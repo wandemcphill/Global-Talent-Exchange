@@ -153,6 +153,31 @@ describe("asset-led cinematic gifting scenes", () => {
     mythic.dispose();
   });
 
+  test("missing boot, glove, crown, card and tactics assets never borrow another gift model", () => {
+    const boot = stage("boot", "golden_boot_king");
+    const glove = stage("glove", "safe_hands_award");
+    const crown = stage("crown", "king_of_tactics");
+    const card = stage("card", "player_of_the_match");
+    const tactics = stage("tactics", "tactical_masterclass");
+    [boot, glove, crown, card, tactics].forEach((scene) => {
+      expect(scene.root.getObjectByName("gift-award-stage")).toBeFalsy();
+      expect(scene.root.getObjectByName("ballon-dor-stage")).toBeFalsy();
+      expect(meshes(scene.root)).toHaveLength(0);
+      expect(scene.root.getObjectByName("gift-cinematic-particles")).toBeTruthy();
+      scene.update(0.55, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+      scene.dispose();
+    });
+  });
+
+  test("an actual Chronos watch gift uses the authored watch model, not a crown substitute", () => {
+    const watch = stage("crown", "chronos_tourbillon_watch");
+    const hero = watch.root.getObjectByName("gift-watch-stage");
+    expect(hero?.userData.assetPath).toBe("/assets/showroom/chronos_tourbillon_watch.glb");
+    expect(watch.root.getObjectByName("gift-award-stage")).toBeFalsy();
+    expect(meshes(watch.root)).toHaveLength(0);
+    watch.dispose();
+  });
+
   test("awards use the real trophy plinth and gold match-ball assets", () => {
     const trophy = stage("trophy", "ballon_dor");
     const award = trophy.root.getObjectByName("ballon-dor-stage");
