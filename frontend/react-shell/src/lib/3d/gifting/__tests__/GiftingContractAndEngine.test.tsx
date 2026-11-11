@@ -71,6 +71,12 @@ describe("Gifting Contract, CinematicGiftingEngine & WebGL Disposal", () => {
     });
 
     expect(container.querySelector('[data-testid="on-pitch-gift-animation"]')).not.toBeNull();
+    expect(container.textContent).toContain("LEGENDARY GIFT");
+    expect(container.textContent).toContain("Private Jet Flyby");
+    expect(container.textContent).toContain("Ayo");
+    expect(container.textContent).toContain("GTEX FC");
+    expect(container.querySelector(".gtex-gift-caption")).not.toBeNull();
+    expect(container.querySelector(".gift-pill")).toBeNull();
     expect(audioSpy).toHaveBeenCalledTimes(1);
 
     // Simulate parent re-render with a fresh object reference and fresh callback reference for the same gift event

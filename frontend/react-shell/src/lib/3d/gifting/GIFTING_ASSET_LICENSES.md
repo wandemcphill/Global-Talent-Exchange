@@ -1,32 +1,53 @@
-# GTEX gifting 2.0 — asset licences
+# GTEX cinematic gifting — asset inventory and licence notes
 
-Commercial use is allowed for every asset below. Nothing in this list was purchased.
+The gift renderer now favours existing authored GLB assets. It does not generate substitute Eiffel towers, runways, crowns, crowds, trophy supports, player silhouettes, goal frames, or floating geometry when those models are missing.
 
-## Already in the product, reused by the gift stage
+## Authored assets reused from the existing GTEX product
 
-| Asset | Where it is used | Source | Licence |
-| --- | --- | --- | --- |
-| `public/models/match/football-stadium.glb` | Maracanã Experience, Golden Sovereign Arena | [Innerscene football stadium](https://www.innerscene.com/tools/library/3d-parts/football-stadium-f7b93967) | CC0 1.0, stated inside the GLB by Innerscene Corp. See `assets/incoming/free-3d/SOURCES.md`. |
-| `public/textures/env/kloofendal_43d_clear_puresky_2k.hdr` | Day and yacht reflections | [Poly Haven](https://polyhaven.com/a/kloofendal_43d_clear_puresky) | CC0 1.0. https://polyhaven.com/license |
-| `public/textures/env/modern_buildings_night_2k.hdr` | Night city and stadium reflections | [Poly Haven](https://polyhaven.com/a/modern_buildings_night) | CC0 1.0 |
-| `public/textures/env/stadium_01_1k.hdr` | Stadium image-based light | Poly Haven stadium HDR | CC0 1.0 |
-| `public/models/footballer/gtex_home_kit_mixamo.glb` | Bicycle Kick, Last-Minute Winner | Kit baked for GTEX from a Mixamo-compatible rig | Adobe Mixamo. Commercial games are allowed. Raw FBX files are not redistributed. See `assets/incoming/free-3d/SOURCES.md`. |
-| `public/models/footballer/gtex_mixamo_clips.glb` | `Soccer_Scissor_Kick_To_Goal`, `Running_Forwards`, `Male_Soccer_Penalty_Kick`, `Soccer_360_Spin` | https://www.mixamo.com/ exported in place, then baked | Adobe Mixamo, same terms as above |
-| `public/models/match/football_pbr.glb` | Ballon d'Or ball, match balls | Existing GTEX match ball | Shipped with the match. The gift stage only recolors it. |
-| `public/assets/showroom/sovereign_900x_jet.glb` | Club Owner Private Jet | Existing GTEX showroom model (`business-jet` meshes) | Already part of the GTEX showroom. No new download. |
-| `public/assets/showroom/superyacht.glb` | Mediterranean Superyacht | Existing GTEX showroom model (`flybridge-yacht` meshes) | Already part of the GTEX showroom. No new download. |
+| Gift scene | Existing model path |
+| --- | --- |
+| City / architecture reveal | `public/assets/showroom/royal_penthouse_box.glb` |
+| Maracanã / stadium reveal | `public/assets/showroom/arena_imperiale_stadium.glb` |
+| Golden stadium | `public/assets/showroom/golden_stadium.glb` |
+| Private jet | `public/assets/showroom/sovereign_900x_jet.glb` |
+| Gulfstream jet | `public/assets/showroom/gulfstream_g700_exec_jet.glb` |
+| Superyacht | `public/assets/showroom/superyacht.glb` |
+| Team coach / bus | `public/assets/showroom/vanguard_xii_coach.glb` |
+| Executive SUV | `public/assets/showroom/executive_suv.glb` |
+| Hypercar | `public/assets/showroom/veloce_gt9_hypercar.glb` |
+| Performance campus / facility | `public/assets/showroom/apex_performance_campus.glb` |
+| Award / trophy | `public/assets/showroom/trophy_plinth.glb` |
+| Crown / watch | `public/assets/showroom/chronos_tourbillon_watch.glb` |
+| Match stadium | `public/models/match/football-stadium.glb` |
+| Goal frame | `public/models/match/goal_frame.glb` |
+| Match ball | `public/models/match/football_pbr.glb` |
+| Footballer rig and kit | `public/models/footballer/gtex_home_kit_mixamo.glb` |
+| Footballer animation clips | `public/models/footballer/gtex_mixamo_clips.glb` |
 
-## Original work in this upgrade
+These are existing GTEX product assets, not new external models introduced by this code change. Their authoritative licence/provenance records remain with the original asset packages and must be retained there; this inventory does not make a new licence claim for those showroom GLBs.
 
-These are modelled in code for GTEX. No third-party mesh was copied.
+## Environment lighting
 
-- Eiffel lattice, Paris blocks, and river
-- Runway, edge lights, and terminal
-- Ocean surface, wake, and sunset sky
-- Ballon d'Or plinth, spotlight, and gold material
-- Pitch markings, goal frame, net, crowd blocks, and match clock
-- Celebration tones in `GtexCelebrationAudioEngine` (synthesized in the browser, not sampled from a recording)
+The gift renderer loads existing environment maps for image-based lighting and metallic reflections:
 
-## Not used
+- `public/textures/env/modern_buildings_night_2k.hdr` — city and award scenes.
+- `public/textures/env/kloofendal_43d_clear_puresky_2k.hdr` — private jet and yacht scenes.
+- `public/textures/env/stadium_01_1k.hdr` — football and stadium scenes.
 
-Paid packs (CGTrader player, Quaternius Source, Player Motion 100) were not downloaded. No ripped game assets were added.
+The Poly Haven environment assets are CC0 1.0. Poly Haven licence: https://polyhaven.com/license. Additional source manifest: `assets/incoming/free-3d/SOURCES.md`.
+
+## Mixamo animation licence
+
+The footballer rig/kit and baked Mixamo clips are based on Adobe Mixamo exports. Adobe's Mixamo terms allow use in commercial games; raw FBX downloads are not redistributed. The source manifest is `assets/incoming/free-3d/SOURCES.md`.
+
+## Known asset gaps — do not fake these with primitives
+
+- City-specific landmark/skyline models for Paris, New York, Rio, Lagos, Tokyo and Dubai are not yet present in the React public asset library. Those gift codes use a clean atmospheric reveal rather than pretending the generic royal-penthouse model is a landmark. The royal-penthouse GLB is reserved for a penthouse/property gift.
+- Dedicated crown, golden-boot and goalkeeper-glove hero models are not yet present. Those gifts currently use a clean, asset-free cinematic light/particle reveal and lower-third; they do not borrow a trophy or watch model.
+- Player-card and tactics-board catalogue gifts also use the restrained atmosphere treatment until proper authored art is available.
+- The Chronos Tourbillon watch gift uses its matching watch model. A generic crown/tactics gift does not.
+- Stadium gifts currently use GTEX's authored Arena Imperiale stadium model as a generic venue reveal. It should not be described as an exact Maracanã, Wembley, San Siro or Camp Nou reconstruction.
+- Ballon d'Or currently stages the authored trophy plinth with a gold-finished PBR football. This is a GTEX award presentation, not a claim that an official Ballon d'Or trophy scan is in the asset library.
+- The match scene uses the existing authored stadium, goal frame, football and Mixamo player. It intentionally does not invent a crowd made of capsule meshes or a goal net made from primitive geometry.
+
+When a matching hero model is unavailable, keep the reveal atmospheric and clearly labelled until approved artwork is added. Do not introduce placeholder cones, capsules, toruses, low-poly crowns, or fake landmarks to fill the gap.
