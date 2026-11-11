@@ -15,6 +15,36 @@ from backend.tests.support.club_treasury import fund_club_treasury
 PREFIX = "full-journey-20260915"
 
 
+def _fund_gift_bridge(app_session_factory, actor_user_id: str) -> None:
+    from app.models import LedgerEntryReason, LedgerUnit
+    from app.models.user import User
+    from app.wallets.service import LedgerPosting, WalletService
+
+    with app_session_factory() as session:
+        actor = session.get(User, actor_user_id)
+        assert actor is not None
+        wallet = WalletService()
+        bridge = wallet.ensure_named_system_account(
+            session,
+            code="platform:coin:gift_conversion_bridge",
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        platform_coin = wallet.ensure_platform_account(session, LedgerUnit.COIN)
+        wallet.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=bridge, amount=Decimal("100.0000")),
+                LedgerPosting(account=platform_coin, amount=Decimal("-100.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=f"{PREFIX}-gift-bridge",
+            actor=actor,
+        )
+        session.commit()
+
+
 def _ok(response, code=200):
     assert response.status_code == code, response.text
     return response.json()
@@ -643,6 +673,9 @@ def test_gtex_full_user_journey(client, app_session_factory, auth_user_factory, 
     history = _ok(client.get("/api/jackpot/history"))
     settled = next(item for item in history if item["round_number"] == trigger["triggered_round_number"])
     assert any(p["user_id"] == owner["user_id"] for p in settled["payouts"])
+
+    # Gifts pay the recipient from the GTEX bridge. The bridge does not mint coin.
+    _fund_gift_bridge(app_session_factory, owner["user_id"])
 
     # Send/receive gifts as user, and to a club owned by the recipient.
     gift_catalog = _ok(client.get("/api/gifts/catalog"))
