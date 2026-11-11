@@ -43,7 +43,7 @@ def _user(session, suffix: str, role: UserRole = UserRole.USER) -> User:
         email=f"{suffix}@example.com",
         username=f"user_{suffix}",
         display_name=f"User {suffix}",
-        password_hash="not-used",
+        password_hash="not-used",  # pragma: allowlist secret
         role=role,
     )
     session.add(user)
