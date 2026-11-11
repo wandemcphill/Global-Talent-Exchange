@@ -6,6 +6,7 @@ describe("resolveGiftShot", () => {
     expect(resolveGiftShot(undefined, "paris_skyline")).toBe("city");
     expect(resolveGiftShot("luxury_private_jet", "private_jet")).toBe("jet");
     expect(resolveGiftShot(undefined, "private_jet")).toBe("jet");
+    expect(resolveGiftShot("gulfstream_g700", "gulfstream_g700_exec_jet")).toBe("jet");
     expect(resolveGiftShot("bicycle_kick", "bicycle_kick")).toBe("bicycle");
     expect(resolveGiftShot("stadium_maracana", "maracana_stadium")).toBe("stadium");
     expect(resolveGiftShot(undefined, "maracana_stadium")).toBe("stadium");
