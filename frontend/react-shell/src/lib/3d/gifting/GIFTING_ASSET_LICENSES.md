@@ -42,8 +42,10 @@ The footballer rig/kit and baked Mixamo clips are based on Adobe Mixamo exports.
 
 ## Known asset gaps — do not fake these with primitives
 
-- The current city scene uses GTEX's existing royal penthouse architecture model. There is not yet a dedicated, authored Paris landmark / skyline model in the React public asset library.
-- Dedicated boot and goalkeeper-glove hero models are not yet present in that library; those catalogue codes currently use the existing trophy-stage asset until proper models are commissioned or approved.
+- The current city scene uses GTEX's existing royal penthouse architecture model. It is not a Paris landmark or a city-specific skyline. A dedicated Paris landmark / skyline model is not yet present in the React public asset library.
+- Dedicated crown, golden-boot and goalkeeper-glove hero models are not yet present. Those gifts currently use a clean, asset-free cinematic light/particle reveal and lower-third; they do not borrow a trophy or watch model.
+- Player-card and tactics-board catalogue gifts also use the restrained atmosphere treatment until proper authored art is available.
+- The Chronos Tourbillon watch gift uses its matching watch model. A generic crown/tactics gift does not.
 - The match scene uses the existing authored stadium, goal frame, football and Mixamo player. It intentionally does not invent a crowd made of capsule meshes or a goal net made from primitive geometry.
 
 A missing model should be shown as a controlled loading/error state or replaced only by another approved, visually appropriate asset. Do not introduce placeholder cones, capsules, toruses, low-poly crowns, or fake landmarks to fill the gap.
