@@ -150,4 +150,46 @@ describe("Gifting Contract, CinematicGiftingEngine & WebGL Disposal", () => {
     expect(texSpy).toHaveBeenCalled();
     expect(scene.children.length).toBe(0);
   });
+  test("plays a matching gift clip muted and falls back to WebGL if the video fails", () => {
+    act(() => {
+      root.render(
+        <CinematicGiftingEngine
+          activeGift={{
+            id: "gift-video-fallback-1",
+            gift_code: "bicycle_kick",
+            gift_name: "Bicycle Kick",
+            sender: "Ayo",
+            amount: 120,
+            rarity: "epic",
+          }}
+          soundEnabled={false}
+        />
+      );
+    });
+
+    const video = container.querySelector<HTMLVideoElement>(
+      '[data-testid="gift-cinematic-video"]'
+    );
+    expect(video).not.toBeNull();
+    expect(video?.muted).toBe(true);
+    expect(video?.hasAttribute("playsinline")).toBe(true);
+    expect(video?.getAttribute("data-gift-video")).toBe(
+      "/assets/gifting/gtex-gift-bicycle.mp4"
+    );
+    expect(
+      container.querySelector('[data-testid="on-pitch-gift-animation"]')
+        ?.getAttribute("data-gift-media")
+    ).toBe("webgl");
+
+    act(() => {
+      video?.dispatchEvent(new Event("error"));
+    });
+
+    expect(container.querySelector('[data-testid="gift-cinematic-video"]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="on-pitch-gift-animation"]')
+        ?.getAttribute("data-gift-media")
+    ).toBe("webgl");
+  });
+
 });
