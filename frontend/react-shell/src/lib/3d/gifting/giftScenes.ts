@@ -32,6 +32,7 @@ export interface GiftDirector {
 interface DirectorOptions {
   shot: string;
   giftCode: string;
+  rarity?: string;
   quality: GiftQuality;
   canStream: boolean;
   resolveUrl: (path: string) => string;
@@ -799,6 +800,32 @@ function buildTrophyStage(bin: SceneBin, quality: GiftQuality, ballon: boolean):
     cup.castShadow = true;
     award.add(cup);
     bin.track(cup.geometry);
+  } else {
+    // A sculpted support and orbital collars make the gold football read as
+    // the centrepiece of an award, rather than a loose match ball.
+    const base = bin.mesh(new THREE.CylinderGeometry(0.52, 0.68, 0.16, 32), stone, award);
+    base.position.y = 0.04;
+    base.name = "ballon-dor-base";
+    const neckCurve = new THREE.CatmullRomCurve3([
+      new THREE.Vector3(0, 0.1, 0),
+      new THREE.Vector3(0.16, 0.28, 0),
+      new THREE.Vector3(-0.13, 0.47, 0),
+      new THREE.Vector3(0, 0.78, 0),
+    ]);
+    const neck = bin.mesh(new THREE.TubeGeometry(neckCurve, 32, 0.105, 10, false), gold, award);
+    neck.name = "ballon-dor-support";
+    const collar = bin.mesh(new THREE.TorusGeometry(0.49, 0.045, 10, 40), gold, award);
+    collar.rotation.x = Math.PI / 2;
+    collar.position.y = 0.17;
+    collar.name = "ballon-dor-collar";
+    const halo = bin.mesh(new THREE.TorusGeometry(0.76, 0.035, 10, 56), gold, award);
+    halo.rotation.x = Math.PI / 2;
+    halo.position.y = 0.98;
+    halo.name = "ballon-dor-orbit";
+    const meridian = bin.mesh(new THREE.TorusGeometry(0.7, 0.025, 8, 56), gold, award);
+    meridian.rotation.set(0.72, 0, 0.24);
+    meridian.position.y = 0.98;
+    meridian.name = "ballon-dor-meridian";
   }
   plinth.add(award);
   bin.root.add(plinth);
@@ -854,6 +881,8 @@ function addGoal(bin: SceneBin, x: number): THREE.Group {
   });
   const net = new THREE.Mesh(new THREE.PlaneGeometry(7.32, 2.44, 8, 4), netMat);
   net.position.set(1.35, 1.22, 0);
+  // Goal posts are spaced on Z, so the net plane must span Z × Y.
+  net.rotation.y = Math.PI / 2;
   net.name = "goal-net";
   goal.add(net);
   bin.track(net.geometry);
@@ -868,26 +897,74 @@ function addStands(bin: SceneBin, length: number, width: number, count: number, 
   north.position.set(0, 2.1, -width / 2 - 2);
   const south = bin.mesh(new THREE.BoxGeometry(length, 4.2, 3), concrete);
   south.position.set(0, 2.1, width / 2 + 2);
+
+  // Instanced body parts create readable supporter silhouettes without one
+  // draw call per spectator.
   const body = new THREE.CapsuleGeometry(0.16, 0.28, 2, 4);
+  const headGeometry = new THREE.SphereGeometry(0.13, 8, 6);
+  const armGeometry = new THREE.CapsuleGeometry(0.055, 0.34, 2, 4);
   const kit = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.65 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd7ae8b, roughness: 0.72 });
   const crowd = new THREE.InstancedMesh(body, kit, count);
+  const heads = new THREE.InstancedMesh(headGeometry, skin, count);
+  const arms = new THREE.InstancedMesh(armGeometry, kit, count * 2);
   bin.track(body);
+  bin.track(headGeometry);
+  bin.track(armGeometry);
   bin.track(kit);
+  bin.track(skin);
+
   const dummy = new THREE.Object3D();
   const color = new THREE.Color();
   const palette = [0xdc2626, 0x1d4ed8, 0xf8fafc, 0xf59e0b, 0x0f172a];
+  const armAnchors: Array<{ x: number; y: number; z: number; side: number; phase: number }> = [];
+
   for (let i = 0; i < count; i++) {
     const side = i % 2 === 0 ? -1 : 1;
-    dummy.position.set(-length / 2 + (i * 1.1) % length, 1.15 + (i % 5) * 0.42, side * (width / 2 + 1.1 + (i % 5) * 0.28));
+    const x = -length / 2 + (i * 1.1) % length;
+    const y = 1.15 + (i % 5) * 0.42;
+    const z = side * (width / 2 + 1.1 + (i % 5) * 0.28);
+    const shirt = palette[i % palette.length];
+
+    dummy.position.set(x, y, z);
+    dummy.rotation.set(0, side > 0 ? Math.PI : 0, 0);
+    dummy.scale.set(1, 1, 1);
     dummy.updateMatrix();
     crowd.setMatrixAt(i, dummy.matrix);
-    color.setHex(palette[i % palette.length]);
+    color.setHex(shirt);
     crowd.setColorAt(i, color);
+
+    dummy.position.set(x, y + 0.4, z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.scale.set(1, 1, 1);
+    dummy.updateMatrix();
+    heads.setMatrixAt(i, dummy.matrix);
+
+    [-1, 1].forEach((armSide) => {
+      const anchor = { x: x + armSide * 0.18, y: y + 0.12, z, side: armSide, phase: i * 0.83 + (armSide + 1) * 0.7 };
+      armAnchors.push(anchor);
+      dummy.position.set(anchor.x, anchor.y, anchor.z);
+      dummy.rotation.set(0, 0, armSide * 0.12);
+      dummy.scale.set(1, 1, 1);
+      dummy.updateMatrix();
+      const armIndex = i * 2 + (armSide > 0 ? 1 : 0);
+      arms.setMatrixAt(armIndex, dummy.matrix);
+      color.setHex(shirt);
+      arms.setColorAt(armIndex, color);
+    });
   }
-  if (crowd.instanceColor) crowd.instanceColor.needsUpdate = true;
+
+  [crowd, heads, arms].forEach((mesh) => {
+    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
+  });
   crowd.name = wave ? "winner-crowd" : "match-crowd";
+  heads.name = "stadium-crowd-heads";
+  arms.name = "stadium-crowd-arms";
   crowd.userData.wave = wave;
-  bin.root.add(crowd);
+  crowd.userData.heads = heads;
+  crowd.userData.arms = arms;
+  crowd.userData.armAnchors = armAnchors;
+  bin.root.add(crowd, heads, arms);
   return crowd;
 }
 
@@ -1096,12 +1173,104 @@ async function dressBall(ball: THREE.Mesh, options: DirectorOptions, gold: boole
   }
 }
 
+function buildRarityPresentation(
+  bin: SceneBin,
+  options: DirectorOptions
+): (progress: number, delta: number) => void {
+  const rarity = String(options.rarity || "common").toLowerCase();
+  const levelByRarity: Record<string, number> = { rare: 1, epic: 2, legendary: 3, mythic: 4 };
+  const level = levelByRarity[rarity] || 0;
+  if (level === 0) return () => undefined;
+
+  const colorByRarity: Record<string, number> = {
+    rare: 0x67e8f9,
+    epic: 0xa78bfa,
+    legendary: 0xfbbf24,
+    mythic: 0xffd978,
+  };
+  const color = colorByRarity[rarity] || 0xfbbf24;
+  const shot = options.shot;
+  const centerY = shot === "city" ? 10 : shot === "stadium" ? 2.2 : shot === "jet" ? 4 : shot === "yacht" ? 2.4 : 1.9;
+  const radius = shot === "stadium" ? 22 : shot === "city" ? 7.5 : shot === "jet" || shot === "yacht" ? 7 : 4.4;
+  const stage = new THREE.Group();
+  stage.name = `gift-rarity-${rarity}`;
+  stage.position.y = centerY;
+  bin.root.add(stage);
+
+  const rings: THREE.Mesh[] = [];
+  for (let i = 0; i < level; i++) {
+    const material = new THREE.MeshBasicMaterial({
+      color,
+      transparent: true,
+      opacity: 0.16 + level * 0.035,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    });
+    const ring = bin.mesh(new THREE.TorusGeometry(radius + i * 0.5, 0.045 + level * 0.008, 8, 72), material, stage);
+    ring.rotation.x = Math.PI / 2;
+    ring.rotation.z = (i / level) * Math.PI;
+    ring.name = `gift-rarity-ring-${i + 1}`;
+    rings.push(ring);
+  }
+
+  if (level >= 3) {
+    const vertical = bin.mesh(
+      new THREE.TorusGeometry(radius * 0.44, 0.045, 8, 64),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.25, depthWrite: false, blending: THREE.AdditiveBlending }),
+      stage
+    );
+    vertical.name = "gift-rarity-vertical-gate";
+    vertical.rotation.y = Math.PI / 2;
+  }
+
+  const orbiters: THREE.Mesh[] = [];
+  if (level >= 3) {
+    const orbiterCount = level === 4 ? 8 : 4;
+    for (let i = 0; i < orbiterCount; i++) {
+      const gem = bin.mesh(
+        new THREE.OctahedronGeometry(level === 4 ? 0.22 : 0.16, 0),
+        new THREE.MeshStandardMaterial({ color, metalness: 0.9, roughness: 0.2, emissive: color, emissiveIntensity: level === 4 ? 0.28 : 0.12 }),
+        stage
+      );
+      gem.name = `gift-rarity-gem-${i + 1}`;
+      orbiters.push(gem);
+    }
+  }
+
+  const light = new THREE.PointLight(color, 1.1 + level * 1.4, radius * 4, 2);
+  light.position.set(0, 1.1, 0);
+  stage.add(light);
+
+  return (progress, delta) => {
+    stage.rotation.y += delta * (0.12 + level * 0.045);
+    const pulse = 0.94 + Math.sin(progress * Math.PI * 4) * (0.025 + level * 0.012);
+    stage.scale.setScalar(pulse);
+    light.intensity = (1.1 + level * 1.4) * (0.68 + Math.sin(progress * Math.PI * 2) * 0.32);
+    rings.forEach((ring, index) => {
+      ring.rotation.y += delta * (index % 2 === 0 ? 0.18 : -0.14);
+      (ring.material as THREE.MeshBasicMaterial).opacity =
+        0.12 + level * 0.04 + Math.sin(progress * Math.PI * 3 + index) * 0.035;
+    });
+    orbiters.forEach((gem, index) => {
+      const angle = progress * Math.PI * (level === 4 ? 2.4 : 1.6) + (index / orbiters.length) * Math.PI * 2;
+      const orbitRadius = radius * 0.66;
+      gem.position.set(Math.cos(angle) * orbitRadius, 0.5 + Math.sin(angle * 1.6) * (level === 4 ? 0.9 : 0.45), Math.sin(angle) * orbitRadius);
+      gem.rotation.set(angle, angle * 0.7, -angle * 0.35);
+    });
+  };
+}
+
 function finish(options: DirectorOptions, bin: SceneBin, background: number, exposure: number, update: GiftDirector["update"]): GiftDirector {
+  const updateRarity = buildRarityPresentation(bin, options);
   return {
     root: bin.root,
     background: new THREE.Color(background),
     exposure,
-    update,
+    update: (progress, delta, camera) => {
+      update(progress, delta, camera);
+      updateRarity(progress, delta);
+    },
     dispose: () => bin.dispose(),
   };
 }
@@ -1244,7 +1413,7 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
     if (shot === "trophy") {
       const ball = makeMatchBall(bin, true, award);
       ball.scale.setScalar(2.6);
-      ball.position.set(0, 0.2, 0);
+      ball.position.set(0, 0.98, 0);
       ball.name = "ballon-dor-ball";
       void dressBall(ball, options, true).finally(() => {
         if (!options.isCancelled()) options.onReady();
@@ -1256,6 +1425,10 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
       if (pedestal) pedestal.position.y = lerp(-1.3, 0, smooth(Math.min(1, progress / 0.28)));
       const ball = bin.root.getObjectByName("ballon-dor-ball");
       if (ball) ball.rotation.y = progress * Math.PI;
+      const orbit = bin.root.getObjectByName("ballon-dor-orbit");
+      if (orbit) orbit.rotation.z = progress * Math.PI * 1.4;
+      const meridian = bin.root.getObjectByName("ballon-dor-meridian");
+      if (meridian) meridian.rotation.y = progress * Math.PI * 1.2;
       const motes = bin.root.getObjectByName("gift-motes") as THREE.Points | null;
       if (motes) driftMotes(motes, delta, 0.25);
     });
@@ -1279,7 +1452,7 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
   grass.name = bicycle ? "bicycle-pitch" : winner ? "winner-pitch" : "match-pitch";
   pitchLines(bin, length, width);
   const goal = addGoal(bin, length / 2 - 1.2);
-  const crowd = addStands(bin, length, width, options.quality.crowd, winner);
+  const crowd = addStands(bin, length, width, options.quality.crowd, winner || bicycle || shot === "goal" || shot === "golden_goal");
   if (winner) clockBoard(bin, width);
   const ball = makeMatchBall(bin, shot === "golden_goal");
   const player = new THREE.Group();
@@ -1370,20 +1543,52 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
     const net = goal.getObjectByName("goal-net") as THREE.Mesh | null;
     if (net) {
       const hit = ball.position.x > goal.position.x - 1.5 ? 1 : 0;
-      net.scale.z = 1;
-      net.position.x = 1.35 + hit * 0.45;
+      const impactCenter = bicycle ? 0.82 : winner ? 0.77 : 0.68;
+      const impact = hit * Math.exp(-Math.pow((progress - impactCenter) * 15, 2));
+      const position = net.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const rest = (net.geometry.userData.restPositions as Float32Array | undefined) ||
+        (net.geometry.userData.restPositions = new Float32Array(position.array as ArrayLike<number>));
+      for (let vertex = 0; vertex < position.count; vertex++) {
+        const x = rest[vertex * 3];
+        const y = rest[vertex * 3 + 1];
+        const edgeFalloff = Math.max(0, 1 - Math.abs(y) / 1.22);
+        const ripple = Math.sin(progress * 110 + Math.abs(x) * 2.6) * impact * 0.62 * edgeFalloff;
+        position.setZ(vertex, rest[vertex * 3 + 2] + ripple);
+      }
+      position.needsUpdate = true;
+      net.geometry.computeVertexNormals();
+      net.position.x = 1.35 + impact * 0.22;
     }
     if (crowd.userData.wave) {
       const dummy = new THREE.Object3D();
+      const heads = crowd.userData.heads as THREE.InstancedMesh;
+      const arms = crowd.userData.arms as THREE.InstancedMesh;
+      const anchors = crowd.userData.armAnchors as Array<{ x: number; y: number; z: number; side: number; phase: number }>;
+      const wave = smooth(clamp01((progress - 0.55) / 0.2));
       for (let i = 0; i < crowd.count; i++) {
         crowd.getMatrixAt(i, dummy.matrix);
         dummy.matrix.decompose(dummy.position, dummy.quaternion, dummy.scale);
         const base = 1.15 + (i % 5) * 0.42;
-        dummy.position.y = base + Math.max(0, Math.sin(dummy.position.x * 0.35 + progress * 14)) * smooth(clamp01((progress - 0.55) / 0.2)) * 0.45;
+        const lift = Math.max(0, Math.sin(dummy.position.x * 0.35 + progress * 14)) * wave * 0.45;
+        dummy.position.y = base + lift;
         dummy.updateMatrix();
         crowd.setMatrixAt(i, dummy.matrix);
+        dummy.position.y += 0.4;
+        dummy.updateMatrix();
+        heads.setMatrixAt(i, dummy.matrix);
+      }
+      for (let i = 0; i < anchors.length; i++) {
+        const anchor = anchors[i];
+        const lift = Math.max(0, Math.sin(progress * 19 + anchor.phase)) * wave;
+        dummy.position.set(anchor.x, anchor.y + lift * 0.25, anchor.z);
+        dummy.rotation.set(0, 0, anchor.side * (0.12 + lift * 1.05));
+        dummy.scale.set(1, 1, 1);
+        dummy.updateMatrix();
+        arms.setMatrixAt(i, dummy.matrix);
       }
       crowd.instanceMatrix.needsUpdate = true;
+      heads.instanceMatrix.needsUpdate = true;
+      arms.instanceMatrix.needsUpdate = true;
     }
     ball.rotation.x += delta * 6;
   });
