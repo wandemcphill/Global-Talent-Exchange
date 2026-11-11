@@ -550,7 +550,9 @@ class ScheduledResolutionMixin:
         profile: dict[str, Any],
         result: dict[str, Any],
     ) -> tuple[dict[str, Any], dict[str, Any]]:
-        if stage == "qualifier" or (stage == "tournament" and "qualified_entry_ids" not in result and board.get("phase") != "knockout"):
+        if stage == "qualifier" or (
+            stage == "tournament" and "qualified_entry_ids" not in result and board.get("phase") != "knockout"
+        ):
             result = self._result_from_played_groups(
                 competition=competition,
                 stage=stage,
@@ -615,7 +617,9 @@ class ScheduledResolutionMixin:
                     representatives = [entry.id for entry in entries]
                 if len(representatives) <= int(profile["tournament_slots"]):
                     lifecycle_state["qualified_entry_ids"] = representatives
-            qualified_ids = {entry_id for entry_id in list(lifecycle_state.get("qualified_entry_ids") or []) if entry_id}
+            qualified_ids = {
+                entry_id for entry_id in list(lifecycle_state.get("qualified_entry_ids") or []) if entry_id
+            }
             for entry in entries:
                 if champion_id and entry.id == champion_id:
                     entry.status = "champion"

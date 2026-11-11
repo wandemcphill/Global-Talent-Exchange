@@ -206,11 +206,7 @@ class LeagueSeasonLifecycleService:
         fixtures = tuple(replace(fixture, result=results_by_fixture.get(fixture.fixture_id)) for fixture in fixtures)
 
         base_standings = self.standings_service.compute(clubs=clubs, fixtures=fixtures)
-        opted_out_club_ids = {
-            event.club_id
-            for event in events
-            if isinstance(event, LeagueClubOptOutEvent)
-        }
+        opted_out_club_ids = {event.club_id for event in events if isinstance(event, LeagueClubOptOutEvent)}
         standings = self.qualification_service.apply_markers(base_standings, opted_out_club_ids=opted_out_club_ids)
         auto_entry_slots = self.qualification_service.build_auto_entry_slots(
             standings,
@@ -381,9 +377,7 @@ class LeagueSeasonLifecycleService:
             return
         bucket = f"pyramid-idle-{season_label}"
         existing = {
-            event.club_id
-            for event in self.repository.list_events(bucket)
-            if isinstance(event, LeagueClubHeldEvent)
+            event.club_id for event in self.repository.list_events(bucket) if isinstance(event, LeagueClubHeldEvent)
         }
         now = datetime.now(timezone.utc)
         for cohort in cohorts:
@@ -447,9 +441,7 @@ class LeagueSeasonLifecycleService:
     def region_division_chain(self, region_code: str) -> tuple[LeagueDivisionLinkRecordedEvent, ...]:
         bucket = f"pyramid-ladder-{normalize_region(region_code)}"
         return tuple(
-            event
-            for event in self.repository.list_events(bucket)
-            if isinstance(event, LeagueDivisionLinkRecordedEvent)
+            event for event in self.repository.list_events(bucket) if isinstance(event, LeagueDivisionLinkRecordedEvent)
         )
 
     def _record_region_ladder(self, region_code: str) -> None:

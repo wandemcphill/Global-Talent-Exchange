@@ -223,9 +223,7 @@ class NationalTeamResultMemory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     """One played result, remembered with the users who played it."""
 
     __tablename__ = "national_team_result_memories"
-    __table_args__ = (
-        UniqueConstraint("competition_id", "match_key", name="uq_national_team_result_memories_match"),
-    )
+    __table_args__ = (UniqueConstraint("competition_id", "match_key", name="uq_national_team_result_memories_match"),)
 
     competition_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     season_label: Mapped[str] = mapped_column(String(64), nullable=False)

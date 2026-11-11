@@ -81,9 +81,7 @@ DEFAULT_REWARD_STRUCTURES: dict[str, dict[str, Any]] = {
 
 
 def default_reward_structure_for(family: str, age_band: str = "senior") -> dict[str, Any]:
-    base = DEFAULT_REWARD_STRUCTURES[
-        "world_cup" if family == "world_cup" else "continental_default"
-    ]
+    base = DEFAULT_REWARD_STRUCTURES["world_cup" if family == "world_cup" else "continental_default"]
     multiplier = Decimal("1.0")
     if age_band == "u20":
         multiplier = Decimal("0.60")

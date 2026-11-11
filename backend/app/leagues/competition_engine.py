@@ -71,10 +71,7 @@ class LeagueCompetitionEngineService:
         for match_date, fixtures in sorted(fixtures_by_date.items()):
             ordered_window_numbers = sorted({fixture.window_number for fixture in fixtures})
             windows = resolver.windows_for_date(match_date)
-            window_map = {
-                window_number: windows[index]
-                for index, window_number in enumerate(ordered_window_numbers)
-            }
+            window_map = {window_number: windows[index] for index, window_number in enumerate(ordered_window_numbers)}
             for fixture in sorted(fixtures, key=lambda item: (item.window_number, item.fixture_id)):
                 scheduled.append(
                     ScheduledFixture(

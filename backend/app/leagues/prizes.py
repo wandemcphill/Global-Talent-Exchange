@@ -18,7 +18,6 @@ from app.leagues.models import (
 )
 from app.leagues.pyramid import normalize_division
 
-
 # GTEX funds the coin. The pool is not buy-in times the number of clubs.
 PLATFORM_POOL_BY_DIVISION: dict[str, int] = {
     "foundation": 500,

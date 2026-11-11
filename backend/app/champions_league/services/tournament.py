@@ -263,7 +263,12 @@ class KnockoutBracketService:
         winner_overrides = winner_overrides or {}
         playoff_ties = self._pair_seeds(
             stage=MatchStage.QUALIFICATION_PLAYOFF,
-            seeds=[ClubSeed(club_id=club.club_id, club_name=club.club_name, seed=club.seed, region=club.region, tier=club.tier) for club in qualification_map.playoff_qualifiers],
+            seeds=[
+                ClubSeed(
+                    club_id=club.club_id, club_name=club.club_name, seed=club.seed, region=club.region, tier=club.tier
+                )
+                for club in qualification_map.playoff_qualifiers
+            ],
             winner_overrides=winner_overrides,
         )
         advancing = [
@@ -393,7 +398,9 @@ class KnockoutBracketService:
                     winner=winner,
                     penalties_if_tied=True,
                     extra_time_allowed=False,
-                    presentation_max_minutes=FINAL_PRESENTATION_MAX_MINUTES if stage is MatchStage.FINAL else MATCH_PRESENTATION_MAX_MINUTES,
+                    presentation_max_minutes=(
+                        FINAL_PRESENTATION_MAX_MINUTES if stage is MatchStage.FINAL else MATCH_PRESENTATION_MAX_MINUTES
+                    ),
                 )
             )
         return ties
@@ -944,9 +951,7 @@ def _settle_stage_bonuses(
                 title=f"Champions League {stage} bonus for {club_id}",
                 gross_amount=delta,
                 reward_source=_MATCH_FEE_SOURCE,
-                note=(
-                    f"kind=stage;season={season_id};club={club_id};stage={stage};amount={delta}"
-                ),
+                note=(f"kind=stage;season={season_id};club={club_id};stage={stage};amount={delta}"),
                 ledger_unit=LedgerUnit.COIN,
             )
         )

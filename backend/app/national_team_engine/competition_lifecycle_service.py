@@ -2209,13 +2209,17 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
                             "home_country_name": preset.get("away_country_name"),
                             "away_country_name": preset.get("home_country_name"),
                         }
-                    match = dict(preset) if preset is not None else self._simulate_match(
-                        competition=competition,
-                        stage_code=stage_code,
-                        stage_label=f"group_{group_name}",
-                        left=home,
-                        right=away,
-                        allow_draw=True,
+                    match = (
+                        dict(preset)
+                        if preset is not None
+                        else self._simulate_match(
+                            competition=competition,
+                            stage_code=stage_code,
+                            stage_label=f"group_{group_name}",
+                            left=home,
+                            right=away,
+                            allow_draw=True,
+                        )
                     )
                     matches.append(match)
                     self._apply_group_result(standings[home.id], standings[away.id], match)

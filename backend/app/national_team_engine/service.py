@@ -25,7 +25,9 @@ class NationalTeamEngineService:
     session: Session
 
     def create_competition(self, *, payload, actor: User) -> NationalTeamCompetition:
-        existing = self.session.scalar(select(NationalTeamCompetition).where(NationalTeamCompetition.key == payload.key.strip().lower()))
+        existing = self.session.scalar(
+            select(NationalTeamCompetition).where(NationalTeamCompetition.key == payload.key.strip().lower())
+        )
         if existing is not None:
             raise NationalTeamEngineError("National team competition key already exists.")
         competition = NationalTeamCompetition(
@@ -73,7 +75,11 @@ class NationalTeamEngineService:
         return list(self.session.scalars(stmt).all())
 
     def get_competition(self, competition_id: str) -> NationalTeamCompetition | None:
-        stmt = select(NationalTeamCompetition).where(NationalTeamCompetition.id == competition_id).options(selectinload(NationalTeamCompetition.entries))
+        stmt = (
+            select(NationalTeamCompetition)
+            .where(NationalTeamCompetition.id == competition_id)
+            .options(selectinload(NationalTeamCompetition.entries))
+        )
         return self.session.scalar(stmt)
 
     def upsert_entry(self, *, competition_id: str, payload, actor: User) -> NationalTeamEntry:
@@ -142,7 +148,7 @@ class NationalTeamEngineService:
                             "country_code": entry.country_code,
                         },
                     )
-            )
+                )
         return entry
 
     def upsert_user_entry(self, *, competition_id: str, payload, actor: User) -> NationalTeamEntry:
@@ -161,11 +167,7 @@ class NationalTeamEngineService:
         is_new = entry is None
         manager_field_set = "manager_user_id" in getattr(payload, "model_fields_set", set())
         selected_manager_user_id = (
-            payload.manager_user_id
-            if manager_field_set
-            else actor.id
-            if entry is None
-            else entry.manager_user_id
+            payload.manager_user_id if manager_field_set else actor.id if entry is None else entry.manager_user_id
         )
         if selected_manager_user_id is not None:
             selected_manager = self.session.get(User, selected_manager_user_id)
@@ -319,7 +321,13 @@ class NationalTeamEngineService:
                 .order_by(NationalTeamEntry.updated_at.desc())
             ).all()
         )
-        squad_memberships = list(self.session.scalars(select(NationalTeamSquadMember).where(NationalTeamSquadMember.user_id == user.id).order_by(NationalTeamSquadMember.updated_at.desc())).all())
+        squad_memberships = list(
+            self.session.scalars(
+                select(NationalTeamSquadMember)
+                .where(NationalTeamSquadMember.user_id == user.id)
+                .order_by(NationalTeamSquadMember.updated_at.desc())
+            ).all()
+        )
         return {"managed_entries": managed_entries, "squad_memberships": squad_memberships}
 
     @staticmethod

@@ -44,9 +44,7 @@ class PlayerHistory(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class UserDynasty(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "user_dynasty"
-    __table_args__ = (
-        UniqueConstraint("user_id", name="uq_user_dynasty_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", name="uq_user_dynasty_user_id"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -194,9 +192,7 @@ class NationalTeamCountryRanking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     country_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
     age_band: Mapped[str] = mapped_column(String(16), nullable=False, default="senior", server_default="senior")
-    competition_family: Mapped[str] = mapped_column(
-        String(32), nullable=False, default="all", server_default="all"
-    )
+    competition_family: Mapped[str] = mapped_column(String(32), nullable=False, default="all", server_default="all")
     elo_rating: Mapped[float] = mapped_column(Float, nullable=False, default=1500.0, server_default="1500.0")
     matches_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

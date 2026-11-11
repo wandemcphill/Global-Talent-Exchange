@@ -300,8 +300,7 @@ def test_rollover_writes_the_new_division_onto_the_owner_club() -> None:
                 "buy_in_tier": 25,
                 "season_start": "2026-08-01",
                 "clubs": [
-                    {"club_id": club_id, "club_name": club_name, "strength_rating": 50}
-                    for club_id, club_name in clubs
+                    {"club_id": club_id, "club_name": club_name, "strength_rating": 50} for club_id, club_name in clubs
                 ],
             },
         )

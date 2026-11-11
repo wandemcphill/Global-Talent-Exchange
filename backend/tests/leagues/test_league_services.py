@@ -247,10 +247,42 @@ def test_standings_sort_points_goal_difference_and_goals_for() -> None:
 
     fixture_map = {fixture.fixture_id: fixture for fixture in season.fixtures}
     fixtures_to_finish = (
-        (next(fixture_id for fixture_id, fixture in fixture_map.items() if fixture.home_club_id == "club-a" and fixture.away_club_id == "club-b"), 2, 0),
-        (next(fixture_id for fixture_id, fixture in fixture_map.items() if fixture.home_club_id == "club-c" and fixture.away_club_id == "club-d"), 1, 0),
-        (next(fixture_id for fixture_id, fixture in fixture_map.items() if fixture.home_club_id == "club-a" and fixture.away_club_id == "club-c"), 1, 0),
-        (next(fixture_id for fixture_id, fixture in fixture_map.items() if fixture.home_club_id == "club-b" and fixture.away_club_id == "club-d"), 2, 0),
+        (
+            next(
+                fixture_id
+                for fixture_id, fixture in fixture_map.items()
+                if fixture.home_club_id == "club-a" and fixture.away_club_id == "club-b"
+            ),
+            2,
+            0,
+        ),
+        (
+            next(
+                fixture_id
+                for fixture_id, fixture in fixture_map.items()
+                if fixture.home_club_id == "club-c" and fixture.away_club_id == "club-d"
+            ),
+            1,
+            0,
+        ),
+        (
+            next(
+                fixture_id
+                for fixture_id, fixture in fixture_map.items()
+                if fixture.home_club_id == "club-a" and fixture.away_club_id == "club-c"
+            ),
+            1,
+            0,
+        ),
+        (
+            next(
+                fixture_id
+                for fixture_id, fixture in fixture_map.items()
+                if fixture.home_club_id == "club-b" and fixture.away_club_id == "club-d"
+            ),
+            2,
+            0,
+        ),
     )
     for fixture_id, home_goals, away_goals in fixtures_to_finish:
         service.record_fixture_result(

@@ -60,14 +60,8 @@ def test_foundation_migrations_upgrade_on_temporary_sqlite(tmp_path) -> None:
     migration_0234 = importlib.import_module("migrations.versions.20261110_0234_champions_league_played_matches")
 
     with engine.begin() as connection:
-        connection.execute(
-            text(
-                "INSERT INTO users (id) VALUES ('user-1')"
-            )
-        )
-        connection.execute(
-            text(
-                """
+        connection.execute(text("INSERT INTO users (id) VALUES ('user-1')"))
+        connection.execute(text("""
                 INSERT INTO national_team_country_rankings (
                     id, created_at, updated_at, country_code, country_name, elo_rating,
                     matches_played, wins, draws, losses, titles, metadata_json
@@ -75,12 +69,8 @@ def test_foundation_migrations_upgrade_on_temporary_sqlite(tmp_path) -> None:
                     'rank-1', '2026-11-10', '2026-11-10', 'NG', 'Nigeria', 1500,
                     0, 0, 0, 0, 0, '{}'
                 )
-                """
-            )
-        )
-        connection.execute(
-            text("INSERT INTO owner_club_states (id, club_id) VALUES ('club-state-1', 'club-1')")
-        )
+                """))
+        connection.execute(text("INSERT INTO owner_club_states (id, club_id) VALUES ('club-state-1', 'club-1')"))
         _upgrade(migration_0232, connection)
         _upgrade(migration_0233, connection)
         _upgrade(migration_0234, connection)

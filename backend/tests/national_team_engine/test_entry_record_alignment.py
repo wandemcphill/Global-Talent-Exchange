@@ -131,7 +131,9 @@ def test_renting_a_player_copies_user_country_and_player_ids_onto_the_competitio
         wallet.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=platform, amount=Decimal("-500.0000"), source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
+                LedgerPosting(
+                    account=platform, amount=Decimal("-500.0000"), source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT
+                ),
                 LedgerPosting(account=account, amount=Decimal("500.0000"), source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,

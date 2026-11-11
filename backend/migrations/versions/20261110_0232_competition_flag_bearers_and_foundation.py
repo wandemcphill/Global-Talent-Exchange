@@ -32,11 +32,19 @@ def upgrade() -> None:
                 sa.Column("competition_family", sa.String(length=32), server_default="all", nullable=False),
             )
         indexes = {index["name"] for index in inspector.get_indexes("national_team_country_rankings")}
-        uniques = {constraint["name"] for constraint in inspector.get_unique_constraints("national_team_country_rankings")}
-        if "uq_national_team_country_rankings_country_code" in uniques or "uq_national_team_country_rankings_country_code" in indexes:
+        uniques = {
+            constraint["name"] for constraint in inspector.get_unique_constraints("national_team_country_rankings")
+        }
+        if (
+            "uq_national_team_country_rankings_country_code" in uniques
+            or "uq_national_team_country_rankings_country_code" in indexes
+        ):
             with op.batch_alter_table("national_team_country_rankings") as batch:
                 batch.drop_constraint("uq_national_team_country_rankings_country_code", type_="unique")
-        uniques = {constraint["name"] for constraint in sa.inspect(bind).get_unique_constraints("national_team_country_rankings")}
+        uniques = {
+            constraint["name"]
+            for constraint in sa.inspect(bind).get_unique_constraints("national_team_country_rankings")
+        }
         if "uq_national_team_country_rankings_scope" not in uniques:
             # SQLite cannot ALTER in a unique constraint. Batch mode copies the table.
             with op.batch_alter_table("national_team_country_rankings") as batch:
@@ -67,8 +75,12 @@ def upgrade() -> None:
             sa.Column("source_competition_id", sa.String(length=36), nullable=False),
             sa.Column("target_key", sa.String(length=96), nullable=False),
             sa.Column("status", sa.String(length=16), server_default="active", nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
             sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint(
@@ -108,12 +120,18 @@ def upgrade() -> None:
             sa.Column("winner_user_id", sa.String(length=36), nullable=True),
             sa.Column("winner_entry_id", sa.String(length=36), nullable=True),
             sa.Column("same_country_playoff", sa.Boolean(), server_default=sa.false(), nullable=False),
-            sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-            sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+            sa.Column(
+                "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
+            sa.Column(
+                "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+            ),
             sa.PrimaryKeyConstraint("id"),
             sa.UniqueConstraint("competition_id", "match_key", name="uq_national_team_result_memories_match"),
         )
-        op.create_index("ix_national_team_result_memories_competition_id", "national_team_result_memories", ["competition_id"])
+        op.create_index(
+            "ix_national_team_result_memories_competition_id", "national_team_result_memories", ["competition_id"]
+        )
         op.create_index(
             "ix_national_team_result_memories_competition_family",
             "national_team_result_memories",

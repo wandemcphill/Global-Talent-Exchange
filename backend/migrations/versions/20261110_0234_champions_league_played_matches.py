@@ -31,8 +31,12 @@ def upgrade() -> None:
         sa.Column("stage_reached", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("club_user_ids", sa.JSON(), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("fee_status", sa.String(length=16), nullable=False, server_default="owed"),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("season_id", "match_id", name="uq_champions_league_played_matches_season_match"),
     )

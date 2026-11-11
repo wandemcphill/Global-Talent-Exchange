@@ -15,7 +15,6 @@ import RegenAwards from "@/pages/RegenAwards";
 import Competitions from "@/pages/Competitions";
 import CompetitionDetail from "@/pages/CompetitionDetail";
 const MatchCenter = React.lazy(() => import("@/pages/MatchCenter"));
-const VisualReviewPage = React.lazy(() => import("@/pages/VisualReviewPage"));
 import Squad from "@/pages/Squad";
 import Lineup from "@/pages/Lineup";
 import Academy from "@/pages/Academy";
@@ -81,7 +80,6 @@ export default function App() {
             <React.Suspense fallback={<Loading label="Loading GTEX 3D Studio..." />}>
             <Routes>
               {/* Public GTEX Consumer Routes */}
-              <Route path="/visual-review" element={<VisualReviewPage />} />
               <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
               <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
               <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />

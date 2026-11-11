@@ -23,8 +23,7 @@ from app.leagues.service import LeagueSeasonLifecycleService, LeagueValidationEr
 def test_regional_pyramid_splits_full_divisions_and_leaves_one_club_idle():
     service = LeagueSeasonLifecycleService(repository=InMemoryLeagueEventRepository())
     nigeria = [
-        PyramidClub(club_id=f"ng-{index:02d}", club_name=f"Nigeria {index}", region_code="CAF")
-        for index in range(21)
+        PyramidClub(club_id=f"ng-{index:02d}", club_name=f"Nigeria {index}", region_code="CAF") for index in range(21)
     ]
     europe = [
         PyramidClub(
@@ -246,9 +245,7 @@ def test_single_club_is_remembered_with_an_idle_result_and_stays():
     assert seasons == ()
     assert [club.club_id for cohort in idle for club in cohort.clubs] == ["solo"]
     held = [
-        event
-        for event in service.repository.list_events("pyramid-idle-2030")
-        if isinstance(event, LeagueClubHeldEvent)
+        event for event in service.repository.list_events("pyramid-idle-2030") if isinstance(event, LeagueClubHeldEvent)
     ]
     assert [event.club_id for event in held] == ["solo"]
     assert held[0].division_level == "foundation"

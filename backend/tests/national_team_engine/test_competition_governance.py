@@ -85,7 +85,10 @@ def test_seeded_templates_chain_finals_and_split_prize_modes():
         assert afcon["reward_structure"]["reward_mode"] == "places"
         assert afcon["reward_structure"]["per_match_coin"]["win"] == "0.0000"
         assert world_cup["qualification_chain"]["accepts_from_keys"] == ["gtex-world-cup-qualifier"]
-        assert by_key["gtex-u17-afcon-qualifier"]["metadata_json"]["qualification_chain"]["feeds_into_key"] == "gtex-u17-afcon"
+        assert (
+            by_key["gtex-u17-afcon-qualifier"]["metadata_json"]["qualification_chain"]["feeds_into_key"]
+            == "gtex-u17-afcon"
+        )
 
 
 def test_scheduled_country_playoff_remembers_the_user_and_feeds_the_finals():
@@ -179,7 +182,9 @@ def test_scheduled_country_playoff_remembers_the_user_and_feeds_the_finals():
         assert opened["current_stage"] == "pre_qualifier"
         pending = opened["pending_round"]["matches"]
         assert pending
-        assert all(match["kickoff_at"] < qualifier.kickoff_at.isoformat() for match in pending if match.get("kickoff_at"))
+        assert all(
+            match["kickoff_at"] < qualifier.kickoff_at.isoformat() for match in pending if match.get("kickoff_at")
+        )
         for match in pending:
             if str(match.get("resolution") or "").endswith("_bye"):
                 continue
@@ -195,7 +200,9 @@ def test_scheduled_country_playoff_remembers_the_user_and_feeds_the_finals():
         assert memories
         assert all(memory.same_country_playoff for memory in memories)
         assert memories[0].home_user_id
-        ranking = session.scalar(select(NationalTeamCountryRanking).where(NationalTeamCountryRanking.country_code == "NG"))
+        ranking = session.scalar(
+            select(NationalTeamCountryRanking).where(NationalTeamCountryRanking.country_code == "NG")
+        )
         assert ranking is None or int(ranking.matches_played) == 0
         try:
             lifecycle.submit_entry(
@@ -358,7 +365,9 @@ def test_new_club_starts_in_foundation_and_cannot_buy_the_top_tier():
         assert moved == repeated == "division_6"
 
 
-def _play_scheduled_until_complete(lifecycle: NationalCompetitionLifecycleService, competition_id: str, *, limit: int = 16):
+def _play_scheduled_until_complete(
+    lifecycle: NationalCompetitionLifecycleService, competition_id: str, *, limit: int = 16
+):
     payload = lifecycle.advance_lifecycle(competition_id=competition_id)
     for _ in range(limit):
         if payload["current_stage"] == "completed":
