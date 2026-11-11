@@ -150,4 +150,43 @@ describe("Gifting Contract, CinematicGiftingEngine & WebGL Disposal", () => {
     expect(texSpy).toHaveBeenCalled();
     expect(scene.children.length).toBe(0);
   });
+  test("plays the matching gift film muted and falls back to WebGL if all matching film sources fail", () => {
+    act(() => {
+      root.render(
+        <CinematicGiftingEngine
+          activeGift={{
+            id: "gift-video-fallback-1",
+            gift_code: "bicycle_kick",
+            gift_name: "Bicycle Kick",
+            sender: "Ayo",
+            amount: 120,
+            rarity: "epic",
+          }}
+          soundEnabled={false}
+        />
+      );
+    });
+
+    const overlay = container.querySelector('[data-testid="on-pitch-gift-animation"]');
+    const video = container.querySelector<HTMLVideoElement>(
+      '[data-testid="showroom-inspection-video"]'
+    );
+    expect(overlay?.getAttribute("data-gift-media")).toBe("film");
+    expect(overlay?.getAttribute("data-gift-film")).toBe(
+      "/assets/gifting/films/gtex-gift-bicycle.mp4"
+    );
+    expect(video).not.toBeNull();
+    expect(video?.muted).toBe(true);
+    expect(video?.hasAttribute("playsinline")).toBe(true);
+
+    act(() => {
+      video?.dispatchEvent(new Event("error"));
+    });
+
+    expect(container.querySelector('[data-testid="showroom-inspection-video"]')).toBeNull();
+    const updatedOverlay = container.querySelector('[data-testid="on-pitch-gift-animation"]');
+    expect(updatedOverlay?.getAttribute("data-gift-media")).toBe("webgl");
+    expect(updatedOverlay?.getAttribute("data-gift-film")).toBe("");
+  });
+
 });

@@ -8,10 +8,12 @@ export function ShowroomInspectionReel({
   frames,
   fit = "cover",
   showLabel = true,
+  onMediaError,
 }: {
   frames: InspectionFrame[];
   fit?: "cover" | "contain";
   showLabel?: boolean;
+  onMediaError?: (frame: InspectionFrame) => void;
 }) {
   const [index, setIndex] = useState(0);
   const count = frames.length;
@@ -46,6 +48,7 @@ export function ShowroomInspectionReel({
           playsInline
           data-testid="showroom-inspection-video"
           onEnded={() => setIndex((current) => (current + 1) % count)}
+          onError={() => onMediaError?.(frame)}
         />
       ) : (
         <img

@@ -270,6 +270,19 @@ function updateParticles(points: THREE.Points, progress: number, delta: number, 
   material.uniforms.uIntensity.value = intensity * (0.76 + Math.sin(progress * Math.PI * 4) * 0.12);
 }
 
+/** Reveal the authored asset wrapper without altering source mesh topology. */
+function animateHeroReveal(
+  hero: THREE.Group,
+  progress: number,
+  profile: { startScale?: number; yaw?: number; drift?: number } = {}
+): void {
+  const reveal = smooth(clamp(progress / 0.2));
+  const settle = smooth(clamp((progress - 0.72) / 0.2));
+  hero.scale.setScalar(lerp(profile.startScale ?? 0.88, 1, reveal));
+  hero.rotation.y = Math.sin(progress * Math.PI * 1.35) * (profile.yaw ?? 0.045) * (1 - settle * 0.65);
+  hero.rotation.z = Math.sin(progress * Math.PI * 2) * (profile.drift ?? 0.008) * (1 - settle * 0.7);
+}
+
 function addOcean(bin: SceneBin): THREE.ShaderMaterial {
   const geometry = new THREE.PlaneGeometry(220, 220, 48, 48);
   geometry.rotateX(-Math.PI / 2);
@@ -478,7 +491,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     ready(options, [task]);
     return finish(bin, 0x071321, 1.14, (progress, delta, target) => {
       camera(target, progress);
-      if (hero) hero.rotation.y = Math.sin(progress * Math.PI) * 0.08;
+      if (hero) animateHeroReveal(hero, progress, { startScale: 0.9, yaw: 0.065, drift: 0.004 });
       light.intensity = 2.6 + smooth(progress) * 1.4;
       updateParticles(particles, progress, delta, 0.24);
     }, options.rarity);
@@ -498,7 +511,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     ready(options, [task]);
     return finish(bin, golden ? 0x100c08 : 0x07111c, golden ? 1.25 : 1.12, (progress, delta, target) => {
       camera(target, progress);
-      hero.rotation.y = Math.sin(progress * Math.PI * 0.65) * 0.06;
+      animateHeroReveal(hero, progress, { startScale: 0.84, yaw: 0.055, drift: 0.006 });
       light.intensity = (golden ? 4.8 : 3) * smooth(progress);
       updateParticles(particles, progress, delta, golden ? 0.78 : 0.34);
     }, options.rarity);
@@ -518,7 +531,7 @@ export function createGiftDirector(options: Options): GiftDirector {
       const glide = smooth(progress);
       const climb = smooth(clamp((progress - 0.62) / 0.38));
       aircraft.position.set(lerp(-5, 5, glide), climb * 3.1, 0);
-      aircraft.rotation.z = climb * 0.06;
+      animateHeroReveal(aircraft, progress, { startScale: 0.9, yaw: 0.025, drift: 0.018 });
       camera(target, progress, [aircraft.position.x, aircraft.position.y, aircraft.position.z]);
       light.intensity = 2.8 + climb * 1.5;
       updateParticles(particles, progress, delta, 0.24 + climb * 0.32);
@@ -539,7 +552,7 @@ export function createGiftDirector(options: Options): GiftDirector {
       water.uniforms.uTime.value += delta;
       const glide = smooth(progress);
       yacht.position.set(lerp(-2.5, 3.5, glide), Math.sin(progress * Math.PI * 2) * 0.12, 0);
-      yacht.rotation.z = Math.sin(progress * Math.PI * 2) * 0.012;
+      animateHeroReveal(yacht, progress, { startScale: 0.88, yaw: 0.035, drift: 0.004 });
       camera(target, progress);
       light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 0.3;
       updateParticles(particles, progress, delta, 0.3);
@@ -568,10 +581,11 @@ export function createGiftDirector(options: Options): GiftDirector {
     return finish(bin, 0x08111d, 1.16, (progress, delta, target) => {
       const reveal = smooth(clamp(progress / 0.22));
       hero.position.x = lerp(shot === "facility" ? 0 : -4.5, 0, reveal);
-      hero.rotation.y =
-        shot === "facility"
-          ? Math.sin(progress * Math.PI * 0.7) * 0.045
-          : Math.sin(progress * Math.PI) * 0.025;
+      animateHeroReveal(hero, progress, {
+        startScale: shot === "facility" ? 0.9 : 0.86,
+        yaw: shot === "facility" ? 0.035 : 0.025,
+        drift: shot === "facility" ? 0.003 : 0.008,
+      });
       camera(target, progress);
       light.intensity = (shot === "facility" ? 3.2 : 2.8) + smooth(progress) * 1.1;
       updateParticles(particles, progress, delta, 0.24);
@@ -614,7 +628,8 @@ export function createGiftDirector(options: Options): GiftDirector {
     ready(options, tasks);
     return finish(bin, 0x08090d, 1.18, (progress, delta, target) => {
       camera(target, progress);
-      award.rotation.y = progress * Math.PI * 0.22;
+      animateHeroReveal(award, progress, { startScale: 0.76, yaw: 0, drift: 0.002 });
+      award.rotation.y = progress * Math.PI * 0.16;
       award.position.y = -0.45 + smooth(clamp(progress / 0.24)) * 0.45;
       const ball = award.getObjectByName("ballon-dor-ball");
       if (ball) ball.rotation.y = progress * Math.PI * 0.95;
