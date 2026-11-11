@@ -449,6 +449,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     const particles = addParticles(bin, options.quality, accent);
     const hero = new THREE.Group();
     hero.name = "gift-city-hero";
+    hero.userData.assetPath = ASSETS.city;
     bin.root.add(hero);
     const task = loadModel(bin, options, ASSETS.city, "gift-city-authored-model", hero, 15, true);
     ready(options, [task]);
@@ -467,6 +468,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     const particles = addParticles(bin, options.quality, accent);
     const hero = new THREE.Group();
     hero.name = "gift-stadium-hero";
+    hero.userData.assetPath = code.includes("golden") ? ASSETS.goldenStadium : ASSETS.stadium;
     bin.root.add(hero);
     const path = golden ? ASSETS.goldenStadium : ASSETS.stadium;
     const task = loadModel(bin, options, path, golden ? "gift-golden-stadium-model" : "gift-stadium-model", hero, 86, true);
@@ -484,6 +486,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     const particles = addParticles(bin, options.quality, 0xb8dcff);
     const aircraft = new THREE.Group();
     aircraft.name = "gift-aircraft";
+    aircraft.userData.assetPath = ASSETS.jet;
     bin.root.add(aircraft);
     const task = loadModel(bin, options, ASSETS.jet, "gift-private-jet-model", aircraft, 24, true, true);
     ready(options, [task]);
@@ -504,6 +507,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     const water = addOcean(bin);
     const yacht = new THREE.Group();
     yacht.name = "gift-yacht";
+    yacht.userData.assetPath = ASSETS.yacht;
     bin.root.add(yacht);
     const task = loadModel(bin, options, ASSETS.yacht, "gift-superyacht-model", yacht, 26, true, true);
     ready(options, [task]);
@@ -524,6 +528,7 @@ export function createGiftDirector(options: Options): GiftDirector {
     const particles = addParticles(bin, options.quality, accent);
     const award = new THREE.Group();
     award.name = shot === "trophy" ? "ballon-dor-stage" : "gift-award-stage";
+    award.userData.assetPath = shot === "crown" ? ASSETS.crown : ASSETS.trophy;
     bin.root.add(award);
     const path = shot === "crown" ? ASSETS.crown : ASSETS.trophy;
     const tasks: Promise<unknown>[] = [
@@ -557,17 +562,20 @@ export function createGiftDirector(options: Options): GiftDirector {
 
   const stadium = new THREE.Group();
   stadium.name = "gift-match-stadium";
+  stadium.userData.assetPath = ASSETS.matchStadium;
   bin.root.add(stadium);
   const stadiumTask = loadModel(bin, options, ASSETS.matchStadium, "gift-match-stadium-model", stadium, 88, true);
 
   const goal = new THREE.Group();
   goal.name = "match-goal";
+  goal.userData.assetPath = ASSETS.goal;
   goal.position.set(17, 0, 0);
   bin.root.add(goal);
   const goalTask = loadModel(bin, options, ASSETS.goal, "gift-match-goal-model", goal, 7.2, true, true);
 
   const ball = new THREE.Group();
   ball.name = "gift-ball";
+  ball.userData.assetPath = ASSETS.ball;
   bin.root.add(ball);
   const ballTask = loadModel(bin, options, ASSETS.ball, "gift-match-ball-model", ball, 0.48, false, false, goldenGoal);
 
