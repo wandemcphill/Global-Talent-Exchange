@@ -167,6 +167,11 @@ class NationalTeamEngineService:
         assert refreshed is not None
         refreshed.squad_size = len(refreshed.squad_members)
         self.session.flush()
+        from app.national_team_engine.competition_lifecycle_service import (
+            mirror_host_entry_onto_competition_entry,
+        )
+
+        mirror_host_entry_onto_competition_entry(self.session, refreshed, actor_id=actor.id)
         if created_count:
             StoryFeedService(self.session).publish(
                 story_type="national_team_callup",

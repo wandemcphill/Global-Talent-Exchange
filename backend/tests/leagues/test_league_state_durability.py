@@ -91,7 +91,6 @@ def _build_instance(session_factory) -> FastAPI:
 def _registration_payload(season_id: str) -> dict[str, object]:
     return {
         "season_id": season_id,
-        "buy_in_tier": 500,
         "season_start": str(date(2026, 3, 11)),
         "clubs": [
             {"club_id": f"club-{index}", "club_name": f"Club {index}", "strength_rating": 90 - index}

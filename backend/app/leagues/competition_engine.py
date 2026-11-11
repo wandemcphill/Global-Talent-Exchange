@@ -105,7 +105,7 @@ class LeagueCompetitionEngineService:
             CompetitionDispatchRequest(
                 fixture=fixture,
                 season_id=state.season_id,
-                competition_name=f"League Tier {state.buy_in_tier}",
+                competition_name=f"League {state.division_level or 'foundation'}",
                 stage_name="league_round",
                 scheduled_kickoff_at=source_by_id[fixture.fixture_id].kickoff_at,
                 home_club_name=source_by_id[fixture.fixture_id].home_club_name,

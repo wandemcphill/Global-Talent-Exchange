@@ -718,6 +718,7 @@ from app.models.history_engagement import (
     UserStreak,
     WeeklyTask,
 )
+from app.models.champions_league_played_match import ChampionsLeaguePlayedMatch
 from app.models.media_engine import MatchRevenueSnapshot, MatchView, PremiumVideoPurchase
 from app.models.ownership_group import (
     OwnershipGroup,
@@ -729,7 +730,9 @@ from app.models.national_team import (
     NationalTeamCompetition,
     NationalTeamCompetitionEntry,
     NationalTeamEntry,
+    NationalTeamFlagBearer,
     NationalTeamManagerHistory,
+    NationalTeamResultMemory,
     NationalTeamSquadMember,
 )
 from app.models.national_team_tournament import (
@@ -1343,7 +1346,10 @@ __all__ = [
     "UserObjectiveProgress",
     "ObjectiveFrequency",
     "UserStreak",
+    "ChampionsLeaguePlayedMatch",
     "NationalTeamCompetition",
+    "NationalTeamFlagBearer",
+    "NationalTeamResultMemory",
     "NationalTeamEntry",
     "NationalTeamManagerHistory",
     "NationalTeamSquadMember",

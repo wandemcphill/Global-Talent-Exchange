@@ -183,11 +183,20 @@ class GlobalProjectionCheckpoint(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 class NationalTeamCountryRanking(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_country_rankings"
     __table_args__ = (
-        UniqueConstraint("country_code", name="uq_national_team_country_rankings_country_code"),
+        UniqueConstraint(
+            "country_code",
+            "age_band",
+            "competition_family",
+            name="uq_national_team_country_rankings_scope",
+        ),
     )
 
     country_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
     country_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    age_band: Mapped[str] = mapped_column(String(16), nullable=False, default="senior", server_default="senior")
+    competition_family: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="all", server_default="all"
+    )
     elo_rating: Mapped[float] = mapped_column(Float, nullable=False, default=1500.0, server_default="1500.0")
     matches_played: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     wins: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")

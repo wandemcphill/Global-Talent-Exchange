@@ -157,3 +157,4 @@ class PrizeSettlementPreview:
     platform_share: Decimal
     currency: str
     events: list[SettlementEventPlan] = field(default_factory=list)
+    match_fee_schedule: dict[str, str] = field(default_factory=dict)

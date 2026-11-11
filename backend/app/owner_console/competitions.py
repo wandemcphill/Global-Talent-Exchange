@@ -37,7 +37,7 @@ SEED = (
         "name": "GTEX Lagos Launch Cup",
         "format": "league",
         "tier": "Launch",
-        "entry_fee": 2000,
+        "entry_fee": 0,
         "sponsored_pool": 20000,
         "max_clubs": 6,
         "description": "The flagship launch league. Six clubs, double prestige, platform-funded prize pool.",
@@ -55,7 +55,7 @@ SEED = (
         "name": "Weekend Knockout Shield",
         "format": "knockout",
         "tier": "Cup",
-        "entry_fee": 5000,
+        "entry_fee": 0,
         "sponsored_pool": 15000,
         "max_clubs": 8,
         "description": "Eight-club single-elimination cup. Same-owner clubs are auto-routed apart.",
@@ -609,14 +609,22 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
 
 
 def host_competition(session: Session, user_id: str, payload: dict[str, Any]) -> OwnerCompetition:
+    from app.national_team_engine.competition_profiles import user_template
+
+    template = user_template(str(payload.get("template_key") or ""))
+    competition_format = payload.get("format", "league")
+    max_clubs = int(payload.get("max_clubs", 4))
+    if template and template.get("side") == "club":
+        competition_format = template["format_type"]
+        max_clubs = int(template["max_participants"])
     comp = OwnerCompetition(
-        name=payload["name"],
+        name=payload.get("name") or (template or {}).get("title") or "Hosted competition",
         host_type="user",
         host_user_id=user_id,
-        format=payload.get("format", "league"),
+        format=competition_format,
         tier="Friends",
         entry_fee=Decimal(str(payload.get("entry_fee", 0))),
-        max_clubs=int(payload.get("max_clubs", 4)),
+        max_clubs=max_clubs,
         allow_same_owner=bool(payload.get("allow_same_owner", False)),
         prize_sensitive=Decimal(str(payload.get("entry_fee", 0))) > 0,
         platform_fee_bps=1000,

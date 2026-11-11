@@ -1006,6 +1006,10 @@ class NationalTeamTournamentService:
             return "u20"
         if normalized in {"u21", "under21"}:
             return "u21"
+        if normalized in {"u23", "under23"}:
+            return "u23"
+        if normalized in {"olympics", "olympic"}:
+            return "olympics"
         return "senior"
 
     @staticmethod
@@ -1025,6 +1029,8 @@ class NationalTeamTournamentService:
             return 20
         if age_band == "u21":
             return 21
+        if age_band == "u23":
+            return 23
         return None
 
     @staticmethod
@@ -1668,7 +1674,24 @@ class NationalTeamTournamentService:
             .outerjoin(InternalLeague, InternalLeague.id == Player.internal_league_id)
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .where(Player.id == player_id)
-        ).one_or_none()
+            .limit(1)
+        ).first()
+        if player_row is None:
+            player = self.session.get(Player, player_id)
+            if player is not None:
+                country = self.session.get(IngestionCountry, player.country_id) if player.country_id else None
+                player_row = (
+                    player,
+                    None,
+                    getattr(country, "name", None),
+                    getattr(country, "alpha2_code", None),
+                    getattr(country, "alpha3_code", None),
+                    getattr(country, "fifa_code", None),
+                    None,
+                    None,
+                    None,
+                    None,
+                )
         if player_row is not None:
             (
                 player,
@@ -2010,6 +2033,10 @@ class NationalTeamTournamentService:
             return int(age) <= 20
         if normalized in {"u21", "under21", "under_21"}:
             return int(age) <= 21
+        if normalized in {"u23", "under23", "under_23"}:
+            return int(age) <= 23
+        if normalized in {"olympics", "olympic"}:
+            return True
         return True
 
     def auto_build_squad(
@@ -2662,6 +2689,7 @@ class NationalTeamTournamentService:
             )
 
         self._refresh_entry_squad_size(entry)
+        self._mirror_host_entry(entry)
         StoryFeedService(self.session).publish(
             story_type="national_team_free_squad",
             title=f"{entry.country_name} claimed its free tournament core",
@@ -2690,6 +2718,7 @@ class NationalTeamTournamentService:
         settings = self._competition_settings(competition)
         current_members = self._entry_rental_members(entry.id)
         if any(member.player_id == player_id for member in current_members):
+            self._mirror_host_entry(entry)
             return self._entry_detail_payload(entry)
         if len(current_members) + len(entry.squad_members) >= int(settings["maximum_squad_size"]):
             raise NationalTeamTournamentError(
@@ -2708,27 +2737,27 @@ class NationalTeamTournamentService:
         }
         item = player_catalog.get(player_id)
         if item is None:
+            outside_pool_item = self._national_pool_item_for_player_id(
+                player_id=player_id,
+                competition=competition,
+            )
+            country_filters = self._normalize_pool_filters(country_code=entry.country_code)
+            matches_country = outside_pool_item is not None and self._pool_item_matches(
+                outside_pool_item,
+                filters=country_filters,
+            )
+            # The country pool stays closed. The national route still prices a known
+            # foreign player so eligibility can report nationality_mismatch.
+            if outside_pool_item is not None and (matches_country or expose_specific_outside_pool_reason):
+                item = self._priced_pool_item(outside_pool_item)
+        if item is None:
             player_exists = self.session.get(Player, player_id) is not None
             seed_exists = self.session.get(NationalRegenSeed, player_id) is not None
             if expose_specific_outside_pool_reason and (player_exists or seed_exists):
-                outside_pool_item = self._national_pool_item_for_player_id(
-                    player_id=player_id,
-                    competition=competition,
+                raise NationalTeamTournamentError(
+                    "Rental player is not eligible for this national team.",
+                    reason="player_not_eligible",
                 )
-                if outside_pool_item is not None:
-                    eligibility = self.rental_eligibility_for_pool_item(
-                        competition=competition,
-                        item=self._priced_pool_item(outside_pool_item),
-                        country_code=entry.country_code,
-                        entry=entry,
-                        actor=actor,
-                    )
-                    if not eligibility["eligible"]:
-                        reason = str((eligibility.get("reasons") or ["player_not_eligible"])[0])
-                        raise NationalTeamTournamentError(
-                            str(eligibility.get("message") or "Rental player is not eligible."),
-                            reason=reason,
-                        )
             raise NationalTeamTournamentError(
                 "Rental player is outside the national pool.",
                 reason="player_not_eligible" if player_exists or seed_exists else "player_not_found",
@@ -2808,7 +2837,15 @@ class NationalTeamTournamentService:
         )
         self._flag_rental_abuse(actor=actor, competition=competition, item=item, loan_price=loan_price)
         self._refresh_entry_squad_size(entry)
+        self._mirror_host_entry(entry)
         return self._entry_detail_payload(entry)
+
+    def _mirror_host_entry(self, entry: NationalTeamEntry) -> None:
+        from app.national_team_engine.competition_lifecycle_service import (
+            mirror_host_entry_onto_competition_entry,
+        )
+
+        mirror_host_entry_onto_competition_entry(self.session, entry)
 
     def get_theme(self, *, competition_id: str) -> dict[str, Any] | None:
         self._require_competition(competition_id)
@@ -3738,8 +3775,14 @@ class NationalTeamTournamentService:
         minimum_squad_size: int = DEFAULT_MINIMUM_SQUAD_SIZE,
         maximum_squad_size: int = DEFAULT_MAXIMUM_SQUAD_SIZE,
         notes: str | None = None,
+        template_key: str | None = None,
+        place_prizes: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        from app.national_team_engine.competition_profiles import default_reward_structure_for, profile_for
+        from app.national_team_engine.competition_profiles import (
+            default_reward_structure_for,
+            profile_for,
+            user_template,
+        )
 
         slug = (
             "-".join(part for part in "".join(ch.lower() if ch.isalnum() else "-" for ch in title).split("-") if part)
@@ -3749,13 +3792,27 @@ class NationalTeamTournamentService:
             f"{actor.id}:{title}:{season_label}:{utcnow().isoformat()}".encode("utf-8")
         ).hexdigest()[:6]
         key = f"user-{slug}-{unique_suffix}"
-        family = (
-            competition_family
-            if competition_family in {"world_cup", "afcon", "copa", "euros", "asian_cup"}
-            else "world_cup"
-        )
-        band = age_band if age_band in {"senior", "u20", "u17"} else "senior"
+        template = user_template(template_key)
+        if template and template.get("side") != "national":
+            raise NationalTeamTournamentError(
+                "That template is a club competition. Host it from the club competition flow.",
+                reason="template_side_mismatch",
+            )
+        if template:
+            age_band = str(template.get("age_band") or age_band)
+            format_type = str(template.get("format_type") or format_type)
+            competition_family = str(template.get("competition_family") or competition_family)
+        family = competition_family if competition_family else "world_cup"
+        band = age_band if age_band in {"senior", "u20", "u17", "u21", "u23", "olympics"} else "senior"
         profile = profile_for(family=family, age_band=band, metadata_json={})
+        reward = default_reward_structure_for("afcon", band)
+        reward["reward_mode"] = "places"
+        if place_prizes:
+            reward["place_prizes"] = {
+                "first": str(place_prizes.get("first", reward["place_prizes"]["first"])),
+                "second": str(place_prizes.get("second", reward["place_prizes"]["second"])),
+                "third": str(place_prizes.get("third", reward["place_prizes"]["third"])),
+            }
         competition = NationalTeamCompetition(
             key=key,
             title=title.strip(),
@@ -3770,12 +3827,15 @@ class NationalTeamTournamentService:
                 "host_type": "user",
                 "host_user_id": actor.id,
                 "entry_fee_coin": "0.0000",
+                "entry_policy": "open_representation",
+                "resolution_mode": "scheduled",
+                "template_key": template_key,
                 "entry_mode": "rental_only",
                 "minimum_squad_size": max(11, min(int(minimum_squad_size), 30)),
                 "maximum_squad_size": max(18, min(int(maximum_squad_size), 30)),
                 "free_player_quota": DEFAULT_FREE_PLAYER_QUOTA,
                 "free_player_distribution": dict(DEFAULT_FREE_PLAYER_DISTRIBUTION),
-                "reward_structure": default_reward_structure_for(family, band),
+                "reward_structure": reward,
                 "competition_engine": profile,
                 "schedule_profile": {
                     "preferred_cycle_week": profile["preferred_cycle_week"],

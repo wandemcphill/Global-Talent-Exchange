@@ -16,14 +16,27 @@ from app.leagues.models import (
     LeaguePrizePoolBreakdown,
     LeagueStandingRow,
 )
+from app.leagues.pyramid import normalize_division
+
+
+# GTEX funds the coin. The pool is not buy-in times the number of clubs.
+PLATFORM_POOL_BY_DIVISION: dict[str, int] = {
+    "foundation": 500,
+    "division_7": 500,
+    "division_6": 800,
+    "division_5": 1200,
+    "division_4": 1800,
+    "division_3": 2500,
+    "division_2": 2500,
+    "division_1": 4000,
+}
 
 
 class LeaguePrizeService:
     def calculate(
         self,
         *,
-        buy_in_tier: int,
-        club_count: int,
+        division_level: str,
         standings: tuple[LeagueStandingRow, ...],
         player_contributions: tuple[LeaguePlayerContribution, ...],
     ) -> tuple[
@@ -32,7 +45,7 @@ class LeaguePrizeService:
         LeagueAwardResult,
         LeagueAwardResult,
     ]:
-        total_pool = float(buy_in_tier * club_count)
+        total_pool = float(PLATFORM_POOL_BY_DIVISION[normalize_division(division_level)])
         prize_pool = LeaguePrizePoolBreakdown(
             total_pool=total_pool,
             winner_prize=total_pool * LEAGUE_WINNER_PCT,
@@ -127,4 +140,4 @@ class LeaguePrizeService:
         )
 
 
-__all__ = ["LeaguePrizeService"]
+__all__ = ["PLATFORM_POOL_BY_DIVISION", "LeaguePrizeService"]

@@ -74,3 +74,10 @@ All agents working on GTEX must adhere to the following rules permanently:
    - Ballon d'Or winners and top podium finishers are calibrated across 90-95.
    - Minimum rating floor: **No legend may be rated below 80**. The floor for all legends is **80 on the dot**.
    - No uniform clumping: ratings are spread across 80-96 according to individual achievements, international tournaments, and career honors.
+
+## Competition Entry (STRICT)
+Every GTEX competition is free to enter. Club competitions and national-team competitions. Nobody pays a buy-in, an entry fee, or a league tier fee.
+- National team: the user rents the squad. That rental is the only cost. Entering the competition itself is free.
+- Club: the user already owns the club and already bought the players. Entering the league is a right, not a purchase.
+- Division is the only difference: 1st, 2nd, 3rd, and on down to foundation. A new club starts in foundation and moves only by promotion and relegation. Money never chooses the division.
+- Prize coin is funded by GTEX. It is never calculated as buy-in times the number of clubs, and it is never taken from the entrants.

@@ -19,6 +19,7 @@ from app.national_team_engine.schemas import (
     NationalTeamCountryRankingResponse,
     NationalTeamManagerHireRequest,
     NationalTeamRentalBasketCheckoutRequest,
+    NationalTeamScheduledMatchResultRequest,
     NationalTeamUserHostCompetitionRequest,
     NationalTeamEntryDetailResponse,
     NationalTeamEntryResponse,
@@ -114,7 +115,7 @@ def _raise_tournament_http(exc: NationalTeamTournamentError) -> None:
 
 
 def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
-    if exc.reason in {"competition_not_found"}:
+    if exc.reason in {"competition_not_found", "scheduled_match_not_found"}:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.reason) from exc
     if exc.reason in {"settlement_forbidden"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=exc.reason) from exc
@@ -140,6 +141,13 @@ def _raise_lifecycle_http(exc: NationalCompetitionLifecycleError) -> None:
         "spending_controls_blocked",
         "economic_policy_unavailable",
         "player_not_rented",
+        "flag_bearer_required",
+        "country_representative_locked",
+        "entry_window_open",
+        "olympic_overage_limit",
+        "results_pending",
+        "scheduled_match_played",
+        "winner_required",
     }:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=exc.reason) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=exc.reason) from exc
@@ -624,6 +632,32 @@ def advance_competition_lifecycle(
 
 
 @admin_router.post(
+    "/competitions/{competition_id}/lifecycle/matches/{match_id}/result",
+    response_model=NationalTeamCompetitionLifecycleResponse,
+)
+def record_scheduled_match_result(
+    competition_id: str,
+    match_id: str,
+    payload: NationalTeamScheduledMatchResultRequest,
+    session: Session = Depends(get_session),
+    service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
+):
+    try:
+        body = service.record_scheduled_match_result(
+            competition_id=competition_id,
+            match_id=match_id,
+            home_score=payload.home_score,
+            away_score=payload.away_score,
+            winner_entry_id=payload.winner_entry_id,
+        )
+        session.commit()
+    except NationalCompetitionLifecycleError as exc:
+        session.rollback()
+        _raise_lifecycle_http(exc)
+    return _lifecycle_detail(body)
+
+
+@admin_router.post(
     "/competitions/{competition_id}/champion-reward/settle",
     response_model=NationalTeamChampionRewardSettlementResponse,
 )
@@ -860,6 +894,8 @@ def host_user_national_team_competition(
             minimum_squad_size=payload.minimum_squad_size,
             maximum_squad_size=payload.maximum_squad_size,
             notes=payload.notes,
+            template_key=payload.template_key,
+            place_prizes=payload.place_prizes,
         )
         session.commit()
     except NationalTeamTournamentError as exc:

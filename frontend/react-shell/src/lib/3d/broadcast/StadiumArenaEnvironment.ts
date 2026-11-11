@@ -1356,6 +1356,7 @@ export class StadiumArenaEnvironment {
     const supporterCount = this.qualityTier === "low" ? 360 : 1200;
     const supGeo = createSpectatorGeometry();
     const supMat = new THREE.MeshLambertMaterial({ color: 0xffffff, vertexColors: true });
+    patchSpectatorMaterial(supMat);
     this.disposables.push(supGeo, supMat);
 
     const instanced = new THREE.InstancedMesh(supGeo, supMat, supporterCount);
@@ -1729,7 +1730,7 @@ export class StadiumArenaEnvironment {
         meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
         meta.baseY = 1.8 + row * 1.05;
         meta.baseZ = -(halfW + 7 + row * 1.05);
-        meta.rotY = Math.PI;
+        meta.rotY = 0;
       } else if (i < count * 0.7) {
         const idx = i - Math.floor(count * 0.4);
         const row = idx % 6;
@@ -1738,7 +1739,7 @@ export class StadiumArenaEnvironment {
         meta.baseX = -halfL * 0.86 + (col / maxCols) * (FIFA_PITCH_DIMENSIONS.length * 0.86);
         meta.baseY = 1.8 + row * 1.05;
         meta.baseZ = halfW + 7 + row * 1.05;
-        meta.rotY = 0;
+        meta.rotY = Math.PI;
       } else if (i < count * 0.85) {
         const idx = i - Math.floor(count * 0.7);
         const row = idx % 5;
@@ -1789,58 +1790,130 @@ export class StadiumArenaEnvironment {
 
 const spectatorScale = new THREE.Vector3();
 
+/** Body part ids read by the crowd shader. Cloth takes the supporter's team colour. */
+const SPECTATOR_PART = { cloth: 0, skin: 1, hair: 2, trousers: 3 } as const;
+
+/**
+ * One fan: tapered torso, neck, head with hair, two legs, and two bent arms raised
+ * as if cheering. About 230 triangles, so the whole crowd stays a single draw call.
+ * The figure faces +Z.
+ */
 function createSpectatorGeometry(): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
-  const add = (geo: THREE.BufferGeometry, x: number, y: number, z: number, color: THREE.Color) => {
+  const add = (geo: THREE.BufferGeometry, part: number) => {
     const solid = geo.index ? geo.toNonIndexed() : geo;
     if (solid !== geo) geo.dispose();
-    solid.translate(x, y, z);
-    geo = solid;
-    const colors = new Float32Array(geo.getAttribute("position").count * 3);
-    for (let i = 0; i < colors.length; i += 3) {
-      colors[i] = color.r;
-      colors[i + 1] = color.g;
-      colors[i + 2] = color.b;
-    }
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    parts.push(geo);
+    const count = solid.getAttribute("position").count;
+    solid.setAttribute("partId", new THREE.BufferAttribute(new Float32Array(count).fill(part), 1));
+    parts.push(solid);
   };
-  const skin = new THREE.Color(0xf0c7a4);
-  const cloth = new THREE.Color(0xffffff);
-  add(new THREE.BoxGeometry(0.34, 0.46, 0.18), 0, 1.08, 0, cloth);
-  add(new THREE.SphereGeometry(0.13, 8, 6), 0, 1.46, 0, skin);
-  add(new THREE.BoxGeometry(0.11, 0.46, 0.12), -0.09, 0.48, 0, cloth);
-  add(new THREE.BoxGeometry(0.11, 0.46, 0.12), 0.09, 0.48, 0, cloth);
-  add(new THREE.BoxGeometry(0.09, 0.38, 0.1), -0.24, 1.12, 0, cloth);
-  add(new THREE.BoxGeometry(0.09, 0.38, 0.1), 0.24, 1.12, 0, cloth);
-  const merged = mergePositionNormalColor(parts);
+
+  const torso = new THREE.CylinderGeometry(0.17, 0.14, 0.54, 7, 1);
+  torso.scale(1, 1, 0.62);
+  torso.translate(0, 0.93, 0);
+  add(torso, SPECTATOR_PART.cloth);
+
+  const neck = new THREE.CylinderGeometry(0.045, 0.05, 0.08, 5, 1);
+  neck.translate(0, 1.24, 0);
+  add(neck, SPECTATOR_PART.skin);
+
+  const head = new THREE.SphereGeometry(0.11, 7, 5);
+  head.scale(0.92, 1.08, 1);
+  head.translate(0, 1.37, 0);
+  add(head, SPECTATOR_PART.skin);
+
+  const hair = new THREE.SphereGeometry(0.118, 7, 4, 0, Math.PI * 2, 0, Math.PI * 0.55);
+  hair.scale(0.95, 1.05, 1.02);
+  hair.translate(0, 1.39, -0.006);
+  add(hair, SPECTATOR_PART.hair);
+
+  [-1, 1].forEach((side) => {
+    const leg = new THREE.CylinderGeometry(0.065, 0.052, 0.66, 5, 1);
+    leg.translate(side * 0.085, 0.33, 0);
+    add(leg, SPECTATOR_PART.trousers);
+
+    // Upper arm hangs from the shoulder and swings out, the forearm bends back up.
+    const shoulder = new THREE.Vector3(side * 0.2, 1.12, 0);
+    const swing = side * 0.55;
+    const upper = new THREE.CylinderGeometry(0.048, 0.042, 0.3, 5, 1);
+    upper.translate(0, -0.15, 0);
+    upper.rotateZ(swing);
+    upper.translate(shoulder.x, shoulder.y, shoulder.z);
+    add(upper, SPECTATOR_PART.cloth);
+
+    const fore = new THREE.CylinderGeometry(0.04, 0.036, 0.27, 5, 1);
+    fore.translate(0, -0.135, 0);
+    fore.rotateZ(-side * 1.45);
+    fore.translate(0, -0.3, 0);
+    fore.rotateZ(swing);
+    fore.translate(shoulder.x, shoulder.y, shoulder.z);
+    add(fore, SPECTATOR_PART.skin);
+  });
+
+  const merged = mergeSpectatorParts(parts);
   parts.forEach((geo) => geo.dispose());
   return merged;
 }
 
-function mergePositionNormalColor(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
+function mergeSpectatorParts(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
   let count = 0;
   parts.forEach((geo) => {
     count += geo.getAttribute("position").count;
   });
   const position = new Float32Array(count * 3);
   const normal = new Float32Array(count * 3);
-  const color = new Float32Array(count * 3);
+  const color = new Float32Array(count * 3).fill(1);
+  const partId = new Float32Array(count);
   let offset = 0;
   parts.forEach((geo) => {
     const pos = geo.getAttribute("position");
     const nrm = geo.getAttribute("normal");
-    const col = geo.getAttribute("color");
     position.set(pos.array as Float32Array, offset * 3);
     normal.set(nrm.array as Float32Array, offset * 3);
-    color.set(col.array as Float32Array, offset * 3);
+    partId.set(geo.getAttribute("partId").array as Float32Array, offset);
     offset += pos.count;
   });
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
   geometry.setAttribute("normal", new THREE.BufferAttribute(normal, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(color, 3));
+  geometry.setAttribute("partId", new THREE.BufferAttribute(partId, 1));
   return geometry;
+}
+
+/**
+ * Cloth takes the supporter's instance colour. Skin, hair, and trousers vary per
+ * fan from the instance index, so nobody ends up with a team-coloured face.
+ */
+function patchSpectatorMaterial(material: THREE.MeshLambertMaterial): void {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute float partId;")
+      .replace(
+        "#include <color_vertex>",
+        `
+        vColor = vec3(1.0);
+        float fanA = fract(sin(float(gl_InstanceID) * 12.9898) * 43758.5453);
+        float fanB = fract(sin(float(gl_InstanceID) * 78.233 + 4.1) * 24634.6345);
+        if (partId < 0.5) {
+          #ifdef USE_INSTANCING_COLOR
+            vColor = instanceColor.xyz;
+          #endif
+        } else if (partId < 1.5) {
+          vColor = mix(vec3(0.16, 0.06, 0.03), vec3(0.87, 0.58, 0.40), fanA);
+        } else if (partId < 2.5) {
+          vec3 hairTone = vec3(0.012, 0.010, 0.010);
+          if (fanB > 0.35) hairTone = vec3(0.07, 0.035, 0.018);
+          if (fanB > 0.70) hairTone = vec3(0.45, 0.30, 0.10);
+          if (fanB > 0.90) hairTone = vec3(0.30, 0.30, 0.30);
+          vColor = hairTone;
+        } else {
+          vColor = mix(vec3(0.02, 0.03, 0.07), vec3(0.06, 0.10, 0.20), fanB);
+        }
+        `,
+      );
+  };
+  material.customProgramCacheKey = () => "gtex-spectator-crowd";
 }
 
 function disposeObject3D(root: THREE.Object3D): void {

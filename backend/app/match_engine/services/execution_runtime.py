@@ -309,6 +309,7 @@ class LocalMatchExecutionWorker:
             )
             self._stream_live_match(job, replay_payload)
             state = self._apply_competition_result(job, replay_payload)
+            self._pay_champions_league_match_fees(job, replay_payload)
             self._publish_match_lifecycle_event(
                 "competition.match.result.generated",
                 job,
@@ -892,10 +893,28 @@ class LocalMatchExecutionWorker:
                         "top_assist_award": asdict(state.top_assist_award),
                     }
                 )
+                if state.status == "completed" and self.session_factory is not None:
+                    payload["division_results"] = self._apply_league_divisions(state)
             self.event_publisher.publish(DomainEvent(name="competition.season.settlement.completed", payload=payload))
         except Exception:
             self._release_claim(self._completed_settlement_jobs, claim_key)
             raise
+
+    def _apply_league_divisions(self, state: LeagueSeasonState) -> dict[str, str]:
+        from sqlalchemy.exc import SQLAlchemyError
+
+        from app.owner_console.service import apply_completed_season_divisions
+
+        if self.session_factory is None:
+            return {}
+        try:
+            with self.session_factory() as session:
+                moved = apply_completed_season_divisions(session, state)
+                session.commit()
+                return moved
+        except SQLAlchemyError:
+            logger.exception("league.division_update_failed season_id=%s", state.season_id)
+            return {}
 
     def _apply_competition_result(self, job: MatchSimulationJob, replay_payload: MatchReplayPayloadView):
         if job.competition_type is not CompetitionType.LEAGUE or job.season_id is None:
@@ -923,6 +942,97 @@ class LocalMatchExecutionWorker:
                 player_contributions=contributions,
             )
         return state
+
+    def _pay_champions_league_match_fees(
+        self,
+        job: MatchSimulationJob,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        """Pay Champions League match coin once the result is known."""
+        if job.competition_type is not CompetitionType.CHAMPIONS_LEAGUE:
+            return
+        if self.session_factory is None or not job.home_club_id or not job.away_club_id:
+            return
+        club_user_ids = {
+            club_id: user_id
+            for club_id, user_id in (
+                (job.home_club_id, job.home_user_id),
+                (job.away_club_id, job.away_user_id),
+            )
+            if user_id
+        }
+        if not club_user_ids:
+            return
+        from app.champions_league.models.domain import LeagueMatchResult
+        from app.champions_league.services.tournament import ChampionsLeagueService
+        from app.models.user import User
+
+        service = ChampionsLeagueService()
+        season_id = job.season_id or job.competition_id
+        played = LeagueMatchResult(
+            match_id=job.fixture_id,
+            home_club_id=job.home_club_id,
+            away_club_id=job.away_club_id,
+            home_goals=int(replay_payload.summary.home_score),
+            away_goals=int(replay_payload.summary.away_score),
+        )
+        session = self.session_factory()
+        try:
+            service.remember_played_match(
+                session=session,
+                season_id=season_id,
+                match=played,
+                club_user_ids=club_user_ids,
+                stage_reached=None,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            logger.exception(
+                "champions_league.match_fee.remember_failed match_id=%s competition_id=%s",
+                job.fixture_id,
+                job.competition_id,
+            )
+            return
+        finally:
+            session.close()
+        session = self.session_factory()
+        try:
+            actor = None
+            for user_id in (job.home_user_id, job.away_user_id):
+                if not user_id:
+                    continue
+                actor = session.get(User, user_id)
+                if actor is not None:
+                    break
+            if actor is None:
+                logger.error(
+                    "champions_league.match_fee.owed match_id=%s competition_id=%s reason=owner_missing",
+                    job.fixture_id,
+                    job.competition_id,
+                )
+                return
+            service.record_match_and_pay(
+                session=session,
+                actor=actor,
+                season_id=season_id,
+                match=played,
+                club_user_ids=club_user_ids,
+                stage_name=job.stage_name,
+                is_final=bool(job.is_final),
+                winner_club_id=replay_payload.summary.winner_team_id,
+            )
+            session.commit()
+        except Exception:
+            session.rollback()
+            logger.exception(
+                "champions_league.match_fee.owed match_id=%s competition_id=%s. "
+                "The result is stored. The next Champions League result pays it.",
+                job.fixture_id,
+                job.competition_id,
+            )
+        finally:
+            session.close()
 
     def _queue_live_notifications(self, job: MatchSimulationJob) -> tuple[str, ...]:
         templates: list[str] = []

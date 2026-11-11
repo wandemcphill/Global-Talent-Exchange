@@ -26,8 +26,15 @@ from app.models.national_team import (
     NationalTeamCompetition,
     NationalTeamCompetitionEntry,
     NationalTeamEntry,
+    NationalTeamFlagBearer,
+    NationalTeamResultMemory,
+    NationalTeamSquadMember,
 )
-from app.models.national_team_tournament import RentalContract, RentalContractStatus
+from app.models.national_team_tournament import (
+    NationalTeamRentalSquadMember,
+    RentalContract,
+    RentalContractStatus,
+)
 from app.models.regen_ecosystem import NationalRegenSeed
 from app.models.reward_settlement import RewardSettlement
 from app.models.user import User, UserRole
@@ -37,6 +44,7 @@ from app.national_team_engine.competition_profiles import (
     infer_competition_family,
     profile_for,
 )
+from app.national_team_engine.scheduled_resolution import ScheduledResolutionMixin
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
 from app.reward_engine.service import RewardEngineError, RewardEngineService
 from app.wallets.service import LedgerPosting, WalletService
@@ -52,8 +60,104 @@ class NationalCompetitionLifecycleError(ValueError):
         self.reason = reason
 
 
+def mirror_host_entry_onto_competition_entry(
+    session: Session,
+    entry: NationalTeamEntry,
+    *,
+    actor_id: str | None = None,
+) -> NationalTeamCompetitionEntry | None:
+    """Copy the rental host onto the competition entry lifecycle reads.
+
+    NationalTeamEntry holds the rented squad. NationalTeamCompetitionEntry is
+    the row lock, qualification, and rewards use. Both stay, and this is the
+    write that keeps user, country, and player ids the same.
+    """
+
+    user_id = entry.entry_owner_user_id or entry.manager_user_id or actor_id
+    if not user_id:
+        return None
+    squad_json = _host_entry_squad_rows(session, entry)
+    existing = session.scalar(
+        select(NationalTeamCompetitionEntry).where(
+            NationalTeamCompetitionEntry.competition_id == entry.competition_id,
+            NationalTeamCompetitionEntry.user_id == user_id,
+        )
+    )
+    if existing is None:
+        existing = NationalTeamCompetitionEntry(
+            competition_id=entry.competition_id,
+            user_id=user_id,
+            country_code=entry.country_code,
+            country_name=entry.country_name,
+            squad_json=squad_json,
+            locked=False,
+            qualified=False,
+            status="submitted",
+            metadata_json={"mirrored_from_entry_id": entry.id},
+        )
+        session.add(existing)
+    elif not existing.locked:
+        existing.country_code = entry.country_code
+        existing.country_name = entry.country_name
+        existing.squad_json = squad_json
+        existing.metadata_json = {
+            **dict(existing.metadata_json or {}),
+            "mirrored_from_entry_id": entry.id,
+        }
+    session.flush()
+    return existing
+
+
+def _host_entry_squad_rows(session: Session, entry: NationalTeamEntry) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    rental_members = list(
+        session.scalars(
+            select(NationalTeamRentalSquadMember)
+            .where(NationalTeamRentalSquadMember.entry_id == entry.id)
+            .order_by(NationalTeamRentalSquadMember.created_at.asc())
+        ).all()
+    )
+    for member in rental_members:
+        player_id = str(member.player_id or "").strip()
+        if not player_id or player_id in seen:
+            continue
+        seen.add(player_id)
+        metadata = dict(member.metadata_json or {})
+        position = metadata.get("primary_position") or metadata.get("assigned_slot") or "fw"
+        rows.append(
+            {
+                "player_id": player_id,
+                "player_name": member.player_name,
+                "overall_rating": int(member.overall_rating or 70),
+                "position": str(position),
+            }
+        )
+    squad_members = list(
+        session.scalars(
+            select(NationalTeamSquadMember)
+            .where(NationalTeamSquadMember.entry_id == entry.id)
+            .order_by(NationalTeamSquadMember.created_at.asc())
+        ).all()
+    )
+    for member in squad_members:
+        player_id = str(member.user_id or "").strip()
+        if not player_id or player_id in seen:
+            continue
+        seen.add(player_id)
+        rows.append(
+            {
+                "player_id": player_id,
+                "player_name": member.player_name,
+                "overall_rating": 70,
+                "position": str(member.role_label or "fw"),
+            }
+        )
+    return rows
+
+
 @dataclass(slots=True)
-class NationalCompetitionLifecycleService:
+class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
     session: Session
     event_publisher: EventPublisher | None = None
     wallet_service: WalletService | None = None
@@ -98,6 +202,7 @@ class NationalCompetitionLifecycleService:
                     reason="country_representative_locked",
                 )
         profile = self._competition_profile(competition)
+        self._assert_flag_bearer_entry(competition, actor=actor, country_code=country_code)
         confederation_code = self._country_confederation(country_code)
         self._validate_confederation(
             profile=profile,
@@ -196,6 +301,7 @@ class NationalCompetitionLifecycleService:
                 "At least one submitted entry is required before entries can be locked.",
                 reason="entries_missing",
             )
+        self._assert_representation_window_closed(competition)
 
         profile = self._competition_profile(competition)
         representatives = self._default_representative_ids(entries)
@@ -276,7 +382,30 @@ class NationalCompetitionLifecycleService:
         entries = self._ordered_entries(competition)
         entry_map = {entry.id: entry for entry in entries}
 
-        if current_stage == "pre_qualifier":
+        if self._uses_scheduled_resolution(competition) and current_stage in {
+            "pre_qualifier",
+            "qualifier",
+            "tournament",
+        }:
+            progress = self._progress_scheduled_stage(
+                competition=competition,
+                lifecycle_state=lifecycle_state,
+                stage=current_stage,
+                entries=entries,
+                entry_map=entry_map,
+                profile=profile,
+            )
+            lifecycle_state = progress["lifecycle_state"]
+            if progress["waiting"]:
+                competition.metadata_json = {
+                    **dict(competition.metadata_json or {}),
+                    "lifecycle_state": lifecycle_state,
+                }
+                competition.status = "live" if current_stage != "registration" else competition.status
+                self.session.flush()
+                return self.get_lifecycle_payload(competition_id=competition_id)
+            result = progress["result"]
+        elif current_stage == "pre_qualifier":
             result = self._run_pre_qualifier(competition=competition, entries=entries)
             representative_ids = list(result["representative_entry_ids"])
             lifecycle_state["stage_results"]["pre_qualifier"] = result
@@ -359,12 +488,26 @@ class NationalCompetitionLifecycleService:
             "lifecycle_state": lifecycle_state,
         }
         stage_matches = self._extract_matches_from_stage_result(stage=current_stage, result=result)
+        self._remember_matches(competition, stage=current_stage, matches=stage_matches)
         self._update_country_rankings(
             competition=competition,
             stage=current_stage,
             matches=stage_matches,
             champion_entry=entry_map.get(lifecycle_state.get("champion_entry_id")),
         )
+        self._sync_flag_bearers(
+            competition=competition,
+            stage=current_stage,
+            lifecycle_state=lifecycle_state,
+            entry_map=entry_map,
+        )
+        eliminated_cleanup = self._cleanup_completed_competition_rentals(competition)
+        if eliminated_cleanup is not None:
+            lifecycle_state["rental_cleanup"] = eliminated_cleanup
+            competition.metadata_json = {
+                **dict(competition.metadata_json or {}),
+                "lifecycle_state": lifecycle_state,
+            }
         self._emit_competition_advanced_event(
             competition=competition,
             stage=current_stage,
@@ -540,6 +683,7 @@ class NationalCompetitionLifecycleService:
             "schedule_plan": list(lifecycle_state.get("schedule_plan") or []),
             "stage_history": list(lifecycle_state.get("stage_history") or []),
             "stage_results": dict(lifecycle_state.get("stage_results") or {}),
+            "pending_round": lifecycle_state.get("pending_round"),
             "rental_cleanup": lifecycle_state.get("rental_cleanup"),
             "champion_reward_settlement": lifecycle_state.get("champion_reward_settlement"),
             "reward_breakdown": self.calculate_tournament_reward_breakdown(competition_id=competition_id),
@@ -553,6 +697,14 @@ class NationalCompetitionLifecycleService:
         reward_structure = dict(
             metadata.get("reward_structure") or default_reward_structure_for(profile["family"], profile["age_band"])
         )
+        if str(reward_structure.get("reward_mode") or "") != "match_and_stage" and profile["family"] != "world_cup":
+            return self._place_prize_breakdown(
+                competition=competition,
+                profile=profile,
+                reward_structure=reward_structure,
+            )
+        if profile["family"] == "world_cup" and not reward_structure.get("reward_mode"):
+            reward_structure["reward_mode"] = "match_and_stage"
         qual_guaranteed = self._normalize_amount(reward_structure.get("qualification_guaranteed_coin", "250.0000"))
         per_match = dict(reward_structure.get("per_match_coin") or {})
         win_coin = self._normalize_amount(per_match.get("win", "120.0000"))
@@ -844,6 +996,8 @@ class NationalCompetitionLifecycleService:
                 "draws": item.draws,
                 "losses": item.losses,
                 "titles": item.titles,
+                "age_band": item.age_band,
+                "competition_family": item.competition_family,
                 "metadata_json": dict(item.metadata_json or {}),
             }
             for item in rows
@@ -1098,6 +1252,223 @@ class NationalCompetitionLifecycleService:
         champion_entry.metadata_json = {
             **dict(champion_entry.metadata_json or {}),
             "champion_reward_settlement": serializable,
+        }
+
+    def _assert_flag_bearer_entry(
+        self,
+        competition: NationalTeamCompetition,
+        *,
+        actor: User,
+        country_code: str,
+    ) -> None:
+        policy = str((competition.metadata_json or {}).get("entry_policy") or "open_representation")
+        if policy != "flag_bearer_only":
+            return
+        if not self._has_tables("national_team_flag_bearers"):
+            raise NationalCompetitionLifecycleError(
+                "This competition accepts only the qualified flag bearer for each country.",
+                reason="flag_bearer_required",
+            )
+        bearer = self.session.scalar(
+            select(NationalTeamFlagBearer).where(
+                NationalTeamFlagBearer.target_key == competition.key,
+                NationalTeamFlagBearer.country_code == country_code,
+                NationalTeamFlagBearer.season_label == competition.season_label,
+                NationalTeamFlagBearer.age_band == str(competition.age_band or "senior"),
+                NationalTeamFlagBearer.status == "active",
+            )
+        )
+        if bearer is None or bearer.user_id != actor.id:
+            raise NationalCompetitionLifecycleError(
+                f"{country_code} can be entered only by the user who qualified with that country.",
+                reason="flag_bearer_required",
+            )
+
+    def _sync_flag_bearers(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        stage: str,
+        lifecycle_state: dict[str, Any],
+        entry_map: dict[str, NationalTeamCompetitionEntry],
+    ) -> None:
+        if not self._has_tables("national_team_flag_bearers"):
+            return
+        chain = dict((competition.metadata_json or {}).get("qualification_chain") or {})
+        feeds_into = str(chain.get("feeds_into_key") or "").strip()
+        targets: list[tuple[str, list[str]]] = []
+        if stage == "pre_qualifier":
+            targets.append((competition.key, list(lifecycle_state.get("representative_entry_ids") or [])))
+        if feeds_into and stage in {"qualifier", "tournament"}:
+            qualified = list(lifecycle_state.get("qualified_entry_ids") or [])
+            if not qualified and lifecycle_state.get("champion_entry_id"):
+                qualified = [str(lifecycle_state["champion_entry_id"])]
+            targets.append((feeds_into, qualified))
+        age_band = str(competition.age_band or "senior")
+        family = str(self._competition_profile(competition)["family"])
+        for target_key, entry_ids in targets:
+            for entry_id in entry_ids:
+                entry = entry_map.get(entry_id)
+                if entry is None:
+                    continue
+                existing = self.session.scalar(
+                    select(NationalTeamFlagBearer).where(
+                        NationalTeamFlagBearer.season_label == competition.season_label,
+                        NationalTeamFlagBearer.age_band == age_band,
+                        NationalTeamFlagBearer.target_key == target_key,
+                        NationalTeamFlagBearer.country_code == entry.country_code.strip().upper(),
+                    )
+                )
+                if existing is None:
+                    self.session.add(
+                        NationalTeamFlagBearer(
+                            season_label=competition.season_label,
+                            age_band=age_band,
+                            competition_family=family,
+                            country_code=entry.country_code.strip().upper(),
+                            country_name=entry.country_name,
+                            user_id=entry.user_id,
+                            entry_id=entry.id,
+                            source_competition_id=competition.id,
+                            target_key=target_key,
+                            status="active",
+                        )
+                    )
+                else:
+                    existing.user_id = entry.user_id
+                    existing.entry_id = entry.id
+                    existing.source_competition_id = competition.id
+                    existing.status = "active"
+                    existing.country_name = entry.country_name
+
+    def _remember_matches(
+        self,
+        competition: NationalTeamCompetition,
+        *,
+        stage: str,
+        matches: list[dict[str, Any]],
+    ) -> None:
+        if not self._has_tables("national_team_result_memories"):
+            return
+        family = str(self._competition_profile(competition)["family"])
+        age_band = str(competition.age_band or "senior")
+        for match in matches:
+            if match.get("home_score") is None or str(match.get("resolution") or "").endswith("_bye"):
+                continue
+            if str(match.get("status") or "played") == "scheduled":
+                continue
+            home_code = str(match.get("home_country_code") or "").upper()
+            away_code = str(match.get("away_country_code") or "").upper()
+            match_key = str(
+                match.get("match_id")
+                or f"{stage}:{match.get('home_entry_id')}:{match.get('away_entry_id')}:{match.get('stage')}"
+            )[:80]
+            existing = self.session.scalar(
+                select(NationalTeamResultMemory).where(
+                    NationalTeamResultMemory.competition_id == competition.id,
+                    NationalTeamResultMemory.match_key == match_key,
+                )
+            )
+            if existing is not None:
+                continue
+            winner_entry_id = match.get("winner_entry_id")
+            winner_user_id = None
+            if winner_entry_id and winner_entry_id == match.get("home_entry_id"):
+                winner_user_id = match.get("home_user_id")
+            elif winner_entry_id and winner_entry_id == match.get("away_entry_id"):
+                winner_user_id = match.get("away_user_id")
+            self.session.add(
+                NationalTeamResultMemory(
+                    competition_id=competition.id,
+                    season_label=competition.season_label,
+                    age_band=age_band,
+                    competition_family=family,
+                    stage=stage,
+                    match_key=match_key,
+                    home_entry_id=match.get("home_entry_id"),
+                    away_entry_id=match.get("away_entry_id"),
+                    home_user_id=match.get("home_user_id"),
+                    away_user_id=match.get("away_user_id"),
+                    home_country_code=home_code,
+                    away_country_code=away_code,
+                    home_score=int(match.get("home_score") or 0),
+                    away_score=int(match.get("away_score") or 0),
+                    winner_entry_id=winner_entry_id,
+                    winner_user_id=winner_user_id,
+                    same_country_playoff=bool(home_code and home_code == away_code),
+                )
+            )
+
+    def _place_prize_breakdown(
+        self,
+        *,
+        competition: NationalTeamCompetition,
+        profile: dict[str, Any],
+        reward_structure: dict[str, Any],
+    ) -> dict[str, Any]:
+        places = dict(reward_structure.get("place_prizes") or {})
+        first = self._normalize_amount(places.get("first", "0"))
+        second = self._normalize_amount(places.get("second", "0"))
+        third = self._normalize_amount(places.get("third", "0"))
+        lifecycle_state = self._lifecycle_state(competition)
+        entry_map = {entry.id: entry for entry in self._ordered_entries(competition)}
+        awards: dict[str, tuple[Decimal, str]] = {}
+        champion_id = str(lifecycle_state.get("champion_entry_id") or "")
+        if champion_id:
+            awards[champion_id] = (first, "first")
+        tournament = dict((lifecycle_state.get("stage_results") or {}).get("tournament") or {})
+        runner_up_id = ""
+        third_ids: list[str] = []
+        for rnd in reversed(list(tournament.get("knockout_rounds") or [])):
+            stage_name = str(rnd.get("stage") or "")
+            for match in list(rnd.get("matches") or []):
+                if str(match.get("resolution") or "").endswith("_bye"):
+                    continue
+                winner_id = str(match.get("winner_entry_id") or "")
+                home_id = str(match.get("home_entry_id") or "")
+                away_id = str(match.get("away_entry_id") or "")
+                loser_id = away_id if winner_id == home_id else home_id
+                if stage_name == "final" and loser_id:
+                    runner_up_id = loser_id
+                elif stage_name == "semifinal" and loser_id:
+                    third_ids.append(loser_id)
+        if runner_up_id:
+            awards[runner_up_id] = (second, "second")
+        if third_ids:
+            share = (third / Decimal(len(third_ids))).quantize(AMOUNT_QUANTUM)
+            for entry_id in third_ids:
+                if entry_id not in awards:
+                    awards[entry_id] = (share, "third")
+        serialized = []
+        total = Decimal("0.0000")
+        for entry_id, (amount, label) in awards.items():
+            entry = entry_map.get(entry_id)
+            if entry is None or amount <= 0:
+                continue
+            total += amount
+            serialized.append(
+                {
+                    "entry_id": entry.id,
+                    "user_id": entry.user_id,
+                    "country_code": entry.country_code,
+                    "country_name": entry.country_name,
+                    "qualification_guaranteed_coin": "0.0000",
+                    "matches_played": 0,
+                    "match_wins": 0,
+                    "match_draws": 0,
+                    "match_losses": 0,
+                    "match_earnings_coin": "0.0000",
+                    "stages_reached": [label],
+                    "stage_progression_coin": "0.0000",
+                    "total_gross_coin": str(self._normalize_amount(amount)),
+                }
+            )
+        return {
+            "competition_id": competition.id,
+            "competition_family": profile["family"],
+            "reward_structure": reward_structure,
+            "total_distributed_coin": str(self._normalize_amount(total)),
+            "entry_rewards": serialized,
         }
 
     @staticmethod
@@ -1415,6 +1786,13 @@ class NationalCompetitionLifecycleService:
                     "metadata_json": metadata_json,
                 }
             )
+        if str(competition.age_band or "").strip().lower() == "olympics":
+            overage = [item for item in normalized if int(item.get("resolved_age") or 0) > 23]
+            if len(overage) > 3:
+                raise NationalCompetitionLifecycleError(
+                    "The Olympics allow only three players over 23.",
+                    reason="olympic_overage_limit",
+                )
         return normalized
 
     @staticmethod
@@ -1479,15 +1857,22 @@ class NationalCompetitionLifecycleService:
         resolved_age: int | None,
     ) -> None:
         age_band = str(competition.age_band or "senior").strip().lower()
-        if age_band not in {"u17", "u20"}:
+        limits = {"u17": 17, "u20": 20, "u21": 21, "u23": 23}
+        if age_band == "olympics":
+            if resolved_age is None:
+                raise NationalCompetitionLifecycleError(
+                    f"Player '{player_name}' is missing age data for the Olympics.",
+                    reason="player_age_missing",
+                )
+            return
+        if age_band not in limits:
             return
         if resolved_age is None:
             raise NationalCompetitionLifecycleError(
                 f"Player '{player_name}' is missing age data for an age-locked competition.",
                 reason="player_age_missing",
             )
-        limit = 17 if age_band == "u17" else 20
-        if resolved_age > limit:
+        if resolved_age > limits[age_band]:
             raise NationalCompetitionLifecycleError(
                 f"Player '{player_name}' exceeds the {age_band.upper()} age limit.",
                 reason="invalid_squad_age",
@@ -1773,6 +2158,7 @@ class NationalCompetitionLifecycleService:
         groups: list[list[NationalTeamCompetitionEntry]],
         advance_per_group: int,
         best_third_slots: int,
+        preset_matches: dict[tuple[str, str], dict[str, Any]] | None = None,
     ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
         best_remaining: list[dict[str, Any]] = []
         qualified_rows: list[dict[str, Any]] = []
@@ -1801,7 +2187,29 @@ class NationalCompetitionLifecycleService:
                 for away_index in range(home_index + 1, len(group_entries)):
                     home = group_entries[home_index]
                     away = group_entries[away_index]
-                    match = self._simulate_match(
+                    preset = None
+                    if preset_matches is not None:
+                        preset = preset_matches.get((home.id, away.id)) or preset_matches.get((away.id, home.id))
+                        if preset is None:
+                            raise NationalCompetitionLifecycleError(
+                                "A scheduled group match is missing its result.",
+                                reason="scheduled_match_not_found",
+                            )
+                    if preset is not None and str(preset.get("home_entry_id") or "") == away.id:
+                        preset = {
+                            **preset,
+                            "home_entry_id": home.id,
+                            "away_entry_id": away.id,
+                            "home_score": preset.get("away_score"),
+                            "away_score": preset.get("home_score"),
+                            "home_user_id": preset.get("away_user_id"),
+                            "away_user_id": preset.get("home_user_id"),
+                            "home_country_code": preset.get("away_country_code"),
+                            "away_country_code": preset.get("home_country_code"),
+                            "home_country_name": preset.get("away_country_name"),
+                            "away_country_name": preset.get("home_country_name"),
+                        }
+                    match = dict(preset) if preset is not None else self._simulate_match(
                         competition=competition,
                         stage_code=stage_code,
                         stage_label=f"group_{group_name}",
@@ -1983,9 +2391,11 @@ class NationalCompetitionLifecycleService:
         return {
             "stage": stage_label,
             "home_entry_id": left.id,
+            "home_user_id": left.user_id,
             "home_country_code": left.country_code,
             "home_country_name": left.country_name,
             "away_entry_id": right.id,
+            "away_user_id": right.user_id,
             "away_country_code": right.country_code,
             "away_country_name": right.country_name,
             "home_score": left_score,
@@ -2047,19 +2457,26 @@ class NationalCompetitionLifecycleService:
         country_code: str,
         *,
         country_name: str | None = None,
+        age_band: str | None = None,
+        competition_family: str | None = None,
         create: bool = True,
     ) -> NationalTeamCountryRanking | None:
         normalized = country_code.strip().upper()
         if not normalized:
             return None
-        ranking = self.session.scalar(
-            select(NationalTeamCountryRanking).where(NationalTeamCountryRanking.country_code == normalized)
-        )
+        statement = select(NationalTeamCountryRanking).where(NationalTeamCountryRanking.country_code == normalized)
+        if age_band:
+            statement = statement.where(NationalTeamCountryRanking.age_band == age_band)
+        if competition_family:
+            statement = statement.where(NationalTeamCountryRanking.competition_family == competition_family)
+        ranking = self.session.scalars(statement.limit(1)).first()
         if ranking is not None or not create:
             return ranking
         ranking = NationalTeamCountryRanking(
             country_code=normalized,
             country_name=(country_name or normalized).strip() or normalized,
+            age_band=age_band or "senior",
+            competition_family=competition_family or "all",
             elo_rating=1500.0,
             metadata_json={},
         )
@@ -2081,10 +2498,22 @@ class NationalCompetitionLifecycleService:
                 continue
             home_code = str(match.get("home_country_code") or "").strip().upper()
             away_code = str(match.get("away_country_code") or "").strip().upper()
-            if not home_code or not away_code:
+            if not home_code or not away_code or home_code == away_code:
                 continue
-            home = self._country_ranking(home_code, country_name=str(match.get("home_country_name") or home_code))
-            away = self._country_ranking(away_code, country_name=str(match.get("away_country_name") or away_code))
+            age_band = str(competition.age_band or "senior")
+            family = str(self._competition_profile(competition)["family"])
+            home = self._country_ranking(
+                home_code,
+                country_name=str(match.get("home_country_name") or home_code),
+                age_band=age_band,
+                competition_family=family,
+            )
+            away = self._country_ranking(
+                away_code,
+                country_name=str(match.get("away_country_name") or away_code),
+                age_band=age_band,
+                competition_family=family,
+            )
             if home is None or away is None:
                 continue
 
@@ -2119,6 +2548,8 @@ class NationalCompetitionLifecycleService:
             champion = self._country_ranking(
                 champion_entry.country_code,
                 country_name=champion_entry.country_name,
+                age_band=str(competition.age_band or "senior"),
+                competition_family=str(self._competition_profile(competition)["family"]),
             )
             if champion is not None:
                 champion.titles += 1

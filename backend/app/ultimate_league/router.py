@@ -89,15 +89,26 @@ def upsert_competitor(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Competitor ownership must match the authenticated user.",
         )
+    # Registration cannot choose a tier. A new club starts in Bronze with no
+    # results. A later profile edit keeps the rating earned from matches.
+    if existing is None:
+        bottom_tier = runtime.list_tiers()[0]
+        elo_rating = 0 if bottom_tier.max_elo is None else bottom_tier.max_elo - 1
+        wins = draws = losses = 0
+    else:
+        elo_rating = existing.elo_rating
+        wins = existing.wins
+        draws = existing.draws
+        losses = existing.losses
     competitor = runtime.upsert_competitor(
         LeagueCompetitor(
             competitor_id=payload.competitor_id,
             display_name=payload.display_name,
-            elo_rating=payload.elo_rating,
+            elo_rating=elo_rating,
             user_id=payload.user_id,
-            wins=payload.wins,
-            draws=payload.draws,
-            losses=payload.losses,
+            wins=wins,
+            draws=draws,
+            losses=losses,
             region=payload.region,
             queue_entered_at=payload.queue_entered_at,
             fatigue=payload.fatigue,

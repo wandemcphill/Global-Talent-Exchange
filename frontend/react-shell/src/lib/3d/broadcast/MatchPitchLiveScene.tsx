@@ -937,6 +937,13 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               standard.envMapIntensity = 0.25;
               standard.userData.gtexFixedEnv = 0.25;
               standard.roughness = Math.max(standard.roughness ?? 0.4, 0.4);
+              // Under the night rig the leather albedo lands tan. Lift the white
+              // panels with the same texture so the ball reads white and black.
+              if (standard.map) {
+                standard.emissiveMap = standard.map;
+                standard.emissive.setRGB(0.5, 0.5, 0.5);
+                standard.emissiveIntensity = 1;
+              }
             });
           });
           ballMesh.add(pbrBall);

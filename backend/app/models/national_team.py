@@ -193,6 +193,59 @@ class NationalTeamSquadMember(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     user: Mapped["User"] = relationship()
 
 
+class NationalTeamFlagBearer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """The one user allowed to carry a country into a competition."""
+
+    __tablename__ = "national_team_flag_bearers"
+    __table_args__ = (
+        UniqueConstraint(
+            "season_label",
+            "age_band",
+            "target_key",
+            "country_code",
+            name="uq_national_team_flag_bearers_slot",
+        ),
+    )
+
+    season_label: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    age_band: Mapped[str] = mapped_column(String(16), nullable=False)
+    competition_family: Mapped[str] = mapped_column(String(32), nullable=False)
+    country_code: Mapped[str] = mapped_column(String(8), nullable=False, index=True)
+    country_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    source_competition_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    target_key: Mapped[str] = mapped_column(String(96), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active")
+
+
+class NationalTeamResultMemory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One played result, remembered with the users who played it."""
+
+    __tablename__ = "national_team_result_memories"
+    __table_args__ = (
+        UniqueConstraint("competition_id", "match_key", name="uq_national_team_result_memories_match"),
+    )
+
+    competition_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    season_label: Mapped[str] = mapped_column(String(64), nullable=False)
+    age_band: Mapped[str] = mapped_column(String(16), nullable=False)
+    competition_family: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    stage: Mapped[str] = mapped_column(String(32), nullable=False)
+    match_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    home_entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    away_entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    home_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    away_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    home_country_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    away_country_code: Mapped[str] = mapped_column(String(8), nullable=False)
+    home_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    away_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    winner_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    winner_entry_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    same_country_playoff: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+
+
 class NationalTeamManagerHistory(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "national_team_manager_history"
 

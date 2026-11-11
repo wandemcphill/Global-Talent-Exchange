@@ -13,21 +13,26 @@ from sqlalchemy.orm import Mapped, Session, mapped_column, sessionmaker
 
 from app.competitions.models.league_events import LeagueSeasonEvent
 from app.competitions.models.league_events import (
+    LeagueClubHeldEvent,
     LeagueClubOptOutEvent,
     LeagueFixtureCompletedEvent,
     LeaguePlayerStatsRecordedEvent,
     LeagueRegisteredClubEventData,
     LeagueSeasonRegisteredEvent,
 )
+from app.leagues.models import LeagueDivisionLinkRecordedEvent
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 logger = logging.getLogger(__name__)
 
 
-class LeagueEventRepository(Protocol):
-    def append(self, event: LeagueSeasonEvent) -> None: ...
+LeagueStoredEvent = LeagueSeasonEvent | LeagueDivisionLinkRecordedEvent
 
-    def list_events(self, season_id: str) -> tuple[LeagueSeasonEvent, ...]: ...
+
+class LeagueEventRepository(Protocol):
+    def append(self, event: LeagueStoredEvent) -> None: ...
+
+    def list_events(self, season_id: str) -> tuple[LeagueStoredEvent, ...]: ...
 
 
 class LeagueEventRecord(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
@@ -43,7 +48,7 @@ class DatabaseLeagueEventRepository:
     def __init__(self, session_factory: sessionmaker[Session]) -> None:
         self._session_factory = session_factory
 
-    def append(self, event: LeagueSeasonEvent) -> None:
+    def append(self, event: LeagueStoredEvent) -> None:
         with self._session_factory() as session:
             session.add(
                 LeagueEventRecord(
@@ -55,7 +60,7 @@ class DatabaseLeagueEventRepository:
             )
             session.commit()
 
-    def list_events(self, season_id: str) -> tuple[LeagueSeasonEvent, ...]:
+    def list_events(self, season_id: str) -> tuple[LeagueStoredEvent, ...]:
         with self._session_factory() as session:
             rows = session.scalars(
                 select(LeagueEventRecord)
@@ -69,14 +74,14 @@ class DatabaseLeagueEventRepository:
 
 class InMemoryLeagueEventRepository:
     def __init__(self) -> None:
-        self._events: dict[str, list[LeagueSeasonEvent]] = defaultdict(list)
+        self._events: dict[str, list[LeagueStoredEvent]] = defaultdict(list)
         self._lock = RLock()
 
-    def append(self, event: LeagueSeasonEvent) -> None:
+    def append(self, event: LeagueStoredEvent) -> None:
         with self._lock:
             self._events[event.season_id].append(event)
 
-    def list_events(self, season_id: str) -> tuple[LeagueSeasonEvent, ...]:
+    def list_events(self, season_id: str) -> tuple[LeagueStoredEvent, ...]:
         with self._lock:
             return tuple(self._events.get(season_id, ()))
 
@@ -126,13 +131,13 @@ def _league_event_table_available(session_factory: sessionmaker[Session]) -> boo
         return False
 
 
-def _event_recorded_at(event: LeagueSeasonEvent) -> datetime:
+def _event_recorded_at(event: LeagueStoredEvent) -> datetime:
     if isinstance(event, LeagueSeasonRegisteredEvent):
         return event.registered_at
     return event.recorded_at
 
 
-def _serialize_event(event: LeagueSeasonEvent) -> dict[str, object]:
+def _serialize_event(event: LeagueStoredEvent) -> dict[str, object]:
     payload = asdict(event)
     return _normalize_value(payload)
 
@@ -151,7 +156,7 @@ def _normalize_value(value):
     return value
 
 
-def _deserialize_event(event_type: str, payload: dict[str, object]) -> LeagueSeasonEvent:
+def _deserialize_event(event_type: str, payload: dict[str, object]) -> LeagueStoredEvent:
     if event_type == "LeagueSeasonRegisteredEvent":
         return LeagueSeasonRegisteredEvent(
             season_id=str(payload["season_id"]),
@@ -166,6 +171,11 @@ def _deserialize_event(event_type: str, payload: dict[str, object]) -> LeagueSea
                 )
                 for club in payload.get("clubs", [])
             ),
+            single_round=bool(payload.get("single_round", False)),
+            division_level=str(payload.get("division_level") or ""),
+            region_code=str(payload.get("region_code") or ""),
+            cohort_index=int(payload.get("cohort_index") or 0),
+            season_label=str(payload.get("season_label") or ""),
         )
     if event_type == "LeagueFixtureCompletedEvent":
         return LeagueFixtureCompletedEvent(
@@ -179,6 +189,27 @@ def _deserialize_event(event_type: str, payload: dict[str, object]) -> LeagueSea
         return LeagueClubOptOutEvent(
             season_id=str(payload["season_id"]),
             club_id=str(payload["club_id"]),
+            recorded_at=datetime.fromisoformat(str(payload["recorded_at"])),
+        )
+    if event_type == "LeagueClubHeldEvent":
+        return LeagueClubHeldEvent(
+            season_id=str(payload["season_id"]),
+            club_id=str(payload["club_id"]),
+            club_name=str(payload["club_name"]),
+            division_level=str(payload.get("division_level") or "foundation"),
+            region_code=str(payload.get("region_code") or "UNASSIGNED"),
+            strength_rating=int(payload.get("strength_rating") or 0),
+            recorded_at=datetime.fromisoformat(str(payload["recorded_at"])),
+        )
+    if event_type == "LeagueDivisionLinkRecordedEvent":
+        parent_level = payload.get("parent_level")
+        child_level = payload.get("child_level")
+        return LeagueDivisionLinkRecordedEvent(
+            season_id=str(payload["season_id"]),
+            region_code=str(payload.get("region_code") or ""),
+            division_level=str(payload.get("division_level") or "foundation"),
+            parent_level=str(parent_level) if parent_level else None,
+            child_level=str(child_level) if child_level else None,
             recorded_at=datetime.fromisoformat(str(payload["recorded_at"])),
         )
     if event_type == "LeaguePlayerStatsRecordedEvent":
@@ -199,6 +230,7 @@ __all__ = [
     "InMemoryLeagueEventRepository",
     "LeagueEventRecord",
     "LeagueEventRepository",
+    "LeagueStoredEvent",
     "build_league_event_repository",
     "get_league_event_repository",
 ]

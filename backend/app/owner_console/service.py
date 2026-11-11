@@ -22,6 +22,7 @@ from app.owner_console.models import (
     OwnerSquadPlayer,
     RelatedPartyTransfer,
 )
+from app.leagues.pyramid import next_division_level
 from app.services.world_clock_service import WorldClockService
 
 logger = logging.getLogger(__name__)
@@ -119,16 +120,63 @@ def start_activation(session: Session, user_id: str, club_id: str) -> OwnerClubS
         owner_user_id=user_id,
         club_name=profile.club_name,
         stage="squad",
+        division_level="foundation",
         manager_json={},
         facilities_json={kind: 1 for kind in engine.FACILITY_KINDS},
         value_history_json=[],
     )
     session.add(state)
     session.flush()
+    state.division_level = "foundation"
     from app.owner_console.first_club_entitlement import award_first_club_launch_grant
 
     award_first_club_launch_grant(session, user_id, club_id)
     return state
+
+
+def apply_division_result(
+    session: Session,
+    club_id: str,
+    *,
+    final_position: int,
+    field_size: int,
+    season_id: str | None = None,
+) -> str:
+    """Move a club one division on league finish. Spend does not change the division."""
+    state = get_state(session, club_id)
+    if state is None:
+        return "foundation"
+    applied = [str(item) for item in (state.division_season_ids or [])]
+    if season_id and season_id in applied:
+        return state.division_level or "foundation"
+    state.division_level = next_division_level(
+        state.division_level or "foundation",
+        final_position=final_position,
+        field_size=field_size,
+    )
+    if season_id:
+        state.division_season_ids = [*applied, season_id][-40:]
+    session.flush()
+    return state.division_level
+
+
+def apply_completed_season_divisions(session: Session, state) -> dict[str, str]:
+    """Promote and relegate once when a league season has a full result table."""
+    if getattr(state, "status", None) != "completed":
+        return {}
+    standings = tuple(getattr(state, "standings", ()) or ())
+    field_size = len(standings)
+    season_id = str(getattr(state, "season_id", "") or "")
+    moved: dict[str, str] = {}
+    for row in standings:
+        moved[row.club_id] = apply_division_result(
+            session,
+            row.club_id,
+            final_position=int(row.position),
+            field_size=field_size,
+            season_id=season_id or None,
+        )
+    return moved
 
 
 def claim_starter_club(

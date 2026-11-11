@@ -126,8 +126,7 @@ def test_pool_splits_follow_configured_distribution() -> None:
     standings = _sample_standings()
 
     prize_pool, champion_prize, top_scorer_award, top_assist_award = prize_service.calculate(
-        buy_in_tier=1000,
-        club_count=20,
+        division_level="division_1",
         standings=standings,
         player_contributions=(
             LeaguePlayerContribution(player_id="p1", player_name="Striker 1", club_id="club-1", goals=12, assists=4),
@@ -135,15 +134,15 @@ def test_pool_splits_follow_configured_distribution() -> None:
         ),
     )
 
-    assert prize_pool.total_pool == pytest.approx(20_000.0)
-    assert prize_pool.winner_prize == pytest.approx(10_000.0)
-    assert prize_pool.top_scorer_prize == pytest.approx(2_000.0)
-    assert prize_pool.top_assist_prize == pytest.approx(1_000.0)
-    assert prize_pool.champions_league_fund == pytest.approx(7_000.0)
+    assert prize_pool.total_pool == pytest.approx(4_000.0)
+    assert prize_pool.winner_prize == pytest.approx(2_000.0)
+    assert prize_pool.top_scorer_prize == pytest.approx(400.0)
+    assert prize_pool.top_assist_prize == pytest.approx(200.0)
+    assert prize_pool.champions_league_fund == pytest.approx(1_400.0)
     assert champion_prize is not None
     assert champion_prize.club_id == "club-1"
-    assert top_scorer_award.winners[0].split_amount == pytest.approx(2_000.0)
-    assert top_assist_award.winners[0].split_amount == pytest.approx(1_000.0)
+    assert top_scorer_award.winners[0].split_amount == pytest.approx(400.0)
+    assert top_assist_award.winners[0].split_amount == pytest.approx(200.0)
 
 
 def test_top_scorer_and_assist_ties_split_evenly() -> None:
@@ -151,8 +150,7 @@ def test_top_scorer_and_assist_ties_split_evenly() -> None:
     standings = _sample_standings()
 
     _, _, top_scorer_award, top_assist_award = prize_service.calculate(
-        buy_in_tier=300,
-        club_count=20,
+        division_level="division_6",
         standings=standings,
         player_contributions=(
             LeaguePlayerContribution(player_id="p1", player_name="Finisher 1", club_id="club-1", goals=10, assists=4),
@@ -164,8 +162,35 @@ def test_top_scorer_and_assist_ties_split_evenly() -> None:
 
     assert len(top_scorer_award.winners) == 2
     assert len(top_assist_award.winners) == 2
-    assert all(winner.split_amount == pytest.approx(300.0) for winner in top_scorer_award.winners)
-    assert all(winner.split_amount == pytest.approx(150.0) for winner in top_assist_award.winners)
+    assert all(winner.split_amount == pytest.approx(40.0) for winner in top_scorer_award.winners)
+    assert all(winner.split_amount == pytest.approx(20.0) for winner in top_assist_award.winners)
+
+
+@pytest.mark.parametrize(
+    ("division_level", "pool"),
+    [
+        ("foundation", 500),
+        ("division_7", 500),
+        ("division_6", 800),
+        ("division_5", 1200),
+        ("division_4", 1800),
+        ("division_3", 2500),
+        ("division_2", 2500),
+        ("division_1", 4000),
+    ],
+)
+def test_prize_pool_is_platform_funded_by_division(division_level: str, pool: int) -> None:
+    prize_pool, *_rest = LeaguePrizeService().calculate(
+        division_level=division_level,
+        standings=_sample_standings(),
+        player_contributions=(),
+    )
+
+    assert prize_pool.total_pool == pytest.approx(float(pool))
+    assert prize_pool.winner_prize == pytest.approx(pool * 0.50)
+    assert prize_pool.top_scorer_prize == pytest.approx(pool * 0.10)
+    assert prize_pool.top_assist_prize == pytest.approx(pool * 0.05)
+    assert prize_pool.champions_league_fund == pytest.approx(pool * 0.35)
 
 
 def test_minimum_size_fallback_creates_valid_short_group_schedule() -> None:

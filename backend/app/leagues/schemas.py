@@ -13,9 +13,20 @@ class LeagueClubRegistrationRequest(BaseModel):
 
 class LeagueRegisterRequest(BaseModel):
     season_id: str | None = Field(default=None, min_length=1)
-    buy_in_tier: int
+    buy_in_tier: int = 0
     season_start: date
     clubs: list[LeagueClubRegistrationRequest] = Field(min_length=2, max_length=20)
+
+
+class LeagueRolloverRequest(BaseModel):
+    season_ids: list[str] = Field(min_length=1, max_length=40)
+    season_label: str = Field(min_length=1, max_length=32)
+    season_start: date
+
+
+class LeagueRolloverView(BaseModel):
+    opened_season_ids: list[str]
+    idle_club_ids: list[str]
 
 
 class LeagueRegistrationView(BaseModel):

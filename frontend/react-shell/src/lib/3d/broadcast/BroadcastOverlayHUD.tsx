@@ -12,7 +12,7 @@
  * 5. Full 6-Mode Broadcast Camera Switcher & 2D Tactical Companion Toggle.
  */
 
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   Layers,
   Tv,
@@ -287,6 +287,15 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
       clockLabel: activeEvent?.clock_label || clockDisplay,
     };
   }, [liveEventBanner, matchState?.event_banner, matchState?.players, activeEvent, clockDisplay]);
+
+  // The card is a lower third. It shows for a few seconds and leaves the pitch clear.
+  const bannerKey = `${activeEvent?.event_id ?? ""}|${liveEventBanner ?? ""}|${matchState?.event_banner ?? ""}`;
+  const [bannerDismissed, setBannerDismissed] = useState(false);
+  useEffect(() => {
+    setBannerDismissed(false);
+    const timer = window.setTimeout(() => setBannerDismissed(true), 7000);
+    return () => window.clearTimeout(timer);
+  }, [bannerKey]);
 
   return (
     <div
@@ -664,7 +673,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
       {/* =====================================================================
           2. CENTER / LOWER-THIRD: Broadcast Event Card & Replay Fallback Notice
           ===================================================================== */}
-      <div className="flex flex-col items-center gap-2 my-auto">
+      <div className="mt-auto flex flex-col items-start gap-2 self-start pb-1">
         {replayFallbackMessage && (
           <div
             data-testid="replay-fallback-notice"
@@ -677,10 +686,10 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
           </div>
         )}
 
-        {eventPresentation && (
+        {eventPresentation && !bannerDismissed && (
           <div
             data-testid="broadcast-event-banner"
-            className="pointer-events-none mx-auto max-w-xl transform transition-all"
+            className="pointer-events-none max-w-md transform transition-all"
           >
             <div
               data-testid="broadcast-lower-third-card"

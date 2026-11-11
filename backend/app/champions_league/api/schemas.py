@@ -205,3 +205,4 @@ class PrizeSettlementPreviewView(BaseModel):
     platform_share: Decimal
     currency: str
     events: list[SettlementEventPlanView]
+    match_fee_schedule: dict[str, str] = Field(default_factory=dict)

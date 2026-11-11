@@ -18,6 +18,11 @@ class LeagueSeasonRegisteredEvent:
     season_start: date
     registered_at: datetime
     clubs: tuple[LeagueRegisteredClubEventData, ...]
+    single_round: bool = False
+    division_level: str = ""
+    region_code: str = ""
+    cohort_index: int = 0
+    season_label: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,6 +42,17 @@ class LeagueClubOptOutEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class LeagueClubHeldEvent:
+    season_id: str
+    club_id: str
+    club_name: str
+    division_level: str
+    region_code: str
+    strength_rating: int
+    recorded_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
 class LeaguePlayerStatsRecordedEvent:
     season_id: str
     player_id: str
@@ -52,10 +68,12 @@ LeagueSeasonEvent = (
     | LeagueFixtureCompletedEvent
     | LeagueClubOptOutEvent
     | LeaguePlayerStatsRecordedEvent
+    | LeagueClubHeldEvent
 )
 
 
 __all__ = [
+    "LeagueClubHeldEvent",
     "LeagueClubOptOutEvent",
     "LeagueFixtureCompletedEvent",
     "LeaguePlayerStatsRecordedEvent",

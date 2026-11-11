@@ -418,6 +418,7 @@ class NationalTeamCompetitionLifecycleResponse(BaseModel):
     champion_reward_settlement: dict[str, Any] | None = None
     reward_breakdown: dict[str, Any] | None = None
     tournament_reward_settlements: list[dict[str, Any]] = Field(default_factory=list)
+    pending_round: dict[str, Any] | None = None
 
 
 class NationalTeamManagerHireRequest(BaseModel):
@@ -439,6 +440,8 @@ class NationalTeamUserHostCompetitionRequest(BaseModel):
     minimum_squad_size: int = Field(default=18, ge=11, le=30)
     maximum_squad_size: int = Field(default=30, ge=18, le=30)
     notes: str | None = Field(default=None, max_length=500)
+    template_key: str | None = Field(default=None, max_length=64)
+    place_prizes: dict[str, str] | None = None
 
 
 class NationalTeamCountryRankingResponse(BaseModel):
@@ -450,7 +453,15 @@ class NationalTeamCountryRankingResponse(BaseModel):
     draws: int
     losses: int
     titles: int
+    age_band: str = "senior"
+    competition_family: str = "all"
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+
+class NationalTeamScheduledMatchResultRequest(BaseModel):
+    home_score: int = Field(ge=0, le=30)
+    away_score: int = Field(ge=0, le=30)
+    winner_entry_id: str | None = None
 
 
 NationalTeamEntryDetailResponse.model_rebuild()

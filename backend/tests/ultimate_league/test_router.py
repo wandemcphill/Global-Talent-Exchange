@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 import pytest
 
 from app.auth.dependencies import get_current_user
+from app.ultimate_league.league_service import LeagueTier, UltimateLeagueService
 from app.ultimate_league.router import router
 
 OWNER_USER_ID = "user-owner"
@@ -87,8 +88,8 @@ def test_competitor_upsert_and_standings_round_trip(client: TestClient, prefix: 
     _register(
         client,
         prefix,
-        _competitor("bronze-1", "Bronze One", 1180, wins=3, draws=1),
-        _competitor("bronze-2", "Bronze Two", 1190, wins=4, draws=0),
+        _competitor("bronze-1", "Bronze One", 1800, wins=3, draws=1),
+        _competitor("bronze-2", "Bronze Two", 1900, wins=4, draws=0),
     )
 
     competitor_response = client.get(f"{prefix}/competitors/bronze-1")
@@ -104,7 +105,9 @@ def test_competitor_upsert_and_standings_round_trip(client: TestClient, prefix: 
     assert bronze_tier["competitor_count"] == 2
 
     standings = standings_response.json()["entries"]
-    assert [entry["competitor"]["competitor_id"] for entry in standings] == ["bronze-2", "bronze-1"]
+    assert [entry["competitor"]["competitor_id"] for entry in standings] == ["bronze-1", "bronze-2"]
+    assert standings[0]["competitor"]["wins"] == 0
+    assert standings[1]["competitor"]["wins"] == 0
     assert standings[0]["zone"] == "promotion"
 
 
@@ -130,7 +133,7 @@ def test_matchmaking_tournament_and_payout_preview(client: TestClient, prefix: s
         f"{prefix}/tournaments",
         json={
             "tournament_id": "gold-cup-1",
-            "tier": "gold",
+            "tier": "bronze",
             "starts_at": datetime(2026, 4, 5, 18, 0, tzinfo=timezone.utc).isoformat(),
             "competitor_ids": ["gold-1", "gold-2", "gold-3", "gold-4"],
             "field_size": 4,
@@ -263,6 +266,64 @@ def test_upsert_competitor_rejects_overwriting_another_users_competitor(client: 
     assert response.status_code == 403
 
 
+def test_new_competitor_with_high_elo_starts_bronze_until_results(client: TestClient) -> None:
+    service = UltimateLeagueService()
+    requested_elo = 2500
+    bottom_tier = service.TIER_DEFINITIONS[0]
+    assert bottom_tier.tier == LeagueTier.BRONZE
+    assert service.tier_for_rating(requested_elo).tier != LeagueTier.BRONZE
+
+    created = client.put(
+        "/ultimate-league/competitors/new-club",
+        json=_competitor("new-club", "New Club", requested_elo),
+    )
+    assert created.status_code == 200, created.text
+    created_body = created.json()
+    assert created_body["tier"] == LeagueTier.BRONZE.value
+    assert service.tier_for_rating(created_body["elo_rating"]).tier == LeagueTier.BRONZE
+
+    opponent = client.put(
+        "/ultimate-league/competitors/new-opponent",
+        json=_competitor("new-opponent", "New Opponent", requested_elo),
+    )
+    assert opponent.status_code == 200, opponent.text
+    assert opponent.json()["tier"] == LeagueTier.BRONZE.value
+
+    result = client.post(
+        "/ultimate-league/matches/result",
+        json={
+            "home_competitor_id": "new-club",
+            "away_competitor_id": "new-opponent",
+            "home_score": 2,
+            "away_score": 0,
+            "importance": 1.0,
+        },
+    )
+    assert result.status_code == 200, result.text
+    home = result.json()["home"]
+    assert home["elo_rating"] > created_body["elo_rating"]
+    promoted = service.tier_for_rating(home["elo_rating"])
+    assert promoted.tier != LeagueTier.BRONZE
+    assert home["tier"] == promoted.tier.value
+    assert service.tier_for_rating(requested_elo).tier != LeagueTier.BRONZE
+
+    padded = client.put(
+        "/ultimate-league/competitors/padded-club",
+        json=_competitor("padded-club", "Padded Club", requested_elo, wins=20, draws=0, losses=0),
+    )
+    assert padded.status_code == 200, padded.text
+    assert padded.json()["tier"] == LeagueTier.BRONZE.value
+    assert padded.json()["wins"] == 0
+
+    jumped = client.put(
+        "/ultimate-league/competitors/new-club",
+        json=_competitor("new-club", "New Club", requested_elo, wins=20),
+    )
+    assert jumped.status_code == 200, jumped.text
+    assert jumped.json()["tier"] == home["tier"]
+    assert jumped.json()["elo_rating"] == home["elo_rating"]
+
+
 def test_upsert_competitor_allows_owner_to_update_own_competitor(client: TestClient) -> None:
     _register(client, "/ultimate-league", _competitor("owned-2", "Owned Two", 1200))
 
@@ -271,7 +332,10 @@ def test_upsert_competitor_allows_owner_to_update_own_competitor(client: TestCli
         json=_competitor("owned-2", "Owned Two Updated", 1250),
     )
     assert response.status_code == 200, response.text
-    assert response.json()["elo_rating"] == 1250
+    body = response.json()
+    assert body["display_name"] == "Owned Two Updated"
+    assert body["tier"] == LeagueTier.BRONZE.value
+    assert body["elo_rating"] < 1200
 
 
 def test_submit_match_result_rejects_non_participant(client: TestClient) -> None:

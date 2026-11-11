@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -17,6 +17,12 @@ class OwnerClubState(UUIDPrimaryKeyMixin, Base):
     owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     club_name: Mapped[str] = mapped_column(String(120), nullable=False)
     stage: Mapped[str] = mapped_column(String(32), nullable=False, default="squad")
+    division_level: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="foundation", server_default="foundation"
+    )
+    division_season_ids: Mapped[list[Any]] = mapped_column(
+        JSON, nullable=False, default=list, server_default=text("'[]'")
+    )
     manager_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     facilities_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     fans: Mapped[int] = mapped_column(Integer, nullable=False, default=1200)

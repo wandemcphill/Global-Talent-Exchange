@@ -98,7 +98,14 @@ def _restore_database_url() -> None:
 def _effective_database_url() -> str:
     explicit_migration_url = os.environ.get("GTE_MIGRATION_DATABASE_URL")
     if explicit_migration_url and explicit_migration_url.strip():
-        return normalize_database_url(explicit_migration_url)
+        normalized = normalize_database_url(explicit_migration_url)
+        if ".pooler.supabase.com:6543/" in normalized:
+            normalized = normalized.replace(
+                ".pooler.supabase.com:6543/",
+                ".pooler.supabase.com:5432/",
+                1,
+            )
+        return normalized
 
     for candidate in (
         _database_url_override,

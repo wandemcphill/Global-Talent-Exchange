@@ -17,6 +17,7 @@ class LeagueFixtureGenerationService:
         season_id: str,
         clubs: tuple[LeagueClub, ...],
         season_start: date,
+        double_round: bool = True,
     ) -> tuple[LeagueFixture, ...]:
         participants: list[LeagueClub | None] = list(clubs)
         if len(participants) % 2 == 1:
@@ -48,7 +49,7 @@ class LeagueFixtureGenerationService:
         schedule_plan = self._build_schedule_plan(
             season_id=season_id,
             season_start=season_start,
-            total_rounds=total_rounds * 2,
+            total_rounds=total_rounds * (2 if double_round else 1),
         )
         fixtures: list[LeagueFixture] = []
         for round_index, pairings in enumerate(rounds, start=1):
@@ -61,17 +62,18 @@ class LeagueFixtureGenerationService:
                 )
             )
 
-        reverse_offset = len(rounds)
-        for round_index, pairings in enumerate(rounds, start=1):
-            reversed_pairings = tuple((away_club, home_club) for home_club, away_club in pairings)
-            fixtures.extend(
-                self._build_round(
-                    season_id=season_id,
-                    schedule_plan=schedule_plan,
-                    round_number=reverse_offset + round_index,
-                    pairings=reversed_pairings,
+        if double_round:
+            reverse_offset = len(rounds)
+            for round_index, pairings in enumerate(rounds, start=1):
+                reversed_pairings = tuple((away_club, home_club) for home_club, away_club in pairings)
+                fixtures.extend(
+                    self._build_round(
+                        season_id=season_id,
+                        schedule_plan=schedule_plan,
+                        round_number=reverse_offset + round_index,
+                        pairings=reversed_pairings,
+                    )
                 )
-            )
 
         return tuple(fixtures)
 

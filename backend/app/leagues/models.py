@@ -127,3 +127,20 @@ class LeagueSeasonState:
     target_matches_per_club: int
     group_size_target: int
     group_is_full: bool
+    division_level: str = ""
+    region_code: str = ""
+    cohort_index: int = 0
+    season_label: str = ""
+    idle_result: LeagueMatchResult | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LeagueDivisionLinkRecordedEvent:
+    """One rung of a region's division ladder. Empty rungs have no fixtures."""
+
+    season_id: str
+    region_code: str
+    division_level: str
+    parent_level: str | None
+    child_level: str | None
+    recorded_at: datetime
