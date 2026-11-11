@@ -941,7 +941,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               // panels with the same texture so the ball reads white and black.
               if (standard.map) {
                 standard.emissiveMap = standard.map;
-                standard.emissive.setRGB(0.5, 0.5, 0.5);
+                standard.emissive.setRGB(0.38, 0.38, 0.38);
                 standard.emissiveIntensity = 1;
               }
             });

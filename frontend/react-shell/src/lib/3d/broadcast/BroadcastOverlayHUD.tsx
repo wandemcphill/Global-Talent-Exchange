@@ -223,7 +223,8 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
     let accentClass = "border-amber-400/60 from-amber-950/95 via-slate-900/95 to-amber-950/95 text-amber-300";
     let badgeBg = "bg-amber-500 text-slate-950";
 
-    if (evType === "goal" || upperBanner.includes("GOAL")) {
+    // "GOALKEEPER SAVE" must not read as a goal, so match GOAL as a whole word.
+    if (evType === "goal" || /\bGOAL\b/.test(upperBanner)) {
       category = "GOAL SCORED";
       accentClass = "border-emerald-400/80 from-emerald-950/95 via-slate-900/95 to-emerald-950/95 text-emerald-300";
       badgeBg = "bg-emerald-400 text-slate-950";
