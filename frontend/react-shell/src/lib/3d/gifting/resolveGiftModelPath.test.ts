@@ -4,6 +4,7 @@ describe("resolveGiftModelPath", () => {
   test("every gift family resolves to a real model", () => {
     const cases: Array<[string, string]> = [
       ["private_jet_flyby", "/assets/showroom/sovereign_900x_jet.glb"],
+      ["gulfstream_g700_exec_jet", "/assets/showroom/gulfstream_g700_exec_jet.glb"],
       ["superyacht", "/assets/showroom/superyacht.glb"],
       ["golden_stadium", "/assets/showroom/golden_stadium.glb"],
       ["sovereign_crown", "/assets/showroom/chronos_tourbillon_watch.glb"],
