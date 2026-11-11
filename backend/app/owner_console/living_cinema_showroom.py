@@ -22,6 +22,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.club_profile import ClubProfile
 from app.owner_console import ledger, living_club_world, storytelling
+from app.owner_console.showroom_inspection import inspection_reel
 from app.owner_console.models import (
     OwnerClubEvent,
     OwnerClubState,
@@ -693,6 +694,7 @@ def get_cinema_and_showroom_overview(session: Session, user_id: str, club_id: st
                 "can_gift_to_staff": bool(item.get("can_gift_to_staff", False)),
                 "image_url": storytelling.resolve_showroom_image_url(key),
                 "high_res_image_url": item.get("high_res_image_url", ""),
+                "inspection_reel": inspection_reel(key),
                 "is_owned": len(instances) > 0,
                 "owned_count": len(instances),
                 "owned_instances": instances,

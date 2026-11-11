@@ -928,6 +928,8 @@ def record_match_news_article(
 
 
 def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    from app.owner_console.showroom_inspection import inspection_reel
+
     state = require_state(session, club_id, user_id)
     items = []
     for k, v in SHOWROOM_CATALOG.items():
@@ -935,6 +937,7 @@ def get_club_showroom(session: Session, user_id: str, club_id: str) -> dict[str,
             {
                 **v,
                 "image_url": resolve_showroom_image_url(k),
+                "inspection_reel": inspection_reel(k),
             }
         )
     owned = []

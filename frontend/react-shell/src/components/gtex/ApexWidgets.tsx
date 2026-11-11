@@ -387,7 +387,7 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
    3. INTERACTIVE 2.5D TACTICAL TURF PITCH WITH CHEMISTRY LINKS
    ============================================================================ */
 export interface TacticalPitch25DProps {
-  formation?: string;
+  formation?: string | Record<string, unknown>;
   players?: Array<{
     id?: string | number;
     name: string;
@@ -397,11 +397,25 @@ export interface TacticalPitch25DProps {
   onSelectPlayer?: (player: any) => void;
 }
 
+function tacticalFormationLabel(formation: TacticalPitch25DProps["formation"]): string {
+  if (typeof formation === "string" && /^\d(?:-\d)+$/.test(formation.trim())) {
+    return formation.trim();
+  }
+  if (formation && typeof formation === "object") {
+    const preferred = formation.preferred_formation ?? formation.shape;
+    if (typeof preferred === "string" && /^\d(?:-\d)+$/.test(preferred.trim())) {
+      return preferred.trim();
+    }
+  }
+  return "4-3-3";
+}
+
 export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
   formation = "4-3-3",
   players = [],
   onSelectPlayer,
 }) => {
+  const formationLabel = tacticalFormationLabel(formation);
   const nodes = useMemo(() => {
     const coords = [
       { x: 50, y: 16, role: "ST" },
@@ -433,7 +447,7 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
           <span className="gx-eyebrow">2.5D INTERACTIVE TACTICAL PITCH</span>
-          <h3 className="gx-h3 mt-0.5">Formation {formation} · Chemistry Matrix</h3>
+          <h3 className="gx-h3 mt-0.5">Formation {formationLabel} · Chemistry Matrix</h3>
         </div>
         <div className="flex items-center gap-2">
           <span className="rounded-lg border border-amber-400/50 bg-amber-400/15 px-2.5 py-1 text-xs font-black text-amber-300">

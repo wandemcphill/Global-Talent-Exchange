@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
+import { ShowroomInspectionReel } from "@/components/gtex/ShowroomInspectionReel";
+import { inspectionFramesFor } from "@/lib/showroomInspection";
 import { createGiftDirector } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
 import { resolvePublicAssetPath } from "@/lib/publicPath";
@@ -555,6 +557,10 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           ? "#8de0e8"
           : "#e7edf5";
   const combo = Number(activeGift.combo_count || 1);
+  const interiorWalk = inspectionFramesFor(
+    { catalog_key: activeGift.animation_key, gift_code: activeGift.gift_code },
+    "full"
+  ).filter((frame) => frame.kind === "video");
 
   return (
     <div
@@ -594,6 +600,11 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         }
       `}</style>
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
+      {interiorWalk.length > 0 && (
+        <div className="absolute inset-0 z-20">
+          <ShowroomInspectionReel frames={interiorWalk} fit="cover" />
+        </div>
+      )}
       <div
         aria-hidden
         className="gtex-gift-lens absolute inset-0"

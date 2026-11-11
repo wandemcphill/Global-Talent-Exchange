@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -13,6 +13,8 @@ import { api } from "@/lib/api";
 import { publicAssetPath } from "@/lib/publicPath";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { ShowroomInspectionReel } from "@/components/gtex/ShowroomInspectionReel";
+import { inspectionFramesFor } from "@/lib/showroomInspection";
 import { PrestigeShowroomScene } from "@/lib/3d/scenes/PrestigeShowroomScene";
 import {
   Sparkles,
@@ -56,6 +58,7 @@ export function Showroom() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [inspectingItem, setInspectingItem] = useState<any | null>(null);
+  const [inspectView, setInspectView] = useState<"walk" | "model">("walk");
   const [acquiringItem, setAcquiringItem] = useState<any | null>(null);
   const [giftingItem, setGiftingItem] = useState<any | null>(null);
   const [recipientType, setRecipientType] = useState<"player" | "staff">("player");
@@ -118,6 +121,10 @@ export function Showroom() {
       : "Tier 4: Regional Pioneer";
 
   const keyOf = (it: any) => it?.catalog_key || it?.id || it?.sku || "";
+
+  useEffect(() => {
+    setInspectView("walk");
+  }, [inspectingItem]);
 
   const assetImage = (it: any) =>
     resolveShowroomMedia(
@@ -562,6 +569,7 @@ export function Showroom() {
             const key = keyOf(it);
             const isJet = it.category === "jet";
             const isWatch = it.category === "watch";
+            const cardFrames = inspectionFramesFor(it, "stills");
             const isBusy = busyItem === key || busyItem === `gift:${key}`;
             const isOwned = ownedAssets.some((oa: any) => keyOf(oa) === key || oa.catalog_key === key);
             const legalClass =
@@ -579,7 +587,9 @@ export function Showroom() {
                     isWatch ? "h-64" : "h-56"
                   } overflow-hidden bg-slate-950 border-b border-gtex-graphite flex items-center justify-center`}
                 >
-                  {assetImage(it) ? (
+                  {cardFrames.length > 0 ? (
+                    <ShowroomInspectionReel frames={cardFrames} fit={isWatch ? "contain" : "cover"} showLabel={false} />
+                  ) : assetImage(it) ? (
                     <img
                       src={assetImage(it)}
                       alt={it.name || it.custom_name}
@@ -743,16 +753,44 @@ export function Showroom() {
         >
           <div className="w-full max-w-4xl overflow-hidden rounded-2xl border border-amber-400/40 bg-slate-950 shadow-2xl my-auto">
             <div className="p-4 bg-slate-950 border-b border-white/10">
-              <PrestigeShowroomScene
-                assetName={inspectingItem.name || "Sovereign Prestige Asset"}
-                assetCategory={inspectingItem.category || "vehicle"}
-                modelName={inspectingItem.model || "Bespoke Edition"}
-                priceGtex={Number(inspectingItem.price_gtex ?? inspectingItem.purchase_price_gtex ?? inspectingItem.price ?? 0)}
-                isOwned={ownedAssets.some((a: any) => keyOf(a) === keyOf(inspectingItem))}
-                clubName={active?.club_name || clubDetail?.club?.name || "GTEX FC"}
-                compact
-                onClose={() => setInspectingItem(null)}
-              />
+              {inspectionFramesFor(inspectingItem).length > 0 && (
+                <div className="mb-3 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setInspectView("walk")}
+                    className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${
+                      inspectView === "walk" ? "bg-amber-400 text-slate-950" : "border border-white/15 text-slate-300"
+                    }`}
+                  >
+                    Walk-through
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setInspectView("model")}
+                    className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${
+                      inspectView === "model" ? "bg-amber-400 text-slate-950" : "border border-white/15 text-slate-300"
+                    }`}
+                  >
+                    3D model
+                  </button>
+                </div>
+              )}
+              {inspectView === "walk" && inspectionFramesFor(inspectingItem).length > 0 ? (
+                <div className="h-[420px] overflow-hidden rounded-xl border border-white/10">
+                  <ShowroomInspectionReel frames={inspectionFramesFor(inspectingItem)} fit="contain" />
+                </div>
+              ) : (
+                <PrestigeShowroomScene
+                  assetName={inspectingItem.name || "Sovereign Prestige Asset"}
+                  assetCategory={inspectingItem.category || "vehicle"}
+                  modelName={inspectingItem.model || "Bespoke Edition"}
+                  priceGtex={Number(inspectingItem.price_gtex ?? inspectingItem.purchase_price_gtex ?? inspectingItem.price ?? 0)}
+                  isOwned={ownedAssets.some((a: any) => keyOf(a) === keyOf(inspectingItem))}
+                  clubName={active?.club_name || clubDetail?.club?.name || "GTEX FC"}
+                  compact
+                  onClose={() => setInspectingItem(null)}
+                />
+              )}
             </div>
             <div className="p-6 space-y-4">
               <div className="flex items-center justify-between">
