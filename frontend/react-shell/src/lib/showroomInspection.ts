@@ -64,6 +64,33 @@ export const SHOWROOM_INSPECTION_REELS: Record<string, InspectionFrame[]> = {
     media("Cabin walk", "video", "gtex-lux-yacht-cabin-walk.mp4"),
     media("360 turn", "video", "gtex-lux-yacht-360.mp4"),
   ],
+  penthouse_box_suite: [
+    media("Box", "image", "gtex-lux-penthouse-box.jpg"),
+    media("Dining room", "image", "gtex-lux-penthouse-dining.jpg"),
+    media("Lounge", "image", "gtex-lux-penthouse-lounge.jpg"),
+    media("Dining walk", "video", "gtex-lux-penthouse-dining-walk.mp4"),
+    media("Lounge walk", "video", "gtex-lux-penthouse-lounge-walk.mp4"),
+    media("360 turn", "video", "gtex-lux-penthouse-360.mp4"),
+  ],
+  high_performance_recovery_wing: [
+    media("Wing", "image", "gtex-lux-cryo-wing.jpg"),
+    media("Hydrotherapy", "image", "gtex-lux-cryo-pool.jpg"),
+    media("Cryo chambers", "image", "gtex-lux-cryo-chamber.jpg"),
+    media("Biomechanics lab", "image", "gtex-lux-cryo-lab.jpg"),
+    media("Pool walk", "video", "gtex-lux-cryo-pool-walk.mp4"),
+    media("Cryo walk", "video", "gtex-lux-cryo-chamber-walk.mp4"),
+    media("Lab walk", "video", "gtex-lux-cryo-lab-walk.mp4"),
+    media("360 turn", "video", "gtex-lux-cryo-360.mp4"),
+  ],
+  elite_academy_boarding_wing: [
+    media("Pavilion", "image", "gtex-lux-academy-pavilion.jpg"),
+    media("Scholar suite", "image", "gtex-lux-academy-suite.jpg"),
+    media("Classroom", "image", "gtex-lux-academy-classroom.jpg"),
+    media("Pitch walk", "video", "gtex-lux-academy-pitch-walk.mp4"),
+    media("Suite walk", "video", "gtex-lux-academy-suite-walk.mp4"),
+    media("Classroom walk", "video", "gtex-lux-academy-classroom-walk.mp4"),
+    media("360 turn", "video", "gtex-lux-academy-360.mp4"),
+  ],
 };
 
 const GIFT_KEYS: Record<string, string> = {
@@ -80,6 +107,8 @@ const GIFT_KEYS: Record<string, string> = {
   executive_suv: "executive_suv_command",
   veloce_gt9_hypercar: "veloce_gt9_hypercar",
   chronos_tourbillon_watch: "chronos_tourbillon_watch",
+  royal_penthouse: "penthouse_box_suite",
+  penthouse: "penthouse_box_suite",
 };
 
 function asFrames(raw: unknown): InspectionFrame[] {
