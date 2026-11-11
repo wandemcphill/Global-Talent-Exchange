@@ -10,7 +10,12 @@ The gift renderer now favours existing authored GLB assets. It does not generate
 | Maracanã / stadium reveal | `public/assets/showroom/arena_imperiale_stadium.glb` |
 | Golden stadium | `public/assets/showroom/golden_stadium.glb` |
 | Private jet | `public/assets/showroom/sovereign_900x_jet.glb` |
+| Gulfstream jet | `public/assets/showroom/gulfstream_g700_exec_jet.glb` |
 | Superyacht | `public/assets/showroom/superyacht.glb` |
+| Team coach / bus | `public/assets/showroom/vanguard_xii_coach.glb` |
+| Executive SUV | `public/assets/showroom/executive_suv.glb` |
+| Hypercar | `public/assets/showroom/veloce_gt9_hypercar.glb` |
+| Performance campus / facility | `public/assets/showroom/apex_performance_campus.glb` |
 | Award / trophy | `public/assets/showroom/trophy_plinth.glb` |
 | Crown / watch | `public/assets/showroom/chronos_tourbillon_watch.glb` |
 | Match stadium | `public/models/match/football-stadium.glb` |
