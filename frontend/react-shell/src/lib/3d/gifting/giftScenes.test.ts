@@ -98,6 +98,19 @@ describe("asset-led cinematic gifting scenes", () => {
     winner.dispose();
   });
 
+  test("football gift impact beats add a small camera punch on contact", () => {
+    const kick = stage("bicycle", "bicycle_kick");
+    const winner = stage("last_minute", "last_minute_winner");
+    const kickCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+    const winnerCamera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+    kick.update(0.8, 1 / 60, kickCamera);
+    winner.update(0.74, 1 / 60, winnerCamera);
+    expect(kickCamera.fov).toBeLessThan(frameGiftShot("bicycle", 0.8).fov);
+    expect(winnerCamera.fov).toBeLessThan(frameGiftShot("last_minute", 0.74).fov);
+    kick.dispose();
+    winner.dispose();
+  });
+
   test("rarity is expressed through lighting rather than floating geometric ornaments", () => {
     const common = stage("stadium", "maracana_stadium", "common");
     const mythic = stage("stadium", "golden_stadium", "mythic");
