@@ -92,7 +92,7 @@ export class PbrTurfShaderMaterial {
         loader.load("/textures/turf/turf_normal_1k.jpg", (tex) => {
           configureTiling(tex, false);
           this.material.normalMap = tex;
-          this.material.normalScale = new THREE.Vector2(0.28, 0.28);
+          this.material.normalScale = new THREE.Vector2(0.16, 0.16);
           this.material.needsUpdate = true;
         });
         loader.load("/textures/turf/turf_roughness_1k.jpg", (tex) => {
@@ -165,7 +165,7 @@ export class PbrTurfShaderMaterial {
         // Grade the photo toward broadcast green. A hard neon mix was hiding the texture.
         float luma = dot(diffuseColor.rgb, vec3(0.25, 0.62, 0.13));
         vec3 broadcastGrass = vec3(0.045, 0.26, 0.065) * (0.85 + luma * 0.5);
-        diffuseColor.rgb = mix(diffuseColor.rgb, broadcastGrass, 0.34);
+        diffuseColor.rgb = mix(diffuseColor.rgb, broadcastGrass, 0.78);
         float stripeFactor = (mod(floor(vWorldPos.x / uStripeWidth), 2.0) > 0.5) ? 1.06 : 0.94;
         diffuseColor.rgb *= stripeFactor;
 
