@@ -60,18 +60,23 @@ describe("asset-led cinematic gifting scenes", () => {
 
   test("jet and yacht scenes contain their authored hero assets, not primitive props", () => {
     const jet = stage("jet", "private_jet");
+    const gulfstream = stage("jet", "gulfstream_g700_exec_jet");
     const yacht = stage("yacht", "superyacht");
     expect(jet.root.getObjectByName("gift-aircraft")?.userData.assetPath)
       .toBe("/assets/showroom/sovereign_900x_jet.glb");
     expect(jet.root.getObjectByName("runway")).toBeFalsy();
     expect(jet.root.getObjectByName("jet-primitive")).toBeFalsy();
     expect(meshes(jet.root)).toHaveLength(0);
+    expect(gulfstream.root.getObjectByName("gift-aircraft")?.userData.assetPath)
+      .toBe("/assets/showroom/gulfstream_g700_exec_jet.glb");
+    expect(meshes(gulfstream.root)).toHaveLength(0);
 
     expect(yacht.root.getObjectByName("gift-yacht")?.userData.assetPath)
       .toBe("/assets/showroom/superyacht.glb");
     expect(yacht.root.getObjectByName("gift-ocean-surface")).toBeTruthy();
     expect(meshes(yacht.root)).toHaveLength(1);
     jet.dispose();
+    gulfstream.dispose();
     yacht.dispose();
   });
 
