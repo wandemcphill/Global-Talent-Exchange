@@ -1,5 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
 import { createGiftDirector } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
@@ -206,6 +210,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const composerRef = useRef<EffectComposer | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -276,6 +281,26 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       renderer.shadowMap.enabled = quality.shadows;
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
+      if (quality.tier !== "low") {
+        try {
+          const composer = new EffectComposer(renderer);
+          composer.setPixelRatio(renderer.getPixelRatio());
+          composer.setSize(width, height);
+          composer.addPass(new RenderPass(scene, camera));
+          composer.addPass(
+            new UnrealBloomPass(
+              new THREE.Vector2(width, height),
+              quality.tier === "high" ? 0.48 : 0.28,
+              0.42,
+              0.86
+            )
+          );
+          composer.addPass(new OutputPass());
+          composerRef.current = composer;
+        } catch (error) {
+          console.warn("Gift bloom pipeline unavailable; using direct renderer", error);
+        }
+      }
     } catch {
       setContextLost(true);
       return;
@@ -308,7 +333,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     keyLightRef.current = dirLight;
     try {
       void import("three/examples/jsm/environments/RoomEnvironment.js").then(({ RoomEnvironment }) => {
-        if (!rendererRef.current || rendererRef.current !== renderer) return;
+        if (!rendererRef.current || rendererRef.current !== renderer || scene.environment) return;
         const pmrem = new THREE.PMREMGenerator(renderer);
         const envTarget = pmrem.fromScene(new RoomEnvironment(), 0.04);
         pmrem.dispose();
@@ -326,6 +351,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       cameraRef.current.aspect = nextWidth / Math.max(nextHeight, 1);
       cameraRef.current.updateProjectionMatrix();
       rendererRef.current.setSize(nextWidth, nextHeight);
+      composerRef.current?.setSize(nextWidth, nextHeight);
     };
     window.addEventListener("resize", handleResize);
 
@@ -338,6 +364,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         if (scene.environment === envTarget.texture) scene.environment = null;
         envTarget.dispose();
       }
+      composerRef.current?.dispose();
+      composerRef.current = null;
       renderer.dispose();
       renderer.domElement.remove();
       if (rendererRef.current === renderer) rendererRef.current = null;
@@ -452,7 +480,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         const waiting = !assetsReady && time - openedAt < 70000;
         if (waiting) {
           if (cameraRef.current) director.update(0, deltaSec, cameraRef.current);
-          if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
+          if (composerRef.current) composerRef.current.render();
+          else if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
           animationFrameRef.current = requestAnimationFrame(animateFrame);
           return;
         }
@@ -465,7 +494,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       if (cameraRef.current) director.update(progress, deltaSec, cameraRef.current);
       const shell = mountRef.current?.parentElement;
       if (shell) shell.setAttribute("data-gift-progress", progress.toFixed(3));
-      if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
+      if (composerRef.current) composerRef.current.render();
+      else if (rendererRef.current && cameraRef.current) rendererRef.current.render(scene, cameraRef.current);
       if (progress < 1 || holding) animationFrameRef.current = requestAnimationFrame(animateFrame);
       else {
         animationFrameRef.current = null;
