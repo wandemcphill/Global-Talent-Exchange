@@ -24,9 +24,11 @@ function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null
 
 export function resolveGiftModelPath(giftCode: string): string {
   const code = giftCode.toLowerCase();
+  if (code.includes("gulfstream")) return "/assets/showroom/gulfstream_g700_exec_jet.glb";
   if (code.includes("jet") || code.includes("flyby")) return "/assets/showroom/sovereign_900x_jet.glb";
   if (code.includes("yacht")) return "/assets/showroom/superyacht.glb";
   if (code.includes("golden_stadium")) return "/assets/showroom/golden_stadium.glb";
+  if (code.includes("maracana") || code.includes("wembley") || code.includes("san_siro") || code.includes("camp_nou")) return "/assets/showroom/arena_imperiale_stadium.glb";
   if (code.includes("crown") || code.includes("watch")) return "/assets/showroom/chronos_tourbillon_watch.glb";
   if (
     code.includes("paris") ||
@@ -40,7 +42,8 @@ export function resolveGiftModelPath(giftCode: string): string {
     return "/assets/showroom/royal_penthouse_box.glb";
   }
   if (code.includes("bus") || code.includes("coach")) return "/assets/showroom/vanguard_xii_coach.glb";
-  if (code.includes("suv") || code.includes("hypercar")) return "/assets/showroom/executive_suv.glb";
+  if (code.includes("hypercar") || code.includes("veloce")) return "/assets/showroom/veloce_gt9_hypercar.glb";
+  if (code.includes("suv")) return "/assets/showroom/executive_suv.glb";
   if (code.includes("campus") || code.includes("facility")) return "/assets/showroom/apex_performance_campus.glb";
   if (
     code.includes("trophy") ||
@@ -69,6 +72,9 @@ export type GiftShotId =
   | "city"
   | "jet"
   | "yacht"
+  | "coach"
+  | "vehicle"
+  | "facility"
   | "goal"
   | "last_minute"
   | "bicycle"
@@ -118,8 +124,16 @@ const SHOT_BY_KEY: Record<string, GiftShotId> = {
   dubai_skyline: "city",
   luxury_private_jet: "jet",
   private_jet: "jet",
+  gulfstream_g700: "jet",
   luxury_superyacht: "yacht",
   superyacht: "yacht",
+  luxury_team_coach: "coach",
+  team_coach: "coach",
+  vanguard_xii_coach: "coach",
+  executive_suv: "vehicle",
+  veloce_gt9_hypercar: "vehicle",
+  apex_performance_campus: "facility",
+  performance_campus: "facility",
   goal_celebration: "goal",
   last_minute_winner: "last_minute",
   bicycle_kick: "bicycle",
@@ -129,6 +143,16 @@ const SHOT_BY_KEY: Record<string, GiftShotId> = {
 };
 
 const SHOT_NEEDLES: Array<[string, GiftShotId]> = [
+  ["vanguard_xii_coach", "coach"],
+  ["coach", "coach"],
+  ["bus", "coach"],
+  ["veloce_gt9_hypercar", "vehicle"],
+  ["hypercar", "vehicle"],
+  ["executive_suv", "vehicle"],
+  ["suv", "vehicle"],
+  ["apex_performance_campus", "facility"],
+  ["campus", "facility"],
+  ["facility", "facility"],
   ["bicycle", "bicycle"],
   ["hat_trick", "hat_trick"],
   ["world_class_save", "save"],
