@@ -400,6 +400,43 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     });
     scene.add(director.root);
     scene.background = director.background;
+
+    const environmentPath =
+      shot === "city" || shot === "trophy" || shot === "boot" || shot === "glove" || shot === "crown"
+        ? "/textures/env/modern_buildings_night_2k.hdr"
+        : shot === "jet" || shot === "yacht"
+          ? "/textures/env/kloofendal_43d_clear_puresky_2k.hdr"
+          : "/textures/env/stadium_01_1k.hdr";
+    const activeRenderer = rendererRef.current;
+    if (activeRenderer) {
+      void import("three/examples/jsm/loaders/RGBELoader.js")
+        .then(({ RGBELoader }) => new Promise<THREE.DataTexture>((resolve, reject) => {
+          new RGBELoader().load(resolvePublicAssetPath(environmentPath), resolve, undefined, reject);
+        }))
+        .then((texture) => {
+          if (cancelled || rendererRef.current !== activeRenderer) {
+            texture.dispose();
+            return;
+          }
+          try {
+            const pmrem = new THREE.PMREMGenerator(activeRenderer);
+            pmrem.compileEquirectangularShader();
+            const envTarget = pmrem.fromEquirectangular(texture);
+            pmrem.dispose();
+            texture.dispose();
+            const previous = scene.userData.giftEnv as THREE.WebGLRenderTarget | undefined;
+            if (previous) previous.dispose();
+            scene.environment = envTarget.texture;
+            scene.userData.giftEnv = envTarget;
+          } catch (error) {
+            texture.dispose();
+            console.warn("Gift HDR environment could not be prepared", error);
+          }
+        })
+        .catch((error) => {
+          if (!cancelled) console.warn("Gift HDR environment could not be loaded", error);
+        });
+    }
     if (rendererRef.current) {
       rendererRef.current.setClearColor(director.background, 1);
       rendererRef.current.toneMappingExposure = director.exposure;
