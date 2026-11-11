@@ -628,8 +628,8 @@ export function createGiftDirector(options: Options): GiftDirector {
     ready(options, tasks);
     return finish(bin, 0x08090d, 1.18, (progress, delta, target) => {
       camera(target, progress);
-      animateHeroReveal(award, progress, { startScale: 0.76, yaw: 0.11, drift: 0.002 });
-      award.rotation.y += progress * Math.PI * 0.16;
+      animateHeroReveal(award, progress, { startScale: 0.76, yaw: 0, drift: 0.002 });
+      award.rotation.y = progress * Math.PI * 0.16;
       award.position.y = -0.45 + smooth(clamp(progress / 0.24)) * 0.45;
       const ball = award.getObjectByName("ballon-dor-ball");
       if (ball) ball.rotation.y = progress * Math.PI * 0.95;
