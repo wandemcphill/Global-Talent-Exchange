@@ -42,7 +42,7 @@ The footballer rig/kit and baked Mixamo clips are based on Adobe Mixamo exports.
 
 ## Known asset gaps — do not fake these with primitives
 
-- The current city scene uses GTEX's existing royal penthouse architecture model. It is not a Paris landmark or a city-specific skyline. A dedicated Paris landmark / skyline model is not yet present in the React public asset library.
+- City-specific landmark/skyline models for Paris, New York, Rio, Lagos, Tokyo and Dubai are not yet present in the React public asset library. Those gift codes use a clean atmospheric reveal rather than pretending the generic royal-penthouse model is a landmark. The royal-penthouse GLB is reserved for a penthouse/property gift.
 - Dedicated crown, golden-boot and goalkeeper-glove hero models are not yet present. Those gifts currently use a clean, asset-free cinematic light/particle reveal and lower-third; they do not borrow a trophy or watch model.
 - Player-card and tactics-board catalogue gifts also use the restrained atmosphere treatment until proper authored art is available.
 - The Chronos Tourbillon watch gift uses its matching watch model. A generic crown/tactics gift does not.
