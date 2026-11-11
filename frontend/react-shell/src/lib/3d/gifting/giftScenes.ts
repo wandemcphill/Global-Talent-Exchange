@@ -591,7 +591,7 @@ function buildStadiumBase(bin: SceneBin, golden: boolean, quality: GiftQuality):
     bin.root.add(spot.target);
     spots.push(spot);
     const beam = bin.mesh(
-      new THREE.CylinderGeometry(0.4, 6, 20, 12, 1, true),
+      new THREE.CylinderGeometry(0.2, 2.4, 10, 10, 1, true),
       new THREE.MeshBasicMaterial({
         color: golden ? 0xfde047 : 0xfef9c3,
         transparent: true,
@@ -626,6 +626,23 @@ function buildStadiumBase(bin: SceneBin, golden: boolean, quality: GiftQuality):
   if (crowd.instanceColor) crowd.instanceColor.needsUpdate = true;
   crowd.name = "stadium-crowd";
   fallback.add(crowd);
+  const nearGoal = addGoal(bin, 22);
+  const farGoal = addGoal(bin, -22);
+  fallback.add(nearGoal, farGoal);
+  const paint = new THREE.MeshBasicMaterial({ color: 0xf8fafc });
+  bin.track(paint);
+  const marking = (x: number, z: number, w: number, d: number) => {
+    const mesh = new THREE.Mesh(new THREE.PlaneGeometry(w, d), paint);
+    mesh.rotation.x = -Math.PI / 2;
+    mesh.position.set(x, 0.04, z);
+    fallback.add(mesh);
+    bin.track(mesh.geometry);
+  };
+  marking(0, 16.2, 48, 0.12);
+  marking(0, -16.2, 48, 0.12);
+  marking(23.4, 0, 0.12, 32);
+  marking(-23.4, 0, 0.12, 32);
+  marking(0, 0, 0.12, 32);
   addMotes(bin, Math.floor(quality.particles * 0.5), golden ? 0xfde68a : 0xfef9c3, 30, 10);
   return spots;
 }
@@ -990,18 +1007,33 @@ function spawnPlayer(template: THREE.Object3D, clips: Map<string, THREE.Animatio
   };
 }
 
-function fallbackPlayer(bin: SceneBin): THREE.Group {
+function fallbackPlayer(bin: SceneBin, pose: "stand" | "kick" = "stand"): THREE.Group {
   const group = new THREE.Group();
-  group.name = "gift-player";
-  const kit = new THREE.MeshStandardMaterial({ color: 0x104a3a, roughness: 0.55 });
+  group.name = "gift-player-standin";
+  const kit = new THREE.MeshStandardMaterial({ color: 0x0f766e, roughness: 0.5 });
+  const skin = new THREE.MeshStandardMaterial({ color: 0xd2a679, roughness: 0.62 });
   bin.track(kit);
-  const torso = bin.mesh(new THREE.CapsuleGeometry(0.28, 0.7, 4, 8), kit, group);
+  bin.track(skin);
+  if (pose === "kick") {
+    const torso = bin.mesh(new THREE.CapsuleGeometry(0.2, 0.5, 4, 8), kit, group);
+    torso.rotation.z = Math.PI / 2;
+    torso.position.set(0.05, 1.28, 0);
+    const head = bin.mesh(new THREE.SphereGeometry(0.16, 12, 12), skin, group);
+    head.position.set(0.58, 1.28, 0);
+    const striking = bin.mesh(new THREE.CapsuleGeometry(0.08, 0.52, 3, 6), kit, group);
+    striking.position.set(-0.08, 1.9, 0.02);
+    const plant = bin.mesh(new THREE.CapsuleGeometry(0.08, 0.48, 3, 6), kit, group);
+    plant.rotation.z = 0.9;
+    plant.position.set(-0.42, 1.02, -0.08);
+    return group;
+  }
+  const torso = bin.mesh(new THREE.CapsuleGeometry(0.22, 0.55, 4, 8), kit, group);
   torso.position.y = 1.15;
-  const head = bin.mesh(new THREE.SphereGeometry(0.18, 12, 12), kit, group);
-  head.position.y = 1.75;
-  const leg = bin.mesh(new THREE.CapsuleGeometry(0.09, 0.7, 3, 6), kit, group);
-  leg.position.set(0.1, 0.85, 0.05);
-  leg.rotation.z = -1.4;
+  const head = bin.mesh(new THREE.SphereGeometry(0.16, 12, 12), skin, group);
+  head.position.y = 1.72;
+  const leg = bin.mesh(new THREE.CapsuleGeometry(0.08, 0.55, 3, 6), kit, group);
+  leg.position.set(0.12, 0.55, 0.15);
+  leg.rotation.x = 0.5;
   return group;
 }
 
@@ -1051,7 +1083,9 @@ async function dressBall(ball: THREE.Mesh, options: DirectorOptions, gold: boole
         envMapIntensity: 1.15,
       });
     });
-    centerOnOrigin(imported, gold ? 1.15 : 0.44);
+    centerOnOrigin(imported, gold ? 1.05 : 0.44);
+    const parentScale = (ball.scale.x || 1);
+    imported.scale.multiplyScalar(1 / parentScale);
     const material = ball.material as THREE.Material;
     material.visible = false;
     const seams = ball.getObjectByName("ball-seams");
@@ -1258,7 +1292,7 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
   let kicker: RigHandle | null = null;
   let dancer: RigHandle | null = null;
   let kicked = false;
-  const standIn = fallbackPlayer(bin);
+  const standIn = fallbackPlayer(bin, bicycle ? "kick" : "stand");
   player.add(standIn);
   if (!options.canStream) {
     options.onReady();
@@ -1296,7 +1330,6 @@ export function createGiftDirector(options: DirectorOptions): GiftDirector {
       const lean = progress < 0.22 ? 0 : progress < 0.48 ? smooth((progress - 0.22) / 0.26) : 1 - smooth((progress - 0.48) / 0.2);
       const tilt = -2.35 * clamp01(lean);
       if (kicker?.pivot) kicker.pivot.rotation.x = tilt;
-      else player.rotation.x = tilt;
       player.position.set(0, 0, 0);
       const foot = kicker?.feet() || v3([0.2, 1.4, 0.2]);
       if (progress < 0.3) {

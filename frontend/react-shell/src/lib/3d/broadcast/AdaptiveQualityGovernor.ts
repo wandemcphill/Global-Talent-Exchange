@@ -32,7 +32,7 @@ export interface AdaptiveQualitySummary {
 }
 
 const TIER_ORDER: DeviceQualityTier[] = ["low", "medium", "high", "ultra"];
-const SCALE_STEPS = [0.5, 0.67, 0.75, 0.85, 1.0];
+const SCALE_STEPS = [0.75, 0.85, 1.0];
 
 export function recommendTierFromCapabilities(report: WebGpuCapabilityReport): DeviceQualityTier {
   if (report.preferredBackend === "headless" || report.preferredBackend === "webgl1") return "low";
@@ -105,7 +105,7 @@ export class AdaptiveQualityGovernor {
     const avg = this.average();
     // Degrade fast (>15% over budget), upgrade slowly (<70% of budget)
     if (avg > this.targetFrameMs * 1.15) {
-      if (this.scaleIndex > 0 && SCALE_STEPS[this.scaleIndex] > 0.75) {
+      if (this.scaleIndex > 0) {
         this.scaleIndex--;
         return this.commit(`slow ${avg.toFixed(1)}ms: resolution ${SCALE_STEPS[this.scaleIndex]}`, 2);
       }
