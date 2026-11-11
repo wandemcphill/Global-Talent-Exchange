@@ -28,8 +28,16 @@ export function resolveGiftModelPath(giftCode: string): string {
   if (code.includes("jet") || code.includes("flyby")) return "/assets/showroom/sovereign_900x_jet.glb";
   if (code.includes("yacht")) return "/assets/showroom/superyacht.glb";
   if (code.includes("golden_stadium")) return "/assets/showroom/golden_stadium.glb";
-  if (code.includes("maracana") || code.includes("wembley") || code.includes("san_siro") || code.includes("camp_nou")) return "/assets/showroom/arena_imperiale_stadium.glb";
-  if (code.includes("crown") || code.includes("watch")) return "/assets/showroom/chronos_tourbillon_watch.glb";
+  if (
+    code.includes("maracana") ||
+    code.includes("wembley") ||
+    code.includes("san_siro") ||
+    code.includes("camp_nou") ||
+    code.includes("football_stadium")
+  ) {
+    return "/assets/showroom/arena_imperiale_stadium.glb";
+  }
+  if (code.includes("watch") || code.includes("chronos")) return "/assets/showroom/chronos_tourbillon_watch.glb";
   if (
     code.includes("paris") ||
     code.includes("new_york") ||
@@ -39,25 +47,19 @@ export function resolveGiftModelPath(giftCode: string): string {
     code.includes("dubai") ||
     code.includes("skyline")
   ) {
+    // Existing GTEX architecture model only; not a Paris/Eiffel landmark.
     return "/assets/showroom/royal_penthouse_box.glb";
   }
   if (code.includes("bus") || code.includes("coach")) return "/assets/showroom/vanguard_xii_coach.glb";
   if (code.includes("hypercar") || code.includes("veloce")) return "/assets/showroom/veloce_gt9_hypercar.glb";
   if (code.includes("suv")) return "/assets/showroom/executive_suv.glb";
   if (code.includes("campus") || code.includes("facility")) return "/assets/showroom/apex_performance_campus.glb";
-  if (
-    code.includes("trophy") ||
-    code.includes("winner") ||
-    code.includes("ballon") ||
-    code.includes("boot") ||
-    code.includes("glove") ||
-    code.includes("puskas") ||
-    code.includes("man_of_the_match") ||
-    code.includes("manager_of_the_month")
-  ) {
+  if (code.includes("trophy") || code.includes("ballon_dor") || code === "ballon_dor") {
     return "/assets/showroom/trophy_plinth.glb";
   }
-  return "/models/match/football-stadium.glb";
+  // No matching authored hero model: leave the reveal atmospheric instead of
+  // returning an unrelated trophy, watch or football-stadium model.
+  return "";
 }
 
 export type GiftShotId =
