@@ -34,18 +34,7 @@ export function resolveGiftModelPath(giftCode: string): string {
     return "/assets/showroom/arena_imperiale_stadium.glb";
   }
   if (code.includes("watch") || code.includes("chronos")) return "/assets/showroom/chronos_tourbillon_watch.glb";
-  if (
-    code.includes("paris") ||
-    code.includes("new_york") ||
-    code.includes("rio") ||
-    code.includes("lagos") ||
-    code.includes("tokyo") ||
-    code.includes("dubai") ||
-    code.includes("skyline")
-  ) {
-    // Existing GTEX architecture model only; not a Paris/Eiffel landmark.
-    return "/assets/showroom/royal_penthouse_box.glb";
-  }
+  if (code.includes("penthouse")) return "/assets/showroom/royal_penthouse_box.glb";
   if (code.includes("bus") || code.includes("coach")) return "/assets/showroom/vanguard_xii_coach.glb";
   if (code.includes("hypercar") || code.includes("veloce")) return "/assets/showroom/veloce_gt9_hypercar.glb";
   if (code.includes("suv")) return "/assets/showroom/executive_suv.glb";
@@ -179,6 +168,8 @@ const SHOT_NEEDLES: Array<[string, GiftShotId]> = [
   ["dubai", "city"],
   ["skyline", "city"],
   ["stadium", "stadium"],
+  ["royal_penthouse", "city"],
+  ["penthouse", "city"],
   ["chronos_tourbillon_watch", "crown"],
   ["watch", "crown"],
   ["crown", "crown"],
