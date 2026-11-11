@@ -573,15 +573,29 @@ export function createGiftDirector(options: Options): GiftDirector {
     }, options.rarity);
   }
 
-  if (shot === "trophy" || shot === "boot" || shot === "glove" || shot === "crown" || shot === "card" || shot === "tactics") {
-    const accent = shot === "crown" ? 0x9edcff : 0xffd16b;
+  const authoredWatch = shot === "crown" && (code.includes("watch") || code.includes("chronos"));
+  if (shot === "boot" || shot === "glove" || shot === "card" || shot === "tactics" || (shot === "crown" && !authoredWatch)) {
+    // These catalogue families do not yet have an approved hero model. Keep the
+    // reveal atmospheric rather than presenting a trophy or watch as the wrong gift.
+    const accent = shot === "glove" ? 0x9edcff : shot === "boot" ? 0xe9c36c : 0xb9c9e4;
     const light = addLights(bin, accent);
     const particles = addParticles(bin, options.quality, accent);
+    ready(options, []);
+    return finish(bin, 0x08090d, 1.12, (progress, delta, target) => {
+      camera(target, progress);
+      light.intensity = 2.5 + Math.sin(progress * Math.PI * 2) * 0.55;
+      updateParticles(particles, progress, delta, 0.32);
+    }, options.rarity);
+  }
+
+  if (shot === "trophy" || authoredWatch) {
+    const light = addLights(bin, authoredWatch ? 0x9edcff : 0xffd16b);
+    const particles = addParticles(bin, options.quality, authoredWatch ? 0x9edcff : 0xffd16b);
     const award = new THREE.Group();
-    award.name = shot === "trophy" ? "ballon-dor-stage" : "gift-award-stage";
-    award.userData.assetPath = shot === "crown" ? ASSETS.crown : ASSETS.trophy;
+    award.name = shot === "trophy" ? "ballon-dor-stage" : "gift-watch-stage";
+    const path = authoredWatch ? ASSETS.crown : ASSETS.trophy;
+    award.userData.assetPath = path;
     bin.root.add(award);
-    const path = shot === "crown" ? ASSETS.crown : ASSETS.trophy;
     const tasks: Promise<unknown>[] = [
       loadModel(bin, options, path, "gift-award-authored-model", award, 5.8, true),
     ];
