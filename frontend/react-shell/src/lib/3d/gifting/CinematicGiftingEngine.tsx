@@ -80,7 +80,7 @@ const SHOT_BY_KEY: Record<string, GiftShotId> = {
   player_of_the_match: "card",
   tactical_masterclass: "tactics",
   midfield_maestro: "tactics",
-  king_of_tactics: "crown",
+  king_of_tactics: "tactics",
   chronos_tourbillon_watch: "crown",
   world_best_award: "trophy",
   golden_manager: "trophy",
