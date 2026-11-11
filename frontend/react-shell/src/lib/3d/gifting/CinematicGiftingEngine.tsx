@@ -1,9 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
-import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
-import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
-import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
-import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
 import { createGiftDirector } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
@@ -240,7 +236,11 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-  const composerRef = useRef<EffectComposer | null>(null);
+  const composerRef = useRef<{
+    setSize: (width: number, height: number) => void;
+    dispose: () => void;
+    render: () => void;
+  } | null>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const keyLightRef = useRef<THREE.DirectionalLight | null>(null);
@@ -312,24 +312,32 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
       rendererRef.current = renderer;
       if (quality.tier !== "low") {
-        try {
-          const composer = new EffectComposer(renderer);
-          composer.setPixelRatio(renderer.getPixelRatio());
-          composer.setSize(width, height);
-          composer.addPass(new RenderPass(scene, camera));
-          composer.addPass(
-            new UnrealBloomPass(
-              new THREE.Vector2(width, height),
-              quality.tier === "high" ? 0.48 : 0.28,
-              0.42,
-              0.86
-            )
-          );
-          composer.addPass(new OutputPass());
-          composerRef.current = composer;
-        } catch (error) {
-          console.warn("Gift bloom pipeline unavailable; using direct renderer", error);
-        }
+        void Promise.all([
+          import("three/examples/jsm/postprocessing/EffectComposer.js"),
+          import("three/examples/jsm/postprocessing/RenderPass.js"),
+          import("three/examples/jsm/postprocessing/UnrealBloomPass.js"),
+          import("three/examples/jsm/postprocessing/OutputPass.js"),
+        ])
+          .then(([composerModule, renderModule, bloomModule, outputModule]) => {
+            if (rendererRef.current !== renderer || !renderer.domElement.isConnected) return;
+            const composer = new composerModule.EffectComposer(renderer);
+            composer.setPixelRatio(renderer.getPixelRatio());
+            composer.setSize(width, height);
+            composer.addPass(new renderModule.RenderPass(scene, camera));
+            composer.addPass(
+              new bloomModule.UnrealBloomPass(
+                new THREE.Vector2(width, height),
+                quality.tier === "high" ? 0.48 : 0.28,
+                0.42,
+                0.86
+              )
+            );
+            composer.addPass(new outputModule.OutputPass());
+            composerRef.current = composer;
+          })
+          .catch((error) => {
+            console.warn("Gift bloom pipeline unavailable; using direct renderer", error);
+          });
       }
     } catch {
       setContextLost(true);
