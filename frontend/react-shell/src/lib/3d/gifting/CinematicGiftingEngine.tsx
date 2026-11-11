@@ -199,6 +199,7 @@ const GIFT_VIDEO_BY_SHOT: Partial<Record<GiftShotId, string>> = {
   card: "/assets/gifting/gtex-gift-card.mp4",
   tactics: "/assets/gifting/gtex-gift-tactics.mp4",
   trophy: "/assets/gifting/gtex-gift-trophy.mp4",
+  crown: "/assets/gifting/gtex-gift-crown.mp4",
   boot: "/assets/gifting/gtex-gift-boot.mp4",
   glove: "/assets/gifting/gtex-gift-glove.mp4",
   city: "/assets/gifting/gtex-gift-city.mp4",
