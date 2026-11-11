@@ -504,7 +504,6 @@ export function createGiftDirector(options: Options): GiftDirector {
     const particles = addParticles(bin, options.quality, 0xb8dcff);
     const aircraft = new THREE.Group();
     aircraft.name = "gift-aircraft";
-    aircraft.userData.assetPath = ASSETS.jet;
     bin.root.add(aircraft);
     const jetPath = code.includes("gulfstream") ? ASSETS.gulfstream : ASSETS.jet;
     aircraft.userData.assetPath = jetPath;
