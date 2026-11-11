@@ -435,10 +435,20 @@ export function createGiftDirector(options: Options): GiftDirector {
   const shot = options.shot;
   const camera = (target: THREE.PerspectiveCamera, progress: number, hero?: [number, number, number]) => {
     const frame = frameGiftShot(shot, progress, hero);
-    target.position.set(...frame.position);
+    const impactAt =
+      shot === "bicycle" ? 0.8 :
+      shot === "last_minute" ? 0.74 :
+      shot === "goal" || shot === "golden_goal" ? 0.68 : null;
+    const impact = impactAt === null ? 0 : Math.exp(-Math.pow((progress - impactAt) * 36, 2));
+    target.position.set(
+      frame.position[0] + Math.sin(progress * 210) * impact * 0.045,
+      frame.position[1] + Math.cos(progress * 184) * impact * 0.035,
+      frame.position[2]
+    );
     target.lookAt(...frame.lookAt);
-    if (Math.abs(target.fov - frame.fov) > 0.04) {
-      target.fov = frame.fov;
+    const fov = frame.fov - impact * 1.15;
+    if (Math.abs(target.fov - fov) > 0.04) {
+      target.fov = fov;
       target.updateProjectionMatrix();
     }
   };
