@@ -164,6 +164,7 @@ const SHOT_NEEDLES: Array<[string, GiftShotId]> = [
   ["golden_goal", "golden_goal"],
   ["golden_stadium", "stadium"],
   ["goal", "goal"],
+  ["gulfstream", "jet"],
   ["flyby", "jet"],
   ["jet", "jet"],
   ["yacht", "yacht"],
