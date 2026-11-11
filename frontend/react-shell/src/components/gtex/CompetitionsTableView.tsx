@@ -26,7 +26,7 @@ export function CompetitionsTableView({ competitions, clubId }: CompetitionsTabl
             <th className="py-2.5 px-3">Host Type</th>
             <th className="py-2.5 px-3">Format</th>
             <th className="py-2.5 px-3">Status</th>
-            <th className="py-2.5 px-3 text-right">Entry Fee</th>
+            <th className="py-2.5 px-3 text-right">Entry</th>
             <th className="py-2.5 px-3 text-right">Prize Pool</th>
             <th className="py-2.5 px-3 text-center">Clubs</th>
             <th className="py-2.5 px-3 text-center">Actions</th>
@@ -59,9 +59,7 @@ export function CompetitionsTableView({ competitions, clubId }: CompetitionsTabl
                     {c.status}
                   </Chip>
                 </td>
-                <td className="py-2.5 px-3 text-right font-mono text-white">
-                  <Coin amount={c.entry_fee} />
-                </td>
+                <td className="py-2.5 px-3 text-right font-mono text-white">FREE</td>
                 <td className="py-2.5 px-3 text-right font-mono font-bold text-amber-300">
                   <Coin amount={c.prize_pool} />
                 </td>

@@ -94,11 +94,21 @@ def test_gift_combo_applies_bonus(session) -> None:
     wallet_service = WalletService()
     sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
     platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = wallet_service.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
+    platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("500.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-500.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("5.0000")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-5.0000")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-gifts",
@@ -173,11 +183,21 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
     wallet_service = WalletService()
     sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
     platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = wallet_service.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
+    platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("400.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-400.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("4.0000")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-4.0000")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-tight-gifts",
@@ -254,11 +274,21 @@ def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift
     # used to seed COIN, which a match-scope gift can no longer spend.
     sender_account = wallet_service.get_user_account(session, sender, LedgerUnit.CREDIT)
     platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = wallet_service.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
+    platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
     wallet_service.append_transaction(
         session,
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("200.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-200.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("2.0000")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-2.0000")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-match-gifts",

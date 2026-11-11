@@ -782,7 +782,7 @@ function CompetitionStep({ clubId, onDone }: any) {
             <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
               <div>
                 <p className="text-slate-500">Entry</p>
-                <Coin amount={c.entry_fee} />
+                <p className="font-bold text-white">FREE</p>
               </div>
               <div>
                 <p className="text-slate-500">Prize pool</p>

@@ -61,7 +61,7 @@ class CompetitionTemplate(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     funding_mode: Mapped[HostedCompetitionFundingMode] = mapped_column(
         SqlEnum(HostedCompetitionFundingMode, name="hosted_competition_funding_mode", native_enum=False),
         nullable=False,
-        default=HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL,
+        default=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
     )
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
@@ -98,7 +98,7 @@ class UserHostedCompetition(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     funding_mode: Mapped[HostedCompetitionFundingMode] = mapped_column(
         SqlEnum(HostedCompetitionFundingMode, name="hosted_competition_funding_mode", native_enum=False),
         nullable=False,
-        default=HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL,
+        default=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
     )
     entry_fee_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
     reward_pool_fancoin: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
@@ -177,13 +177,12 @@ def _normalize_funding_mode(value: object) -> HostedCompetitionFundingMode:
 
     app.economy.competition_funding_policy.CompetitionFundingMode carries the
     same values but is a different class, so callers assigning it produced a
-    member that compares equal yet fails the `is` checks below -- silently
-    routing a FanCoin entry pool into the Coin-prize branch.
+    member that compares equal yet fails the `is` checks below.
     """
     if isinstance(value, HostedCompetitionFundingMode):
         return value
     if value is None:
-        return HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL
+        return HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
     return HostedCompetitionFundingMode(str(getattr(value, "value", value)))
 
 
@@ -199,9 +198,9 @@ def _validate_hosted_competition_economic_contract(_: object, __: object, compet
         raise ValueError("Hosted competition monetary amounts cannot be negative.")
 
     if mode is HostedCompetitionFundingMode.FANCOIN_ENTRY_POOL:
-        if coin_prize != 0 or required != 0 or escrowed != 0:
-            raise ValueError("FanCoin entry-pool competitions cannot carry a GTEX Coin host-funded prize.")
-        return
+        raise ValueError(
+            "FanCoin entry-pool competitions are prohibited. Prize coin is funded by the host or by GTEX."
+        )
 
     if entry != 0 or fancoin_prize != 0:
         raise ValueError("GTEX Coin prize competitions cannot use participant-funded FanCoin or Coin entry pools.")

@@ -16,11 +16,23 @@ from app.models.club_sponsorship_package import ClubSponsorshipPackage
 from app.models.club_sponsorship_payout import ClubSponsorshipPayout
 from app.models.sponsorship_engine import SponsorshipLead
 from app.models.user import User
-from app.models.wallet import LedgerSourceTag
-from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.wallet import (
+    LedgerBalanceProjection,
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerUnit,
+)
 from app.notifications.service import NotificationEventMatrixService
+from app.sponsorship_engine.schemas import SPONSORSHIP_AMOUNT_CAP_ERROR, capped_sponsorship_amount_minor
 from app.story_feed_engine.service import StoryFeedService
-from app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import LedgerError, LedgerPosting, WalletService
+
+_AMOUNT_QUANTUM = Decimal("0.0001")
+_OWNER_SHARE_RATE = Decimal("0.60")
+SPONSORSHIP_FEE_ACCOUNT_CODE = "platform:credit:sponsorship_fee_revenue"
+_SETTLEMENT_BALANCE_ERROR = "Platform Fan Coin balance cannot fund the owner share and the platform fee."
+_SETTLEMENT_STATUS_ERROR = "Only an approved active sponsorship contract can be settled."
 
 
 class SponsorshipEngineError(ValueError):
@@ -114,9 +126,22 @@ class SponsorshipEngineService:
         if package is None or not package.is_active:
             raise SponsorshipEngineError("Sponsorship package is unavailable.")
 
-        amount_minor = (
-            payload.custom_amount_minor if payload.custom_amount_minor is not None else package.base_amount_minor
-        )
+        package_amount = int(package.base_amount_minor)
+        custom_amount = getattr(payload, "custom_amount_minor", None)
+        if custom_amount is None:
+            amount_minor = package_amount
+        elif type(custom_amount) is int:
+            amount_minor = custom_amount
+        else:
+            amount_minor = 0
+        if amount_minor <= 0 or amount_minor > package_amount:
+            raise SponsorshipEngineError(SPONSORSHIP_AMOUNT_CAP_ERROR)
+        try:
+            schema_amount = capped_sponsorship_amount_minor(custom_amount, package_amount)
+        except ValueError as exc:
+            raise SponsorshipEngineError(SPONSORSHIP_AMOUNT_CAP_ERROR) from exc
+        if schema_amount != amount_minor:
+            raise SponsorshipEngineError(SPONSORSHIP_AMOUNT_CAP_ERROR)
         duration_months = payload.duration_months or package.default_duration_months
         payout_schedule = payload.payout_schedule or package.payout_schedule
         start_at = utcnow()
@@ -224,6 +249,9 @@ class SponsorshipEngineService:
         contract = self.session.get(ClubSponsorshipContract, contract_id)
         if contract is None:
             raise SponsorshipEngineError("Contract was not found.")
+        status_value = contract.status.value if hasattr(contract.status, "value") else str(contract.status)
+        if status_value != SponsorshipStatus.ACTIVE.value:
+            raise SponsorshipEngineError(_SETTLEMENT_STATUS_ERROR)
         club = self.session.get(ClubProfile, contract.club_id)
         if club is None:
             raise SponsorshipEngineError("Club was not found.")
@@ -234,29 +262,74 @@ class SponsorshipEngineService:
         )
         if payout is None:
             raise SponsorshipEngineError("No pending sponsorship payout remains.")
-        credit_amount = (Decimal(payout.amount_minor) / Decimal("100")).quantize(Decimal("0.0001"))
-        # Dual inventory settlement: 60% club owner · 40% GTEX platform fee.
-        owner_share = (credit_amount * Decimal("0.60")).quantize(Decimal("0.0001"))
-        platform_fee = (credit_amount - owner_share).quantize(Decimal("0.0001"))
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-        owner_account = self.wallet_service.get_user_account(
-            self.session, self.session.get(User, club.owner_user_id), LedgerUnit.CREDIT
-        )
-        self.wallet_service.append_transaction(
+        credit_amount = (Decimal(payout.amount_minor) / Decimal("100")).quantize(_AMOUNT_QUANTUM)
+        # 60% club owner, 40% platform fee. Both legs must be funded or the settlement fails.
+        owner_share = (credit_amount * _OWNER_SHARE_RATE).quantize(_AMOUNT_QUANTUM)
+        platform_fee = (credit_amount - owner_share).quantize(_AMOUNT_QUANTUM)
+        if owner_share <= 0 or platform_fee <= 0 or owner_share + platform_fee != credit_amount:
+            raise SponsorshipEngineError("Sponsorship payout split is not payable.")
+        wallet = self.wallet_service
+        if wallet is None:
+            raise SponsorshipEngineError("Wallet service is unavailable.")
+        owner = self.session.get(User, club.owner_user_id)
+        if owner is None:
+            raise SponsorshipEngineError("Club owner was not found.")
+        platform_account = wallet.ensure_platform_account(self.session, LedgerUnit.CREDIT)
+        platform_balance = self._backed_account_balance(platform_account)
+        required_amount = (owner_share + platform_fee).quantize(_AMOUNT_QUANTUM)
+        if platform_balance < owner_share or platform_balance < required_amount:
+            raise SponsorshipEngineError(_SETTLEMENT_BALANCE_ERROR)
+        projected_platform_balance = (platform_balance - required_amount).quantize(_AMOUNT_QUANTUM)
+        if projected_platform_balance < Decimal("0.0000"):
+            raise SponsorshipEngineError(_SETTLEMENT_BALANCE_ERROR)
+        owner_account = wallet.get_user_account(self.session, owner, LedgerUnit.CREDIT)
+        fee_account = wallet.ensure_named_system_account(
             self.session,
-            postings=[
-                LedgerPosting(account=owner_account, amount=owner_share),
-                LedgerPosting(account=platform_account, amount=-owner_share),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            reference=f"sponsorship:{contract.id}:{payout.id}",
-            description=(
-                f"Sponsorship payout for {contract.sponsor_name} "
-                f"(owner 60%={owner_share}, platform 40%={platform_fee})"
-            ),
-            actor=actor,
+            code=SPONSORSHIP_FEE_ACCOUNT_CODE,
+            label="Platform Fan Coin Sponsorship Fee Revenue",
+            unit=LedgerUnit.CREDIT,
+            allow_negative=False,
         )
+        if fee_account.allow_negative:
+            raise SponsorshipEngineError("Sponsorship platform fee cannot post to an allow-negative account.")
+        # Clearing is created allow_negative and would mint Fan Coin. Hold that privilege
+        # off for this posting so the ledger refuses an unbacked debit, then restore it.
+        restore_allow_negative = bool(platform_account.allow_negative)
+        platform_account.allow_negative = False
+        try:
+            wallet.append_transaction(
+                self.session,
+                postings=[
+                    LedgerPosting(
+                        account=owner_account,
+                        amount=owner_share,
+                        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    ),
+                    LedgerPosting(
+                        account=fee_account,
+                        amount=platform_fee,
+                        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    ),
+                    LedgerPosting(
+                        account=platform_account,
+                        amount=-required_amount,
+                        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    ),
+                ],
+                reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                reference=f"sponsorship:{contract.id}:{payout.id}",
+                idempotency_key=f"sponsorship-settle:{contract.id}:{payout.id}",
+                description=(
+                    f"Sponsorship payout for {contract.sponsor_name} "
+                    f"(owner 60%={owner_share}, platform 40%={platform_fee})"
+                ),
+                actor=actor,
+            )
+        except LedgerError as exc:
+            raise SponsorshipEngineError(_SETTLEMENT_BALANCE_ERROR) from exc
+        finally:
+            platform_account.allow_negative = restore_allow_negative
         payout.status = "settled"
         payout.settled_at = utcnow()
         contract.settled_amount_minor += payout.amount_minor
@@ -353,6 +426,21 @@ class SponsorshipEngineService:
             "currencies": currencies,
             "headline_insights": insights,
         }
+
+    def _backed_account_balance(self, account) -> Decimal:
+        """Read the lower of the projection and the entry sum, ignoring a hot balance cache."""
+        self.session.flush()
+        entry_sum = self.session.scalar(
+            select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.account_id == account.id)
+        )
+        summed = Decimal(str(entry_sum or 0)).quantize(_AMOUNT_QUANTUM)
+        projection = self.session.scalar(
+            select(LedgerBalanceProjection).where(LedgerBalanceProjection.account_id == account.id)
+        )
+        if projection is None:
+            return summed
+        projected = Decimal(str(projection.balance)).quantize(_AMOUNT_QUANTUM)
+        return min(projected, summed)
 
     def _ensure_payout_schedule(self, contract: ClubSponsorshipContract) -> None:
         count = max(contract.duration_months, 1)

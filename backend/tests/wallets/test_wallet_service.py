@@ -376,12 +376,21 @@ def test_convert_wallet_units_moves_value_across_coin_and_credit_wallets(session
     session.commit()
 
     platform_credit = service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = service.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
 
     assert result.source_amount == Decimal("1.0000")
     assert result.target_amount == Decimal("100.0000")
     assert service.get_balance(session, coin_account) == Decimal("1.0000")
     assert service.get_balance(session, credit_account) == Decimal("100.0000")
-    assert service.get_balance(session, platform_coin) == Decimal("-1.0000")
+    # The spent GTEX backs the gift bridge instead of the generic platform coin account.
+    assert service.get_balance(session, platform_coin) == Decimal("-2.0000")
+    assert service.get_balance(session, bridge) == Decimal("1.0000")
     assert service.get_balance(session, platform_credit) == Decimal("-100.0000")
 
 
@@ -638,3 +647,196 @@ def test_request_payout_rejects_unknown_source_scope(session) -> None:
             source_scope="bonus",
             actor=user,
         )
+
+
+def _credit(session, service, user, *, amount, reason, source_tag, metadata=None, reference):
+    account = service.get_user_account(session, user, LedgerUnit.COIN)
+    platform = service.ensure_platform_account(session, LedgerUnit.COIN)
+    service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=account, amount=amount, source_tag=source_tag),
+            LedgerPosting(account=platform, amount=-amount, source_tag=source_tag),
+        ],
+        reason=reason,
+        source_tag=source_tag,
+        reference=reference,
+        actor=user,
+        metadata=metadata,
+    )
+
+
+def test_trade_withdrawal_cannot_spend_gift_competition_or_national_credits(session) -> None:
+    user = _create_user(session)
+    service = WalletService()
+    _credit(
+        session,
+        service,
+        user,
+        amount=Decimal("10.0000"),
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        reference="seed-trade-coins",
+    )
+    _credit(
+        session,
+        service,
+        user,
+        amount=Decimal("0.7000"),
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME,
+        metadata={"source_scope": "user_hosted"},
+        reference="seed-gift-income",
+    )
+    _credit(
+        session,
+        service,
+        user,
+        amount=Decimal("4.0000"),
+        reason=LedgerEntryReason.COMPETITION_REWARD,
+        source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
+        reference="seed-competition-reward",
+    )
+    _credit(
+        session,
+        service,
+        user,
+        amount=Decimal("3.0000"),
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.NATIONAL_COMPETITION_REWARD,
+        reference="seed-national-reward",
+    )
+    session.commit()
+
+    with pytest.raises(InsufficientBalanceError, match="cannot spend competition rewards, gift income, or national"):
+        service.request_payout(
+            session,
+            user=user,
+            amount=Decimal("10.7000"),
+            destination_reference="bank:trade-over-gift",
+            withdrawal_fee_bps=0,
+            minimum_fee=Decimal("0.0000"),
+            source_scope="trade",
+            actor=user,
+        )
+    trade = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("10.0000"),
+        destination_reference="bank:trade-only",
+        withdrawal_fee_bps=0,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="trade",
+        actor=user,
+    )
+    assert trade.source_scope == "trade"
+    gift = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("0.7000"),
+        destination_reference="bank:gift-scope",
+        withdrawal_fee_bps=0,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="user_hosted_gift",
+        actor=user,
+    )
+    assert gift.source_scope == "user_hosted_gift"
+    with pytest.raises(InsufficientBalanceError, match="gtex_competition_gift balance"):
+        service.request_payout(
+            session,
+            user=user,
+            amount=Decimal("0.1000"),
+            destination_reference="bank:wrong-gift-scope",
+            withdrawal_fee_bps=0,
+            minimum_fee=Decimal("0.0000"),
+            source_scope="gtex_competition_gift",
+            actor=user,
+        )
+    competition = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("4.0000"),
+        destination_reference="bank:competition-scope",
+        withdrawal_fee_bps=0,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="competition",
+        actor=user,
+    )
+    assert competition.source_scope == "competition"
+    national = service.request_payout(
+        session,
+        user=user,
+        amount=Decimal("3.0000"),
+        destination_reference="bank:national-scope",
+        withdrawal_fee_bps=0,
+        minimum_fee=Decimal("0.0000"),
+        source_scope="national_reward",
+        actor=user,
+    )
+    assert national.source_scope == "national_reward"
+    account = service.get_user_account(session, user, LedgerUnit.COIN)
+    assert service.get_balance(session, account) == Decimal("0.0000")
+
+
+def test_conversion_idempotency_key_does_not_replay_another_users_posting(session) -> None:
+    first = _create_user(session)
+    second = AuthService().register_user(
+        session,
+        email="wallet-second@example.com",
+        username="walletsecond",
+        password="SuperSecret1",
+    )
+    session.commit()
+    service = WalletService()
+    for user, reference in ((first, "seed-first-convert"), (second, "seed-second-convert")):
+        account = service.get_user_account(session, user, LedgerUnit.COIN)
+        platform = service.ensure_platform_account(session, LedgerUnit.COIN)
+        service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=account, amount=Decimal("2.0000")),
+                LedgerPosting(account=platform, amount=Decimal("-2.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=reference,
+            actor=user,
+        )
+    session.commit()
+
+    original = service.convert_wallet_units(
+        session,
+        user=first,
+        amount=Decimal("1.0000"),
+        source_unit=LedgerUnit.COIN,
+        actor=first,
+        idempotency_key="shared-convert",
+    )
+    session.commit()
+    replay = service.convert_wallet_units(
+        session,
+        user=first,
+        amount=Decimal("2.0000"),
+        source_unit=LedgerUnit.COIN,
+        actor=first,
+        idempotency_key="shared-convert",
+    )
+    assert replay.transaction_id == original.transaction_id
+    assert replay.source_amount == Decimal("1.0000")
+    assert service.get_balance(session, service.get_user_account(session, first, LedgerUnit.COIN)) == Decimal("1.0000")
+
+    with pytest.raises(LedgerError, match="another user"):
+        service.convert_wallet_units(
+            session,
+            user=second,
+            amount=Decimal("1.0000"),
+            source_unit=LedgerUnit.COIN,
+            actor=second,
+            idempotency_key="shared-convert",
+        )
+    assert service.get_balance(session, service.get_user_account(session, second, LedgerUnit.COIN)) == Decimal("2.0000")
+    assert (
+        session.scalar(
+            select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "shared-convert")
+        )
+        == 1
+    )

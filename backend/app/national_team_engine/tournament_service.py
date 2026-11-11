@@ -597,6 +597,16 @@ class NationalTeamTournamentService:
         )
         return "contract_locked" if contract is not None else None
 
+    @staticmethod
+    def _tier_is(player: Player | None, tier: str) -> bool:
+        if player is None:
+            return False
+        return str(player.real_player_tier or "").strip().lower() == tier
+
+    def _player_is_legend(self, player_id: str, player: Player | None = None) -> bool:
+        row = player if isinstance(player, Player) else self.session.get(Player, player_id)
+        return self._tier_is(row, "legend")
+
     def _active_rental_count(
         self,
         *,
@@ -604,19 +614,24 @@ class NationalTeamTournamentService:
         competition_id: str,
         actor: User | None,
         now: datetime,
+        legend: bool | None = None,
     ) -> int:
+        is_legend = self._player_is_legend(player_id) if legend is None else legend
         stmt = (
             select(func.count())
             .select_from(RentalContract)
             .where(
                 RentalContract.player_id == player_id,
-                RentalContract.tournament_id == competition_id,
                 RentalContract.status == RentalContractStatus.ACTIVE,
                 RentalContract.end_date > now,
             )
         )
-        if actor is not None:
-            stmt = stmt.where(RentalContract.user_id == actor.id)
+        # A legend is 1-of-1: one active rental across every user and competition.
+        # Other players stay limited to this actor's contract in this competition.
+        if not is_legend:
+            stmt = stmt.where(RentalContract.tournament_id == competition_id)
+            if actor is not None:
+                stmt = stmt.where(RentalContract.user_id == actor.id)
         return int(self.session.scalar(stmt) or 0)
 
     def rental_eligibility_for_pool_item(
@@ -686,12 +701,24 @@ class NationalTeamTournamentService:
             duplicate = player_id in member_ids
         record("duplicate", not duplicate, "duplicate_player")
 
+        is_legend = self._tier_is(player if isinstance(player, Player) else None, "legend")
         active_rental_count = (
             int(prefetch["rentals"].get(player_id, 0))
             if prefetch is not None
-            else self._active_rental_count(player_id=player_id, competition_id=competition.id, actor=actor, now=now)
+            else self._active_rental_count(
+                player_id=player_id,
+                competition_id=competition.id,
+                actor=actor,
+                now=now,
+                legend=is_legend,
+            )
         )
-        record("active_rentals", actor is None or active_rental_count == 0, "active_rental_exists")
+        active_rental_blocks = is_legend or actor is not None
+        record(
+            "active_rentals",
+            (not active_rental_blocks) or active_rental_count == 0,
+            "active_rental_exists",
+        )
 
         eligible = not reasons
         return {
@@ -767,19 +794,40 @@ class NationalTeamTournamentService:
                 .where(PlayerContract.ends_on >= today)
             ).all()
         )
-        rentals = (
-            select(RentalContract.player_id, func.count())
-            .where(
-                RentalContract.player_id.in_(ids),
-                RentalContract.tournament_id == competition.id,
-                RentalContract.status == RentalContractStatus.ACTIVE,
-                RentalContract.end_date > now,
-            )
-            .group_by(RentalContract.player_id)
+        legend_ids = set(
+            self.session.scalars(
+                select(Player.id).where(
+                    Player.id.in_(ids),
+                    func.lower(func.trim(Player.real_player_tier)) == "legend",
+                )
+            ).all()
         )
-        if actor is not None:
-            rentals = rentals.where(RentalContract.user_id == actor.id)
-        cache["rentals"] = dict(self.session.execute(rentals).all())
+        ordinary_ids = [player_id for player_id in ids if player_id not in legend_ids]
+        if ordinary_ids:
+            rentals = (
+                select(RentalContract.player_id, func.count())
+                .where(
+                    RentalContract.player_id.in_(ordinary_ids),
+                    RentalContract.tournament_id == competition.id,
+                    RentalContract.status == RentalContractStatus.ACTIVE,
+                    RentalContract.end_date > now,
+                )
+                .group_by(RentalContract.player_id)
+            )
+            if actor is not None:
+                rentals = rentals.where(RentalContract.user_id == actor.id)
+            cache["rentals"].update(dict(self.session.execute(rentals).all()))
+        if legend_ids:
+            legend_rentals = (
+                select(RentalContract.player_id, func.count())
+                .where(
+                    RentalContract.player_id.in_(tuple(legend_ids)),
+                    RentalContract.status == RentalContractStatus.ACTIVE,
+                    RentalContract.end_date > now,
+                )
+                .group_by(RentalContract.player_id)
+            )
+            cache["rentals"].update(dict(self.session.execute(legend_rentals).all()))
         return cache
 
     @staticmethod
@@ -1291,6 +1339,7 @@ class NationalTeamTournamentService:
             "is_regen": not bool(player.is_real_player),
             **market_access_payload(player),
             **self._player_image_payload(player, summary=summary),
+            "real_player_tier": player.real_player_tier,
             "supply_mode": INFINITE_SUPPLY_MODE,
         }
 
@@ -1371,6 +1420,12 @@ class NationalTeamTournamentService:
             .outerjoin(PlayerSummaryReadModel, PlayerSummaryReadModel.player_id == Player.id)
             .options(selectinload(Player.image_metadata))
             .where(or_(Player.is_tradable.is_(True), Player.is_real_player.is_(False)))
+            .where(
+                or_(
+                    Player.real_player_tier.is_(None),
+                    func.lower(func.trim(Player.real_player_tier)) != "archived_duplicate",
+                )
+            )
         )
         if country_code:
             normalized_country_code = country_code.strip().upper()
@@ -1692,6 +1747,8 @@ class NationalTeamTournamentService:
                     None,
                     None,
                 )
+        if player_row is not None and self._tier_is(player_row[0], "archived_duplicate"):
+            return None
         if player_row is not None:
             (
                 player,
@@ -2642,8 +2699,30 @@ class NationalTeamTournamentService:
                 limit=1000,
             )
         )
+        prefetch = self._prefetch_eligibility(
+            player_ids=[str(item["player_id"]) for item in pool],
+            competition=competition,
+            entry=entry,
+            actor=actor,
+        )
+        free_pool = []
+        for item in pool:
+            if self._tier_is(item.get("player") if isinstance(item.get("player"), Player) else None, "legend"):
+                continue
+            if str(item.get("real_player_tier") or "").strip().lower() == "legend":
+                continue
+            eligibility = self.rental_eligibility_for_pool_item(
+                competition=competition,
+                item=item,
+                country_code=entry.country_code,
+                entry=entry,
+                actor=actor,
+                prefetch=prefetch,
+            )
+            if eligibility["eligible"]:
+                free_pool.append(item)
         selection = self._pick_slot_players(
-            pool=pool,
+            pool=free_pool,
             slots=starter_slots[:total_remaining],
             excluded_player_ids=current_player_ids,
             budget_coin=None,
@@ -3442,22 +3521,24 @@ class NationalTeamTournamentService:
                 competition is not None and str(competition.status).lower() in ("completed", "cancelled", "archived")
             )
 
-            if competition is not None and not competition_completed:
+            if expired_by_window or competition_completed:
+                should_release = True
+            elif competition is not None:
                 entry = self.session.scalar(
                     select(NationalTeamCompetitionEntry).where(
                         NationalTeamCompetitionEntry.competition_id == contract.tournament_id,
                         NationalTeamCompetitionEntry.user_id == contract.user_id,
                     )
                 )
-                if entry is not None and str(entry.status).lower() in ("eliminated", "withdrawn", "disqualified"):
-                    should_release = True
-                elif entry is not None:
-                    # Active squad in ongoing multi-day tournament: protected from premature deletion
-                    should_release = False
-                else:
-                    should_release = expired_by_window
+                # A live entry keeps a rental whose window is still open. An ended
+                # window is released above, including when the entry was mirrored.
+                should_release = entry is not None and str(entry.status).lower() in (
+                    "eliminated",
+                    "withdrawn",
+                    "disqualified",
+                )
             else:
-                should_release = expired_by_window or competition_completed
+                should_release = False
             if (
                 not should_release
                 and (contract_start is None or contract_start <= reference_now)
@@ -3639,7 +3720,7 @@ class NationalTeamTournamentService:
             {
                 **dict(mgr),
                 "currency": "FAN_COIN",
-                "upfront_contract_deduction": True,
+                "upfront_contract_deduction": False,
                 "staff_roles_required": ["manager"],
                 "excluded_club_staff_roles": ["general_manager", "head_of_youth_development", "chief_scout"],
             }
@@ -3668,51 +3749,11 @@ class NationalTeamTournamentService:
                 reason="manager_not_found",
             )
 
-        fee_fan_coin = self._normalize_amount(candidate["fee_fan_coin"])
-        if fee_fan_coin > Decimal("0.0000"):
-            user_fan_account = self.wallet_service.get_user_account(self.session, actor, LedgerUnit.CREDIT)
-            platform_fan_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-            try:
-                self.wallet_service.append_transaction(
-                    self.session,
-                    postings=[
-                        LedgerPosting(
-                            account=user_fan_account,
-                            amount=-fee_fan_coin,
-                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
-                        ),
-                        LedgerPosting(
-                            account=platform_fan_account,
-                            amount=fee_fan_coin,
-                            source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
-                        ),
-                    ],
-                    reason=LedgerEntryReason.COMPETITION_ENTRY,
-                    source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND,
-                    reference=f"national-manager-hire:{entry.id}:{manager_id}",
-                    description=f"Upfront Fan Coin salary for National Team Manager {candidate['display_name']} ({entry.country_name})",
-                    external_reference=f"national-manager-hire:{entry.id}:{manager_id}",
-                    actor=actor,
-                    metadata={
-                        "entry_id": entry.id,
-                        "competition_id": competition.id,
-                        "country_code": entry.country_code,
-                        "manager_id": manager_id,
-                        "currency_label": "Fan Coin",
-                        "upfront_contract_deduction": True,
-                    },
-                )
-            except InsufficientBalanceError as exc:
-                raise NationalTeamTournamentError(
-                    str(exc),
-                    reason="insufficient_fan_coin_balance",
-                ) from exc
-
         hired_payload = {
             **candidate,
-            "fee_fan_coin": str(fee_fan_coin),
+            "fee_fan_coin": "0.0000",
             "currency": "FAN_COIN",
-            "upfront_paid": True,
+            "upfront_paid": False,
             "hired_at": utcnow().isoformat(),
             "staff_roles_required": ["manager"],
         }

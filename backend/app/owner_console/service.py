@@ -1847,7 +1847,7 @@ def tick_club(
                 "competition_invite",
                 sender="GTEX Competitions",
                 title=f"Invitation: {open_comp.name}",
-                what=f"{open_comp.name} has open slots. Entry {int(open_comp.entry_fee):,} GTEX Coin.",
+                what=f"{open_comp.name} has open slots. Entry is free.",
                 why="Competition football raises prestige, fan engagement and regen growth (competition quality driver).",
                 actions=[
                     {"key": "enter", "label": "Enter competition", "style": "primary"},

@@ -781,6 +781,38 @@ class WalletService:
             rate=rate,
         )
 
+    def _gift_conversion_bridge_account(self, session: Session) -> LedgerAccount:
+        """GTEX backing that later Fan Coin gifts debit. Never allowed to mint."""
+        from app.economy.conversion_service import GIFT_CONVERSION_BRIDGE_COIN_CODE
+
+        account = self.ensure_named_system_account(
+            session,
+            code=GIFT_CONVERSION_BRIDGE_COIN_CODE,
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        if account.allow_negative:
+            account.allow_negative = False
+            session.flush()
+        return account
+
+    def _conversion_result_from_transaction(self, transaction: LedgerTransaction) -> WalletConversionResult:
+        meta: dict[str, Any] = {}
+        raw = transaction.metadata_json.get("conversion") if isinstance(transaction.metadata_json, dict) else None
+        if isinstance(raw, dict):
+            meta = raw
+        source_unit = LedgerUnit(str(meta.get("source_unit") or LedgerUnit.COIN.value))
+        target_unit = LedgerUnit(str(meta.get("target_unit") or LedgerUnit.CREDIT.value))
+        return WalletConversionResult(
+            transaction_id=transaction.id,
+            reference=transaction.reference or "",
+            source_unit=source_unit,
+            source_amount=self._normalize_amount(meta.get("source_amount")),
+            target_unit=target_unit,
+            target_amount=self._normalize_amount(meta.get("target_amount")),
+        )
+
     def convert_wallet_units(
         self,
         session: Session,
@@ -793,9 +825,28 @@ class WalletService:
         idempotency_key: str | None = None,
     ) -> WalletConversionResult:
         quote = self.quote_conversion(source_unit=source_unit, amount=amount)
+        normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
+        if normalized_idempotency_key is not None:
+            existing = session.scalar(
+                select(LedgerTransaction).where(LedgerTransaction.idempotency_key == normalized_idempotency_key)
+            )
+            if existing is not None:
+                if existing.created_by_user_id != user.id:
+                    raise LedgerError("Conversion idempotency key belongs to another user.")
+                if existing.status == LedgerTransactionStatus.COMMITTED:
+                    return self._conversion_result_from_transaction(existing)
+                raise LedgerError(
+                    f"Ledger transaction with idempotency key '{normalized_idempotency_key}' "
+                    f"is already {existing.status.value}."
+                )
         source_account = self.get_user_account(session, user, quote.source_unit)
         target_account = self.get_user_account(session, user, quote.target_unit)
-        source_platform_account = self.ensure_platform_account(session, quote.source_unit)
+        # GTEX spent on Fan Coin backs the gift bridge. Fan Coin is still minted
+        # from the platform credit clearing account at the published 100:1 rate.
+        if quote.source_unit == LedgerUnit.COIN:
+            source_sink = self._gift_conversion_bridge_account(session)
+        else:
+            source_sink = self.ensure_platform_account(session, quote.source_unit)
         target_platform_account = self.ensure_platform_account(session, quote.target_unit)
         resolved_reference = reference or f"wallet-conversion:{generate_uuid()}"
         description = (
@@ -806,7 +857,7 @@ class WalletService:
             session,
             postings=[
                 LedgerPosting(account=source_account, amount=-quote.source_amount),
-                LedgerPosting(account=source_platform_account, amount=quote.source_amount),
+                LedgerPosting(account=source_sink, amount=quote.source_amount),
                 LedgerPosting(account=target_platform_account, amount=-quote.target_amount),
                 LedgerPosting(account=target_account, amount=quote.target_amount),
             ],
@@ -816,7 +867,7 @@ class WalletService:
             description=description,
             external_reference=resolved_reference,
             actor=actor or user,
-            idempotency_key=idempotency_key,
+            idempotency_key=normalized_idempotency_key,
             transaction_type=LedgerTransactionType.CONVERSION,
             metadata={
                 "conversion": {
@@ -873,22 +924,89 @@ class WalletService:
     def competition_reward_withdrawable_balance(
         self, session: Session, user: User, unit: LedgerUnit = LedgerUnit.COIN
     ) -> Decimal:
-        rewards_total = self.competition_reward_balance(session, user, unit)
+        return self._source_scope_remainder(session, user, unit, "competition")
+
+    def _floor_amount(self, value: Decimal) -> Decimal:
+        normalized = self._normalize_amount(value)
+        if normalized < Decimal("0.0000"):
+            return Decimal("0.0000")
+        return normalized
+
+    def _scoped_credit_totals(self, session: Session, user: User, unit: LedgerUnit) -> dict[str, Decimal]:
+        """Positive credits still attributable to a withdrawal source.
+
+        The client label is not an input. Competition rewards are
+        LedgerEntryReason.COMPETITION_REWARD, gift income is
+        LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME (split by the ledger
+        transaction's source_scope), and national rewards are
+        LedgerSourceTag.NATIONAL_COMPETITION_REWARD.
+        """
+        account = self.get_user_account(session, user, unit)
+        rows = session.execute(
+            select(
+                LedgerEntry.amount,
+                LedgerEntry.reason,
+                LedgerEntry.source_tag,
+                LedgerTransaction.metadata_json,
+            )
+            .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+            .where(LedgerEntry.account_id == account.id, LedgerEntry.amount > 0)
+        ).all()
+        totals = {
+            "competition": Decimal("0.0000"),
+            "user_hosted_gift": Decimal("0.0000"),
+            "gtex_competition_gift": Decimal("0.0000"),
+            "national_reward": Decimal("0.0000"),
+            "gift_unscoped": Decimal("0.0000"),
+        }
+        for amount, reason, source_tag, metadata in rows:
+            normalized = self._normalize_amount(amount)
+            scope = ""
+            if isinstance(metadata, dict) and metadata.get("source_scope") is not None:
+                scope = str(metadata.get("source_scope"))
+            if source_tag == LedgerSourceTag.NATIONAL_COMPETITION_REWARD:
+                totals["national_reward"] += normalized
+            elif reason == LedgerEntryReason.COMPETITION_REWARD:
+                totals["competition"] += normalized
+            elif source_tag == LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME:
+                if scope in {"user_hosted", "user_hosted_gift"}:
+                    totals["user_hosted_gift"] += normalized
+                elif scope in {"gtex_competition", "gtex_competition_gift"}:
+                    totals["gtex_competition_gift"] += normalized
+                else:
+                    totals["gift_unscoped"] += normalized
+        return {key: self._normalize_amount(value) for key, value in totals.items()}
+
+    def _reserved_payout_amount(self, session: Session, user: User, unit: LedgerUnit, scopes: set[str]) -> Decimal:
         requests = session.scalars(
             select(PayoutRequest).where(PayoutRequest.user_id == user.id, PayoutRequest.unit == unit)
         ).all()
-        reserved_or_paid = Decimal("0.0000")
+        reserved = Decimal("0.0000")
         for request in requests:
-            meta = self._parse_payout_meta(request.notes)
-            if meta.get("source_scope") != "competition":
-                continue
             if request.status in {PayoutStatus.REJECTED, PayoutStatus.FAILED}:
                 continue
-            reserved_or_paid += self._normalize_amount(request.amount)
-        remaining = rewards_total - reserved_or_paid
-        if remaining < Decimal("0.0000"):
-            remaining = Decimal("0.0000")
-        return self._normalize_amount(remaining)
+            meta = self._parse_payout_meta(request.notes)
+            if str(meta.get("source_scope") or "") not in scopes:
+                continue
+            reserved += self._normalize_amount(request.amount)
+        return self._normalize_amount(reserved)
+
+    def _source_scope_remainder(self, session: Session, user: User, unit: LedgerUnit, source_scope: str) -> Decimal:
+        credits = self._scoped_credit_totals(session, user, unit).get(source_scope, Decimal("0.0000"))
+        reserved = self._reserved_payout_amount(session, user, unit, {source_scope})
+        return self._floor_amount(credits - reserved)
+
+    def _trade_withdrawable_balance(self, session: Session, user: User, unit: LedgerUnit) -> Decimal:
+        """GTEX that is not still attributable to rewards, gifts, or national payouts."""
+        account = self.get_user_account(session, user, unit)
+        available = self.get_balance(session, account)
+        credits = self._scoped_credit_totals(session, user, unit)
+        restricted = Decimal("0.0000")
+        for scope in ("competition", "user_hosted_gift", "gtex_competition_gift", "national_reward"):
+            reserved = self._reserved_payout_amount(session, user, unit, {scope})
+            restricted += self._floor_amount(credits.get(scope, Decimal("0.0000")) - reserved)
+        restricted += self._floor_amount(credits.get("gift_unscoped", Decimal("0.0000")))
+        return self._floor_amount(available - restricted)
 
     def list_payout_requests_for_user(self, session: Session, user: User) -> list[PayoutRequest]:
         return session.scalars(
@@ -934,11 +1052,23 @@ class WalletService:
         available_balance = self.get_balance(session, user_account)
         if available_balance < total_debit:
             raise InsufficientBalanceError("Available balance is lower than the requested withdrawal plus fee.")
-        if source_scope == "competition":
-            reward_balance = self.competition_reward_withdrawable_balance(session, user, unit)
+        if source_scope == "trade":
+            trade_residual = self._trade_withdrawable_balance(session, user, unit)
+            if trade_residual < total_debit:
+                raise InsufficientBalanceError(
+                    "Trade withdrawals cannot spend competition rewards, gift income, or national rewards."
+                )
+        elif source_scope == "competition":
+            reward_balance = self._source_scope_remainder(session, user, unit, "competition")
             if reward_balance < normalized_amount:
                 raise InsufficientBalanceError(
                     "Competition reward balance is lower than the requested e-game withdrawal."
+                )
+        else:
+            scoped_balance = self._source_scope_remainder(session, user, unit, source_scope)
+            if scoped_balance < normalized_amount:
+                raise InsufficientBalanceError(
+                    f"{source_scope} balance is lower than the requested withdrawal."
                 )
 
         normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)

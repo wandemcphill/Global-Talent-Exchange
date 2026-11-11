@@ -35,7 +35,9 @@ from app.wallets.service import LedgerPosting, WalletService
 GIFT_KEY = "refund-safety-star"
 GROSS = Decimal("100.0000")
 RAKE = Decimal("30.0000")
-NET = Decimal("70.0000")
+FAN_NET = Decimal("70.0000")
+GTEX_OUT = Decimal("0.7000")
+BRIDGE_BACKING = Decimal("1.0000")
 
 
 def _make_session():
@@ -85,11 +87,20 @@ def _seed(session, sender):
     session.commit()
 
     wallet = WalletService()
+    bridge = wallet.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
     wallet.append_transaction(
         session,
         postings=[
             LedgerPosting(account=wallet.get_user_account(session, sender, LedgerUnit.CREDIT), amount=GROSS),
             LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.CREDIT), amount=-GROSS),
+            LedgerPosting(account=bridge, amount=BRIDGE_BACKING),
+            LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=-BRIDGE_BACKING),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-refund-safety",
@@ -115,7 +126,7 @@ def _accounts(session, wallet, sender, recipient) -> dict[str, object]:
             code="platform:coin:gift_conversion_bridge",
             label="Platform GTEX Coin Gift Conversion Bridge",
             unit=LedgerUnit.COIN,
-            allow_negative=True,
+            allow_negative=False,
         ),
         "fee_revenue": wallet.ensure_named_system_account(
             session,
@@ -158,9 +169,9 @@ def test_refund_returns_fan_coin_and_never_mints_gtex_coin() -> None:
 
         after_gift = _balances(session, wallet, accounts)
         assert after_gift["sender_credit"] == Decimal("0.0000")
-        assert after_gift["recipient_coin"] == NET
-        assert after_gift["bridge_coin"] == -NET
-        assert after_gift["bridge_credit"] == NET
+        assert after_gift["recipient_coin"] == GTEX_OUT
+        assert after_gift["bridge_coin"] == BRIDGE_BACKING - GTEX_OUT
+        assert after_gift["bridge_credit"] == FAN_NET
         assert after_gift["fee_revenue"] == RAKE
 
         admin_refund_gift_event(event_id=tx.id, actor=admin, session=session)
@@ -172,7 +183,7 @@ def test_refund_returns_fan_coin_and_never_mints_gtex_coin() -> None:
         # single-unit refund violated.
         assert after_refund["sender_coin"] == Decimal("0.0000")
         assert after_refund["recipient_coin"] == Decimal("0.0000")
-        assert after_refund["bridge_coin"] == Decimal("0.0000")
+        assert after_refund["bridge_coin"] == BRIDGE_BACKING
         assert after_refund["bridge_credit"] == Decimal("0.0000")
         assert after_refund["fee_revenue"] == Decimal("0.0000")
 
@@ -241,8 +252,8 @@ def test_refund_fails_closed_when_recipient_already_spent_the_coin() -> None:
         wallet.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=accounts["recipient_coin"], amount=-NET),
-                LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=NET),
+                LedgerPosting(account=accounts["recipient_coin"], amount=-GTEX_OUT),
+                LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=GTEX_OUT),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             reference="recipient-spends-gift-coin",

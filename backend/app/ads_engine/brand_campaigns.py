@@ -61,17 +61,30 @@ def _campaign_for_owner(session: Session, campaign_id: str, user_id: str) -> Bra
     return campaign
 
 
-def _event_counts(session: Session, campaign_ids: list[str]) -> dict[str, dict[str, int]]:
+def _event_counts(
+    session: Session,
+    campaign_ids: list[str],
+    *,
+    include_client_analytics: bool = False,
+) -> dict[str, dict[str, int]]:
+    """Count events per campaign.
+
+    Rows with event_source="client" are anonymous analytics. Spend and delivery
+    throttling ignore them unless include_client_analytics is set for reports.
+    """
     if not campaign_ids:
         return {}
     from sqlalchemy.exc import SQLAlchemyError
 
     try:
-        rows = session.execute(
+        statement = (
             select(BrandAdEvent.campaign_id, BrandAdEvent.event_type, func.count(BrandAdEvent.id))
             .where(BrandAdEvent.campaign_id.in_(campaign_ids))
             .group_by(BrandAdEvent.campaign_id, BrandAdEvent.event_type)
-        ).all()
+        )
+        if not include_client_analytics:
+            statement = statement.where(BrandAdEvent.event_source != "client")
+        rows = session.execute(statement).all()
         result: dict[str, dict[str, int]] = {}
         for campaign_id, event_type, count in rows:
             result.setdefault(campaign_id, {})[event_type] = int(count)
@@ -81,6 +94,7 @@ def _event_counts(session: Session, campaign_ids: list[str]) -> dict[str, dict[s
 
 
 def _estimated_spend(campaign: BrandAdCampaign, counts: dict[str, int]) -> Decimal:
+    """Spend from server-delivered events only. Caller counts must exclude event_source="client"."""
     price = Decimal(campaign.unit_price or 0)
     if campaign.pricing_model == "CPC":
         amount = Decimal(counts.get("click", 0)) * price
@@ -89,11 +103,15 @@ def _estimated_spend(campaign: BrandAdCampaign, counts: dict[str, int]) -> Decim
     return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
-def _report(campaign: BrandAdCampaign, counts: dict[str, int]) -> CampaignReportView:
+def _report(
+    campaign: BrandAdCampaign,
+    counts: dict[str, int],
+    billable_counts: dict[str, int],
+) -> CampaignReportView:
     impressions = counts.get("impression", 0)
     clicks = counts.get("click", 0)
     conversions = counts.get("conversion", 0)
-    spend = _estimated_spend(campaign, counts)
+    spend = _estimated_spend(campaign, billable_counts)
     budget = Decimal(campaign.budget_amount or 0)
     return CampaignReportView(
         campaign_id=campaign.id,
@@ -118,7 +136,7 @@ def _is_campaign_budget_exhausted(session: Session, campaign: BrandAdCampaign) -
     budget = Decimal(campaign.budget_amount or 0)
     if budget <= Decimal("0"):
         return False
-    counts = _event_counts(session, [campaign.id]).get(campaign.id, {})
+    counts = _event_counts(session, [campaign.id], include_client_analytics=False).get(campaign.id, {})
     spend = _estimated_spend(campaign, counts)
     return spend >= budget
 
@@ -131,6 +149,7 @@ def _live_campaign_statement(*, campaign_type: str, now: datetime):
             BrandAdCampaign.status.in_(("approved", "active")),
             BrandAdCampaign.is_approved.is_(True),
             BrandAdCampaign.is_active.is_(True),
+            BrandAdCampaign.payment_status == "paid",
             BrandAdCampaign.start_at <= now,
             BrandAdCampaign.end_at > now,
         )
@@ -190,6 +209,7 @@ def create_advertiser_campaign(
             status_code=status.HTTP_409_CONFLICT, detail="Complete your advertiser profile before creating a campaign."
         )
     values = payload.model_dump()
+    values.pop("payment_status", None)
     campaign = BrandAdCampaign(
         advertiser_id=current_user.id,
         **values,
@@ -197,6 +217,7 @@ def create_advertiser_campaign(
         is_approved=False,
         is_active=False,
         status="draft",
+        payment_status="unpaid",
     )
     session.add(campaign)
     session.commit()
@@ -217,6 +238,8 @@ def update_advertiser_campaign(
             status_code=status.HTTP_409_CONFLICT, detail="Only draft or rejected campaigns can be edited."
         )
     for key, value in payload.model_dump().items():
+        if key == "payment_status":
+            continue
         setattr(campaign, key, value)
     campaign.is_approved = False
     campaign.is_active = False
@@ -298,9 +321,13 @@ def advertiser_campaign_reports(
     session: Session = Depends(get_session),
 ):
     campaigns = session.scalars(select(BrandAdCampaign).where(BrandAdCampaign.advertiser_id == current_user.id)).all()
-    counts = _event_counts(session, [campaign.id for campaign in campaigns])
+    campaign_ids = [campaign.id for campaign in campaigns]
+    analytics = _event_counts(session, campaign_ids, include_client_analytics=True)
+    billable = _event_counts(session, campaign_ids, include_client_analytics=False)
     return CampaignReportsResponse(
-        reports=[_report(campaign, counts.get(campaign.id, {})) for campaign in campaigns],
+        reports=[
+            _report(campaign, analytics.get(campaign.id, {}), billable.get(campaign.id, {})) for campaign in campaigns
+        ],
         generated_at=_now(),
     )
 
@@ -325,9 +352,13 @@ def admin_campaign_reports(
     session: Session = Depends(get_session),
 ):
     campaigns = session.scalars(select(BrandAdCampaign)).all()
-    counts = _event_counts(session, [campaign.id for campaign in campaigns])
+    campaign_ids = [campaign.id for campaign in campaigns]
+    analytics = _event_counts(session, campaign_ids, include_client_analytics=True)
+    billable = _event_counts(session, campaign_ids, include_client_analytics=False)
     return CampaignReportsResponse(
-        reports=[_report(campaign, counts.get(campaign.id, {})) for campaign in campaigns],
+        reports=[
+            _report(campaign, analytics.get(campaign.id, {}), billable.get(campaign.id, {})) for campaign in campaigns
+        ],
         generated_at=_now(),
     )
 
@@ -351,6 +382,11 @@ def admin_review_brand_campaign(
             )
         if _as_utc(campaign.end_at) <= now:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Expired campaigns cannot be approved.")
+        if campaign.payment_status != "paid":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Campaign must be paid before it can be approved.",
+            )
         campaign.status = "approved"
         campaign.is_approved = True
         campaign.is_active = True
@@ -462,9 +498,13 @@ def get_public_music_promotions(
     now = _now()
     rows = session.scalars(_live_campaign_statement(campaign_type="music", now=now).limit(100)).all()
     candidate_ids = [row.id for row in rows]
-    counts_by_campaign = _event_counts(session, candidate_ids) if candidate_ids else {}
+    counts_by_campaign = (
+        _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
+    )
     promotions = []
     for row in rows:
+        if row.payment_status != "paid":
+            continue
         if row.music_target_type not in {"track", "artist", "playlist"}:
             continue
         if not row.music_target_id or not _safe_http_url(row.destination_url):
@@ -551,7 +591,7 @@ def get_public_stadium_inventory(
     """
     now = _now()
     candidates = session.scalars(_live_campaign_statement(campaign_type="brand", now=now).limit(limit * 4)).all()
-    counts_by_campaign = _event_counts(session, [c.id for c in candidates])
+    counts_by_campaign = _event_counts(session, [c.id for c in candidates], include_client_analytics=False)
 
     workspace_status: dict[str, str | None] = {}
     inventory: list[PublicBrandAdCampaignView] = []
@@ -609,6 +649,36 @@ def get_public_stadium_inventory(
     return PublicBrandAdCampaignsResponse(campaigns=inventory, generated_at=now)
 
 
+def record_server_brand_delivery(
+    session: Session,
+    campaign: BrandAdCampaign,
+    *,
+    event_type: Literal["impression", "click"],
+    idempotency_key: str,
+) -> bool:
+    """Record one billable delivery the server actually served.
+
+    Client analytics must not call this. The idempotency key is counted at most once.
+    """
+    if event_type not in {"impression", "click"}:
+        raise ValueError("Server delivery events must be impression or click.")
+    existing = session.scalar(select(BrandAdEvent).where(BrandAdEvent.idempotency_key == idempotency_key))
+    if existing is not None:
+        return False
+    session.add(
+        BrandAdEvent(
+            campaign_id=campaign.id,
+            event_type=event_type,
+            idempotency_key=idempotency_key,
+            user_id=None,
+            event_source="server",
+            metadata_json={},
+        )
+    )
+    session.flush()
+    return True
+
+
 @public_router.post("/events", response_model=BrandAdEventResponse)
 def record_public_brand_ad_event(
     payload: BrandCampaignEventRequest,
@@ -625,6 +695,7 @@ def record_public_brand_ad_event(
         or not campaign.is_active
         or _as_utc(campaign.start_at) > now
         or _as_utc(campaign.end_at) <= now
+        or campaign.payment_status != "paid"
         or not _safe_http_url(campaign.destination_url)
         or _is_campaign_budget_exhausted(session, campaign)
     ):

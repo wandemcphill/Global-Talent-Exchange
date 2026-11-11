@@ -41,7 +41,7 @@ function CompCard({ c, clubId }: any) {
               {c.host_type === "gtex" ? "GTEX Major" : "Community Cup"}
             </Chip>
             <Chip>{c.format?.toUpperCase()}</Chip>
-            {c.allow_same_owner && <Chip tone="red">Open Ownership</Chip>}
+            <Chip>Free entry</Chip>
           </div>
           <span
             className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${
@@ -72,9 +72,7 @@ function CompCard({ c, clubId }: any) {
         <div className="mt-4 grid grid-cols-3 gap-2 rounded-xl border border-white/5 bg-gtex-midnight/70 p-3 text-center">
           <div>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Entry</p>
-            <p className="gx-mono text-xs font-bold text-white mt-0.5">
-              {c.entry_fee ? <Coin amount={c.entry_fee} /> : "FREE"}
-            </p>
+            <p className="gx-mono text-xs font-bold text-white mt-0.5">FREE</p>
           </div>
           <div>
             <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Prize Pool</p>
@@ -133,11 +131,11 @@ function CompCard({ c, clubId }: any) {
 
 function HostForm() {
   const refresh = useRefreshOwner();
-  const [f, setF] = useState<any>({ name: "", format: "league", entry_fee: 0, max_clubs: 4, allow_same_owner: false });
+  const [f, setF] = useState<any>({ name: "", format: "league", max_clubs: 4 });
   const submit = async (e: any) => {
     e.preventDefault();
     try {
-      const { data } = await api.post("/owner/competitions", { ...f, entry_fee: Number(f.entry_fee), max_clubs: Number(f.max_clubs) });
+      const { data } = await api.post("/owner/competitions", { ...f, max_clubs: Number(f.max_clubs) });
       toast.success(`Hosted. Share invite code ${data.invite_code} with friends.`);
       refresh();
     } catch (err) {
@@ -145,16 +143,12 @@ function HostForm() {
     }
   };
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-6" data-testid="host-competition-form">
+    <form onSubmit={submit} className="grid gap-3 md:grid-cols-5" data-testid="host-competition-form">
       <input required minLength={3} data-testid="host-name-input" className="gx-input md:col-span-2" placeholder="Friday Night Derby Cup" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
       <select data-testid="host-format-select" className="gx-input" value={f.format} onChange={(e) => setF({ ...f, format: e.target.value })}><option value="league">League</option><option value="knockout">Knockout</option></select>
-      <input data-testid="host-fee-input" className="gx-input" type="number" min={0} placeholder="Entry fee" value={f.entry_fee} onChange={(e) => setF({ ...f, entry_fee: e.target.value })} />
       <select data-testid="host-size-select" className="gx-input" value={f.max_clubs} onChange={(e) => setF({ ...f, max_clubs: e.target.value })}>{[2, 4, 6, 8].map((n) => <option key={n} value={n}>{n} clubs</option>)}</select>
       <Btn type="submit" data-testid="host-submit-button">Host</Btn>
-      <label className="flex items-center gap-2 text-xs text-slate-400 md:col-span-6">
-        <input type="checkbox" data-testid="host-same-owner-checkbox" checked={f.allow_same_owner} onChange={(e) => setF({ ...f, allow_same_owner: e.target.checked })} />
-        Allow clubs under common ownership (the competition will be publicly labelled "Same-owner allowed"). Platform fee on entry fees: 10%.
-      </label>
+      <p className="text-xs text-slate-400 md:col-span-5">Entry is free. One club per owner. Prize coin is funded by GTEX.</p>
     </form>
   );
 }

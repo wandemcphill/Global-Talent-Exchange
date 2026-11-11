@@ -481,21 +481,9 @@ class EconomyGovernorService:
         return self._bounded_multiplier(max(Decimal("0.6500"), decay))
 
     def quote_conversion(self, *, source_unit: LedgerUnit, amount: Decimal) -> WalletConversionQuote:
-        base_quote = self.wallet_service.quote_conversion(source_unit=source_unit, amount=amount)
-        policy = self.get_policy()
-        target_amount = base_quote.target_amount
-        if source_unit == LedgerUnit.COIN and int(policy.conversion_bonus_bps or 0) > 0:
-            target_amount = self._amount(
-                target_amount * (Decimal("1.0000") + Decimal(int(policy.conversion_bonus_bps)) / Decimal("10000"))
-            )
-        rate = self._amount(target_amount / base_quote.source_amount)
-        return WalletConversionQuote(
-            source_unit=base_quote.source_unit,
-            source_amount=base_quote.source_amount,
-            target_unit=base_quote.target_unit,
-            target_amount=target_amount,
-            rate=rate,
-        )
+        # The published quote is the wallet rate. A conversion bonus would mint
+        # Fan Coin the gift bridge is not funded to pay back.
+        return self.wallet_service.quote_conversion(source_unit=source_unit, amount=amount)
 
     def convert_wallet_units(
         self,
@@ -507,48 +495,14 @@ class EconomyGovernorService:
         reference: str | None = None,
         idempotency_key: str | None = None,
     ) -> WalletConversionResult:
-        quote = self.quote_conversion(source_unit=source_unit, amount=amount)
-        source_account = self.wallet_service.get_user_account(self.session, user, quote.source_unit)
-        target_account = self.wallet_service.get_user_account(self.session, user, quote.target_unit)
-        source_platform_account = self.wallet_service.ensure_platform_account(self.session, quote.source_unit)
-        target_platform_account = self.wallet_service.ensure_platform_account(self.session, quote.target_unit)
-        resolved_reference = reference or f"wallet-conversion:{generate_uuid()}"
-        entries = self.wallet_service.append_transaction(
+        return self.wallet_service.convert_wallet_units(
             self.session,
-            postings=[
-                LedgerPosting(account=source_account, amount=-quote.source_amount),
-                LedgerPosting(account=source_platform_account, amount=quote.source_amount),
-                LedgerPosting(account=target_platform_account, amount=-quote.target_amount),
-                LedgerPosting(account=target_account, amount=quote.target_amount),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            reference=resolved_reference,
-            description=(
-                f"Converted {quote.source_amount} {quote.source_unit.value} "
-                f"to {quote.target_amount} {quote.target_unit.value}"
-            ),
-            external_reference=resolved_reference,
-            actor=actor or user,
+            user=user,
+            amount=amount,
+            source_unit=source_unit,
+            actor=actor,
+            reference=reference,
             idempotency_key=idempotency_key,
-            metadata={
-                "conversion": {
-                    "source_unit": quote.source_unit.value,
-                    "source_amount": str(quote.source_amount),
-                    "target_unit": quote.target_unit.value,
-                    "target_amount": str(quote.target_amount),
-                    "rate": str(quote.rate),
-                    "conversion_bonus_bps": int(self.get_policy().conversion_bonus_bps or 0),
-                }
-            },
-        )
-        return WalletConversionResult(
-            transaction_id=entries[0].transaction_id,
-            reference=resolved_reference,
-            source_unit=quote.source_unit,
-            source_amount=quote.source_amount,
-            target_unit=quote.target_unit,
-            target_amount=quote.target_amount,
         )
 
     def snapshot(self, *, metrics: dict[str, Any] | None = None) -> dict[str, Any]:

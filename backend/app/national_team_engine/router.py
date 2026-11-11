@@ -640,6 +640,7 @@ def record_scheduled_match_result(
     match_id: str,
     payload: NationalTeamScheduledMatchResultRequest,
     session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
     service: NationalCompetitionLifecycleService = Depends(_lifecycle_service),
 ):
     try:
@@ -649,6 +650,7 @@ def record_scheduled_match_result(
             home_score=payload.home_score,
             away_score=payload.away_score,
             winner_entry_id=payload.winner_entry_id,
+            actor=current_admin,
         )
         session.commit()
     except NationalCompetitionLifecycleError as exc:

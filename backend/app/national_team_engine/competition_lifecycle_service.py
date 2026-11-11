@@ -1109,19 +1109,7 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
             if normalized > Decimal("0.0000"):
                 return normalized
 
-        if self._has_tables("national_team_rental_contracts"):
-            collected_rental_pool = self._normalize_amount(
-                self.session.scalar(
-                    select(func.coalesce(func.sum(RentalContract.loan_price_coin), 0)).where(
-                        RentalContract.tournament_id == competition.id
-                    )
-                )
-                or 0
-            )
-            if collected_rental_pool > Decimal("0.0000"):
-                share_bps = int(metadata.get("champion_prize_share_bps", 10_000) or 10_000)
-                share_bps = max(0, min(share_bps, 10_000))
-                return self._normalize_amount((collected_rental_pool * Decimal(share_bps)) / Decimal(10_000))
+        # Prize coin is a platform schedule. Collected squad rentals are not a prize pool.
         return Decimal("0.0000")
 
     def _can_auto_settle_champion_reward(self, competition: NationalTeamCompetition) -> bool:
@@ -1633,37 +1621,24 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
             for item in raw_squad
         ]
         valid_player_ids = [pid for pid in raw_player_ids if pid]
-        require_rental_provenance = bool(metadata.get("require_rental_provenance")) or bool(valid_player_ids)
+        # Seeded and user competitions are rental_only. This lifecycle service
+        # applies that rule to every competition, including the first entry.
+        require_rental_provenance = True
         rented_player_ids: set[str] = set()
-        if actor is not None:
-            if not require_rental_provenance and self._has_tables(
-                "national_team_rental_contracts",
-                "national_team_entries",
-            ):
-                has_competition_rentals = bool(
-                    self.session.scalar(
-                        select(RentalContract.id).where(RentalContract.tournament_id == competition.id).limit(1)
+        if actor is not None and valid_player_ids and self._has_tables("national_team_rental_contracts"):
+            rental_now = utcnow()
+            rented_player_ids = set(
+                self.session.scalars(
+                    select(RentalContract.player_id).where(
+                        RentalContract.tournament_id == competition.id,
+                        RentalContract.user_id == actor.id,
+                        RentalContract.status == RentalContractStatus.ACTIVE,
+                        RentalContract.start_date <= rental_now,
+                        RentalContract.end_date > rental_now,
+                        RentalContract.player_id.in_(valid_player_ids),
                     )
-                    or self.session.scalar(
-                        select(NationalTeamEntry.id).where(NationalTeamEntry.competition_id == competition.id).limit(1)
-                    )
-                )
-                if has_competition_rentals:
-                    require_rental_provenance = True
-            if valid_player_ids and self._has_tables("national_team_rental_contracts"):
-                rental_now = utcnow()
-                rented_player_ids = set(
-                    self.session.scalars(
-                        select(RentalContract.player_id).where(
-                            RentalContract.tournament_id == competition.id,
-                            RentalContract.user_id == actor.id,
-                            RentalContract.status == RentalContractStatus.ACTIVE,
-                            RentalContract.start_date <= rental_now,
-                            RentalContract.end_date > rental_now,
-                            RentalContract.player_id.in_(valid_player_ids),
-                        )
-                    ).all()
-                )
+                ).all()
+            )
 
         for index, item in enumerate(raw_squad, start=1):
             record = item.model_dump() if hasattr(item, "model_dump") else dict(item)
@@ -1671,7 +1646,8 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
             player_name = str(record.get("player_name") or "").strip()
             date_of_birth = record.get("date_of_birth")
             explicit_age = record.get("age")
-            overall_rating = record.get("overall_rating")
+            # Client overall_rating is ignored. Rating comes from the player or seed row.
+            overall_rating = None
             position = str(record.get("position") or "").strip() or None
             player = self.session.get(Player, player_id) if player_id else None
             national_seed = self.session.get(NationalRegenSeed, player_id) if player_id and player is None else None
@@ -1749,15 +1725,10 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
                         **metadata_json,
                         **self._seed_market_metadata(national_seed),
                     }
-            elif actor is not None and require_rental_provenance:
+            elif require_rental_provenance or not player_name:
                 raise NationalCompetitionLifecycleError(
                     f"Squad player #{index} must reference an active rented player for this entry.",
                     reason="player_not_rented",
-                )
-            elif not player_name:
-                raise NationalCompetitionLifecycleError(
-                    f"Squad player #{index} is missing a player name.",
-                    reason="player_name_missing",
                 )
 
             resolved_age = self._resolve_player_age(

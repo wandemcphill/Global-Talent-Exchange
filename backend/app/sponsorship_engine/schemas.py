@@ -22,19 +22,50 @@ class SponsorshipPackageView(BaseModel):
     is_active: bool
 
 
+SPONSORSHIP_AMOUNT_CAP_ERROR = (
+    "Sponsorship amount must be greater than zero and cannot exceed the selected package amount."
+)
+
+
+def capped_sponsorship_amount_minor(
+    custom_amount_minor: int | None,
+    package_base_amount_minor: int,
+) -> int:
+    """Return the contract amount, capped at the selected package.
+
+    Omitted amounts use the package. Zero and anything above the package are rejected.
+    """
+    if type(package_base_amount_minor) is not int or package_base_amount_minor <= 0:
+        raise ValueError(SPONSORSHIP_AMOUNT_CAP_ERROR)
+    if custom_amount_minor is None:
+        return package_base_amount_minor
+    if type(custom_amount_minor) is not int or custom_amount_minor <= 0:
+        raise ValueError(SPONSORSHIP_AMOUNT_CAP_ERROR)
+    if custom_amount_minor > package_base_amount_minor:
+        raise ValueError(SPONSORSHIP_AMOUNT_CAP_ERROR)
+    return custom_amount_minor
+
+
 class SponsorshipLeadCreateRequest(BaseModel):
     club_id: str
     package_code: str
     sponsor_name: str = Field(min_length=2, max_length=120)
     sponsor_email: str | None = None
     sponsor_company: str | None = None
-    custom_amount_minor: int | None = Field(default=None, ge=0)
+    custom_amount_minor: int | None = Field(
+        default=None,
+        gt=0,
+        description="Optional minor-unit amount. Omit to use the package. Zero and amounts above the package are rejected.",
+    )
     duration_months: int | None = Field(default=None, ge=1, le=36)
     payout_schedule: str | None = None
     proposal_note: str = ""
     custom_copy: str | None = None
     custom_logo_url: str | None = None
     metadata_json: dict[str, Any] = Field(default_factory=dict)
+
+    def resolve_contract_amount_minor(self, package_base_amount_minor: int) -> int:
+        return capped_sponsorship_amount_minor(self.custom_amount_minor, package_base_amount_minor)
 
 
 class SponsorshipLeadView(BaseModel):

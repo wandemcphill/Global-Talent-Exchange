@@ -22,6 +22,7 @@ from app.national_team_engine.competition_lifecycle_service import (
 )
 from app.national_team_engine.schemas import NationalTeamCompetitionEntrySubmitRequest
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from backend.tests.national_team_engine.rented_squads import submit_request
 from app.owner_console import ledger as oc_ledger
 from app.owner_console import service as oc_service
 from app.owner_console.models import OwnerClubState
@@ -152,10 +153,12 @@ def test_national_team_manager_hiring_upfront_fan_coin_and_tactical_autobuild():
         )
         after_fan = ws.get_balance(session, ws.get_user_account(session, user_no_club, LedgerUnit.CREDIT))
 
-        assert hire_res["hired_manager"]["upfront_paid"] is True
+        assert hire_res["hired_manager"]["upfront_paid"] is False
+        assert hire_res["hired_manager"]["fee_fan_coin"] == "0.0000"
         assert hire_res["hired_manager"]["preferred_formation"] == "4-3-3"
         assert hire_res["hired_manager"]["staff_roles_required"] == ["manager"]
-        assert before_fan - after_fan == Decimal(tiki_mgr["fee_fan_coin"])
+        assert after_fan == before_fan
+        assert hire_res["entry"]["metadata_json"]["hired_manager"]["manager_id"] == tiki_mgr["manager_id"]
 
         # Verify tactical resolution for tiki_taka & gegenpress
         t_label, form = service._resolve_auto_build_formation("tiki_taka")
@@ -223,27 +226,29 @@ def test_prequalifier_representative_continuity_finals_squad_window_and_multitie
 
         lifecycle = NationalCompetitionLifecycleService(session)
 
-        def _make_squad(country_code: str, country_name: str, r1: int, r2: int):
-            return NationalTeamCompetitionEntrySubmitRequest(
+        def _make_squad(actor, country_code: str, country_name: str, r1: int, r2: int):
+            return submit_request(
+                session,
+                actor=actor,
+                competition=competition,
                 country_code=country_code,
                 country_name=country_name,
-                squad=[
-                    {"player_name": f"{country_code} Star 1", "age": 24, "overall_rating": r1, "position": "ST"},
-                    {"player_name": f"{country_code} Star 2", "age": 23, "overall_rating": r2, "position": "CM"},
-                ],
+                ages=(24, 23),
+                ratings=(r1, r2),
+                positions=("ST", "CM"),
             )
 
         # 4 users submit England; eng_users[0] has the strongest squad
         lifecycle.submit_entry(
             competition_id=competition.id,
             actor=eng_users[0],
-            payload=_make_squad("ENG", "England", 94, 92),
+            payload=_make_squad(eng_users[0], "ENG", "England", 94, 92),
         )
         for idx, u in enumerate(eng_users[1:], start=1):
             lifecycle.submit_entry(
                 competition_id=competition.id,
                 actor=u,
-                payload=_make_squad("ENG", "England", 75 - idx, 74 - idx),
+                payload=_make_squad(u, "ENG", "England", 75 - idx, 74 - idx),
             )
 
         other_nations = [
@@ -257,7 +262,7 @@ def test_prequalifier_representative_continuity_finals_squad_window_and_multitie
             lifecycle.submit_entry(
                 competition_id=competition.id,
                 actor=u,
-                payload=_make_squad(code, cname, r1, r2),
+                payload=_make_squad(u, code, cname, r1, r2),
             )
 
         # Lock entries -> stage starts at pre_qualifier because 4 users picked England
@@ -283,7 +288,7 @@ def test_prequalifier_representative_continuity_finals_squad_window_and_multitie
             lifecycle.update_qualified_finals_squad(
                 competition_id=competition.id,
                 actor=outsider,
-                payload=_make_squad("ENG", "England", 99, 99),
+                payload=_make_squad(outsider, "ENG", "England", 99, 99),
             )
         except NationalCompetitionLifecycleError as exc:
             assert exc.reason == "country_representative_locked"
@@ -294,14 +299,15 @@ def test_prequalifier_representative_continuity_finals_squad_window_and_multitie
         updated_eng = lifecycle.update_qualified_finals_squad(
             competition_id=competition.id,
             actor=eng_rep_user,
-            payload=NationalTeamCompetitionEntrySubmitRequest(
+            payload=submit_request(
+                session,
+                actor=eng_rep_user,
+                competition=competition,
                 country_code="ENG",
                 country_name="England",
-                squad=[
-                    {"player_name": "ENG Star 1", "age": 24, "overall_rating": 95, "position": "ST"},
-                    {"player_name": "ENG Star 2", "age": 23, "overall_rating": 93, "position": "CM"},
-                    {"player_name": "ENG Finals Callup 3", "age": 21, "overall_rating": 91, "position": "GK"},
-                ],
+                ages=(24, 23, 21),
+                ratings=(95, 93, 91),
+                positions=("ST", "CM", "GK"),
             ),
         )
         assert len(updated_eng["squad"]) == 3

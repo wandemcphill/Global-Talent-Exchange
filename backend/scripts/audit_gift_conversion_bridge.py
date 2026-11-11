@@ -1,11 +1,9 @@
 """Read-only reconciliation for the FanCoin -> GTEX Coin gift conversion bridge.
 
-Every FanCoin gift converts non-withdrawable FanCoin into withdrawable GTEX
-Coin. The ledger stays balanced per unit, but that balance alone says nothing
-about whether the resulting Coin liability is backed:
-
-    CREDIT  bridge  +net   (FanCoin consumed, non-withdrawable)
-    COIN    bridge  -net   (Coin issued, withdrawable)
+A gift pays GTEX equal to the Fan Coin remainder divided by 100. That GTEX
+comes off the gift bridge, which is funded when a user spends GTEX to buy
+Fan Coin. The coin bridge stays at or above zero. A negative coin bridge
+means a gift was paid without backing.
 
 PHASE_A_CROSS_CURRENCY_CONVERSION defers that reconciliation to "a later
 treasury phase" and nothing observed the bridge accounts at all. This audit
@@ -97,24 +95,17 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
             outstanding_coin = coin_issued
 
             gates: dict[str, bool] = {}
-            # The Coin bridge is the mirror of outstanding issued Coin, so it
-            # should sit at exactly -outstanding.
+            # Purchases fund this account. Gifts debit GTEX at 1/100 of the Fan
+            # Coin remainder. A negative balance is an unbacked mint.
             if coin_bridge is not None:
-                gates["coin_bridge_mirrors_outstanding_liability"] = coin_bridge == -outstanding_coin
-            # The FanCoin bridge holds the consumed FanCoin backing that Coin.
-            if credit_bridge is not None:
-                gates["credit_bridge_mirrors_outstanding_liability"] = credit_bridge == outstanding_coin
-            # A positive Coin bridge would mean Coin was returned without a
-            # corresponding issuance: never expected.
-            if coin_bridge is not None:
-                gates["coin_bridge_not_positive"] = coin_bridge <= Decimal("0.0000")
-            # FanCoin backing must never be negative: that would mean Coin was
-            # issued against FanCoin the platform never actually received.
+                gates["coin_bridge_not_negative"] = coin_bridge >= Decimal("0.0000")
             if credit_bridge is not None:
                 gates["credit_bridge_not_negative"] = credit_bridge >= Decimal("0.0000")
-            # Conservation: every settled conversion splits gross into fee, burn
-            # and destination, so fee + destination can never exceed gross.
-            gates["fee_and_destination_within_gross"] = (platform_fee + coin_issued) <= fancoin_consumed
+            # Issued GTEX is the Fan Coin remainder divided by 100, so 100 times
+            # issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
+            gates["fee_and_destination_within_gross"] = (
+                platform_fee + (outstanding_coin * Decimal("100.0000"))
+            ) <= fancoin_consumed
 
             return {
                 "name": "gift_conversion_bridge",

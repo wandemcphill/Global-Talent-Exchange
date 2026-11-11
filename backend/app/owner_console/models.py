@@ -113,6 +113,26 @@ class LedgerEvent(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class OwnerDepositIntent(UUIDPrimaryKeyMixin, Base):
+    """One Paystack (or sibling) checkout. (provider, reference) is the credit lock."""
+
+    __tablename__ = "owner_deposit_intents"
+    __table_args__ = (
+        UniqueConstraint("provider", "reference", name="uq_owner_deposit_intents_provider_reference"),
+    )
+
+    provider: Mapped[str] = mapped_column(String(32), nullable=False)
+    reference: Mapped[str] = mapped_column(String(64), nullable=False)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    requested_amount_ngn: Mapped[Decimal] = mapped_column(Numeric(20, 2), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="pending")
+    credited_amount_kobo: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ledger_event_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=utcnow, server_default=func.now()
+    )
+
+
 class OwnerWithdrawal(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "owner_withdrawals"
 

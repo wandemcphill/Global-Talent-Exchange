@@ -23,6 +23,7 @@ from app.national_team_engine.competition_lifecycle_service import (
 from app.national_team_engine.competition_profiles import default_reward_structure_for
 from app.national_team_engine.schemas import NationalTeamCompetitionEntrySubmitRequest
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from backend.tests.national_team_engine.rented_squads import submit_request
 from app.owner_console.models import OwnerClubState
 from app.owner_console.service import apply_division_result
 
@@ -51,7 +52,19 @@ def _user(session, suffix: str, role: UserRole = UserRole.USER) -> User:
     return user
 
 
-def _squad(country_code: str, country_name: str, ages: tuple[int, ...], ratings: tuple[int, ...]):
+def _squad(session, actor, competition, country_code: str, country_name: str, ages: tuple[int, ...], ratings: tuple[int, ...]):
+    return submit_request(
+        session,
+        actor=actor,
+        competition=competition,
+        country_code=country_code,
+        country_name=country_name,
+        ages=ages,
+        ratings=ratings,
+    )
+
+
+def _named_squad(country_code: str, country_name: str, ages: tuple[int, ...], ratings: tuple[int, ...]):
     return NationalTeamCompetitionEntrySubmitRequest(
         country_code=country_code,
         country_name=country_name,
@@ -162,17 +175,17 @@ def test_scheduled_country_playoff_remembers_the_user_and_feeds_the_finals():
         lifecycle.submit_entry(
             competition_id=qualifier.id,
             actor=nigeria[0],
-            payload=_squad("NG", "Nigeria", (28, 27), (90, 88)),
+            payload=_squad(session, nigeria[0], qualifier, "NG", "Nigeria", (28, 27), (90, 88)),
         )
         lifecycle.submit_entry(
             competition_id=qualifier.id,
             actor=nigeria[1],
-            payload=_squad("NG", "Nigeria", (26, 25), (70, 69)),
+            payload=_squad(session, nigeria[1], qualifier, "NG", "Nigeria", (26, 25), (70, 69)),
         )
         lifecycle.submit_entry(
             competition_id=qualifier.id,
             actor=ghana,
-            payload=_squad("GH", "Ghana", (27, 26), (80, 79)),
+            payload=_squad(session, ghana, qualifier, "GH", "Ghana", (27, 26), (80, 79)),
         )
         qualifier.entry_closes_at = now - timedelta(hours=1)
         session.flush()
@@ -208,7 +221,7 @@ def test_scheduled_country_playoff_remembers_the_user_and_feeds_the_finals():
             lifecycle.submit_entry(
                 competition_id=finals.id,
                 actor=outsider,
-                payload=_squad("NG", "Nigeria", (29, 28), (99, 98)),
+                payload=_named_squad("NG", "Nigeria", (29, 28), (99, 98)),
             )
         except NationalCompetitionLifecycleError as exc:
             assert exc.reason == "flag_bearer_required"
@@ -265,7 +278,7 @@ def test_age_limits_cover_under_21_and_olympic_overage():
             lifecycle.submit_entry(
                 competition_id=under_21.id,
                 actor=user,
-                payload=_squad("NG", "Nigeria", (22,), (80,)),
+                payload=_squad(session, user, under_21, "NG", "Nigeria", (22,), (80,)),
             )
         except NationalCompetitionLifecycleError as exc:
             assert exc.reason == "invalid_squad_age"
@@ -275,7 +288,7 @@ def test_age_limits_cover_under_21_and_olympic_overage():
             lifecycle.submit_entry(
                 competition_id=olympics.id,
                 actor=user,
-                payload=_squad("NG", "Nigeria", (24, 25, 26, 27), (80, 81, 82, 83)),
+                payload=_squad(session, user, olympics, "NG", "Nigeria", (24, 25, 26, 27), (80, 81, 82, 83)),
             )
         except NationalCompetitionLifecycleError as exc:
             assert exc.reason == "olympic_overage_limit"
@@ -284,7 +297,7 @@ def test_age_limits_cover_under_21_and_olympic_overage():
         accepted = lifecycle.submit_entry(
             competition_id=olympics.id,
             actor=user,
-            payload=_squad("NG", "Nigeria", (21, 22, 24, 30), (80, 81, 82, 83)),
+            payload=_squad(session, user, olympics, "NG", "Nigeria", (21, 22, 24, 30), (80, 81, 82, 83)),
         )
         assert len(accepted["squad"]) == 4
 
@@ -465,12 +478,12 @@ def test_scheduled_qualifier_plays_cross_country_matches_into_one_flag_bearer_pe
         lifecycle.submit_entry(
             competition_id=qualifier.id,
             actor=nigeria,
-            payload=_squad("NG", "Nigeria", (28, 27), (90, 88)),
+            payload=_squad(session, nigeria, qualifier, "NG", "Nigeria", (28, 27), (90, 88)),
         )
         lifecycle.submit_entry(
             competition_id=qualifier.id,
             actor=ghana,
-            payload=_squad("GH", "Ghana", (27, 26), (80, 79)),
+            payload=_squad(session, ghana, qualifier, "GH", "Ghana", (27, 26), (80, 79)),
         )
         qualifier.entry_closes_at = now - timedelta(hours=1)
         session.flush()
@@ -511,14 +524,14 @@ def test_scheduled_qualifier_plays_cross_country_matches_into_one_flag_bearer_pe
         accepted = lifecycle.submit_entry(
             competition_id=finals.id,
             actor=nigeria,
-            payload=_squad("NG", "Nigeria", (28, 27), (90, 88)),
+            payload=_squad(session, nigeria, finals, "NG", "Nigeria", (28, 27), (90, 88)),
         )
         assert accepted["country_code"] == "NG"
         with pytest.raises(NationalCompetitionLifecycleError) as rejected:
             lifecycle.submit_entry(
                 competition_id=finals.id,
                 actor=outsider,
-                payload=_squad("NG", "Nigeria", (29, 28), (99, 98)),
+                payload=_named_squad("NG", "Nigeria", (29, 28), (99, 98)),
             )
         assert rejected.value.reason == "flag_bearer_required"
 
@@ -575,7 +588,7 @@ def test_scheduled_four_country_group_and_knockout_finishes():
             lifecycle.submit_entry(
                 competition_id=competition.id,
                 actor=user,
-                payload=_squad(code, name, (28, 27), (rating, rating - 1)),
+                payload=_squad(session, user, competition, code, name, (28, 27), (rating, rating - 1)),
             )
         competition.entry_closes_at = now - timedelta(hours=2)
         session.flush()

@@ -6,7 +6,7 @@ from pathlib import Path
 import uuid
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import sessionmaker
 
 from app.ingestion.models import Country, InjuryStatus, Player
@@ -15,6 +15,7 @@ from app.models.federation import FederationSanction, FederationSanctionType
 from app.models.national_team import NationalTeamCompetition, NationalTeamEntry
 from app.models.national_team_tournament import RentalContract, RentalContractStatus
 from app.models.player_contract import PlayerContract
+from app.models.player_token_market import PlayerShareMarket
 from app.models.user import User
 from app.models.wallet import (
     LedgerEntryReason,
@@ -104,6 +105,7 @@ def _create_legendary_player(
         normalized_position=position,
         is_real_player=True,
         is_tradable=True,
+        real_player_tier="legend",
         market_value_eur=market_value_eur,
         current_market_reference_value=market_value_eur,
         dna_profile={"legendary": True, "rarity": "legendary"},
@@ -490,3 +492,189 @@ def test_legendary_player_in_competition_lifecycle(tmp_path: Path):
         advanced_payload = lifecycle_service.advance_lifecycle(competition_id=competition.id)
         assert advanced_payload["current_stage"] == "completed"
         assert advanced_payload["champion_entry_id"] in {fr_entry["id"], es_entry["id"]}
+
+
+def test_legend_rental_is_global_and_cannot_be_claimed_free(tmp_path: Path):
+    session_factory = _build_session_factory(tmp_path / "legend-one-of-one.db")
+    wallet_service = WalletService()
+
+    with session_factory() as session:
+        service = NationalTeamTournamentService(session=session, wallet_service=wallet_service)
+        argentina = _create_country(session, "Argentina", "AR", "ARG", "ARG", "CONMEBOL")
+        user_a = _create_user(session, "owner_a")
+        user_b = _create_user(session, "owner_b")
+        user_free = _create_user(session, "free_claimer")
+        _fund_user(session, wallet_service, user_a, Decimal("1000.00"))
+        _fund_user(session, wallet_service, user_b, Decimal("1000.00"))
+        competition = _create_competition(session)
+        other = _create_competition(session, key="legend_other_cup", title="Other Cup")
+
+        legend = _create_legendary_player(session, "Diego Maradona", argentina, position="ST")
+        legend.real_player_tier = "Legend"
+        archived = Player(
+            source_provider="test",
+            provider_external_id=f"archived-{uuid.uuid4().hex[:8]}",
+            country_id=argentina.id,
+            full_name="Archived Cantona",
+            canonical_display_name="Archived Cantona",
+            position="ST",
+            normalized_position="ST",
+            is_real_player=True,
+            is_tradable=False,
+            real_player_tier="archived_duplicate",
+            date_of_birth=date(1966, 5, 24),
+        )
+        injured = Player(
+            source_provider="test",
+            provider_external_id=f"injured-{uuid.uuid4().hex[:8]}",
+            country_id=argentina.id,
+            full_name="Injured Star",
+            position="ST",
+            normalized_position="ST",
+            is_real_player=True,
+            is_tradable=True,
+            real_player_tier="marquee",
+            market_value_eur=80_000_000.0,
+            date_of_birth=date(1996, 1, 2),
+        )
+        fillers = []
+        for name, position in (
+            ("Healthy Striker", "ST"),
+            ("Keeper", "GK"),
+            ("Winger", "RW"),
+            ("Mid One", "CM"),
+            ("Mid Two", "CM"),
+        ):
+            fillers.append(
+                Player(
+                    source_provider="test",
+                    provider_external_id=f"fill-{uuid.uuid4().hex[:8]}",
+                    country_id=argentina.id,
+                    full_name=name,
+                    position=position,
+                    normalized_position=position,
+                    is_real_player=False,
+                    is_tradable=True,
+                    real_player_tier="marquee",
+                    market_value_eur=2_000_000.0,
+                    date_of_birth=date(1998, 4, 4),
+                )
+            )
+        marquee = Player(
+            source_provider="test",
+            provider_external_id=f"marquee-{uuid.uuid4().hex[:8]}",
+            country_id=argentina.id,
+            full_name="Active Marquee",
+            position="CM",
+            normalized_position="CM",
+            is_real_player=True,
+            is_tradable=True,
+            real_player_tier="marquee",
+            market_value_eur=12_000_000.0,
+            date_of_birth=date(1997, 3, 3),
+        )
+        session.add_all([archived, injured, marquee, *fillers])
+        session.flush()
+        session.add(
+            PlayerShareMarket(
+                player_id=legend.id,
+                total_shares=1,
+                released_shares=1,
+                circulating_shares=0,
+            )
+        )
+        session.add(
+            InjuryStatus(
+                source_provider="test",
+                provider_external_id=f"inj-{uuid.uuid4().hex[:8]}",
+                player_id=injured.id,
+                status="injured",
+                detail="knock",
+                expected_return_at=datetime.now().date() + timedelta(days=14),
+            )
+        )
+        entries = {}
+        for key, user in (("a", user_a), ("b", user_b), ("free", user_free)):
+            entry = NationalTeamEntry(
+                competition_id=competition.id,
+                country_code="AR",
+                country_name="Argentina",
+                entry_owner_user_id=user.id,
+                manager_user_id=user.id,
+            )
+            session.add(entry)
+            entries[key] = entry
+        other_entry = NationalTeamEntry(
+            competition_id=other.id,
+            country_code="AR",
+            country_name="Argentina",
+            entry_owner_user_id=user_b.id,
+            manager_user_id=user_b.id,
+        )
+        session.add(other_entry)
+        session.flush()
+
+        pool = service.list_rental_players(
+            competition_id=competition.id,
+            country_code="AR",
+            entry_id=entries["a"].id,
+            actor=user_a,
+        )
+        pool_ids = {item["player_id"] for item in pool["items"]}
+        assert legend.id in pool_ids
+        assert archived.id not in pool_ids
+
+        claimed = service.claim_free_players(entry_id=entries["free"].id, actor=user_free)
+        claimed_ids = {member["player_id"] for member in claimed["rental_squad_members"]}
+        assert legend.id not in claimed_ids
+        assert injured.id not in claimed_ids
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(RentalContract)
+                .where(
+                    RentalContract.player_id == legend.id,
+                    RentalContract.is_free_player.is_(True),
+                )
+            )
+            == 0
+        )
+
+        balance_before = wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, user_a, LedgerUnit.COIN)
+        )
+        rented = service.rent_player(entry_id=entries["a"].id, actor=user_a, player_id=legend.id)
+        legend_member = rented["rental_squad_members"][0]
+        paid_contract = session.scalar(select(RentalContract).where(RentalContract.player_id == legend.id))
+        assert paid_contract is not None
+        assert paid_contract.loan_price_coin > Decimal("0.0000")
+        assert paid_contract.is_free_player is False
+        assert legend_member["player_id"] == legend.id
+        balance_after = wallet_service.get_balance(
+            session, wallet_service.get_user_account(session, user_a, LedgerUnit.COIN)
+        )
+        assert balance_before - balance_after == paid_contract.loan_price_coin
+        share = session.scalar(select(PlayerShareMarket).where(PlayerShareMarket.player_id == legend.id))
+        assert share is not None
+        assert share.total_shares == 1
+        assert share.released_shares == 1
+        assert session.scalar(select(func.count()).select_from(PlayerShareMarket)) == 1
+
+        with pytest.raises(NationalTeamTournamentError) as blocked:
+            service.rent_player(entry_id=entries["b"].id, actor=user_b, player_id=legend.id)
+        assert blocked.value.reason == "active_rental_exists"
+        with pytest.raises(NationalTeamTournamentError) as blocked_elsewhere:
+            service.rent_player(entry_id=other_entry.id, actor=user_b, player_id=legend.id)
+        assert blocked_elsewhere.value.reason == "active_rental_exists"
+
+        service.rent_player(entry_id=entries["a"].id, actor=user_a, player_id=marquee.id)
+        service.rent_player(entry_id=entries["b"].id, actor=user_b, player_id=marquee.id)
+        marquee_holders = set(
+            session.scalars(
+                select(RentalContract.user_id).where(
+                    RentalContract.player_id == marquee.id,
+                    RentalContract.status == RentalContractStatus.ACTIVE,
+                )
+            ).all()
+        )
+        assert {user_a.id, user_b.id} <= marquee_holders

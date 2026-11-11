@@ -205,7 +205,7 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
                     else max((match.round_number for match in canonical_matches), default=0)
                 )
                 data["total_rounds"] = max((match.round_number for match in canonical_matches), default=0)
-                data["entry_fee"] = str(Decimal(canonical.entry_fee_minor) / Decimal("10000"))
+                data["entry_fee"] = "0"
                 pools = list(
                     session.scalars(
                         select(CompetitionRewardPool).where(CompetitionRewardPool.competition_id == canonical.id)
@@ -220,6 +220,8 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
     else:
         data["execution_model"] = "user_hosted_legacy"
         data["canonical_lifecycle_status"] = "not_applicable"
+        data["entry_fee"] = "0"
+        data["allow_same_owner"] = False
     return data
 
 
@@ -533,30 +535,12 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
         raise OwnerError("already_entered", 409)
     if len(rows) >= comp.max_clubs:
         raise OwnerError("competition_full", 409)
-    if not comp.allow_same_owner and any(e.owner_user_id == user_id for e in rows):
+    if any(e.owner_user_id == user_id for e in rows):
         raise OwnerError(
             "same_owner_bracket_blocked",
             409,
-            "Clubs under common ownership cannot enter the same prize-sensitive bracket unless the format is explicitly labelled to allow it.",
+            "Clubs under common ownership cannot enter the same competition.",
         )
-    if comp.entry_fee > 0:
-        try:
-            ledger.record(
-                session,
-                event_type="competition_entry_fee",
-                source=ledger.club_account(club_id),
-                destination=comp_account(comp.id),
-                currency=ledger.GTEX,
-                gross=comp.entry_fee,
-                fee_bps=comp.platform_fee_bps,
-                club_id=club_id,
-                user_id=user_id,
-                related_type="competition",
-                related_id=comp.id,
-                memo=f"Entry: {comp.name}",
-            )
-        except ledger.LedgerError as exc:
-            raise OwnerError(str(exc), 402) from exc
     strength = club_strength(
         [player_dict(p) for p in squad(session, club_id)], state.manager_json or {}, state.facilities_json or {}
     )
@@ -587,24 +571,6 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
     if state.stage == "competition":
         state.stage = "active"
     session.flush()
-
-    try:
-        ledger.record(
-            session,
-            event_type="competition_entry_grant",
-            source=ledger.COMPETITION_PRIZE_POOL,
-            destination=ledger.club_account(club_id),
-            currency=ledger.GTEX,
-            gross=500,
-            club_id=club_id,
-            user_id=user_id,
-            related_type="competition",
-            related_id=comp.id,
-            memo=f"Participation grant for entering {comp.name}",
-        )
-    except Exception as exc:
-        logger.warning("competition_entry_grant failed: %s", exc)
-
     return entry
 
 
@@ -623,14 +589,13 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
         host_user_id=user_id,
         format=competition_format,
         tier="Friends",
-        entry_fee=Decimal(str(payload.get("entry_fee", 0))),
+        entry_fee=Decimal("0"),
         max_clubs=max_clubs,
-        allow_same_owner=bool(payload.get("allow_same_owner", False)),
-        prize_sensitive=Decimal(str(payload.get("entry_fee", 0))) > 0,
+        allow_same_owner=False,
+        prize_sensitive=False,
         platform_fee_bps=1000,
         invite_code=secrets.token_hex(3).upper(),
-        description=payload.get("description")
-        or ("Same-owner clubs allowed (labelled)." if payload.get("allow_same_owner") else "One club per owner."),
+        description=payload.get("description") or "One club per owner.",
     )
     session.add(comp)
     session.flush()

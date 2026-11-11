@@ -140,7 +140,7 @@ def get_public_brand_ad_campaigns(
     limit: int = Query(default=60, ge=1, le=100),
     session: Session = Depends(get_session),
 ) -> PublicBrandAdCampaignsResponse:
-    """Return approved brand campaigns that are live inside their delivery window."""
+    """Return approved, paid brand campaigns that are live inside their delivery window."""
     from datetime import UTC, datetime
 
     from sqlalchemy import select
@@ -155,6 +155,7 @@ def get_public_brand_ad_campaigns(
             BrandAdCampaign.status.in_(("approved", "active")),
             BrandAdCampaign.is_approved.is_(True),
             BrandAdCampaign.is_active.is_(True),
+            BrandAdCampaign.payment_status == "paid",
             BrandAdCampaign.start_at <= now,
             BrandAdCampaign.end_at > now,
         )
@@ -171,7 +172,9 @@ def get_public_brand_ad_campaigns(
 
     candidates = session.scalars(statement).all()
     candidate_ids = [c.id for c in candidates]
-    counts_by_campaign = _event_counts(session, candidate_ids) if candidate_ids else {}
+    counts_by_campaign = (
+        _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
+    )
 
     equivalent_keys = set(PLACEMENT_EQUIVALENCE_MAP.get(placement, (placement,))) if placement else set()
 
@@ -179,6 +182,8 @@ def get_public_brand_ad_campaigns(
     for campaign in candidates:
         if len(campaigns) >= limit:
             break
+        if campaign.payment_status != "paid":
+            continue
         if not _is_safe_public_http_url(campaign.destination_url):
             continue
         campaign_placements = list(campaign.placements_json or [])

@@ -9,12 +9,14 @@ from sqlalchemy.orm import sessionmaker
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.global_memory.models import NationalTeamCountryRanking
-from app.ingestion.models import Country
+from app.ingestion.models import Country, Player
 from app.models import Base
 from app.models.competition import UserCompetition
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.national_team_tournament import RentalContract
 from app.models.user import User, UserRole
 from app.national_team_engine.router import admin_router, router
+from backend.tests.national_team_engine.rented_squads import rent_players_for_squad
 
 
 def _build_app(database_path: Path) -> tuple[TestClient, sessionmaker, dict[str, User]]:
@@ -29,6 +31,8 @@ def _build_app(database_path: Path) -> tuple[TestClient, sessionmaker, dict[str,
             NationalTeamCountryRanking.__table__,
             NationalTeamCompetition.__table__,
             NationalTeamCompetitionEntry.__table__,
+            Player.__table__,
+            RentalContract.__table__,
         ],
     )
 
@@ -146,7 +150,7 @@ def test_lifecycle_routes_submit_lock_advance_and_read(tmp_path: Path) -> None:
         holder = context["holder"]
 
         holder["user"] = context["user_one"]
-        invalid = client.post(
+        fabricated = client.post(
             f"/national-team-engine/competitions/{competition_id}/entries",
             json={
                 "country_code": "NG",
@@ -157,31 +161,51 @@ def test_lifecycle_routes_submit_lock_advance_and_read(tmp_path: Path) -> None:
                 ],
             },
         )
+        assert fabricated.status_code == 409, fabricated.text
+        assert fabricated.json()["detail"] == "player_not_rented"
+
+        with _session_factory() as session:
+            over_age = rent_players_for_squad(
+                session,
+                actor=context["user_one"],
+                competition=context["competition"],
+                country_name="Nigeria",
+                ages=(18, 16),
+                ratings=(77, 74),
+            )
+            nigeria = rent_players_for_squad(
+                session,
+                actor=context["user_one"],
+                competition=context["competition"],
+                country_name="Nigeria",
+                ages=(17, 16),
+                ratings=(80, 78),
+            )
+            ghana = rent_players_for_squad(
+                session,
+                actor=context["user_two"],
+                competition=context["competition"],
+                country_name="Ghana",
+                ages=(17, 16),
+                ratings=(75, 74),
+            )
+            session.commit()
+
+        invalid = client.post(
+            f"/national-team-engine/competitions/{competition_id}/entries",
+            json={"country_code": "NG", "country_name": "Nigeria", "squad": over_age},
+        )
         assert invalid.status_code == 409, invalid.text
         assert invalid.json()["detail"] == "invalid_squad_age"
 
         valid_payloads = [
             (
                 context["user_one"],
-                {
-                    "country_code": "NG",
-                    "country_name": "Nigeria",
-                    "squad": [
-                        {"player_name": "Nigeria One", "age": 17, "overall_rating": 80},
-                        {"player_name": "Nigeria Two", "age": 16, "overall_rating": 78},
-                    ],
-                },
+                {"country_code": "NG", "country_name": "Nigeria", "squad": nigeria},
             ),
             (
                 context["user_two"],
-                {
-                    "country_code": "GH",
-                    "country_name": "Ghana",
-                    "squad": [
-                        {"player_name": "Ghana One", "age": 17, "overall_rating": 75},
-                        {"player_name": "Ghana Two", "age": 16, "overall_rating": 74},
-                    ],
-                },
+                {"country_code": "GH", "country_name": "Ghana", "squad": ghana},
             ),
         ]
         for user, payload in valid_payloads:

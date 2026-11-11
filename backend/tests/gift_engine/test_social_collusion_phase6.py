@@ -66,11 +66,22 @@ def _fund_fan_coin(session: Session, user: User, amount: Decimal) -> None:
     wallet_service = WalletService()
     user_account = wallet_service.get_user_account(session, user, LedgerUnit.CREDIT)
     platform_account = wallet_service.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = wallet_service.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
+    platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    gtex_backing = (amount / Decimal("100")).quantize(Decimal("0.0001"))
     wallet_service.append_transaction(
         session,
         postings=[
             LedgerPosting(account=user_account, amount=amount),
             LedgerPosting(account=platform_account, amount=-amount),
+            LedgerPosting(account=bridge, amount=gtex_backing),
+            LedgerPosting(account=platform_coin, amount=-gtex_backing),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference=f"seed-phase6-social-collusion:{user.id}",

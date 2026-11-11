@@ -6,7 +6,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models.club_profile import ClubProfile
@@ -14,6 +14,7 @@ from app.owner_console import ledger
 from app.wallets.service import COIN_TO_CREDIT_RATE
 from app.owner_console.models import (
     LedgerEvent,
+    OwnerDepositIntent,
     OwnerSquadPlayer,
     OwnerWithdrawal,
     RelatedPartyTransfer,
@@ -238,65 +239,156 @@ def paystack_init(
             metadata={"user_id": user.id, "product": "gtex_coin", "provider": provider},
             narration=f"GTEX {reference}",
         )
+        session.add(
+            OwnerDepositIntent(
+                provider=provider,
+                reference=reference,
+                user_id=user.id,
+                requested_amount_ngn=Decimal(str(amount_ngn)),
+                status="pending",
+            )
+        )
+        session.flush()
         return {"authorization_url": checkout_session.checkout_url, "reference": reference}
     except Exception as exc:
         raise OwnerError(f"{provider}_init_failed", 502, str(exc)) from exc
 
 
-def _credit_deposit(session: Session, user_id: str, reference: str, amount_kobo: int) -> LedgerEvent:
+def _load_deposit_intent(session: Session, provider: str, reference: str) -> OwnerDepositIntent | None:
+    statement = select(OwnerDepositIntent).where(
+        OwnerDepositIntent.provider == provider,
+        OwnerDepositIntent.reference == reference,
+    )
+    bind = session.get_bind()
+    if bind is not None and bind.dialect.name != "sqlite":
+        statement = statement.with_for_update()
+    return session.scalar(statement)
+
+
+def _deposit_wallet_key(provider: str, reference: str) -> str:
+    return f"oc:deposit:{provider}:{reference}:settle"
+
+
+def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: int, provider: str) -> LedgerEvent:
+    """Credit the initiating user once. Amount is the provider figure, not the client quote."""
+    session.refresh(intent)
+    if intent.status == "credited" and intent.ledger_event_id:
+        existing = session.get(LedgerEvent, intent.ledger_event_id)
+        if existing is not None:
+            return existing
     existing = session.scalar(
         select(LedgerEvent).where(
-            LedgerEvent.related_object_type == "paystack", LedgerEvent.related_object_id == reference
+            LedgerEvent.related_object_type == provider,
+            LedgerEvent.related_object_id == intent.reference,
+            LedgerEvent.event_type == "deposit",
+            LedgerEvent.user_id == intent.user_id,
         )
     )
-    if existing:
+    if existing is not None:
+        intent.status = "credited"
+        intent.ledger_event_id = existing.id
+        session.flush()
         return existing
-    ngn = Decimal(amount_kobo) / 100
+    if amount_kobo <= 0:
+        raise OwnerError("deposit_amount_missing", 400)
+    claimed = session.execute(
+        update(OwnerDepositIntent)
+        .where(OwnerDepositIntent.id == intent.id, OwnerDepositIntent.status == "pending")
+        .values(status="crediting")
+    )
+    if claimed.rowcount != 1:
+        session.refresh(intent)
+        if intent.ledger_event_id:
+            existing = session.get(LedgerEvent, intent.ledger_event_id)
+            if existing is not None:
+                return existing
+        raise OwnerError("deposit_already_processing", 409)
+    ngn = Decimal(amount_kobo) / Decimal(100)
     rates = treasury_rates(session)
     coins = fiat_to_coin(ngn, rates["deposit_rate"], rates["deposit_direction"])
-    return ledger.record(
+    event = ledger.record(
         session,
         event_type="deposit",
         source=ledger.PAYSTACK,
-        destination=ledger.user_account(user_id),
+        destination=ledger.user_account(intent.user_id),
         currency=ledger.GTEX,
         gross=coins,
         balance_class="deposited",
-        user_id=user_id,
-        related_type="paystack",
-        related_id=reference,
+        user_id=intent.user_id,
+        related_type=provider,
+        related_id=intent.reference,
         memo=f"Paystack deposit NGN {ngn:,.2f}",
+        wallet_idempotency_key=_deposit_wallet_key(provider, intent.reference),
     )
+    intent.status = "credited"
+    intent.ledger_event_id = event.id
+    intent.credited_amount_kobo = amount_kobo
+    session.flush()
+    return event
+
+
+def _verification_amount_kobo(verification: Any) -> int:
+    amount = getattr(verification, "amount_paid", None)
+    if amount is None:
+        amount = getattr(verification, "amount", None)
+    if amount is None:
+        return 0
+    return int((Decimal(str(amount)) * Decimal(100)).to_integral_value())
+
+
+def _verification_succeeded(verification: Any) -> bool:
+    if bool(getattr(verification, "is_successful", False)):
+        return True
+    return str(getattr(verification, "status", "") or "").strip().lower() == "success"
 
 
 def paystack_verify(session: Session, user, reference: str, provider: str = "paystack") -> dict[str, Any]:
     from app.wallets.providers.registry import get_provider_adapter
 
+    intent = _load_deposit_intent(session, provider, reference)
+    if intent is None:
+        raise OwnerError("deposit_not_found", 404)
+    if intent.user_id != user.id:
+        raise OwnerError("deposit_user_conflict", 409)
+    if intent.status == "credited" and intent.ledger_event_id:
+        existing = session.get(LedgerEvent, intent.ledger_event_id)
+        if existing is not None:
+            return {"status": "success", "ledger_event": ledger.serialize(existing)}
     try:
         adapter = get_provider_adapter(provider)
-        verification = adapter.verify_payment(reference)
-        if not verification.is_successful:
-            return {"status": "failed", "message": verification.gateway_response or "Payment not verified"}
-        amount_kobo = int(verification.amount_paid * 100) if verification.amount_paid else 0
-        event = _credit_deposit(session, user.id, reference, amount_kobo)
-        return {"status": "success", "ledger_event": ledger.serialize(event)}
+        verification = adapter.verify_payment(reference=reference)
     except Exception as exc:
         return {"status": "failed", "message": str(exc)}
+    if not _verification_succeeded(verification):
+        message = getattr(verification, "gateway_response", None) or "Payment not verified"
+        return {"status": "failed", "message": message}
+    event = _credit_deposit(session, intent, _verification_amount_kobo(verification), provider)
+    return {"status": "success", "ledger_event": ledger.serialize(event)}
 
 
 def paystack_webhook(session: Session, raw: bytes, signature: str | None, event: dict[str, Any]) -> None:
     from app.wallets.providers.registry import get_provider_adapter
 
     adapter = get_provider_adapter("paystack")
-    if not adapter.verify_webhook_signature(
-        payload=event, raw_body=raw, headers={"x-paystack-signature": signature or ""}
-    ):
+    try:
+        signature_ok = adapter.verify_webhook_signature(
+            payload=event, raw_body=raw, headers={"x-paystack-signature": signature or ""}
+        )
+    except Exception as exc:
+        raise OwnerError("invalid_signature", 401) from exc
+    if not signature_ok:
         raise OwnerError("invalid_signature", 401)
-    if event.get("event") == "charge.success":
-        tx = event.get("data") or {}
-        user_id = (tx.get("metadata") or {}).get("user_id")
-        if user_id:
-            _credit_deposit(session, user_id, tx["reference"], int(tx["amount"]))
+    if event.get("event") != "charge.success":
+        return
+    tx = event.get("data") or {}
+    reference = tx.get("reference")
+    if not reference:
+        raise OwnerError("deposit_reference_missing", 400)
+    intent = _load_deposit_intent(session, "paystack", str(reference))
+    if intent is None:
+        raise OwnerError("deposit_not_found", 404)
+    # Credit the user who started checkout. Webhook metadata is not an authority.
+    _credit_deposit(session, intent, int(tx.get("amount") or 0), "paystack")
 
 
 # ---------- capital moves ----------
@@ -594,7 +686,7 @@ def buy_fan_coin(session: Session, user_id: str, gtex_amount) -> dict[str, Any]:
             session,
             event_type="fan_coin_purchase",
             source=ledger.user_account(user_id),
-            destination=ledger.PLATFORM_FEES,
+            destination=ledger.GIFT_CONVERSION_BRIDGE,
             currency=ledger.GTEX,
             gross=gtex_amount,
             user_id=user_id,

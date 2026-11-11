@@ -12,6 +12,7 @@ from typing import Any
 
 from app.models.base import utcnow
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.user import User
 
 
 def _lifecycle_error(detail: str, *, reason: str) -> None:
@@ -43,6 +44,7 @@ class ScheduledResolutionMixin:
         home_score: int,
         away_score: int,
         winner_entry_id: str | None = None,
+        actor: User | None = None,
     ) -> dict[str, Any]:
         if home_score < 0 or away_score < 0:
             _lifecycle_error("Match scores cannot be negative.", reason="invalid_match_score")
@@ -92,7 +94,7 @@ class ScheduledResolutionMixin:
         self.session.flush()
         if self._pending_is_open(pending):
             return self.get_lifecycle_payload(competition_id=competition_id)
-        return self.advance_lifecycle(competition_id=competition_id)
+        return self.advance_lifecycle(competition_id=competition_id, actor=actor)
 
     def _progress_scheduled_stage(
         self,

@@ -9,7 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from app.ads_engine.brand_campaigns import public_router, router
+from app.ads_engine.brand_campaigns import record_server_brand_delivery, router
+from app.ads_engine.router import public_router as delivery_router
 from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
 from app.models.base import Base
 from app.models.brand_ad_campaign import BrandAdCampaign
@@ -20,7 +21,7 @@ from app.models.user import User, UserRole
 def _client() -> tuple[TestClient, sessionmaker[Session], User, User]:
     app = FastAPI()
     app.include_router(router)
-    app.include_router(public_router, prefix="/public/ads")
+    app.include_router(delivery_router)
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -111,10 +112,36 @@ def test_advertiser_profile_campaign_ownership_and_review_flow():
         assert created.status_code == 201, created.text
         campaign_id = created.json()["id"]
         assert created.json()["status"] == "draft"
+        with factory() as session:
+            draft = session.get(BrandAdCampaign, campaign_id)
+            assert draft is not None
+            assert draft.payment_status == "unpaid"
+
+        forged = client.post("/ads/brand/campaigns", json={**_payload(), "payment_status": "paid"})
+        assert forged.status_code == 422
 
         submitted = client.post(f"/ads/brand/campaigns/{campaign_id}/submit")
         assert submitted.status_code == 200, submitted.text
         assert submitted.json()["status"] == "pending"
+
+        unpaid_review = client.post(
+            f"/ads/brand/admin/campaigns/{campaign_id}/review",
+            json={"action": "approve", "note": "Creative checked"},
+        )
+        assert unpaid_review.status_code == 409, unpaid_review.text
+
+        hidden = client.get("/public/ads/campaigns")
+        assert hidden.status_code == 200, hidden.text
+        assert campaign_id not in {item["id"] for item in hidden.json()["campaigns"]}
+        with factory() as session:
+            campaign = session.get(BrandAdCampaign, campaign_id)
+            assert campaign is not None
+            assert campaign.status == "pending"
+            assert campaign.is_approved is False
+            assert campaign.is_active is False
+            assert campaign.advertiser_id == advertiser.id
+            campaign.payment_status = "paid"
+            session.commit()
 
         admin_review = client.post(
             f"/ads/brand/admin/campaigns/{campaign_id}/review",
@@ -123,6 +150,10 @@ def test_advertiser_profile_campaign_ownership_and_review_flow():
         assert admin_review.status_code == 200, admin_review.text
         assert admin_review.json()["status"] == "approved"
 
+        live = client.get("/public/ads/campaigns")
+        assert live.status_code == 200, live.text
+        assert campaign_id in {item["id"] for item in live.json()["campaigns"]}
+
         history = client.get(f"/ads/brand/campaigns/{campaign_id}/history")
         assert history.status_code == 200, history.text
         assert {event["action"] for event in history.json()} == {"submitted", "approve"}
@@ -130,7 +161,117 @@ def test_advertiser_profile_campaign_ownership_and_review_flow():
             campaign = session.get(BrandAdCampaign, campaign_id)
             assert campaign is not None
             assert campaign.advertiser_id == advertiser.id
+            assert campaign.payment_status == "paid"
             assert session.query(BrandAdReviewEvent).filter_by(campaign_id=campaign_id).count() == 2
+
+
+def test_unpaid_approved_campaign_is_absent_from_public_feed():
+    client, factory, advertiser, _admin = _client()
+    now = datetime.now(UTC)
+    with factory() as session:
+        unpaid = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="brand",
+            brand_name="Unpaid Partner",
+            headline="Should stay off the feed",
+            description="Approved on paper, never paid",
+            placement="homepage_rail",
+            destination_url="https://example.com/unpaid",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=3),
+            budget_amount=Decimal("100.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("5.0000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            payment_status="unpaid",
+        )
+        paid = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="brand",
+            brand_name="Paid Partner",
+            headline="Cleared for the homepage",
+            description="Approved and paid",
+            placement="homepage_rail",
+            destination_url="https://example.com/paid",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=3),
+            budget_amount=Decimal("100.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("5.0000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            payment_status="paid",
+        )
+        unpaid_music = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Unpaid Label",
+            headline="Unpaid rotation",
+            description="Rights cleared, invoice open",
+            placement="music_track",
+            destination_url="https://example.com/unpaid-track",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=3),
+            budget_amount=Decimal("40.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("2.0000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            payment_status="unpaid",
+            music_target_type="track",
+            music_target_id="trax-unpaid",
+            music_title="Unpaid Single",
+            music_artist_name="Open Invoice",
+            music_rights_verified=True,
+        )
+        paid_music = BrandAdCampaign(
+            advertiser_id=advertiser.id,
+            campaign_type="music",
+            brand_name="Paid Label",
+            headline="Paid rotation",
+            description="Rights cleared and settled",
+            placement="music_track",
+            destination_url="https://example.com/paid-track",
+            start_at=now - timedelta(minutes=5),
+            end_at=now + timedelta(days=3),
+            budget_amount=Decimal("40.00"),
+            currency="USD",
+            pricing_model="CPM",
+            unit_price=Decimal("2.0000"),
+            status="approved",
+            is_approved=True,
+            is_active=True,
+            payment_status="paid",
+            music_target_type="track",
+            music_target_id="trax-paid",
+            music_title="Paid Single",
+            music_artist_name="Settled Invoice",
+            music_rights_verified=True,
+        )
+        session.add_all([unpaid, paid, unpaid_music, paid_music])
+        session.commit()
+        unpaid_id = unpaid.id
+        paid_id = paid.id
+
+    with client:
+        feed = client.get("/public/ads/campaigns")
+        assert feed.status_code == 200, feed.text
+        ids = [item["id"] for item in feed.json()["campaigns"]]
+        assert paid_id in ids
+        assert unpaid_id not in ids
+
+        music = client.get("/public/ads/music/promotions")
+        assert music.status_code == 200, music.text
+        targets = [item["target_id"] for item in music.json()["promotions"]]
+        assert "trax-paid" in targets
+        assert "trax-unpaid" not in targets
 
 
 def test_idempotent_events_and_music_promotion_disclosure_fields():
@@ -166,6 +307,7 @@ def test_idempotent_events_and_music_promotion_disclosure_fields():
             music_artist_name="Kazeem",
             music_rights_verified=True,
             music_rights_holder="Afrobeat Collective",
+            payment_status="paid",
         )
         session.add_all([profile, campaign])
         session.commit()
@@ -317,6 +459,7 @@ def test_unverified_music_campaign_excluded_from_public_promotions():
             music_title="Demo Track 1",
             music_artist_name="Unknown Artist",
             music_rights_verified=False,
+            payment_status="paid",
         )
         # Approved, active, AND music_rights_verified is True
         verified_campaign = BrandAdCampaign(
@@ -342,6 +485,7 @@ def test_unverified_music_campaign_excluded_from_public_promotions():
             music_artist_name="Verified Star",
             music_rights_verified=True,
             music_rights_holder="Star Records Ltd",
+            payment_status="paid",
         )
         session.add_all([profile, unverified_campaign, verified_campaign])
         session.commit()
@@ -389,18 +533,20 @@ def test_budget_exhaustion_delivery_throttling():
             music_artist_name="Budget Artist",
             music_rights_verified=True,
             music_rights_holder="Budget Label",
+            payment_status="paid",
         )
         session.add_all([profile, campaign])
         session.commit()
         campaign_id = campaign.id
 
+    client.app.dependency_overrides[get_optional_current_user] = lambda: None
     with client:
         # Initially delivered
         res1 = client.get("/public/ads/music/promotions")
         assert res1.status_code == 200
         assert any(p["target_id"] == "trax-budget-exhaustion" for p in res1.json()["promotions"])
 
-        # Record 5 clicks to exhaust the $10.00 budget
+        # Five unauthenticated clicks are analytics only and must not exhaust the budget.
         for i in range(5):
             click_res = client.post(
                 "/public/ads/events",
@@ -411,14 +557,39 @@ def test_budget_exhaustion_delivery_throttling():
                     "metadata_json": {},
                 },
             )
-            assert click_res.status_code == 200
+            assert click_res.status_code == 200, click_res.text
 
-        # After budget exhaustion, delivery is throttled (excluded)
-        res2 = client.get("/public/ads/music/promotions")
-        assert res2.status_code == 200
-        assert not any(p["target_id"] == "trax-budget-exhaustion" for p in res2.json()["promotions"])
+        still_live = client.get("/public/ads/music/promotions")
+        assert still_live.status_code == 200
+        assert any(p["target_id"] == "trax-budget-exhaustion" for p in still_live.json()["promotions"])
+        with factory() as session:
+            stored = session.query(BrandAdEvent).filter_by(campaign_id=campaign_id, event_source="client").count()
+            assert stored == 5
+            campaign = session.get(BrandAdCampaign, campaign_id)
+            assert campaign is not None
+            for i in range(5):
+                assert record_server_brand_delivery(
+                    session,
+                    campaign,
+                    event_type="click",
+                    idempotency_key=f"server-delivery-click-{i}",
+                )
+            assert (
+                record_server_brand_delivery(
+                    session,
+                    campaign,
+                    event_type="click",
+                    idempotency_key="server-delivery-click-0",
+                )
+                is False
+            )
+            session.commit()
 
-        # Further event recording is rejected
+        # A server-recorded delivery can still exhaust a paid CPC budget.
+        exhausted = client.get("/public/ads/music/promotions")
+        assert exhausted.status_code == 200
+        assert not any(p["target_id"] == "trax-budget-exhaustion" for p in exhausted.json()["promotions"])
+
         blocked_event = client.post(
             "/public/ads/events",
             json={

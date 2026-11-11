@@ -39,7 +39,7 @@ from app.wallets.schemas import (
     WalletTopUpVerifyRequest,
 )
 from app.wallets.service import LedgerPosting, WalletService
-from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.models.wallet import LedgerEntryReason, LedgerTransaction, LedgerUnit
 
 
 class _FakeKoraPayResponse:
@@ -251,6 +251,55 @@ def test_create_wallet_conversion_route_moves_balance(session) -> None:
     assert payload.target_amount == Decimal("100.0000")
     assert wallet_service.get_balance(session, user_coin_account) == Decimal("1.0000")
     assert wallet_service.get_balance(session, user_credit_account) == Decimal("100.0000")
+    stored = session.scalar(select(LedgerTransaction).where(LedgerTransaction.id == payload.transaction_id))
+    assert stored is not None
+    assert stored.idempotency_key == f"u:{current_user.id}:router-convert-1-coin"
+
+
+def test_two_users_do_not_share_a_wallet_conversion_idempotency_key(session) -> None:
+    first = _register_and_load_user(session)
+    second = AuthService().register_user(
+        session,
+        email="fan-two@example.com",
+        username="fantwo",
+        password="SuperSecret1",  # pragma: allowlist secret
+        region_code="NG",
+    )
+    session.commit()
+    second = session.get(User, second.id)
+    wallet_service = WalletService()
+    platform_coin_account = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
+    for user, reference in ((first, "seed-router-first"), (second, "seed-router-second")):
+        coin_account = wallet_service.get_user_account(session, user, LedgerUnit.COIN)
+        wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=coin_account, amount=Decimal("2")),
+                LedgerPosting(account=platform_coin_account, amount=Decimal("-2")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference=reference,
+            actor=user,
+        )
+    session.commit()
+
+    payload = WalletConversionRequest(
+        amount=Decimal("1"),
+        source_unit=LedgerUnit.COIN,
+        idempotency_key="shared-router-key",
+    )
+    first_result = create_wallet_conversion(payload, session=session, current_user=first)
+    second_result = create_wallet_conversion(payload, session=session, current_user=second)
+
+    assert first_result.transaction_id != second_result.transaction_id
+    assert first_result.target_amount == Decimal("100.0000")
+    assert second_result.target_amount == Decimal("100.0000")
+    first_tx = session.get(LedgerTransaction, first_result.transaction_id)
+    second_tx = session.get(LedgerTransaction, second_result.transaction_id)
+    assert first_tx.idempotency_key == f"u:{first.id}:shared-router-key"
+    assert second_tx.idempotency_key == f"u:{second.id}:shared-router-key"
+    assert first_tx.created_by_user_id == first.id
+    assert second_tx.created_by_user_id == second.id
 
 
 def test_create_wallet_conversion_route_refreshes_shared_wallet_summary_cache(session) -> None:

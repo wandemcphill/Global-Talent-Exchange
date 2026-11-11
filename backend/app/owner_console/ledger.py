@@ -25,6 +25,7 @@ WORLD_MARKET = "world:market"
 WORLD_CLUBS = "world:clubs"
 PAYSTACK = "external:paystack"
 BANK_OUT = "external:bank_payout"
+GIFT_CONVERSION_BRIDGE = "platform:coin:gift_conversion_bridge"
 HELD = "owner_console:held"
 TRANSFER_PLATFORM_FEE_BPS = 2_000
 LIVE_STATUSES = ("completed", "pending_review", "held")
@@ -97,6 +98,18 @@ def wallet_account(session: Session, account: str, currency: str):
             unit=unit,
             allow_negative=True,
         )
+    if account == GIFT_CONVERSION_BRIDGE:
+        bridge = _wallet.ensure_named_system_account(
+            session,
+            code=GIFT_CONVERSION_BRIDGE,
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        if bridge.allow_negative:
+            bridge.allow_negative = False
+            session.flush()
+        return bridge
     return _wallet.ensure_named_system_account(
         session,
         code=f"owner_console:{account.replace(':', '_')}:{unit.value}",
@@ -107,7 +120,14 @@ def wallet_account(session: Session, account: str, currency: str):
 
 
 def _post(
-    session: Session, event: LedgerEvent, source: str, destination: str, net: Decimal, fee: Decimal, phase: str
+    session: Session,
+    event: LedgerEvent,
+    source: str,
+    destination: str,
+    net: Decimal,
+    fee: Decimal,
+    phase: str,
+    idempotency_key: str | None = None,
 ) -> None:
     cur = event.currency
     postings = [
@@ -123,14 +143,14 @@ def _post(
             reason=REASONS.get(event.event_type, LedgerEntryReason.ADJUSTMENT),
             reference=f"owner-console:{event.id}:{phase}",
             description=(event.memo or event.event_type)[:255],
-            idempotency_key=f"oc:{event.id}:{phase}",
+            idempotency_key=idempotency_key or f"oc:{event.id}:{phase}",
             metadata={"owner_ledger_event_id": event.id, "event_type": event.event_type, "phase": phase},
         )
     except WalletLedgerError as exc:
         raise LedgerError("insufficient_funds" if "nsufficient" in str(exc) else str(exc)) from exc
 
 
-def post_event(session: Session, event: LedgerEvent) -> None:
+def post_event(session: Session, event: LedgerEvent, wallet_idempotency_key: str | None = None) -> None:
     if event.status == "completed":
         _post(
             session,
@@ -140,6 +160,7 @@ def post_event(session: Session, event: LedgerEvent) -> None:
             D(event.net_amount),
             D(event.platform_fee),
             "settle",
+            idempotency_key=wallet_idempotency_key,
         )
     else:
         _post(session, event, event.source_account, HELD, D(event.gross_amount), D(0), "hold")
@@ -191,6 +212,7 @@ def record(
     related_id: str | None = None,
     memo: str | None = None,
     check_funds: bool = True,
+    wallet_idempotency_key: str | None = None,
 ) -> LedgerEvent:
     gross_amount = D(gross)
     if gross_amount <= 0:
@@ -217,7 +239,7 @@ def record(
     )
     session.add(event)
     session.flush()
-    post_event(session, event)
+    post_event(session, event, wallet_idempotency_key=wallet_idempotency_key)
     return event
 
 

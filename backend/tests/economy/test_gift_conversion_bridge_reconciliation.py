@@ -35,7 +35,9 @@ from backend.tests.support.economic_policy import seed_economic_policy  # noqa: 
 from scripts.audit_gift_conversion_bridge import audit_bridge  # noqa: E402
 
 GROSS = Decimal("100.0000")
-NET = Decimal("70.0000")
+FAN_NET = Decimal("70.0000")
+GTEX_OUT = Decimal("0.7000")
+PURCHASED_GTEX = Decimal("1.0000")
 
 
 def _make_session_and_url(tmp_path):
@@ -67,12 +69,21 @@ def _send_gift(session, sender, recipient):
     wallet.append_transaction(
         session,
         postings=[
-            LedgerPosting(account=wallet.get_user_account(session, sender, LedgerUnit.CREDIT), amount=GROSS),
-            LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.CREDIT), amount=-GROSS),
+            LedgerPosting(account=wallet.get_user_account(session, sender, LedgerUnit.COIN), amount=PURCHASED_GTEX),
+            LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=-PURCHASED_GTEX),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
-        reference="seed-bridge-fancoin",
+        reference="seed-bridge-gtex",
         actor=sender,
+    )
+    session.commit()
+    wallet.convert_wallet_units(
+        session,
+        user=sender,
+        amount=PURCHASED_GTEX,
+        source_unit=LedgerUnit.COIN,
+        actor=sender,
+        idempotency_key="bridge-purchase",
     )
     session.commit()
     tx = GiftEngineService(session).send_gift(
@@ -100,12 +111,12 @@ def test_bridge_reports_outstanding_coin_liability_after_a_gift(tmp_path) -> Non
 
     assert report["settled_conversions"] == 1
     assert Decimal(report["fancoin_consumed"]) == GROSS
-    assert Decimal(report["coin_issued"]) == NET
-    assert Decimal(report["outstanding_coin_liability"]) == NET
-    # The Coin bridge is negative by exactly the withdrawable Coin it issued,
-    # and the FanCoin bridge holds the matching consumed FanCoin.
-    assert Decimal(report["coin_bridge_balance"]) == -NET
-    assert Decimal(report["credit_bridge_balance"]) == NET
+    assert Decimal(report["coin_issued"]) == GTEX_OUT
+    assert Decimal(report["outstanding_coin_liability"]) == GTEX_OUT
+    # The purchase left 1 GTEX on the bridge. The gift spends the Fan Coin
+    # remainder converted at 100:1, so 0.70 GTEX leaves and 0.30 stays backed.
+    assert Decimal(report["coin_bridge_balance"]) == PURCHASED_GTEX - GTEX_OUT
+    assert Decimal(report["credit_bridge_balance"]) == FAN_NET
     assert report["bridge_accounts_exist"] is True
     assert report["pass"] is True
 
@@ -127,7 +138,8 @@ def test_bridge_liability_returns_to_zero_after_a_reversal(tmp_path) -> None:
 
     assert report["reversed_conversions"] == 1
     assert Decimal(report["outstanding_coin_liability"]) == Decimal("0.0000")
-    assert Decimal(report["coin_bridge_balance"]) == Decimal("0.0000")
+    # Reversal returns the gifted GTEX to the bridge. The purchase backing remains.
+    assert Decimal(report["coin_bridge_balance"]) == PURCHASED_GTEX
     assert Decimal(report["credit_bridge_balance"]) == Decimal("0.0000")
     assert report["pass"] is True
 

@@ -5,18 +5,19 @@ from pathlib import Path
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.ingestion.models import Country
+from app.ingestion.models import Country, Player
 from app.global_memory.models import NationalTeamCountryRanking
 from app.models import Base
 from app.models.competition import UserCompetition
 from app.models.national_team import NationalTeamCompetition, NationalTeamCompetitionEntry
+from app.models.national_team_tournament import RentalContract
 from app.models.user import User, UserRole
 from app.national_team_engine.competition_lifecycle_service import (
     NationalCompetitionLifecycleError,
     NationalCompetitionLifecycleService,
 )
-from app.national_team_engine.schemas import NationalTeamCompetitionEntrySubmitRequest
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from backend.tests.national_team_engine.rented_squads import submit_request
 
 
 def _build_session_factory(database_path: Path) -> sessionmaker:
@@ -31,6 +32,8 @@ def _build_session_factory(database_path: Path) -> sessionmaker:
             NationalTeamCountryRanking.__table__,
             NationalTeamCompetition.__table__,
             NationalTeamCompetitionEntry.__table__,
+            Player.__table__,
+            RentalContract.__table__,
         ],
     )
     return SessionLocal
@@ -62,26 +65,16 @@ def _seed_country(session, *, name: str, alpha2: str, fifa: str, confederation: 
     )
 
 
-def _payload(
-    country_code: str, country_name: str, ages: tuple[int, int], ratings: tuple[int, int]
-) -> NationalTeamCompetitionEntrySubmitRequest:
-    return NationalTeamCompetitionEntrySubmitRequest(
+def _payload(session, actor, competition, country_code: str, country_name: str, ages: tuple[int, ...], ratings: tuple[int, ...]):
+    return submit_request(
+        session,
+        actor=actor,
+        competition=competition,
         country_code=country_code,
         country_name=country_name,
-        squad=[
-            {
-                "player_name": f"{country_name} Player A",
-                "age": ages[0],
-                "overall_rating": ratings[0],
-                "position": "fw",
-            },
-            {
-                "player_name": f"{country_name} Player B",
-                "age": ages[1],
-                "overall_rating": ratings[1],
-                "position": "cm",
-            },
-        ],
+        ages=ages,
+        ratings=ratings,
+        positions=("ST", "CM"),
     )
 
 
@@ -149,7 +142,7 @@ def test_lifecycle_engine_handles_age_locking_prequalifiers_qualifiers_and_tourn
             service.submit_entry(
                 competition_id=competition.id,
                 actor=users[0],
-                payload=_payload("NG", "Nigeria", ages=(18, 16), ratings=(78, 74)),
+                payload=_payload(session, users[0], competition, "NG", "Nigeria", (18, 16), (78, 74)),
             )
         except NationalCompetitionLifecycleError as exc:
             assert exc.reason == "invalid_squad_age"
@@ -157,12 +150,12 @@ def test_lifecycle_engine_handles_age_locking_prequalifiers_qualifiers_and_tourn
             raise AssertionError("Expected invalid U17 squad submission to fail.")
 
         submissions = [
-            (users[0], _payload("NG", "Nigeria", ages=(17, 16), ratings=(82, 80))),
-            (users[1], _payload("NG", "Nigeria", ages=(17, 17), ratings=(79, 78))),
-            (users[2], _payload("GH", "Ghana", ages=(16, 17), ratings=(76, 75))),
-            (users[3], _payload("CI", "Ivory Coast", ages=(16, 16), ratings=(77, 74))),
-            (users[4], _payload("EG", "Egypt", ages=(17, 16), ratings=(75, 75))),
-            (users[5], _payload("CM", "Cameroon", ages=(17, 17), ratings=(74, 73))),
+            (users[0], _payload(session, users[0], competition, "NG", "Nigeria", (17, 16), (82, 80))),
+            (users[1], _payload(session, users[1], competition, "NG", "Nigeria", (17, 17), (79, 78))),
+            (users[2], _payload(session, users[2], competition, "GH", "Ghana", (16, 17), (76, 75))),
+            (users[3], _payload(session, users[3], competition, "CI", "Ivory Coast", (16, 16), (77, 74))),
+            (users[4], _payload(session, users[4], competition, "EG", "Egypt", (17, 16), (75, 75))),
+            (users[5], _payload(session, users[5], competition, "CM", "Cameroon", (17, 17), (74, 73))),
         ]
         for actor, payload in submissions:
             service.submit_entry(competition_id=competition.id, actor=actor, payload=payload)

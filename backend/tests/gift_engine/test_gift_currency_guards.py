@@ -68,11 +68,22 @@ def _fund_fancoin(session: Session, user: User, amount: Decimal) -> None:
     wallet = WalletService()
     account = wallet.get_user_account(session, user, LedgerUnit.CREDIT)
     platform = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+    bridge = wallet.ensure_named_system_account(
+        session,
+        code="platform:coin:gift_conversion_bridge",
+        label="Platform GTEX Coin Gift Conversion Bridge",
+        unit=LedgerUnit.COIN,
+        allow_negative=False,
+    )
+    platform_coin = wallet.ensure_platform_account(session, LedgerUnit.COIN)
+    gtex_backing = (amount / Decimal("100")).quantize(Decimal("0.0001"))
     wallet.append_transaction(
         session,
         postings=[
             LedgerPosting(account=account, amount=amount),
             LedgerPosting(account=platform, amount=-amount),
+            LedgerPosting(account=bridge, amount=gtex_backing),
+            LedgerPosting(account=platform_coin, amount=-gtex_backing),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference=f"seed-fancoin:{user.id}",
@@ -138,6 +149,6 @@ def test_gift_transaction_view_contains_currency_provenance(session: Session) ->
     assert view.source_ledger_unit == "credit"
     assert view.destination_ledger_unit == "coin"
     assert view.economic_conversion_id == tx.economic_conversion_id
-    assert view.conversion_rate == Decimal("1.0000")
+    assert view.conversion_rate == Decimal("0.0100")
     assert view.fee_policy_rule_key == "platform-economy-defaults"
     assert view.fee_policy_version is not None

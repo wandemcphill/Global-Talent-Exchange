@@ -891,23 +891,30 @@ def create_wallet_conversion(
     current_user: User = Depends(get_current_wallet_user),
     request: Request = None,
 ) -> WalletConversionView:
-    governor = EconomyGovernorService(
-        session,
-        wallet_service=_build_wallet_service(request),
+    wallet_service = _build_wallet_service(request)
+    # payout_requests and ledger transactions share one global idempotency
+    # index. Namespace the caller's key by user so a replay returns only that
+    # user's conversion, and a second user cannot receive the first posting.
+    stored_key = (
+        f"u:{current_user.id}:{payload.idempotency_key.strip()}"
+        if payload.idempotency_key and payload.idempotency_key.strip()
+        else None
     )
     try:
         with _wallet_transaction_lock(request, user=current_user, operation="wallet_conversion"):
-            result = governor.convert_wallet_units(
+            result = wallet_service.convert_wallet_units(
+                session,
                 user=current_user,
                 amount=payload.amount,
                 source_unit=payload.source_unit,
                 actor=current_user,
-                idempotency_key=payload.idempotency_key,
+                idempotency_key=stored_key,
             )
             session.commit()
     except LedgerError as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    quote = wallet_service.quote_conversion(source_unit=result.source_unit, amount=result.source_amount)
     return WalletConversionView(
         transaction_id=result.transaction_id,
         reference=result.reference,
@@ -915,10 +922,7 @@ def create_wallet_conversion(
         source_amount=result.source_amount,
         target_unit=result.target_unit,
         target_amount=result.target_amount,
-        rate=governor.quote_conversion(
-            source_unit=result.source_unit,
-            amount=result.source_amount,
-        ).rate,
+        rate=quote.rate,
     )
 
 

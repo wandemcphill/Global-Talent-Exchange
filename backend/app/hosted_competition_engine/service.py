@@ -11,8 +11,19 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.admin_engine.service import AdminEngineService
+from app.economy.competition_funding_policy import (
+    CompetitionFundingMode,
+    CompetitionFundingPolicyError,
+    funding_mode_from_prize_mode,
+    validate_competition_funding_contract,
+)
+from app.economy.hosted_competition_coin_escrow import (
+    HostedCompetitionCoinEscrowError,
+    HostedCompetitionCoinEscrowService,
+)
 from app.models.hosted_competition import (
     CompetitionTemplate,
+    HostedCompetitionFundingMode,
     HostedCompetitionSettlement,
     HostedCompetitionSettlementStatus,
     HostedCompetitionStanding,
@@ -39,8 +50,9 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
         "gift_rules": {"enabled": True},
         "seeding_method": "random",
         "is_user_hostable": True,
-        "entry_fee_fancoin": Decimal("100.0000"),
-        "reward_pool_fancoin": Decimal("640.0000"),
+        "funding_mode": HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
+        "entry_fee_fancoin": Decimal("0.0000"),
+        "reward_pool_fancoin": Decimal("0.0000"),
         "platform_fee_bps": 2000,
         "metadata_json": {"family": "national_team"},
         "active": True,
@@ -58,8 +70,9 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
         "gift_rules": {"enabled": True},
         "seeding_method": "random",
         "is_user_hostable": True,
-        "entry_fee_fancoin": Decimal("250.0000"),
-        "reward_pool_fancoin": Decimal("1600.0000"),
+        "funding_mode": HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
+        "entry_fee_fancoin": Decimal("0.0000"),
+        "reward_pool_fancoin": Decimal("0.0000"),
         "platform_fee_bps": 1000,
         "metadata_json": {"family": "creator"},
         "active": True,
@@ -77,8 +90,9 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
         "gift_rules": {"enabled": True},
         "seeding_method": "snake",
         "is_user_hostable": True,
-        "entry_fee_fancoin": Decimal("300.0000"),
-        "reward_pool_fancoin": Decimal("2400.0000"),
+        "funding_mode": HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
+        "entry_fee_fancoin": Decimal("0.0000"),
+        "reward_pool_fancoin": Decimal("0.0000"),
         "platform_fee_bps": 1000,
         "metadata_json": {"family": "creator"},
         "active": True,
@@ -96,8 +110,9 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
         "gift_rules": {"enabled": True},
         "seeding_method": "random",
         "is_user_hostable": True,
-        "entry_fee_fancoin": Decimal("100.0000"),
-        "reward_pool_fancoin": Decimal("320.0000"),
+        "funding_mode": HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
+        "entry_fee_fancoin": Decimal("0.0000"),
+        "reward_pool_fancoin": Decimal("0.0000"),
         "platform_fee_bps": 2000,
         "metadata_json": {"family": "queue"},
         "active": True,
@@ -105,6 +120,18 @@ DEFAULT_TEMPLATES: tuple[dict[str, object], ...] = (
 )
 
 AMOUNT_QUANTUM = Decimal("0.0001")
+_PROHIBITED_ENTRY_POOL_MODES = frozenset(
+    {
+        "entry_funded",
+        "fancoin_entry_pool",
+        "participant_funded",
+        "pool",
+        "dynamic",
+    }
+)
+_ENTRY_POOL_PROHIBITED = (
+    "FanCoin entry-pool competitions are prohibited. Prize coin is funded by the host or by GTEX."
+)
 
 
 class HostedCompetitionError(ValueError):
@@ -122,6 +149,22 @@ class HostedCompetitionService:
 
     def _normalize_amount(self, amount: Decimal | int | float | str) -> Decimal:
         return Decimal(str(amount)).quantize(AMOUNT_QUANTUM)
+
+    def _reject_participant_funded_mode(self, mode: object) -> None:
+        if isinstance(mode, str):
+            normalized = mode.strip().lower()
+        else:
+            raw = getattr(mode, "funding_mode", mode)
+            normalized = str(getattr(raw, "value", raw) or "").strip().lower()
+        if normalized in _PROHIBITED_ENTRY_POOL_MODES:
+            raise HostedCompetitionError(_ENTRY_POOL_PROHIBITED)
+
+    def _resolved_funding_mode(self, payload) -> CompetitionFundingMode:
+        requested = getattr(payload, "funding_mode", None)
+        try:
+            return funding_mode_from_prize_mode(str(requested) if requested else None)
+        except CompetitionFundingPolicyError as exc:
+            raise HostedCompetitionError(str(exc)) from exc
 
     def _now_iso(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -314,7 +357,7 @@ class HostedCompetitionService:
         participant = UserHostedCompetitionParticipant(
             competition_id=competition.id,
             user_id=user.id,
-            entry_fee_fancoin=competition.entry_fee_fancoin,
+            entry_fee_fancoin=Decimal("0.0000"),
             metadata_json={"role": role},
         )
         self.session.add(participant)
@@ -327,67 +370,17 @@ class HostedCompetitionService:
     def _collect_entry_fee(
         self, *, competition: UserHostedCompetition, participant: UserHostedCompetitionParticipant, user: User
     ) -> None:
-        amount = self._normalize_amount(competition.entry_fee_fancoin)
-        if amount <= Decimal("0.0000"):
-            participant.metadata_json = {**participant.metadata_json, "payment_status": "free"}
-            self.session.flush()
-            return
-        user_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.CREDIT)
-        escrow_account = self._competition_escrow_account(competition)
-        if self.wallet_service.get_balance(self.session, user_account) < amount:
-            raise InsufficientBalanceError("Available FanCoin balance is lower than the hosted competition entry fee.")
-        entries = self.wallet_service.append_transaction(
-            self.session,
-            postings=[
-                LedgerPosting(
-                    account=user_account, amount=-amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
-                ),
-                LedgerPosting(
-                    account=escrow_account, amount=amount, source_tag=LedgerSourceTag.USER_COMPETITION_ENTRY_SPEND
-                ),
-            ],
-            reason=LedgerEntryReason.COMPETITION_ENTRY,
-            reference=f"hosted-entry:{competition.id}:{user.id}",
-            description=f"Hosted competition entry for {competition.title}",
-            external_reference=f"hosted-entry:{competition.id}:{user.id}",
-            actor=user,
-        )
-        participant.metadata_json = {
-            **participant.metadata_json,
-            "payment_status": "settled",
-            "entry_transaction_id": entries[0].transaction_id if entries else None,
-        }
+        """Entry is free. This method never debits an entrant wallet."""
+        del competition, user
+        participant.entry_fee_fancoin = Decimal("0.0000")
+        participant.metadata_json = {**participant.metadata_json, "payment_status": "free"}
         self.session.flush()
 
     def _fund_gtex_hosted_reward_pool(self, *, competition: UserHostedCompetition, admin: User) -> None:
-        amount = self._normalize_amount(competition.reward_pool_fancoin)
-        if amount <= Decimal("0.0000"):
-            return
-        platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.CREDIT)
-        escrow_account = self._competition_escrow_account(competition)
-        self.wallet_service.append_transaction(
-            self.session,
-            postings=[
-                LedgerPosting(
-                    account=platform_account,
-                    amount=-amount,
-                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
-                ),
-                LedgerPosting(
-                    account=escrow_account,
-                    amount=amount,
-                    source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD,
-                ),
-            ],
-            reason=LedgerEntryReason.COMPETITION_REWARD,
-            reference=f"gtex-hosted-reward-pool:{competition.id}",
-            description=f"GTEX hosted reward pool funding for {competition.title}",
-            external_reference=f"gtex-hosted-reward-pool:{competition.id}",
-            actor=admin,
-            idempotency_key=f"gtex-hosted-reward-pool:{competition.id}",
-            metadata={"hosted_competition_id": competition.id, "reward_source": "gtex_hosted_reward_pool"},
+        del competition, admin
+        raise HostedCompetitionError(
+            "Host-funded prizes must be escrowed from the host wallet, not minted on an unbounded platform account."
         )
-        self.session.flush()
 
     def create_competition(
         self,
@@ -397,37 +390,37 @@ class HostedCompetitionService:
         created_by_admin: User | None = None,
         gtex_hosted: bool = False,
     ) -> tuple[UserHostedCompetition, CompetitionTemplate, bool]:
+        mode = self._resolved_funding_mode(payload)
+        if mode is not CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE:
+            raise HostedCompetitionError("Unsupported hosted competition funding mode.")
         template = self.get_template_by_key(payload.template_key)
         if template is None or not template.is_user_hostable:
             raise HostedCompetitionError("Competition template was not found or is not hostable.")
         slug = (payload.slug or payload.title).strip().lower().replace(" ", "-")
         if not slug:
             raise HostedCompetitionError("Competition slug cannot be empty.")
-        entry_fee = Decimal(
-            str(payload.entry_fee_fancoin if payload.entry_fee_fancoin is not None else template.entry_fee_fancoin)
-        ).quantize(Decimal("0.0001"))
-        if gtex_hosted:
-            entry_fee = Decimal("0.0000")
-        if entry_fee < Decimal("0.0000"):
-            raise HostedCompetitionError("Entry fee cannot be negative.")
+        requested_fee = getattr(payload, "entry_fee_fancoin", None)
+        if requested_fee is not None and self._normalize_amount(requested_fee) != Decimal("0.0000"):
+            raise HostedCompetitionError("Hosted competitions cannot charge a participant entry fee.")
+        entry_fee = Decimal("0.0000")
         max_participants = int(payload.max_participants or template.participants)
-        platform_fee_bps = self._active_platform_fee_bps()
-        capacity_revenue = entry_fee * Decimal(max_participants)
-        platform_fee_amount = (capacity_revenue * Decimal(platform_fee_bps) / Decimal(10_000)).quantize(
-            Decimal("0.0001")
-        )
-        default_reward_pool = max(
-            Decimal("0.0000"), (capacity_revenue - platform_fee_amount).quantize(Decimal("0.0001"))
-        )
-        reward_pool = Decimal(
-            str(
-                payload.reward_pool_fancoin
-                if getattr(payload, "reward_pool_fancoin", None) is not None
-                else default_reward_pool
+        gross_prize = self._normalize_amount(getattr(payload, "reward_pool_coin", None) or 0)
+        try:
+            validate_competition_funding_contract(
+                mode=mode,
+                currency=LedgerUnit.COIN,
+                participant_entry_amount=entry_fee,
+                host_prize_amount=gross_prize,
             )
-        ).quantize(Decimal("0.0001"))
-        if reward_pool < Decimal("0.0000"):
-            raise HostedCompetitionError("Reward pool cannot be negative.")
+        except CompetitionFundingPolicyError as exc:
+            raise HostedCompetitionError(str(exc)) from exc
+        platform_fee_bps = self._active_platform_fee_bps()
+        platform_fee_amount = self._normalize_amount(gross_prize * Decimal(platform_fee_bps) / Decimal("10000"))
+        net_prize = self._normalize_amount(gross_prize - platform_fee_amount)
+        if net_prize <= Decimal("0.0000"):
+            raise HostedCompetitionError(
+                "Host-funded GTEX Coin prize must leave a positive net prize after platform fees."
+            )
         visibility = str(payload.visibility or "public").strip().lower()
         metadata = self._metadata_with_join_rules(payload=payload, visibility=visibility, gtex_hosted=gtex_hosted)
         if metadata.get("join_passcode_required") is True and visibility == "public":
@@ -442,26 +435,39 @@ class HostedCompetitionService:
             starts_at=payload.starts_at,
             lock_at=payload.lock_at,
             max_participants=max_participants,
+            funding_mode=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
             entry_fee_fancoin=entry_fee,
-            reward_pool_fancoin=reward_pool,
+            reward_pool_fancoin=Decimal("0.0000"),
+            reward_pool_coin=gross_prize,
+            host_funding_required_coin=gross_prize,
+            host_funding_escrowed_coin=Decimal("0.0000"),
             platform_fee_amount=platform_fee_amount,
             metadata_json={
                 **metadata,
                 "created_by_user_id": created_by_admin.id if created_by_admin is not None else host.id,
+                "prize_currency": LedgerUnit.COIN.value,
+                "gross_prize_coin": str(gross_prize),
+                "net_prize_coin": str(net_prize),
             },
             status=HostedCompetitionStatus.OPEN,
         )
         self.session.add(competition)
         self.session.flush()
+        if self.wallet_service is None:
+            raise HostedCompetitionError("Wallet service is required to escrow a host-funded prize.")
+        escrow_service = HostedCompetitionCoinEscrowService(self.session, self.wallet_service)
+        try:
+            escrow_service.fund_from_host(competition=competition, host=host, gross_prize=gross_prize)
+        except (InsufficientBalanceError, HostedCompetitionCoinEscrowError) as exc:
+            self.session.delete(competition)
+            self.session.flush()
+            raise HostedCompetitionError(str(exc)) from exc
         if gtex_hosted:
-            if created_by_admin is not None:
-                self._fund_gtex_hosted_reward_pool(competition=competition, admin=created_by_admin)
             return competition, template, False
         participant = self._create_entry_participant(competition=competition, user=host, role="host")
-        try:
-            self._collect_entry_fee(competition=competition, participant=participant, user=host)
-        except InsufficientBalanceError as exc:
-            raise HostedCompetitionError(str(exc)) from exc
+        participant.entry_fee_fancoin = Decimal("0.0000")
+        participant.metadata_json = {**participant.metadata_json, "payment_status": "host_funded"}
+        self.session.flush()
         return competition, template, True
 
     def create_admin_competition(
@@ -670,8 +676,8 @@ class HostedCompetitionService:
         return {
             "currency": "fan_coin",
             "participant_count": len(participants),
-            "entry_fee_fancoin": self._normalize_amount(competition.entry_fee_fancoin),
-            "gross_collected": self._normalize_amount(competition.entry_fee_fancoin * Decimal(len(participants))),
+            "entry_fee_fancoin": Decimal("0.0000"),
+            "gross_collected": Decimal("0.0000"),
             "projected_reward_pool": self._normalize_amount(competition.reward_pool_fancoin),
             "projected_platform_fee": self._normalize_amount(competition.platform_fee_amount),
             "escrow_balance": escrow_balance,
@@ -695,6 +701,7 @@ class HostedCompetitionService:
             raise HostedCompetitionError("Hosted competition was not found.")
         if competition.status not in {HostedCompetitionStatus.OPEN, HostedCompetitionStatus.DRAFT}:
             raise HostedCompetitionError("Hosted competition is not open for joining.")
+        self._reject_participant_funded_mode(competition)
         invite = self._find_join_invite(competition=competition, user=user)
         self._assert_passcode_allowed(
             competition=competition,
@@ -777,6 +784,7 @@ class HostedCompetitionService:
         competition = self.get_competition(competition_id)
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
+        self._reject_participant_funded_mode(competition)
         if competition.status == HostedCompetitionStatus.COMPLETED:
             raise HostedCompetitionError("Hosted competition has already been completed.")
         participants = {item.user_id for item in self.participants_for_competition(competition_id)}

@@ -143,7 +143,7 @@ class HostedCompetitionCreateRequest(BaseModel):
     max_participants: int | None = None
     entry_fee_fancoin: Decimal | None = None
     reward_pool_fancoin: Decimal | None = None
-    funding_mode: str = "fancoin_entry_pool"
+    funding_mode: str = "host_funded_gtex_coin_prize"
     reward_pool_coin: Decimal | None = None
     join_passcode: str | None = Field(default=None, max_length=64)
     metadata_json: dict[str, object] = Field(default_factory=dict)

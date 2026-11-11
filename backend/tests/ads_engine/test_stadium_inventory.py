@@ -124,7 +124,7 @@ def test_priority_order_and_budget_exhaustion() -> None:
                     campaign_id=exhausted,
                     event_type="impression",
                     idempotency_key=f"imp-{index}",
-                    event_source="client",
+                    event_source="server",
                     metadata_json={},
                 )
             )

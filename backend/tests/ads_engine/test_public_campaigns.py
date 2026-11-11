@@ -64,8 +64,15 @@ def test_public_feed_returns_only_approved_active_campaigns_in_window() -> None:
     with factory() as session:
         session.add_all(
             [
-                _campaign(campaign_id="live-rail", placement="homepage_rail", now=now, priority=200),
-                _campaign(campaign_id="live-auth", placement="auth_canvas", now=now),
+                _campaign(
+                    campaign_id="live-rail",
+                    placement="homepage_rail",
+                    now=now,
+                    priority=200,
+                    payment_status="paid",
+                ),
+                _campaign(campaign_id="live-auth", placement="auth_canvas", now=now, payment_status="paid"),
+                _campaign(campaign_id="unpaid", placement="homepage_rail", now=now, payment_status="unpaid"),
                 _campaign(campaign_id="unapproved", placement="homepage_rail", now=now, is_approved=False),
                 _campaign(campaign_id="paused", placement="homepage_rail", now=now, is_active=False),
                 _campaign(

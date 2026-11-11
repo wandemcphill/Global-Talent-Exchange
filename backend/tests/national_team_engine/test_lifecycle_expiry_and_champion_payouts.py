@@ -44,6 +44,7 @@ from app.national_team_engine.competition_lifecycle_service import (
 from app.national_team_engine.router import admin_router, national_router, router
 from app.national_team_engine.schemas import NationalTeamCompetitionEntrySubmitRequest
 from app.national_team_engine.tournament_service import NationalTeamTournamentService
+from backend.tests.national_team_engine.rented_squads import rent_players_for_squad
 from app.national_team_engine.worker import NationalTeamLifecycleScheduler
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -777,6 +778,21 @@ def test_champion_eligibility_validation_and_router_authorization(tmp_path: Path
             created_by_user_id=admin.id,
         )
         session.add(competition)
+        session.flush()
+        squads = {
+            actor.id: rent_players_for_squad(
+                session,
+                actor=actor,
+                competition=competition,
+                country_name=name,
+                ages=(24,),
+                ratings=(rating,),
+            )
+            for actor, _code, name, rating in (
+                (user_one, "NG", "Nigeria", 88),
+                (user_two, "GH", "Ghana", 74),
+            )
+        }
         session.commit()
 
     auth_state: dict[str, User | None] = {"user": user_one, "is_admin": False}
@@ -823,7 +839,7 @@ def test_champion_eligibility_validation_and_router_authorization(tmp_path: Path
                 json={
                     "country_code": code,
                     "country_name": name,
-                    "squad": [{"player_name": f"{name} Captain", "age": 24, "overall_rating": rating}],
+                    "squad": squads[actor.id],
                 },
             )
             assert resp.status_code == 200, resp.text
@@ -849,6 +865,13 @@ def test_champion_eligibility_validation_and_router_authorization(tmp_path: Path
         auth_state["is_admin"] = False
         user_resp = client.post(f"/admin/national-team-engine/competitions/{competition.id}/champion-reward/settle")
         assert user_resp.status_code == 403, user_resp.text
+
+        # A logged-in non-admin cannot write a scheduled result either.
+        user_result = client.post(
+            f"/admin/national-team-engine/competitions/{competition.id}/lifecycle/matches/not-a-match/result",
+            json={"home_score": 1, "away_score": 0},
+        )
+        assert user_result.status_code == 403, user_result.text
 
         # 3. Read endpoints have zero payout side effects
         lifecycle_read = client.get(f"/national-team-engine/competitions/{competition.id}/lifecycle")
@@ -947,6 +970,21 @@ def test_rental_provenance_rejects_fabricated_players_and_caller_spoofed_attribu
         session.add_all([u17_comp, senior_comp])
         session.flush()
 
+        lifecycle_service = NationalCompetitionLifecycleService(session, wallet_service=wallet_service)
+
+        # A name-only squad is rejected before any rental or entry exists.
+        with pytest.raises(NationalCompetitionLifecycleError) as empty_exc:
+            lifecycle_service.submit_entry(
+                competition_id=senior_comp.id,
+                actor=manager,
+                payload=NationalTeamCompetitionEntrySubmitRequest(
+                    country_code="NG",
+                    country_name="Nigeria",
+                    squad=[{"player_name": "Fabricated 99 Superstar", "age": 22, "overall_rating": 99}],
+                ),
+            )
+        assert empty_exc.value.reason == "player_not_rented"
+
         u17_entry = NationalTeamEntry(
             competition_id=u17_comp.id,
             country_code="NG",
@@ -969,8 +1007,6 @@ def test_rental_provenance_rejects_fabricated_players_and_caller_spoofed_attribu
         tournament_service.rent_player(entry_id=u17_entry.id, actor=manager, player_id=veteran_player.id)
         u17_comp.age_band = "u17"
         tournament_service.rent_player(entry_id=senior_entry.id, actor=manager, player_id=veteran_player.id)
-
-        lifecycle_service = NationalCompetitionLifecycleService(session, wallet_service=wallet_service)
 
         # 1) Fabricated player without player_id in a rental-backed tournament is rejected
         with pytest.raises(NationalCompetitionLifecycleError) as fabricated_exc:
@@ -1023,3 +1059,44 @@ def test_rental_provenance_rejects_fabricated_players_and_caller_spoofed_attribu
         )
         assert submitted["squad"][0]["overall_rating"] == 74
         assert submitted["squad"][0]["resolved_age"] == 30
+
+
+def test_champion_reward_is_a_platform_schedule_not_collected_rentals(tmp_path: Path) -> None:
+    session_factory = _build_session_factory(tmp_path / "champion-not-rentals.db")
+    now = datetime.now(UTC)
+    with session_factory() as session:
+        admin = _create_user(session, "prize_admin", role=UserRole.ADMIN)
+        renter = _create_user(session, "prize_renter")
+        competition = NationalTeamCompetition(
+            key=f"no-rental-prize-{uuid.uuid4().hex[:6]}",
+            title="Platform Prize Cup",
+            season_label="2031",
+            region_type="global",
+            age_band="senior",
+            format_type="cup",
+            status="published",
+            metadata_json={"entry_mode": "rental_only", "entry_fee_coin": "0.0000"},
+            created_by_user_id=admin.id,
+        )
+        session.add(competition)
+        session.flush()
+        for amount in ("40.0000", "25.0000"):
+            session.add(
+                RentalContract(
+                    player_id=str(uuid.uuid4()),
+                    user_id=renter.id,
+                    tournament_id=competition.id,
+                    start_date=now - timedelta(hours=1),
+                    end_date=now + timedelta(days=2),
+                    loan_price_coin=Decimal(amount),
+                    status=RentalContractStatus.ACTIVE,
+                )
+            )
+        session.flush()
+        service = NationalCompetitionLifecycleService(session)
+        assert service._resolve_champion_reward_gross_amount(competition) == Decimal("0.0000")
+        competition.metadata_json = {
+            **dict(competition.metadata_json or {}),
+            "champion_reward_coin": "125.0000",
+        }
+        assert service._resolve_champion_reward_gross_amount(competition) == Decimal("125.0000")

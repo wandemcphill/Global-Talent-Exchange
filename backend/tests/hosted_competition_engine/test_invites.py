@@ -10,17 +10,21 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.hosted_competition_engine.coin_aware_service import CoinAwareHostedCompetitionService
 from app.hosted_competition_engine.router import admin_router as hosted_admin_router
 from app.hosted_competition_engine.router import router as hosted_router
 from app.hosted_competition_engine.schemas import AdminHostedCompetitionCreateRequest
-from app.hosted_competition_engine.service import HostedCompetitionError, HostedCompetitionService
+from app.hosted_competition_engine.service import HostedCompetitionError
 from app.models.base import Base
 from app.models.hosted_competition import (
     CompetitionTemplate,
+    HostedCompetitionFundingMode,
     HostedCompetitionStatus,
     UserHostedCompetition,
 )
 from app.models.user import User, UserRole
+from app.models.wallet import LedgerEntryReason, LedgerUnit
+from app.wallets.service import LedgerPosting, WalletService
 
 import app.models.hosted_competition  # noqa: F401
 import app.models.user  # noqa: F401
@@ -39,6 +43,23 @@ def _create_user(session, *, user_id: str, role: UserRole = UserRole.USER) -> Us
     )
     session.add(user)
     return user
+
+
+def _seed_host_coin(session, user: User, amount: Decimal) -> None:
+    wallet = WalletService()
+    host_account = wallet.get_user_account(session, user, LedgerUnit.COIN)
+    clearing = wallet.ensure_platform_account(session, LedgerUnit.COIN)
+    wallet.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=host_account, amount=amount),
+            LedgerPosting(account=clearing, amount=-amount),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        reference=f"hosted-test-seed:{user.id}",
+        actor=user,
+    )
+    session.commit()
 
 
 def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -> None:
@@ -86,8 +107,12 @@ def test_private_hosted_competition_requires_invite_and_accepts_invited_user() -
             status=HostedCompetitionStatus.OPEN,
             visibility="private",
             max_participants=4,
+            funding_mode=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
             entry_fee_fancoin=Decimal("0.0000"),
             reward_pool_fancoin=Decimal("0.0000"),
+            reward_pool_coin=Decimal("100.0000"),
+            host_funding_required_coin=Decimal("100.0000"),
+            host_funding_escrowed_coin=Decimal("0.0000"),
             platform_fee_amount=Decimal("0.0000"),
             metadata_json={},
         )
@@ -190,8 +215,12 @@ def test_passcode_competition_requires_valid_passcode_to_join() -> None:
             status=HostedCompetitionStatus.OPEN,
             visibility="passcode",
             max_participants=4,
+            funding_mode=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
             entry_fee_fancoin=Decimal("0.0000"),
             reward_pool_fancoin=Decimal("0.0000"),
+            reward_pool_coin=Decimal("100.0000"),
+            host_funding_required_coin=Decimal("100.0000"),
+            host_funding_escrowed_coin=Decimal("0.0000"),
             platform_fee_amount=Decimal("0.0000"),
             metadata_json={"join_passcode": "CUP123", "join_passcode_required": True},
         )
@@ -267,6 +296,7 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
         )
         session.add(template)
         session.commit()
+        _seed_host_coin(session, admin, Decimal("100.0000"))
 
         app = FastAPI()
         app.include_router(hosted_admin_router)
@@ -288,6 +318,7 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
                     "title": "Official GTEX Cup",
                     "gtex_hosted": True,
                     "join_passcode": "VIP",
+                    "reward_pool_coin": "100.0000",
                 },
             )
 
@@ -295,6 +326,7 @@ def test_admin_can_create_free_gtex_hosted_competition() -> None:
         payload = response.json()
         assert payload["host_participation_created"] is False
         assert payload["competition"]["entry_fee_fancoin"] == "0.0000"
+        assert payload["competition"]["funding_mode"] == "host_funded_gtex_coin_prize"
         assert payload["competition"]["visibility"] == "passcode"
         assert payload["competition"]["metadata_json"]["gtex_hosted"] is True
         assert payload["competition"]["metadata_json"]["join_passcode_required"] is True
@@ -348,8 +380,12 @@ def test_hosted_competition_finance_requires_host_or_admin() -> None:
             status=HostedCompetitionStatus.OPEN,
             visibility="public",
             max_participants=4,
+            funding_mode=HostedCompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE,
             entry_fee_fancoin=Decimal("0.0000"),
             reward_pool_fancoin=Decimal("0.0000"),
+            reward_pool_coin=Decimal("100.0000"),
+            host_funding_required_coin=Decimal("100.0000"),
+            host_funding_escrowed_coin=Decimal("0.0000"),
             platform_fee_amount=Decimal("0.0000"),
             metadata_json={},
         )
@@ -428,17 +464,20 @@ def test_gtex_hosted_reward_pool_is_funded_and_finalize_requires_exact_unique_pl
         session.add(template)
         session.commit()
 
-        service = HostedCompetitionService(session)
-        competition, _template, _host_created = service.create_admin_competition(
+        _seed_host_coin(session, admin, Decimal("100.0000"))
+        service = CoinAwareHostedCompetitionService(session)
+        competition, _template, host_created = service.create_admin_competition(
             admin=admin,
             payload=AdminHostedCompetitionCreateRequest(
                 template_key="gtex-reward-cup",
                 title="Official Reward Cup",
                 gtex_hosted=True,
-                reward_pool_fancoin=Decimal("100.0000"),
+                reward_pool_coin=Decimal("100.0000"),
                 max_participants=2,
             ),
         )
+        assert host_created is False
+        assert competition.entry_fee_fancoin == Decimal("0.0000")
         service.join_competition(user=winner, competition_id=competition.id)
         service.join_competition(user=runner_up, competition_id=competition.id)
         session.commit()
@@ -465,7 +504,7 @@ def test_gtex_hosted_reward_pool_is_funded_and_finalize_requires_exact_unique_pl
                 ],
             )
 
-        with pytest.raises(HostedCompetitionError, match="rank must be unique"):
+        with pytest.raises(HostedCompetitionError, match="ranks must be unique"):
             service.finalize_competition(
                 actor=admin,
                 competition_id=competition.id,

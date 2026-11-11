@@ -36,13 +36,15 @@ def _competition(**overrides):
     return UserHostedCompetition(**values)
 
 
-def test_fancoin_entry_pool_contract_is_valid() -> None:
+def test_fancoin_entry_pool_contract_is_rejected() -> None:
     session = _session()
     try:
         competition = _competition()
         session.add(competition)
-        session.flush()
+        with pytest.raises(ValueError, match="FanCoin entry-pool competitions are prohibited"):
+            session.flush()
     finally:
+        session.rollback()
         session.close()
 
 
@@ -89,7 +91,7 @@ def test_fancoin_pool_rejects_coin_prize() -> None:
             host_funding_required_coin=Decimal("100.0000"),
         )
         session.add(competition)
-        with pytest.raises(ValueError, match="GTEX Coin host-funded prize"):
+        with pytest.raises(ValueError, match="FanCoin entry-pool competitions are prohibited"):
             session.flush()
     finally:
         session.rollback()

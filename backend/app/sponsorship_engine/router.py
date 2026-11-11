@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from app.admin.capabilities import AdminCapability, require_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.models.user import User
 from app.sponsorship_engine.schemas import (
@@ -346,7 +347,9 @@ def review_contract(
 
 @admin_router.post("/contracts/{contract_id}/settle-next", response_model=SponsorshipSettlementView)
 def settle_next_payout(
-    contract_id: str, actor: User = Depends(get_current_admin), session: Session = Depends(get_session)
+    contract_id: str,
+    actor: User = Depends(require_admin_capability(AdminCapability.MANAGE_PAYMENT_RAILS)),
+    session: Session = Depends(get_session),
 ) -> SponsorshipSettlementView:
     service = SponsorshipEngineService(session)
     try:

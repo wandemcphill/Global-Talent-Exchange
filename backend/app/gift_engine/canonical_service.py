@@ -484,7 +484,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             ledger_unit=LedgerUnit.COIN,
             source_ledger_unit=LedgerUnit.CREDIT,
             destination_ledger_unit=LedgerUnit.COIN,
-            conversion_rate=Decimal("1"),
+            conversion_rate=Decimal("0.0100"),
             animation_key=gift.animation_key,
             sound_key=gift.sound_key,
             note=kwargs.get("note"),
@@ -569,6 +569,8 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             None,
         )
 
+        gtex_out = conversion.destination_amount
+        transaction.conversion_rate = conversion.conversion_rate
         transaction.economic_conversion_id = conversion.id
         transaction.ledger_transaction_id = ledger_transaction_id
         transaction.wallet_debit_ledger_id = debit_entry.id if debit_entry else None
@@ -578,7 +580,10 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             **(transaction.metadata_json or {}),
             "conversion_id": conversion.id,
             "conversion_source_amount": str(conversion.source_amount),
-            "conversion_destination_amount": str(conversion.destination_amount),
+            "conversion_destination_amount": str(gtex_out),
+            "gtex_out": str(gtex_out),
+            "fan_remainder": str(recipient_net),
+            "conversion_rate": str(conversion.conversion_rate),
             "conversion_fee_amount": str(conversion.platform_fee_amount),
             "ledger_transaction_id": ledger_transaction_id,
             "fee_policy_rule_key": conversion.fee_rule_key,
@@ -610,6 +615,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             "quantity": str(normalized_quantity),
             "gross_amount": str(gross_amount),
             "recipient_net_amount": str(recipient_net),
+            "gtex_out": str(gtex_out),
             "ledger_unit": LedgerUnit.COIN.value,
             "source_ledger_unit": LedgerUnit.CREDIT.value,
             "destination_ledger_unit": LedgerUnit.COIN.value,
@@ -629,7 +635,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
                 template_key="GIFT_RECEIVED",
                 resource_type="gift_transaction",
                 resource_id=transaction.id,
-                message=f"{sender_label} sent you {gift.display_name} worth {recipient_net} GTEX Coin.",
+                message=f"{sender_label} sent you {gift.display_name} worth {gtex_out} GTEX Coin.",
                 metadata_json=notification_metadata,
             )
         )

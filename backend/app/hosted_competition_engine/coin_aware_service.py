@@ -68,12 +68,10 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
     def _funding_mode(self, payload) -> CompetitionFundingMode:
         requested = getattr(payload, "funding_mode", None)
-        if requested:
-            try:
-                return funding_mode_from_prize_mode(str(requested))
-            except CompetitionFundingPolicyError as exc:
-                raise HostedCompetitionError(str(exc)) from exc
-        return CompetitionFundingMode.FANCOIN_ENTRY_POOL
+        try:
+            return funding_mode_from_prize_mode(str(requested) if requested else None)
+        except CompetitionFundingPolicyError as exc:
+            raise HostedCompetitionError(str(exc)) from exc
 
     def _competition_mode(self, competition: UserHostedCompetition) -> CompetitionFundingMode:
         try:
@@ -88,25 +86,6 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
 
     def create_competition(self, *, host, payload, created_by_admin=None, gtex_hosted: bool = False):
         mode = self._funding_mode(payload)
-        if mode is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
-            competition, template, host_participation_created = super().create_competition(
-                host=host,
-                payload=payload,
-                created_by_admin=created_by_admin,
-                gtex_hosted=gtex_hosted,
-            )
-            metadata = dict(competition.metadata_json or {})
-            rule_key, policy_ver = self._policy_provenance()
-            metadata["funding_mode"] = mode.value
-            metadata["platform_fee_bps"] = self._active_platform_fee_bps()
-            metadata["fee_policy_rule_key"] = rule_key
-            metadata["fee_policy_version"] = policy_ver
-            metadata["platform_fee_policy_frozen"] = True
-            competition.funding_mode = mode
-            competition.metadata_json = metadata
-            self.session.flush()
-            return competition, template, host_participation_created
-
         if mode is not CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE:
             raise HostedCompetitionError("Unsupported hosted competition funding mode.")
         if gtex_hosted and created_by_admin is None:
@@ -192,6 +171,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             self.session.delete(competition)
             self.session.flush()
             raise HostedCompetitionError(str(exc)) from exc
+        if gtex_hosted:
+            return competition, template, False
         participant = self._create_entry_participant(competition=competition, user=host, role="host")
         participant.entry_fee_fancoin = Decimal("0.0000")
         participant.metadata_json = {
@@ -207,7 +188,9 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
         if self._competition_mode(competition) is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
-            return super().finance_snapshot(competition_id)
+            raise HostedCompetitionError(
+                "FanCoin entry-pool competitions are prohibited. Prize coin is funded by the host or by GTEX."
+            )
 
         participants = self.participants_for_competition(competition_id)
         escrow_service = HostedCompetitionCoinEscrowService(self.session, self.wallet_service)
@@ -251,11 +234,8 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
         if competition is None:
             raise HostedCompetitionError("Hosted competition was not found.")
         if self._competition_mode(competition) is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
-            return super().finalize_competition(
-                actor=actor,
-                competition_id=competition_id,
-                placements=placements,
-                note=note,
+            raise HostedCompetitionError(
+                "FanCoin entry-pool competitions are prohibited. Prize coin is funded by the host or by GTEX."
             )
         if competition.status == HostedCompetitionStatus.COMPLETED:
             raise HostedCompetitionError("Hosted competition has already been completed.")

@@ -32,10 +32,28 @@ class CompetitionFundingContract:
         return self.mode is CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
 
 
+_PROHIBITED_ENTRY_POOL_MODES = frozenset(
+    {
+        "entry_funded",
+        "fancoin_entry_pool",
+        "participant_funded",
+        "pool",
+        "dynamic",
+    }
+)
+_ENTRY_POOL_PROHIBITED = (
+    "FanCoin entry-pool competitions are prohibited. Prize coin is funded by the host or by GTEX."
+)
+
+
 def funding_mode_from_prize_mode(
     prize_mode: str | None,
 ) -> CompetitionFundingMode:
-    normalized = (prize_mode or "entry_funded").strip().lower()
+    if prize_mode is None or not str(prize_mode).strip():
+        return CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
+    normalized = str(prize_mode).strip().lower()
+    if normalized in _PROHIBITED_ENTRY_POOL_MODES:
+        raise CompetitionFundingPolicyError(_ENTRY_POOL_PROHIBITED)
     if normalized in {
         "host_funded_fixed",
         "host_funded",
@@ -43,14 +61,6 @@ def funding_mode_from_prize_mode(
         "host_prize",
     }:
         return CompetitionFundingMode.HOST_FUNDED_GTEX_COIN_PRIZE
-    if normalized in {
-        "entry_funded",
-        "fancoin_entry_pool",
-        "participant_funded",
-        "pool",
-        "dynamic",
-    }:
-        return CompetitionFundingMode.FANCOIN_ENTRY_POOL
     raise CompetitionFundingPolicyError(f"Unsupported competition prize mode: {prize_mode!r}.")
 
 
@@ -70,18 +80,7 @@ def validate_competition_funding_contract(
         raise CompetitionFundingPolicyError("Competition monetary amounts cannot be negative.")
 
     if normalized_mode is CompetitionFundingMode.FANCOIN_ENTRY_POOL:
-        if normalized_currency is not LedgerUnit.CREDIT:
-            raise CompetitionFundingPolicyError("FanCoin entry-pool competitions must use FanCoin/CREDIT.")
-        if host_prize > 0:
-            raise CompetitionFundingPolicyError(
-                "FanCoin entry-pool competitions cannot also carry a host-funded prize."
-            )
-        return CompetitionFundingContract(
-            mode=normalized_mode,
-            currency=normalized_currency,
-            participant_entry_amount=entry,
-            host_prize_amount=Decimal("0.0000"),
-        )
+        raise CompetitionFundingPolicyError(_ENTRY_POOL_PROHIBITED)
 
     if normalized_currency is not LedgerUnit.COIN:
         raise CompetitionFundingPolicyError("Host-funded prize competitions must use withdrawable GTEX Coin.")
