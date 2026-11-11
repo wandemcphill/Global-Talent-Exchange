@@ -4,10 +4,11 @@ import { detectGiftQuality } from "./giftQuality";
 describe("gifting 2.0 scenes", () => {
   const quality = detectGiftQuality(1440, 8);
 
-  function stage(shot: string, giftCode: string) {
+  function stage(shot: string, giftCode: string, rarity = "common") {
     return createGiftDirector({
       shot,
       giftCode,
+      rarity,
       quality,
       canStream: false,
       resolveUrl: (path) => path,
@@ -44,12 +45,36 @@ describe("gifting 2.0 scenes", () => {
     winner.dispose();
   });
 
+  test("goal scenes orient the net across the mouth and add a visible crowd rig", () => {
+    const scene = stage("last_minute", "last_minute_winner");
+    const goal = scene.root.getObjectByName("match-goal");
+    const net = goal?.getObjectByName("goal-net") as import("three").Mesh | undefined;
+    expect(net).toBeTruthy();
+    expect(net?.rotation.y).toBeCloseTo(Math.PI / 2);
+    expect(scene.root.getObjectByName("stadium-crowd-heads")).toBeTruthy();
+    expect(scene.root.getObjectByName("stadium-crowd-arms")).toBeTruthy();
+    scene.dispose();
+  });
+
+  test("rarity controls add distinct cinematic staging without affecting common gifts", () => {
+    const common = stage("stadium", "maracana_stadium", "common");
+    const mythic = stage("stadium", "golden_stadium", "mythic");
+    expect(common.root.getObjectByName("gift-rarity-mythic")).toBeFalsy();
+    expect(mythic.root.getObjectByName("gift-rarity-mythic")).toBeTruthy();
+    expect(mythic.root.getObjectByName("gift-rarity-vertical-gate")).toBeTruthy();
+    expect(mythic.root.getObjectByName("gift-rarity-gem-8")).toBeTruthy();
+    common.dispose();
+    mythic.dispose();
+  });
+
   test("ballon d'or is a trophy stage with a ball, and the jet has a runway", () => {
     const trophy = stage("trophy", "ballon_dor");
     const jet = stage("jet", "private_jet");
     const yacht = stage("yacht", "superyacht");
     expect(trophy.root.getObjectByName("ballon-dor-ball")).toBeTruthy();
     expect(trophy.root.getObjectByName("ballon-dor-stage")).toBeTruthy();
+    expect(trophy.root.getObjectByName("ballon-dor-support")).toBeTruthy();
+    expect(trophy.root.getObjectByName("ballon-dor-orbit")).toBeTruthy();
     expect(jet.root.getObjectByName("runway")).toBeTruthy();
     expect(yacht.root.getObjectByName("ocean")).toBeTruthy();
     trophy.dispose();
