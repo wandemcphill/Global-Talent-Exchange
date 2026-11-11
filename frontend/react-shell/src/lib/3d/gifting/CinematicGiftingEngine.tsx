@@ -5,6 +5,8 @@ import { createGiftDirector } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
 import { resolvePublicAssetPath } from "@/lib/publicPath";
 
+const VIDEO_GIFT_DURATION_MS = 8042;
+
 function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null): void {
   objects.forEach((root) => {
     if (scene) scene.remove(root);
@@ -192,6 +194,38 @@ export function resolveGiftShot(animationKey?: string, giftCode?: string): GiftS
   return "atmosphere";
 }
 
+const GIFT_VIDEO_BY_SHOT: Partial<Record<GiftShotId, string>> = {
+  atmosphere: "/assets/gifting/gtex-gift-atmosphere.mp4",
+  card: "/assets/gifting/gtex-gift-card.mp4",
+  tactics: "/assets/gifting/gtex-gift-tactics.mp4",
+  trophy: "/assets/gifting/gtex-gift-trophy.mp4",
+  boot: "/assets/gifting/gtex-gift-boot.mp4",
+  glove: "/assets/gifting/gtex-gift-glove.mp4",
+  city: "/assets/gifting/gtex-gift-city.mp4",
+  jet: "/assets/gifting/gtex-gift-jet.mp4",
+  yacht: "/assets/gifting/gtex-gift-yacht.mp4",
+  coach: "/assets/gifting/gtex-gift-coach.mp4",
+  vehicle: "/assets/gifting/gtex-gift-hypercar.mp4",
+  facility: "/assets/gifting/gtex-gift-campus.mp4",
+  goal: "/assets/gifting/gtex-gift-goal.mp4",
+  last_minute: "/assets/gifting/gtex-gift-last-minute.mp4",
+  bicycle: "/assets/gifting/gtex-gift-bicycle.mp4",
+  golden_goal: "/assets/gifting/gtex-gift-golden-goal.mp4",
+  hat_trick: "/assets/gifting/gtex-gift-hat-trick.mp4",
+  save: "/assets/gifting/gtex-gift-save.mp4",
+};
+
+/** Resolve only a clip that matches the gift being sent; unknown matches stay on WebGL. */
+export function resolveGiftVideoPath(giftCode: string, shot: GiftShotId): string {
+  const code = giftCode.toLowerCase().replace(/-/g, "_");
+  if (shot === "stadium") {
+    return code.includes("maracana") ? "/assets/gifting/gtex-maracana-gift.mp4" : "";
+  }
+  // The supplied crown clip is for a crown gift, not the Chronos watch.
+  if (shot === "crown" && (code.includes("watch") || code.includes("chronos"))) return "";
+  return GIFT_VIDEO_BY_SHOT[shot] || "";
+}
+
 export interface CinematicGiftEvent {
   id?: string;
   type?: string;
@@ -238,6 +272,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const activeObjectsRef = useRef<THREE.Object3D[]>([]);
   const onCompleteRef = useRef(onAnimationComplete);
+  const audioGiftKeyRef = useRef("");
   useEffect(() => {
     onCompleteRef.current = onAnimationComplete;
   }, [onAnimationComplete]);
@@ -250,6 +285,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     : "";
 
   const [visualReady, setVisualReady] = useState(false);
+  const [loadedVideoKey, setLoadedVideoKey] = useState("");
+  const [failedVideoKey, setFailedVideoKey] = useState("");
   const [muted, setMuted] = useState(false);
   const mutedRef = useRef(false);
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
@@ -405,16 +442,26 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   useEffect(() => {
     if (!activeGift || !giftInstanceKey) return;
-    const duration = activeGift.duration_ms || 4500;
     const giftCode = (activeGift.gift_code || activeGift.animation_key || "").toLowerCase();
     const shot = resolveGiftShot(activeGift.animation_key, activeGift.gift_code);
+    const videoPath = resolveGiftVideoPath(giftCode, shot);
     const isReducedMotion =
       prefersReducedMotion ||
       (typeof window !== "undefined" &&
         typeof window.matchMedia === "function" &&
         Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches));
-    if (soundEnabled && !mutedRef.current && !isReducedMotion) {
+    const baseDuration = activeGift.duration_ms || 4500;
+    const duration = videoPath && !isReducedMotion
+      ? Math.max(baseDuration, VIDEO_GIFT_DURATION_MS)
+      : baseDuration;
+    if (soundEnabled && !mutedRef.current && !isReducedMotion && audioGiftKeyRef.current !== giftInstanceKey) {
       GtexCelebrationAudioEngine.playCelebrationCue(activeGift.sound_key, activeGift.gift_code || activeGift.animation_key, activeGift.rarity);
+      audioGiftKeyRef.current = giftInstanceKey;
+    }
+    if (!isReducedMotion && videoPath && loadedVideoKey === giftInstanceKey) {
+      setVisualReady(true);
+      const videoTimer = window.setTimeout(() => onCompleteRef.current?.(), duration);
+      return () => window.clearTimeout(videoTimer);
     }
     if (!sceneRef.current || isReducedMotion) {
       const fallbackTimer = setTimeout(() => onCompleteRef.current?.(), duration);
@@ -541,7 +588,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       director.dispose();
     };
 
-  }, [giftInstanceKey, prefersReducedMotion, soundEnabled]);
+  }, [giftInstanceKey, prefersReducedMotion, soundEnabled, loadedVideoKey, failedVideoKey]);
 
   if (!activeGift) return null;
 
@@ -555,13 +602,22 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           ? "#8de0e8"
           : "#e7edf5";
   const combo = Number(activeGift.combo_count || 1);
+  const giftShot = resolveGiftShot(activeGift.animation_key, activeGift.gift_code);
+  const giftVideoPath = resolveGiftVideoPath(activeGift.gift_code, giftShot);
+  const showGiftVideo = Boolean(
+    giftVideoPath &&
+      !prefersReducedMotion &&
+      loadedVideoKey === giftInstanceKey &&
+      failedVideoKey !== giftInstanceKey
+  );
 
   return (
     <div
       data-testid="on-pitch-gift-animation"
       data-webgl-context={contextLost ? "lost" : "ready"}
       data-gift-visual={visualReady ? "ready" : "loading"}
-      data-gift-shot={resolveGiftShot(activeGift.animation_key, activeGift.gift_code)}
+      data-gift-shot={giftShot}
+      data-gift-media={showGiftVideo ? "video" : "webgl"}
       className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden ${className}`}
     >
       <style>{`
@@ -577,6 +633,8 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           0%, 100% { opacity: .3; }
           50% { opacity: .52; }
         }
+        .gtex-gift-video { object-fit: cover; }
+        @media (max-aspect-ratio: 4/5) { .gtex-gift-video { object-fit: contain; background: #050910; } }
         .gtex-gift-caption {
           animation: gtex-gift-caption-in 680ms cubic-bezier(.18,.72,.2,1) both;
           text-shadow: 0 2px 24px rgba(0,0,0,.62), 0 1px 3px rgba(0,0,0,.85);
@@ -593,10 +651,35 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           .gtex-gift-caption, .gtex-gift-caption-rule, .gtex-gift-lens { animation: none; }
         }
       `}</style>
-      <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
+      {giftVideoPath && !prefersReducedMotion && failedVideoKey !== giftInstanceKey ? (
+        <video
+          key={giftInstanceKey}
+          data-testid="gift-cinematic-video"
+          data-gift-video={giftVideoPath}
+          aria-hidden="true"
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          src={resolvePublicAssetPath(giftVideoPath)}
+          onPlaying={() => {
+            setLoadedVideoKey(giftInstanceKey);
+            setVisualReady(true);
+          }}
+          onError={() => {
+            setFailedVideoKey(giftInstanceKey);
+            setLoadedVideoKey("");
+          }}
+          className={`gtex-gift-video absolute inset-0 z-20 h-full w-full pointer-events-none transition-opacity duration-300 ${showGiftVideo ? "opacity-100" : "opacity-0"}`}
+        />
+      ) : null}
+      <div
+        ref={mountRef}
+        className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 ${showGiftVideo ? "opacity-0" : "opacity-100"}`}
+      />
       <div
         aria-hidden
-        className="gtex-gift-lens absolute inset-0"
+        className="gtex-gift-lens absolute inset-0 z-30"
         style={{
           background:
             "radial-gradient(ellipse at 50% 42%, transparent 34%, rgba(2,6,14,.22) 72%, rgba(2,6,14,.52) 100%)",
@@ -604,7 +687,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       />
       <div
         aria-hidden
-        className="absolute inset-x-0 bottom-0 h-[48%]"
+        className="absolute inset-x-0 bottom-0 z-30 h-[48%]"
         style={{
           background:
             "linear-gradient(180deg, rgba(3,7,15,0) 0%, rgba(3,7,15,.14) 30%, rgba(3,7,15,.72) 100%)",
