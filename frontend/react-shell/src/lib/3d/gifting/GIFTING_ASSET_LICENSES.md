@@ -46,6 +46,8 @@ The footballer rig/kit and baked Mixamo clips are based on Adobe Mixamo exports.
 - Dedicated crown, golden-boot and goalkeeper-glove hero models are not yet present. Those gifts currently use a clean, asset-free cinematic light/particle reveal and lower-third; they do not borrow a trophy or watch model.
 - Player-card and tactics-board catalogue gifts also use the restrained atmosphere treatment until proper authored art is available.
 - The Chronos Tourbillon watch gift uses its matching watch model. A generic crown/tactics gift does not.
+- Stadium gifts currently use GTEX's authored Arena Imperiale stadium model as a generic venue reveal. It should not be described as an exact Maracanã, Wembley, San Siro or Camp Nou reconstruction.
+- Ballon d'Or currently stages the authored trophy plinth with a gold-finished PBR football. This is a GTEX award presentation, not a claim that an official Ballon d'Or trophy scan is in the asset library.
 - The match scene uses the existing authored stadium, goal frame, football and Mixamo player. It intentionally does not invent a crowd made of capsule meshes or a goal net made from primitive geometry.
 
-A missing model should be shown as a controlled loading/error state or replaced only by another approved, visually appropriate asset. Do not introduce placeholder cones, capsules, toruses, low-poly crowns, or fake landmarks to fill the gap.
+When a matching hero model is unavailable, keep the reveal atmospheric and clearly labelled until approved artwork is added. Do not introduce placeholder cones, capsules, toruses, low-poly crowns, or fake landmarks to fill the gap.
