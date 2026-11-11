@@ -465,15 +465,20 @@ export function createGiftDirector(options: Options): GiftDirector {
     const accent = code.includes("tokyo") ? 0xd78aff : code.includes("dubai") ? 0xffc56e : 0x94c8ff;
     const light = addLights(bin, accent);
     const particles = addParticles(bin, options.quality, accent);
-    const hero = new THREE.Group();
-    hero.name = "gift-city-hero";
-    hero.userData.assetPath = ASSETS.city;
-    bin.root.add(hero);
-    const task = loadModel(bin, options, ASSETS.city, "gift-city-authored-model", hero, 15, true);
+    const isPenthouseGift = code.includes("penthouse");
+    let hero: THREE.Group | null = null;
+    let task: Promise<unknown> = Promise.resolve(null);
+    if (isPenthouseGift) {
+      hero = new THREE.Group();
+      hero.name = "gift-penthouse-hero";
+      hero.userData.assetPath = ASSETS.city;
+      bin.root.add(hero);
+      task = loadModel(bin, options, ASSETS.city, "gift-penthouse-authored-model", hero, 15, true);
+    }
     ready(options, [task]);
     return finish(bin, 0x071321, 1.14, (progress, delta, target) => {
       camera(target, progress);
-      hero.rotation.y = Math.sin(progress * Math.PI) * 0.08;
+      if (hero) hero.rotation.y = Math.sin(progress * Math.PI) * 0.08;
       light.intensity = 2.6 + smooth(progress) * 1.4;
       updateParticles(particles, progress, delta, 0.24);
     }, options.rarity);
