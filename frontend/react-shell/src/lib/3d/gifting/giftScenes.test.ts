@@ -27,12 +27,12 @@ describe("asset-led cinematic gifting scenes", () => {
     return found;
   }
 
-  test("city uses an authored architecture asset instead of a procedural landmark", () => {
+  test("unsupported city landmarks use a clean cinematic atmosphere, not a penthouse substitute", () => {
     const city = stage("city", "paris_skyline");
-    const hero = city.root.getObjectByName("gift-city-hero");
-    expect(hero).toBeTruthy();
-    expect(hero?.userData.assetPath).toBe("/assets/showroom/royal_penthouse_box.glb");
+    expect(city.root.getObjectByName("gift-city-hero")).toBeFalsy();
+    expect(city.root.getObjectByName("gift-penthouse-hero")).toBeFalsy();
     expect(city.root.getObjectByName("eiffel-lattice")).toBeFalsy();
+    expect(city.root.getObjectByName("gift-cinematic-particles")).toBeTruthy();
     expect(meshes(city.root)).toHaveLength(0);
 
     const start = frameGiftShot("city", 0);
@@ -43,6 +43,13 @@ describe("asset-led cinematic gifting scenes", () => {
     const winner = frameGiftShot("last_minute", 0.4);
     expect(bicycle.position[0]).not.toBeCloseTo(winner.position[0], 0);
     city.dispose();
+  });
+
+  test("a penthouse gift uses the matching existing architecture asset", () => {
+    const penthouse = stage("city", "royal_penthouse");
+    expect(penthouse.root.getObjectByName("gift-penthouse-hero")?.userData.assetPath)
+      .toBe("/assets/showroom/royal_penthouse_box.glb");
+    penthouse.dispose();
   });
 
   test("stadium scenes resolve to licensed authored GLB models", () => {
