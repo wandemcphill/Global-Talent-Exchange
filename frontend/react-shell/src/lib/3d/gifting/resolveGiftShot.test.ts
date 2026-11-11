@@ -12,5 +12,8 @@ describe("resolveGiftShot", () => {
     expect(resolveGiftShot("golden_boot_spark", "golden_boot_king")).toBe("boot");
     expect(resolveGiftShot("last_minute_winner", "last_minute_winner")).toBe("last_minute");
     expect(resolveGiftShot("goal_celebration", "goal_celebration")).toBe("goal");
+    expect(resolveGiftShot("luxury_team_coach", "vanguard_xii_coach")).toBe("coach");
+    expect(resolveGiftShot("veloce_gt9_hypercar", "veloce_gt9_hypercar")).toBe("vehicle");
+    expect(resolveGiftShot("apex_performance_campus", "apex_performance_campus")).toBe("facility");
   });
 });
