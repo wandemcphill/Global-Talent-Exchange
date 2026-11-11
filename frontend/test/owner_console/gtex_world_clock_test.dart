@@ -91,7 +91,7 @@ void main() {
       expect(find.text('Fri, 14 March 2031'), findsOneWidget);
       expect(find.text('09:05 UTC'), findsOneWidget);
       expect(find.text('Running'), findsOneWidget);
-      expect(find.textContaining('12 virtual months'), findsOneWidget);
+      expect(find.textContaining('12 months per game season'), findsOneWidget);
       expect(find.byKey(const Key('world-clock-season-unavailable')), findsOneWidget);
     });
 

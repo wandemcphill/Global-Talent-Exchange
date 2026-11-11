@@ -211,12 +211,12 @@ class _GtexWorldClockPanelState extends State<GtexWorldClockPanel> {
                 ),
                 GtexStatusChip(
                   key: const Key('world-clock-rate'),
-                  label: 'Rate ${c.displayRate}',
+                  label: 'Game speed ${c.displayRate}',
                   color: GtexColors.cyan,
                 ),
                 GtexStatusChip(
                   key: const Key('world-clock-season-length'),
-                  label: 'Season: ${c.virtualMonthsPerSeason} virtual months',
+                  label: '${c.virtualMonthsPerSeason} months per game season',
                   color: GtexColors.gold,
                 ),
                 GtexStatusChip(

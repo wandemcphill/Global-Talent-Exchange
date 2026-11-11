@@ -484,10 +484,10 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Admin controls', style: Theme.of(context).textTheme.titleLarge),
+          Text('Jackpot, for admins', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 10),
           const Text(
-            'These controls update the live jackpot runtime and the current open round. Use them to tune thresholds and force settlement when the pool needs intervention.',
+            'Players do not pay into this pot. Change the rules, then save. To put a set amount of coin in the pot, use Fill or pay the jackpot on the admin desk. Paying now sends the current pot to the winners.',
           ),
           const SizedBox(height: 14),
           Wrap(
@@ -498,49 +498,49 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
                 width: 220,
                 child: _PanelField(
                   controller: _thresholdController,
-                  label: 'Threshold',
+                  label: 'Pay out when the pot reaches',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _probabilityLimitController,
-                  label: 'Probability limit',
+                  label: 'Win-chance limit',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _probabilityCapController,
-                  label: 'Probability cap',
+                  label: 'Maximum win chance',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _contributionRateController,
-                  label: 'Contribution rate',
+                  label: 'Share of fees that fill the pot',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _topSplitPercentController,
-                  label: 'Top split percent',
+                  label: 'Share for the top winners',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _minActivityScoreController,
-                  label: 'Min activity score',
+                  label: 'Minimum play needed',
                 ),
               ),
               SizedBox(
                 width: 220,
                 child: _PanelField(
                   controller: _failsafeHoursController,
-                  label: 'Failsafe hours',
+                  label: 'Hours before a stuck round is paid',
                   keyboardType: TextInputType.number,
                 ),
               ),
@@ -572,7 +572,7 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
                     });
                   },
                   decoration: const InputDecoration(
-                    labelText: 'Distribution mode',
+                    labelText: 'How winners split the pot',
                   ),
                 ),
               ),
@@ -586,13 +586,13 @@ class _GtexJackpotRouteScreenState extends State<GtexJackpotRouteScreen> {
               FilledButton.icon(
                 onPressed: _savingRuntime ? null : _saveRuntime,
                 icon: const Icon(Icons.save_outlined),
-                label: Text(_savingRuntime ? 'Saving...' : 'Save runtime'),
+                label: Text(_savingRuntime ? 'Saving...' : 'Save jackpot rules'),
               ),
               FilledButton.tonalIcon(
                 onPressed: _triggeringRound ? null : _triggerRound,
                 icon: const Icon(Icons.bolt_outlined),
                 label: Text(
-                  _triggeringRound ? 'Triggering...' : 'Manual trigger',
+                  _triggeringRound ? 'Paying...' : 'Pay the jackpot now',
                 ),
               ),
             ],

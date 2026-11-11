@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/app_feedback.dart';
+import 'gtex_admin_clock_and_prize.dart';
 import '../../data/admin_command_center_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
@@ -507,32 +508,32 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             .length;
     return GtexHeroPanel(
       eyebrow: 'ADMIN OPS',
-      title: 'Run the GTEX football economy from one operating cockpit.',
+      title: 'Give coin, fund the jackpot, and open a competition.',
       description:
-          'Market supply, competition launches, treasury rails, and user-credit interventions stay visible here as one coordinated operations surface.',
+          'The game clock is already running at normal speed. There is no start button. Coin is created when you give it to someone, pay a prize, or fill the jackpot. GTEX competitions are free to enter.',
       accentColor: GteShellTheme.accentAdmin,
       metrics: <Widget>[
         GtexStatTile(
-          label: 'Trade queue',
-          value: liveDepositCount == 0 ? 'WATCH' : '$liveDepositCount',
-          support: 'Deposits and treasury reviews',
+          label: 'Money waiting',
+          value: liveDepositCount == 0 ? 'NONE' : '$liveDepositCount',
+          support: 'Payments still to check',
           tone: GtexSurfaceTone.live,
         ),
         GtexStatTile(
-          label: 'Rails',
-          value: liveRailCount == 0 ? 'OFFLINE' : '$liveRailCount',
-          support: 'Active deposit or payout rails',
+          label: 'Banks open',
+          value: liveRailCount == 0 ? 'NONE' : '$liveRailCount',
+          support: 'Ways people can pay in or cash out',
           tone: GtexSurfaceTone.warning,
         ),
         GtexStatTile(
-          label: 'Withdrawals',
+          label: 'Cash-outs',
           value:
               _withdrawalControls == null
                   ? 'CHECKING'
                   : (_withdrawalControls!.tradeWithdrawalsEnabled
                       ? 'OPEN'
                       : 'PAUSED'),
-          support: 'Trade payout posture',
+          support: 'Can people cash out right now',
           tone:
               _withdrawalControls?.tradeWithdrawalsEnabled == false
                   ? GtexSurfaceTone.danger
@@ -547,13 +548,13 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                   ? null
                   : _createGtexHostedCompetition,
           icon: const Icon(Icons.emoji_events_outlined),
-          label: const Text('Launch GTEX arena'),
+          label: const Text('Create a GTEX competition'),
         ),
         OutlinedButton.icon(
           onPressed: _previewingCredit ? null : _previewCredit,
           icon: const Icon(Icons.toll_outlined),
           label: Text(
-            _previewingCredit ? 'Previewing credit' : 'Preview wallet credit',
+            _previewingCredit ? 'Checking...' : 'Check a coin gift first',
           ),
         ),
       ],
@@ -970,7 +971,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Reason',
-                  hintText: 'Shown in the audit trail',
+                  hintText: 'Saved in the admin log',
                 ),
               ),
               const SizedBox(height: 8),
@@ -1087,22 +1088,22 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             }
 
             return AlertDialog(
-              title: const Text('Jackpot control'),
+              title: const Text('The jackpot'),
               content: SizedBox(
                 width: 420,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
-                    _metricRow('Current balance', runtime['balance']),
+                    _metricRow('Coin in the pot', runtime['balance']),
                     _metricRow('Round', runtime['round_number']),
                     _metricRow('Status', runtime['status']),
-                    _metricRow('Participants', runtime['participant_count']),
-                    _metricRow('Trigger threshold', runtime['threshold_amount']),
-                    _metricRow('Probability cap', runtime['probability_cap']),
-                    _metricRow('Contribution rate', runtime['contribution_rate']),
-                    _metricRow('Distribution', runtime['distribution_mode']),
-                    _metricRow('Failsafe (hours)', runtime['failsafe_hours']),
+                    _metricRow('People in this round', runtime['participant_count']),
+                    _metricRow('Pays out when it reaches', runtime['threshold_amount']),
+                    _metricRow('Maximum win chance', runtime['probability_cap']),
+                    _metricRow('Share of fees that fill the pot', runtime['contribution_rate']),
+                    _metricRow('How winners split it', runtime['distribution_mode']),
+                    _metricRow('Hours before a stuck round is paid', runtime['failsafe_hours']),
                     if (busy) ...<Widget>[
                       const SizedBox(height: 12),
                       const LinearProgressIndicator(),
@@ -1133,10 +1134,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                                 if (input.reason.isNotEmpty) 'reason': input.reason,
                               },
                             ),
-                            'Jackpot balance updated.',
+                            'Jackpot amount saved.',
                           );
                         },
-                  child: const Text('Set balance'),
+                  child: const Text('Set the pot to this amount'),
                 ),
                 TextButton(
                   onPressed: busy
@@ -1152,10 +1153,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                               '/api/admin/jackpot/runtime',
                               body: settings,
                             ),
-                            'Jackpot runtime settings saved.',
+                            'Jackpot rules saved.',
                           );
                         },
-                  child: const Text('Edit settings'),
+                  child: const Text('Change the rules'),
                 ),
                 FilledButton(
                   onPressed: busy
@@ -1163,10 +1164,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       : () async {
                           final bool ok = await _confirmDialog(
                             dialogContext,
-                            title: 'Trigger jackpot round?',
+                            title: 'Pay the jackpot now?',
                             message:
-                                'This settles the current round now and pays out winners. This cannot be undone.',
-                            confirmLabel: 'Trigger now',
+                                'This pays the current pot to the winners right now. It cannot be undone.',
+                            confirmLabel: 'Pay now',
                           );
                           if (!ok) {
                             return;
@@ -1175,10 +1176,10 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                             () async {
                               await api.post('/api/admin/jackpot/trigger');
                             },
-                            'Jackpot round triggered.',
+                            'Jackpot paid.',
                           );
                         },
-                  child: const Text('Trigger round'),
+                  child: const Text('Pay the jackpot now'),
                 ),
               ],
             );
@@ -1242,7 +1243,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
       context: context,
       builder: (BuildContext dialogContext) {
         return AlertDialog(
-          title: const Text('Set jackpot balance'),
+          title: const Text('Set the jackpot total'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
@@ -1250,8 +1251,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 controller: balanceController,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
                 decoration: const InputDecoration(
-                  labelText: 'New balance',
-                  hintText: 'e.g. 25000',
+                  labelText: 'New pot total',
+                  hintText: 'The pot becomes this number. For example 25000',
                 ),
               ),
               const SizedBox(height: 8),
@@ -1261,7 +1262,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 maxLines: 3,
                 decoration: const InputDecoration(
                   labelText: 'Reason',
-                  hintText: 'Shown in the audit trail',
+                  hintText: 'Saved in the admin log',
                 ),
               ),
             ],
@@ -1278,7 +1279,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 if (parsed == null || parsed < 0) {
                   AppFeedback.showError(
                     dialogContext,
-                    'Enter a valid non-negative balance.',
+                    'Type a coin amount of zero or more.',
                   );
                   return;
                 }
@@ -1343,25 +1344,25 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         return StatefulBuilder(
           builder: (BuildContext context, void Function(void Function()) setLocal) {
             return AlertDialog(
-              title: const Text('Edit jackpot runtime'),
+              title: const Text('Jackpot rules'),
               content: SizedBox(
                 width: 420,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: <Widget>[
-                      numberField('Trigger threshold', threshold),
-                      numberField('Probability limit', probabilityLimit),
-                      numberField('Probability cap (0-1)', probabilityCap),
-                      numberField('Contribution rate (0-1)', contributionRate),
-                      numberField('Top split percent (0-1)', topSplit),
-                      numberField('Min activity score', minActivity),
-                      numberField('Failsafe hours', failsafeHours),
+                      numberField('Pay out when the pot reaches this much coin', threshold),
+                      numberField('Win-chance limit', probabilityLimit),
+                      numberField('Maximum win chance, from 0 to 1', probabilityCap),
+                      numberField('Share of fees that fill the pot, from 0 to 1', contributionRate),
+                      numberField('Share for the top winners, from 0 to 1', topSplit),
+                      numberField('Minimum play needed to qualify', minActivity),
+                      numberField('Hours before a stuck round is paid anyway', failsafeHours),
                       const SizedBox(height: 6),
                       DropdownButtonFormField<String>(
                         initialValue: distribution,
                         decoration:
-                            const InputDecoration(labelText: 'Distribution mode'),
+                            const InputDecoration(labelText: 'How winners split the pot'),
                         items: modes
                             .map(
                               (String mode) => DropdownMenuItem<String>(
@@ -1511,7 +1512,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     : <dynamic>[];
 
             return AlertDialog(
-              title: const Text('Coin economy governor'),
+              title: const Text('How much coin is out there'),
               content: SizedBox(
                 width: 440,
                 child: SingleChildScrollView(
@@ -1523,8 +1524,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                       _metricRow('GTEX supply', metrics['gtex_supply']),
                       _metricRow('Fan-coin supply', metrics['fan_supply']),
                       _metricRow('Treasury balance', metrics['treasury_balance']),
-                      _metricRow('Daily mint', metrics['daily_mint']),
-                      _metricRow('Daily burn', metrics['daily_burn']),
+                      _metricRow('Coin created today', metrics['daily_mint']),
+                      _metricRow('Coin removed today', metrics['daily_burn']),
                       _metricRow('Inflation rate', metrics['inflation_rate']),
                       const Divider(height: 22),
                       _metricRow('Tournament entry ×',
@@ -1907,9 +1908,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         _withdrawalControls != null ||
         _operationsReadiness != null;
     return GtexProductionFlowScaffold(
-      title: 'Admin command center',
+      title: 'Admin desk',
       subtitle:
-          'Live treasury rails, user-credit controls, payment queues, and GTEX competition operations.',
+          'Give someone coin, set the jackpot total, and create a free GTEX competition.',
       icon: Icons.admin_panel_settings_outlined,
       accent: GteShellTheme.accentAdmin,
       statusLabel: 'Admin dashboard',
@@ -1943,6 +1944,8 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                   padding: const EdgeInsets.fromLTRB(20, 12, 20, 120),
                   children: <Widget>[
                     _buildWarRoomHero(context),
+                    const SizedBox(height: 18),
+                    GtexAdminClockAndPrize(api: _api.client),
                     const SizedBox(height: 18),
                     GtexLiveTickerBar(
                       accentColor: GteShellTheme.accentAdmin,
@@ -2254,9 +2257,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const _SectionHeader(
-            title: 'Operations launchers',
+            title: 'Do these jobs',
             subtitle:
-                'Open the live admin and platform routes that were previously buried behind direct links.',
+                'Create a competition, put coin in the jackpot, or give coin to a person.',
           ),
           const SizedBox(height: 16),
           Wrap(
@@ -2273,27 +2276,27 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/admin/launch-control'),
                 icon: const Icon(Icons.tune_outlined),
-                label: const Text('Launch control'),
+                label: const Text('Turn features on or off'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/admin/trust-ops'),
                 icon: const Icon(Icons.policy_outlined),
-                label: const Text('Trust ops'),
+                label: const Text('Cheating and account checks'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/admin/matchday-economy'),
                 icon: const Icon(Icons.query_stats_outlined),
-                label: const Text('Matchday economy'),
+                label: const Text('Match-day money'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/admin/coin-traders'),
                 icon: const Icon(Icons.currency_exchange_outlined),
-                label: const Text('Coin trader ops'),
+                label: const Text('Coin traders'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => context.go('/admin/notifications'),
                 icon: const Icon(Icons.notifications_active_outlined),
-                label: const Text('Notification matrix'),
+                label: const Text('Announcements'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => _showBanUserDialog(),
@@ -2315,16 +2318,16 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
               FilledButton.tonalIcon(
                 onPressed: () => _showJackpotAdminDialog(),
                 icon: const Icon(Icons.celebration_outlined),
-                label: const Text('Jackpot control'),
+                label: const Text('Set or pay the jackpot'),
               ),
               FilledButton.tonalIcon(
                 onPressed: () => _showCoinEconomyDialog(),
                 icon: const Icon(Icons.account_balance_wallet_outlined),
-                label: const Text('Coin economy'),
+                label: const Text('See the coin supply'),
               ),
               _buildRouteLauncher(
                 context: context,
-                label: 'GTEX jackpot (public)',
+                label: 'Jackpot page people see',
                 icon: Icons.celebration_outlined,
                 route: const GtexJackpotRouteData(),
               ),
@@ -2391,9 +2394,9 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const _SectionHeader(
-            title: 'GTEX competition hosting',
+            title: 'Create a GTEX competition',
             subtitle:
-                'Create official GTEX hosted competitions from admin. These are free for users to join; user-created competitions use Fan Coin.',
+                'Entry is free. Prize coin is paid by GTEX, not by the clubs. Give the cup a name, pick a template, then create it. Load the template list first if the name box is empty.',
           ),
           const SizedBox(height: 12),
           TextField(
@@ -2408,7 +2411,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             controller: _competitionTemplateController,
             decoration: const InputDecoration(
               labelText: 'Template key',
-              helperText: 'Use a seeded hosted template key.',
+              helperText: 'The short name of a saved competition template.',
             ),
           ),
           const SizedBox(height: 12),
@@ -2449,7 +2452,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                             if (context.mounted) {
                               AppFeedback.showSuccess(
                                 context,
-                                'Competition templates seeded.',
+                                'Competition templates are ready.',
                               );
                             }
                           } catch (error) {
@@ -2459,7 +2462,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                           }
                         },
                 icon: const Icon(Icons.library_add_check_outlined),
-                label: const Text('Seed templates'),
+                label: const Text('Load the competition templates'),
               ),
             ],
           ),
@@ -3214,23 +3217,23 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const _SectionHeader(
-            title: 'Admin wallet credit',
+            title: 'Give someone coin',
             subtitle:
-                'Credit GTEX Coin directly to a user wallet by creating and settling an internal top-up.',
+                'This is how you mint coin. Type the person, the amount, and why. Check it first, then send it. The coin is created and put in their wallet.',
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _creditUserIdController,
             decoration: const InputDecoration(
               labelText: 'Target user ID',
-              hintText: 'Paste the user ID to credit',
+              hintText: 'Paste the person\'s user ID',
             ),
           ),
           const SizedBox(height: 12),
           TextField(
             controller: _creditAmountController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'GTEX Coin amount'),
+            decoration: const InputDecoration(labelText: 'How much coin to create'),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -3238,7 +3241,7 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
             maxLines: 3,
             decoration: const InputDecoration(
               labelText: 'Notes',
-              hintText: 'Optional internal reason for the credit',
+              hintText: 'Why you are giving this coin',
             ),
           ),
           const SizedBox(height: 16),
@@ -3250,14 +3253,14 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                 onPressed: _previewingCredit ? null : _previewCredit,
                 icon: const Icon(Icons.receipt_long_outlined),
                 label: Text(
-                  _previewingCredit ? 'Previewing...' : 'Preview credit',
+                  _previewingCredit ? 'Checking...' : 'Check before sending',
                 ),
               ),
               FilledButton.icon(
                 onPressed: _runningCredit ? null : _createAndSettleCredit,
                 icon: const Icon(Icons.send_outlined),
                 label: Text(
-                  _runningCredit ? 'Applying...' : 'Create and settle',
+                  _runningCredit ? 'Sending...' : 'Create the coin and send it',
                 ),
               ),
             ],

@@ -458,6 +458,24 @@ class NationalTeamCountryRankingResponse(BaseModel):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class NamedCupPrizeView(BaseModel):
+    id: str
+    title: str
+    season_label: str
+    first: str
+    second: str
+    third: str
+    funded_coin: str
+    held_coin: str
+    moved_coin: str | None = None
+
+
+class NamedCupPrizeUpdateRequest(BaseModel):
+    first: Decimal = Field(ge=0)
+    second: Decimal = Field(default=Decimal("0"), ge=0)
+    third: Decimal = Field(default=Decimal("0"), ge=0)
+
+
 class NationalTeamScheduledMatchResultRequest(BaseModel):
     home_score: int = Field(ge=0, le=30)
     away_score: int = Field(ge=0, le=30)

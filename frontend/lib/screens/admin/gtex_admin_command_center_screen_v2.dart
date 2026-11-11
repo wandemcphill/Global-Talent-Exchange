@@ -322,9 +322,9 @@ class _MainWorkspace extends StatelessWidget {
   String _subtitleFor(GtexAdminModuleType type) {
     switch (type) {
       case GtexAdminModuleType.jackpot:
-        return 'Monitor the live pool, edit runtime settings, set balance, trigger settlement, and review winner history.';
+        return 'See the pot, put coin in it, change when it pays, or pay the winners now.';
       case GtexAdminModuleType.coinEconomy:
-        return 'Control wallet risk, treasury balance, top-ups, withdrawals, ledger audits and coin supply.';
+        return 'See how much coin is out, give coin to someone, and watch cash-outs.';
       case GtexAdminModuleType.transferHub:
         return 'Review transfer listings, swaps, loans, release clauses, payment state and disputes.';
       case GtexAdminModuleType.coinTraders:
@@ -524,9 +524,9 @@ class _OperationalPlaybook extends StatelessWidget {
   String _copyFor(GtexAdminModuleType module) {
     switch (module) {
       case GtexAdminModuleType.jackpot:
-        return 'Live controls use GET/POST /api/admin/jackpot/runtime, PATCH /api/admin/jackpot/balance, POST /api/admin/jackpot/trigger, and GET /api/jackpot/history. Manual trigger settles the current round immediately.';
+        return 'Type the new pot total and save. That sets the jackpot to that amount. Players do not pay into it. Paying now sends the current pot to the winners.';
       case GtexAdminModuleType.coinEconomy:
-        return 'Wire coin controls to wallet, ledger, withdrawal, treasury, and anomaly APIs. Every action should create an audit trail.';
+        return 'There is no separate print-coins switch. Coin is created when you give it to a person, pay a prize, or fill the jackpot. Every change is written in the admin log.';
       case GtexAdminModuleType.systemHealth:
         return 'Connect to /api/build-info, ingestion health, Redis policy, queue health, Render deploy state and smoke-test results.';
       case GtexAdminModuleType.launchControl:

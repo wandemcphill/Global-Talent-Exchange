@@ -67,6 +67,112 @@ function Field({ name, value, onChange, type = "text", testid }: { name: string;
 
 const READONLY_KEYS = new Set(["id", "created_at", "updated_at", "updated_by", "updated_by_user_id", "active_bank_account", "reason"]);
 
+export function GameClockPanel() {
+  const act = useAct();
+  const { data: clock, refetch } = useAdminGet<any>("world-clock", "/world/clock");
+  const [speed, setSpeed] = useState(clock?.progression_rate != null ? String(clock.progression_rate) : "1");
+  useEffect(() => {
+    if (clock?.progression_rate != null) setSpeed(String(clock.progression_rate));
+  }, [clock?.progression_rate]);
+  const paused = Boolean(clock?.is_paused);
+  return (
+    <Panel eyebrow="Game clock" title="Pause the world, start it again, or change the speed" testid="admin-game-clock">
+      <p className="mb-3 text-sm leading-relaxed text-slate-400">
+        The clock is {paused ? "paused" : "running"}. Game date {clock?.world_date || "—"}. Speed {clock?.progression_rate ?? "—"} means that many game seconds pass for each real second. 1 is a normal day. Young players age when a new season opens, and a season is {clock?.virtual_months_per_season ?? 12} months of this clock.
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <Btn
+          variant="secondary"
+          data-testid="admin-pause-clock-btn"
+          onClick={() => act(() => api.post("/admin/world/clock/pause"), "Game clock paused").then(() => refetch())}
+        >
+          Pause the clock
+        </Btn>
+        <Btn
+          data-testid="admin-resume-clock-btn"
+          onClick={() => act(() => api.post("/admin/world/clock/resume"), "Game clock running again").then(() => refetch())}
+        >
+          Start the clock again
+        </Btn>
+        <Field name="Game speed" type="number" value={speed} onChange={setSpeed} testid="admin-clock-speed-input" />
+        <Btn
+          variant="gold"
+          data-testid="admin-save-clock-speed-btn"
+          onClick={() =>
+            act(() => api.post("/admin/world/clock/speed", { progression_rate: Number(speed) }), "Game speed saved").then(() => refetch())
+          }
+        >
+          Save the speed
+        </Btn>
+      </div>
+    </Panel>
+  );
+}
+
+export function NamedCupPrizePanel() {
+  const act = useAct();
+  const { data: cups, refetch } = useAdminGet<any[]>("named-cups", "/admin/national-team-engine/cups");
+  const [cupId, setCupId] = useState("");
+  const [first, setFirst] = useState("");
+  const [second, setSecond] = useState("");
+  const [third, setThird] = useState("");
+  const rows = cups || [];
+  const selected = rows.find((row) => row.id === cupId);
+  useEffect(() => {
+    if (!cupId && rows[0]?.id) setCupId(rows[0].id);
+  }, [cupId, cups]);
+  useEffect(() => {
+    if (!selected) return;
+    setFirst(String(selected.first ?? ""));
+    setSecond(String(selected.second ?? ""));
+    setThird(String(selected.third ?? ""));
+  }, [selected?.id]);
+  return (
+    <Panel eyebrow="Named cup" title="Put this prize into this cup" testid="admin-named-cup-prize">
+      <p className="mb-3 text-sm leading-relaxed text-slate-400">
+        Pick the cup, type what 1st, 2nd and 3rd win, then put that coin aside for this cup. Entry stays free. Players do not pay this. When the cup ends, the prize is paid from the coin held for it.
+      </p>
+      {rows.length === 0 ? (
+        <Empty title="No cups yet" body="Create a GTEX competition on the admin desk, then come back and set its prize." />
+      ) : (
+        <>
+          <label className="gx-label">Which cup</label>
+          <select className="gx-input mb-3" value={cupId} onChange={(e) => setCupId(e.target.value)} data-testid="admin-cup-select">
+            {rows.map((row) => (
+              <option key={row.id} value={row.id}>
+                {row.title} · {row.season_label} · {row.held_coin} coin set aside
+              </option>
+            ))}
+          </select>
+          <div className="grid grid-cols-3 gap-2">
+            <Field name="1st prize" type="number" value={first} onChange={setFirst} testid="admin-cup-first" />
+            <Field name="2nd prize" type="number" value={second} onChange={setSecond} testid="admin-cup-second" />
+            <Field name="3rd prize" type="number" value={third} onChange={setThird} testid="admin-cup-third" />
+          </div>
+          <Btn
+            className="mt-3"
+            variant="gold"
+            data-testid="admin-save-cup-prize-btn"
+            onClick={() =>
+              act(
+                () =>
+                  api.put(`/admin/national-team-engine/cups/${cupId}/prize`, {
+                    first: Number(first || 0),
+                    second: Number(second || 0),
+                    third: Number(third || 0),
+                  }),
+                "Prize saved for this cup",
+              ).then(() => refetch())
+            }
+          >
+            Put this prize into this cup
+          </Btn>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 /** Generic editor for flat settings objects (primitive fields only). Sends only changed fields. */
 function SettingsEditor({ title, path, method = "put", extra = {}, wrap }: { title: string; path: string; method?: "put" | "post"; extra?: Record<string, any>; wrap?: (d: any) => any }) {
   const { data, isLoading } = useAdminGet("settings", path);
@@ -117,16 +223,16 @@ export function RailsAndTreasuryTab() {
 
   return (
     <div className="space-y-6" data-testid="admin-tab-rails">
-      <Panel eyebrow="Treasury" title="Treasury exposure & liability">
+      <Panel eyebrow="Money owed" title="What the platform may have to pay">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="Users" value={fmt(td?.total_users ?? 0)} />
-          <Stat label="Wallet liability" value={fmt(td?.wallet_liability ?? 0)} />
-          <Stat label="Pending payout exposure" value={fmt(td?.pending_treasury_exposure ?? 0)} tone="warn" />
-          <Stat label="Pending dep / wd / KYC" value={`${td?.pending_deposits ?? 0} / ${td?.pending_withdrawals ?? 0} / ${td?.pending_kyc ?? 0}`} />
+          <Stat label="People" value={fmt(td?.total_users ?? 0)} />
+          <Stat label="Coin sitting in wallets" value={fmt(td?.wallet_liability ?? 0)} />
+          <Stat label="Cash-outs still waiting" value={fmt(td?.pending_treasury_exposure ?? 0)} tone="warn" />
+          <Stat label="Money in / cash-outs / ID checks" value={`${td?.pending_deposits ?? 0} / ${td?.pending_withdrawals ?? 0} / ${td?.pending_kyc ?? 0}`} />
         </div>
       </Panel>
-      <Panel eyebrow="Payment rails" title="Rails, maintenance & withdrawal processor">
-        <input className="gx-input mb-3" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Audit reason (min 4 chars)" />
+      <Panel eyebrow="Banks" title="Turn pay-in and cash-out on or off">
+        <input className="gx-input mb-3" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why you changed this (at least 4 letters)" />
         <div className="grid gap-3 lg:grid-cols-2">
           <div className="space-y-2">
             {railDraft.length === 0 && <Empty title="No rails configured" />}
@@ -142,12 +248,12 @@ export function RailsAndTreasuryTab() {
               </div>
             ))}
             {railDraft.length > 0 && (
-              <Btn onClick={() => act(() => api.put("/admin/god-mode/payment-rails", { reason, rails: railDraft.map(({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message }) => ({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message })) }), "Payment rails updated")}>Save rails</Btn>
+              <Btn onClick={() => act(() => api.put("/admin/god-mode/payment-rails", { reason, rails: railDraft.map(({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message }) => ({ provider, deposits_enabled, withdrawals_enabled, is_live, maintenance_message })) }), "Bank switches saved")}>Save bank switches</Btn>
             )}
           </div>
           {wcDraft && (
             <div className="space-y-2 rounded-md border border-white/10 p-3">
-              <p className="text-xs font-bold uppercase text-emerald-300">Withdrawal controls</p>
+              <p className="text-xs font-bold uppercase text-emerald-300">Who can cash out</p>
               <select className="gx-input" value={wcDraft.processor_mode} onChange={(e) => setWcDraft({ ...wcDraft, processor_mode: e.target.value })}>
                 <option value="manual_bank_transfer">Manual bank transfer</option>
                 <option value="automatic_gateway">Automatic gateway</option>
@@ -155,16 +261,16 @@ export function RailsAndTreasuryTab() {
               {(["egame_withdrawals_enabled", "trade_withdrawals_enabled", "deposits_via_bank_transfer", "payouts_via_bank_transfer"] as const).map((k) => (
                 <Toggle key={k} text={label(k)} on={Boolean(wcDraft[k])} onChange={(v) => setWcDraft({ ...wcDraft, [k]: v })} />
               ))}
-              <Btn onClick={() => act(() => api.put("/admin/god-mode/withdrawal-controls", { egame_withdrawals_enabled: wcDraft.egame_withdrawals_enabled, trade_withdrawals_enabled: wcDraft.trade_withdrawals_enabled, processor_mode: wcDraft.processor_mode, deposits_via_bank_transfer: wcDraft.deposits_via_bank_transfer, payouts_via_bank_transfer: wcDraft.payouts_via_bank_transfer, reason }), "Withdrawal controls updated")}>Save withdrawal controls</Btn>
+              <Btn onClick={() => act(() => api.put("/admin/god-mode/withdrawal-controls", { egame_withdrawals_enabled: wcDraft.egame_withdrawals_enabled, trade_withdrawals_enabled: wcDraft.trade_withdrawals_enabled, processor_mode: wcDraft.processor_mode, deposits_via_bank_transfer: wcDraft.deposits_via_bank_transfer, payouts_via_bank_transfer: wcDraft.payouts_via_bank_transfer, reason }), "Cash-out rules saved")}>Save cash-out rules</Btn>
             </div>
           )}
         </div>
       </Panel>
-      <Panel eyebrow="FX & guardrails" title="Fiat rates, modes & coin-trader guardrails">
+      <Panel eyebrow="Exchange rate" title="Naira rate and trader limits">
         <SettingsEditor title="Treasury settings" path="/admin/treasury/settings" />
       </Panel>
       <BankAccounts />
-      <Panel eyebrow="Liquidity desk" title="Liquidity intervention (buy from / sell to user)">
+      <Panel eyebrow="Market help" title="Buy a player share from someone, or sell one to them">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
           <div>
             <label className="gx-label">Action</label>
@@ -179,15 +285,15 @@ export function RailsAndTreasuryTab() {
           <Field name="Unit price (GTX)" type="number" value={iv.unit_price_credits} onChange={(v) => setIv({ ...iv, unit_price_credits: v })} />
           <Field name="Type CONFIRM-LIQUIDITY" value={iv.confirmation_text} onChange={(v) => setIv({ ...iv, confirmation_text: v })} />
         </div>
-        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/liquidity/interventions", { ...iv, quantity: Number(iv.quantity), unit_price_credits: Number(iv.unit_price_credits), reason }), "Liquidity intervention executed")}>Execute intervention</Btn>
+        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/liquidity/interventions", { ...iv, quantity: Number(iv.quantity), unit_price_credits: Number(iv.unit_price_credits), reason }), "Market trade done")}>Do this trade</Btn>
       </Panel>
-      <Panel eyebrow="Treasury payout" title="Treasury withdrawal (platform wallet → bank)">
+      <Panel eyebrow="Platform cash-out" title="Send platform coin to a bank account">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
           {Object.keys(wd).map((k) => (
             <Field key={k} name={label(k)} value={wd[k]} type={k.startsWith("amount") ? "number" : "text"} onChange={(v) => setWd({ ...wd, [k]: v })} />
           ))}
         </div>
-        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/treasury/withdrawals", { ...wd, amount_credits: Number(wd.amount_credits), reason }), "Treasury withdrawal created")}>Create treasury withdrawal</Btn>
+        <Btn className="mt-3" variant="danger" onClick={() => act(() => api.post("/admin/god-mode/treasury/withdrawals", { ...wd, amount_credits: Number(wd.amount_credits), reason }), "Platform cash-out created")}>Send this to the bank</Btn>
       </Panel>
     </div>
   );
@@ -460,7 +566,16 @@ export function PlayersTab() {
 }
 
 /* ---------- Tab 4: competitions / jackpot / kill-switch ---------- */
-const JACKPOT_KEYS = ["threshold_amount", "contribution_rate", "distribution_mode", "failsafe_hours", "probability_limit", "probability_cap", "top_split_percent", "min_activity_score"];
+const JACKPOT_FIELDS: { key: string; name: string }[] = [
+  { key: "threshold_amount", name: "Pay out when the pot reaches" },
+  { key: "contribution_rate", name: "Share of fees that fill the pot" },
+  { key: "distribution_mode", name: "How winners split the pot" },
+  { key: "failsafe_hours", name: "Hours before a stuck round is paid anyway" },
+  { key: "probability_limit", name: "Win-chance limit" },
+  { key: "probability_cap", name: "Maximum win chance" },
+  { key: "top_split_percent", name: "Percent for the top winners" },
+  { key: "min_activity_score", name: "Minimum play needed to qualify" },
+];
 
 export function CompetitionsTab({ children }: { children?: React.ReactNode }) {
   const act = useAct();
@@ -474,37 +589,41 @@ export function CompetitionsTab({ children }: { children?: React.ReactNode }) {
   return (
     <div className="space-y-6" data-testid="admin-tab-competitions">
       {children}
-      <Panel eyebrow="Global jackpot" title="Runtime controls (platform-funded only; users cannot contribute)">
+      <NamedCupPrizePanel />
+      <Panel eyebrow="Jackpot" title="Fill the pot and choose when it pays">
+        <p className="mb-3 text-sm leading-relaxed text-slate-400">
+          Players cannot add money here. Type the new pot total and press &quot;Set the pot to this amount&quot;. That moves coin from the platform into the jackpot. A smaller number moves the difference back. Save the rules only when you change how it pays. Paying now sends the current pot to the winners.
+        </p>
         <div className="mb-3 grid grid-cols-2 gap-4 md:grid-cols-3">
-          <Stat label="Current pool" value={fmt(src.current_balance ?? src.balance ?? 0)} />
+          <Stat label="Coin in the pot now" value={fmt(src.current_balance ?? src.balance ?? 0)} />
           <Stat label="Round" value={String(src.round_number ?? src.current_round ?? "—")} />
-          <Stat label="Threshold" value={fmt(src.threshold_amount ?? 0)} />
+          <Stat label="Pays out at" value={fmt(src.threshold_amount ?? 0)} />
         </div>
         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {JACKPOT_KEYS.map((k) => <Field key={k} name={label(k)} value={jv(k)} onChange={(v) => setJd({ ...jd, [k]: v })} />)}
+          {JACKPOT_FIELDS.map((f) => <Field key={f.key} name={f.name} value={jv(f.key)} onChange={(v) => setJd({ ...jd, [f.key]: v })} />)}
         </div>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <Btn onClick={() => {
             const body: any = {};
             Object.entries(jd).forEach(([k, v]) => (body[k] = k === "distribution_mode" ? v : Number(v)));
-            return act(() => api.post("/admin/jackpot/runtime", body), "Jackpot runtime updated");
-          }}>Save runtime</Btn>
-          <input className="gx-input w-40" type="number" placeholder="Set balance" value={bal} onChange={(e) => setBal(e.target.value)} />
-          <Btn variant="secondary" onClick={() => act(() => api.patch("/admin/jackpot/balance", { balance: Number(bal), reason: "Admin balance adjustment" }), "Jackpot balance set")}>Set balance</Btn>
-          <Btn variant="gold" onClick={() => window.confirm("Trigger the current jackpot round now?") && act(() => api.post("/admin/jackpot/trigger"), "Jackpot round triggered")}>Trigger round</Btn>
+            return act(() => api.post("/admin/jackpot/runtime", body), "Jackpot rules saved");
+          }}>Save jackpot rules</Btn>
+          <input className="gx-input w-48" type="number" placeholder="New pot total" value={bal} onChange={(e) => setBal(e.target.value)} />
+          <Btn variant="secondary" onClick={() => act(() => api.patch("/admin/jackpot/balance", { balance: Number(bal), reason: "Admin balance adjustment" }), "Jackpot amount set")}>Set the pot to this amount</Btn>
+          <Btn variant="gold" onClick={() => window.confirm("Pay the current jackpot to the winners now?") && act(() => api.post("/admin/jackpot/trigger"), "Jackpot paid")}>Pay the jackpot now</Btn>
         </div>
       </Panel>
-      <Panel eyebrow="Emergency" title="Live match kill-switch">
+      <Panel eyebrow="Emergency" title="Stop a live match">
         <div className="flex flex-wrap gap-2">
           <input className="gx-input w-64" placeholder="Match ID" value={m.match_id} onChange={(e) => setM({ ...m, match_id: e.target.value })} />
           <input className="gx-input flex-1" placeholder="Reason" value={m.reason} onChange={(e) => setM({ ...m, reason: e.target.value })} />
-          <Btn variant="danger" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: m.match_id, enabled: true, reason: m.reason || "Emergency stop" }), "Match halted")}>Halt match</Btn>
+          <Btn variant="danger" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: m.match_id, enabled: true, reason: m.reason || "Emergency stop" }), "Match halted")}>Stop this match</Btn>
         </div>
         <div className="mt-3 space-y-1">
           {(ks || []).map((k: any) => (
             <div key={k.match_id} className="flex items-center justify-between rounded-md border border-white/10 p-2 text-sm">
               <span>{k.match_id} · {k.reason || "—"} <Chip tone={k.enabled ? "red" : "slate"}>{k.enabled ? "halted" : "released"}</Chip></span>
-              <Btn variant="secondary" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: k.match_id, enabled: !k.enabled, reason: k.reason }), "Kill-switch toggled")}>{k.enabled ? "Release" : "Re-halt"}</Btn>
+              <Btn variant="secondary" onClick={() => act(() => api.post("/admin/finance/match-kill-switches", { match_id: k.match_id, enabled: !k.enabled, reason: k.reason }), "Match stop updated")}>{k.enabled ? "Let it play" : "Stop it again"}</Btn>
             </div>
           ))}
         </div>
@@ -525,28 +644,29 @@ export function EconomyTab() {
   const [simRes, setSimRes] = useState<any>(null);
   return (
     <div className="space-y-6" data-testid="admin-tab-economy">
-      <Panel eyebrow="Control tower" title="Economy health">
+      <Panel eyebrow="Coin" title="How much coin is out there">
+        <p className="mb-3 text-sm leading-relaxed text-slate-400">This page watches the coin already created. It does not print new coin. Coin appears when GTEX pays a prize, a reward, or the jackpot.</p>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          <Stat label="GTX supply" value={fmt(ct?.gtex_supply ?? 0)} />
-          <Stat label="Fan supply" value={fmt(ct?.fan_supply ?? 0)} />
+          <Stat label="GTEX coin in circulation" value={fmt(ct?.gtex_supply ?? 0)} />
+          <Stat label="Fan coin in circulation" value={fmt(ct?.fan_supply ?? 0)} />
           <Stat label="Inflation risk" value={String(ct?.inflation_risk ?? "—")} tone={ct?.inflation_risk === "high" ? "bad" : "good"} />
           <Stat label="Liquidity" value={String(ct?.liquidity_status ?? "—")} />
           <Stat label="Frozen / banned" value={`${ct?.frozen_account_count ?? 0} / ${ct?.banned_account_count ?? 0}`} />
           <Stat label="Price overrides" value={String(ct?.manual_price_override_count ?? 0)} />
-          <Stat label="Kill-switches" value={String(ct?.match_kill_switch_count ?? 0)} />
+          <Stat label="Matches stopped" value={String(ct?.match_kill_switch_count ?? 0)} />
           <Stat label="Wallet locks" value={String(wp?.active_wallet_transaction_lock_count ?? 0)} />
         </div>
         {(ct?.alerts || []).map((a: any, i: number) => <p key={i} className="mt-2 text-xs text-amber-300">⚠ {a.title}: {a.message}</p>)}
         <p className="mt-3 text-xs text-slate-400">Reconciliation: {rec?.issues?.length ?? 0} open issues · {rec?.duplicate_provider_references ?? 0} duplicate refs · {rec?.confirmed_deposits_missing_ledger ?? 0} deposits missing ledger</p>
       </Panel>
-      <Panel eyebrow="Simulator" title="30-day economy simulation">
+      <Panel eyebrow="What-if" title="Guess the next 30 days of coin">
         <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
           {Object.keys(sim).map((k) => <Field key={k} name={label(k)} type="number" value={sim[k]} onChange={(v) => setSim({ ...sim, [k]: Number(v) })} />)}
         </div>
-        <Btn className="mt-3" onClick={async () => { const r = await act(() => api.post("/admin/finance/simulate", sim), "Simulation complete"); if (r) setSimRes(r.data); }}>Run simulation</Btn>
+        <Btn className="mt-3" onClick={async () => { const r = await act(() => api.post("/admin/finance/simulate", sim), "Guess finished"); if (r) setSimRes(r.data); }}>Run the 30-day guess</Btn>
         {simRes && <p className="mt-3 text-sm text-slate-200">Ending GTX supply {fmt(simRes.summary?.ending_gtex_supply)} · risk <b>{simRes.summary?.inflation_risk}</b> · {(simRes.summary?.recommendations || []).join(" ")}</p>}
       </Panel>
-      <Panel eyebrow="Feature flags" title="Live feature flags">
+      <Panel eyebrow="Switches" title="Turn features on or off">
         {(flags || []).length === 0 && <Empty title="No flags" />}
         <div className="grid gap-2 md:grid-cols-2">
           {(flags || []).map((f: any) => (
@@ -554,7 +674,7 @@ export function EconomyTab() {
           ))}
         </div>
       </Panel>
-      <Panel eyebrow="Reward rules" title="Fees & stability rules">
+      <Panel eyebrow="Fees" title="The fee rules that are live">
         {(rewards || []).map((r: any) => (
           <div key={r.id} className="mb-2 rounded-md border border-white/10 p-3 text-sm">
             <b className="text-white">{r.title}</b> <Chip tone={r.active ? "emerald" : "slate"}>{r.active ? "active" : "inactive"}</Chip>
@@ -613,7 +733,7 @@ export function UsersTab() {
         </div>
         <Btn className="mt-3" onClick={() => act(() => api.post("/admin/access", { ...na, permissions: (perms?.permissions || []).slice(0, 0) }), "Admin created (assign permissions after)")}>Create scoped admin</Btn>
       </Panel>
-      <Panel eyebrow="Audit" title="God-mode audit trail">
+      <Panel eyebrow="Log" title="What admins changed">
         <input className="gx-input mb-2" placeholder="Search audit events" value={auditQ} onChange={(e) => setAuditQ(e.target.value)} />
         <div className="max-h-80 space-y-1 overflow-y-auto text-xs">
           {(audit || []).map((ev: any, i: number) => (

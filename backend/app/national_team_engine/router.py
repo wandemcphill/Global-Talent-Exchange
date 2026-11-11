@@ -20,6 +20,8 @@ from app.national_team_engine.schemas import (
     NationalTeamManagerHireRequest,
     NationalTeamRentalBasketCheckoutRequest,
     NationalTeamScheduledMatchResultRequest,
+    NamedCupPrizeUpdateRequest,
+    NamedCupPrizeView,
     NationalTeamUserHostCompetitionRequest,
     NationalTeamEntryDetailResponse,
     NationalTeamEntryResponse,
@@ -38,6 +40,7 @@ from app.national_team_engine.schemas import (
     TournamentThemeResponse,
     TournamentThemeUpsertRequest,
 )
+from app.national_team_engine.named_cup_prize import NamedCupPrizeError, list_named_cups, set_named_cup_prize
 from app.national_team_engine.competition_lifecycle_service import (
     NationalCompetitionLifecycleError,
     NationalCompetitionLifecycleService,
@@ -561,6 +564,38 @@ def national_get_my_history(
     current_user: User = Depends(get_current_user),
 ):
     return get_my_history(session=session, current_user=current_user)
+
+
+@admin_router.get("/cups", response_model=list[NamedCupPrizeView])
+def list_named_cup_prizes(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> list[NamedCupPrizeView]:
+    return [NamedCupPrizeView.model_validate(row) for row in list_named_cups(session)]
+
+
+@admin_router.put("/cups/{competition_id}/prize", response_model=NamedCupPrizeView)
+def put_prize_into_named_cup(
+    competition_id: str,
+    payload: NamedCupPrizeUpdateRequest,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin),
+) -> NamedCupPrizeView:
+    try:
+        saved = set_named_cup_prize(
+            session,
+            competition_id=competition_id,
+            actor=current_admin,
+            first=payload.first,
+            second=payload.second,
+            third=payload.third,
+        )
+        session.commit()
+    except NamedCupPrizeError as exc:
+        session.rollback()
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in exc.detail.lower() else status.HTTP_400_BAD_REQUEST
+        raise HTTPException(status_code=status_code, detail=exc.detail) from exc
+    return NamedCupPrizeView.model_validate(saved)
 
 
 @admin_router.post("/competitions", response_model=NationalTeamCompetitionResponse)

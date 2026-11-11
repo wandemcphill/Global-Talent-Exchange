@@ -7,7 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
-import { CompetitionsTab, EconomyTab, PlayersTab, QueuesTab, RailsAndTreasuryTab, UsersTab } from "./AdminControls";
+import { CompetitionsTab, EconomyTab, GameClockPanel, NamedCupPrizePanel, PlayersTab, QueuesTab, RailsAndTreasuryTab, UsersTab } from "./AdminControls";
 
 function GodModeControlDesk() {
   const qc = useQueryClient();
@@ -51,7 +51,7 @@ function GodModeControlDesk() {
         minimum_withdrawal_fee_credits: String(godMode?.commissions?.minimum_withdrawal_fee_credits ?? "10.0000"),
         reason: reason.trim() || "Commission calibration",
       });
-      toast.success("Platform commission settings updated via God-Mode.");
+      toast.success("Fees saved.");
       await qc.invalidateQueries({ queryKey: ["admin-god-mode-bootstrap"] });
     } catch (e) {
       toast.error(errMsg(e));
@@ -67,7 +67,7 @@ function GodModeControlDesk() {
         prize_pool_topup_pct: String(Number(topupPct || 0)),
         reason: reason.trim() || "Prize pool top-up adjustment",
       });
-      toast.success("Competition prize-pool top-up percentage updated.");
+      toast.success("Extra prize money saved.");
       await qc.invalidateQueries({ queryKey: ["admin-god-mode-bootstrap"] });
     } catch (e) {
       toast.error(errMsg(e));
@@ -97,27 +97,27 @@ function GodModeControlDesk() {
     <div className="space-y-6" data-testid="admin-godmode-section">
       {/* Treasury & Ecosystem Telemetry */}
       <Panel
-        eyebrow="Canonical Admin God-Mode · Treasury & Rails"
-        title="Platform Treasury, Commissions & Competition Controls"
+        eyebrow="Money and prizes"
+        title="Fees, prize money, and the season"
         testid="admin-godmode-treasury"
       >
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
           <Stat
-            label={Number(td?.platform_coin_balance ?? 0) < 0 ? "Circulating GTX Minted (issuance)" : "Treasury Reserve Balance"}
+            label={Number(td?.platform_coin_balance ?? 0) < 0 ? "Coin already given out" : "Coin the platform still holds"}
             value={<Coin amount={Math.abs(Number(td?.platform_coin_balance ?? 0))} />}
             tone="good"
           />
           <Stat
-            label="Manager Trade Volume"
+            label="Player sales, total"
             value={<Coin amount={Number(td?.manager_trade_volume_credits ?? 0)} />}
           />
           <Stat
-            label="Trade Fee Revenue"
+            label="Fees kept from those sales"
             value={<Coin amount={Number(td?.manager_trade_fee_revenue_credits ?? 0)} />}
             tone="good"
           />
           <Stat
-            label="Open / Settled Listings"
+            label="Sales still open / sales finished"
             value={`${fmt(td?.open_manager_listing_count ?? 0)} / ${fmt(td?.settled_manager_trade_count ?? 0)}`}
           />
         </div>
@@ -127,13 +127,13 @@ function GodModeControlDesk() {
           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1.5">
-                <Sliders size={14} /> Exchange & Withdrawal Commissions (BPS)
+                <Sliders size={14} /> Fees on buying, selling, and cashing out
               </span>
-              <Chip tone="emerald">100 BPS = 1%</Chip>
+              <Chip tone="emerald">100 = 1%</Chip>
             </div>
             <div className="grid grid-cols-3 gap-2">
               <div>
-                <label className="gx-label">Buy BPS</label>
+                <label className="gx-label">Buy fee</label>
                 <input
                   type="number"
                   min={0}
@@ -145,7 +145,7 @@ function GodModeControlDesk() {
                 />
               </div>
               <div>
-                <label className="gx-label">Sell BPS</label>
+                <label className="gx-label">Sell fee</label>
                 <input
                   type="number"
                   min={0}
@@ -157,7 +157,7 @@ function GodModeControlDesk() {
                 />
               </div>
               <div>
-                <label className="gx-label">Withdraw BPS</label>
+                <label className="gx-label">Cash-out fee</label>
                 <input
                   type="number"
                   min={0}
@@ -173,12 +173,12 @@ function GodModeControlDesk() {
               <input
                 type="text"
                 className="gx-input flex-1"
-                placeholder="Audit reason"
+                placeholder="Why you changed this"
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
               />
               <Btn onClick={updateCommissions} disabled={saving === "commissions"} data-testid="admin-save-commissions-btn">
-                {saving === "commissions" ? "Saving…" : "Save Commissions"}
+                {saving === "commissions" ? "Saving…" : "Save fees"}
               </Btn>
             </div>
           </div>
@@ -187,13 +187,16 @@ function GodModeControlDesk() {
           <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-amber-300 flex items-center gap-1.5">
-                <Trophy size={14} /> Competition Top-Up & Season Lifecycle
+                <Trophy size={14} /> Extra prize money GTEX adds
               </span>
-              <Chip tone="gold">Canonical Season Engine</Chip>
+              <Chip tone="gold">Free to enter</Chip>
             </div>
+            <p className="text-xs leading-relaxed text-slate-400">
+              This is not an entry fee. Type 15 to add 15% more coin on top of a competition&apos;s prize. GTEX pays that extra. Players do not.
+            </p>
             <div className="flex gap-2 items-end">
               <div className="flex-1">
-                <label className="gx-label">Platform Prize Pool Top-Up (%)</label>
+                <label className="gx-label">Extra prize money (%)</label>
                 <input
                   type="number"
                   min={0}
@@ -205,7 +208,7 @@ function GodModeControlDesk() {
                 />
               </div>
               <Btn variant="gold" onClick={updateCompetitionTopup} disabled={saving === "competition"} data-testid="admin-save-topup-btn">
-                {saving === "competition" ? "Saving…" : "Update Top-Up %"}
+                {saving === "competition" ? "Saving…" : "Save extra prize money"}
               </Btn>
             </div>
 
@@ -216,7 +219,7 @@ function GodModeControlDesk() {
                 disabled={Boolean(saving)}
                 data-testid="admin-archive-season-btn"
               >
-                <RefreshCw size={13} /> Archive Season & Distribute Rewards
+                <RefreshCw size={13} /> Close the season and pay the prizes
               </Btn>
               <Btn
                 variant="ghost"
@@ -224,7 +227,7 @@ function GodModeControlDesk() {
                 disabled={Boolean(saving)}
                 data-testid="admin-reset-season-btn"
               >
-                Soft-Reset Rankings
+                Clear the rankings, keep the history
               </Btn>
             </div>
           </div>
@@ -234,9 +237,9 @@ function GodModeControlDesk() {
         {(rails.length > 0 || auditEvents.length > 0) && (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs space-y-2">
-              <p className="font-bold uppercase tracking-wider text-slate-300">Payment Rails Status</p>
+              <p className="font-bold uppercase tracking-wider text-slate-300">Pay-in and pay-out switches</p>
               {rails.length === 0 ? (
-                <p className="text-slate-500">All default payment rails operational.</p>
+                <p className="text-slate-500">Bank payments are on.</p>
               ) : (
                 rails.map((r: any) => (
                   <div key={r.provider} className="flex items-center justify-between border-b border-white/5 pb-1.5">
@@ -251,9 +254,9 @@ function GodModeControlDesk() {
             </div>
 
             <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-xs space-y-2 max-h-44 overflow-y-auto">
-              <p className="font-bold uppercase tracking-wider text-slate-300">Recent God-Mode Audit Trail</p>
+              <p className="font-bold uppercase tracking-wider text-slate-300">Recent admin changes</p>
               {auditEvents.length === 0 ? (
-                <p className="text-slate-500">No high-risk override events recorded in current window.</p>
+                <p className="text-slate-500">No admin changes in this window.</p>
               ) : (
                 auditEvents.slice(0, 6).map((ev: any, i: number) => (
                   <div key={ev.event_id || i} className="border-b border-white/5 pb-1.5">
@@ -271,13 +274,13 @@ function GodModeControlDesk() {
 }
 
 const ADMIN_TABS = [
-  { id: "overview", label: "Overview & Commissions" },
-  { id: "rails", label: "Rails & Treasury" },
-  { id: "queues", label: "Deposits, KYC & Disputes" },
-  { id: "players", label: "Players & Portraits" },
-  { id: "competitions", label: "Competitions & Jackpot" },
-  { id: "economy", label: "Economy & Flags" },
-  { id: "users", label: "Users, Admins & Audit" },
+  { id: "overview", label: "Fees and prizes" },
+  { id: "rails", label: "Bank and payouts" },
+  { id: "queues", label: "Money in, ID checks, disputes" },
+  { id: "players", label: "Players and photos" },
+  { id: "competitions", label: "Competitions and jackpot" },
+  { id: "economy", label: "Coin supply and switches" },
+  { id: "users", label: "People and admin log" },
 ] as const;
 
 export default function Admin() {
@@ -299,7 +302,29 @@ export default function Admin() {
   };
   return (
     <div data-testid="admin-page" className="space-y-6">
-      <PageHeader eyebrow="Admin review & God-Mode" title="Trust, payouts & platform controls" sub="Manual review path for withdrawals, integrity flags, held competition payouts, and canonical God-Mode treasury/commission controls." />
+      <PageHeader eyebrow="Admin desk" title="Run the platform" sub="Plain controls for the game clock, coin, the jackpot, and competition prizes. Entry to GTEX competitions stays free." />
+      <Panel eyebrow="Start here" title="What each job actually does" testid="admin-plain-guide">
+        <div className="grid gap-4 text-sm leading-relaxed text-slate-300 md:grid-cols-2">
+          <div>
+            <p className="font-bold text-white">The game clock is already running</p>
+            <p className="mt-1">It started on 30 October 2026. Use the buttons under this note to pause it, start it again, or change the speed. 1 means one game day is one real day. A season is 12 months, so a young player does not age a year until a new season is opened. Matches begin when this clock reaches their kickoff. On a brand-new database the clock begins the first time the site asks for the time. To open on a chosen date, set the virtual start date before that first request. Changing it later does not rewind a clock that has already started.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">How to create coin</p>
+            <p className="mt-1">This page does not print coin. On the admin desk, use Give someone coin. That creates the coin and puts it in their wallet. Coin is also created when a prize or the jackpot is paid. The number on this page is coin already in wallets, or coin the platform still holds.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">Put money in the jackpot</p>
+            <p className="mt-1">Open Competitions and jackpot. Type the new pot total and press &quot;Set the pot to this amount&quot;. That moves coin from the platform into the jackpot. A smaller number moves the difference back. Players do not pay into it. &quot;Pay the jackpot now&quot; sends the current pot to the winners.</p>
+          </div>
+          <div>
+            <p className="font-bold text-white">Set a competition and fund it</p>
+            <p className="mt-1">GTEX cups are free to enter. Under this note, pick the cup and press Put this prize into this cup. That sets 1st, 2nd and 3rd and holds the coin for that cup. Extra prize money on this page is a percent added on top. It is not a ticket price.</p>
+          </div>
+        </div>
+      </Panel>
+      <GameClockPanel />
+      <NamedCupPrizePanel />
       <div className="flex flex-wrap gap-2 border-b border-white/10 pb-3" data-testid="admin-tabs">
         {ADMIN_TABS.map((t) => (
           <button
@@ -322,7 +347,7 @@ export default function Admin() {
       {tab === "users" && <UsersTab />}
       {tab === "overview" && <>
       <GodModeControlDesk />
-      <Panel eyebrow="Fraud review" title={`Withdrawals (${data.withdrawals.length})`} testid="admin-withdrawals">
+      <Panel eyebrow="Cash-outs waiting" title={`Withdrawals (${data.withdrawals.length})`} testid="admin-withdrawals">
         {data.withdrawals.length === 0 ? <Empty title="Queue clear" /> : data.withdrawals.map((w: any) => (
           <div key={w.id} className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 p-4" data-testid={`admin-withdrawal-${w.id}`}>
             <div>
@@ -337,7 +362,7 @@ export default function Admin() {
           </div>
         ))}
       </Panel>
-      <Panel eyebrow="Anti-collusion" title={`Integrity flags (${data.flags.length})`} testid="admin-flags">
+      <Panel eyebrow="Cheating checks" title={`Warnings (${data.flags.length})`} testid="admin-flags">
         {data.flags.length === 0 ? <Empty title="No open flags" /> : data.flags.map((f: any) => (
           <div key={f.id} className="mb-2 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 p-3">
             <p className="text-sm text-slate-200"><Chip tone={f.severity === "high" ? "red" : "gold"}>{f.severity}</Chip> <b className="capitalize">{label(f.flag_type)}</b> · {f.detail}</p>
@@ -345,7 +370,7 @@ export default function Admin() {
           </div>
         ))}
       </Panel>
-      <Panel eyebrow="Payout holds" title={`Held payouts (${data.held_payouts.length})`} testid="admin-held-payouts">
+      <Panel eyebrow="Prizes on hold" title={`Held payouts (${data.held_payouts.length})`} testid="admin-held-payouts">
         {data.held_payouts.length === 0 ? <Empty title="Nothing held" /> : data.held_payouts.map((e: any) => (
           <div key={e.id} className="mb-2 flex items-center justify-between rounded-sm border border-white/10 p-3 text-sm">
             <span>{label(e.event_type)} · {fmt(e.net_amount)} GTX · {e.memo}</span>

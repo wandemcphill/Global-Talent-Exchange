@@ -156,9 +156,9 @@ class _GtexJackpotAdminPanelState extends State<GtexJackpotAdminPanel> {
       builder: (BuildContext context) {
         return AlertDialog(
           backgroundColor: const Color(0xFF121821),
-          title: const Text('Trigger jackpot round?'),
+          title: const Text('Pay the jackpot now?'),
           content: const Text(
-            'This settles the current round now and pays out winners. This cannot be undone.',
+            'This pays the current pot to the winners right now. It cannot be undone.',
           ),
           actions: <Widget>[
             TextButton(
@@ -167,7 +167,7 @@ class _GtexJackpotAdminPanelState extends State<GtexJackpotAdminPanel> {
             ),
             FilledButton(
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Trigger now'),
+              child: const Text('Pay now'),
             ),
           ],
         );
@@ -189,9 +189,9 @@ class _GtexJackpotAdminPanelState extends State<GtexJackpotAdminPanel> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           GtexAdminSectionHeader(
-            title: 'Jackpot control',
+            title: 'The jackpot',
             subtitle:
-                'Live pool runtime, balance, manual trigger, and winner history.',
+                'See the pot, put GTEX coin in it, change the rules, or pay the winners now.',
             trailing: const GtexAdminStatusPill(label: 'Admin only'),
           ),
           const SizedBox(height: 14),
@@ -235,19 +235,19 @@ class _GtexJackpotAdminPanelState extends State<GtexJackpotAdminPanel> {
             runSpacing: 10,
             children: <Widget>[
               _ActionButton(
-                label: 'Edit settings',
+                label: 'Change the rules',
                 icon: Icons.tune_rounded,
                 onPressed: widget.api == null || _busy || _runtime == null
                     ? null
                     : _editSettings,
               ),
               _ActionButton(
-                label: 'Set balance',
+                label: 'Set the pot to this amount',
                 icon: Icons.account_balance_wallet_outlined,
                 onPressed: widget.api == null || _busy ? null : _setBalance,
               ),
               _ActionButton(
-                label: _busy ? 'Working…' : 'Trigger round',
+                label: _busy ? 'Working…' : 'Pay the jackpot now',
                 icon: Icons.bolt_rounded,
                 onPressed: widget.api == null || _busy ? null : _triggerRound,
               ),
@@ -261,7 +261,7 @@ class _GtexJackpotAdminPanelState extends State<GtexJackpotAdminPanel> {
           const SizedBox(height: 16),
           const GtexAdminSectionHeader(
             title: 'Winner history',
-            subtitle: 'Settled and triggered rounds from /api/jackpot/history.',
+            subtitle: 'Rounds that have already been paid.',
           ),
           const SizedBox(height: 10),
           if (_history.isEmpty)
@@ -489,14 +489,14 @@ class _JackpotBalanceDialogState extends State<_JackpotBalanceDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       backgroundColor: const Color(0xFF121821),
-      title: const Text('Set jackpot balance'),
+      title: const Text('Set the jackpot total'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
           TextField(
             controller: _balanceController,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(labelText: 'Balance'),
+            decoration: const InputDecoration(labelText: 'New pot total'),
           ),
           TextField(
             controller: _reasonController,

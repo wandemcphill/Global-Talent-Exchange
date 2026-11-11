@@ -815,6 +815,30 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
                         payouts_by_entry[runner_up_id]["stage_progression_coin"] += ru_bonus
                         payouts_by_entry[runner_up_id]["total_gross_coin"] += ru_bonus
 
+        if metadata.get("gtex_named_prize_set"):
+            third_prize = self._normalize_amount(dict(reward_structure.get("place_prizes") or {}).get("third", "0"))
+            third_ids: list[str] = []
+            for rnd in list(tournament_result.get("knockout_rounds") or []):
+                if str(rnd.get("stage") or "") != "semifinal":
+                    continue
+                for match in list(rnd.get("matches") or []):
+                    if str(match.get("resolution") or "").endswith("_bye"):
+                        continue
+                    winner_id = str(match.get("winner_entry_id") or "")
+                    home_id = str(match.get("home_entry_id") or "")
+                    away_id = str(match.get("away_entry_id") or "")
+                    loser_id = away_id if winner_id == home_id else home_id
+                    if loser_id:
+                        third_ids.append(loser_id)
+            if third_prize > 0 and third_ids:
+                share = (third_prize / Decimal(len(third_ids))).quantize(AMOUNT_QUANTUM)
+                for entry_id in third_ids:
+                    row = payouts_by_entry.get(entry_id)
+                    if row is None:
+                        continue
+                    row["stage_progression_coin"] += share
+                    row["total_gross_coin"] += share
+
         serialized_entries = []
         total_pool_coin = Decimal("0.0000")
         for row in sorted(
@@ -1154,6 +1178,45 @@ class NationalCompetitionLifecycleService(ScheduledResolutionMixin):
         if current_balance >= required_balance:
             return
         shortfall = self._normalize_amount(required_balance - current_balance)
+        from app.national_team_engine.named_cup_prize import cup_prize_account_code
+
+        cup_account = self.wallet_service.ensure_named_system_account(
+            self.session,
+            code=cup_prize_account_code(competition.id),
+            label=f"Prize held for {competition.title}",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        held = self.wallet_service.get_balance(self.session, cup_account)
+        take = self._normalize_amount(min(held, shortfall))
+        if take > Decimal("0.0000"):
+            self.wallet_service.append_transaction(
+                self.session,
+                postings=[
+                    LedgerPosting(
+                        account=cup_account,
+                        amount=-take,
+                        source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                        transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                    ),
+                    LedgerPosting(
+                        account=promo_pool_account,
+                        amount=take,
+                        source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                        transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                    ),
+                ],
+                reason=LedgerEntryReason.ADJUSTMENT,
+                source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                reference=f"national-cup-prize:{competition.id}:{champion_entry.id}",
+                description=f"Prize from {competition.title} moved to the payout pool",
+                actor=actor,
+                transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                idempotency_key=f"national-cup-prize-draw:{competition.id}:{champion_entry.id}:{take}",
+            )
+            shortfall = self._normalize_amount(shortfall - take)
+        if shortfall <= Decimal("0.0000"):
+            return
         platform_account = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
         self.wallet_service.append_transaction(
             self.session,

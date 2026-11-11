@@ -7,12 +7,14 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_current_admin, get_session
 from app.models.world_clock import WorldClockState
 from app.services.world_clock_service import DEFAULT_CLOCK_ID, WorldClockService, _as_utc
+from app.models.user import User
 from app.world_simulation.schemas import (
     ClubWorldContextView,
     ClubWorldProfileUpsertRequest,
     CompetitionWorldContextView,
     FootballCultureUpsertRequest,
     FootballCultureView,
+    WorldClockSpeedRequest,
     WorldClockView,
     WorldNarrativeUpsertRequest,
     WorldNarrativeView,
@@ -45,19 +47,65 @@ def get_world_clock(session: Session = Depends(get_session)) -> WorldClockView:
             )
         clock = WorldClockService(session)
 
+    return _clock_view(clock, state)
+
+
+def _clock_view(clock: WorldClockService, state: WorldClockState) -> WorldClockView:
     world_time = clock.now_virtual()
+    years = max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1)
+    season_number = max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1)
     return WorldClockView(
         clock_id=state.id,
         world_time=world_time,
         world_date=world_time.date(),
         virtual_start_time=_as_utc(state.virtual_start_time),
-        gtex_years_running=max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1),
-        current_season_number=max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1),
-        current_season_label=f"GTEX Year {max(1, (world_time.year - _as_utc(state.virtual_start_time).year) + 1)} · Season {max(1, int((world_time - _as_utc(state.virtual_start_time)).days // 365) + 1)}",
+        gtex_years_running=years,
+        current_season_number=season_number,
+        current_season_label=f"GTEX Year {years} · Season {season_number}",
         is_paused=bool(state.is_paused),
         progression_rate=float(state.progression_rate or 1.0),
         virtual_months_per_season=int(state.virtual_months_per_season or 12),
     )
+
+
+@admin_router.post("/clock/pause", response_model=WorldClockView)
+def pause_world_clock(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> WorldClockView:
+    """Freeze game time. Matches and birthdays wait until the clock starts again."""
+    clock = WorldClockService(session)
+    state = clock.pause()
+    session.commit()
+    return _clock_view(clock, state)
+
+
+@admin_router.post("/clock/resume", response_model=WorldClockView)
+def resume_world_clock(
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> WorldClockView:
+    """Start the clock again from the moment it was paused."""
+    clock = WorldClockService(session)
+    state = clock.resume()
+    session.commit()
+    return _clock_view(clock, state)
+
+
+@admin_router.post("/clock/speed", response_model=WorldClockView)
+def set_world_clock_speed(
+    payload: WorldClockSpeedRequest,
+    session: Session = Depends(get_session),
+    _: User = Depends(get_current_admin),
+) -> WorldClockView:
+    """Set how many game seconds pass for each real second. 1 is normal speed."""
+    clock = WorldClockService(session)
+    try:
+        state = clock.set_rate(float(payload.progression_rate))
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    session.commit()
+    return _clock_view(clock, state)
 
 
 def get_service(session: Session = Depends(get_session)) -> FootballWorldService:

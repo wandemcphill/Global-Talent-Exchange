@@ -6,6 +6,12 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field
 
 
+class WorldClockSpeedRequest(BaseModel):
+    """How fast game time moves. 1 means one game day is one real day."""
+
+    progression_rate: float = Field(gt=0, le=48)
+
+
 class WorldClockView(BaseModel):
     """Read-only snapshot of the authoritative GTEX virtual-world clock."""
 

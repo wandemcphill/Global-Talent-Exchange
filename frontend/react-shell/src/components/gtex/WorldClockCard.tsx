@@ -85,15 +85,15 @@ export function WorldClockView({ state }: { state: WorldClockViewState }) {
 
           <dl className="grid grid-cols-1 gap-3 border-t border-white/10 pt-4 text-xs sm:grid-cols-3">
             <div>
-              <dt className="uppercase tracking-wider text-slate-400">Progression rate</dt>
+              <dt className="uppercase tracking-wider text-slate-400">Game speed</dt>
               <dd className="gx-mono mt-1 text-sm text-white" data-testid="world-clock-rate">
                 {formatProgressionRate(state.clock.progressionRate)}
               </dd>
             </div>
             <div>
-              <dt className="uppercase tracking-wider text-slate-400">Season length</dt>
+              <dt className="uppercase tracking-wider text-slate-400">How long a season lasts</dt>
               <dd className="gx-mono mt-1 text-sm text-white" data-testid="world-clock-season-length">
-                {state.clock.virtualMonthsPerSeason} virtual months
+                {state.clock.virtualMonthsPerSeason} months per game season
               </dd>
             </div>
             <div>
