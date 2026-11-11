@@ -771,14 +771,15 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   if (!activeGift) return null;
 
-  const rarityColor =
-    activeGift.rarity === "mythic"
-      ? "border-amber-300 bg-slate-950/80"
-      : activeGift.rarity === "legendary"
-        ? "border-amber-400 bg-slate-950/80"
-        : activeGift.rarity === "epic"
-          ? "border-indigo-300 bg-slate-950/80"
-          : "border-emerald-400 bg-slate-950/75";
+  const rarity = String(activeGift.rarity || "common").toUpperCase();
+  const rarityAccent =
+    activeGift.rarity === "mythic" || activeGift.rarity === "legendary"
+      ? "#f5cd83"
+      : activeGift.rarity === "epic"
+        ? "#b8a6ff"
+        : activeGift.rarity === "rare"
+          ? "#8de0e8"
+          : "#e7edf5";
   const combo = Number(activeGift.combo_count || 1);
 
   return (
@@ -787,44 +788,103 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       data-webgl-context={contextLost ? "lost" : "ready"}
       data-gift-visual={visualReady ? "ready" : "loading"}
       data-gift-shot={resolveGiftShot(activeGift.animation_key, activeGift.gift_code)}
-      className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-start overflow-hidden p-4 sm:p-6 ${className}`}
+      className={\`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden \${className}\`}
     >
+      <style>{\`
+        @keyframes gtex-gift-caption-in {
+          from { opacity: 0; transform: translate3d(0, 18px, 0); filter: blur(8px); }
+          to { opacity: 1; transform: translate3d(0, 0, 0); filter: blur(0); }
+        }
+        @keyframes gtex-gift-rule-in {
+          from { transform: scaleX(.15); opacity: 0; }
+          to { transform: scaleX(1); opacity: .9; }
+        }
+        @keyframes gtex-gift-lens-breathe {
+          0%, 100% { opacity: .3; }
+          50% { opacity: .52; }
+        }
+        .gtex-gift-caption {
+          animation: gtex-gift-caption-in 680ms cubic-bezier(.18,.72,.2,1) both;
+          text-shadow: 0 2px 24px rgba(0,0,0,.62), 0 1px 3px rgba(0,0,0,.85);
+        }
+        .gtex-gift-caption-rule {
+          transform-origin: center;
+          animation: gtex-gift-rule-in 900ms cubic-bezier(.18,.72,.2,1) 140ms both;
+        }
+        .gtex-gift-lens {
+          animation: gtex-gift-lens-breathe 4.8s ease-in-out infinite;
+          mix-blend-mode: screen;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .gtex-gift-caption, .gtex-gift-caption-rule, .gtex-gift-lens { animation: none; }
+        }
+      \`}</style>
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
+      <div
+        aria-hidden
+        className="gtex-gift-lens absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(ellipse at 50% 42%, transparent 34%, rgba(2,6,14,.22) 72%, rgba(2,6,14,.52) 100%)",
+        }}
+      />
+      <div
+        aria-hidden
+        className="absolute inset-x-0 bottom-0 h-[48%]"
+        style={{
+          background:
+            "linear-gradient(180deg, rgba(3,7,15,0) 0%, rgba(3,7,15,.14) 30%, rgba(3,7,15,.72) 100%)",
+        }}
+      />
       <button
         type="button"
         data-testid="gift-mute"
-        className="pointer-events-auto absolute right-3 top-3 z-50 rounded-full border border-white/20 bg-black/55 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white"
+        aria-label={muted ? "Turn gift sound on" : "Turn gift sound off"}
+        className="pointer-events-auto absolute right-4 top-4 z-50 rounded-full bg-black/30 px-3 py-2 text-[10px] font-semibold tracking-wide text-white/80 backdrop-blur-md transition hover:bg-black/55 hover:text-white"
         onClick={() => {
           mutedRef.current = !mutedRef.current;
           setMuted(mutedRef.current);
           GtexCelebrationAudioEngine.setMuted(mutedRef.current);
         }}
       >
-        {muted ? "Sound off" : "Sound on"}
+        {muted ? "SOUND OFF" : "SOUND ON"}
       </button>
-      <div className="relative z-40 mt-2 flex max-w-[92vw] flex-col items-center">
-        <div className={`flex items-center gap-3 rounded-full border px-4 py-2 sm:gap-4 sm:px-6 sm:py-2.5 ${rarityColor}`}>
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-black/40 text-amber-300">
-            <Trophy size={20} />
+      <div className="gtex-gift-caption relative z-40 mb-[7vh] flex w-full justify-center px-5 sm:px-8">
+        <div className="w-full max-w-2xl text-center">
+          <div className="flex items-center justify-center gap-3">
+            <span
+              aria-hidden
+              className="gtex-gift-caption-rule h-px w-8 sm:w-12"
+              style={{ background: \`linear-gradient(90deg, transparent, \${rarityAccent})\` }}
+            />
+            <span
+              className="text-[10px] font-semibold uppercase tracking-[.34em] sm:text-xs"
+              style={{ color: rarityAccent }}
+            >
+              {rarity} GIFT
+            </span>
+            <span
+              aria-hidden
+              className="gtex-gift-caption-rule h-px w-8 sm:w-12"
+              style={{ background: \`linear-gradient(90deg, \${rarityAccent}, transparent)\` }}
+            />
           </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-black uppercase tracking-widest text-amber-200">{activeGift.gift_name}</span>
-              <span className="rounded bg-black/50 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
-                {activeGift.rarity || "common"}
-              </span>
-              {combo > 1 ? (
-                <span data-testid="gift-combo-count" className="text-sm font-black text-amber-100">
-                  x{combo}
-                </span>
-              ) : null}
-            </div>
-            <div className="text-xs text-white/95">
-              <span className="font-bold text-emerald-300">{activeGift.sender}</span>
-              {" backed "}
-              <span className="font-semibold text-white">{activeGift.recipient || "the club"}</span>
-              <span className="gx-mono ml-1 font-semibold text-amber-200">({activeGift.amount} FAN)</span>
-            </div>
+          <div className="mt-3 text-2xl font-black leading-tight tracking-[-.035em] text-white sm:mt-4 sm:text-4xl">
+            {activeGift.gift_name}
+          </div>
+          <div className="mt-2 text-xs font-medium tracking-wide text-white/80 sm:text-sm">
+            <span className="font-semibold text-white">{activeGift.sender}</span>
+            <span className="mx-2 text-white/45">SENT TO</span>
+            <span className="font-semibold text-white">{activeGift.recipient || "the club"}</span>
+          </div>
+          <div className="mt-2 flex items-center justify-center gap-3 text-[10px] font-medium tracking-[.18em] text-white/60 sm:text-xs">
+            <span>{activeGift.amount} FAN</span>
+            {combo > 1 ? (
+              <>
+                <span aria-hidden className="h-1 w-1 rounded-full bg-white/40" />
+                <span data-testid="gift-combo-count">{\`COMBO ×\${combo}\`}</span>
+              </>
+            ) : null}
           </div>
         </div>
       </div>
