@@ -11,6 +11,11 @@ const ASSETS = {
   yacht: "/assets/showroom/superyacht.glb",
   trophy: "/assets/showroom/trophy_plinth.glb",
   crown: "/assets/showroom/chronos_tourbillon_watch.glb",
+  gulfstream: "/assets/showroom/gulfstream_g700_exec_jet.glb",
+  coach: "/assets/showroom/vanguard_xii_coach.glb",
+  suv: "/assets/showroom/executive_suv.glb",
+  hypercar: "/assets/showroom/veloce_gt9_hypercar.glb",
+  facility: "/assets/showroom/apex_performance_campus.glb",
   matchStadium: "/models/match/football-stadium.glb",
   goal: "/models/match/goal_frame.glb",
   ball: "/models/match/football_pbr.glb",
@@ -55,6 +60,9 @@ const RAILS: Record<string, { camera: number[][]; target: number[][]; fov: [numb
   stadium: { camera: [[18, 36, 62], [10, 26, 48], [4, 15, 34], [2, 12, 29]], target: [[0, 2, 0], [0, 3, 0], [0, 2, 0], [0, 2, 0]], fov: [50, 34] },
   jet: { camera: [[22, 8, 34], [14, 9, 27], [7, 8, 21], [5, 7, 18]], target: [[0, 1, 0], [4, 1, 0], [8, 2, 0], [10, 3, 0]], fov: [38, 31] },
   yacht: { camera: [[24, 13, 29], [17, 11, 24], [10, 9, 19], [8, 8, 16]], target: [[0, 1, 0], [0, 1, 0], [2, 1, 0], [2, 1, 0]], fov: [42, 32] },
+  coach: { camera: [[16, 6, 24], [10, 6, 18], [6, 5, 14], [5, 4, 12]], target: [[0, 1.5, 0], [0, 1.5, 0], [0, 1.4, 0], [0, 1.4, 0]], fov: [40, 31] },
+  vehicle: { camera: [[14, 5, 22], [9, 5, 16], [5, 4.2, 12], [4, 3.5, 10]], target: [[0, 1.1, 0], [0, 1.1, 0], [0, 1.1, 0], [0, 1.1, 0]], fov: [38, 29] },
+  facility: { camera: [[22, 12, 28], [17, 10, 23], [11, 8, 18], [8, 7, 15]], target: [[0, 5, 0], [0, 5, 0], [0, 5, 0], [0, 5, 0]], fov: [42, 32] },
   trophy: { camera: [[8, 3.8, 11], [6, 3.2, 8], [4, 2.7, 6], [3.6, 2.4, 5.2]], target: [[0, 1.2, 0], [0, 1.2, 0], [0, 1.3, 0], [0, 1.3, 0]], fov: [34, 27] },
   bicycle: { camera: [[10, 5, 14], [6, 3.8, 11], [3, 2.4, 8], [5, 3.2, 10]], target: [[0, 1.2, 0], [2, 1.3, 0], [7, 1.3, 0], [9, 1.5, 0]], fov: [40, 34] },
   last_minute: { camera: [[12, 7, 18], [7, 4.5, 13], [2.8, 2.5, 8], [5, 3.6, 11]], target: [[0, 1.5, 0], [3, 1.2, 0], [10, 1.1, 0], [11, 1.5, 0]], fov: [44, 34] },
@@ -498,7 +506,9 @@ export function createGiftDirector(options: Options): GiftDirector {
     aircraft.name = "gift-aircraft";
     aircraft.userData.assetPath = ASSETS.jet;
     bin.root.add(aircraft);
-    const task = loadModel(bin, options, ASSETS.jet, "gift-private-jet-model", aircraft, 24, true, true);
+    const jetPath = code.includes("gulfstream") ? ASSETS.gulfstream : ASSETS.jet;
+    aircraft.userData.assetPath = jetPath;
+    const task = loadModel(bin, options, jetPath, "gift-private-jet-model", aircraft, 24, true, true);
     ready(options, [task]);
     return finish(bin, 0x08111e, 1.16, (progress, delta, target) => {
       const glide = smooth(progress);
@@ -529,6 +539,38 @@ export function createGiftDirector(options: Options): GiftDirector {
       camera(target, progress);
       light.intensity = 3 + Math.sin(progress * Math.PI * 2) * 0.3;
       updateParticles(particles, progress, delta, 0.3);
+    }, options.rarity);
+  }
+
+  if (shot === "coach" || shot === "vehicle" || shot === "facility") {
+    const path =
+      shot === "coach"
+        ? ASSETS.coach
+        : shot === "facility"
+          ? ASSETS.facility
+          : code.includes("hypercar") || code.includes("veloce")
+            ? ASSETS.hypercar
+            : ASSETS.suv;
+    const extent = shot === "facility" ? 42 : shot === "coach" ? 20 : 14;
+    const accent = shot === "facility" ? 0x8fc6ff : shot === "coach" ? 0xffd28b : 0xe5eaf2;
+    const light = addLights(bin, accent);
+    const particles = addParticles(bin, options.quality, accent);
+    const hero = new THREE.Group();
+    hero.name = shot === "coach" ? "gift-coach" : shot === "facility" ? "gift-facility" : "gift-vehicle";
+    hero.userData.assetPath = path;
+    bin.root.add(hero);
+    const task = loadModel(bin, options, path, "gift-authored-hero-model", hero, extent, true, true);
+    ready(options, [task]);
+    return finish(bin, 0x08111d, 1.16, (progress, delta, target) => {
+      const reveal = smooth(clamp(progress / 0.22));
+      hero.position.x = lerp(shot === "facility" ? 0 : -4.5, 0, reveal);
+      hero.rotation.y =
+        shot === "facility"
+          ? Math.sin(progress * Math.PI * 0.7) * 0.045
+          : Math.sin(progress * Math.PI) * 0.025;
+      camera(target, progress);
+      light.intensity = (shot === "facility" ? 3.2 : 2.8) + smooth(progress) * 1.1;
+      updateParticles(particles, progress, delta, 0.24);
     }, options.rarity);
   }
 
