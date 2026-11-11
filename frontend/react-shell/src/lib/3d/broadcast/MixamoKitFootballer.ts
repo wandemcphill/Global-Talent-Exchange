@@ -495,12 +495,14 @@ function recolorCloth(material: THREE.MeshStandardMaterial, tint: THREE.Color): 
   const tintUniform = { value: tint.clone() };
   material.onBeforeCompile = (shader) => {
     shader.uniforms.uKitTint = tintUniform;
-    shader.fragmentShader = shader.fragmentShader.replace(
-      "#include <map_fragment>",
-      `#include <map_fragment>
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform vec3 uKitTint;")
+      .replace(
+        "#include <map_fragment>",
+        `#include <map_fragment>
        float kitLuma = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
        diffuseColor.rgb = uKitTint * (0.4 + kitLuma * 1.05);`
-    );
+      );
   };
   material.customProgramCacheKey = () => `gtex-kit-${tint.getHexString()}`;
 }
