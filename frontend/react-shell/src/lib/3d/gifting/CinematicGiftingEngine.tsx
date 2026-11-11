@@ -703,6 +703,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     const director = createGiftDirector({
       shot,
       giftCode,
+      rarity: activeGift.rarity || "common",
       quality,
       canStream,
       resolveUrl: resolvePublicAssetPath,
