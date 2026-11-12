@@ -559,7 +559,7 @@ def upgrade(
 @router.post("/clubs/{club_id}/academy/intake")
 def intake(club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
     players = _run(session, service.academy_intake, session, user.id, club_id)
-    return {"regens": [service.player_dict(p) for p in players]}
+    return {"regens": [service.player_dict(p, session) for p in players]}
 
 
 @router.post("/clubs/{club_id}/advance")
