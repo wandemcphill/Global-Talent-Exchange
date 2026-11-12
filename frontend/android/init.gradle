@@ -1,0 +1,10 @@
+// Flutter's included Gradle build resolves Kotlin plugins from the Gradle Plugin
+// Portal only. Kotlin 2.2.21's BOM is published on Maven Central, so the portal
+// lookup fails before the Android build starts.
+gradle.beforeSettings { settings ->
+    settings.pluginManagement.repositories {
+        mavenCentral()
+        google()
+        gradlePluginPortal()
+    }
+}
