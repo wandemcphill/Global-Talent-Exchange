@@ -12,6 +12,8 @@ from app.models.wallet import LedgerUnit
 from app.wallets.service import WalletService
 
 AMOUNT_QUANTUM = Decimal('0.0001')
+# User-hosted play prices. A zero quote is a free match, not a missing rule.
+PLAY_PRICE_KEYS = frozenset({'tournament-entry', 'fast-match-entry', 'competitive-match-entry'})
 
 
 class PricingEngineError(ValueError):
@@ -68,7 +70,16 @@ class PricingEngine:
         gtex_amount = self._normalize_amount(rule.price_coin)
         fancoin_amount = self._normalize_amount(rule.price_fancoin_equivalent)
         if gtex_amount <= Decimal('0.0000') and fancoin_amount <= Decimal('0.0000'):
-            raise PricingEngineError(f'Service pricing rule {service_key} does not define a GTex or Fan Coin price.')
+            if service_key not in PLAY_PRICE_KEYS:
+                raise PricingEngineError(f'Service pricing rule {service_key} does not define a GTex or Fan Coin price.')
+            return ServicePriceQuote(
+                service_key=rule.service_key,
+                title=rule.title,
+                description=rule.description,
+                gtex_amount=Decimal('0.0000'),
+                fancoin_amount=Decimal('0.0000'),
+                active=bool(rule.active),
+            )
 
         if gtex_amount <= Decimal('0.0000') and fancoin_amount > Decimal('0.0000'):
             gtex_amount = Decimal('0.0000')

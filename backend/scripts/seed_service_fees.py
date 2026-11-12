@@ -1,7 +1,7 @@
 """Seed service-fee pricing rules (fan-coin). 1 fan-coin = ₦1.
 
-Currently sets the fast-match / match-hosting entry fee to 100 fan-coin (= ₦100),
-the founder-specified match cost. Idempotent upsert by service_key.
+Public matches launch on the 2D pitch, so the quick-match play price starts at 0.
+An admin sets the live price from the admin desk. Idempotent upsert by service_key.
 
 Usage: python scripts/seed_service_fees.py --database-url <url>
 """
@@ -14,7 +14,7 @@ import psycopg
 
 # service_key -> (title, fan-coin price). Fan-coin = ₦1, so price == naira.
 FEES: dict[str, tuple[str, int]] = {
-    "fast-match-entry": ("Fast Match / match hosting entry", 100),
+    "fast-match-entry": ("Quick Match", 0),
 }
 
 
@@ -33,6 +33,7 @@ def main() -> int:
                 price_fancoin_equivalent = excluded.price_fancoin_equivalent,
                 active = true,
                 updated_at = now()
+            where service_pricing_rules.updated_by_user_id is null
     """
     with psycopg.connect(args.database_url) as conn:
         with conn.cursor() as cur:

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from calendar import monthrange
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -21,6 +22,7 @@ from app.value_engine.banded_pricing import (
 from .schemas import PlayerAdminEditRequest, PlayerAdminEditResult, PlayerAdminView
 
 REGEN_SOURCE = "gtex_regen"
+LEGEND_GSI_FLOOR = 80
 
 
 class AdminPlayerError(ValueError):
@@ -29,6 +31,29 @@ class AdminPlayerError(ValueError):
 
 class PlayerNotFoundError(AdminPlayerError):
     pass
+
+
+def calendar_age(dob: date | None, today: date) -> int | None:
+    if dob is None:
+        return None
+    years = today.year - dob.year
+    if (today.month, today.day) < (dob.month, dob.day):
+        years -= 1
+    return years if years >= 0 else None
+
+
+def dob_for_game_age(age: int, *, today: date, existing: date | None = None) -> date:
+    """Store a game date of birth that shows as `age` on `today`."""
+    month = existing.month if existing is not None else today.month
+    day = existing.day if existing is not None else today.day
+    year = today.year - int(age)
+    day = min(day, monthrange(year, month)[1])
+    born = date(year, month, day)
+    if (born.month, born.day) > (today.month, today.day):
+        year -= 1
+        day = min(existing.day if existing is not None else day, monthrange(year, month)[1])
+        born = date(year, month, day)
+    return born
 
 
 @dataclass(slots=True)
@@ -155,14 +180,23 @@ class AdminPlayerService:
         if edits.overall is not None:
             dna[self._overall_key(player)] = edits.overall
             dna["current_rating"] = edits.overall
+            player.governed_gsi = edits.overall
             gsi_touched = True
             changed.append("overall")
         if edits.potential is not None:
             player.potential = edits.potential
+            player.governed_potential_gsi = edits.potential
             dna[self._potential_key(player)] = edits.potential
             dna["potential_rating"] = edits.potential
             gsi_touched = True
             changed.append("potential")
+        if edits.age is not None:
+            player.date_of_birth = dob_for_game_age(
+                edits.age,
+                today=datetime.now(UTC).date(),
+                existing=player.date_of_birth,
+            )
+            changed.append("age")
         if edits.club_rating is not None:
             dna["sofifa_club_rating"] = edits.club_rating
             gsi_touched = True
@@ -174,6 +208,12 @@ class AdminPlayerService:
         if edits.real_player_tier is not None:
             player.real_player_tier = edits.real_player_tier or None
             changed.append("real_player_tier")
+        if (
+            edits.overall is not None
+            and player.real_player_tier == "legend"
+            and edits.overall < LEGEND_GSI_FLOOR
+        ):
+            raise AdminPlayerError(f"A legend's GSI cannot be set below {LEGEND_GSI_FLOOR}.")
         if edits.real_world_club_name is not None:
             player.real_world_club_name = edits.real_world_club_name or None
             changed.append("real_world_club_name")
@@ -264,8 +304,14 @@ class AdminPlayerService:
 
     def _view(self, session: Session, player: Player) -> PlayerAdminView:
         dna = self._dna(player)
-        overall = self._read_int(dna, "sofifa_overall", "overall", "current_rating")
-        potential = self._read_int(dna, "sofifa_potential", "potential", "potential_rating") or player.potential
+        overall = player.governed_gsi if player.governed_gsi is not None else self._read_int(
+            dna, "sofifa_overall", "overall", "current_rating"
+        )
+        potential = (
+            player.governed_potential_gsi
+            if player.governed_potential_gsi is not None
+            else self._read_int(dna, "sofifa_potential", "potential", "potential_rating") or player.potential
+        )
         club_rating = self._read_int(dna, "sofifa_club_rating")
         summary = session.get(PlayerSummaryReadModel, player.id)
         current_value = float(summary.current_value_credits) if summary is not None else None
@@ -285,6 +331,7 @@ class AdminPlayerService:
             current_competition_id=player.current_competition_id,
             overall=overall,
             potential=potential,
+            age=calendar_age(player.date_of_birth, datetime.now(UTC).date()),
             club_rating=club_rating,
             is_tradable=bool(player.is_tradable),
             current_value_credits=current_value,

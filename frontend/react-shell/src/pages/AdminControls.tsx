@@ -484,10 +484,10 @@ export function PlayersTab() {
   const { data, refetch } = useAdminGet("players", path);
   useEffect(() => setEdit({}), [sel?.player_id]);
   const val = (k: string) => edit[k] ?? sel?.[k] ?? "";
-  const save = async () => {
+    const save = async () => {
     const body: Record<string, any> = {};
-    ["overall", "potential"].forEach((k) => edit[k] !== undefined && (body[k] = Number(edit[k])));
-    if (edit.market_value_credits !== undefined) body.market_value_credits = Number(edit.market_value_credits);
+    ["overall", "potential", "age"].forEach((k) => edit[k] !== undefined && edit[k] !== "" && (body[k] = Number(edit[k])));
+    if (edit.market_value_credits !== undefined && edit.market_value_credits !== "") body.market_value_credits = Number(edit.market_value_credits);
     ["real_player_tier", "real_world_club_name", "image_url"].forEach((k) => edit[k] !== undefined && (body[k] = edit[k]));
     if (edit.is_tradable !== undefined) body.is_tradable = edit.is_tradable;
     if (!Object.keys(body).length) return toast.info("No changes");
@@ -516,13 +516,14 @@ export function PlayersTab() {
         </div>
       </Panel>
       <Panel eyebrow="Editor" title={sel ? sel.full_name : "Select a player"}>
-        {!sel ? <Empty title="Pick a player to edit GSI, tier, price or portrait" /> : (
+        {!sel ? <Empty title="Search a player, then edit age, GSI and cost" /> : (
           <div className="space-y-3">
             <div className="mx-auto w-48">
               <PlayerCard name={sel.full_name} rating={Number(val("overall")) || 60} position={sel.position} club={sel.real_world_club_name || sel.current_club_name} image={val("image_url") || null} regen={sel.is_regen} tier={sel.real_player_tier === "legend" ? "legendary" : undefined} />
             </div>
             <div className="grid grid-cols-2 gap-2">
-              <Field name="Overall GSI" type="number" value={val("overall")} onChange={(v) => setEdit({ ...edit, overall: v })} />
+              <Field name="Age" type="number" value={val("age")} onChange={(v) => setEdit({ ...edit, age: v })} testid="admin-player-age" />
+              <Field name="GSI" type="number" value={val("overall")} onChange={(v) => setEdit({ ...edit, overall: v })} testid="admin-player-gsi" />
               <Field name="Potential GSI" type="number" value={val("potential")} onChange={(v) => setEdit({ ...edit, potential: v })} />
               <div>
                 <label className="gx-label">Tier</label>
@@ -532,7 +533,7 @@ export function PlayersTab() {
                 </select>
               </div>
               <Field name="Real-world club" value={val("real_world_club_name")} onChange={(v) => setEdit({ ...edit, real_world_club_name: v })} />
-              <Field name="Price override (GTX)" type="number" value={edit.market_value_credits ?? sel.current_value_credits ?? ""} onChange={(v) => setEdit({ ...edit, market_value_credits: v })} />
+              <Field name="Cost (GTEX)" type="number" value={edit.market_value_credits ?? sel.current_value_credits ?? ""} onChange={(v) => setEdit({ ...edit, market_value_credits: v })} testid="admin-player-cost" />
               <Toggle text="Tradable" on={Boolean(edit.is_tradable ?? sel.is_tradable)} onChange={(v) => setEdit({ ...edit, is_tradable: v })} />
             </div>
             <Field name="Headshot URL (empty = clean silhouette)" value={val("image_url")} onChange={(v) => setEdit({ ...edit, image_url: v })} />
@@ -559,6 +560,88 @@ const JACKPOT_FIELDS: { key: string; name: string }[] = [
   { key: "min_activity_score", name: "Minimum play needed to qualify" },
 ];
 
+const PLAY_PRICES: { key: string; title: string; hint: string }[] = [
+  { key: "tournament-entry", title: "User-hosted tournament", hint: "What a player pays to play a user-hosted tournament." },
+  { key: "fast-match-entry", title: "Quick match", hint: "What a player pays to play a quick match after the free run." },
+  { key: "competitive-match-entry", title: "Competitive match", hint: "What a player pays to play a competitive match." },
+];
+
+export function LaunchMatchPanel() {
+  const act = useAct();
+  const { data: flags, refetch: refetchFlags } = useAdminGet<any[]>("flags", "/admin/admin-engine/feature-flags");
+  const { data: prices, refetch: refetchPrices } = useAdminGet<any[]>("play-prices", "/economy/service-pricing");
+  const flag = (flags || []).find((item: any) => item.feature_key === "match_3d_gameplay");
+  const threeD = Boolean(flag?.enabled);
+  const [draft, setDraft] = useState<Record<string, { coin?: string; fan?: string }>>({});
+  const ruleFor = (key: string) => (prices || []).find((item: any) => item.service_key === key);
+  const shown = (key: string, field: "coin" | "fan") => {
+    const edited = draft[key]?.[field];
+    if (edited !== undefined) return edited;
+    const rule = ruleFor(key);
+    if (!rule) return "";
+    return String(field === "coin" ? rule.price_coin : rule.price_fancoin_equivalent);
+  };
+  const setPrice = (key: string, field: "coin" | "fan", value: string) => {
+    setDraft({ ...draft, [key]: { ...draft[key], [field]: value } });
+  };
+  const savePrice = (key: string) => {
+    const meta = PLAY_PRICES.find((item) => item.key === key);
+    const rule = ruleFor(key);
+    return act(
+      () =>
+        api.post("/admin/economy/service-pricing", {
+          service_key: key,
+          title: rule?.title || meta?.title || key,
+          description: meta?.hint || rule?.description || "",
+          price_coin: shown(key, "coin") === "" ? "0" : shown(key, "coin"),
+          price_fancoin_equivalent: shown(key, "fan") === "" ? "0" : shown(key, "fan"),
+          active: true,
+        }),
+      "Play price saved"
+    ).then(() => refetchPrices());
+  };
+  return (
+    <Panel eyebrow="Launch" title="2D matches, 3D switch, and play prices" testid="admin-launch-match">
+      <p className="mb-3 text-sm leading-relaxed text-slate-400">
+        Public matches play on the 2D pitch. Turn 3D on only when that gameplay is ready. Official GTEX competitions stay free to enter. The prices below are what players pay to play a user-hosted tournament or a paid match. They start at 0.
+      </p>
+      <Toggle
+        testid="admin-3d-gameplay-toggle"
+        text={threeD ? "3D gameplay is on" : "3D gameplay is off. All matches are 2D"}
+        on={threeD}
+        onChange={() =>
+          act(
+            () =>
+              api.post("/admin/admin-engine/feature-flags", {
+                feature_key: "match_3d_gameplay",
+                title: "3D gameplay",
+                description: "Public matches stay on the 2D pitch until an admin turns 3D gameplay on.",
+                enabled: !threeD,
+                audience: "global",
+              }),
+            threeD ? "3D gameplay turned off" : "3D gameplay turned on"
+          ).then(() => refetchFlags())
+        }
+      />
+      <div className="mt-4 space-y-3">
+        {PLAY_PRICES.map((item) => (
+          <div key={item.key} className="rounded-md border border-white/10 p-3" data-testid={`admin-play-price-${item.key}`}>
+            <p className="text-sm font-bold text-white">{item.title}</p>
+            <p className="mb-2 text-xs text-slate-400">{item.hint}</p>
+            <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+              <Field name="GTEX" type="number" value={shown(item.key, "coin")} onChange={(v) => setPrice(item.key, "coin", v)} />
+              <Field name="Fan Coin" type="number" value={shown(item.key, "fan")} onChange={(v) => setPrice(item.key, "fan", v)} />
+              <div className="flex items-end">
+                <Btn onClick={() => savePrice(item.key)}>Save price</Btn>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 export function CompetitionsTab({ children }: { children?: React.ReactNode }) {
   const act = useAct();
   const { data: rt } = useAdminGet("jackpot", "/admin/jackpot/runtime");
@@ -571,6 +654,7 @@ export function CompetitionsTab({ children }: { children?: React.ReactNode }) {
   return (
     <div className="space-y-6" data-testid="admin-tab-competitions">
       {children}
+      <LaunchMatchPanel />
       <NamedCupPrizePanel />
       <Panel eyebrow="Jackpot" title="Fill the pot and choose when it pays">
         <p className="mb-3 text-sm leading-relaxed text-slate-400">
@@ -626,6 +710,7 @@ export function EconomyTab() {
   const [simRes, setSimRes] = useState<any>(null);
   return (
     <div className="space-y-6" data-testid="admin-tab-economy">
+      <LaunchMatchPanel />
       <Panel eyebrow="Coin" title="How much coin is out there">
         <p className="mb-3 text-sm leading-relaxed text-slate-400">This page watches the coin already created. It does not print new coin. Coin appears when GTEX pays a prize, a reward, or the jackpot.</p>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -652,7 +737,7 @@ export function EconomyTab() {
         {(flags || []).length === 0 && <Empty title="No flags" />}
         <div className="grid gap-2 md:grid-cols-2">
           {(flags || []).map((f: any) => (
-            <Toggle key={f.id || f.flag_key} text={f.flag_key || f.key || f.name} on={Boolean(f.enabled ?? f.is_enabled ?? f.active)} onChange={(v) => act(() => api.post("/admin/admin-engine/feature-flags", { ...f, enabled: v, is_enabled: v, active: v }), "Flag updated")} />
+            <Toggle key={f.id || f.feature_key} text={f.title || f.feature_key} on={Boolean(f.enabled)} onChange={(v) => act(() => api.post("/admin/admin-engine/feature-flags", { feature_key: f.feature_key, title: f.title || f.feature_key, description: f.description, enabled: v, audience: f.audience || "global" }), "Flag updated")} />
           ))}
         </div>
       </Panel>

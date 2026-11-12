@@ -285,6 +285,15 @@ _FEATURE_FLAG_SEEDS: tuple[dict[str, object], ...] = (
         "allowed_roles_json": ["admin", "super_admin"],
         "metadata_json": {"route": "/app/home"},
     },
+    {
+        "feature_key": "match_3d_gameplay",
+        "title": "3D gameplay",
+        "description": "Public matches stay on the 2D pitch until an admin turns 3D gameplay on.",
+        "enabled": False,
+        "audience": "global",
+        "launch_state": "public",
+        "metadata_json": {"route": "/app/match"},
+    },
 )
 
 _ADMIN_ONLY_FLAG_KEYS = frozenset({"launch_control"})
@@ -297,6 +306,7 @@ _KEEP_SEEDED_FLAG_KEYS = frozenset(
         "club_legacy_preseason",
         "club_legacy_sponsors",
         "club_legacy_governance",
+        "match_3d_gameplay",
     }
 )
 

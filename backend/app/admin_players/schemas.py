@@ -19,6 +19,7 @@ class PlayerAdminView(BaseModel):
     current_competition_id: str | None = None
     overall: int | None = None
     potential: int | None = None
+    age: int | None = None
     club_rating: int | None = None
     is_tradable: bool = True
     current_value_credits: float | None = None
@@ -37,6 +38,7 @@ class PlayerAdminEditRequest(BaseModel):
 
     overall: int | None = Field(default=None, ge=1, le=99)
     potential: int | None = Field(default=None, ge=1, le=99)
+    age: int | None = Field(default=None, ge=15, le=50)
     club_rating: int | None = Field(default=None, ge=1, le=99)
     # Direct price override (credits). When set, skips the banded recompute for this
     # edit and pins the displayed/traded price to this value.

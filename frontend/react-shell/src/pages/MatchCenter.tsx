@@ -2048,8 +2048,20 @@ export default function MatchCenter() {
   const clubId = params.get("club") || activeClub?.club_id || "";
   const { getModuleView, setModuleView } = useSkin();
   const matchView = getModuleView("match_center");
-  // 3D WebGL Broadcast View vs 2D Tactical Pitch View Toggle & Full-Screen 16:9 Match Theatre
-  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(true);
+  // Public matches stay on the 2D pitch until an admin turns match_3d_gameplay on.
+  const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(false);
+  const applied3dDefault = useRef(false);
+  const { data: clientFlags } = useQuery({
+    queryKey: ["client-feature-flags"],
+    queryFn: async () => {
+      try {
+        return (await api.get("/feature-flags/client")).data as { feature_key: string; enabled: boolean }[];
+      } catch {
+        return [] as { feature_key: string; enabled: boolean }[];
+      }
+    },
+  });
+  const match3dEnabled = (clientFlags || []).some((flag) => flag.feature_key === "match_3d_gameplay" && flag.enabled);
   const [isTheatreMode, setIsTheatreMode] = useState<boolean>(
     params.get("theatre") === "1" || params.get("theatre") === "true"
   );
@@ -2265,6 +2277,19 @@ export default function MatchCenter() {
   const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom">("2.5d");
   const [selectedPlayer, setSelectedPlayer] = useState<number | null>(9);
   const [show3DCutIn, setShow3DCutIn] = useState(false);
+  useEffect(() => {
+    if (!clientFlags) return;
+    if (!match3dEnabled) {
+      setView3DBroadcast(false);
+      setIsTheatreMode(false);
+      setShow3DCutIn(false);
+      return;
+    }
+    if (!applied3dDefault.current) {
+      applied3dDefault.current = true;
+      setView3DBroadcast(true);
+    }
+  }, [clientFlags, match3dEnabled]);
   const [cutInScene, setCutInScene] = useState<Cinema3DSceneType>("signing_walkout");
 
   // Tactics State
@@ -2612,6 +2637,7 @@ export default function MatchCenter() {
 
               {/* 3D WebGL Broadcast / 2D Tactical Toggle & 16:9 Match Theatre Launch */}
               <div className="flex items-center gap-1.5">
+                {match3dEnabled && (
                 <button
                   type="button"
                   data-testid="toggle-3d-broadcast-mode"
@@ -2625,6 +2651,8 @@ export default function MatchCenter() {
                   <Tv size={11} className={view3DBroadcast ? "text-cyan-400" : "text-slate-400"} />
                   <span>{view3DBroadcast ? "3D BROADCAST" : "2D PITCH"}</span>
                 </button>
+                )}
+                {match3dEnabled && (
                 <button
                   type="button"
                   data-testid="enter-match-theatre-button"
@@ -2640,6 +2668,7 @@ export default function MatchCenter() {
                 >
                   <span>{isTheatreMode ? "EXIT 16:9 THEATRE" : "16:9 MATCH THEATRE"}</span>
                 </button>
+                )}
               </div>
 
               {/* Spatial Shaders + Event-Driven 3D Cut-In Triggers */}
@@ -2677,6 +2706,7 @@ export default function MatchCenter() {
                 >
                   <Activity size={11} /> LANES & xG
                 </button>
+                {match3dEnabled && (
                 <button
                   onClick={() => {
                     setCutInScene("signing_walkout");
@@ -2690,6 +2720,7 @@ export default function MatchCenter() {
                 >
                   <Box size={11} /> 3D GOAL / TUNNEL CAM
                 </button>
+                )}
               </div>
               )}
             </div>
@@ -2776,7 +2807,7 @@ export default function MatchCenter() {
                 minute={minute}
                 homeName={m.home_name}
                 awayName={m.away_name}
-                show3DCutIn={show3DCutIn}
+                show3DCutIn={match3dEnabled && show3DCutIn}
                 cutInScene={cutInScene}
                 onClose3DCutIn={() => setShow3DCutIn(false)}
                 homeRoster={homeSheetState.sheet.starters}

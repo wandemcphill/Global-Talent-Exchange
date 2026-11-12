@@ -509,3 +509,17 @@ def test_governor_price_change_limit_caps_service_pricing(session) -> None:
 
     assert quote.gtex_amount == Decimal("1.0500")
     assert quote.fancoin_amount == Decimal("105.0000")
+
+
+def test_user_hosted_play_price_can_be_free(session) -> None:
+    _create_service_pricing_rule(
+        session,
+        service_key="tournament-entry",
+        price_coin=Decimal("0.0000"),
+        price_fancoin_equivalent=Decimal("0.0000"),
+    )
+
+    quote = PricingEngine(session).quote_service("tournament-entry")
+
+    assert quote.gtex_amount == Decimal("0.0000")
+    assert quote.fancoin_amount == Decimal("0.0000")
