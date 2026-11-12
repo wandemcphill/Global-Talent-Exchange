@@ -26,6 +26,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
+  const [accountType, setAccountType] = useState(
+    requestedRole === "creator" ? "creator" : requestedRole === "trader" || requestedRole === "coin_trader" ? "coin_trader" : "user",
+  );
   const [f, setF] = useState({
     full_name: "",
     username: "",
@@ -75,7 +78,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       }
 
       const signupPayload = {
-        account_type: "user",
+        account_type: accountType,
         full_name: f.full_name.trim(),
         username: f.username.trim(),
         email: f.email.trim(),
@@ -210,9 +213,22 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
           {mode === "signup" && (
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs text-slate-300">
-              <p className="font-semibold text-emerald-300">Unified GTEX Account</p>
-              <p className="mt-1 leading-5 text-slate-400">
-                One account unlocks the full platform. You can claim or create clubs, apply for the Creator Program, or activate Coin Trader desks directly from your console after signup.
+              <p className="font-semibold text-emerald-300">Choose how you join</p>
+              <label className="mt-2 block">
+                <span className="gx-label">Account type</span>
+                <select
+                  data-testid="signup-account-type"
+                  className="gx-input"
+                  value={accountType}
+                  onChange={(event) => setAccountType(event.target.value)}
+                >
+                  <option value="user">Fan or club owner</option>
+                  <option value="coin_trader">Coin trader</option>
+                  <option value="creator">Creator</option>
+                </select>
+              </label>
+              <p className="mt-2 leading-5 text-slate-400">
+                Fans and club owners use the same account. Coin traders and creators register into their own desks. Advertisers use the corporate signup above.
               </p>
 
               {requestedRole && (

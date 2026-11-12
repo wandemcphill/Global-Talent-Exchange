@@ -89,6 +89,7 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
     "hands_on": {
         "recruitment_max_gtex": 0.0,
         "sales_min_gtex": 0.0,
+        "sales_target_gtex": 0.0,
         "operational_spend_max_gtex": 0.0,
         "contract_renewal_max_weekly_wage_gtex": 0.0,
         "facility_spend_max_gtex": 0.0,
@@ -103,6 +104,7 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
     "balanced": {
         "recruitment_max_gtex": 25000.0,
         "sales_min_gtex": 5000.0,
+        "sales_target_gtex": 0.0,
         "operational_spend_max_gtex": 10000.0,
         "contract_renewal_max_weekly_wage_gtex": 5000.0,
         "facility_spend_max_gtex": 15000.0,
@@ -117,6 +119,7 @@ DEFAULT_FINANCIAL_THRESHOLDS: dict[str, dict[str, float]] = {
     "delegating": {
         "recruitment_max_gtex": 100000.0,
         "sales_min_gtex": 25000.0,
+        "sales_target_gtex": 0.0,
         "operational_spend_max_gtex": 50000.0,
         "contract_renewal_max_weekly_wage_gtex": 20000.0,
         "facility_spend_max_gtex": 75000.0,

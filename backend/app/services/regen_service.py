@@ -57,6 +57,16 @@ def _clamp(value: float, minimum: int, maximum: int) -> int:
     return max(minimum, min(maximum, round(value)))
 
 
+def _as_int(value: object) -> int | None:
+    if isinstance(value, bool) or value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, float):
+        return int(round(value))
+    return None
+
+
 def _scale_score(value: float) -> float:
     if value <= 5:
         return max(0.0, min(100.0, (value / 5.0) * 100.0))
@@ -116,6 +126,7 @@ class OwnerSonRequest:
     customization: dict[str, object] = field(default_factory=dict)
     total_cost_coin: int = 0
     target_club_id: str | None = None
+    parent_bloodline: dict[str, object] | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -1835,11 +1846,23 @@ class RegenGenerationEngine:
         customization = self._owner_customization(lineage_selection)
         if customization.get("name"):
             display_name = self._apply_custom_name(str(customization["name"]), used_names, rng)
-        primary_position = rng.choice(_PRIMARY_POSITIONS)
+        bloodline = lineage_selection.metadata if lineage_selection is not None and isinstance(lineage_selection.metadata, dict) else {}
+        rolled_position = rng.choice(_PRIMARY_POSITIONS)
+        inherited_position = bloodline.get("parent_position")
         if customization.get("position"):
             primary_position = str(customization["position"])
+        elif isinstance(inherited_position, str) and inherited_position in _PRIMARY_POSITIONS:
+            primary_position = inherited_position
+        else:
+            primary_position = rolled_position
         secondary_pool = _SECONDARY_POSITIONS[primary_position]
         secondary_positions = () if not secondary_pool else (secondary_pool[rng.randrange(len(secondary_pool))],)
+        inherited_secondaries = bloodline.get("parent_secondary_positions")
+        if isinstance(inherited_secondaries, list):
+            for candidate in inherited_secondaries:
+                if isinstance(candidate, str) and candidate in secondary_pool and candidate != primary_position:
+                    secondary_positions = (candidate,)
+                    break
         current_ability, potential = (
             self._starter_ranges(current_gsi=current_gsi_override or 58, rng=rng)
             if generation_source == "new_club"
@@ -1849,6 +1872,14 @@ class RegenGenerationEngine:
                 rng=rng,
             )
         )
+        parent_rating = _as_int(bloodline.get("parent_rating"))
+        if parent_rating is not None and generation_source != "new_club" and current_gsi_override is None:
+            current_ability, potential = self._inherit_parent_ranges(
+                parent_rating=parent_rating,
+                parent_potential=_as_int(bloodline.get("parent_potential")),
+                age=age,
+                rng=rng,
+            )
         current_gsi = current_gsi_override or round((current_ability.minimum + current_ability.maximum) / 2)
         scout_confidence = self._scout_confidence(
             quality_score=quality_score, generation_source=generation_source, rng=rng
@@ -1939,6 +1970,7 @@ class RegenGenerationEngine:
                 position=primary_position,
                 country_code=origin.country_code,
                 lineage_metadata=lineage_metadata or None,
+                inherited_profile=bloodline.get("inherited_dna") if isinstance(bloodline.get("inherited_dna"), dict) else None,
                 rng=rng,
             ),
         }
@@ -2032,6 +2064,34 @@ class RegenGenerationEngine:
                 )
             ),
             metadata=metadata,
+        )
+
+    def _inherit_parent_ranges(
+        self,
+        *,
+        parent_rating: int,
+        parent_potential: int | None,
+        age: int,
+        rng: random.Random,
+    ) -> tuple[AbilityRangeView, AbilityRangeView]:
+        """Youth ability tracks the parent. The ceiling can approach the parent and stops at 96."""
+        rating = _clamp(parent_rating, 40, 98)
+        ceiling = _clamp(parent_potential if parent_potential is not None else rating, rating, 98)
+        if age <= 16:
+            factor = 0.62
+        elif age == 17:
+            factor = 0.66
+        else:
+            factor = 0.70
+        anchor = _clamp(round(rating * factor) + rng.randint(-3, 2), 42, 78)
+        current_min = _clamp(anchor - rng.randint(2, 4), 40, 76)
+        current_max = _clamp(anchor + rng.randint(1, 3), current_min + 1, 80)
+        pot_ceiling = min(ceiling, 96)
+        pot_max = _clamp(pot_ceiling - rng.randint(0, 3), current_max + 6, 96)
+        pot_min = _clamp(pot_max - rng.randint(3, 6), current_max + 1, pot_max - 1)
+        return (
+            AbilityRangeView(minimum=current_min, maximum=current_max),
+            AbilityRangeView(minimum=pot_min, maximum=pot_max),
         )
 
     def _starter_gsi(self, rng: random.Random, club_context: RegenClubContext) -> int:
@@ -2441,6 +2501,9 @@ class RegenGenerationEngine:
             "owner_club_id": owner_context.club_id,
             "owner_destination_club_id": destination_club_id,
         }
+        forced_surname = None
+        narrative_text = None
+        tags = ["son_of_owner", "lineage"]
         if owner_son_request is not None:
             metadata.update(
                 {
@@ -2450,6 +2513,22 @@ class RegenGenerationEngine:
                     "cost_coin": owner_son_request.total_cost_coin,
                 }
             )
+            bloodline = owner_son_request.parent_bloodline if isinstance(owner_son_request.parent_bloodline, dict) else None
+            if bloodline:
+                parent_name = str(bloodline.get("parent_player_name") or "").strip()
+                name_parts = [part for part in parent_name.split(" ") if part]
+                if len(name_parts) >= 2:
+                    forced_surname = name_parts[-1]
+                if parent_name:
+                    narrative_text = f"Son of {parent_name}. The bloodline stays in the family."
+                metadata.update(bloodline)
+                raw_height = _as_int(bloodline.get("parent_height_cm"))
+                if raw_height is not None and 145 <= raw_height <= 210:
+                    metadata["inherited_height_cm"] = _clamp(raw_height + rng.randint(-4, 4), 155, 205)
+                raw_foot = bloodline.get("parent_foot")
+                if isinstance(raw_foot, str) and raw_foot in {"left", "right", "both"}:
+                    metadata["inherited_foot"] = raw_foot
+                tags.append("parent_bloodline")
         return LineageSelection(
             relationship_type="son_of_owner",
             related_legend_type="club_owner",
@@ -2458,8 +2537,11 @@ class RegenGenerationEngine:
             lineage_region_name=owner_context.club_region_name,
             lineage_city_name=owner_context.club_city_name,
             lineage_hometown_code=owner_context.club_city_name or owner_context.club_region_name,
+            forced_surname=forced_surname,
             is_owner_son=True,
-            tags=("son_of_owner", "lineage"),
+            lineage_tier="rare",
+            narrative_text=narrative_text,
+            tags=tuple(tags),
             metadata=metadata,
         )
 

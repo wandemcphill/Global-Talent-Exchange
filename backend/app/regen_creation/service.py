@@ -50,6 +50,7 @@ from app.regen_creation.schemas import (
     RegenCreationGeneratedPlayerView,
     RegenCreationOrderListView,
     RegenCreationOrderView,
+    RegenCreationParentDnaView,
     RegenCreationParentPlayerView,
     RegenCreationPricingView,
     RequestSonCreateRequest,
@@ -107,16 +108,29 @@ class RegenCreationService:
     def request_son_options(self, actor: User) -> RequestSonOptionsView:
         club = self._resolve_actor_club(actor)
         pricing = self._pricing_view()
+        rows = self._eligible_parent_rows(club.id)
+        regens_by_player = self._regens_by_player([player.id for player, _country in rows])
         eligible = [
-            self._parent_player_view(player=player, club=club, country=country)
-            for player, country in self._eligible_parent_rows(club.id)
+            self._parent_player_view(
+                player=player,
+                club=club,
+                country=country,
+                regen=regens_by_player.get(player.id),
+            )
+            for player, country in rows
         ]
+        assert self.settings is not None
+        lifetime_used = self._owner_son_lifetime_count(actor.id)
+        lifetime_cap = int(self.settings.regen_generation.owner_son_lifetime_cap)
         return RequestSonOptionsView(
             club_id=club.id,
             club_name=club.club_name,
             currency="COIN",
             pricing=pricing,
             eligible_parents=eligible,
+            lifetime_cap=lifetime_cap,
+            lifetime_used=lifetime_used,
+            slots_remaining=max(0, lifetime_cap - lifetime_used),
         )
 
     def create_request_son_order(
@@ -155,6 +169,8 @@ class RegenCreationService:
                 "parent_player_name": parent_player.full_name,
                 "club_name": club.club_name,
                 "pricing_snapshot": pricing_snapshot,
+                "requested_foot": payload.requested_foot,
+                "requested_height_cm": payload.requested_height_cm,
             },
         )
         self.session.add(order)
@@ -274,10 +290,14 @@ class RegenCreationService:
         config = self.settings.regen_generation
         base = self._normalize_amount(config.owner_son_paid_request_base_cost)
         name_cost = self._normalize_amount(config.owner_son_paid_request_name_cost if payload.requested_name else 0)
+        custom_requested = bool(
+            payload.requested_country_code
+            or payload.requested_position
+            or payload.requested_foot
+            or payload.requested_height_cm is not None
+        )
         custom_cost = self._normalize_amount(
-            config.owner_son_paid_request_customization_cost
-            if (payload.requested_country_code or payload.requested_position)
-            else 0
+            config.owner_son_paid_request_customization_cost if custom_requested else 0
         )
         total = base + name_cost + custom_cost
         return {
@@ -529,6 +549,7 @@ class RegenCreationService:
             customization=self._owner_customization(order),
             total_cost_coin=int(self._normalize_amount(order.amount_coin)),
             target_club_id=club.id,
+            parent_bloodline=self._parent_bloodline(parent_player),
         )
         generated = self.engine.generate_academy_intake(
             club_id=club.id,
@@ -870,10 +891,17 @@ class RegenCreationService:
         )
 
         customization = self._owner_customization(order)
+        lineage_meta = generated_regen.metadata.get("lineage") if isinstance(generated_regen.metadata, dict) else None
+        if not isinstance(lineage_meta, dict):
+            lineage_meta = {}
         raw_foot = customization.get("favorite_foot")
         if isinstance(raw_foot, str):
             player.preferred_foot = raw_foot
+        elif isinstance(lineage_meta.get("inherited_foot"), str):
+            player.preferred_foot = str(lineage_meta["inherited_foot"])
         raw_height = customization.get("height_cm")
+        if raw_height is None:
+            raw_height = lineage_meta.get("inherited_height_cm")
         if raw_height is not None:
             try:
                 player.height_cm = int(raw_height)
@@ -898,11 +926,21 @@ class RegenCreationService:
             customization["position"] = order.requested_position
         if order.requested_country_code:
             customization["country_code"] = order.requested_country_code
+        metadata = dict(order.metadata_json or {})
+        raw_foot = metadata.get("requested_foot")
+        if isinstance(raw_foot, str) and raw_foot.strip():
+            customization["favorite_foot"] = raw_foot.strip().lower()
+        raw_height = metadata.get("requested_height_cm")
+        if raw_height is not None:
+            customization["height_cm"] = raw_height
         return customization
 
     def _target_country_code(self, *, order: RegenCreationOrder, club: ClubProfile, parent_player: Player) -> str:
         if order.requested_country_code:
             return order.requested_country_code.strip().upper()
+        parent_country = self._country_code(self.session.get(Country, parent_player.country_id)) if parent_player.country_id else None
+        if parent_country:
+            return parent_country
         if club.country_code:
             return club.country_code.strip().upper()
         if parent_player.country_id:
@@ -932,24 +970,150 @@ class RegenCreationService:
         )
         return int(count or 0)
 
+    def _regens_by_player(self, player_ids: list[str]) -> dict[str, RegenProfile]:
+        if not player_ids:
+            return {}
+        rows = self.session.scalars(select(RegenProfile).where(RegenProfile.player_id.in_(player_ids))).all()
+        return {row.player_id: row for row in rows if row.player_id}
+
+    def _parent_bloodline(self, player: Player, regen: RegenProfile | None = None) -> dict[str, object]:
+        if regen is None:
+            regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
+        rating = None
+        potential = None
+        if regen is not None and regen.current_gsi is not None:
+            rating = int(round(float(regen.current_gsi)))
+            raw_potential = (regen.potential_range_json or {}).get("maximum")
+            if isinstance(raw_potential, (int, float)) and not isinstance(raw_potential, bool):
+                potential = int(round(float(raw_potential)))
+        if rating is None and player.governed_gsi is not None:
+            rating = int(player.governed_gsi)
+        if potential is None and player.governed_potential_gsi is not None:
+            potential = int(player.governed_potential_gsi)
+        if potential is None and player.potential is not None:
+            potential = int(player.potential)
+        position = self._canonical_position(player.position) or self._canonical_position(player.normalized_position)
+        secondaries: list[str] = []
+        raw_secondaries = player.secondary_positions_json if isinstance(player.secondary_positions_json, list) else []
+        for item in raw_secondaries:
+            canon = self._canonical_position(item)
+            if canon and canon != position and canon not in secondaries:
+                secondaries.append(canon)
+        dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+        inherited_dna: dict[str, object] = {}
+        archetype = dna.get("archetype")
+        if isinstance(archetype, str) and archetype.strip():
+            inherited_dna["archetype"] = archetype.strip().lower()
+        for key in ("tempo", "risk_taking", "creativity", "discipline"):
+            value = dna.get(key)
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                inherited_dna[key] = float(value)
+        return {
+            "parent_player_id": player.id,
+            "parent_player_name": player.full_name,
+            "parent_position": position,
+            "parent_secondary_positions": secondaries,
+            "parent_rating": rating,
+            "parent_potential": potential,
+            "parent_foot": self._canonical_foot(player.preferred_foot),
+            "parent_height_cm": int(player.height_cm) if isinstance(player.height_cm, int) else None,
+            "inherited_dna": inherited_dna or None,
+        }
+
+    def _parent_age(self, player: Player) -> int | None:
+        from app.services.player_aging import age_years, aging_date_for_player
+
+        if player.date_of_birth is None:
+            return None
+        return age_years(player.date_of_birth, aging_date_for_player(player, self.session))
+
     def _parent_player_view(
         self,
         *,
         player: Player,
         club: ClubProfile,
         country: Country | None,
+        regen: RegenProfile | None = None,
     ) -> RegenCreationParentPlayerView:
+        bloodline = self._parent_bloodline(player, regen=regen)
+        rating = bloodline.get("parent_rating")
+        potential = bloodline.get("parent_potential")
+        height = bloodline.get("parent_height_cm")
         return RegenCreationParentPlayerView(
             player_id=player.id,
             full_name=player.full_name,
             image_url=self._player_image_url(player),
             portrait_url=self._player_image_url(player),
-            position=player.position or player.normalized_position,
+            position=str(bloodline.get("parent_position") or player.position or player.normalized_position or "") or None,
             country_code=self._country_code(country),
             country_name=country.name if country is not None else None,
             club_id=club.id,
             club_name=club.club_name,
+            current_rating=int(rating) if isinstance(rating, int) else None,
+            potential_rating=int(potential) if isinstance(potential, int) else None,
+            preferred_foot=bloodline.get("parent_foot") if isinstance(bloodline.get("parent_foot"), str) else None,
+            height_cm=int(height) if isinstance(height, int) else None,
+            age=self._parent_age(player),
+            dna=self._parent_dna_view(bloodline.get("inherited_dna")),
         )
+
+    @staticmethod
+    def _parent_dna_view(raw: object) -> RegenCreationParentDnaView | None:
+        if not isinstance(raw, dict) or not raw:
+            return None
+        traits: dict[str, float | None] = {}
+        for key in ("tempo", "risk_taking", "creativity", "discipline"):
+            value = raw.get(key)
+            traits[key] = float(value) if isinstance(value, (int, float)) and not isinstance(value, bool) else None
+        archetype = raw.get("archetype")
+        if not any(value is not None for value in traits.values()) and not isinstance(archetype, str):
+            return None
+        return RegenCreationParentDnaView(
+            archetype=archetype.strip().lower() if isinstance(archetype, str) and archetype.strip() else None,
+            tempo=traits["tempo"],
+            risk_taking=traits["risk_taking"],
+            creativity=traits["creativity"],
+            discipline=traits["discipline"],
+        )
+
+    @staticmethod
+    def _canonical_position(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        key = "".join(ch for ch in value.strip().upper() if ch.isalnum())
+        return {
+            "GK": "GK",
+            "GOALKEEPER": "GK",
+            "CB": "CB",
+            "RB": "RB",
+            "LB": "LB",
+            "DEFENDER": "CB",
+            "DM": "DM",
+            "CDM": "DM",
+            "CM": "CM",
+            "AM": "AM",
+            "CAM": "AM",
+            "MIDFIELDER": "CM",
+            "RW": "RW",
+            "LW": "LW",
+            "WINGER": "RW",
+            "ST": "ST",
+            "CF": "ST",
+            "FW": "ST",
+            "STRIKER": "ST",
+            "FORWARD": "ST",
+        }.get(key)
+
+    @staticmethod
+    def _canonical_foot(value: object) -> str | None:
+        if not isinstance(value, str):
+            return None
+        foot = value.strip().lower()
+        if foot == "either":
+            return "both"
+        if foot in {"left", "right", "both"}:
+            return foot
+        return None
 
     def _generated_player_view(self, order: RegenCreationOrder) -> RegenCreationGeneratedPlayerView | None:
         if not order.generated_player_id or not order.generated_regen_profile_id:
@@ -961,6 +1125,16 @@ class RegenCreationService:
         country = self.session.get(Country, player.country_id) if player.country_id else None
         club = self.session.get(ClubProfile, player.current_club_profile_id) if player.current_club_profile_id else None
         potential = regen.potential_range_json or {}
+        lineage = {}
+        if isinstance(regen.metadata_json, dict):
+            raw_lineage = regen.metadata_json.get("lineage")
+            if isinstance(raw_lineage, dict):
+                lineage = raw_lineage
+        order_meta = dict(order.metadata_json or {})
+        parent_name = lineage.get("parent_player_name") or order_meta.get("parent_player_name")
+        narrative = lineage.get("narrative_text")
+        dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+        archetype = dna.get("archetype")
         return RegenCreationGeneratedPlayerView(
             player_id=player.id,
             regen_profile_id=regen.id,
@@ -976,6 +1150,11 @@ class RegenCreationService:
             current_rating=int(regen.current_gsi),
             potential_rating=int(potential.get("maximum") or regen.current_gsi),
             card_id=regen.linked_unique_card_id,
+            preferred_foot=player.preferred_foot,
+            height_cm=int(player.height_cm) if isinstance(player.height_cm, int) else None,
+            parent_player_name=str(parent_name) if isinstance(parent_name, str) and parent_name.strip() else None,
+            narrative=str(narrative) if isinstance(narrative, str) and narrative.strip() else None,
+            dna_archetype=archetype.strip().lower() if isinstance(archetype, str) and archetype.strip() else None,
         )
 
     def _player_image_url(self, player: Player) -> str | None:

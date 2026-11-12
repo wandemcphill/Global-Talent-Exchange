@@ -63,7 +63,7 @@ describe("GtexSponsoredMusicCard", () => {
     expect(link?.getAttribute("href")).toBe("https://music.apple.com/test");
   });
 
-  it("handles mute and play/pause button clicks", async () => {
+  it("does not offer play, pause, or mute", async () => {
     const track: SponsoredTrackView = {
       campaignId: "camp-test-2",
       title: "Victory Dub",
@@ -80,21 +80,10 @@ describe("GtexSponsoredMusicCard", () => {
       root.render(<GtexSponsoredMusicCard />);
     });
 
-    const muteBtn = container.querySelector('[data-testid="music-mute-toggle"]') as HTMLButtonElement;
-    expect(muteBtn).not.toBeNull();
-
-    act(() => {
-      muteBtn.click();
-    });
-    expect(gtexAudio.getSnapshot().channelMuted.sponsored_music).toBe(true);
-
-    const playPauseBtn = container.querySelector('[data-testid="music-play-pause-btn"]') as HTMLButtonElement;
-    expect(playPauseBtn).not.toBeNull();
-
-    act(() => {
-      playPauseBtn.click();
-    });
-    expect(gtexAudio.getSnapshot().sponsoredPlaybackStatus).toBe("paused");
+    expect(container.querySelector('[data-testid="music-mute-toggle"]')).toBeNull();
+    expect(container.querySelector('[data-testid="music-play-pause-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="unlock-autoplay-btn"]')).toBeNull();
+    expect(gtexAudio.getSnapshot().sponsoredPlaybackStatus).not.toBe("paused");
   });
 
   it("handles track skipping and dismiss callbacks", async () => {
@@ -149,15 +138,9 @@ describe("GtexSponsoredMusicCard", () => {
 
     const blockedCard = container.querySelector('[data-testid="gtex-sponsored-music-blocked"]');
     expect(blockedCard).not.toBeNull();
-    expect(container.textContent).toContain("Audio Autoplay Paused");
-    expect(container.textContent).toContain("Tap to Listen");
-
-    const unlockBtn = container.querySelector('[data-testid="unlock-autoplay-btn"]') as HTMLButtonElement;
-    expect(unlockBtn).not.toBeNull();
-
-    await act(async () => {
-      unlockBtn.click();
-    });
-    expect(gtexAudio.getSnapshot().isAutoplayBlocked).toBe(false);
+    expect(container.textContent).toContain("Night Kickoff");
+    expect(container.textContent).toContain("starts with your next tap");
+    expect(container.querySelector('[data-testid="unlock-autoplay-btn"]')).toBeNull();
+    expect(container.textContent).not.toContain("Tap to Listen");
   });
 });

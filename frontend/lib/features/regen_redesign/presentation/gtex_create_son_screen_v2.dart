@@ -238,7 +238,7 @@ class _CreateSonLeftPanel extends StatelessWidget {
                                 ),
                               ),
                               Text(
-                                '${parent.clubName} • ${parent.countryCode} • ${parent.rating} OVR',
+                                '${parent.clubName} • ${parent.countryCode} • ${parent.rating > 0 ? '${parent.rating} OVR' : 'OVR pending'}',
                                 style: const TextStyle(
                                   color: GtexColors.textMuted,
                                 ),

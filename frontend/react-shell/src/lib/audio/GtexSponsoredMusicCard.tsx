@@ -5,18 +5,14 @@
  */
 
 import React from "react";
-import { useSponsoredMusic, useAudioChannel } from "./GtexAudioContext";
+import { useSponsoredMusic } from "./GtexAudioContext";
 import {
   Disc3,
   ExternalLink,
   Headphones,
   Music2,
-  Pause,
-  Play,
   SkipForward,
   Sparkles,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 
@@ -34,15 +30,9 @@ export const GtexSponsoredMusicCard: React.FC<GtexSponsoredMusicCardProps> = ({
   const {
     track,
     status,
-    isAutoplayBlocked,
     progressPercent,
-    pause,
-    resume,
     stop,
-    unlockAutoplay,
   } = useSponsoredMusic();
-
-  const { isMuted, setMute } = useAudioChannel("sponsored_music");
 
   if (!track || status === "idle") {
     return null;
@@ -51,52 +41,24 @@ export const GtexSponsoredMusicCard: React.FC<GtexSponsoredMusicCardProps> = ({
   const isPlaying = status === "playing";
   const accentColor = track.accentColor || "#00E676";
 
-  // When autoplay is blocked by browser policies: show clean unlock CTA card
-  if (isAutoplayBlocked || status === "blocked") {
+  // Browser autoplay waits for the first tap anywhere in the app. There is no play control.
+  if (status === "blocked") {
     return (
       <div
         data-testid="gtex-sponsored-music-blocked"
         className={`relative overflow-hidden rounded-2xl border border-amber-500/30 bg-gradient-to-r from-[#0d1424] via-[#090d18] to-[#060910] p-4 text-white shadow-2xl backdrop-blur-md ${className}`}
       >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-400"
-            >
-              <Headphones className="h-6 w-6 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 ring-1 ring-amber-500/30">
-                  <Sparkles className="mr-1 h-3 w-3" />
-                  GTEX Music Spotlight
-                </span>
-                <span className="text-xs text-slate-400">Audio Autoplay Paused</span>
-              </div>
-              <h4 className="mt-0.5 text-sm font-bold text-slate-100">{track.title}</h4>
-              <p className="text-xs text-slate-400">by {track.artist}</p>
-            </div>
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-500/40 bg-amber-500/10 text-amber-400">
+            <Headphones className="h-6 w-6 animate-pulse" />
           </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => void unlockAutoplay()}
-              data-testid="unlock-autoplay-btn"
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 px-4 py-2 text-xs font-bold text-slate-950 transition-all hover:scale-105 active:scale-95"
-            >
-              <Play className="h-3.5 w-3.5 fill-current" />
-              <span>Tap to Listen</span>
-            </button>
-            {onDismiss && (
-              <button
-                type="button"
-                onClick={onDismiss}
-                className="rounded-lg p-1.5 text-slate-400 hover:bg-white/10 hover:text-white"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+          <div>
+            <span className="flex items-center rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 ring-1 ring-amber-500/30">
+              <Sparkles className="mr-1 h-3 w-3" />
+              GTEX Music Spotlight
+            </span>
+            <h4 className="mt-0.5 text-sm font-bold text-slate-100">{track.title}</h4>
+            <p className="text-xs text-slate-400">by {track.artist} · starts with your next tap</p>
           </div>
         </div>
       </div>
@@ -172,29 +134,7 @@ export const GtexSponsoredMusicCard: React.FC<GtexSponsoredMusicCardProps> = ({
             </a>
           )}
 
-          {/* Mute Toggle */}
-          <button
-            type="button"
-            onClick={() => setMute(!isMuted)}
-            data-testid="music-mute-toggle"
-            className="rounded-lg p-1.5 text-slate-400 transition-colors hover:bg-white/10 hover:text-white"
-            title={isMuted ? "Unmute music" : "Mute music"}
-          >
-            {isMuted ? <VolumeX className="h-4 w-4 text-amber-400" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-
-          {/* Play / Pause Toggle */}
-          <button
-            type="button"
-            onClick={isPlaying ? pause : resume}
-            data-testid="music-play-pause-btn"
-            className="rounded-lg bg-white/10 p-1.5 text-slate-100 transition-colors hover:bg-white/20 active:scale-95"
-            title={isPlaying ? "Pause" : "Play"}
-          >
-            {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 fill-current" />}
-          </button>
-
-          {/* Skip Button */}
+          {/* Skip moves off this placement. It does not pause the station. */}
           <button
             type="button"
             onClick={() => stop()}

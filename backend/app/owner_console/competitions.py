@@ -220,8 +220,12 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
     else:
         data["execution_model"] = "user_hosted_legacy"
         data["canonical_lifecycle_status"] = "not_applicable"
-        data["entry_fee"] = "0"
-        data["allow_same_owner"] = False
+        data["entry_fee"] = str(comp.entry_fee)
+        declared = Decimal(comp.sponsored_pool or 0)
+        funded = Decimal(str(data.get("prize_pool") or 0))
+        data["prize_pool"] = str(max(declared, funded))
+        data["contribution"] = str(comp.entry_fee)
+        data["allow_same_owner"] = comp.allow_same_owner
     return data
 
 
@@ -541,6 +545,24 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
             409,
             "Clubs under common ownership cannot enter the same competition.",
         )
+    contribution = Decimal(comp.entry_fee or 0)
+    if contribution > 0:
+        try:
+            ledger.record(
+                session,
+                event_type="competition_entry_fee",
+                source=ledger.club_account(club_id),
+                destination=comp_account(comp.id),
+                currency=ledger.GTEX,
+                gross=contribution,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="owner_competition",
+                related_id=comp.id,
+                memo=f"Entry contribution for {comp.name}",
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError("contribution_unpaid", 402, "The club cannot cover this competition contribution.") from exc
     strength = club_strength(
         [player_dict(p) for p in squad(session, club_id)], state.manager_json or {}, state.facilities_json or {}
     )
@@ -578,27 +600,61 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
     from app.national_team_engine.competition_profiles import user_template
 
     template = user_template(str(payload.get("template_key") or ""))
-    competition_format = payload.get("format", "league")
-    max_clubs = int(payload.get("max_clubs", 4))
-    if template and template.get("side") == "club":
-        competition_format = template["format_type"]
-        max_clubs = int(template["max_participants"])
+    competition_format = str(payload.get("format") or (template or {}).get("format_type") or "league")
+    if competition_format in {"cup", "group_knockout"}:
+        competition_format = "knockout"
+    max_clubs = int(payload.get("max_clubs") or (template or {}).get("max_participants") or 4)
+    max_clubs = max(2, min(32, max_clubs))
+    contribution = Decimal(str(payload.get("contribution") if payload.get("contribution") is not None else payload.get("entry_fee") or 0))
+    prize = Decimal(str(payload.get("winner_prize") or payload.get("prize_pool") or 0))
+    if contribution < 0 or prize < 0:
+        raise OwnerError("invalid_competition_money", 400, "Contribution and prize must be zero or more.")
+    pin = str(payload.get("pin") or payload.get("invite_code") or "").strip().upper()
+    if pin and (len(pin) < 4 or len(pin) > 12 or not pin.isalnum()):
+        raise OwnerError("invalid_pin", 400, "Pin must be 4 to 12 letters or numbers.")
+    if pin and session.scalar(select(OwnerCompetition).where(OwnerCompetition.invite_code == pin)):
+        raise OwnerError("pin_taken", 409, "That pin is already in use.")
+    if not pin:
+        pin = secrets.token_hex(3).upper()
+    name = payload.get("name") or (template or {}).get("title") or "Hosted competition"
     comp = OwnerCompetition(
-        name=payload.get("name") or (template or {}).get("title") or "Hosted competition",
+        name=name,
         host_type="user",
         host_user_id=user_id,
         format=competition_format,
         tier="Friends",
-        entry_fee=Decimal("0"),
+        entry_fee=contribution,
+        sponsored_pool=prize,
         max_clubs=max_clubs,
-        allow_same_owner=False,
-        prize_sensitive=False,
+        allow_same_owner=bool(payload.get("allow_same_owner") or False),
+        prize_sensitive=prize > 0 or contribution > 0,
         platform_fee_bps=1000,
-        invite_code=secrets.token_hex(3).upper(),
-        description=payload.get("description") or "One club per owner.",
+        invite_code=pin,
+        description=payload.get("description") or "One club per owner. Official GTEX entry stays free.",
     )
     session.add(comp)
     session.flush()
+    club_id = payload.get("club_id")
+    if prize > 0:
+        if not club_id:
+            raise OwnerError("club_required_to_fund_prize", 400, "Select a club to fund the winner prize.")
+        require_state(session, str(club_id), user_id)
+        try:
+            ledger.record(
+                session,
+                event_type="competition_entry_fee",
+                source=ledger.club_account(str(club_id)),
+                destination=comp_account(comp.id),
+                currency=ledger.GTEX,
+                gross=prize,
+                club_id=str(club_id),
+                user_id=user_id,
+                related_type="owner_competition",
+                related_id=comp.id,
+                memo=f"Host prize for {name}",
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError("prize_unfunded", 402, "The club cannot fund that winner prize.") from exc
     return comp
 
 

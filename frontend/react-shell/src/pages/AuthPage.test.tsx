@@ -139,7 +139,7 @@ describe("Unified AuthPage Onboarding & Login (Issue #228)", () => {
     expect(container?.querySelector('[data-testid="signup-totp-secret"]')).toBeNull();
 
     // Unified account explanation notice is shown
-    expect(container?.textContent).toContain("Unified GTEX Account");
+    expect(container?.textContent).toContain("Choose how you join");
     expect(container?.textContent).toContain("One account unlocks the full platform");
   });
 

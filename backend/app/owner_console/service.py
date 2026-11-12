@@ -402,6 +402,7 @@ def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
             regens[0]["position"] = "goalkeeper"
 
         # Distribute into 11 first team, 6 reserve, 5 academy
+        used_portrait_keys: set[str] = set()
         for i, regen in enumerate(regens):
             pers = dict(regen.get("personality") or {})
             slot_idx = len(current) + i
@@ -412,7 +413,7 @@ def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
             else:
                 pers["squad_status"] = "academy"
             regen["personality"] = pers
-            _add_regen(session, state.club_id, regen)
+            _add_regen(session, state.club_id, regen, used_portrait_keys=used_portrait_keys)
     _advance_stage_after_squad(session, state)
 
 
@@ -489,11 +490,23 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         ),
     }
 
+    needs_portrait = (
+        session is not None
+        and p.is_regen
+        and p.acquired_via == "academy"
+        and not storytelling.stored_regen_portrait_url(p)
+    )
+    if needs_portrait:
+        assign_academy_regen_portrait(session, p)
+    portrait_url = storytelling.stored_regen_portrait_url(p) or storytelling.resolve_player_portrait_url(
+        session, p.id, p.name
+    )
+
     return {
         "id": p.id,
         "player_ref": p.player_ref,
         "name": p.name,
-        "portrait_url": storytelling.resolve_player_portrait_url(session, p.id, p.name),
+        "portrait_url": portrait_url,
         "position": p.position,
         "age": p.age,
         "rating": p.rating,
@@ -1046,7 +1059,98 @@ def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
         state.stage = "competition" if has_custom_manager else "manager"
 
 
-def _add_regen(session: Session, club_id: str, regen: dict[str, Any]) -> OwnerSquadPlayer:
+ACADEMY_PORTRAIT_POLICY = "newgen_bank_only"
+_PORTRAIT_PICK_ATTEMPTS = 48
+
+
+def assign_academy_regen_portrait(
+    session: Session,
+    player: OwnerSquadPlayer,
+    *,
+    used_storage_keys: set[str] | None = None,
+) -> str | None:
+    """Store one nationality-matched face-bank portrait on an academy regen.
+
+    A missing face bank leaves the portrait empty so intake can still finish.
+    """
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from app.services.regen_portrait_service import RegenPortraitService
+
+    personality = dict(player.personality_json or {})
+    existing = personality.get("portrait_url")
+    existing_key = str(personality.get("portrait_storage_key") or "")
+    if isinstance(existing, str) and existing.strip():
+        if used_storage_keys is not None and existing_key:
+            used_storage_keys.add(existing_key)
+        return existing.strip()
+
+    reserved = used_storage_keys if used_storage_keys is not None else _club_portrait_keys(session, player.club_id)
+    profile = session.get(ClubProfile, player.club_id)
+    country = profile.country_code if profile is not None else None
+    try:
+        portrait_service = RegenPortraitService(session)
+        groups = RegenPortraitService._portrait_ethnicity_groups(country)
+        recipe = {
+            "portraitEthnicityGroups": list(groups),
+            "portraitEthnicity": groups[0] if groups else "Mixed",
+        }
+        seed = f"{player.club_id}:{player.id}"
+        chosen: dict[str, Any] | None = None
+        fallback: dict[str, Any] | None = None
+        for attempt in range(_PORTRAIT_PICK_ATTEMPTS):
+            attempt_seed = seed if attempt == 0 else f"{seed}:retry:{attempt}"
+            candidate = portrait_service._select_regen_face_bank_asset(seed=attempt_seed, recipe=recipe)
+            if not candidate:
+                break
+            if fallback is None:
+                fallback = candidate
+            storage_key = str(candidate.get("storage_key") or "")
+            if storage_key and storage_key not in reserved:
+                chosen = candidate
+                break
+        asset = chosen or fallback
+        if asset is None:
+            return None
+        storage_key = str(asset.get("storage_key") or "")
+        portrait_url = portrait_service._face_bank_asset_url(asset)
+        if not portrait_url:
+            return None
+    except Exception:
+        logger.warning("academy face bank assignment failed for %s", player.id, exc_info=True)
+        return None
+
+    personality["portrait_url"] = portrait_url
+    personality["portrait_storage_key"] = storage_key
+    personality["portrait_ethnicity"] = str(asset.get("ethnicity") or recipe["portraitEthnicity"])
+    personality["portrait_policy"] = ACADEMY_PORTRAIT_POLICY
+    player.personality_json = personality
+    flag_modified(player, "personality_json")
+    if storage_key:
+        reserved.add(storage_key)
+    session.flush()
+    return portrait_url
+
+
+def _club_portrait_keys(session: Session, club_id: str) -> set[str]:
+    keys: set[str] = set()
+    rows = session.scalars(
+        select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id, OwnerSquadPlayer.is_regen.is_(True))
+    ).all()
+    for row in rows:
+        key = str((row.personality_json or {}).get("portrait_storage_key") or "")
+        if key:
+            keys.add(key)
+    return keys
+
+
+def _add_regen(
+    session: Session,
+    club_id: str,
+    regen: dict[str, Any],
+    *,
+    used_portrait_keys: set[str] | None = None,
+) -> OwnerSquadPlayer:
     player = OwnerSquadPlayer(
         club_id=club_id,
         name=regen["name"],
@@ -1062,6 +1166,7 @@ def _add_regen(session: Session, club_id: str, regen: dict[str, Any]) -> OwnerSq
     )
     session.add(player)
     session.flush()
+    assign_academy_regen_portrait(session, player, used_storage_keys=used_portrait_keys)
     return player
 
 
@@ -1326,7 +1431,8 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
         campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
         campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
     )
-    return [_add_regen(session, club_id, r) for r in cohort]
+    used_portrait_keys: set[str] = set()
+    return [_add_regen(session, club_id, regen, used_portrait_keys=used_portrait_keys) for regen in cohort]
 
 
 # ---------- integrity ----------

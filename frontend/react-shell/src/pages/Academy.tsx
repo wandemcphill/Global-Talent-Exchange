@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -27,25 +27,67 @@ const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(s
 const TRAITS = ["ambition", "loyalty", "marketability", "professionalism", "adaptability", "growth_responsiveness", "environment_sensitivity"];
 const SON_POSITIONS = ["ST", "RW", "LW", "AM", "CM", "DM", "RB", "LB", "CB", "GK"];
 
+const POS_CANON: Record<string, string> = {
+  GK: "GK",
+  GOALKEEPER: "GK",
+  CB: "CB",
+  RB: "RB",
+  LB: "LB",
+  DEFENDER: "CB",
+  DM: "DM",
+  CDM: "DM",
+  CM: "CM",
+  AM: "AM",
+  CAM: "AM",
+  MIDFIELDER: "CM",
+  RW: "RW",
+  LW: "LW",
+  WINGER: "RW",
+  ST: "ST",
+  CF: "ST",
+  FW: "ST",
+  STRIKER: "ST",
+  FORWARD: "ST",
+};
+
+function canonPos(value?: string | null): string {
+  if (!value) return "";
+  const key = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return POS_CANON[key] || (SON_POSITIONS.includes(key) ? key : "");
+}
+
+function canonFoot(value?: string | null): string {
+  const foot = (value || "").trim().toLowerCase();
+  if (foot === "either") return "both";
+  return foot === "left" || foot === "right" || foot === "both" ? foot : "";
+}
+
+function projectYouthBand(rating?: number | null, potential?: number | null) {
+  if (!rating) return null;
+  const r = Math.max(40, Math.min(98, Number(rating)));
+  const ceiling = Math.min(96, Math.max(r, Math.min(98, Number(potential || r))));
+  const low = Math.max(42, Math.round(r * 0.62) - 3);
+  const high = Math.min(78, Math.round(r * 0.7) + 2);
+  return { low, high, mid: Math.round((low + high) / 2), potential: ceiling };
+}
+
 function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: () => void }) {
   const qc = useQueryClient();
   const [parentId, setParentId] = useState("");
   const [sonName, setSonName] = useState("");
-  const [sonPosition, setSonPosition] = useState("ST");
-  const [sonCountry, setSonCountry] = useState("NGA");
+  const [sonPosition, setSonPosition] = useState("");
+  const [sonCountry, setSonCountry] = useState("");
+  const [sonFoot, setSonFoot] = useState("");
+  const [sonHeight, setSonHeight] = useState("");
   const [busyOrder, setBusyOrder] = useState<string | null>(null);
+  const [reveal, setReveal] = useState<any | null>(null);
 
-  const { data: options } = useQuery({
+  const optionsQuery = useQuery({
     queryKey: ["request-son-options", club?.club_id],
-    queryFn: async () => {
-      try {
-        return (await api.get("/regens/request-son/options")).data;
-      } catch {
-        return null;
-      }
-    },
+    queryFn: async () => (await api.get("/regens/request-son/options")).data,
     enabled: Boolean(club?.club_id),
   });
+  const options = optionsQuery.data;
 
   const { data: ordersData } = useQuery({
     queryKey: ["regen-creation-orders", club?.club_id],
@@ -59,16 +101,7 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
     enabled: Boolean(club?.club_id),
   });
 
-  const eligibleParents: any[] =
-    options?.eligible_parents?.length > 0
-      ? options.eligible_parents
-      : (club?.squad || []).slice(0, 8).map((p: any) => ({
-          player_id: p.player_ref || p.player_id || p.id,
-          full_name: p.name,
-          position: p.position,
-          country_code: p.nationality || "NGA",
-          club_name: club?.club_name,
-        }));
+  const eligibleParents: any[] = options?.eligible_parents || [];
 
   useEffect(() => {
     if (!parentId && eligibleParents.length > 0) {
@@ -76,39 +109,85 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
     }
   }, [eligibleParents, parentId]);
 
-  const baseCost = Number(options?.pricing?.base_cost_coin ?? 1500);
-  const nameCost = sonName.trim() ? Number(options?.pricing?.name_cost_coin ?? 500) : 0;
-  const customCost = Number(options?.pricing?.customization_cost_coin ?? 500);
+  const parent = eligibleParents.find((p) => String(p.player_id) === parentId) || null;
+  const inheritedPosition = canonPos(parent?.position);
+  const inheritedCountry = String(parent?.country_code || "").toUpperCase();
+  const inheritedFoot = canonFoot(parent?.preferred_foot);
+  const positionOverride = sonPosition && sonPosition !== inheritedPosition ? sonPosition : "";
+  const countryOverride =
+    sonCountry.trim() && sonCountry.trim().toUpperCase() !== inheritedCountry
+      ? sonCountry.trim().toUpperCase()
+      : "";
+  const footOverride = sonFoot && sonFoot !== inheritedFoot ? sonFoot : "";
+  const heightNumber = sonHeight.trim() ? Number(sonHeight) : null;
+  const heightOverride =
+    heightNumber && Number.isFinite(heightNumber) && heightNumber !== Number(parent?.height_cm || 0)
+      ? heightNumber
+      : null;
+  const pricingReady = options?.pricing?.base_cost_coin != null;
+  const baseCost = Number(options?.pricing?.base_cost_coin || 0);
+  const nameUnit = Number(options?.pricing?.name_cost_coin || 0);
+  const customUnit = Number(options?.pricing?.customization_cost_coin || 0);
+  const nameCost = sonName.trim() ? nameUnit : 0;
+  const customized = Boolean(positionOverride || countryOverride || footOverride || heightOverride);
+  const customCost = customized ? customUnit : 0;
   const totalEstimated = baseCost + nameCost + customCost;
+  const slots = Number.isFinite(Number(options?.slots_remaining)) ? Number(options.slots_remaining) : null;
+  const band = projectYouthBand(parent?.current_rating, parent?.potential_rating);
+  const surname = String(parent?.full_name || "")
+    .trim()
+    .split(/\s+/)
+    .slice(1)
+    .join(" ");
 
-  const orders: any[] = ordersData?.orders || ordersData?.items || [];
+  const orders: any[] = ordersData?.items || ordersData?.orders || [];
 
   const handleRequestSon = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!parentId) {
-      toast.error("Select a parent club legend / senior player to pass on the bloodline.");
+      toast.error("Select a parent at your club to pass on the bloodline.");
+      return;
+    }
+    if (heightOverride && (heightOverride < 145 || heightOverride > 210)) {
+      toast.error("Height must be between 145 and 210 cm.");
+      return;
+    }
+    if (slots === 0) {
+      toast.error("This club has used every Build-a-Son slot.");
       return;
     }
     setBusyOrder("create");
     try {
-      const { data: order } = await api.post("/regens/request-son", {
+      const body: Record<string, unknown> = {
         parent_player_id: parentId,
-        requested_name: sonName.trim() || undefined,
-        requested_position: sonPosition,
-        requested_country_code: sonCountry.trim().toUpperCase() || undefined,
         payment_method: "wallet",
-      });
-      // Immediately pay with wallet & generate if pending payment
+      };
+      if (sonName.trim()) body.requested_name = sonName.trim();
+      if (positionOverride) body.requested_position = positionOverride;
+      if (countryOverride) body.requested_country_code = countryOverride;
+      if (footOverride) body.requested_foot = footOverride;
+      if (heightOverride) body.requested_height_cm = heightOverride;
+      const { data: order } = await api.post("/regens/request-son", body);
+      let generated = order?.generated_player;
       if (order?.id && order.status !== "generated") {
         try {
-          await api.post(`/regens/creation-orders/${order.id}/pay-with-wallet`);
-          await api.post(`/regens/creation-orders/${order.id}/generate-after-payment`);
-        } catch {
-          // Order created; user can complete payment/generation from the order row below
+          const paid = await api.post(`/regens/creation-orders/${order.id}/pay-with-wallet`);
+          generated = paid.data?.generated_player || generated;
+        } catch (payErr) {
+          toast.error(errMsg(payErr));
         }
       }
-      toast.success(`Build-A-Son dynasty order submitted${sonName ? ` for ${sonName}` : ""}!`);
+      if (generated?.full_name) {
+        setReveal(generated);
+        toast.success(`${generated.full_name} joined the reserve squad.`);
+      } else {
+        toast.success(`Build-A-Son order submitted${sonName ? ` for ${sonName}` : ""}.`);
+      }
       setSonName("");
+      setSonPosition("");
+      setSonCountry("");
+      setSonFoot("");
+      setSonHeight("");
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["regen-creation-orders"] }),
         qc.invalidateQueries({ queryKey: ["request-son-options"] }),
@@ -124,14 +203,24 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
   const handleCompleteOrder = async (orderId: string, step: "pay" | "generate") => {
     setBusyOrder(`${orderId}:${step}`);
     try {
-      if (step === "pay") {
-        await api.post(`/regens/creation-orders/${orderId}/pay-with-wallet`);
+      const path =
+        step === "pay"
+          ? `/regens/creation-orders/${orderId}/pay-with-wallet`
+          : `/regens/creation-orders/${orderId}/generate-after-payment`;
+      const { data } = await api.post(path);
+      const generated = data?.generated_player;
+      if (generated?.full_name) {
+        setReveal(generated);
+        toast.success(`${generated.full_name} joined the reserve squad.`);
+      } else if (step === "pay") {
         toast.success("Build-A-Son order paid from GTEX wallet.");
       } else {
-        await api.post(`/regens/creation-orders/${orderId}/generate-after-payment`);
-        toast.success("Dynasty heir generated and inducted into your Academy!");
+        toast.success("Dynasty heir generated and inducted into the reserve squad.");
       }
-      await qc.invalidateQueries({ queryKey: ["regen-creation-orders"] });
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["regen-creation-orders"] }),
+        qc.invalidateQueries({ queryKey: ["request-son-options"] }),
+      ]);
       onOrderUpdated();
     } catch (err) {
       toast.error(errMsg(err));
@@ -140,58 +229,88 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
     }
   };
 
+  const shownPosition = positionOverride || inheritedPosition || "bloodline";
+  const heirLabel = sonName.trim() || (surname ? `${surname} Jr.` : "Bloodline heir");
+  const dna = parent?.dna;
+
+  if (optionsQuery.isLoading) {
+    return (
+      <Panel eyebrow="Dynasty bloodline" title="Build a Son" testid="build-a-son-panel">
+        <Loading label="Loading bloodline parents" />
+      </Panel>
+    );
+  }
+  if (optionsQuery.isError || !options) {
+    return (
+      <Panel eyebrow="Dynasty bloodline" title="Build a Son" testid="build-a-son-panel">
+        <Empty title="Build a Son unavailable" body={errMsg(optionsQuery.error)} />
+      </Panel>
+    );
+  }
+
   return (
     <Panel
-      eyebrow="Canonical Regen Creation Engine · Dynasty Bloodline"
-      title="Build-A-Son Legacy Program"
+      eyebrow="Dynasty bloodline"
+      title="Build a Son"
       testid="build-a-son-panel"
     >
       <div className="mb-6">
         <Cinema3DStage
           scene="build_a_son"
           compact
-          title={`3D Bloodline Induction · ${sonName.trim() || "Dynasty Heir Jr."}`}
-          subtitle={`Passing the Torch at ${club?.club_name || "GTEX FC"} · Position: ${sonPosition} (${sonCountry})`}
-          badgeText="3D DNA TUNNEL WALKOUT"
+          title={`Bloodline induction · ${heirLabel}`}
+          subtitle={
+            band
+              ? `Projected youth band ${band.low}–${band.high}, ceiling ${band.potential}. The minted card is dealt after payment.`
+              : `Son of ${parent?.full_name || "a club player"} at ${club?.club_name || "your club"}. Rating follows academy intake when the parent has no GSI.`
+          }
+          badgeText="DNA WALKOUT"
           clubName={club?.club_name || "GTEX FC"}
-          subjectName={sonName.trim() || "Dynasty Heir Jr."}
-          subjectRole={`${sonPosition} · Second-Generation Club Scion`}
-          jerseyNumber={sonPosition === "ST" ? 9 : sonPosition === "AM" || sonPosition === "RW" ? 10 : 7}
-          overallRating={74}
-          potentialRating={94}
-          quote="Growing up in these stands, wearing my father's crest is my destiny."
+          subjectName={heirLabel}
+          subjectRole={`${shownPosition} · son of ${parent?.full_name || "the bloodline"}`}
+          jerseyNumber={shownPosition === "ST" ? 9 : shownPosition === "AM" || shownPosition === "RW" ? 10 : 7}
+          overallRating={band ? band.mid : "—"}
+          potentialRating={band ? band.potential : "—"}
+          quote={
+            parent?.full_name
+              ? `I grew up watching ${parent.full_name}. The shirt already knows my name.`
+              : "The bloodline stays at the club."
+          }
         />
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <form onSubmit={handleRequestSon} className="space-y-4 lg:col-span-7" data-testid="build-a-son-form">
-          <p className="text-xs text-slate-300 leading-relaxed">
-            Induct a second-generation dynasty heir into <b className="text-white">{club?.club_name}</b> using the canonical{" "}
-            <span className="gx-mono text-emerald-300">/regens/request-son</span> pipeline. Select an eligible club parent to pass on DNA bloodline traits, position affinity, and supporter adoration.
+          <p className="text-xs leading-relaxed text-slate-300">
+            The son keeps <b className="text-white">{parent?.full_name || "the parent's"}</b> surname, position, foot, and DNA unless you pay to change them.
+            He joins <b className="text-white">{club?.club_name}</b> in the reserve squad. A lifetime club gets {options.lifetime_cap ?? 3} sons.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <label className="gx-label">Parent Player (Bloodline Progenitor)</label>
+            <div className="sm:col-span-2">
+              <label className="gx-label">Parent</label>
               <select
                 className="gx-input mt-1"
                 value={parentId}
                 onChange={(e) => setParentId(e.target.value)}
                 data-testid="build-a-son-parent-select"
               >
+                {eligibleParents.length === 0 && <option value="">No eligible parents at this club</option>}
                 {eligibleParents.map((p: any) => (
                   <option key={p.player_id} value={p.player_id}>
-                    {p.full_name} ({p.position || "PRO"})
+                    {p.full_name} · {p.position || "POS"}
+                    {p.current_rating ? ` · ${p.current_rating} OVR` : ""}
+                    {p.preferred_foot ? ` · ${p.preferred_foot}` : ""}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="gx-label">Requested Heir Name (Optional)</label>
+              <label className="gx-label">Heir name · optional · {fmt(nameUnit)} GTX</label>
               <input
                 type="text"
                 maxLength={120}
-                placeholder="e.g. Adewale Jr."
+                placeholder={surname ? `Leave blank to keep ${surname}` : "Leave blank to keep the surname"}
                 value={sonName}
                 onChange={(e) => setSonName(e.target.value)}
                 className="gx-input mt-1"
@@ -200,13 +319,14 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Preferred Position</label>
+              <label className="gx-label">Position · blank inherits {inheritedPosition || "the bloodline"}</label>
               <select
                 className="gx-input mt-1"
                 value={sonPosition}
                 onChange={(e) => setSonPosition(e.target.value)}
                 data-testid="build-a-son-position-select"
               >
+                <option value="">Inherit {inheritedPosition || "bloodline"}</option>
                 {SON_POSITIONS.map((pos) => (
                   <option key={pos} value={pos}>
                     {pos}
@@ -216,93 +336,176 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Nationality Code (ISO)</label>
+              <label className="gx-label">Country · blank inherits {inheritedCountry || "the parent"}</label>
               <input
                 type="text"
                 maxLength={8}
-                placeholder="NGA"
+                placeholder={inheritedCountry || "NG"}
                 value={sonCountry}
                 onChange={(e) => setSonCountry(e.target.value.toUpperCase())}
                 className="gx-input mt-1 uppercase"
                 data-testid="build-a-son-country-input"
               />
             </div>
+
+            <div>
+              <label className="gx-label">Foot · blank inherits {inheritedFoot || "the parent"}</label>
+              <select
+                className="gx-input mt-1"
+                value={sonFoot}
+                onChange={(e) => setSonFoot(e.target.value)}
+                data-testid="build-a-son-foot-select"
+              >
+                <option value="">Inherit {inheritedFoot || "bloodline"}</option>
+                <option value="left">Left</option>
+                <option value="right">Right</option>
+                <option value="both">Both</option>
+              </select>
+            </div>
+
+            <div>
+              <label className="gx-label">Height cm · blank inherits{parent?.height_cm ? ` ~${parent.height_cm}` : ""}</label>
+              <input
+                type="number"
+                min={145}
+                max={210}
+                placeholder={parent?.height_cm ? String(parent.height_cm) : "155–205"}
+                value={sonHeight}
+                onChange={(e) => setSonHeight(e.target.value)}
+                className="gx-input mt-1"
+                data-testid="build-a-son-height-input"
+              />
+            </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs" data-testid="build-a-son-price">
             <div className="flex items-center gap-2 text-amber-200">
               <Crown size={15} className="text-amber-400" />
               <span>
-                Base: <b>{fmt(baseCost)}</b> · Name: <b>{fmt(nameCost)}</b> · Custom Position: <b>{fmt(customCost)}</b>
+                Base <b>{fmt(baseCost)}</b> · Name <b>{fmt(nameCost)}</b> · Change <b>{fmt(customCost)}</b>
+                {slots != null && (
+                  <b className="ml-2 text-white" data-testid="build-a-son-slots">
+                    {slots} slot{slots === 1 ? "" : "s"} left
+                  </b>
+                )}
               </span>
             </div>
-            <Btn type="submit" variant="gold" disabled={busyOrder === "create"} data-testid="build-a-son-submit">
+            <Btn
+              type="submit"
+              variant="gold"
+              disabled={busyOrder === "create" || !pricingReady || !parentId || slots === 0}
+              data-testid="build-a-son-submit"
+            >
               <Dna size={14} />
-              {busyOrder === "create" ? "Inducting Heir…" : `Induct Dynasty Son · ${fmt(totalEstimated)} GTX`}
+              {busyOrder === "create" ? "Inducting heir…" : `Induct son · ${fmt(totalEstimated)} GTX`}
             </Btn>
           </div>
         </form>
 
-        <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4 lg:col-span-5" data-testid="build-a-son-orders">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
-              Dynasty Creation Orders ({orders.length})
-            </span>
-            <Chip tone="emerald">DNA Lineage Active</Chip>
+        <div className="space-y-3 lg:col-span-5">
+          <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4" data-testid="build-a-son-preview">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-200">What the son inherits</span>
+              <Chip tone="gold">{customized ? "Custom change" : "Pure bloodline"}</Chip>
+            </div>
+            <p className="text-xs leading-relaxed text-slate-300">
+              {surname ? `Surname ${surname}. ` : ""}
+              Position {positionOverride || inheritedPosition || "from the academy roll"}.
+              {parent?.current_rating
+                ? ` Youth band about ${band?.low}–${band?.high}, ceiling ${band?.potential}.`
+                : " No parent GSI yet, so ability follows a normal academy intake."}
+              {" "}The minted card appears after the wallet payment.
+            </p>
+            {dna && (
+              <div className="space-y-2">
+                <p className="text-[11px] uppercase tracking-wider text-slate-400">{dna.archetype || "DNA"} from the parent</p>
+                {(["tempo", "creativity", "discipline", "risk_taking"] as const).map((key) =>
+                  dna[key] == null ? null : (
+                    <TraitBar key={key} label={label(key)} value={Math.round(Number(dna[key]) * 100)} max={100} />
+                  ),
+                )}
+              </div>
+            )}
           </div>
 
-          {orders.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4 text-center">
-              No Build-A-Son creation orders yet. Submit the form to induct your first dynasty scion.
-            </p>
-          ) : (
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
-              {orders.map((ord: any) => (
-                <div
-                  key={ord.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs"
-                  data-testid={`son-order-${ord.id}`}
-                >
-                  <div>
-                    <p className="font-bold text-white">
-                      {ord.requested_name || ord.generated_player?.full_name || "Dynasty Heir"} ·{" "}
-                      <span className="text-emerald-300">{ord.requested_position || ord.generated_player?.position || "ST"}</span>
-                    </p>
-                    <p className="text-[11px] text-slate-400">
-                      Status: <b className="uppercase text-amber-300">{label(ord.status)}</b> · <Coin amount={Number(ord.amount_coin || 0)} />
-                    </p>
-                  </div>
-                  <div className="flex gap-1.5">
-                    {ord.status === "pending_payment" && (
-                      <Btn
-                        variant="gold"
-                        onClick={() => handleCompleteOrder(ord.id, "pay")}
-                        disabled={busyOrder === `${ord.id}:pay`}
-                      >
-                        Pay Wallet
-                      </Btn>
-                    )}
-                    {ord.status === "paid" && !ord.generated_player_id && (
-                      <Btn
-                        variant="primary"
-                        onClick={() => handleCompleteOrder(ord.id, "generate")}
-                        disabled={busyOrder === `${ord.id}:generate`}
-                      >
-                        Generate Son
-                      </Btn>
-                    )}
-                    {ord.generated_player && (
-                      <Chip tone="emerald">
-                        OVR {ord.generated_player.current_rating} / POT {ord.generated_player.potential_rating}
-                      </Chip>
-                    )}
-                  </div>
-                </div>
-              ))}
+          <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4" data-testid="build-a-son-orders">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
+                Dynasty orders ({orders.length})
+              </span>
+              <Chip tone="emerald">Reserve squad</Chip>
             </div>
-          )}
+
+            {orders.length === 0 ? (
+              <p className="py-4 text-center text-xs text-slate-400">
+                No sons yet. A pure bloodline order costs the base fee and keeps the parent's game.
+              </p>
+            ) : (
+              <div className="max-h-56 space-y-2 overflow-y-auto pr-1">
+                {orders.map((ord: any) => (
+                  <div
+                    key={ord.id}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs"
+                    data-testid={`son-order-${ord.id}`}
+                  >
+                    <div>
+                      <p className="font-bold text-white">
+                        {ord.generated_player?.full_name || ord.requested_name || "Bloodline heir"} ·{" "}
+                        <span className="text-emerald-300">{ord.generated_player?.position || ord.requested_position || inheritedPosition || "POS"}</span>
+                      </p>
+                      <p className="text-[11px] text-slate-400">
+                        Status: <b className="uppercase text-amber-300">{label(ord.status)}</b> · <Coin amount={Number(ord.amount_coin || 0)} />
+                      </p>
+                    </div>
+                    <div className="flex gap-1.5">
+                      {ord.status === "pending_payment" && (
+                        <Btn
+                          variant="gold"
+                          onClick={() => handleCompleteOrder(ord.id, "pay")}
+                          disabled={busyOrder === `${ord.id}:pay`}
+                        >
+                          Pay wallet
+                        </Btn>
+                      )}
+                      {ord.status === "paid" && !ord.generated_player_id && (
+                        <Btn
+                          variant="primary"
+                          onClick={() => handleCompleteOrder(ord.id, "generate")}
+                          disabled={busyOrder === `${ord.id}:generate`}
+                        >
+                          Generate son
+                        </Btn>
+                      )}
+                      {ord.generated_player && (
+                        <Chip tone="emerald">
+                          OVR {ord.generated_player.current_rating} / POT {ord.generated_player.potential_rating}
+                        </Chip>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      {reveal?.full_name && (
+        <PackReveal
+          players={[
+            {
+              id: reveal.player_id,
+              name: reveal.full_name,
+              rating: reveal.current_rating,
+              potential: reveal.potential_rating,
+              position: reveal.position,
+              age: reveal.age,
+              morale: "—",
+              value_coin: 0,
+            },
+          ]}
+          onClose={() => setReveal(null)}
+        />
+      )}
     </Panel>
   );
 }
@@ -544,7 +747,17 @@ export default function Academy() {
     setPack(club.squad.filter((p: any) => p.is_regen && !seen.has(p.id)));
   }, [club]);
 
-  if (isLoading || !club) return <Loading />;
+  if (!active?.club_id) {
+    return (
+      <div className="mx-auto max-w-lg p-8 text-center">
+        <h1 className="text-2xl font-black text-white">Youth academy</h1>
+        <p className="mt-2 text-sm text-slate-400">Create a club to run an academy. You can keep browsing the rest of GTEX until then.</p>
+        <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex">My clubs</Link>
+      </div>
+    );
+  }
+  if (isLoading) return <Loading />;
+  if (!club) return <Loading label="Opening your academy..." />;
 
   const regens: any[] = club.squad.filter((p: any) => Boolean(p.is_regen));
   const facilityLevel = Number(

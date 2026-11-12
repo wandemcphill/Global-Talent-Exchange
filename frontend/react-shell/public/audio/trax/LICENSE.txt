@@ -1,0 +1,14 @@
+GTEX TRAX public-domain bed
+
+These MP3 files are musical works by Kevin MacLeod (incompetech.com),
+distributed through the FreePD public-domain archive under CC0 1.0 Universal.
+
+CC0: the works may be copied, modified, and used commercially, including
+continuous in-app playback, with no attribution required and no licence fee.
+
+They are the platform bed. Paid artist campaigns are a separate rotation
+and must carry their own rights clearance. These files are not a claim that
+the named FreePD titles are GTEX-signed artists.
+
+Source archive: Youmiel/FreePD-Data (Hugging Face), which mirrors the
+FreePD collection taken down from freepd.com.

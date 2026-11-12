@@ -60,7 +60,7 @@ ROLE_DISPLAY_LABELS: dict[str, str] = {
     ROLE_HEAD_OF_YOUTH_DEVELOPMENT: "Head of Youth Development",
     "chief_scout": "Chief Scout",
     ROLE_SCOUT: "Senior Scout",
-    "medical_director": "Medical Director",
+    "medical_director": "Physio and medical lead",
     ROLE_MEDICAL: "Physio / Medical Specialist",
     ROLE_FIRST_TEAM_COACH: "First-Team Coach",
     ROLE_YOUTH_COACH: "Academy Youth Coach",
@@ -94,13 +94,27 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
             continue
         key = f"staff:{staff_id}"
 
-        if key in by_key:
-            continue
-
         raw_role = str(item.get("role") or "first_team_manager")
         canon_role = normalise_staff_role(raw_role)
         salary_minor = _safe_int(item.get("salary") or item.get("salary_gtex") or 600) * 100
-        rating = _safe_int(item.get("tactical_flexibility") or item.get("youth_development") or 72)
+        rating = _safe_int(item.get("rating"), 0) or _safe_int(
+            item.get("tactical_flexibility") or item.get("youth_development") or 72
+        )
+
+        if key in by_key:
+            profile = by_key[key]
+            meta = dict(profile.metadata_json or {})
+            if str(meta.get("employment_status") or "unemployed") == "unemployed" and profile.staff_type != canon_role:
+                profile.staff_type = canon_role
+                profile.rating = rating
+                profile.salary_minor = salary_minor
+                style = str(meta.get("style") or item.get("style") or "Balanced")
+                profile.skills_json = [canon_role, style]
+                meta["preferred_roles"] = [canon_role, raw_role]
+                if item.get("source_job"):
+                    meta["source_job"] = item.get("source_job")
+                profile.metadata_json = meta
+            continue
 
         meta = {
             "staff_id": staff_id,
@@ -115,6 +129,11 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
             "career_history": [],
             "previous_relationships": {},
             "preferred_roles": [canon_role, raw_role],
+            "portrait_url": item.get("portrait_url"),
+            "gender": item.get("gender"),
+            "age": item.get("age"),
+            "nation": item.get("nation"),
+            "origin": item.get("origin") or "catalog",
         }
 
         # Add starter historical background if defined
@@ -140,7 +159,10 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
 
     if created:
         session.flush()
-    return list(by_key.values())
+    from app.owner_console.staff_supply import replenish_scarce_staff
+
+    replenish_scarce_staff(session)
+    return list(session.scalars(select(ClubStaffProfile)).all())
 
 
 def get_club_vacancies(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
@@ -217,6 +239,11 @@ def list_staff_market_candidates(
     role: str | None = None,
     employment_status: str | None = "unemployed",
     limit: int = 50,
+    offset: int = 0,
+    wage_max: int | None = None,
+    style: str | None = None,
+    temperament: str | None = None,
+    search: str | None = None,
 ) -> dict[str, Any]:
     """
     Queries the global professional staff employment market.
@@ -238,7 +265,10 @@ def list_staff_market_candidates(
             )
         )
 
-    profiles = session.scalars(stmt.order_by(ClubStaffProfile.rating.desc()).limit(limit)).all()
+    profiles = session.scalars(stmt.order_by(ClubStaffProfile.rating.desc())).all()
+    style_query = (style or "").strip().lower()
+    temperament_query = (temperament or "").strip().lower()
+    search_query = (search or "").strip().lower()
 
     candidates = []
     for p in profiles:
@@ -248,8 +278,21 @@ def list_staff_market_candidates(
         if employment_status and status != employment_status and employment_status != "all":
             continue
 
-        min_p = _safe_int(meta.get("min_prestige"), 15)
         annual_salary_gtex = p.salary_minor // 100 if p.salary_minor else 600
+        if wage_max is not None and annual_salary_gtex > int(wage_max):
+            continue
+        candidate_style = str(meta.get("style") or "")
+        candidate_temperament = str(meta.get("temperament") or "")
+        if style_query and style_query not in candidate_style.lower():
+            continue
+        if temperament_query and temperament_query not in candidate_temperament.lower():
+            continue
+        if search_query and search_query not in " ".join(
+            [p.display_name or "", candidate_style, candidate_temperament, p.staff_type or ""]
+        ).lower():
+            continue
+
+        min_p = _safe_int(meta.get("min_prestige"), 15)
         can_attract = state.prestige >= min_p
         prestige_delta = state.prestige - min_p
 
@@ -287,14 +330,25 @@ def list_staff_market_candidates(
                 "can_attract": can_attract,
                 "interest_level": interest_level,
                 "career_history": meta.get("career_history", []),
+                "supply_origin": meta.get("origin") or "catalog",
+                "portrait_url": meta.get("portrait_url"),
+                "gender": meta.get("gender"),
+                "age": meta.get("age"),
+                "nation": meta.get("nation"),
             }
         )
+
+    start = max(0, int(offset or 0))
+    page_size = max(1, min(100, int(limit or 50)))
+    page = candidates[start : start + page_size]
+    from app.owner_console.staff_supply import general_manager_supply
 
     return {
         "club_id": club_id,
         "club_prestige": state.prestige,
         "total_count": len(candidates),
-        "candidates": candidates,
+        "candidates": page,
+        "supply": general_manager_supply(session),
     }
 
 

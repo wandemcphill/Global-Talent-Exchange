@@ -155,8 +155,8 @@ class TreasuryService:
                 max_deposit=Decimal("500000.0000"),
                 min_withdrawal=Decimal("10.0000"),
                 max_withdrawal=Decimal("500000.0000"),
-                deposit_mode=PaymentMode.MANUAL,
-                withdrawal_mode=PaymentMode.MANUAL,
+                deposit_mode=PaymentMode.AUTOMATIC,
+                withdrawal_mode=PaymentMode.AUTOMATIC,
                 whatsapp_number=DEFAULT_WHATSAPP,
             )
             session.add(settings)
@@ -813,12 +813,12 @@ class TreasuryService:
             session,
             user=user,
             topic="wallet",
-            message="Withdrawal requested. Awaiting admin review.",
+            message="Withdrawal requested. Sending it to your bank.",
             resource_type="withdrawal_request",
             resource_id=withdrawal.id,
             metadata={"reference": withdrawal.reference},
         )
-        return withdrawal
+        return self._dispatch_withdrawal_payout(session, user=user, withdrawal=withdrawal)
 
     def review_withdrawal_status(
         self,
@@ -957,6 +957,54 @@ class TreasuryService:
                 metadata={"reference": request.reference, "status": status.value},
             )
         return request
+
+    def _dispatch_withdrawal_payout(
+        self,
+        session: Session,
+        *,
+        user: User,
+        withdrawal: TreasuryWithdrawalRequest,
+    ) -> TreasuryWithdrawalRequest:
+        """Send a held withdrawal to the live payout rail without an admin review."""
+        from app.wallets.providers.registry import korapay_enabled, paystack_enabled, provider_live_payout_ready
+
+        chosen = withdrawal.provider_key if withdrawal.provider_key in {"korapay", "paystack"} else None
+        if chosen and not provider_live_payout_ready(chosen):
+            chosen = None
+        if chosen is None:
+            for key, enabled in (("korapay", korapay_enabled()), ("paystack", paystack_enabled())):
+                if enabled and provider_live_payout_ready(key):
+                    chosen = key
+                    break
+        if chosen is None:
+            self.create_notification(
+                session,
+                user=user,
+                topic="wallet",
+                message="Withdrawal is held. The bank payout rail is not configured yet.",
+                resource_type="withdrawal_request",
+                resource_id=withdrawal.id,
+                metadata={"reference": withdrawal.reference},
+            )
+            return withdrawal
+        try:
+            return self.initiate_withdrawal_payout(
+                session,
+                actor=user,
+                withdrawal_id=withdrawal.id,
+                provider_key=chosen,
+            )
+        except TreasuryConflictError as exc:
+            self.create_notification(
+                session,
+                user=user,
+                topic="wallet",
+                message=f"Withdrawal could not be sent to the bank yet: {exc}",
+                resource_type="withdrawal_request",
+                resource_id=withdrawal.id,
+                metadata={"reference": withdrawal.reference},
+            )
+            return withdrawal
 
     def initiate_withdrawal_payout(
         self,

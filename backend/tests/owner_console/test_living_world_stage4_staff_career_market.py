@@ -31,6 +31,10 @@ from app.models.wallet import (
 )
 from app.models.user import User
 from app.owner_console import ledger, living_staff_market, router as owner_router
+from app.owner_console.staff_supply import (
+    GENERAL_MANAGER_FREE_AGENT_FLOOR,
+    replenish_scarce_staff,
+)
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
     OwnerClubState,
@@ -470,3 +474,69 @@ def test_stage4_router_endpoints():
     dism_json = res_dism.json()
     assert dism_json["status"] == "dismissed"
     assert dism_json["entered_free_agency"] is True
+
+
+def test_unemployed_staff_follow_a_corrected_catalog_role():
+    session = _session()
+    from app.owner_console import engine
+
+    director = next(
+        item
+        for item in engine.EXECUTIVE_STAFF_CATALOG
+        if item.get("role") == "general_manager" and item.get("source_job") == "Technical Director"
+    )
+    session.add(
+        ClubStaffProfile(
+            market_key=f"staff:{director['id']}",
+            display_name=director["name"],
+            staff_type="first_team_manager",
+            rating=12,
+            salary_minor=100,
+            metadata_json={"employment_status": "unemployed", "career_history": [{"club_id": "kept"}]},
+        )
+    )
+    session.flush()
+
+    living_staff_market.ensure_staff_market_profiles(session)
+    profile = session.scalar(
+        select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{director['id']}")
+    )
+    assert profile is not None
+    assert profile.staff_type == "general_manager"
+    assert profile.metadata_json["career_history"] == [{"club_id": "kept"}]
+
+
+def test_general_manager_bench_refills_when_clubs_hire():
+    session = _session()
+    first = replenish_scarce_staff(session)
+    assert first["general_manager_added"] == GENERAL_MANAGER_FREE_AGENT_FLOOR
+    assert first["general_manager_available"] == GENERAL_MANAGER_FREE_AGENT_FLOOR
+
+    held = replenish_scarce_staff(session)
+    assert held["general_manager_added"] == 0
+    assert held["general_manager_available"] == GENERAL_MANAGER_FREE_AGENT_FLOOR
+
+    appointed = session.scalars(
+        select(ClubStaffProfile).where(ClubStaffProfile.staff_type == "general_manager")
+    ).all()
+    for profile in appointed[:12]:
+        meta = dict(profile.metadata_json or {})
+        meta["employment_status"] = "employed"
+        meta["current_club_id"] = "club-holding"
+        profile.metadata_json = meta
+    session.flush()
+
+    refilled = replenish_scarce_staff(session)
+    assert refilled["general_manager_added"] == 12
+    assert refilled["general_manager_available"] == GENERAL_MANAGER_FREE_AGENT_FLOOR
+
+    affordable = [
+        profile
+        for profile in session.scalars(
+            select(ClubStaffProfile).where(ClubStaffProfile.staff_type == "general_manager")
+        ).all()
+        if (profile.metadata_json or {}).get("employment_status") == "unemployed"
+        and int((profile.metadata_json or {}).get("min_prestige") or 99) <= 20
+        and (profile.salary_minor or 0) // 100 <= 1100
+    ]
+    assert len(affordable) >= 20

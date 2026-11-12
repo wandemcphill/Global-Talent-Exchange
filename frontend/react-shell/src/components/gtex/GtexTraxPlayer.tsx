@@ -7,19 +7,10 @@ import { commercialApi, MusicRotationTrack, resolveCommercialMediaUrl } from "@/
 import {
   Disc3,
   ExternalLink,
-  Flame,
   Headphones,
   Info,
-  Music2,
-  Pause,
-  Play,
-  Radio,
   Shuffle,
   SkipForward,
-  Sliders,
-  Sparkles,
-  Volume2,
-  VolumeX,
   X,
 } from "lucide-react";
 
@@ -102,147 +93,66 @@ export interface GtexTraxItem {
   explicitContent?: boolean;
 }
 
+const PUBLIC_DOMAIN_BED = {
+  artist: "Kevin MacLeod",
+  artistHandle: "incompetech.com",
+  album: "GTEX public-domain bed",
+  region: "Public domain",
+  isPromoted: false,
+  sponsorTier: "Official Theme" as const,
+  artistBio:
+    "Public-domain instrumental cleared for continuous GTEX playback. Advertiser tracks are inserted into this rotation when a campaign is live.",
+  contexts: ["home", "club", "market", "competition", "matchday", "world", "celebration"] as GtexAudioContextType[],
+  hypeCount: 0,
+  streamImpressions: 0,
+  isGoalAnthem: false,
+  isWalkoutAnthem: false,
+  licence: "CC0 1.0 Public Domain",
+  source: "Kevin MacLeod (incompetech.com) via the FreePD public-domain archive",
+  provenance: "CC0. No attribution required. Not a substitute for a paid artist campaign.",
+  notes: [220, 261.63, 293.66, 329.63, 392.0, 329.63, 293.66, 261.63],
+};
+
+function bedTrack(
+  file: string,
+  title: string,
+  genre: string,
+  bpm: number,
+  duration: string,
+  accentColor: string,
+): GtexTraxItem {
+  return {
+    ...PUBLIC_DOMAIN_BED,
+    id: `gtex-bed-${file.replace(/\.mp3$/, "")}`,
+    title,
+    genre,
+    bpm,
+    duration,
+    accentColor,
+    audioUrl: `/audio/trax/${file}`,
+  };
+}
+
 export const GTEX_TRAX_CATALOGUE: GtexTraxItem[] = [
-  {
-    id: "gtex-trax-afro-01",
-    title: "Lagos Nightlights (Champions Walkout VIP)",
-    artist: "Kazeem & The Sovereign Pulse",
-    artistHandle: "@kazeemsounds",
-    album: "Echoes of Eko EP",
-    genre: "Afro-Fusion / Arena",
-    region: "Lagos · West Africa",
-    bpm: 118,
-    duration: "3:16",
-    isPromoted: false,
-    sponsorTier: "Headliner",
-    artistBio:
-      "Lagos-born Afro-arena producer blending talking drums with stadium synth brass for matchday walkouts.",
-    contexts: ["home", "competition", "matchday", "celebration"],
-    spotifyUrl: "https://open.spotify.com",
-    appleMusicUrl: "https://music.apple.com",
-    audiomackUrl: "https://audiomack.com",
-    youtubeUrl: "https://youtube.com",
-    hypeCount: 9840,
-    streamImpressions: 314500,
-    isGoalAnthem: true,
-    isWalkoutAnthem: true,
-    licence: "GTEX Artist Promotion & In-Game Sync Licence",
-    source: "GTEX TRAX Artist Spotlight Partnership",
-    provenance: "Verified GTEX TRAX Artist Submission",
-    accentColor: "#00E87A",
-    notes: [220, 261.63, 293.66, 329.63, 392.0, 329.63, 293.66, 261.63],
-  },
-  {
-    id: "gtex-trax-ukg-02",
-    title: "Top Bins Only (Deadline Day Dub)",
-    artist: "Nova Vane",
-    artistHandle: "@novavane_uk",
-    album: "South London Tekkers",
-    genre: "UK Garage / Grime",
-    region: "London · UK",
-    bpm: 132,
-    duration: "2:54",
-    isPromoted: false,
-    sponsorTier: "Spotlight",
-    artistBio:
-      "South London 2-step & grime vocalist crafting high-tempo football trading floor anthems.",
-    contexts: ["market", "club", "competition"],
-    spotifyUrl: "https://open.spotify.com",
-    appleMusicUrl: "https://music.apple.com",
-    audiomackUrl: "https://audiomack.com",
-    youtubeUrl: "https://youtube.com",
-    hypeCount: 6420,
-    streamImpressions: 208900,
-    isGoalAnthem: true,
-    isWalkoutAnthem: true,
-    licence: "GTEX Artist Promotion & In-Game Sync Licence",
-    source: "GTEX TRAX Artist Spotlight Partnership",
-    provenance: "Verified GTEX TRAX Artist Submission",
-    accentColor: "#38BDF8",
-    notes: [196.0, 233.08, 261.63, 293.66, 349.23, 293.66, 261.63, 233.08],
-  },
-  {
-    id: "gtex-trax-baile-03",
-    title: "Baila En La Cancha (Wonderkid Bounce)",
-    artist: "Fuego Sol",
-    artistHandle: "@fuegosol_br",
-    album: "Futebol Futuro",
-    genre: "Baile Funk / Club",
-    region: "São Paulo · LATAM",
-    bpm: 128,
-    duration: "2:42",
-    isPromoted: false,
-    sponsorTier: "Headliner",
-    artistBio:
-      "São Paulo electronic percussionist powering GTEX Regen World & Goal Celebrations.",
-    contexts: ["world", "celebration", "matchday"],
-    spotifyUrl: "https://open.spotify.com",
-    appleMusicUrl: "https://music.apple.com",
-    audiomackUrl: "https://audiomack.com",
-    youtubeUrl: "https://youtube.com",
-    hypeCount: 8190,
-    streamImpressions: 276400,
-    isGoalAnthem: true,
-    isWalkoutAnthem: false,
-    licence: "GTEX Artist Promotion & In-Game Sync Licence",
-    source: "GTEX TRAX Artist Spotlight Partnership",
-    provenance: "Verified GTEX TRAX Artist Submission",
-    accentColor: "#FFB800",
-    notes: [246.94, 293.66, 329.63, 369.99, 440.0, 369.99, 329.63, 293.66],
-  },
-  {
-    id: "gtex-trax-synth-04",
-    title: "Sovereign Liquidity (VIP Mix)",
-    artist: "Aether & Gold",
-    artistHandle: "@aethergold",
-    album: "Night Market Protocol",
-    genre: "Melodic Techno",
-    region: "Berlin · EU",
-    bpm: 124,
-    duration: "3:30",
-    isPromoted: false,
-    sponsorTier: "Rising Star",
-    artistBio:
-      "Berlin-based melodic synth duo scoring late-night player share trading and executive boardrooms.",
-    contexts: ["market", "club", "home"],
-    spotifyUrl: "https://open.spotify.com",
-    appleMusicUrl: "https://music.apple.com",
-    youtubeUrl: "https://youtube.com",
-    hypeCount: 5110,
-    streamImpressions: 159200,
-    isGoalAnthem: false,
-    isWalkoutAnthem: true,
-    licence: "GTEX Artist Promotion & In-Game Sync Licence",
-    source: "GTEX TRAX Artist Spotlight Partnership",
-    provenance: "Verified GTEX TRAX Artist Submission",
-    accentColor: "#A855F7",
-    notes: [174.61, 220.0, 261.63, 329.63, 349.23, 329.63, 261.63, 220.0],
-  },
-  {
-    id: "gtex-stadium-ambient",
-    title: "GTEX Stadium Atmosphere (Official Theme)",
-    artist: "GTEX Sound Design Team",
-    artistHandle: "@gtex_sound",
-    album: "GTEX Football OS",
-    genre: "Stadium Ambience",
-    region: "Global",
-    bpm: 110,
-    duration: "2:00",
-    isPromoted: false,
-    sponsorTier: "Official Theme",
-    artistBio:
-      "In-house spatial stadium sound design and broadcast theme engineered for GTEX Football OS.",
-    contexts: ["home", "club", "market", "competition", "matchday", "world", "celebration"],
-    hypeCount: 4120,
-    streamImpressions: 192000,
-    isGoalAnthem: false,
-    isWalkoutAnthem: true,
-    licence: "GTEX Proprietary Bundled Sound Asset",
-    source: "GTEX First-Party Sound Production",
-    provenance: "Bundled repository asset (assets/media/gtex_stadium_ambient.mp3)",
-    accentColor: "#10B981",
-    notes: [146.83, 196.0, 220.0, 293.66, 220.0, 196.0, 164.81, 146.83],
-  },
+  bedTrack("advertime.mp3", "Advertime", "Uplifting", 120, "2:40", "#00E87A"),
+  bedTrack("and-just-like-that.mp3", "And Just Like That", "Uplifting", 118, "1:30", "#38BDF8"),
+  bedTrack("bar-brawl.mp3", "Bar Brawl", "Uplifting", 140, "1:20", "#FFB800"),
+  bedTrack("city-sunshine.mp3", "City Sunshine", "Uplifting", 112, "3:20", "#F59E0B"),
+  bedTrack("fresh-focus.mp3", "Fresh Focus", "Uplifting", 108, "2:30", "#10B981"),
+  bedTrack("from-page-to-practice.mp3", "From Page to Practice", "Uplifting", 116, "1:40", "#22D3EE"),
+  bedTrack("funshine.mp3", "Funshine", "Uplifting", 124, "3:10", "#F97316"),
+  bedTrack("happy-whistling-ukulele.mp3", "Happy Whistling Ukulele", "Uplifting", 114, "2:20", "#A3E635"),
+  bedTrack("inspiration.mp3", "Inspiration", "Uplifting", 100, "2:45", "#A855F7"),
+  bedTrack("inventing-flight.mp3", "Inventing Flight", "Uplifting", 128, "1:35", "#38BDF8"),
+  bedTrack("motions.mp3", "Motions", "Uplifting", 122, "2:15", "#00E87A"),
+  bedTrack("3-am-west-end.mp3", "3 am West End", "Electronic", 118, "2:50", "#6366F1"),
+  bedTrack("arpent.mp3", "Arpent", "Electronic", 110, "3:05", "#8B5CF6"),
+  bedTrack("backbeat.mp3", "Backbeat", "Electronic", 126, "1:15", "#EC4899"),
+  bedTrack("beat-one.mp3", "Beat One", "Electronic", 120, "2:40", "#14B8A6"),
+  bedTrack("bit-bit-loop.mp3", "Bit Bit Loop", "Electronic", 130, "1:45", "#F43F5E"),
+  bedTrack("goodnightmare.mp3", "Goodnightmare", "Electronic", 108, "3:30", "#64748B"),
+  bedTrack("hear-what-they-say.mp3", "Hear What They Say", "Electronic", 116, "2:35", "#0EA5E9"),
+  bedTrack("meditating-beat.mp3", "Meditating Beat", "Electronic", 104, "3:00", "#84CC16"),
 ];
 
 function inferContextFromPath(pathname: string): GtexAudioContextType {
@@ -263,21 +173,21 @@ function inferContextFromPath(pathname: string): GtexAudioContextType {
 
 export function GtexTraxTopBarControl() {
   const { pathname } = useLocation();
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying] = useState(true);
+  const isMuted = false;
   const [modalOpen, setModalOpen] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showToastChyron, setShowToastChyron] = useState(false);
 
-  const [masterVolume, setMasterVolume] = useState(0.85);
-  const [musicVolume, setMusicVolume] = useState(0.45);
+  const masterVolume = 1;
+  const musicVolume = 1;
   const [activeContext, setActiveContext] = useState<GtexAudioContextType>("home");
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
   const [hypedIds, setHypedIds] = useState<Record<string, boolean>>({});
   const [tipsByTrack, setTipsByTrack] = useState<Record<string, number>>({});
   const [clicksByTrack, setClicksByTrack] = useState<Record<string, number>>({});
-  const [goalAnthemId, setGoalAnthemId] = useState<string>("gtex-trax-afro-01");
+  const [goalAnthemId, setGoalAnthemId] = useState<string>(GTEX_TRAX_CATALOGUE[0].id);
   const [sponsoredPromotions, setSponsoredPromotions] = useState<PublicMusicPromotion[]>([]);
   const [rotationTracks, setRotationTracks] = useState<GtexTraxItem[]>([]);
   const reportedPromotionImpressions = useRef(new Set<string>());
@@ -436,13 +346,18 @@ export function GtexTraxTopBarControl() {
 
       el.addEventListener("timeupdate", onTimeUpdate);
       el.addEventListener("ended", onEnded);
-      el.play()
-        .then(() => {
-          if (currentTrack.campaignId) {
-            reportMusicPromotionEvent(currentTrack.campaignId, "play_started");
-          }
-        })
-        .catch(() => undefined);
+      const markStarted = () => {
+        if (currentTrack.campaignId) {
+          reportMusicPromotionEvent(currentTrack.campaignId, "play_started");
+        }
+      };
+      el.play().then(markStarted).catch(() => {
+        const resume = () => {
+          el.play().then(markStarted).catch(() => undefined);
+        };
+        window.addEventListener("pointerdown", resume, { once: true });
+        window.addEventListener("keydown", resume, { once: true });
+      });
 
       return () => {
         el.removeEventListener("timeupdate", onTimeUpdate);
@@ -538,18 +453,6 @@ export function GtexTraxTopBarControl() {
         data-testid="gtex-trax-pill"
         className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/35 bg-slate-950/90 px-2.5 py-1 text-xs shadow-inner"
       >
-        <button
-          type="button"
-          onClick={() => {
-            if (isMuted) setIsMuted(false);
-            setIsPlaying(!isPlaying);
-          }}
-          title={isPlaying ? "Pause GTEX TRAX" : "Play GTEX TRAX Artist Radio"}
-          className="flex h-5 w-5 items-center justify-center rounded-md bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/35"
-        >
-          {isPlaying ? <Pause size={11} /> : <Play size={11} />}
-        </button>
-
         <button
           type="button"
           onClick={() => setModalOpen(true)}
@@ -722,22 +625,8 @@ export function GtexTraxTopBarControl() {
                     {/* Playback Controls */}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => setIsMuted(!isMuted)}
-                        className="rounded-xl border border-white/15 bg-white/5 p-2.5 text-slate-300 hover:text-white"
-                      >
-                        {isMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (isMuted) setIsMuted(false);
-                          setIsPlaying(!isPlaying);
-                        }}
-                        className="flex h-11 w-11 items-center justify-center rounded-xl bg-emerald-500 text-slate-950 shadow-lg hover:bg-emerald-400"
-                      >
-                        {isPlaying ? <Pause size={20} /> : <Play size={20} />}
-                      </button>
-                      <button
                         onClick={nextTrack}
+                        title="Skip to the next track"
                         className="rounded-xl border border-white/15 bg-white/5 p-2.5 text-slate-300 hover:text-white"
                       >
                         <SkipForward size={16} />
@@ -882,20 +771,15 @@ export function GtexTraxTopBarControl() {
                             <button
                               type="button"
                               onClick={() => {
-                                void gtexAudio.playSponsoredTrack({
-                                  campaignId: promotion.campaign_id,
-                                  title: promotion.track_title || promotion.headline,
-                                  artist: promotion.artist_name || promotion.brand_name,
-                                  destinationUrl: promotion.destination_url,
-                                  genre: promotion.genre || "Afrobeats / Arena",
-                                  rightsVerified: true,
-                                  sponsorTier: "Spotlight",
-                                });
+                                const idx = combinedCatalogue.findIndex(
+                                  (item) => item.campaignId === promotion.campaign_id,
+                                );
+                                if (idx >= 0) setCurrentTrackIndex(idx);
                                 reportMusicPromotionEvent(promotion.campaign_id, "click");
                               }}
                               className="inline-flex rounded-lg border border-emerald-400/40 bg-emerald-400/10 px-2.5 py-1.5 text-[10px] font-black uppercase text-emerald-200 hover:bg-emerald-400/20"
                             >
-                              ▶ Play Spotlight
+                              Skip to this track
                             </button>
                             <a
                               href={promotion.destination_url}
@@ -918,14 +802,13 @@ export function GtexTraxTopBarControl() {
                 <div>
                   <p className="gx-label mb-2">GTEX TRAX · Artist Roster</p>
                   <div className="space-y-2">
-                    {GTEX_TRAX_CATALOGUE.map((item, idx) => {
+                    {combinedCatalogue.map((item, idx) => {
                       const active = idx === currentTrackIndex;
                       return (
                         <div
                           key={item.id}
                           onClick={() => {
                             setCurrentTrackIndex(idx);
-                            if (!isPlaying) setIsPlaying(true);
                           }}
                           className={`flex cursor-pointer items-center justify-between rounded-xl border p-3 transition-all ${
                             active
@@ -967,79 +850,13 @@ export function GtexTraxTopBarControl() {
                 </div>
 
                 {/* Audio Channel Mixer & Context Switcher */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-                    <p className="gx-label mb-3">Active Audio Channel Mixer</p>
-                    <div className="space-y-3 text-xs">
-                      <div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-300">Master Output Gain</span>
-                          <span className="gx-mono font-bold text-emerald-400">
-                            {Math.round(masterVolume * 100)}%
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={Math.round(masterVolume * 100)}
-                          onChange={(e) => setMasterVolume(Number(e.target.value) / 100)}
-                          className="w-full accent-emerald-500"
-                        />
-                      </div>
-                      <div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-300">Music / Artist Stream</span>
-                          <span className="gx-mono font-bold text-cyan-400">
-                            {Math.round(musicVolume * 100)}%
-                          </span>
-                        </div>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={Math.round(musicVolume * 100)}
-                          onChange={(e) => setMusicVolume(Number(e.target.value) / 100)}
-                          className="w-full accent-cyan-500"
-                        />
-                      </div>
-                      <p className="text-[10px] text-slate-400">
-                        Matchday Ducking:{" "}
-                        <strong className="text-amber-300">
-                          {isMatchdayDucked ? "ACTIVE (-18 dB under commentary)" : "STANDBY (100% Music)"}
-                        </strong>
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-                    <p className="gx-label mb-3">Soundtrack Context Routing</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {(
-                        [
-                          "home",
-                          "club",
-                          "market",
-                          "competition",
-                          "matchday",
-                          "world",
-                          "celebration",
-                        ] as GtexAudioContextType[]
-                      ).map((ctx) => (
-                        <button
-                          key={ctx}
-                          onClick={() => setActiveContext(ctx)}
-                          className={`rounded-lg px-2.5 py-1 text-[10px] font-black uppercase transition-all ${
-                            activeContext === ctx
-                              ? "border border-emerald-400 bg-emerald-500/20 text-emerald-300"
-                              : "border border-white/10 bg-white/5 text-slate-400 hover:text-white"
-                          }`}
-                        >
-                          {ctx}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
+                  <p className="gx-label mb-3">Playback</p>
+                  <p className="text-xs leading-relaxed text-slate-300">
+                    Music stays on while you use GTEX. There is no play or pause control.
+                    Skip moves to the next track. Volume is your device volume.
+                    On a match page the bed sits under commentary.
+                  </p>
                 </div>
               </div>
             )}

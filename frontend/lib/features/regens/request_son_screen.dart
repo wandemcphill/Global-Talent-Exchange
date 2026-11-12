@@ -742,7 +742,7 @@ class _RequestSonScreenState extends State<RequestSonScreen> {
                   style: Theme.of(context).textTheme.titleSmall,
                 ),
                 Text(
-                  '${parent.position ?? 'Position N/A'} • ${parent.countryCode ?? 'Country N/A'} • ${parent.clubName ?? 'Club'}',
+                  '${parent.position ?? 'Position N/A'} • ${parent.countryCode ?? 'Country N/A'} • ${parent.clubName ?? 'Club'}${parent.currentRating != null ? ' • ${parent.currentRating} OVR' : ''}',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],

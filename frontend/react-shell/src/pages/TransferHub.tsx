@@ -192,6 +192,44 @@ export function TransferHub() {
     }
   };
 
+  const [counterAmounts, setCounterAmounts] = useState<Record<string, string>>({});
+  const handleCounterOffer = async (offerId: string) => {
+    const amount = Number(counterAmounts[offerId]);
+    if (!Number.isFinite(amount) || amount < 0) {
+      toast.error("Enter the counter amount.");
+      return;
+    }
+    try {
+      await api.post(`/transfer-hub/offers/${offerId}/counter`, { cash_amount: amount });
+      toast.success("Counter offer sent.");
+      refetchOffers();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
+  const [listingPlayerId, setListingPlayerId] = useState("");
+  const [listingPrice, setListingPrice] = useState("");
+  const handleListPlayer = async () => {
+    if (!activeClub?.club_id || !listingPlayerId || !listingPrice) {
+      toast.error("Choose a player and an asking price.");
+      return;
+    }
+    try {
+      await api.post("/transfer-hub/listings", {
+        player_id: listingPlayerId,
+        selling_club_id: activeClub.club_id,
+        base_price: Number(listingPrice),
+        expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+      });
+      toast.success("Player listed. Offers can come in.");
+      setListingPrice("");
+      refetchListings();
+    } catch (e) {
+      toast.error(errMsg(e));
+    }
+  };
+
   const handlePlaceBid = async (listing: any) => {
     const rawAmount = bidAmounts[listing.id];
     const amount = Number(rawAmount);
@@ -637,6 +675,43 @@ export function TransferHub() {
       {/* Lane 2: Offers */}
       {lane === "offers" && (
         <div className="space-y-4" data-testid="lane-offers-view">
+          {activeClub?.club_id && (
+            <form
+              className="flex flex-wrap items-end gap-2 rounded-xl border border-[#25354B] bg-[#14243A]/80 p-4"
+              onSubmit={(event) => {
+                event.preventDefault();
+                void handleListPlayer();
+              }}
+              data-testid="list-player-form"
+            >
+              <label className="text-xs text-slate-300">
+                List a squad player
+                <select
+                  className="gx-input mt-1 min-w-52"
+                  value={listingPlayerId}
+                  onChange={(event) => setListingPlayerId(event.target.value)}
+                >
+                  <option value="">Choose player</option>
+                  {(clubDetail?.squad || []).map((player: any) => (
+                    <option key={player.id} value={player.player_ref || player.id}>
+                      {player.name} · {player.position}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-xs text-slate-300">
+                Asking price
+                <input
+                  className="gx-input mt-1 w-36"
+                  type="number"
+                  min="0"
+                  value={listingPrice}
+                  onChange={(event) => setListingPrice(event.target.value)}
+                />
+              </label>
+              <button type="submit" className="gx-btn gx-btn-primary text-xs">List for offers</button>
+            </form>
+          )}
           {loadingOffers ? (
             <Loading label="Gathering offer transactions..." />
           ) : !activeClub?.club_id ? (
@@ -719,6 +794,23 @@ export function TransferHub() {
                             data-testid={`reject-offer-${offer.id}`}
                           >
                             Reject
+                          </button>
+                          <input
+                            className="gx-input w-28"
+                            type="number"
+                            min="0"
+                            placeholder="Counter"
+                            value={counterAmounts[offer.id] || ""}
+                            onChange={(e) => setCounterAmounts({ ...counterAmounts, [offer.id]: e.target.value })}
+                            data-testid={`counter-amount-${offer.id}`}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleCounterOffer(offer.id)}
+                            className="gx-btn gx-btn-secondary text-xs"
+                            data-testid={`counter-offer-${offer.id}`}
+                          >
+                            Counter
                           </button>
                         </>
                       )}

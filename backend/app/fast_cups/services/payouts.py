@@ -16,6 +16,19 @@ _REWARD_POOL_SHARE = Decimal("0.8500")
 _CHAMPION_SHARE = Decimal("0.6000")
 _RUNNER_UP_SHARE = Decimal("0.2500")
 _SEMIFINAL_SHARE = Decimal("0.0750")
+_PLATFORM_PRIZE_BY_SIZE = {
+    32: Decimal("5000.0000"),
+    64: Decimal("8000.0000"),
+    128: Decimal("12000.0000"),
+    256: Decimal("20000.0000"),
+}
+
+
+def _platform_prize_pool(cup: FastCup) -> Decimal:
+    """GTEX funds the purse. A stored buy-in on an older cup is not collected again."""
+    if cup.buy_in > Decimal("0"):
+        return (cup.buy_in * Decimal(cup.size)).quantize(_FOUR_PLACES, rounding=ROUND_DOWN)
+    return _PLATFORM_PRIZE_BY_SIZE.get(int(cup.size), Decimal("5000.0000"))
 
 
 class FastCupRewardPayoutService:
@@ -29,7 +42,7 @@ class FastCupRewardPayoutService:
         if bracket.champion is None or bracket.runner_up is None or len(bracket.semifinalists) != 2:
             raise ValueError("A completed fast cup bracket is required to settle rewards.")
 
-        prize_pool = (cup.buy_in * Decimal(cup.size)).quantize(_FOUR_PLACES, rounding=ROUND_DOWN)
+        prize_pool = _platform_prize_pool(cup)
         reward_pool = (prize_pool * _REWARD_POOL_SHARE).quantize(_FOUR_PLACES, rounding=ROUND_DOWN)
         platform_fee = (prize_pool - reward_pool).quantize(_FOUR_PLACES, rounding=ROUND_DOWN)
 

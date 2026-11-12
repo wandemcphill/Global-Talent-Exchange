@@ -133,7 +133,7 @@ def test_academy_and_senior_fast_cups_stay_separate(ecosystem, base_now, select_
     academy_cup = select_cup(ecosystem, now=base_now, division=FastCupDivision.ACADEMY, size=64)
     join_at = senior_cup.slot.registration_opens_at + timedelta(minutes=1)
 
-    assert academy_cup.buy_in < senior_cup.buy_in
+    assert academy_cup.buy_in == senior_cup.buy_in == 0
 
     with pytest.raises(FastCupValidationError, match="division does not match"):
         ecosystem.join_cup(

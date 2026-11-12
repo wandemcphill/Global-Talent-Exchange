@@ -514,6 +514,7 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
 # Dynamically load full executive staff catalog from exported JSON if present
 
 _catalog_file = Path(__file__).resolve().parent / "executive_staff_catalog.json"
+_seen_ids = {s.get("id") for s in EXECUTIVE_STAFF_CATALOG}
 
 if _catalog_file.is_file():
 
@@ -525,7 +526,7 @@ if _catalog_file.is_file():
 
             if isinstance(_loaded_staff, list) and _loaded_staff:
 
-                _seen_ids = {s.get("id") for s in EXECUTIVE_STAFF_CATALOG}
+                _seen_ids.update(s.get("id") for s in EXECUTIVE_STAFF_CATALOG)
 
                 for _s in _loaded_staff:
 
@@ -538,6 +539,13 @@ if _catalog_file.is_file():
     except Exception as _e:
 
         logger.warning("Could not load executive_staff_catalog.json: %s", _e)
+
+from app.owner_console.regen_staff_catalog import build_regen_staff_catalog
+
+for _regen in build_regen_staff_catalog():
+    if _regen.get("id") and _regen["id"] not in _seen_ids:
+        EXECUTIVE_STAFF_CATALOG.append(_regen)
+        _seen_ids.add(_regen["id"])
 
 
 MANAGER_CATALOG: list[dict[str, Any]] = [

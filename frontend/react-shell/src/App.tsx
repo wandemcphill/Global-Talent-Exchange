@@ -18,6 +18,7 @@ const MatchCenter = React.lazy(() => import("@/pages/MatchCenter"));
 const VisualReviewPage = React.lazy(() => import("@/pages/VisualReviewPage"));
 const GiftCapturePage = React.lazy(() => import("@/pages/GiftCapturePage"));
 import Squad from "@/pages/Squad";
+import StaffMarket from "@/pages/StaffMarket";
 import Lineup from "@/pages/Lineup";
 import Academy from "@/pages/Academy";
 import CreatorAccess from "@/pages/CreatorAccess";
@@ -181,6 +182,7 @@ export default function App() {
                 <Route path="competitions/:id" element={<CompetitionDetail />} />
                 <Route path="match/:id" element={<MatchCenter />} />
                 <Route path="squad" element={<Squad />} />
+                <Route path="staff-market" element={<StaffMarket />} />
                 <Route path="lineup" element={<Lineup />} />
                 <Route path="academy" element={<Academy />} />
                 <Route path="build-a-son" element={<Academy />} />

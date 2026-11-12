@@ -4,10 +4,8 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from app.config.competition_constants import (
-    ACADEMY_BUY_IN_MULTIPLIER,
     FAST_CUP_REGISTRATION_INTERVAL_MINUTES,
     FINAL_PRESENTATION_MAX_MINUTES,
-    LEAGUE_BUY_IN_TIERS,
     MATCH_PRESENTATION_MAX_MINUTES,
 )
 from app.fast_cups.models.domain import FastCup, FastCupDivision, FastCupSlot
@@ -97,17 +95,9 @@ def _cup_title(*, division: FastCupDivision, size: int) -> str:
 
 
 def _buy_in_for(*, division: FastCupDivision, size: int) -> Decimal:
-    buy_in_slots = tuple(sorted(LEAGUE_BUY_IN_TIERS))[1:5]
-    size_to_buy_in = {
-        32: Decimal(str(buy_in_slots[0])),
-        64: Decimal(str(buy_in_slots[1])),
-        128: Decimal(str(buy_in_slots[2])),
-        256: Decimal(str(buy_in_slots[3])),
-    }
-    base_amount = size_to_buy_in[size]
-    if division is FastCupDivision.ACADEMY:
-        return (base_amount * Decimal(str(ACADEMY_BUY_IN_MULTIPLIER))).quantize(Decimal("0.0001"))
-    return base_amount.quantize(Decimal("0.0001"))
+    # Official GTEX cups are free to enter. Size and division do not set a buy-in.
+    del division, size
+    return Decimal("0.0000")
 
 
 def _expected_duration_minutes(size: int) -> int:

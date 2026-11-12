@@ -129,26 +129,87 @@ function CompCard({ c, clubId }: any) {
   );
 }
 
+const HOST_TEMPLATES_KEY = "gtex-host-templates";
+
 function HostForm() {
   const refresh = useRefreshOwner();
-  const [f, setF] = useState<any>({ name: "", format: "league", max_clubs: 4 });
+  const { active } = useActiveClub();
+  const [f, setF] = useState<any>({
+    name: "",
+    format: "league",
+    max_clubs: 8,
+    pin: "",
+    winner_prize: "0",
+    contribution: "0",
+    template_key: "",
+  });
+  const [savedName, setSavedName] = useState("");
+  const [saved, setSaved] = useState<any[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(HOST_TEMPLATES_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
+  const applyTemplate = (key: string) => {
+    const presets: Record<string, any> = {
+      weekend_league: { name: "Weekend League", format: "league", max_clubs: 10, template_key: "weekend_league" },
+      cup_8: { name: "Friends Cup", format: "knockout", max_clubs: 8, template_key: "cup_8" },
+    };
+    const mine = saved.find((item) => item.id === key);
+    setF({ ...f, ...(presets[key] || mine || {}), template_key: presets[key] ? key : "" });
+  };
+  const saveTemplate = () => {
+    const name = savedName.trim();
+    if (name.length < 3) {
+      toast.error("Name the template before saving it.");
+      return;
+    }
+    const next = [{ id: `mine-${Date.now()}`, name, format: f.format, max_clubs: Number(f.max_clubs), pin: f.pin, winner_prize: f.winner_prize, contribution: f.contribution }, ...saved].slice(0, 12);
+    localStorage.setItem(HOST_TEMPLATES_KEY, JSON.stringify(next));
+    setSaved(next);
+    setSavedName("");
+    toast.success(`Saved template ${name}.`);
+  };
   const submit = async (e: any) => {
     e.preventDefault();
     try {
-      const { data } = await api.post("/owner/competitions", { ...f, max_clubs: Number(f.max_clubs) });
-      toast.success(`Hosted. Share invite code ${data.invite_code} with friends.`);
+      const { data } = await api.post("/owner/competitions", {
+        name: f.name,
+        format: f.format,
+        max_clubs: Number(f.max_clubs),
+        pin: f.pin || null,
+        winner_prize: Number(f.winner_prize || 0),
+        contribution: Number(f.contribution || 0),
+        template_key: f.template_key || null,
+        club_id: active?.club_id || null,
+      });
+      toast.success(`Hosted. Pin ${data.invite_code}.`);
       refresh();
     } catch (err) {
       toast.error(errMsg(err));
     }
   };
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-5" data-testid="host-competition-form">
-      <input required minLength={3} data-testid="host-name-input" className="gx-input md:col-span-2" placeholder="Friday Night Derby Cup" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-      <select data-testid="host-format-select" className="gx-input" value={f.format} onChange={(e) => setF({ ...f, format: e.target.value })}><option value="league">League</option><option value="knockout">Knockout</option></select>
-      <select data-testid="host-size-select" className="gx-input" value={f.max_clubs} onChange={(e) => setF({ ...f, max_clubs: e.target.value })}>{[2, 4, 6, 8].map((n) => <option key={n} value={n}>{n} clubs</option>)}</select>
+    <form onSubmit={submit} className="grid gap-3 md:grid-cols-4" data-testid="host-competition-form">
+      <select className="gx-input md:col-span-2" value="" onChange={(e) => applyTemplate(e.target.value)} data-testid="host-template-select">
+        <option value="">Start from a template</option>
+        <option value="weekend_league">Weekend league</option>
+        <option value="cup_8">8-club cup</option>
+        {saved.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+      </select>
+      <input required minLength={3} data-testid="host-name-input" className="gx-input md:col-span-2" placeholder="Adekunle and Friends Cup" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, template_key: "" })} />
+      <select data-testid="host-format-select" className="gx-input" value={f.format} onChange={(e) => setF({ ...f, format: e.target.value })}><option value="league">League</option><option value="knockout">Cup</option></select>
+      <select data-testid="host-size-select" className="gx-input" value={f.max_clubs} onChange={(e) => setF({ ...f, max_clubs: e.target.value })}>{[2, 4, 6, 8, 10, 12, 16].map((n) => <option key={n} value={n}>{n} clubs</option>)}</select>
+      <input data-testid="host-pin-input" className="gx-input uppercase" placeholder="Pin (optional)" maxLength={12} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.toUpperCase() })} />
+      <input data-testid="host-prize-input" className="gx-input" type="number" min="0" placeholder="Winner takes" value={f.winner_prize} onChange={(e) => setF({ ...f, winner_prize: e.target.value })} />
+      <input data-testid="host-contribution-input" className="gx-input" type="number" min="0" placeholder="Entry contribution" value={f.contribution} onChange={(e) => setF({ ...f, contribution: e.target.value })} />
       <Btn type="submit" data-testid="host-submit-button">Host</Btn>
-      <p className="text-xs text-slate-400 md:col-span-5">Entry is free. One club per owner. Prize coin is funded by GTEX.</p>
+      <div className="flex gap-2 md:col-span-3">
+        <input className="gx-input" placeholder="Save these settings as my template" value={savedName} onChange={(e) => setSavedName(e.target.value)} />
+        <Btn type="button" variant="secondary" onClick={saveTemplate}>Save template</Btn>
+      </div>
+      <p className="text-xs text-slate-400 md:col-span-4">Official GTEX competitions stay free. A friends cup can stay at zero, or you can set a pin, a winner purse funded by your club, and an optional contribution from each entrant.</p>
     </form>
   );
 }

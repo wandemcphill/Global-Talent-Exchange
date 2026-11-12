@@ -638,7 +638,7 @@ class LiveGtexRegenRepository implements GtexRegenRepository {
               position: parent.position ?? 'POS',
               countryCode: parent.countryCode ?? 'GTEX',
               clubName: parent.clubName ?? options.clubName,
-              rating: 75,
+              rating: parent.currentRating ?? 0,
               imageUrl: parent.imageUrl,
             ),
           )

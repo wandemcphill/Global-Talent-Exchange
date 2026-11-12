@@ -403,6 +403,27 @@ export const ClubAuthorityPanel: React.FC<ClubAuthorityPanelProps> = ({ clubId }
 
             <div className="bg-black/40 border border-white/10 rounded-xl p-3.5 space-y-1">
               <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                Season sales target
+              </label>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="number"
+                  min="0"
+                  step="1000"
+                  disabled={policy?.is_suspended}
+                  value={thresholds.sales_target_gtex || 0}
+                  onChange={(e) =>
+                    setThresholds({ ...thresholds, sales_target_gtex: Number(e.target.value) })
+                  }
+                  className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-purple-400"
+                  data-testid="input-sales-target"
+                />
+                <span className="text-xs text-slate-400 font-mono">GTX</span>
+              </div>
+            </div>
+
+            <div className="bg-black/40 border border-white/10 rounded-xl p-3.5 space-y-1">
+              <label className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
                 Operational Spend Ceiling
               </label>
               <div className="flex items-center space-x-2">

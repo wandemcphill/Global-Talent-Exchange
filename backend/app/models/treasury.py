@@ -101,12 +101,12 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     deposit_mode: Mapped[PaymentMode] = mapped_column(
         Enum(PaymentMode, name="payment_mode", native_enum=False),
         nullable=False,
-        default=PaymentMode.MANUAL,
+        default=PaymentMode.AUTOMATIC,
     )
     withdrawal_mode: Mapped[PaymentMode] = mapped_column(
         Enum(PaymentMode, name="payment_mode", native_enum=False),
         nullable=False,
-        default=PaymentMode.MANUAL,
+        default=PaymentMode.AUTOMATIC,
     )
 
     maintenance_message: Mapped[str | None] = mapped_column(String(255), nullable=True)

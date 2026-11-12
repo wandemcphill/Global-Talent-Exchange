@@ -59,6 +59,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from app.core.config import normalize_database_url
+from app.owner_console.staff_catalog_roles import assign_executive_staff_role
 from app.services.regen_portrait_service import FACE_BANK_MANIFEST
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -116,6 +117,71 @@ def canonical_name(val: str | None) -> str:
         if surname and given:
             return f"{given} {surname}"
     return name
+
+
+def compile_executive_staff_catalog(staff_rows: list[dict[str, str]]) -> list[dict[str, Any]]:
+    """Build the executive catalog. Director-of-football jobs become general managers."""
+    catalog_items: list[dict[str, Any]] = []
+    for staff in staff_rows:
+        name = canonical_name(staff.get("Name"))
+        uid = staff.get("Unique ID")
+        nation = staff.get("Nation", "Unknown").split("/")[0].strip()
+        team = staff.get("Team", "-")
+        head_coach = parse_rating(staff.get("Head Coach Rating")) or 0
+        general_manager = parse_rating(staff.get("General Manager Rating")) or 0
+        technical_director = parse_rating(staff.get("Technical Director Rating")) or 0
+        youth = parse_rating(staff.get("Head of Youth Dev Rating")) or 0
+        scout = parse_rating(staff.get("Scout Rating")) or 0
+        physio = parse_rating(staff.get("Physio Rating")) or 0
+        assigned = assign_executive_staff_role(
+            job=staff.get("Job"),
+            head_coach=head_coach,
+            general_manager=general_manager,
+            technical_director=technical_director,
+            youth=youth,
+            scout=scout,
+            physio=physio,
+        )
+        if assigned is None:
+            continue
+        best_role, best_rat = assigned
+        # Upfront signing fee reduced by 60%: anchor 65 rating -> 80 Coins, 95 rating -> 800 Coins
+        signing_fee = round(80.0 + (best_rat - 65) * ((800.0 - 80.0) / 30.0), 1)
+        # Annual salary in Fan Coins reduced by 75%: anchor 65 rating -> 150 FC, 95 rating -> 2,000 FC
+        annual_salary = round(150.0 + (best_rat - 65) * ((2000.0 - 150.0) / 30.0), 1)
+        catalog_items.append(
+            {
+                "id": f"staff_{uid}",
+                "staff_id": f"staff_{uid}",
+                "role": best_role,
+                "role_label": best_role.replace("_", " ").title(),
+                "name": name,
+                "nation": nation,
+                "real_club": team if team != "-" else None,
+                "source_job": (staff.get("Job") or "").strip() or None,
+                "rating": best_rat,
+                "style": "Elite Professional",
+                "temperament": "pragmatic",
+                "ambition": min(20, max(10, round(best_rat / 5))),
+                "loyalty": 14,
+                "youth_development": min(20, max(8, round(youth / 5))),
+                "tactical_flexibility": min(20, max(8, round(head_coach / 5))),
+                "scouting_accuracy": min(20, max(8, round(scout / 5))),
+                "medical_expertise": min(20, max(8, round(physio / 5))),
+                "min_prestige": max(20, round(best_rat * 0.8)),
+                "salary": annual_salary,
+                "salary_fancoin": annual_salary,
+                "salary_gtex": round(annual_salary / 10.0, 1),
+                "signing_fee_gtex": signing_fee,
+                "contract_1yr_fancoin": annual_salary,
+                "contract_1yr_gtex": round(annual_salary / 10.0, 1),
+                "contract_3yr_fancoin": round(annual_salary * 3, 1),
+                "contract_3yr_gtex": round(annual_salary * 3 / 10.0, 1),
+                "bio": f"Experienced {nation} tactical specialist currently registered with {team}.",
+                "specialty": f"{best_role.replace('_', ' ').title()} Mastery",
+            }
+        )
+    return catalog_items
 
 
 def normalize_lookup_name(val: str | None) -> str:
@@ -1484,71 +1550,7 @@ def execute_ingestion(batch_size: int = 500):
         # 7. Generate Executive Staff Catalog
         logger.info("--- Compiling Elite Staff Catalog ---")
         staff_rows = universe["staff_rows"]
-        catalog_items = []
-        for s in staff_rows:
-            s_name = canonical_name(s.get("Name"))
-            s_uid = s.get("Unique ID")
-            s_nation = s.get("Nation", "Unknown").split("/")[0].strip()
-            s_team = s.get("Team", "-")
-            hc_rat = parse_rating(s.get("Head Coach Rating")) or 0
-            gm_rat = parse_rating(s.get("General Manager Rating")) or 0
-            hoyd_rat = parse_rating(s.get("Head of Youth Dev Rating")) or 0
-            scout_rat = parse_rating(s.get("Scout Rating")) or 0
-            phys_rat = parse_rating(s.get("Physio Rating")) or 0
-
-            best_role = "first_team_manager"
-            best_rat = hc_rat
-            if gm_rat > best_rat:
-                best_role = "general_manager"
-                best_rat = gm_rat
-            if hoyd_rat > best_rat:
-                best_role = "head_of_youth_development"
-                best_rat = hoyd_rat
-            if scout_rat > best_rat:
-                best_role = "chief_scout"
-                best_rat = scout_rat
-            if phys_rat > best_rat:
-                best_role = "medical_director"
-                best_rat = phys_rat
-
-            if best_rat >= 65:
-                # Upfront signing fee reduced by 60%: anchor 65 rating -> 80 Coins, 95 rating -> 800 Coins
-                signing_fee = round(80.0 + (best_rat - 65) * ((800.0 - 80.0) / 30.0), 1)
-                # Annual salary in Fan Coins reduced by 75%: anchor 65 rating -> 150 FC, 95 rating -> 2,000 FC
-                annual_salary = round(150.0 + (best_rat - 65) * ((2000.0 - 150.0) / 30.0), 1)
-
-                catalog_items.append(
-                    {
-                        "id": f"staff_{s_uid}",
-                        "staff_id": f"staff_{s_uid}",
-                        "role": best_role,
-                        "role_label": best_role.replace("_", " ").title(),
-                        "name": s_name,
-                        "nation": s_nation,
-                        "real_club": s_team if s_team != "-" else None,
-                        "rating": best_rat,
-                        "style": "Elite Professional",
-                        "temperament": "pragmatic",
-                        "ambition": min(20, max(10, round(best_rat / 5))),
-                        "loyalty": 14,
-                        "youth_development": min(20, max(8, round(hoyd_rat / 5))),
-                        "tactical_flexibility": min(20, max(8, round(hc_rat / 5))),
-                        "scouting_accuracy": min(20, max(8, round(scout_rat / 5))),
-                        "medical_expertise": min(20, max(8, round(phys_rat / 5))),
-                        "min_prestige": max(20, round(best_rat * 0.8)),
-                        "salary": annual_salary,
-                        "salary_fancoin": annual_salary,
-                        "salary_gtex": round(annual_salary / 10.0, 1),
-                        "signing_fee_gtex": signing_fee,
-                        "contract_1yr_fancoin": annual_salary,
-                        "contract_1yr_gtex": round(annual_salary / 10.0, 1),
-                        "contract_3yr_fancoin": round(annual_salary * 3, 1),
-                        "contract_3yr_gtex": round(annual_salary * 3 / 10.0, 1),
-                        "bio": f"Experienced {s_nation} tactical specialist currently registered with {s_team}.",
-                        "specialty": f"{best_role.replace('_', ' ').title()} Mastery",
-                    }
-                )
-
+        catalog_items = compile_executive_staff_catalog(staff_rows)
         staff_out = BACKEND_ROOT / "app" / "owner_console" / "executive_staff_catalog.json"
         with open(staff_out, "w", encoding="utf-8") as f:
             json.dump(catalog_items, f, indent=2, ensure_ascii=False)

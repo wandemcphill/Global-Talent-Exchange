@@ -592,8 +592,14 @@ class CoinTraderService:
         self._require_approved_profile_for_user(actor)
         from app.wallets.funding_service import WalletFundingService
 
+        quote = self.quote_liquidity_purchase(
+            actor=actor,
+            amount=amount,
+            provider=provider,
+            coin_unit=coin_unit,
+        )
         funding_service = WalletFundingService(wallet_service=self.wallet_service)
-        session = funding_service.initiate_top_up(
+        checkout = funding_service.initiate_top_up(
             self.session,
             user=actor,
             amount=amount,
@@ -605,13 +611,13 @@ class CoinTraderService:
             purchase_purpose="trader_liquidity",
         )
         return {
-            "order_reference": session.order_reference,
-            "checkout_url": session.checkout_url,
-            "provider": session.provider,
-            "unit": session.unit,
-            "amount_coin": session.amount_coin,
-            "amount_fiat": session.amount_fiat,
-            "status": session.status,
+            "order_reference": checkout.reference,
+            "checkout_url": checkout.payment_link,
+            "provider": checkout.provider,
+            "unit": coin_unit,
+            "amount_coin": quote["net_amount"],
+            "amount_fiat": quote["amount_fiat"],
+            "status": checkout.status,
         }
 
     def verify_liquidity_purchase(
@@ -630,12 +636,19 @@ class CoinTraderService:
             reference=reference,
         )
         self.session.refresh(profile)
+        transaction = result.transaction
+        amount_coin = getattr(transaction, "amount", None)
+        if amount_coin is None:
+            amount_coin = getattr(transaction, "net_amount", Decimal("0"))
+        status = getattr(transaction, "status", "settled")
+        status_text = status.value if hasattr(status, "value") else str(status)
         return {
-            "order_reference": result.order_reference,
-            "status": result.status,
-            "unit": result.unit,
-            "amount_coin": result.amount_coin,
-            "amount_fiat": result.amount_fiat,
+            "order_reference": reference,
+            "status": status_text,
+            "unit": str(getattr(transaction, "unit", LedgerUnit.COIN)),
+            "amount_coin": str(amount_coin or 0),
+            "amount_fiat": "0",
+            "wallet_id": getattr(result.wallet, "id", None),
             "available_liquidity_snapshot": profile.liquidity_snapshot_json,
         }
 

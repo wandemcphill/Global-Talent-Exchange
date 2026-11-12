@@ -376,10 +376,24 @@ def _normalize_portrait_url(url: str) -> str:
     return cleaned
 
 
+def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
+    """Return the face already stored on an academy regen, if one was assigned."""
+    if player is None or not player.is_regen:
+        return None
+    personality = player.personality_json if isinstance(player.personality_json, dict) else {}
+    stored = personality.get("portrait_url")
+    if isinstance(stored, str) and stored.strip():
+        return _normalize_portrait_url(stored)
+    return None
+
+
 def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
     import urllib.parse
 
     player = session.get(OwnerSquadPlayer, player_id) if session else None
+    stored = stored_regen_portrait_url(player)
+    if stored:
+        return stored
     name = (player.name if player else player_name) or "Player"
     seed_key = (player.player_ref if player and player.player_ref else player_id) or "player"
 

@@ -563,7 +563,7 @@ def _gateway_deposit_enabled(
         return False
     if bool(policy.get("policy_enforced", False)):
         processor_mode = str(policy.get("processor_mode", "manual_bank_transfer"))
-        if processor_mode == "manual_bank_transfer" and settings.deposit_mode != PaymentMode.HYBRID:
+        if processor_mode == "manual_bank_transfer" and settings.deposit_mode == PaymentMode.MANUAL:
             return False
     enabled_providers = _enabled_gateway_deposit_providers(request, require_live_ready=require_live_ready)
     if provider_key is not None:

@@ -80,6 +80,10 @@ class RegenCreationParentPlayer {
     this.imageUrl,
     this.clubId,
     this.clubName,
+    this.currentRating,
+    this.potentialRating,
+    this.preferredFoot,
+    this.heightCm,
   });
 
   final String playerId;
@@ -90,6 +94,10 @@ class RegenCreationParentPlayer {
   final String? imageUrl;
   final String? clubId;
   final String? clubName;
+  final int? currentRating;
+  final int? potentialRating;
+  final String? preferredFoot;
+  final int? heightCm;
 
   factory RegenCreationParentPlayer.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(
@@ -111,6 +119,22 @@ class RegenCreationParentPlayer {
       imageUrl: _generatedImageUrl(json),
       clubId: GteJson.stringOrNull(json, <String>['club_id', 'clubId']),
       clubName: GteJson.stringOrNull(json, <String>['club_name', 'clubName']),
+      currentRating: GteJson.integerOrNull(json, <String>[
+        'current_rating',
+        'currentRating',
+      ]),
+      potentialRating: GteJson.integerOrNull(json, <String>[
+        'potential_rating',
+        'potentialRating',
+      ]),
+      preferredFoot: GteJson.stringOrNull(json, <String>[
+        'preferred_foot',
+        'preferredFoot',
+      ]),
+      heightCm: GteJson.integerOrNull(json, <String>[
+        'height_cm',
+        'heightCm',
+      ]),
     );
   }
 }

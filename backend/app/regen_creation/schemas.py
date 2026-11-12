@@ -15,6 +15,8 @@ class RequestSonCreateRequest(CommonSchema):
     requested_name: str | None = Field(default=None, max_length=160)
     requested_country_code: str | None = Field(default=None, max_length=8)
     requested_position: str | None = Field(default=None, max_length=32)
+    requested_foot: str | None = Field(default=None, max_length=16)
+    requested_height_cm: int | None = None
     payment_method: str = Field(default="wallet", max_length=32)
 
     @field_validator("requested_name")
@@ -43,6 +45,29 @@ class RequestSonCreateRequest(CommonSchema):
             raise ValueError("requested_position must be one of GK, CB, RB, LB, DM, CM, AM, RW, LW, ST")
         return trimmed or None
 
+    @field_validator("requested_foot")
+    @classmethod
+    def _normalize_requested_foot(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        trimmed = value.strip().lower()
+        if not trimmed:
+            return None
+        if trimmed == "either":
+            trimmed = "both"
+        if trimmed not in {"left", "right", "both"}:
+            raise ValueError("requested_foot must be left, right, or both")
+        return trimmed
+
+    @field_validator("requested_height_cm")
+    @classmethod
+    def _normalize_requested_height(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not 145 <= int(value) <= 210:
+            raise ValueError("requested_height_cm must be between 145 and 210")
+        return int(value)
+
     @field_validator("payment_method")
     @classmethod
     def _normalize_payment_method(cls, value: str) -> str:
@@ -58,6 +83,14 @@ class RegenCreationPricingView(CommonSchema):
     customization_cost_coin: Decimal
 
 
+class RegenCreationParentDnaView(CommonSchema):
+    archetype: str | None = None
+    tempo: float | None = None
+    risk_taking: float | None = None
+    creativity: float | None = None
+    discipline: float | None = None
+
+
 class RegenCreationParentPlayerView(CommonSchema):
     player_id: str
     full_name: str
@@ -68,6 +101,12 @@ class RegenCreationParentPlayerView(CommonSchema):
     country_name: str | None = None
     club_id: str | None = None
     club_name: str | None = None
+    current_rating: int | None = None
+    potential_rating: int | None = None
+    preferred_foot: str | None = None
+    height_cm: int | None = None
+    age: int | None = None
+    dna: RegenCreationParentDnaView | None = None
 
 
 class RequestSonOptionsView(CommonSchema):
@@ -76,6 +115,9 @@ class RequestSonOptionsView(CommonSchema):
     currency: str
     pricing: RegenCreationPricingView
     eligible_parents: list[RegenCreationParentPlayerView] = Field(default_factory=list)
+    lifetime_cap: int = 0
+    lifetime_used: int = 0
+    slots_remaining: int = 0
 
 
 class RegenCreationGeneratedPlayerView(CommonSchema):
@@ -93,6 +135,11 @@ class RegenCreationGeneratedPlayerView(CommonSchema):
     current_rating: int
     potential_rating: int
     card_id: str | None = None
+    preferred_foot: str | None = None
+    height_cm: int | None = None
+    parent_player_name: str | None = None
+    narrative: str | None = None
+    dna_archetype: str | None = None
 
 
 class RegenCreationOrderView(CommonSchema):

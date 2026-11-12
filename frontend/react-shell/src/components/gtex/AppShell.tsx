@@ -58,6 +58,7 @@ const NAV = [
 
   // 4. FOOTBALL
   { to: "/app/squad", label: "Squad & Management", icon: Shirt, id: "squad", category: "FOOTBALL" },
+  { to: "/app/staff-market", label: "Staff Market", icon: User, id: "staff-market", category: "FOOTBALL" },
   { to: "/app/lineup", label: "Tactics & Lineup", icon: Swords, id: "lineup", category: "FOOTBALL" },
   { to: "/app/competitions", label: "Competitions & Tournaments", icon: Trophy, id: "competitions", category: "FOOTBALL" },
   { to: "/app/national", label: "National Teams", icon: Flag, id: "national", category: "FOOTBALL" },

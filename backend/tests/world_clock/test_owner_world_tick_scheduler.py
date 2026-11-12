@@ -281,7 +281,7 @@ def test_academy_intake_uses_a_separate_sequence_not_world_day(monkeypatch) -> N
 
     monkeypatch.setattr(owner_service.ledger, "record", fake_record)
     monkeypatch.setattr(owner_service.engine, "generate_regens", fake_generate)
-    monkeypatch.setattr(owner_service, "_add_regen", lambda _session, _club, regen: regen)
+    monkeypatch.setattr(owner_service, "_add_regen", lambda _session, _club, regen, **_kwargs: regen)
 
     first = owner_service.academy_intake(session, state.owner_user_id, state.club_id)
     session.flush()

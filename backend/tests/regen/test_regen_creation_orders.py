@@ -16,7 +16,7 @@ from app.ingestion.models import Country, Player
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
 from app.models.club_squad_tier import ClubSquadTierMembership
-from app.models.regen import RegenProfile
+from app.models.regen import RegenLineageProfile, RegenProfile
 from app.models.regen_ecosystem import CareerEvent, RegenBloodlineLink
 from app.models.user import User
 from app.models.wallet import LedgerEntry, LedgerEntryReason, LedgerSourceTag, LedgerUnit
@@ -571,3 +571,86 @@ def test_korapay_paid_callback_generates_exactly_once(session, monkeypatch: pyte
         select(func.count(RegenProfile.id)).where(RegenProfile.generation_source == "requested_son")
     )
     assert int(regen_count or 0) == 1
+
+
+def test_requested_son_inherits_parent_bloodline(session) -> None:
+    user = _create_user(session, email="bloodline@example.com", username="bloodlineuser", full_name="Bloodline User")
+    club = _create_club(session, owner=user, slug="bloodline-fc", name="Bloodline FC")
+    country = _create_country(session)
+    player = _create_player(
+        session,
+        club=club,
+        country=country,
+        external_id="bloodline-parent",
+        full_name="Samuel Adeyemi",
+        position="CM",
+    )
+    player.governed_gsi = 88
+    player.governed_potential_gsi = 92
+    player.preferred_foot = "left"
+    player.height_cm = 186
+    player.secondary_positions_json = ["AM"]
+    player.dna_profile = {
+        "archetype": "playmaker",
+        "tempo": 0.71,
+        "risk_taking": 0.64,
+        "creativity": 0.93,
+        "discipline": 0.58,
+    }
+    session.commit()
+    _fund_user(session, user, amount=Decimal("500.0000"))
+
+    client = _client(session, current_user=user)
+    options = client.get("/api/regens/request-son/options")
+    assert options.status_code == 200
+    options_payload = options.json()
+    parent_view = options_payload["eligible_parents"][0]
+    assert parent_view["current_rating"] == 88
+    assert parent_view["potential_rating"] == 92
+    assert parent_view["preferred_foot"] == "left"
+    assert parent_view["height_cm"] == 186
+    assert parent_view["position"] == "CM"
+    assert parent_view["dna"]["archetype"] == "playmaker"
+    assert options_payload["lifetime_cap"] == 3
+    assert options_payload["slots_remaining"] == 3
+
+    create_response = client.post(
+        "/api/regens/request-son",
+        json={"parent_player_id": player.id, "payment_method": "wallet"},
+    )
+    assert create_response.status_code == 201
+    assert Decimal(str(create_response.json()["amount_coin"])) == Decimal("125")
+
+    pay_response = client.post(f"/api/regens/creation-orders/{create_response.json()['id']}/pay-with-wallet")
+    assert pay_response.status_code == 200, pay_response.text
+    generated = pay_response.json()["generated_player"]
+    assert "Adeyemi" in generated["full_name"]
+    assert generated["position"] == "CM"
+    assert generated["preferred_foot"] == "left"
+    assert 182 <= generated["height_cm"] <= 190
+    assert 45 <= generated["current_rating"] <= 72
+    assert generated["current_rating"] < generated["potential_rating"] <= 96
+    assert generated["parent_player_name"] == "Samuel Adeyemi"
+    assert "Adeyemi" in generated["narrative"]
+
+    regen = session.scalar(select(RegenProfile).where(RegenProfile.player_id == generated["player_id"]))
+    assert regen is not None
+    assert "AM" in list(regen.secondary_positions_json or [])
+    lineage = session.scalar(select(RegenLineageProfile).where(RegenLineageProfile.regen_id == regen.id))
+    assert lineage is not None
+    assert lineage.is_owner_son is True
+    assert lineage.related_legend_ref_id == user.id
+    assert lineage.metadata_json["parent_player_id"] == player.id
+
+    membership = session.scalar(
+        select(ClubSquadTierMembership).where(
+            ClubSquadTierMembership.player_id == generated["player_id"],
+            ClubSquadTierMembership.status == "active",
+        )
+    )
+    assert membership is not None
+    assert membership.tier == "reserve"
+    assert membership.source == "son"
+
+    refreshed = client.get("/api/regens/request-son/options")
+    assert refreshed.json()["slots_remaining"] == 2
