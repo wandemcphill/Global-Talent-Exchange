@@ -65,6 +65,7 @@ export const SHOWROOM_INSPECTION_REELS: Record<string, InspectionFrame[]> = {
     media("360 turn", "video", "gtex-lux-yacht-360.mp4"),
   ],
   penthouse_box_suite: [
+    media("Exterior", "image", "gtex-lux-penthouse-exterior.jpg"),
     media("Box", "image", "gtex-lux-penthouse-box.jpg"),
     media("Dining room", "image", "gtex-lux-penthouse-dining.jpg"),
     media("Lounge", "image", "gtex-lux-penthouse-lounge.jpg"),
@@ -120,24 +121,48 @@ function asFrames(raw: unknown): InspectionFrame[] {
   });
 }
 
+const EXTERIOR_STILL_LABELS = new Set([
+  "body",
+  "rear",
+  "hull",
+  "wing",
+  "pavilion",
+  "dial",
+  "engine",
+  "exterior",
+]);
+
+export function isExteriorStill(frame: Pick<InspectionFrame, "label">): boolean {
+  return EXTERIOR_STILL_LABELS.has(frame.label.trim().toLowerCase());
+}
+
+export function splitInspectionStills(frames: InspectionFrame[]): {
+  exterior: InspectionFrame[];
+  interior: InspectionFrame[];
+} {
+  const stills = frames.filter((frame) => frame.kind === "image");
+  return {
+    exterior: stills.filter((frame) => isExteriorStill(frame)),
+    interior: stills.filter((frame) => !isExteriorStill(frame)),
+  };
+}
+
 export function inspectionFramesFor(
   item: { catalog_key?: string; gift_code?: string; id?: string; inspection_reel?: unknown } | null | undefined,
   mode: "stills" | "full" = "full"
 ): InspectionFrame[] {
-  const fromApi = asFrames(item?.inspection_reel);
-  let frames = fromApi;
-  if (frames.length === 0) {
-    const candidates = [item?.catalog_key, item?.gift_code, item?.id]
-      .map((value) => String(value || "").trim().toLowerCase())
-      .filter(Boolean);
-    for (const key of candidates) {
-      const reelKey = SHOWROOM_INSPECTION_REELS[key] ? key : GIFT_KEYS[key];
-      if (reelKey && SHOWROOM_INSPECTION_REELS[reelKey]) {
-        frames = SHOWROOM_INSPECTION_REELS[reelKey];
-        break;
-      }
+  const candidates = [item?.catalog_key, item?.gift_code, item?.id]
+    .map((value) => String(value || "").trim().toLowerCase())
+    .filter(Boolean);
+  let frames: InspectionFrame[] = [];
+  for (const key of candidates) {
+    const reelKey = SHOWROOM_INSPECTION_REELS[key] ? key : GIFT_KEYS[key];
+    if (reelKey && SHOWROOM_INSPECTION_REELS[reelKey]) {
+      frames = SHOWROOM_INSPECTION_REELS[reelKey];
+      break;
     }
   }
+  if (frames.length === 0) frames = asFrames(item?.inspection_reel);
   if (mode === "stills") return frames.filter((frame) => frame.kind === "image");
   return frames;
 }

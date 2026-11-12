@@ -13,7 +13,7 @@ import { api } from "@/lib/api";
 import { publicAssetPath } from "@/lib/publicPath";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
-import { ShowroomInspectionReel } from "@/components/gtex/ShowroomInspectionReel";
+import { ShowroomInspectionReel, ShowroomStillStage } from "@/components/gtex/ShowroomInspectionReel";
 import { inspectionFramesFor } from "@/lib/showroomInspection";
 import { PrestigeShowroomScene } from "@/lib/3d/scenes/PrestigeShowroomScene";
 import {
@@ -58,7 +58,7 @@ export function Showroom() {
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [inspectingItem, setInspectingItem] = useState<any | null>(null);
-  const [inspectView, setInspectView] = useState<"walk" | "model">("walk");
+  const [inspectView, setInspectView] = useState<"stills" | "walk" | "model">("stills");
   const [acquiringItem, setAcquiringItem] = useState<any | null>(null);
   const [giftingItem, setGiftingItem] = useState<any | null>(null);
   const [recipientType, setRecipientType] = useState<"player" | "staff">("player");
@@ -123,7 +123,10 @@ export function Showroom() {
   const keyOf = (it: any) => it?.catalog_key || it?.id || it?.sku || "";
 
   useEffect(() => {
-    setInspectView("walk");
+    const frames = inspectionFramesFor(inspectingItem);
+    if (frames.some((frame) => frame.kind === "image")) setInspectView("stills");
+    else if (frames.length > 0) setInspectView("walk");
+    else setInspectView("model");
   }, [inspectingItem]);
 
   const assetImage = (it: any) =>
@@ -568,7 +571,6 @@ export function Showroom() {
           {filteredItems.map((it: any) => {
             const key = keyOf(it);
             const isJet = it.category === "jet";
-            const isWatch = it.category === "watch";
             const cardFrames = inspectionFramesFor(it, "stills");
             const isBusy = busyItem === key || busyItem === `gift:${key}`;
             const isOwned = ownedAssets.some((oa: any) => keyOf(oa) === key || oa.catalog_key === key);
@@ -582,20 +584,14 @@ export function Showroom() {
                 className="group flex flex-col overflow-hidden rounded-2xl border border-[#25354B] bg-[#14243A] gx-card-bezel shadow-xl transition-all duration-300 hover:-translate-y-1 hover:border-[#E5B63F]/70 hover:shadow-[0_20px_50px_rgba(229,182,63,0.22)]"
               >
                 {/* Visual Header — Preserves full vehicle / aircraft proportions & watch macro detail */}
-                <div
-                  className={`relative ${
-                    isWatch ? "h-64" : "h-56"
-                  } overflow-hidden bg-slate-950 border-b border-gtex-graphite flex items-center justify-center`}
-                >
+                <div className="relative h-64 overflow-hidden border-b border-gtex-graphite bg-black">
                   {cardFrames.length > 0 ? (
-                    <ShowroomInspectionReel frames={cardFrames} fit={isWatch ? "contain" : "cover"} showLabel={false} />
+                    <ShowroomStillStage frames={cardFrames} compact />
                   ) : assetImage(it) ? (
                     <img
                       src={assetImage(it)}
                       alt={it.name || it.custom_name}
-                      className={`h-full w-full ${
-                        isWatch ? "object-contain p-2 bg-slate-950" : "object-cover"
-                      } transition-transform duration-700 group-hover:scale-105`}
+                      className="h-full w-full bg-black object-contain"
                       onError={(e) => {
                         (e.currentTarget as HTMLImageElement).style.opacity = "0";
                       }}
@@ -606,7 +602,7 @@ export function Showroom() {
                     </div>
                   )}
 
-                  <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/15 to-transparent pointer-events-none" />
+                  <div className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-slate-950 to-transparent" />
 
                   {/* Wire notice & legal owner badge */}
                   <div className="absolute left-3 top-3 flex flex-wrap gap-1.5">
@@ -755,15 +751,28 @@ export function Showroom() {
             <div className="p-4 bg-slate-950 border-b border-white/10">
               {inspectionFramesFor(inspectingItem).length > 0 && (
                 <div className="mb-3 flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setInspectView("walk")}
-                    className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${
-                      inspectView === "walk" ? "bg-amber-400 text-slate-950" : "border border-white/15 text-slate-300"
-                    }`}
-                  >
-                    Walk-through
-                  </button>
+                  {inspectionFramesFor(inspectingItem).some((frame) => frame.kind === "image") && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectView("stills")}
+                      className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${
+                        inspectView === "stills" ? "bg-amber-400 text-slate-950" : "border border-white/15 text-slate-300"
+                      }`}
+                    >
+                      Stills
+                    </button>
+                  )}
+                  {inspectionFramesFor(inspectingItem).some((frame) => frame.kind === "video") && (
+                    <button
+                      type="button"
+                      onClick={() => setInspectView("walk")}
+                      className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider ${
+                        inspectView === "walk" ? "bg-amber-400 text-slate-950" : "border border-white/15 text-slate-300"
+                      }`}
+                    >
+                      Walk-through
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setInspectView("model")}
@@ -775,9 +784,16 @@ export function Showroom() {
                   </button>
                 </div>
               )}
-              {inspectView === "walk" && inspectionFramesFor(inspectingItem).length > 0 ? (
+              {inspectView === "stills" && inspectionFramesFor(inspectingItem, "stills").length > 0 ? (
+                <div className="h-[420px] overflow-hidden rounded-xl border border-white/10 bg-black">
+                  <ShowroomStillStage frames={inspectionFramesFor(inspectingItem, "stills")} />
+                </div>
+              ) : inspectView === "walk" && inspectionFramesFor(inspectingItem).some((frame) => frame.kind === "video") ? (
                 <div className="h-[420px] overflow-hidden rounded-xl border border-white/10">
-                  <ShowroomInspectionReel frames={inspectionFramesFor(inspectingItem)} fit="contain" />
+                  <ShowroomInspectionReel
+                    frames={inspectionFramesFor(inspectingItem).filter((frame) => frame.kind === "video")}
+                    fit="contain"
+                  />
                 </div>
               ) : (
                 <PrestigeShowroomScene

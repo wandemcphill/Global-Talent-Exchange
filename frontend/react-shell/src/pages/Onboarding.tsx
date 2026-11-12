@@ -1440,13 +1440,7 @@ export default function Onboarding() {
     queryFn: async () => (await api.get("/owner/onboarding")).data,
     enabled: !!user,
   });
-  if (loading || (user && isLoading)) return <Loading label="Preparing your club" />;
-  if (!user) return <Navigate to="/login" replace />;
   const club = (data?.clubs || []).find((c: any) => !["active"].includes(c.stage)) || null;
-  if (!club && !(data?.clubs || []).length) {
-    return <CreateFirstClub onDone={() => refetch()} onCancel={() => navigate("/app")} />;
-  }
-  if (!club) return <Navigate to="/app" replace />;
   const [academyAcknowledged, setAcademyAcknowledged] = useState(() =>
     Boolean(club?.club_id && localStorage.getItem(`gtex.onboarding.academy.${club.club_id}`) === "acknowledged")
   );
@@ -1458,6 +1452,13 @@ export default function Onboarding() {
       );
     }
   }, [club?.club_id]);
+
+  if (loading || (user && isLoading)) return <Loading label="Preparing your club" />;
+  if (!user) return <Navigate to="/login" replace />;
+  if (!club && !(data?.clubs || []).length) {
+    return <CreateFirstClub onDone={() => refetch()} onCancel={() => navigate("/app")} />;
+  }
+  if (!club) return <Navigate to="/app" replace />;
 
   let index = 0;
   if (club.stage === "squad") {

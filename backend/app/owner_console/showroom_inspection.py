@@ -64,6 +64,7 @@ SHOWROOM_INSPECTION_REELS: dict[str, list[dict[str, str]]] = {
         _frame("360 turn", "video", "gtex-lux-yacht-360.mp4"),
     ],
     "penthouse_box_suite": [
+        _frame("Exterior", "image", "gtex-lux-penthouse-exterior.jpg"),
         _frame("Box", "image", "gtex-lux-penthouse-box.jpg"),
         _frame("Dining room", "image", "gtex-lux-penthouse-dining.jpg"),
         _frame("Lounge", "image", "gtex-lux-penthouse-lounge.jpg"),
