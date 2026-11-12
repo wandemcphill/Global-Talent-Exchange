@@ -354,6 +354,7 @@ def test_pricing_snapshot_and_ledger_source_tag(session) -> None:
 
     # Verify order metadata contains immutable pricing snapshot
     from app.models.regen_creation_order import RegenCreationOrder
+
     order_obj = session.get(RegenCreationOrder, order_id)
     assert order_obj is not None
     snapshot = (order_obj.metadata_json or {}).get("pricing_snapshot")
@@ -469,7 +470,9 @@ def test_pending_request_limit_enforced(session) -> None:
     user = _create_user(session, email="limit@example.com", username="limituser", full_name="Limit User")
     club = _create_club(session, owner=user, slug="limit-fc", name="Limit FC")
     country = _create_country(session)
-    player = _create_player(session, club=club, country=country, external_id="limit-parent", full_name="Godwin Oboabona")
+    player = _create_player(
+        session, club=club, country=country, external_id="limit-parent", full_name="Godwin Oboabona"
+    )
 
     client = _client(session, current_user=user)
     res1 = client.post(

@@ -1373,7 +1373,11 @@ def execute_ingestion(batch_size: int = 500):
                 cur = parse_rating(r.get("Best Rating")) or max(45, pot - 10)
                 club = r.get("Club")
 
-                face_idx = int(hashlib.sha256(f"{uid}-{name}".encode("utf-8")).hexdigest(), 16) % face_count if face_count > 0 else 0
+                face_idx = (
+                    int(hashlib.sha256(f"{uid}-{name}".encode("utf-8")).hexdigest(), 16) % face_count
+                    if face_count > 0
+                    else 0
+                )
                 face_asset = faces[face_idx] if face_count > 0 else {}
                 face_url = face_asset.get("cloudinary_secure_url", "")
                 dna = {
@@ -1576,7 +1580,9 @@ if __name__ == "__main__":
 
     if args.apply:
         if os.getenv("GTEX_ALLOW_FM23_INGEST", "").lower() != "true":
-            logger.error("Database ingestion is locked for production safety. Set GTEX_ALLOW_FM23_INGEST=true to proceed.")
+            logger.error(
+                "Database ingestion is locked for production safety. Set GTEX_ALLOW_FM23_INGEST=true to proceed."
+            )
             sys.exit(1)
         execute_ingestion()
     else:

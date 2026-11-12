@@ -287,9 +287,11 @@ def list_staff_market_candidates(
             continue
         if temperament_query and temperament_query not in candidate_temperament.lower():
             continue
-        if search_query and search_query not in " ".join(
-            [p.display_name or "", candidate_style, candidate_temperament, p.staff_type or ""]
-        ).lower():
+        if (
+            search_query
+            and search_query
+            not in " ".join([p.display_name or "", candidate_style, candidate_temperament, p.staff_type or ""]).lower()
+        ):
             continue
 
         min_p = _safe_int(meta.get("min_prestige"), 15)

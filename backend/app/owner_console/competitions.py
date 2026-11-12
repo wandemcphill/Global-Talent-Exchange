@@ -562,7 +562,9 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
                 memo=f"Entry contribution for {comp.name}",
             )
         except ledger.LedgerError as exc:
-            raise OwnerError("contribution_unpaid", 402, "The club cannot cover this competition contribution.") from exc
+            raise OwnerError(
+                "contribution_unpaid", 402, "The club cannot cover this competition contribution."
+            ) from exc
     strength = club_strength(
         [player_dict(p) for p in squad(session, club_id)], state.manager_json or {}, state.facilities_json or {}
     )
@@ -605,7 +607,9 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
         competition_format = "knockout"
     max_clubs = int(payload.get("max_clubs") or (template or {}).get("max_participants") or 4)
     max_clubs = max(2, min(32, max_clubs))
-    contribution = Decimal(str(payload.get("contribution") if payload.get("contribution") is not None else payload.get("entry_fee") or 0))
+    contribution = Decimal(
+        str(payload.get("contribution") if payload.get("contribution") is not None else payload.get("entry_fee") or 0)
+    )
     prize = Decimal(str(payload.get("winner_prize") or payload.get("prize_pool") or 0))
     if contribution < 0 or prize < 0:
         raise OwnerError("invalid_competition_money", 400, "Contribution and prize must be zero or more.")

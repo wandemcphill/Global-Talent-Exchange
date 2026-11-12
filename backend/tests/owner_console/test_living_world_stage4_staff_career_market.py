@@ -498,9 +498,7 @@ def test_unemployed_staff_follow_a_corrected_catalog_role():
     session.flush()
 
     living_staff_market.ensure_staff_market_profiles(session)
-    profile = session.scalar(
-        select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{director['id']}")
-    )
+    profile = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{director['id']}"))
     assert profile is not None
     assert profile.staff_type == "general_manager"
     assert profile.metadata_json["career_history"] == [{"club_id": "kept"}]
@@ -516,9 +514,7 @@ def test_general_manager_bench_refills_when_clubs_hire():
     assert held["general_manager_added"] == 0
     assert held["general_manager_available"] == GENERAL_MANAGER_FREE_AGENT_FLOOR
 
-    appointed = session.scalars(
-        select(ClubStaffProfile).where(ClubStaffProfile.staff_type == "general_manager")
-    ).all()
+    appointed = session.scalars(select(ClubStaffProfile).where(ClubStaffProfile.staff_type == "general_manager")).all()
     for profile in appointed[:12]:
         meta = dict(profile.metadata_json or {})
         meta["employment_status"] = "employed"

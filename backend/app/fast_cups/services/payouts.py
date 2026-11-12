@@ -125,10 +125,7 @@ class FastCupRewardPayoutService:
             ),
         )
         penalty_shootouts = sum(
-            1
-            for round_entry in bracket.rounds
-            for match in round_entry.matches
-            if match.decided_by_penalties
+            1 for round_entry in bracket.rounds for match in round_entry.matches if match.decided_by_penalties
         )
         return FastCupResultSummary(
             cup_id=cup.cup_id,

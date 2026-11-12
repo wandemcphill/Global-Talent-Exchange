@@ -140,7 +140,7 @@ describe("Unified AuthPage Onboarding & Login (Issue #228)", () => {
 
     // Unified account explanation notice is shown
     expect(container?.textContent).toContain("Choose how you join");
-    expect(container?.textContent).toContain("One account unlocks the full platform");
+    expect(container?.textContent).toContain("Fans and club owners use the same account.");
   });
 
   it("submits unified user registration payload and routes to /app by default", async () => {

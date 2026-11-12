@@ -1846,7 +1846,11 @@ class RegenGenerationEngine:
         customization = self._owner_customization(lineage_selection)
         if customization.get("name"):
             display_name = self._apply_custom_name(str(customization["name"]), used_names, rng)
-        bloodline = lineage_selection.metadata if lineage_selection is not None and isinstance(lineage_selection.metadata, dict) else {}
+        bloodline = (
+            lineage_selection.metadata
+            if lineage_selection is not None and isinstance(lineage_selection.metadata, dict)
+            else {}
+        )
         rolled_position = rng.choice(_PRIMARY_POSITIONS)
         inherited_position = bloodline.get("parent_position")
         if customization.get("position"):
@@ -1970,7 +1974,9 @@ class RegenGenerationEngine:
                 position=primary_position,
                 country_code=origin.country_code,
                 lineage_metadata=lineage_metadata or None,
-                inherited_profile=bloodline.get("inherited_dna") if isinstance(bloodline.get("inherited_dna"), dict) else None,
+                inherited_profile=(
+                    bloodline.get("inherited_dna") if isinstance(bloodline.get("inherited_dna"), dict) else None
+                ),
                 rng=rng,
             ),
         }
@@ -2513,7 +2519,9 @@ class RegenGenerationEngine:
                     "cost_coin": owner_son_request.total_cost_coin,
                 }
             )
-            bloodline = owner_son_request.parent_bloodline if isinstance(owner_son_request.parent_bloodline, dict) else None
+            bloodline = (
+                owner_son_request.parent_bloodline if isinstance(owner_son_request.parent_bloodline, dict) else None
+            )
             if bloodline:
                 parent_name = str(bloodline.get("parent_player_name") or "").strip()
                 name_parts = [part for part in parent_name.split(" ") if part]

@@ -66,7 +66,20 @@ _MALE = {
         ("Haddad", "El-Sayed", "Demir", "Farouk", "Qureshi", "Mansour", "Yilmaz", "Nasser", "Khoury", "Amrani"),
     ),
     "latino": (
-        ("Mateo", "Santiago", "Lucas", "Andres", "Thiago", "Joao", "Diego", "Camilo", "Bruno", "Rafael", "Luis", "Pedro"),
+        (
+            "Mateo",
+            "Santiago",
+            "Lucas",
+            "Andres",
+            "Thiago",
+            "Joao",
+            "Diego",
+            "Camilo",
+            "Bruno",
+            "Rafael",
+            "Luis",
+            "Pedro",
+        ),
         ("Navarro", "Almeida", "Costa", "Duarte", "Silva", "Herrera", "Pereira", "Vargas", "Mendes", "Rojas"),
     ),
     "mixed_braids": (
@@ -74,7 +87,20 @@ _MALE = {
         ("Laurent", "Diallo", "Bennett", "Moreau", "Silva", "Okoro", "Dubois", "James", "Petit", "Barnes"),
     ),
     "blonde": (
-        ("Soren", "Erik", "Lars", "Nils", "Johan", "Mikkel", "Anders", "Frederik", "Oskar", "Vilhelm", "Kasper", "Mats"),
+        (
+            "Soren",
+            "Erik",
+            "Lars",
+            "Nils",
+            "Johan",
+            "Mikkel",
+            "Anders",
+            "Frederik",
+            "Oskar",
+            "Vilhelm",
+            "Kasper",
+            "Mats",
+        ),
         ("Lindholm", "Bergstrom", "Nielsen", "Hansen", "Eriksson", "Dahl", "Virtanen", "Holm", "Strand", "Bakker"),
     ),
 }

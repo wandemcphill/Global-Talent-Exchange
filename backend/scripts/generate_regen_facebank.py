@@ -79,8 +79,22 @@ HAIR_WEIGHTS = {
     "Hispanic": (("Dark Brown", 34), ("Black", 28), ("Brown", 18), ("Light Brown", 12), ("Blonde", 5), ("Red", 3)),
     "Indian": (("Black", 58), ("Dark Brown", 30), ("Brown", 9), ("Light Brown", 2), ("Red", 1)),
     "Middle east": (("Black", 42), ("Dark Brown", 36), ("Brown", 14), ("Light Brown", 6), ("Blonde", 1), ("Red", 1)),
-    "North european": (("Dark Brown", 24), ("Light Brown", 22), ("Blonde", 22), ("Brown", 14), ("Black", 12), ("Red", 6)),
-    "South european": (("Dark Brown", 36), ("Black", 24), ("Brown", 20), ("Light Brown", 12), ("Blonde", 5), ("Red", 3)),
+    "North european": (
+        ("Dark Brown", 24),
+        ("Light Brown", 22),
+        ("Blonde", 22),
+        ("Brown", 14),
+        ("Black", 12),
+        ("Red", 6),
+    ),
+    "South european": (
+        ("Dark Brown", 36),
+        ("Black", 24),
+        ("Brown", 20),
+        ("Light Brown", 12),
+        ("Blonde", 5),
+        ("Red", 3),
+    ),
     "Mixed": (("Black", 28), ("Dark Brown", 24), ("Brown", 16), ("Light Brown", 14), ("Blonde", 12), ("Red", 6)),
 }
 

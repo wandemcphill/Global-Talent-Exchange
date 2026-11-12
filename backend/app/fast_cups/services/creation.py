@@ -40,9 +40,7 @@ class RecurringFastCupCreationService:
                     scheduled_cups[cup_id] = self._build_cup(division=division, size=size, kickoff_at=kickoff_at)
 
         existing_by_id = {
-            cup.cup_id: cup
-            for cup in self.repository.list_upcoming(now=next_boundary)
-            if cup.cup_id in scheduled_cups
+            cup.cup_id: cup for cup in self.repository.list_upcoming(now=next_boundary) if cup.cup_id in scheduled_cups
         }
         missing_cups = [scheduled_cups[cup_id] for cup_id in scheduled_cup_ids if cup_id not in existing_by_id]
         persisted_missing = self.repository.save_many(missing_cups) if missing_cups else ()

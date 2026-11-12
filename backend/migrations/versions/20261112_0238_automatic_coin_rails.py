@@ -19,30 +19,14 @@ depends_on = None
 
 
 def upgrade() -> None:
+    op.execute(sa.text("UPDATE treasury_settings SET deposit_mode = 'automatic' " "WHERE deposit_mode = 'manual'"))
     op.execute(
-        sa.text(
-            "UPDATE treasury_settings SET deposit_mode = 'automatic' "
-            "WHERE deposit_mode = 'manual'"
-        )
-    )
-    op.execute(
-        sa.text(
-            "UPDATE treasury_settings SET withdrawal_mode = 'automatic' "
-            "WHERE withdrawal_mode = 'manual'"
-        )
+        sa.text("UPDATE treasury_settings SET withdrawal_mode = 'automatic' " "WHERE withdrawal_mode = 'manual'")
     )
 
 
 def downgrade() -> None:
+    op.execute(sa.text("UPDATE treasury_settings SET deposit_mode = 'manual' " "WHERE deposit_mode = 'automatic'"))
     op.execute(
-        sa.text(
-            "UPDATE treasury_settings SET deposit_mode = 'manual' "
-            "WHERE deposit_mode = 'automatic'"
-        )
-    )
-    op.execute(
-        sa.text(
-            "UPDATE treasury_settings SET withdrawal_mode = 'manual' "
-            "WHERE withdrawal_mode = 'automatic'"
-        )
+        sa.text("UPDATE treasury_settings SET withdrawal_mode = 'manual' " "WHERE withdrawal_mode = 'automatic'")
     )

@@ -454,7 +454,7 @@ def test_wallet_overview_surfaces_provider_status_and_live_restrictions(api_cont
     assert payload["required_policy_acceptances_missing"] == 0
     assert payload["policy_blocked"] is False
     assert payload["deposit_mode"] == "bank_transfer"
-    assert payload["withdrawal_mode"] == "bank_transfer"
+    assert payload["withdrawal_mode"] == "gateway"
     assert payload["payment_provider_status"]["paystack"] == "blocked"
     assert payload["payment_provider_status"]["korapay"] == "blocked"
 

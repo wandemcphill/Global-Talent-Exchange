@@ -938,7 +938,11 @@ class RegenCreationService:
     def _target_country_code(self, *, order: RegenCreationOrder, club: ClubProfile, parent_player: Player) -> str:
         if order.requested_country_code:
             return order.requested_country_code.strip().upper()
-        parent_country = self._country_code(self.session.get(Country, parent_player.country_id)) if parent_player.country_id else None
+        parent_country = (
+            self._country_code(self.session.get(Country, parent_player.country_id))
+            if parent_player.country_id
+            else None
+        )
         if parent_country:
             return parent_country
         if club.country_code:
@@ -1044,7 +1048,8 @@ class RegenCreationService:
             full_name=player.full_name,
             image_url=self._player_image_url(player),
             portrait_url=self._player_image_url(player),
-            position=str(bloodline.get("parent_position") or player.position or player.normalized_position or "") or None,
+            position=str(bloodline.get("parent_position") or player.position or player.normalized_position or "")
+            or None,
             country_code=self._country_code(country),
             country_name=country.name if country is not None else None,
             club_id=club.id,

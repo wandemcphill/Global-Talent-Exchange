@@ -57,7 +57,9 @@ class RecordingFastCupRepository:
     ) -> tuple[FastCup, ...]:
         return tuple(
             cup
-            for cup in sorted(self._cups.values(), key=lambda item: (item.slot.kickoff_at, item.division.value, item.size))
+            for cup in sorted(
+                self._cups.values(), key=lambda item: (item.slot.kickoff_at, item.division.value, item.size)
+            )
             if cup.slot.kickoff_at >= now
             and (division is None or cup.division is division)
             and (size is None or cup.size == size)
