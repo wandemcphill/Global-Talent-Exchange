@@ -183,6 +183,87 @@ const FORMATION_TEMPLATES: Record<
   ],
 };
 
+function frameClock(frame: any): number {
+  return Number(frame?.time_seconds ?? frame?.timeSeconds ?? 0);
+}
+
+function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
+  const x = Number(rawX ?? 50);
+  const y = Number(rawY ?? 50);
+  return { x: x > 1.5 ? x / 100 : x, y: y > 1.5 ? y / 100 : y };
+}
+
+function smoothUnit(value: number): number {
+  const t = Math.min(1, Math.max(0, value));
+  return t * t * (3 - 2 * t);
+}
+
+function playbackPair(frames: any[], time: number): { left: any; right: any; t: number } {
+  let left = frames[0];
+  let right = frames[frames.length - 1];
+  for (let index = 0; index < frames.length - 1; index += 1) {
+    if (time <= frameClock(frames[index + 1])) {
+      left = frames[index];
+      right = frames[index + 1];
+      break;
+    }
+  }
+  const span = frameClock(right) - frameClock(left);
+  const raw = span <= 0.001 ? 1 : (time - frameClock(left)) / span;
+  const t = span > 4.5 ? (raw < 0.5 ? 0 : 1) : smoothUnit(raw);
+  return { left, right, t };
+}
+
+function playerKey(player: any): string {
+  return String(player?.player_id ?? player?.id ?? player?.shirt_number ?? "");
+}
+
+type PitchDot = {
+  x: number;
+  y: number;
+  num: number;
+  role: string;
+  hasBall: boolean;
+  name: string;
+  stamina: number;
+  speedKmh: string;
+  vx: number;
+  vy: number;
+  playerId?: string;
+  idx?: number;
+};
+
+function interpolatedSquad(leftPlayers: any[], rightPlayers: any[], t: number, home: boolean): PitchDot[] {
+  const rightById = new Map(rightPlayers.map((player) => [playerKey(player), player]));
+  return leftPlayers
+    .filter((player) => {
+      const side = String(player?.side ?? "").toLowerCase();
+      if (side) return home ? side === "home" : side === "away";
+      return home ? Boolean(player?.is_home) : !player?.is_home;
+    })
+    .map((player, idx) => {
+      const next = rightById.get(playerKey(player)) || player;
+      const from = unitPoint(player?.position?.x ?? player?.x, player?.position?.y ?? player?.y);
+      const to = unitPoint(next?.position?.x ?? next?.x, next?.position?.y ?? next?.y);
+      const shirt = Number(player?.shirt_number ?? player?.num ?? idx + 1);
+      const label = String(player?.label ?? player?.name ?? `P${shirt}`);
+      const nearer = t < 0.5 ? player : next;
+      return {
+        x: from.x + (to.x - from.x) * t,
+        y: from.y + (to.y - from.y) * t,
+        num: shirt,
+        role: String(player?.role ?? "CM"),
+        hasBall: Boolean(nearer?.has_possession ?? nearer?.has_ball),
+        name: (label.split(" ").pop() || "PRO").toUpperCase(),
+        stamina: Number(player?.stamina_pct ?? nearer?.stamina_pct ?? 80),
+        speedKmh: (18 + Math.min(16, Math.hypot(to.x - from.x, to.y - from.y) * 80)).toFixed(1),
+        vx: (to.x - from.x) * 18,
+        vy: (to.y - from.y) * 18,
+        playerId: playerKey(player),
+      };
+    });
+}
+
 const AWAY_NAMES = [
   "MAIGNAN",
   "FRIMPONG",
@@ -413,6 +494,10 @@ function Pitch2DView({
   homeRoster,
   awayRoster,
   activePerimeterAd,
+  frames,
+  durationSeconds,
+  playbackSpeed = 1,
+  paused = false,
 }: {
   selectedPlayer: number | null;
   onSelectPlayer: (num: number | null) => void;
@@ -448,32 +533,77 @@ function Pitch2DView({
   homeRoster?: MatchdaySquadMember[];
   awayRoster?: MatchdaySquadMember[];
   activePerimeterAd?: PublicBrandAd | null;
+  frames?: any[] | null;
+  durationSeconds?: number;
+  playbackSpeed?: number;
+  paused?: boolean;
 }) {
   // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
   const [phaseTick, setPhaseTick] = useState(0);
+  const playbackRef = useRef(0);
+  const frameCount = Array.isArray(frames) ? frames.length : 0;
+  useEffect(() => {
+    playbackRef.current = 0;
+  }, [frameCount]);
   useEffect(() => {
     const interval = setInterval(() => {
       setPhaseTick((t) => (t + 1) % 3600);
     }, 90);
     return () => clearInterval(interval);
   }, []);
+  useEffect(() => {
+    if (paused || frameCount < 2 || !frames) return;
+    const last = frames[frames.length - 1];
+    const end = Number(durationSeconds) > 0 ? Number(durationSeconds) : frameClock(last);
+    playbackRef.current = Math.min(end, playbackRef.current + 0.09 * (playbackSpeed || 1));
+  }, [phaseTick, paused, frameCount, frames, durationSeconds, playbackSpeed]);
 
   const hasLiveCoords = Boolean(pitchPlayers && pitchPlayers.length > 0);
   const template = FORMATION_TEMPLATES[formation] || FORMATION_TEMPLATES["4-3-3"];
   const awayTemplate = FORMATION_TEMPLATES["4-3-3"];
 
   // Compute deterministic fluid 22-player coordinates (uses backend feed when present, or autonomous formation physics)
-  const { homeCoords, awayCoords, synthBall, passTarget, carrierInfo } = useMemo(() => {
-    const t = phaseTick * 0.08 * (0.6 + tempo / 100);
-    const lineShift = ((line - 50) / 100) * 0.14;
-    const pressAmp = (press / 100) * 0.035;
-    const attackWave = Math.sin(t * 0.35) * 0.08;
+  const { homeCoords, awayCoords, synthBall, passTarget, carrierInfo } = useMemo((): {
+    homeCoords: PitchDot[];
+    awayCoords: PitchDot[];
+    synthBall: { x: number; y: number };
+    passTarget: { x: number; y: number } | null;
+    carrierInfo: (PitchDot & { isHome: boolean }) | null;
+  } => {
+    if (Array.isArray(frames) && frames.length > 1 && Array.isArray(frames[0]?.players) && frames[0].players.length > 0) {
+      const pair = playbackPair(frames, playbackRef.current);
+      const h = interpolatedSquad(pair.left.players || [], pair.right.players || [], pair.t, true);
+      const a = interpolatedSquad(pair.left.players || [], pair.right.players || [], pair.t, false);
+      const leftBall = unitPoint(
+        pair.left.ball?.position?.x ?? pair.left.ball?.x,
+        pair.left.ball?.position?.y ?? pair.left.ball?.y
+      );
+      const rightBall = unitPoint(
+        pair.right.ball?.position?.x ?? pair.right.ball?.x,
+        pair.right.ball?.position?.y ?? pair.right.ball?.y
+      );
+      const ownerId = String(
+        (pair.t < 0.5 ? pair.left.ball?.owner_player_id : pair.right.ball?.owner_player_id) || ""
+      );
+      const squad = [...h, ...a];
+      if (ownerId) {
+        for (const player of squad) player.hasBall = player.playerId === ownerId;
+      }
+      const carrier = squad.find((player) => player.hasBall) || h[8] || h[0];
+      const carrierIsHome = Boolean(carrier && h.includes(carrier));
+      return {
+        homeCoords: h,
+        awayCoords: a,
+        synthBall: {
+          x: leftBall.x + (rightBall.x - leftBall.x) * pair.t,
+          y: leftBall.y + (rightBall.y - leftBall.y) * pair.t,
+        },
+        passTarget: carrier ? { x: carrier.x, y: carrier.y } : null,
+        carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
+      };
+    }
 
-    // Cycle active carrier across midfield/attackers smoothly
-    const possessionCycle = Math.floor((phaseTick / 18) % 8);
-    const homePossession = possessionCycle < 5;
-    const activeCarrierIdx = [5, 6, 7, 8, 9, 10, 6, 9][possessionCycle % 8];
-    const nextReceiverIdx = [7, 8, 9, 10, 8, 9, 10, 7][(possessionCycle + 1) % 8];
+    const t = phaseTick * 0.08 * (0.6 + tempo / 100);
 
     if (hasLiveCoords && pitchPlayers) {
       const h = pitchPlayers
@@ -515,78 +645,95 @@ function Pitch2DView({
       };
     }
 
-    // Autonomous 22-player spatial physics
-    const h = template.map((tpl, idx) => {
-      const isGK = idx === 0;
-      const dx = isGK
-        ? Math.sin(t * 0.4) * 0.01
-        : lineShift + attackWave + Math.sin(t + idx * 0.9) * pressAmp;
-      const dy = isGK
-        ? Math.cos(t * 0.5) * 0.02
-        : Math.cos(t * 0.85 + idx * 1.3) * 0.032;
-      const x = Math.min(0.91, Math.max(0.06, tpl.bx + dx));
-      const y = Math.min(0.9, Math.max(0.1, tpl.by + dy));
-      const homeMember = homeRoster?.[idx];
+    // The side in possession walks a block up the pitch and plays through a short pass chain.
+    const seconds = phaseTick * 0.09;
+    const attackPeriod = 16;
+    const phase = seconds % (attackPeriod * 2);
+    const attackingHome = phase < attackPeriod;
+    const local = attackingHome ? phase : phase - attackPeriod;
+    const depth = 0.2 + 0.58 * (0.5 - 0.5 * Math.cos((local / attackPeriod) * Math.PI));
+    const beat = Math.floor(local / 1.8);
+    const chain = [0.24, 0.46, 0.7, 0.42][beat % 4];
+    const ballDepth = depth * 0.5 + chain * 0.5;
+    const lane = [0.34, 0.5, 0.66, 0.42][beat % 4];
+    const shapedBallX = attackingHome ? 0.2 + ballDepth * 0.62 : 0.8 - ballDepth * 0.62;
+    const chainSlots = [3, 5, 6, 10, 8, 9];
+    const fromSlot = chainSlots[beat % chainSlots.length];
+    const toSlot = chainSlots[(beat + 1) % chainSlots.length];
+    const passProgress = smoothUnit((local % 1.8) / 1.8);
+
+    const placeOutfield = (
+      tpl: { num: number; role: string; name: string; bx: number; by: number },
+      idx: number,
+      isHome: boolean,
+      roster: MatchdaySquadMember[] | undefined,
+      fallbackName: string
+    ) => {
+      const role = String(tpl.role || "").toUpperCase();
+      const lineName =
+        idx === 0 || role === "GK"
+          ? "gk"
+          : ["RB", "LB", "CB", "RCB", "LCB", "CCB", "RWB", "LWB"].includes(role)
+          ? "def"
+          : ["RW", "LW", "ST", "SS", "CF"].includes(role)
+          ? "att"
+          : "mid";
+      const sign = isHome ? 1 : -1;
+      const inPossession = attackingHome === isHome;
+      const gaps: Record<string, number> = inPossession
+        ? { gk: 0, def: -0.15, mid: -0.045, att: 0.075 }
+        : { gk: 0, def: -0.1, mid: -0.02, att: 0.06 };
+      const along = gaps[lineName] ?? 0;
+      let x = lineName === "gk" ? (isHome ? 0.07 : 0.93) : shapedBallX + along * sign;
+      if (inPossession && lineName === "def" && Math.abs(tpl.by - 0.5) > 0.2) x += 0.045 * sign;
+      x = Math.min(0.93, Math.max(0.07, x));
+      const y = Math.min(0.9, Math.max(0.1, tpl.by * 0.7 + lane * 0.3 + Math.sin(seconds + idx) * 0.008));
+      const member = roster?.[idx];
       return {
         x,
         y,
-        num: homeMember?.shirt_number || tpl.num,
-        role: homeMember?.position || tpl.role,
-        hasBall: homePossession && idx === activeCarrierIdx,
-        name: (homeMember?.short_name || tpl.name).toUpperCase(),
-        stamina: Math.max(45, 99 - Math.floor(minute * 0.42) - (idx > 5 ? 6 : 2)),
-        speedKmh: (22.4 + Math.abs(Math.sin(t + idx)) * 10.8).toFixed(1),
-        vx: Math.cos(t + idx * 0.9) * 16,
-        vy: -Math.sin(t * 0.85 + idx * 1.3) * 11,
+        idx,
+        num: member?.shirt_number || tpl.num,
+        role: member?.position || tpl.role,
+        hasBall: false,
+        name: (member?.short_name || fallbackName).toUpperCase(),
+        stamina: Math.max(44, 99 - Math.floor(minute * 0.42) - (idx > 5 ? 6 : 2)),
+        speedKmh: (20 + (inPossession ? 6 : 2) + Math.abs(Math.sin(seconds + idx)) * 4).toFixed(1),
+        vx: sign * (inPossession ? 14 : -6),
+        vy: Math.cos(seconds + idx) * 4,
       };
-    });
+    };
 
-    const a = awayTemplate.map((tpl, idx) => {
-      const isGK = idx === 0;
-      const baseAx = 1 - tpl.bx;
-      const baseAy = 1 - tpl.by;
-      const dx = isGK
-        ? -Math.sin(t * 0.4) * 0.01
-        : attackWave * 0.7 - Math.cos(t * 0.9 + idx) * 0.028;
-      const dy = isGK
-        ? Math.sin(t * 0.5) * 0.02
-        : Math.sin(t * 0.75 + idx * 1.1) * 0.03;
-      const x = Math.min(0.94, Math.max(0.09, baseAx + dx));
-      const y = Math.min(0.9, Math.max(0.1, baseAy + dy));
-      const awayMember = awayRoster?.[idx];
+    const h = template.map((tpl, idx) => placeOutfield(tpl, idx, true, homeRoster, tpl.name));
+    const a = awayTemplate.map((tpl, idx) =>
+      placeOutfield(tpl, idx, false, awayRoster, AWAY_NAMES[idx] || tpl.name)
+    );
+    const activeSquad = attackingHome ? h : a;
+    const carrier = activeSquad.find((player) => player.idx === fromSlot) || activeSquad[5] || activeSquad[0];
+    const receiver = activeSquad.find((player) => player.idx === toSlot) || activeSquad[6] || activeSquad[0];
+    if (!carrier || !receiver) {
       return {
-        x,
-        y,
-        num: awayMember?.shirt_number || tpl.num,
-        role: awayMember?.position || tpl.role,
-        hasBall: !homePossession && idx === activeCarrierIdx,
-        name: (awayMember?.short_name || AWAY_NAMES[idx] || tpl.name).toUpperCase(),
-        stamina: Math.max(44, 98 - Math.floor(minute * 0.44) - (idx > 5 ? 5 : 2)),
-        speedKmh: (21.8 + Math.abs(Math.cos(t + idx)) * 10.2).toFixed(1),
-        vx: -Math.sin(t * 0.9 + idx) * 15,
-        vy: Math.cos(t * 0.75 + idx * 1.1) * 10,
+        homeCoords: h,
+        awayCoords: a,
+        synthBall: { x: shapedBallX, y: lane },
+        passTarget: null,
+        carrierInfo: null,
       };
-    });
-
-    const activeSquad = homePossession ? h : a;
-    const carrier = activeSquad[activeCarrierIdx] || h[8];
-    const receiver = activeSquad[nextReceiverIdx] || h[9];
-    const passProgress = (phaseTick % 18) / 18;
-    const bx = ball
-      ? ball.x
-      : carrier.x + (receiver.x - carrier.x) * Math.min(1, passProgress * 1.25);
-    const by = ball
-      ? ball.y
-      : carrier.y + (receiver.y - carrier.y) * Math.min(1, passProgress * 1.25);
+    }
+    carrier.hasBall = passProgress < 0.72;
+    receiver.hasBall = passProgress >= 0.72;
+    const bx = ball ? ball.x : carrier.x + (receiver.x - carrier.x) * passProgress;
+    const by = ball ? ball.y : carrier.y + (receiver.y - carrier.y) * passProgress;
+    const shownCarrier = passProgress < 0.72 ? carrier : receiver;
 
     return {
       homeCoords: h,
       awayCoords: a,
       synthBall: { x: bx, y: by },
       passTarget: { x: receiver.x, y: receiver.y },
-      carrierInfo: { ...carrier, isHome: homePossession },
+      carrierInfo: { ...shownCarrier, isHome: attackingHome },
     };
-  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster]);
+  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster, frames]);
 
   const selectedObj =
     homeCoords.find((p) => p.num === selectedPlayer) ||
@@ -2798,6 +2945,10 @@ export default function MatchCenter() {
                 ballOwner={null}
                 pitchPlayers={liveState?.pitch_players}
                 ball={liveState?.ball}
+                frames={viewerData?.frames?.length ? viewerData.frames : m?.frames}
+                durationSeconds={viewerData?.duration_seconds || m?.duration_seconds}
+                playbackSpeed={speed}
+                paused={isPaused}
                 activeGift={activeGift}
                 onGiftComplete={handleGiftAnimationComplete}
                 formation={formation}

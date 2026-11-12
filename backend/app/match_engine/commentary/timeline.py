@@ -144,21 +144,19 @@ class MatchCommentaryTimelineGenerator:
                 )
             return f"Fulltime: {result.home_team_name} {event.home_score}-{event.away_score} {result.away_team_name}."
         if event.event_type is MatchEventType.POSSESSION_SWING:
-            return f"{event.team_name} swing the momentum and take control of the tempo."
+            return self._open_play_line(event, "possession")
         if event.event_type is MatchEventType.COUNTER_ATTACK:
-            return f"{event.team_name} break quickly on the counter."
+            return self._open_play_line(event, "counter")
         if event.event_type is MatchEventType.DANGEROUS_ATTACK:
-            return f"{event.team_name} work a dangerous attack."
+            return self._open_play_line(event, "attack")
         if event.event_type is MatchEventType.SET_PIECE_CHANCE:
-            return f"{event.team_name} earn a set-piece chance."
+            return self._open_play_line(event, "set_piece")
         if event.event_type is MatchEventType.DEFENSIVE_ERROR:
-            return f"A defensive error opens the door for {event.team_name}."
+            return self._open_play_line(event, "error")
         if event.event_type is MatchEventType.SHOT:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} fires for {event.team_name}{detail}."
+            return self._attack_call(event, result, outcome="shot", family_phrase=family_phrase)
         if event.event_type is MatchEventType.SHOT_ON_TARGET:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} tests the keeper for {event.team_name}{detail}."
+            return self._attack_call(event, result, outcome="on_target", family_phrase=family_phrase)
         if event.event_type is MatchEventType.FOUL:
             if event.metadata.get("reviewable") and event.metadata.get(
                 "review_decision"
@@ -176,25 +174,17 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.OFFSIDE:
             return f"The flag goes up against {event.team_name} as the move is caught offside."
         if event.event_type is MatchEventType.MISSED_CHANCE:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} wastes a big opening{detail} for {event.team_name}."
+            return self._attack_call(event, result, outcome="miss", family_phrase=family_phrase)
         if event.event_type is MatchEventType.MISSED_BIG_CHANCE:
-            detail = f" {family_phrase}" if family_phrase else ""
-            crowd = self._crowd_suffix(event, result, kind="chance")
-            suffix = f" {crowd}" if crowd else ""
-            return f"{event.primary_player_name} spurns a huge chance{detail} for {event.team_name}.{suffix}".strip()
+            return self._attack_call(event, result, outcome="big_miss", family_phrase=family_phrase)
         if event.event_type is MatchEventType.SAVE:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} keeps out {event.secondary_player_name}{detail} with a sharp stop."
+            return self._attack_call(event, result, outcome="save", family_phrase=family_phrase)
         if event.event_type is MatchEventType.GOALKEEPER_SAVE:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} makes a strong save to deny {event.secondary_player_name}{detail}."
+            return self._attack_call(event, result, outcome="save", family_phrase=family_phrase)
         if event.event_type is MatchEventType.DOUBLE_SAVE:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} makes a double save to deny {event.secondary_player_name}{detail}."
+            return self._attack_call(event, result, outcome="double_save", family_phrase=family_phrase)
         if event.event_type is MatchEventType.WOODWORK:
-            detail = f" {family_phrase}" if family_phrase else ""
-            return f"{event.primary_player_name} rattles the woodwork{detail} for {event.team_name}."
+            return self._attack_call(event, result, outcome="woodwork", family_phrase=family_phrase)
         if event.event_type is MatchEventType.GOAL:
             if event.metadata.get("reviewable") and event.metadata.get(
                 "review_decision"
@@ -210,15 +200,7 @@ class MatchCommentaryTimelineGenerator:
                     f"Goal for {event.team_name}. VAR checks the phase and confirms "
                     f"{event.primary_player_name}'s finish."
                 )
-            if event.metadata.get("assisted") and event.secondary_player_name is not None:
-                detail = f" {family_phrase}" if family_phrase else ""
-                crowd = self._crowd_suffix(event, result, kind="goal")
-                suffix = f" {crowd}" if crowd else ""
-                return f"Goal for {event.team_name}. {event.primary_player_name} finishes{detail} after a setup from {event.secondary_player_name}.{suffix}".strip()
-            detail = f" {family_phrase}" if family_phrase else ""
-            crowd = self._crowd_suffix(event, result, kind="goal")
-            suffix = f" {crowd}" if crowd else ""
-            return f"Goal for {event.team_name}. {event.primary_player_name} finds the net{detail}.{suffix}".strip()
+            return self._attack_call(event, result, outcome="goal", family_phrase=family_phrase)
         if event.event_type is MatchEventType.YELLOW_CARD:
             return f"{event.primary_player_name} goes into the book for {event.team_name}."
         if event.event_type is MatchEventType.TACTICAL_FOUL:
@@ -277,8 +259,128 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.INJURY:
             return "That injury forces a structural decision, not just a personnel change."
         if event.event_type in {MatchEventType.POSSESSION_SWING, MatchEventType.DANGEROUS_ATTACK, MatchEventType.COUNTER_ATTACK}:
-            return "The spacing between the lines is changing, and the defending side has to read it faster."
-        return "The detail of the phase matters here: shape, pressure, and second actions are deciding it."
+            route = self._route_phrase(event)
+            if route:
+                return f"The move comes {route}, and the defending line has to travel with the ball."
+            return "The block is shifting with the ball, and the defending line has to travel with it."
+        return "The detail of the phase matters here: shape, pressure, and the pass before the shot are deciding it."
+
+    def _variant(self, event, count: int) -> int:
+        token = f"{event.event_id}:{event.minute}:{event.event_type.value}".encode("utf-8")
+        return sum(token) % max(1, count)
+
+    def _route_phrase(self, event) -> str:
+        return {
+            "transition": "in transition",
+            "central_combine": "through the middle",
+            "wide_overlap": "down the overlap",
+            "set_piece": "from the set piece",
+            "press_break": "through the press",
+        }.get(str(event.metadata.get("possession_route") or ""), "")
+
+    def _attacker_name(self, event) -> str:
+        if event.event_type in {
+            MatchEventType.SAVE,
+            MatchEventType.GOALKEEPER_SAVE,
+            MatchEventType.DOUBLE_SAVE,
+        }:
+            return event.secondary_player_name or event.metadata.get("decision_actor_name") or "the shot"
+        return event.primary_player_name or event.team_name or "The attacker"
+
+    def _build_clause(self, event) -> str:
+        route = self._route_phrase(event)
+        action = str(event.metadata.get("decision_action") or "")
+        attacker = self._attacker_name(event)
+        creator = event.metadata.get("creator_player_name") or event.secondary_player_name
+        team = event.team_name or "The side"
+        where = f" {route}" if route else ""
+        if event.event_type in {
+            MatchEventType.SAVE,
+            MatchEventType.GOALKEEPER_SAVE,
+            MatchEventType.DOUBLE_SAVE,
+        }:
+            creator = event.metadata.get("creator_player_name")
+        if action == "pass" and creator and creator != attacker:
+            return f"{creator} finds {attacker}{where}"
+        if action == "dribble":
+            return f"{attacker} carries it{where}"
+        if action == "run_into_space":
+            if creator and creator != attacker:
+                return f"{creator} sends {attacker} in behind{where}"
+            return f"{attacker} runs in behind{where}"
+        if route:
+            return f"{team} come {route}"
+        return ""
+
+    def _finish_detail(self, event, family_phrase: str) -> str:
+        route = str(event.metadata.get("possession_route") or "")
+        if family_phrase == "on the counter" and route == "transition":
+            return ""
+        if family_phrase == "from a set piece" and route == "set_piece":
+            return ""
+        body = str(event.metadata.get("shot_body_part") or "")
+        if body == "header" and "header" not in family_phrase and "post" not in family_phrase:
+            return f" with a header{f' {family_phrase}' if family_phrase else ''}"
+        if body == "volley":
+            return f" on the volley{f' {family_phrase}' if family_phrase else ''}"
+        return f" {family_phrase}" if family_phrase else ""
+
+    def _open_play_line(self, event, kind: str) -> str:
+        team = event.team_name or "The side"
+        route = self._route_phrase(event)
+        if kind == "possession":
+            if route:
+                return f"{team} take the ball and move it {route}. The other side drops into a line."
+            return f"{team} take the ball and walk it through the lines."
+        if kind == "counter":
+            return f"{team} break before the defensive line can step out."
+        if kind == "attack":
+            if route:
+                return f"{team} step up and work the ball {route}, into the final third."
+            return f"{team} step the block up and work the ball into the final third."
+        if kind == "set_piece":
+            return f"{team} have a set piece, and the box fills."
+        return f"The line is split, and {team} are in."
+
+    def _attack_call(self, event, result: SimulationResult, *, outcome: str, family_phrase: str) -> str:
+        attacker = self._attacker_name(event)
+        team = event.team_name or "the side"
+        detail = self._finish_detail(event, family_phrase)
+        build = self._build_clause(event)
+        score = f"{event.home_score}-{event.away_score}"
+        if outcome == "goal":
+            finishes = (
+                f"{attacker} finishes{detail}",
+                f"{attacker} finds the net{detail}",
+                f"{attacker} puts it away{detail}",
+            )
+            finish = finishes[self._variant(event, len(finishes))]
+            lead = f"{build}, and {finish}" if build else finish[:1].upper() + finish[1:]
+            crowd = self._crowd_suffix(event, result, kind="goal")
+            stadium = f" {crowd}" if crowd else ""
+            return f"Goal for {team}. {lead}. The score is {score}.{stadium}".strip()
+        if outcome == "shot":
+            action = f"{attacker} shoots{detail}"
+        elif outcome == "on_target":
+            action = f"{attacker} forces the keeper into a save{detail}"
+        elif outcome == "miss":
+            action = f"{attacker} drags the chance wide{detail}"
+        elif outcome == "big_miss":
+            action = f"{attacker} spurns a huge chance{detail}"
+        elif outcome == "double_save":
+            action = f"{event.primary_player_name} makes a double save to deny {attacker}{detail}"
+        elif outcome == "save":
+            action = f"{event.primary_player_name} keeps out {attacker}{detail}"
+        else:
+            action = f"{attacker} rattles the woodwork{detail}"
+        sentence = f"{build}. {action[:1].upper() + action[1:]}." if build else f"{action[:1].upper() + action[1:]}."
+        if outcome in {"shot", "on_target", "miss", "big_miss", "woodwork"}:
+            sentence = f"{sentence[:-1]} for {team}."
+        if outcome == "big_miss":
+            crowd = self._crowd_suffix(event, result, kind="chance")
+            if crowd:
+                sentence = f"{sentence} {crowd}"
+        return sentence.strip()
 
     def _family_phrase(self, value: object | None) -> str:
         if value is None:

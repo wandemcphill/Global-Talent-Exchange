@@ -8,11 +8,15 @@ import 'package:gte_frontend/models/match_view_state.dart';
 
 class MatchPlaybackController extends ChangeNotifier {
   static const int maxFrameGapMs = 2200;
+  static const int openPlayGapMs = 4500;
   static const int minAnimationMs = 300;
   static const int defaultAnimationMs = 500;
   static const int maxAnimationMs = 800;
   static const Duration _maxInterpolationGap = Duration(
     milliseconds: maxFrameGapMs,
+  );
+  static const Duration _openPlayInterpolationGap = Duration(
+    milliseconds: openPlayGapMs,
   );
 
   MatchPlaybackController({
@@ -53,11 +57,19 @@ class MatchPlaybackController extends ChangeNotifier {
 
   double get interpolationT => _easedFrameInterpolationT(_framePair);
 
-  MatchTimelineFrame get displayFrame => leftFrame.interpolate(
-    rightFrame,
-    interpolationT,
-    maxGap: _maxInterpolationGap,
-  );
+  MatchTimelineFrame get displayFrame {
+    final (
+      MatchTimelineFrame,
+      MatchTimelineFrame,
+      double,
+    ) pair = _framePair;
+    final bool openPlay = pair.$2.activeEventId == null;
+    return pair.$1.interpolate(
+      pair.$2,
+      _easedFrameInterpolationT(pair),
+      maxGap: openPlay ? _openPlayInterpolationGap : _maxInterpolationGap,
+    );
+  }
 
   static int clampAnimationDurationMs(int? value) {
     return (value ?? defaultAnimationMs).clamp(minAnimationMs, maxAnimationMs);
@@ -115,7 +127,10 @@ class MatchPlaybackController extends ChangeNotifier {
       return rawT;
     }
     final MatchEvent? event = viewState.eventById(right.activeEventId);
-    final int requestedMs = clampAnimationDurationMs(event?.durationMs);
+    final bool openPlay = right.activeEventId == null;
+    final int requestedMs = openPlay
+        ? math.min(openPlayGapMs, spanMs.round())
+        : clampAnimationDurationMs(event?.durationMs);
     final double effectiveMs = math.min(spanMs, requestedMs.toDouble());
     final double windowT =
         ((rawT * spanMs) / effectiveMs).clamp(0.0, 1.0).toDouble();

@@ -351,3 +351,70 @@ def test_lineup_referencing_an_unknown_player_fails_loudly() -> None:
 
     with pytest.raises(KeyError):
         _line_sizes(runtime)
+
+
+def test_resting_shape_keeps_attack_ahead_of_defense() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    payloads = _payloads_for(home, away)
+    home_defense = next(item for item in payloads if item["player_id"] == "home-2")
+    home_attack = next(item for item in payloads if item["player_id"] == "home-9")
+    away_defense = next(item for item in payloads if item["player_id"] == "away-2")
+    away_attack = next(item for item in payloads if item["player_id"] == "away-9")
+
+    assert home_attack["position"]["x"] > home_defense["position"]["x"] + 8.0
+    assert away_defense["position"]["x"] > away_attack["position"]["x"] + 8.0
+
+
+def test_open_play_depth_moves_the_block_and_hands_the_ball_to_one_carrier() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    def midfield_x(depth: float) -> float:
+        players = build_player_payloads(
+            home_runtime=home,
+            away_runtime=away,
+            home_attacks_right=True,
+            active_event=None,
+            stage="pre",
+            clock_minute=12.0,
+            possession_side=MatchViewerSide.HOME,
+            time_seconds=40.0,
+            phase_depth=depth,
+        )
+        return next(item["position"]["x"] for item in players if item["player_id"] == "home-6")
+
+    assert midfield_x(0.8) > midfield_x(0.2) + 12.0
+
+    players = build_player_payloads(
+        home_runtime=home,
+        away_runtime=away,
+        home_attacks_right=True,
+        active_event=None,
+        stage="pre",
+        clock_minute=12.0,
+        possession_side=MatchViewerSide.HOME,
+        time_seconds=40.0,
+        phase_depth=0.55,
+    )
+    carriers = [item for item in players if item["has_possession"]]
+    assert len(carriers) == 1
+    assert carriers[0]["side"] is MatchViewerSide.HOME
+    defenders = [item for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    line = [item["position"]["x"] for item in defenders]
+    assert max(line) - min(line) < 8.0
+
+    ball = build_ball_payload(
+        player_payloads=players,
+        home_runtime=home,
+        away_runtime=away,
+        home_attacks_right=True,
+        active_event=None,
+        stage="pre",
+        possession_side=MatchViewerSide.HOME,
+        time_seconds=40.0,
+    )
+    assert ball["state"] == "controlled"
+    assert ball["owner_player_id"] == carriers[0]["player_id"]
+    assert abs(ball["position"]["x"] - carriers[0]["position"]["x"]) < 1.5

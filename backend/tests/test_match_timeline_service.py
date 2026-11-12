@@ -12,6 +12,7 @@ from app.services.match_timeline_service import MatchTimelineService
 from app.schemas.match_viewer import (
     MatchViewerAnimationState,
     MatchViewerEventType,
+    MatchViewerPhase,
     MatchViewerPossessionPhase,
     MatchViewerPlayerState,
     MatchViewerSide,
@@ -428,6 +429,29 @@ def test_match_timeline_service_maps_live_pass_events_to_2d_contract() -> None:
     assert event.ball.owner_player_id == "north-city-8"
     assert all(0.0 <= frame.ball.position.x <= 100.0 for frame in view_state.frames)
     assert all(0.0 <= player.position.y <= 100.0 for frame in view_state.frames for player in frame.players)
+
+
+def test_open_play_frames_walk_the_ball_between_chances() -> None:
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=33))
+    view_state = MatchTimelineService().build_from_replay_payload(replay_payload)
+
+    circulation = [
+        frame
+        for frame in view_state.frames
+        if frame.phase is MatchViewerPhase.OPEN_PLAY and frame.active_event_id is None
+    ]
+    assert len(circulation) >= 3
+    for frame in circulation:
+        assert frame.ball.owner_player_id
+        owner = next(player for player in frame.players if player.player_id == frame.ball.owner_player_id)
+        assert owner.side is frame.possession_side
+        assert frame.ball.state == "controlled"
+
+    gaps = [
+        view_state.frames[index + 1].time_seconds - frame.time_seconds
+        for index, frame in enumerate(view_state.frames[:-1])
+    ]
+    assert max(gaps) <= 4.6
 
 
 def _archive_event_type(event_type: MatchEventType) -> str | None:
