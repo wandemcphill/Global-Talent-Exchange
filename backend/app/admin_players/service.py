@@ -208,11 +208,7 @@ class AdminPlayerService:
         if edits.real_player_tier is not None:
             player.real_player_tier = edits.real_player_tier or None
             changed.append("real_player_tier")
-        if (
-            edits.overall is not None
-            and player.real_player_tier == "legend"
-            and edits.overall < LEGEND_GSI_FLOOR
-        ):
+        if edits.overall is not None and player.real_player_tier == "legend" and edits.overall < LEGEND_GSI_FLOOR:
             raise AdminPlayerError(f"A legend's GSI cannot be set below {LEGEND_GSI_FLOOR}.")
         if edits.real_world_club_name is not None:
             player.real_world_club_name = edits.real_world_club_name or None
@@ -245,9 +241,7 @@ class AdminPlayerService:
                 summary.previous_value_credits = summary.current_value_credits
                 summary.current_value_credits = round(float(edits.market_value_credits), 4)
                 summary.movement_pct = self._movement(summary.previous_value_credits, summary.current_value_credits)
-            market = session.scalars(
-                select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)
-            ).first()
+            market = session.scalars(select(PlayerShareMarket).where(PlayerShareMarket.player_id == player.id)).first()
             if market is not None:
                 market.share_price_coin = round(float(edits.market_value_credits), 4)
             changed.append("market_value_credits")
@@ -304,8 +298,10 @@ class AdminPlayerService:
 
     def _view(self, session: Session, player: Player) -> PlayerAdminView:
         dna = self._dna(player)
-        overall = player.governed_gsi if player.governed_gsi is not None else self._read_int(
-            dna, "sofifa_overall", "overall", "current_rating"
+        overall = (
+            player.governed_gsi
+            if player.governed_gsi is not None
+            else self._read_int(dna, "sofifa_overall", "overall", "current_rating")
         )
         potential = (
             player.governed_potential_gsi

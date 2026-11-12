@@ -5,6 +5,7 @@ An admin sets the live price from the admin desk. Idempotent upsert by service_k
 
 Usage: python scripts/seed_service_fees.py --database-url <url>
 """
+
 from __future__ import annotations
 
 import argparse

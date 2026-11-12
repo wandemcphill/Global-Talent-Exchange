@@ -99,7 +99,5 @@ def downgrade() -> None:
         sa.column("updated_by_user_id", sa.String),
     )
     op.execute(
-        flags.delete()
-        .where(flags.c.feature_key == "match_3d_gameplay")
-        .where(flags.c.updated_by_user_id.is_(None))
+        flags.delete().where(flags.c.feature_key == "match_3d_gameplay").where(flags.c.updated_by_user_id.is_(None))
     )

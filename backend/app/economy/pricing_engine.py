@@ -11,9 +11,9 @@ from app.models.economy_config import ServicePricingRule
 from app.models.wallet import LedgerUnit
 from app.wallets.service import WalletService
 
-AMOUNT_QUANTUM = Decimal('0.0001')
+AMOUNT_QUANTUM = Decimal("0.0001")
 # User-hosted play prices. A zero quote is a free match, not a missing rule.
-PLAY_PRICE_KEYS = frozenset({'tournament-entry', 'fast-match-entry', 'competitive-match-entry'})
+PLAY_PRICE_KEYS = frozenset({"tournament-entry", "fast-match-entry", "competitive-match-entry"})
 
 
 class PricingEngineError(ValueError):
@@ -38,7 +38,7 @@ class ServicePriceQuote:
             return self.gtex_amount
         if unit == LedgerUnit.CREDIT:
             return self.fancoin_amount
-        raise PricingEngineError(f'Unsupported ledger unit: {unit!s}')
+        raise PricingEngineError(f"Unsupported ledger unit: {unit!s}")
 
 
 class PricingEngine:
@@ -52,7 +52,7 @@ class PricingEngine:
             statement = statement.where(ServicePricingRule.active.is_(True))
         rule = self.session.scalar(statement)
         if rule is None:
-            raise ServicePricingRuleNotFoundError(f'Service pricing rule was not found for {service_key}.')
+            raise ServicePricingRuleNotFoundError(f"Service pricing rule was not found for {service_key}.")
         return rule
 
     def quote_service(
@@ -63,27 +63,29 @@ class PricingEngine:
         active_only: bool = True,
     ) -> ServicePriceQuote:
         quantity_multiplier = Decimal(str(quantity))
-        if quantity_multiplier <= Decimal('0.0000'):
-            raise PricingEngineError('Quoted quantity must be positive.')
+        if quantity_multiplier <= Decimal("0.0000"):
+            raise PricingEngineError("Quoted quantity must be positive.")
 
         rule = self.get_service_rule(service_key, active_only=active_only)
         gtex_amount = self._normalize_amount(rule.price_coin)
         fancoin_amount = self._normalize_amount(rule.price_fancoin_equivalent)
-        if gtex_amount <= Decimal('0.0000') and fancoin_amount <= Decimal('0.0000'):
+        if gtex_amount <= Decimal("0.0000") and fancoin_amount <= Decimal("0.0000"):
             if service_key not in PLAY_PRICE_KEYS:
-                raise PricingEngineError(f'Service pricing rule {service_key} does not define a GTex or Fan Coin price.')
+                raise PricingEngineError(
+                    f"Service pricing rule {service_key} does not define a GTex or Fan Coin price."
+                )
             return ServicePriceQuote(
                 service_key=rule.service_key,
                 title=rule.title,
                 description=rule.description,
-                gtex_amount=Decimal('0.0000'),
-                fancoin_amount=Decimal('0.0000'),
+                gtex_amount=Decimal("0.0000"),
+                fancoin_amount=Decimal("0.0000"),
                 active=bool(rule.active),
             )
 
-        if gtex_amount <= Decimal('0.0000') and fancoin_amount > Decimal('0.0000'):
-            gtex_amount = Decimal('0.0000')
-        if fancoin_amount <= Decimal('0.0000'):
+        if gtex_amount <= Decimal("0.0000") and fancoin_amount > Decimal("0.0000"):
+            gtex_amount = Decimal("0.0000")
+        if fancoin_amount <= Decimal("0.0000"):
             fancoin_amount = self.wallet_service.quote_conversion(
                 source_unit=LedgerUnit.COIN,
                 amount=gtex_amount,
@@ -106,5 +108,5 @@ class PricingEngine:
     @staticmethod
     def _normalize_amount(value: Decimal | int | float | str | None) -> Decimal:
         if value is None:
-            value = Decimal('0.0000')
+            value = Decimal("0.0000")
         return Decimal(str(value)).quantize(AMOUNT_QUANTUM)
