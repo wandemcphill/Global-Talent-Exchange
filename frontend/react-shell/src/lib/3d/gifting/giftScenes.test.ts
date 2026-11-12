@@ -185,6 +185,22 @@ describe("asset-led cinematic gifting scenes", () => {
     watch.dispose();
   });
 
+  test("authored hero assets receive a staged entrance and settle into a clean hero read", () => {
+    const stadium = stage("stadium", "maracana_stadium");
+    const hero = stadium.root.getObjectByName("gift-stadium-hero") as THREE.Group;
+    const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 400);
+    stadium.update(0, 1 / 60, camera);
+    const openingScale = hero.scale.x;
+    stadium.update(0.35, 1 / 60, camera);
+    const revealScale = hero.scale.x;
+    stadium.update(0.9, 1 / 60, camera);
+    const settledScale = hero.scale.x;
+    expect(openingScale).toBeLessThan(1);
+    expect(revealScale).toBeGreaterThan(openingScale);
+    expect(settledScale).toBeCloseTo(1, 5);
+    stadium.dispose();
+  });
+
   test("awards use the real trophy plinth and gold match-ball assets", () => {
     const trophy = stage("trophy", "ballon_dor");
     const award = trophy.root.getObjectByName("ballon-dor-stage");

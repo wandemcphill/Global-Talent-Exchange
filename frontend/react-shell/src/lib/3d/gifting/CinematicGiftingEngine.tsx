@@ -8,6 +8,8 @@ import { createGiftDirector } from "./giftScenes";
 import { detectGiftQuality } from "./giftQuality";
 import { resolvePublicAssetPath } from "@/lib/publicPath";
 
+const VIDEO_GIFT_DURATION_MS = 8042;
+
 function disposeObjectTree(objects: THREE.Object3D[], scene?: THREE.Scene | null): void {
   objects.forEach((root) => {
     if (scene) scene.remove(root);
@@ -81,7 +83,7 @@ const SHOT_BY_KEY: Record<string, GiftShotId> = {
   player_of_the_match: "card",
   tactical_masterclass: "tactics",
   midfield_maestro: "tactics",
-  king_of_tactics: "crown",
+  king_of_tactics: "tactics",
   chronos_tourbillon_watch: "crown",
   world_best_award: "trophy",
   golden_manager: "trophy",
@@ -241,6 +243,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
   const animationFrameRef = useRef<number | null>(null);
   const activeObjectsRef = useRef<THREE.Object3D[]>([]);
   const onCompleteRef = useRef(onAnimationComplete);
+  const audioGiftKeyRef = useRef("");
   useEffect(() => {
     onCompleteRef.current = onAnimationComplete;
   }, [onAnimationComplete]);
@@ -262,6 +265,37 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
     return false;
   });
   const [contextLost, setContextLost] = useState(false);
+  const [failedGiftFilm, setFailedGiftFilm] = useState<{ giftKey: string; src: string } | null>(null);
+  const shot = activeGift ? resolveGiftShot(activeGift.animation_key, activeGift.gift_code) : "atmosphere";
+  const giftCode = activeGift
+    ? (activeGift.gift_code || activeGift.animation_key || "").toLowerCase()
+    : "";
+  const interiorWalk = activeGift
+    ? inspectionFramesFor(
+        { catalog_key: activeGift.animation_key, gift_code: activeGift.gift_code },
+        "full"
+      ).filter((frame) => frame.kind === "video")
+    : [];
+  const conceptGiftFilm =
+    activeGift &&
+    !(shot === "stadium" && !giftCode.includes("maracana")) &&
+    !(shot === "crown" && (giftCode.includes("watch") || giftCode.includes("chronos")))
+      ? giftConceptFilm(shot)
+      : null;
+  const failedFilmSrc = failedGiftFilm?.giftKey === giftInstanceKey ? failedGiftFilm.src : "";
+  const giftFilm = prefersReducedMotion
+    ? []
+    : failedFilmSrc
+      ? conceptGiftFilm && conceptGiftFilm.src !== failedFilmSrc
+        ? [conceptGiftFilm]
+        : []
+      : interiorWalk.length > 0
+        ? interiorWalk
+        : conceptGiftFilm
+          ? [conceptGiftFilm]
+          : [];
+  const giftFilmKey = giftFilm.map((frame) => frame.src).join("|");
+  const hasGiftFilm = giftFilm.length > 0;
 
   useEffect(() => {
     if (typeof window === "undefined" || !window.matchMedia) return;
@@ -408,7 +442,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   useEffect(() => {
     if (!activeGift || !giftInstanceKey) return;
-    const duration = activeGift.duration_ms || 4500;
+    const baseDuration = activeGift.duration_ms || 4500;
     const giftCode = (activeGift.gift_code || activeGift.animation_key || "").toLowerCase();
     const shot = resolveGiftShot(activeGift.animation_key, activeGift.gift_code);
     const isReducedMotion =
@@ -416,8 +450,22 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       (typeof window !== "undefined" &&
         typeof window.matchMedia === "function" &&
         Boolean(window.matchMedia("(prefers-reduced-motion: reduce)")?.matches));
-    if (soundEnabled && !mutedRef.current && !isReducedMotion) {
-      GtexCelebrationAudioEngine.playCelebrationCue(activeGift.sound_key, activeGift.gift_code || activeGift.animation_key, activeGift.rarity);
+    const duration =
+      !isReducedMotion && hasGiftFilm
+        ? Math.max(baseDuration, VIDEO_GIFT_DURATION_MS)
+        : baseDuration;
+    if (
+      soundEnabled &&
+      !mutedRef.current &&
+      !isReducedMotion &&
+      audioGiftKeyRef.current !== giftInstanceKey
+    ) {
+      GtexCelebrationAudioEngine.playCelebrationCue(
+        activeGift.sound_key,
+        activeGift.gift_code || activeGift.animation_key,
+        activeGift.rarity
+      );
+      audioGiftKeyRef.current = giftInstanceKey;
     }
     if (!sceneRef.current || isReducedMotion) {
       const fallbackTimer = setTimeout(() => onCompleteRef.current?.(), duration);
@@ -544,7 +592,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       director.dispose();
     };
 
-  }, [giftInstanceKey, prefersReducedMotion, soundEnabled]);
+  }, [giftInstanceKey, prefersReducedMotion, soundEnabled, giftFilmKey, hasGiftFilm]);
 
   if (!activeGift) return null;
 
@@ -558,12 +606,6 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           ? "#8de0e8"
           : "#e7edf5";
   const combo = Number(activeGift.combo_count || 1);
-  const shot = resolveGiftShot(activeGift.animation_key, activeGift.gift_code);
-  const interiorWalk = inspectionFramesFor(
-    { catalog_key: activeGift.animation_key, gift_code: activeGift.gift_code },
-    "full"
-  ).filter((frame) => frame.kind === "video");
-  const giftFilm = interiorWalk.length > 0 ? interiorWalk : [giftConceptFilm(shot)];
 
   return (
     <div
@@ -572,6 +614,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       data-gift-visual={visualReady ? "ready" : "loading"}
       data-gift-shot={shot}
       data-gift-film={giftFilm[0]?.src || ""}
+      data-gift-media={hasGiftFilm ? "film" : "webgl"}
       className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden ${className}`}
     >
       <style>{`
@@ -604,9 +647,17 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         }
       `}</style>
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
-      <div className="absolute inset-0 z-20">
-        <ShowroomInspectionReel frames={giftFilm} fit="cover" />
-      </div>
+      {hasGiftFilm ? (
+        <div className="absolute inset-0 z-20">
+          <ShowroomInspectionReel
+            key={`${giftInstanceKey}:${giftFilmKey}`}
+            frames={giftFilm}
+            fit="cover"
+            showLabel={false}
+            onMediaError={(frame) => setFailedGiftFilm({ giftKey: giftInstanceKey, src: frame.src })}
+          />
+        </div>
+      ) : null}
       <div
         aria-hidden
         className="gtex-gift-lens absolute inset-0"

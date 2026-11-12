@@ -11,6 +11,8 @@ describe("resolveGiftShot", () => {
     expect(resolveGiftShot("bicycle_kick", "bicycle_kick")).toBe("bicycle");
     expect(resolveGiftShot("stadium_maracana", "maracana_stadium")).toBe("stadium");
     expect(resolveGiftShot(undefined, "maracana_stadium")).toBe("stadium");
+    expect(resolveGiftShot(undefined, "king_of_tactics")).toBe("tactics");
+    expect(resolveGiftShot(undefined, "sovereign_crown")).toBe("crown");
     expect(resolveGiftShot("golden_boot_spark", "golden_boot_king")).toBe("boot");
     expect(resolveGiftShot("last_minute_winner", "last_minute_winner")).toBe("last_minute");
     expect(resolveGiftShot("goal_celebration", "goal_celebration")).toBe("goal");
