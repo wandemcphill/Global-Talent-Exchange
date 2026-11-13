@@ -212,6 +212,18 @@ def _bootstrap_club(
         user_id=u.id,
         club_id=club_id,
         memo="Stage 8 E2E seed treasury",
+    )
+    ledger.record(
+        session,
+        event_type="test_club_fan_funding",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.FAN,
+        gross=Decimal(str(cash_gtex)),
+        user_id=u.id,
+        club_id=club_id,
+        memo="Stage 8 E2E Fan Coin salary purse",
+    )
         check_funds=False,
     )
     session.commit()

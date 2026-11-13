@@ -13,6 +13,7 @@
  */
 
 import React, { useState } from "react";
+import { coinWithNaira } from "@/lib/money";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -308,7 +309,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400">
-                  Annual Remuneration: <span className="text-emerald-400 font-mono">{(gm?.salary_gtex || 1800).toLocaleString()} GTEX</span>
+                  Annual salary: <span className="text-emerald-400 font-mono">{coinWithNaira(gm?.salary_fan_coin || gm?.salary_gtex || 1800, "FAN")}</span>
                 </div>
               </div>
             </div>

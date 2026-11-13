@@ -115,6 +115,17 @@ def _bootstrap_club(
         user_id=user_id,
         memo="Deterministic test-club treasury funding",
     )
+    ledger.record(
+        session,
+        event_type="test_club_fan_funding",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.FAN,
+        gross=2_000_000,
+        club_id=club_id,
+        user_id=user_id,
+        memo="Deterministic test-club Fan Coin salary purse",
+    )
     return u, c, state
 
 
@@ -392,7 +403,9 @@ def test_rehire_dismissed_staff_by_second_club():
     assert d1["entered_free_agency"] is True
 
     # 3. Club 2 browses the market and finds Kofi Mensah in the free agent pool
-    pool = living_staff_market.list_staff_market_candidates(session, u2.id, c2.id, role="chief_scout")
+    pool = living_staff_market.list_staff_market_candidates(
+        session, u2.id, c2.id, role="chief_scout", search="Kofi Mensah"
+    )
     kofi_candidate = next((c for c in pool["candidates"] if c["profile_id"] == prof.id), None)
     assert kofi_candidate is not None
     assert kofi_candidate["employment_status"] == "unemployed"

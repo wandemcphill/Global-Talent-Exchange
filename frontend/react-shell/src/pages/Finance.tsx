@@ -6,12 +6,16 @@ import { Flame, Megaphone, ShieldAlert, Sparkles, Tv, Trophy } from "lucide-reac
 import { api, errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
 import { fmt, label, useRefreshOwner } from "@/lib/owner";
+import { nairaText, setMoneyRates, useMoneyRates } from "@/lib/money";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
 import { TelemetrySparklineCard } from "@/components/gtex/ApexWidgets";
 
-function Balances({ w }: any) {
+function Balances({ w, rates }: any) {
+  const live = useMoneyRates();
+  const nairaPerGtex = Number(rates?.naira_per_gtex) || live.nairaPerGtex;
+  const nairaPerFan = Number(rates?.naira_per_fan) || live.nairaPerFan;
   const rows = [
     ["withdrawable", "Withdrawable", "good"], ["non_withdrawable", "Non-withdrawable", "default"], ["earned", "Earned", "default"],
     ["deposited", "Deposited", "default"], ["promotional", "Promotional", "warn"], ["pending_review", "Pending review", "warn"], ["exchange_activity", "Exchange & traders", "default"],
@@ -30,9 +34,15 @@ function Balances({ w }: any) {
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
         <Stat label="GTEX Coin total" value={<Coin amount={w.gtex_total} />} testid="balance-gtex-total" />
         <Stat label="Fan Coin" value={<Coin amount={w.fan_total} currency="FAN" />} testid="balance-fan-total" />
-        {rows.map(([k, l, tone]) => <Stat key={k} label={l} value={fmt(w[k])} tone={tone} testid={`balance-${k}`} />)}
+        {rows.map(([k, l, tone]) => (
+          <Stat key={k} label={l} value={<span>{fmt(w[k])} GTX <span className="text-slate-400">{nairaText(w[k], "GTEX")}</span></span>} tone={tone} testid={`balance-${k}`} />
+        ))}
       </div>
-      <p className="mt-4 text-xs text-slate-500">One wallet: this is the same GTEX wallet used by the exchange, coin traders and your clubs. GTEX Coin powers the club economy. Fan Coin is for gifting and fan actions and is never withdrawable. Promotional grants can be spent but not withdrawn.</p>
+      <p className="mt-4 text-xs text-slate-500">
+        1 GTX = ₦{fmt(nairaPerGtex)} and 1 FAN = ₦{fmt(nairaPerFan, 2)}. {fmt(live.fanPerGtex)} Fan Coin equals 1 GTEX Coin.
+        Player wages and staff salaries are paid in Fan Coin. GTEX Coin buys players, facilities, and shares.
+        Fan Coin is never withdrawable. Promotional GTX can be spent but not withdrawn.
+      </p>
     </Panel>
   );
 }
@@ -171,7 +181,7 @@ function FanCoin({ data }: any) {
   };
   return (
     <Panel eyebrow="Secondary · fan rail" title="Fan Coin" testid="fan-coin-panel" className="lg:col-span-6">
-      <p className="mb-3 text-sm text-slate-400">Convert GTEX Coin to Fan Coin at 1 : {data.fan_coin_per_gtex} for gifts and fan actions. Fan Coin is non-withdrawable.</p>
+      <p className="mb-3 text-sm text-slate-400">Convert GTEX Coin to Fan Coin at 1 GTX = {data.fan_coin_per_gtex} FAN ({nairaText(1, "GTEX")} = {nairaText(data.fan_coin_per_gtex, "FAN")}). Wages are paid from Fan Coin. Fan Coin is non-withdrawable.</p>
       <div className="flex gap-2">
         <input data-testid="fan-coin-amount-input" className="gx-input" type="number" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} />
         <Btn variant="secondary" onClick={buy} data-testid="fan-coin-buy-button">Convert</Btn>
@@ -733,12 +743,19 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
 
 export default function Finance() {
   const { data, isLoading } = useQuery({ queryKey: ["finance"], queryFn: async () => (await api.get("/owner/finance")).data });
+  if (data?.naira_per_gtex) {
+    setMoneyRates({
+      nairaPerGtex: Number(data.naira_per_gtex),
+      nairaPerFan: Number(data.naira_per_fan),
+      fanPerGtex: Number(data.fan_coin_per_gtex),
+    });
+  }
   if (isLoading || !data) return <Loading label="Reading the ledger" />;
   return (
     <div data-testid="finance-page">
-      <PageHeader eyebrow="Finance" title="Money, clearly labelled" sub="Every total on this page is derived from the unified ledger: gross, platform fee and net for every event." />
+      <PageHeader eyebrow="Finance" title="Money, clearly labelled" sub="Every coin amount shows its naira value. Wages are Fan Coin. Transfer fees and shares stay in GTEX Coin." />
       <div className="grid gap-6 lg:grid-cols-12">
-        <Balances w={data.wallet} />
+        <Balances w={data.wallet} rates={data} />
         {data.ecosystem_waterfall && (
           <Panel
             eyebrow="Ecosystem Revenue Recycling · Giving Back to Club Owners"

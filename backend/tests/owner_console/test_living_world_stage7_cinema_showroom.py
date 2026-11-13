@@ -173,6 +173,17 @@ def _bootstrap_club(
         user_id=user_id,
         memo="Deterministic test-club treasury funding",
     )
+    ledger.record(
+        session,
+        event_type="test_club_fan_funding",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.FAN,
+        gross=2_000_000,
+        club_id=club_id,
+        user_id=user_id,
+        memo="Deterministic test-club Fan Coin salary purse",
+    )
 
     return u, cp, state
 

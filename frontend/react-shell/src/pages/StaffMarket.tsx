@@ -6,6 +6,7 @@ import { api, errMsg } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
 import { clubStaffMarketCandidatesEndpoint } from "@/lib/ownerBriefing";
 import { Btn, Empty, Loading, PageHeader } from "@/components/gtex/ui";
+import { coinWithNaira } from "@/lib/money";
 
 const ROLES = [
   { id: "all", label: "All staff" },
@@ -111,7 +112,7 @@ export default function StaffMarket() {
                 <div>
                 <h2 className="text-lg font-black text-white">{candidate.name}</h2>
                 <p className="text-xs text-slate-400">{candidate.role_label} · rating {candidate.rating} · {candidate.style} · {candidate.temperament}</p>
-                <p className="mt-1 text-sm text-amber-200">Expected wage {Number(candidate.expected_salary_gtex || 0).toLocaleString()} GTX</p>
+                <p className="mt-1 text-sm text-amber-200">Expected wage {coinWithNaira(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 0, "FAN")} / year</p>
                 </div>
               </div>
               <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(candidate.expected_salary_gtex || "")); }}>

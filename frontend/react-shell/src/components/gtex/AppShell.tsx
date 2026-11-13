@@ -31,6 +31,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { fmt, useActiveClub, useControlCenter } from "@/lib/owner";
+import { nairaText, setMoneyRates, useMoneyRates } from "@/lib/money";
 import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
@@ -167,6 +168,16 @@ export default function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const { data, isLoading } = useControlCenter();
+  const moneyRates = useMoneyRates();
+  useEffect(() => {
+    const economy = data?.economy;
+    if (!economy) return;
+    setMoneyRates({
+      nairaPerGtex: Number(economy.naira_per_gtex),
+      nairaPerFan: Number(economy.naira_per_fan),
+      fanPerGtex: Number(economy.fan_coin_per_gtex),
+    });
+  }, [data]);
   const { active } = useActiveClub();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const { skin, sidebarMode, dataSaver } = useSkin();
@@ -490,6 +501,7 @@ export default function AppShell() {
                 <span className="text-slate-400 text-[11px] font-bold">Treasury</span>
                 <b className="text-white font-mono text-xs">{fmt(wallet.gtex_total)}</b>
                 <span className="text-[#42B9EC] font-black text-xs">GTX</span>
+                <span className="text-[10px] text-slate-400">{nairaText(wallet.gtex_total, "GTEX")}</span>
               </span>
             ) : (
               <span data-testid="topbar-user-account" className="gx-mono text-slate-300 text-xs">
@@ -509,6 +521,10 @@ export default function AppShell() {
               <span className="h-2 w-2 rounded-full bg-[#E5B63F] shadow-[0_0_8px_#E5B63F]" />
               <b className="text-white font-mono text-xs">{fmt(wallet.fan_total)}</b>
               <span className="text-[#E5B63F] font-black text-xs">FAN</span>
+              <span className="text-[10px] text-slate-400">{nairaText(wallet.fan_total, "FAN")}</span>
+            </span>
+            <span className="hidden xl:inline text-[10px] font-semibold text-slate-500" data-testid="coin-naira-key">
+              1 GTX = ₦{fmt(moneyRates.nairaPerGtex)} · 1 FAN = ₦{fmt(moneyRates.nairaPerFan, 2)}
             </span>
           </div>
 

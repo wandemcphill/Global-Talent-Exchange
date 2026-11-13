@@ -253,6 +253,55 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "specialty": "Squad Stabilization",
     },
     {
+        "id": "mgr_tunde_mcphill",
+        "staff_id": "mgr_tunde_mcphill",
+        "role": "first_team_manager",
+        "role_label": "First-Team Manager",
+        "name": "Tunde Mc'Phill",
+        "nation": "Nigeria",
+        "age": 37,
+        "gender": "male",
+        "style": "Collective Fluid Balance",
+        "mentality": "balanced",
+        "temperament": "pragmatic",
+        "ambition": 15,
+        "loyalty": 16,
+        "youth_development": 18,
+        "tactical_flexibility": 17,
+        "negotiation": 12,
+        "commercial_acumen": 10,
+        "scouting_accuracy": 14,
+        "medical_expertise": 10,
+        "min_prestige": 32,
+        "salary": 1600,
+        "salary_fancoin": 1600,
+        "salary_fan_coin": 1600,
+        "salary_gtex": 160,
+        "signing_fee_gtex": 4800,
+        "rating": 76,
+        "gsi": 76,
+        "potential": 88,
+        "rarity": "established",
+        "profile_locked": True,
+        "preferred_formation": "3-4-3",
+        "preferred_formations": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
+        "tactics": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
+        "traits": ["develops_young_players", "academy_promotion_bias", "tactical_flexibility", "balanced_substitution"],
+        "youth_age_max": 26,
+        "uses_academy_players": True,
+        "bio": (
+            "Tunde Mc'Phill, 37, coaches in the balanced USSR and Yugoslav school. "
+            "He rotates 3-4-3, 4-3-3, a 4-1-2-1-2 diamond, 3-5-2, and 3-6-1, all on a balanced mentality: "
+            "fluid interchange, a packed midfield, and wing-backs who join without leaving the block. "
+            "He selects players under 26 and builds the side from academy graduates. GSI 76, potential 88."
+        ),
+        "philosophy_summary": (
+            "Balanced collective shapes in the USSR and Yugoslav school. "
+            "Players under 26, academy graduates first."
+        ),
+        "specialty": "Youth Collective Shape",
+    },
+    {
         "id": "mgr_marcelo_vance",
         "staff_id": "mgr_marcelo_vance",
         "role": "first_team_manager",
@@ -589,7 +638,7 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     youth = int(clamp(rng.randint(7, 16) + (3 if "academy_promotion_bias" in traits else 0) + rarity_bonus // 2, 1, 20))
 
-    return {
+    profile = {
         "manager_id": manager_id,
         "name": snapshot.get("display_name") or snapshot.get("name") or "Tunde Bakare",
         "rarity": rarity,
@@ -610,6 +659,29 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
         "mood": 70,
         "is_default": manager_id == "gtex-staff-coach",
     }
+    if snapshot.get("profile_locked"):
+        profile["temperament"] = snapshot.get("temperament") or profile["temperament"]
+        profile["ambition"] = int(snapshot.get("ambition") or profile["ambition"])
+        profile["loyalty"] = int(snapshot.get("loyalty") or profile["loyalty"])
+        profile["youth_development"] = int(snapshot.get("youth_development") or profile["youth_development"])
+        profile["tactical_quality"] = int(snapshot.get("tactical_flexibility") or profile["tactical_quality"])
+        profile["discipline_style"] = "balanced"
+        profile["transfer_preference"] = "youth-first"
+        for field in (
+            "age",
+            "gsi",
+            "potential",
+            "preferred_formation",
+            "youth_age_max",
+            "nation",
+        ):
+            if snapshot.get(field) is not None:
+                profile[field] = snapshot[field]
+        if snapshot.get("preferred_formations"):
+            profile["preferred_formations"] = list(snapshot["preferred_formations"])
+        if snapshot.get("uses_academy_players"):
+            profile["uses_academy_players"] = True
+    return profile
 
 
 DEFAULT_MANAGER = {

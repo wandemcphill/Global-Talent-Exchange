@@ -27,6 +27,7 @@ import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub, useRefreshOwner } from "@/lib/owner";
+import { coinWithNaira } from "@/lib/money";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
@@ -979,7 +980,7 @@ function BoardroomSection({ club }: any) {
 
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span>Upfront Fan Coin Contract:</span>
-                    <b className="gx-mono text-amber-300">{fmt((cand.salary_fan_coin || 1200) * (contractYears[cand.staff_id] || 3))} FAN</b>
+                    <b className="gx-mono text-amber-300">{coinWithNaira((cand.salary_fan_coin || cand.salary || 1600) * (contractYears[cand.staff_id] || 3), "FAN")}</b>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
                     <span>Contract Length:</span>

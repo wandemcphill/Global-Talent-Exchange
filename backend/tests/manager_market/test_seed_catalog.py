@@ -30,6 +30,25 @@ def test_seed_catalog_includes_tunde_oni() -> None:
     assert "short passing" in tunde["philosophy"]
 
 
+def test_seed_catalog_includes_tunde_mcphill() -> None:
+    catalog = build_seed_catalog()
+    coach = next(item for item in catalog if item["name"] == "Tunde Mc'Phill")
+
+    assert CATALOG_VERSION >= 9
+    assert coach["mentality"] == "balanced"
+    assert coach["rarity"] == "popular"
+    assert coach["supply_total"] == 1
+    assert coach["club_associations"] == ["Nigeria"]
+    assert coach["tactics"] == ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"]
+    assert "academy_promotion_bias" in coach["traits"]
+    assert "develops_young_players" in coach["traits"]
+    assert "under 26" in coach["philosophy"]
+    assert "academy" in coach["philosophy"]
+    assert "GSI 76" in coach["philosophy"]
+    assert "potential 88" in coach["philosophy"]
+    assert "balanced" in coach["philosophy"]
+
+
 def test_seed_catalog_applies_locked_scarcity_rules() -> None:
     catalog = build_seed_catalog()
     entries = {item["name"]: item for item in catalog}

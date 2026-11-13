@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CATALOG_VERSION = 8
+CATALOG_VERSION = 9
 
 LEGENDARY_MANAGERS: list[dict[str, Any]] = [
     {
@@ -220,6 +220,26 @@ ELITE_ACTIVE_MANAGERS: list[dict[str, Any]] = [
         "traits": ["develops_young_players", "tactical_flexibility", "technical_coaching", "quick_substitution"],
         "philosophy": "A balanced Nigerian coach and great motivator built around 3-4-3, 4-1-2-1-2 diamond, and 3-4-1-2 ideas. Prefers to play through the middle with short passing combinations, then hit sharp counters against bigger teams while leaning on set-piece detail and belief in young players.",
         "rarity": "elite_active",
+        "club_associations": ["Nigeria"],
+    },
+    {
+        "name": "Tunde Mc'Phill",
+        "mentality": "balanced",
+        "keep_tactics": True,
+        "tactics": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
+        "traits": [
+            "develops_young_players",
+            "academy_promotion_bias",
+            "tactical_flexibility",
+            "balanced_substitution",
+        ],
+        "philosophy": (
+            "Tunde Mc'Phill, 37, coaches in the balanced USSR and Yugoslav school. "
+            "He rotates 3-4-3, 4-3-3, a 4-1-2-1-2 diamond, 3-5-2, and 3-6-1, all on a balanced mentality: "
+            "fluid interchange, a packed midfield, and wing-backs who join without leaving the block. "
+            "He selects players under 26 and builds the side from academy graduates. GSI 76, potential 88."
+        ),
+        "rarity": "popular",
         "club_associations": ["Nigeria"],
     },
     {
@@ -1353,7 +1373,8 @@ def build_seed_catalog() -> list[dict[str, Any]]:
 def build_seed_catalog_entries() -> list[dict[str, Any]]:
     entries: list[dict[str, Any]] = []
     for raw in build_seed_catalog():
-        traits = list(raw["traits"][:4])
+        tactic_limit = 6 if raw.get("keep_tactics") else 4
+        traits = list(raw["traits"][:tactic_limit])
         supply_total = int(raw["supply_total"])
         entries.append(
             {
@@ -1361,7 +1382,7 @@ def build_seed_catalog_entries() -> list[dict[str, Any]]:
                 "display_name": raw["name"],
                 "rarity": raw["rarity"],
                 "mentality": raw["mentality"],
-                "tactics": list(raw["tactics"][:4]),
+                "tactics": list(raw["tactics"][:tactic_limit]),
                 "traits": traits,
                 "substitution_tendency": next(
                     (trait for trait in traits if "substitution" in trait),

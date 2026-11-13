@@ -466,7 +466,7 @@ export const ClubAuthorityPanel: React.FC<ClubAuthorityPanelProps> = ({ clubId }
                   className="w-full bg-slate-950 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-amber-300 font-mono font-bold focus:outline-none focus:border-purple-400"
                   data-testid="input-contract-threshold"
                 />
-                <span className="text-xs text-slate-400 font-mono">GTX/wk</span>
+                <span className="text-xs text-slate-400 font-mono">FAN/wk</span>
               </div>
             </div>
 

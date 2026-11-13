@@ -1609,22 +1609,24 @@ def tick_club(
     med = exec_staff.get("medical_director") or {}
 
     total_staff_salary = sum(
-        int(s.get("salary_gtex", s.get("salary", 300))) for s in exec_staff.values() if not s.get("upfront_paid", True)
+        int(s.get("salary_fan_coin") or s.get("salary_fancoin") or s.get("salary") or s.get("salary_gtex") or 0)
+        for s in exec_staff.values()
+        if not s.get("upfront_paid", True)
     )
     daily_upkeep = max(10, total_staff_salary // 30) if exec_staff else 0
-    club_cash = ledger.balance(session, ledger.club_account(state.club_id), ledger.GTEX)
-    if daily_upkeep > 0 and club_cash >= daily_upkeep:
+    club_fan = ledger.balance(session, ledger.club_account(state.club_id), ledger.FAN)
+    if daily_upkeep > 0 and club_fan >= daily_upkeep:
         try:
             ledger.record(
                 session,
                 event_type="staff_wage_upkeep",
                 source=ledger.club_account(state.club_id),
                 destination=ledger.WORLD_CLUBS,
-                currency=ledger.GTEX,
+                currency=ledger.FAN,
                 gross=daily_upkeep,
                 club_id=state.club_id,
                 user_id=state.owner_user_id,
-                memo="Executive staff daily wage upkeep",
+                memo="Executive staff daily wage upkeep in Fan Coin",
             )
         except Exception:
             pass
@@ -2651,34 +2653,35 @@ def hire_executive_staff(
 
     years = max(1, min(int(contract_years or 3), 5))
     base_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
-    annual_salary = int(candidate.get("salary_fan_coin") or candidate.get("salary") or max(400, base_fee // 3))
+    annual_salary = int(
+        candidate.get("salary_fan_coin")
+        or candidate.get("salary_fancoin")
+        or candidate.get("salary")
+        or max(400, base_fee // 3)
+    )
     signing_fee = annual_salary * years if years != 3 else base_fee
     if marquee_wage_premium:
         signing_fee = int(signing_fee * 1.5)
 
     user_fan_acct = ledger.user_account(user_id)
     club_fan_acct = ledger.club_account(club_id)
-    club_gtex_acct = ledger.club_account(club_id)
 
     user_fan_bal = ledger.balance(session, user_fan_acct, ledger.FAN)
     club_fan_bal = ledger.balance(session, club_fan_acct, ledger.FAN)
-    club_gtex_bal = ledger.balance(session, club_gtex_acct, ledger.GTEX)
 
-    if pay_with_fan_coin and user_fan_bal >= signing_fee:
+    if user_fan_bal >= signing_fee:
         pay_source = user_fan_acct
         pay_currency = ledger.FAN
-    elif pay_with_fan_coin and club_fan_bal >= signing_fee:
+    elif club_fan_bal >= signing_fee:
         pay_source = club_fan_acct
         pay_currency = ledger.FAN
     else:
-        if club_gtex_bal < signing_fee:
-            raise OwnerError(
-                "insufficient_club_cash",
-                400,
-                f"Insufficient Fan Coin ({max(user_fan_bal, club_fan_bal)}) or Club GTX ({club_gtex_bal}) for {signing_fee} upfront {years}-year contract.",
-            )
-        pay_source = club_gtex_acct
-        pay_currency = ledger.GTEX
+        raise OwnerError(
+            "insufficient_fan_coin",
+            400,
+            f"Staff salaries are paid in Fan Coin. This {years}-year contract needs {signing_fee} Fan Coin. "
+            f"Available Fan Coin is {max(user_fan_bal, club_fan_bal)}.",
+        )
 
     try:
         ledger.record(

@@ -1,5 +1,6 @@
 import React from "react";
 import { fmt } from "@/lib/owner";
+import { nairaText, useMoneyRates, type CoinKind } from "@/lib/money";
 
 export function Panel({ title, eyebrow, action, children, className = "", testid, live }: any) {
   return (
@@ -44,13 +45,16 @@ export function Btn({ variant = "primary", className = "", children, ...rest }: 
 }
 
 export function Coin({ amount, currency = "GTEX", className = "", testid }: any) {
+  const rates = useMoneyRates();
   const isFan = currency === "FAN";
   const isNgn = currency === "NGN";
+  const kind: CoinKind = isFan ? "FAN" : "GTEX";
   const badgeStyle = isFan
     ? "text-[#E5B63F] bg-[#E5B63F]/15 border-[#E5B63F]/35"
     : isNgn
     ? "text-[#00C991] bg-[#00C991]/15 border-[#00C991]/35"
     : "text-[#42B9EC] bg-[#42B9EC]/15 border-[#42B9EC]/35";
+  const naira = isNgn ? null : nairaText(amount, kind);
 
   return (
     <span data-testid={testid} className={`gx-mono font-bold text-white inline-flex items-baseline gap-1.5 ${className}`}>
@@ -61,6 +65,11 @@ export function Coin({ amount, currency = "GTEX", className = "", testid }: any)
       {!isNgn && (
         <span className={`rounded-md px-1.5 py-0.5 text-[10px] font-extrabold tracking-wider border ${badgeStyle}`}>
           {isFan ? "FAN" : "GTX"}
+        </span>
+      )}
+      {naira && (
+        <span className="text-[10px] font-semibold text-slate-400" data-naira-per-gtex={rates.nairaPerGtex}>
+          {naira}
         </span>
       )}
     </span>

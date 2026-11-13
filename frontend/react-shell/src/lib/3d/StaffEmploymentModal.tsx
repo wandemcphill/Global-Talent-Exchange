@@ -12,6 +12,7 @@
  */
 
 import React, { useState } from "react";
+import { coinWithNaira } from "@/lib/money";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
@@ -237,7 +238,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
       toast.success(
         resPayload.retained
           ? `Executive retained at the club (${resPayload.choice}).`
-          : `Released for ${Number(resPayload.buyout_credited_gtex || 0).toLocaleString()} GTEX buyout clause.`
+          : `Released for ${coinWithNaira(Number(resPayload.buyout_credited_gtex || 0), "GTEX")} buyout clause.`
       );
       setPoachingEvent(null);
       queryClient.invalidateQueries({ queryKey: ["club-staff-vacancies", clubId] });
@@ -536,7 +537,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                             <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-400">
                               <div className="flex items-center gap-1">
                                 <Coins className="h-3.5 w-3.5 text-amber-400" />
-                                <span>Wage: ₦{incumbent.salary_gtex.toLocaleString()} /yr</span>
+                                <span>Wage: {coinWithNaira(incumbent.salary_fan_coin || incumbent.salary_gtex, "FAN")} /yr</span>
                               </div>
                               <div className="flex items-center gap-1">
                                 <Clock className="h-3.5 w-3.5 text-sky-400" />
@@ -547,7 +548,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
 
                           <div className="mt-4 pt-3 border-t border-white/5 flex items-center justify-between gap-2">
                             <span className="text-[11px] text-slate-400">
-                              Severance: ₦{Math.round(incumbent.salary_gtex * 0.5).toLocaleString()}
+                              Severance: {coinWithNaira(Math.round(incumbent.salary_gtex * 0.5), "FAN")}
                             </span>
                             <div className="flex items-center gap-1.5">
                               <button
@@ -601,7 +602,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                       <p className="mt-2 text-xs text-slate-300 leading-relaxed">
                         <strong className="text-white">{poachingEvent.rival_club_name}</strong> have tabled a{" "}
                         <span className="font-mono font-bold text-amber-300">
-                          {Number(poachingEvent.rival_offered_salary_gtex || 0).toLocaleString()} GTEX/yr
+                          {coinWithNaira(Number(poachingEvent.rival_offered_salary_gtex || 0), "FAN")}/yr
                         </span>{" "}
                         contract for{" "}
                         <strong className="text-white">
@@ -609,7 +610,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                         </strong>{" "}
                         with a{" "}
                         <span className="font-mono font-bold text-emerald-300">
-                          {Number(poachingEvent.buyout_clause_gtex || 0).toLocaleString()} GTEX
+                          {coinWithNaira(Number(poachingEvent.buyout_clause_gtex || 0), "GTEX")}
                         </span>{" "}
                         buyout compensation offer.
                       </p>
@@ -655,7 +656,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                           }
                           className="rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3.5 py-2 text-xs font-bold text-amber-200 transition-all"
                         >
-                          Accept {Number(poachingEvent.buyout_clause_gtex || 0).toLocaleString()} GTEX Buyout & Release
+                          Accept {coinWithNaira(Number(poachingEvent.buyout_clause_gtex || 0), "GTEX")} buyout and release
                         </button>
                       </div>
                     </div>
@@ -689,7 +690,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                         <strong className="text-white">{dismissRoleTarget.role_label}</strong>. A mandatory 50%
                         severance fee of{" "}
                         <span className="font-mono font-bold text-amber-300">
-                          ₦{Math.round(dismissRoleTarget.salary_gtex * 0.5).toLocaleString()} GTEX
+                          {coinWithNaira(Math.round(dismissRoleTarget.salary_gtex * 0.5), "FAN")}
                         </span>{" "}
                         will be settled immediately from the club treasury. They will enter the Global Free Agent pool
                         and can be recruited by other clubs.
@@ -848,7 +849,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                             <div className="rounded-lg bg-slate-900/80 p-2 border border-white/5">
                               <span className="text-[10px] text-slate-400 uppercase block">Expected Wage</span>
                               <span className="font-mono font-bold text-amber-300">
-                                ₦{cand.expected_salary_gtex.toLocaleString()} GTEX
+                                {coinWithNaira(cand.expected_salary_fan_coin || cand.expected_salary_gtex, "FAN")}
                               </span>
                             </div>
                             <div className="rounded-lg bg-slate-900/80 p-2 border border-white/5">
@@ -951,7 +952,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                       </h3>
                       <p className="text-xs text-slate-400">
                         Target Role: <strong className="text-white">{negotiatingCandidate.role_label}</strong> •
-                        Baseline Wage: ₦{negotiatingCandidate.expected_salary_gtex.toLocaleString()} GTEX
+                        Baseline wage: {coinWithNaira(negotiatingCandidate.expected_salary_fan_coin || negotiatingCandidate.expected_salary_gtex, "FAN")}
                       </p>
                     </div>
                     <button
@@ -967,7 +968,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Annual Salary */}
                     <div>
-                      <label className="text-xs font-semibold text-slate-300">Annual Wage (GTEX)</label>
+                      <label className="text-xs font-semibold text-slate-300">Annual wage (Fan Coin)</label>
                       <input
                         type="number"
                         data-testid="offer-salary-input"
@@ -976,7 +977,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                         className="mt-1 w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-mono text-white focus:border-emerald-500 focus:outline-none"
                       />
                       <span className="text-[10px] text-slate-400 mt-1 block">
-                        Expected: ₦{negotiatingCandidate.expected_salary_gtex.toLocaleString()}
+                        Expected: {coinWithNaira(negotiatingCandidate.expected_salary_fan_coin || negotiatingCandidate.expected_salary_gtex, "FAN")}
                       </span>
                     </div>
 
@@ -1001,7 +1002,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                     <div>
                       <label className="text-xs font-semibold text-slate-300">Upfront Signing Fee (15%)</label>
                       <div className="mt-1 flex items-center justify-between rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm font-mono text-amber-300">
-                        <span>₦{Math.round(offerSalary * 0.15).toLocaleString()} GTEX</span>
+                        <span>{coinWithNaira(Math.round(offerSalary * 0.15), "FAN")}</span>
                         <Coins className="h-4 w-4 text-amber-400" />
                       </div>
                       <span className="text-[10px] text-slate-400 mt-1 block">
@@ -1063,7 +1064,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                       )}
                       {lastOfferResult.counter_salary_gtex && (
                         <p className="mt-1 text-[11px] font-mono text-amber-300">
-                          Candidate Counter-Demand: ₦{lastOfferResult.counter_salary_gtex.toLocaleString()} GTEX
+                          Candidate counter: {coinWithNaira(lastOfferResult.counter_salary_gtex, "FAN")}
                         </p>
                       )}
                     </div>

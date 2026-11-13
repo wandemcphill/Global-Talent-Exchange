@@ -701,6 +701,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             },
             "economy": {
                 "wallet": ledger.wallet_classes(session, user.id),
+                **money.display_rates(session),
                 "club_cash_total": str(sum(float(e["cash_gtex"]) for e in economy_by_club.values())),
                 "earnings_sources": totals,
                 "pending_payouts": str(sum(float(e["pending_payouts"]) for e in economy_by_club.values())),
@@ -1027,6 +1028,7 @@ def finance(user=Depends(get_current_user), session: Session = Depends(get_sessi
         "gift_catalog": money.GIFTS,
         "support_unit_price": money.SUPPORT_UNIT_PRICE,
         "fan_coin_per_gtex": money.FAN_COIN_PER_GTEX,
+        **money.display_rates(session),
         "paystack_configured": bool(money.paystack_secret()),
         "paystack_mode": "live" if (money.paystack_secret() or "").startswith("sk_live_") else "test",
         "treasury_rates": {k: str(v) for k, v in money.treasury_rates(session).items()},
@@ -2506,6 +2508,11 @@ def get_living_world_staff_market_candidates(
     role: str | None = None,
     employment_status: str | None = "unemployed",
     limit: int = 50,
+    offset: int = 0,
+    wage_max: int | None = None,
+    style: str | None = None,
+    temperament: str | None = None,
+    search: str | None = None,
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
@@ -2519,6 +2526,11 @@ def get_living_world_staff_market_candidates(
             role=role,
             employment_status=employment_status,
             limit=limit,
+            offset=offset,
+            wage_max=wage_max,
+            style=style,
+            temperament=temperament,
+            search=search,
         )
 
     return _run(session, _op)

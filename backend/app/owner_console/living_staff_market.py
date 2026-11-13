@@ -135,6 +135,23 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
             "nation": item.get("nation"),
             "origin": item.get("origin") or "catalog",
         }
+        for field in (
+            "preferred_formation",
+            "preferred_formations",
+            "gsi",
+            "potential",
+            "youth_age_max",
+            "uses_academy_players",
+            "mentality",
+            "tactics",
+            "traits",
+            "philosophy_summary",
+            "bio",
+            "youth_development",
+            "tactical_flexibility",
+        ):
+            if item.get(field) is not None:
+                meta[field] = item[field]
 
         # Add starter historical background if defined
         if "reputation" in item:
@@ -326,6 +343,7 @@ def list_staff_market_candidates(
                 "ambition": _safe_int(meta.get("ambition"), 10),
                 "loyalty": _safe_int(meta.get("loyalty"), 12),
                 "expected_salary_gtex": annual_salary_gtex,
+                "expected_salary_fan_coin": annual_salary_gtex,
                 "min_prestige": min_p,
                 "employment_status": status,
                 "current_club_id": meta.get("current_club_id"),
@@ -410,7 +428,7 @@ def evaluate_staff_contract_offer(
             "accepted": False,
             "outcome": "rejected",
             "reason": "insufficient_wage",
-            "message": f"Offer rejected. The proposed salary of ₦{offered_salary_gtex:,} GTEX is substantially below {name}'s market expectation of ₦{expected_salary:,} GTEX.",
+            "message": f"Offer rejected. The proposed salary of {offered_salary_gtex:,} Fan Coin is substantially below {name}'s market expectation of {expected_salary:,} Fan Coin.",
             "counter_salary_gtex": expected_salary,
         }
     elif wage_ratio < 0.95:
@@ -420,7 +438,7 @@ def evaluate_staff_contract_offer(
             "accepted": False,
             "outcome": "counter_offer",
             "reason": "salary_below_market",
-            "message": f"{name} is intrigued by the project but requests ₦{counter_wage:,} GTEX per annum.",
+            "message": f"{name} is intrigued by the project but requests {counter_wage:,} Fan Coin per year.",
             "counter_salary_gtex": counter_wage,
             "counter_years": contract_years,
         }
@@ -511,16 +529,24 @@ def hire_staff_from_market(
     # Financial settlement is a hard precondition for an appointment. Never create
     # a contract or change employment state when the club cannot fund the upfront fee.
     club_acct = ledger.club_account(club_id)
-    club_bal = ledger.balance(session, club_acct, ledger.GTEX)
-    logger.info("Executing staff appointment for club %s; ledger balance: %s GTEX", club_id, club_bal)
-    if club_bal < total_contract_fee:
+    user_acct = ledger.user_account(user_id)
+    club_fan = ledger.balance(session, club_acct, ledger.FAN)
+    user_fan = ledger.balance(session, user_acct, ledger.FAN)
+    if user_fan >= total_contract_fee:
+        pay_source = user_acct
+        pay_balance = user_fan
+    else:
+        pay_source = club_acct
+        pay_balance = club_fan
+    logger.info("Executing staff appointment for club %s; Fan Coin available: %s", club_id, pay_balance)
+    if pay_balance < total_contract_fee:
         return {
             "status": "rejected",
             "success": False,
             "reason": "insufficient_funds",
             "message": (
-                f"Appointment not completed: the club has {club_bal} GTEX available, "
-                f"but the upfront contract fee is {total_contract_fee} GTEX."
+                f"Appointment not completed: staff salaries are paid in Fan Coin. "
+                f"Available Fan Coin is {max(user_fan, club_fan)}, and the upfront contract is {total_contract_fee} Fan Coin."
             ),
             "required_salary_gtex": salary,
         }
@@ -529,9 +555,9 @@ def hire_staff_from_market(
     ledger.record(
         session,
         event_type="staff_hire",
-        source=club_acct,
+        source=pay_source,
         destination=ledger.WORLD_CLUBS,
-        currency=ledger.GTEX,
+        currency=ledger.FAN,
         gross=total_contract_fee,
         club_id=club_id,
         user_id=user_id,
@@ -609,6 +635,8 @@ def hire_staff_from_market(
         "ambition": meta.get("ambition", 10),
         "loyalty": meta.get("loyalty", 12),
         "salary": salary,
+        "salary_fan_coin": salary,
+        "salary_fancoin": salary,
         "salary_gtex": salary,
         "appointed_at": now.isoformat(),
         "mood": 85,
@@ -707,7 +735,7 @@ def dismiss_staff_with_free_agency(
             event_type="staff_compensation",
             source=ledger.club_account(club_id),
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
+            currency=ledger.FAN,
             gross=severance_compensation,
             club_id=club_id,
             user_id=user_id,
@@ -1014,7 +1042,7 @@ def resolve_external_poaching_approach(
             event_type="staff_retention_bonus",
             source=ledger.club_account(club_id),
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
+            currency=ledger.FAN,
             gross=Decimal(str(retention_bonus)),
             club_id=club_id,
             user_id=user_id,

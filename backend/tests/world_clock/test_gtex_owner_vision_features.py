@@ -115,6 +115,17 @@ def _seed_club(session: Session, *, prestige: int = 50, cash: int = 100_000) -> 
         user_id="user-1",
         memo="Initial club grant",
     )
+    ledger.record(
+        session,
+        event_type="club_launch_fan_grant",
+        source=ledger.WORLD_CLUBS,
+        destination=ledger.club_account("club-1"),
+        currency=ledger.FAN,
+        gross=Decimal(cash),
+        club_id="club-1",
+        user_id="user-1",
+        memo="Initial club Fan Coin purse",
+    )
     session.commit()
     return state
 

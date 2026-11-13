@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, useActiveClub, useClub } from "@/lib/owner";
+import { coinWithNaira } from "@/lib/money";
 import { Loading } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
@@ -273,7 +274,7 @@ export function TransferHub() {
         offer_type: "transfer",
         cash_amount: Number(offerAmount),
         conditional_terms: offerWage ? { proposed_weekly_wage: Number(offerWage) } : {},
-        message: offerWage ? `Proposed weekly wage: ${Number(offerWage)} GTX/w` : undefined,
+        message: offerWage ? `Proposed weekly wage: ${coinWithNaira(offerWage, "FAN")}/w` : undefined,
       });
       toast.success(`Formal offer of ${fmt(offerAmount)} GTX submitted to selling club!`);
       setOfferListing(null);
@@ -425,7 +426,7 @@ export function TransferHub() {
             <div className="rounded-lg border border-[#25354B] bg-black/40 px-3.5 py-2">
               <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Wage Room</p>
               <p className="gx-mono text-lg font-black text-amber-300">
-                {activeClub?.wage_budget != null ? fmt(activeClub.wage_budget) : "—"} <span className="text-[10px] text-amber-400/80">GTX/w</span>
+                {activeClub?.wage_budget != null ? coinWithNaira(activeClub.wage_budget, "FAN") : "—"} <span className="text-[10px] text-amber-400/80">/w</span>
               </p>
             </div>
             <button
@@ -769,7 +770,7 @@ export function TransferHub() {
                         {offerPlayerName}
                       </h4>
                       <p className="text-xs text-slate-300">
-                        Offered: <b className="text-amber-300 font-mono">{fmt(offer.cash_amount)} GTX</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${fmt(offer.conditional_terms.proposed_weekly_wage)} GTX/w` : "Not specified"}</b>
+                        Offered: <b className="text-amber-300 font-mono">{coinWithNaira(offer.cash_amount, "GTEX")}</b> · Proposed Wage: <b className="text-white font-mono">{offer.conditional_terms?.proposed_weekly_wage != null ? `${coinWithNaira(offer.conditional_terms.proposed_weekly_wage, "FAN")}/w` : "Not specified"}</b>
                       </p>
                       <p className="text-[11px] text-slate-400 italic">
                         {offerStatusView.explanation}
@@ -1250,7 +1251,7 @@ export function TransferHub() {
               badgeText="LIVE 3D NEGOTIATION"
               clubName={activeClub?.club_name || "GTEX FC"}
               subjectName={offerListing.player?.full_name || String(offerListing.player_id)}
-              subjectRole={`Transfer Bid: ${fmt(Number(offerAmount || 0))} GTX · Wage: ${fmt(Number(offerWage || 0))} GTX/wk`}
+              subjectRole={`Transfer Bid: ${coinWithNaira(Number(offerAmount || 0), "GTEX")} · Wage: ${coinWithNaira(Number(offerWage || 0), "FAN")}/wk`}
               agentMood={
                 Number(offerAmount || 0) >= Number(offerListing.base_price || 0)
                   ? "eager"
@@ -1327,7 +1328,7 @@ export function TransferHub() {
               badgeText="3D AGENT TABLE"
               clubName={activeClub?.club_name || "GTEX FC"}
               subjectName={contractOfferNegotiation.player_name || String(contractOfferNegotiation.player_id)}
-              subjectRole={`Proposed Wage: ${fmt(Number(contractWageOffer || 0))} GTX/wk (${contractYears} yrs)`}
+              subjectRole={`Proposed Wage: ${coinWithNaira(Number(contractWageOffer || 0), "FAN")}/wk (${contractYears} yrs)`}
               agentMood={Number(contractWageOffer || 0) >= 2000 ? "eager" : "tense"}
             />
 

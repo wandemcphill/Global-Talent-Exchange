@@ -1,6 +1,7 @@
 import React from "react";
 import { OrgStructure, StaffPosition } from "@/lib/clubAuthority";
 import { Crown, UserCheck, UserX, Award, Shield, Compass, Activity, Brain } from "lucide-react";
+import { coinWithNaira } from "@/lib/money";
 
 interface OrganizationalStructureViewProps {
   orgStructure: OrgStructure | null;
@@ -163,7 +164,7 @@ export const OrganizationalStructureView: React.FC<OrganizationalStructureViewPr
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-400 pt-1">
-                      <span>Salary: {staff.salary_weekly.toLocaleString()} GTX/wk</span>
+                      <span>Salary: {coinWithNaira(staff.salary_weekly, "FAN")}/wk</span>
                       <span className="font-semibold text-purple-300">
                         {pos.delegated_activities_count} Delegated Activities
                       </span>
