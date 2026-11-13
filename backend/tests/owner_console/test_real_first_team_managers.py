@@ -40,9 +40,7 @@ def test_staff_market_hires_missing_real_managers() -> None:
     assert cruyff["rating"] >= 94
     assert "high defensive line" in cruyff["bio"]
 
-    scolari = [
-        item for item in EXECUTIVE_STAFF_CATALOG if canon_fold(item.get("name")) == "luiz felipe scolari"
-    ]
+    scolari = [item for item in EXECUTIVE_STAFF_CATALOG if canon_fold(item.get("name")) == "luiz felipe scolari"]
     assert any(item.get("role") == "first_team_manager" for item in scolari)
 
     ids = [item.get("id") for item in EXECUTIVE_STAFF_CATALOG]

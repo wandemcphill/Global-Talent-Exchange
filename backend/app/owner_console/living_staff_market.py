@@ -55,6 +55,7 @@ SUPPORTED_MARKET_ROLES = [
     ROLE_PERFORMANCE_ANALYST,
 ]
 
+
 def fold_staff_text(value: str | None) -> str:
     """Lowercase a name so Ferguson, Éric, and Mc'Phill match plain typing."""
     text = unicodedata.normalize("NFKD", str(value or ""))

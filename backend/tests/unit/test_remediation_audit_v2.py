@@ -276,8 +276,16 @@ def test_generational_legend_age_rules() -> None:
     all_ages = [
         _compute_age(d, today=virtual_date)
         for d in [
-            messi_dob, cr7_dob, modric_dob, casemiro_dob, gerrard_dob,
-            zidane_dob, romario_dob, maradona_dob, pele_dob, di_stefano_dob
+            messi_dob,
+            cr7_dob,
+            modric_dob,
+            casemiro_dob,
+            gerrard_dob,
+            zidane_dob,
+            romario_dob,
+            maradona_dob,
+            pele_dob,
+            di_stefano_dob,
         ]
     ]
     assert max(all_ages) == 30
@@ -407,4 +415,3 @@ def test_fm23_regens_quarantine_enforcement() -> None:
         country_name="Spain",
     )
     assert res2 is None
-
