@@ -20,6 +20,10 @@ describe("resolveGiftShot", () => {
     expect(resolveGiftShot("veloce_gt9_hypercar", "veloce_gt9_hypercar")).toBe("vehicle");
     expect(resolveGiftShot("chronos_tourbillon_watch", "chronos_tourbillon_watch")).toBe("crown");
     expect(resolveGiftShot("apex_performance_campus", "apex_performance_campus")).toBe("facility");
+    expect(resolveGiftShot("super_eagle", "super_eagle")).toBe("eagle");
+    expect(resolveGiftShot("black_jaguar", "black_jaguar")).toBe("jaguar");
+    expect(resolveGiftShot("white_tiger", "white_tiger")).toBe("white_tiger");
+    expect(resolveGiftShot("polar_bear", "polar_bear")).toBe("polar_bear");
   });
 
   test("plays the generated arrival film for each match gift shot", () => {
@@ -38,5 +42,9 @@ describe("resolveGiftShot", () => {
     expect(giftConceptFilm("golden_goal").src).toBe("/assets/gifting/films/gtex-gift-golden-goal.mp4");
     expect(giftConceptFilm("hat_trick").src).toBe("/assets/gifting/films/gtex-gift-hat-trick.mp4");
     expect(giftConceptFilm("save").src).toBe("/assets/gifting/films/gtex-gift-save.mp4");
+    expect(giftConceptFilm("eagle").src).toBe("/assets/gifting/films/gtex-gift-super-eagle.mp4");
+    expect(giftConceptFilm("jaguar").src).toBe("/assets/gifting/films/gtex-gift-black-jaguar.mp4");
+    expect(giftConceptFilm("white_tiger").src).toBe("/assets/gifting/films/gtex-gift-white-tiger.mp4");
+    expect(giftConceptFilm("polar_bear").src).toBe("/assets/gifting/films/gtex-gift-polar-bear.mp4");
   });
 });

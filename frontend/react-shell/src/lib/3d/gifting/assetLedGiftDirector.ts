@@ -638,6 +638,19 @@ export function createGiftDirector(options: Options): GiftDirector {
     }, options.rarity);
   }
 
+  const animalShot = shot === "eagle" || shot === "jaguar" || shot === "white_tiger" || shot === "polar_bear";
+  if (animalShot) {
+    const accent = shot === "eagle" ? 0x1f8f4e : shot === "jaguar" ? 0x242424 : shot === "polar_bear" ? 0xd7e7f5 : 0xf7fbff;
+    const light = addLights(bin, accent);
+    const particles = addParticles(bin, options.quality, accent);
+    ready(options, []);
+    return finish(bin, shot === "polar_bear" ? 0x0b1c2c : 0x07111d, 1.12, (progress, delta, target) => {
+      camera(target, progress);
+      updateParticles(particles, progress, delta, 0.7);
+      light.intensity = 2.4 + Math.sin(progress * Math.PI) * 0.8;
+    }, options.rarity);
+  }
+
   const winner = shot === "last_minute";
   const bicycle = shot === "bicycle";
   const goldenGoal = shot === "golden_goal";

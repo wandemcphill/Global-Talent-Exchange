@@ -176,6 +176,18 @@ describe("asset-led cinematic gifting scenes", () => {
     });
   });
 
+  test("animal gifts stay on particles and never fall back to a match footballer", () => {
+    ["eagle", "jaguar", "white_tiger", "polar_bear"].forEach((shot) => {
+      const scene = stage(shot, shot, "legendary");
+      expect(scene.root.getObjectByName("gift-match-stadium")).toBeFalsy();
+      expect(scene.root.getObjectByName("gift-footballer")).toBeFalsy();
+      expect(scene.root.getObjectByName("gift-cinematic-particles")).toBeTruthy();
+      expect(meshes(scene.root)).toHaveLength(0);
+      scene.update(0.4, 1 / 60, new THREE.PerspectiveCamera(38, 1, 0.1, 400));
+      scene.dispose();
+    });
+  });
+
   test("an actual Chronos watch gift uses the authored watch model, not a crown substitute", () => {
     const watch = stage("crown", "chronos_tourbillon_watch");
     const hero = watch.root.getObjectByName("gift-watch-stage");

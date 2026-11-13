@@ -16,5 +16,9 @@ describe("resolveCelebrationCue", () => {
     expect(resolveCelebrationCue("jet_turbine_flyby")).toBe("jet");
     expect(resolveCelebrationCue("hat_trick_fireworks")).toBe("fireworks");
     expect(resolveCelebrationCue("goal_roar", "goal_celebration")).toBe("goal_roar");
+    expect(resolveCelebrationCue("eagle_scream", "super_eagle")).toBe("eagle");
+    expect(resolveCelebrationCue("jaguar_roar", "black_jaguar")).toBe("jaguar");
+    expect(resolveCelebrationCue("white_tiger_roar", "white_tiger")).toBe("white_tiger");
+    expect(resolveCelebrationCue("polar_bear_roar", "polar_bear")).toBe("polar_bear");
   });
 });

@@ -72,7 +72,11 @@ export type GiftShotId =
   | "bicycle"
   | "golden_goal"
   | "hat_trick"
-  | "save";
+  | "save"
+  | "eagle"
+  | "jaguar"
+  | "white_tiger"
+  | "polar_bear";
 
 const SHOT_BY_KEY: Record<string, GiftShotId> = {
   common_whistle: "atmosphere",
@@ -133,9 +137,18 @@ const SHOT_BY_KEY: Record<string, GiftShotId> = {
   golden_goal: "golden_goal",
   perfect_hat_trick: "hat_trick",
   world_class_save: "save",
+  super_eagle: "eagle",
+  green_white_green_eagle: "eagle",
+  black_jaguar: "jaguar",
+  white_tiger: "white_tiger",
+  polar_bear: "polar_bear",
 };
 
 const SHOT_NEEDLES: Array<[string, GiftShotId]> = [
+  ["super_eagle", "eagle"],
+  ["black_jaguar", "jaguar"],
+  ["white_tiger", "white_tiger"],
+  ["polar_bear", "polar_bear"],
   ["vanguard_xii_coach", "coach"],
   ["coach", "coach"],
   ["bus", "coach"],

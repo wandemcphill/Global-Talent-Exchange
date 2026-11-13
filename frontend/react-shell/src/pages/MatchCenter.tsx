@@ -63,6 +63,10 @@ const GIFTS = [
   { code: "wembley_stadium", name: "Wembley Stadium", cost: 2500, rarity: "legendary" },
   { code: "private_jet", name: "Private Jet Flyby", cost: 3500, rarity: "mythic" },
   { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 10000, rarity: "mythic" },
+  { code: "super_eagle", name: "Super Eagle", cost: 500, rarity: "legendary", anim: "super_eagle", animation_key: "super_eagle", sound_key: "eagle_scream", duration_ms: 8000 },
+  { code: "black_jaguar", name: "Black Jaguar", cost: 700, rarity: "legendary", anim: "black_jaguar", animation_key: "black_jaguar", sound_key: "jaguar_roar", duration_ms: 8000 },
+  { code: "white_tiger", name: "White Tiger", cost: 800, rarity: "legendary", anim: "white_tiger", animation_key: "white_tiger", sound_key: "white_tiger_roar", duration_ms: 8000 },
+  { code: "polar_bear", name: "Polar Bear", cost: 900, rarity: "legendary", anim: "polar_bear", animation_key: "polar_bear", sound_key: "polar_bear_roar", duration_ms: 8000 },
 ];
 
 // Tactical Style Presets

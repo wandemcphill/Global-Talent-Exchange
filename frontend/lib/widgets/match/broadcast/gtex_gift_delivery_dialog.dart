@@ -1,10 +1,28 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../data/match_gift_api.dart';
 import '../../../ui_gtex/ui_gtex.dart';
 
+const Map<String, String> _giftFilms = <String, String>{
+  'super_eagle': 'assets/gifting/films/gtex-gift-super-eagle.mp4',
+  'black_jaguar': 'assets/gifting/films/gtex-gift-black-jaguar.mp4',
+  'white_tiger': 'assets/gifting/films/gtex-gift-white-tiger.mp4',
+  'polar_bear': 'assets/gifting/films/gtex-gift-polar-bear.mp4',
+};
+
+const Map<String, String> _giftSounds = <String, String>{
+  'super_eagle': 'assets/gifting/sounds/eagle_scream.wav',
+  'black_jaguar': 'assets/gifting/sounds/jaguar_roar.wav',
+  'white_tiger': 'assets/gifting/sounds/white_tiger_roar.wav',
+  'polar_bear': 'assets/gifting/sounds/polar_bear_roar.wav',
+};
+
 /// Animated confirmation shown after the gift API confirms a send.
-class GtexGiftDeliveryDialog extends StatelessWidget {
+class GtexGiftDeliveryDialog extends StatefulWidget {
   const GtexGiftDeliveryDialog({
     super.key,
     required this.gift,
@@ -31,7 +49,59 @@ class GtexGiftDeliveryDialog extends StatelessWidget {
   }
 
   @override
+  State<GtexGiftDeliveryDialog> createState() => _GtexGiftDeliveryDialogState();
+}
+
+class _GtexGiftDeliveryDialogState extends State<GtexGiftDeliveryDialog> {
+  VideoPlayerController? _video;
+  AudioPlayer? _audio;
+  bool _videoReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final String? film = _giftFilms[widget.gift.key];
+    final String? sound = _giftSounds[widget.gift.key];
+    if (film != null) unawaited(_startFilm(film));
+    if (sound != null) unawaited(_startSound(sound));
+  }
+
+  Future<void> _startFilm(String film) async {
+    final VideoPlayerController controller = VideoPlayerController.asset(film);
+    _video = controller;
+    try {
+      await controller.initialize();
+      if (!mounted) return;
+      await controller.setLooping(false);
+      setState(() => _videoReady = true);
+      await controller.play();
+    } catch (_) {
+      // The receipt still confirms the gift if the film cannot start.
+    }
+  }
+
+  Future<void> _startSound(String sound) async {
+    final AudioPlayer player = AudioPlayer();
+    _audio = player;
+    try {
+      await player.setAsset(sound);
+      await player.play();
+    } catch (_) {
+      // A missing sound file must not block the gift receipt.
+    }
+  }
+
+  @override
+  void dispose() {
+    unawaited(_video?.dispose() ?? Future<void>.value());
+    unawaited(_audio?.dispose() ?? Future<void>.value());
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final MatchGiftCatalogItem gift = widget.gift;
+    final MatchGiftReceipt receipt = widget.receipt;
     final Color accent = switch (gift.rarity.toLowerCase()) {
       'rare' => const Color(0xFF69C7FF),
       'epic' => const Color(0xFFC29BFF),
@@ -70,7 +140,16 @@ class GtexGiftDeliveryDialog extends StatelessWidget {
                 style: TextStyle(color: Color(0xFFE8C979), fontSize: 10, letterSpacing: 2.5, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 18),
-              Stack(
+              if (_videoReady && _video != null)
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: AspectRatio(
+                    aspectRatio: _video!.value.aspectRatio == 0 ? 16 / 9 : _video!.value.aspectRatio,
+                    child: VideoPlayer(_video!),
+                  ),
+                )
+              else
+                Stack(
                 alignment: Alignment.center,
                 children: <Widget>[
                   Container(

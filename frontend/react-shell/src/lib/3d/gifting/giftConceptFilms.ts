@@ -21,6 +21,10 @@ const FILM_BY_SHOT: Record<string, string> = {
   golden_goal: "gtex-gift-golden-goal.mp4",
   hat_trick: "gtex-gift-hat-trick.mp4",
   save: "gtex-gift-save.mp4",
+  eagle: "gtex-gift-super-eagle.mp4",
+  jaguar: "gtex-gift-black-jaguar.mp4",
+  white_tiger: "gtex-gift-white-tiger.mp4",
+  polar_bear: "gtex-gift-polar-bear.mp4",
 };
 
 export function giftConceptFilm(shot: string): InspectionFrame {

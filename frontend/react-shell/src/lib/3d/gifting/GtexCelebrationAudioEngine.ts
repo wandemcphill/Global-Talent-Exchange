@@ -36,9 +36,17 @@ const SOUND_CUES: Record<string, string> = {
   nyc_harbor_horn: "harbor_horn",
   yacht_harbor_chime: "harbor_chime",
   jet_turbine_flyby: "jet",
+  eagle_scream: "eagle",
+  jaguar_roar: "jaguar",
+  white_tiger_roar: "white_tiger",
+  polar_bear_roar: "polar_bear",
 };
 
 const CODE_CUES: Record<string, string> = {
+  super_eagle: "eagle",
+  black_jaguar: "jaguar",
+  white_tiger: "white_tiger",
+  polar_bear: "polar_bear",
   private_jet: "jet",
   superyacht: "harbor_chime",
   ballon_dor: "ceremony",
@@ -164,6 +172,18 @@ export class GtexCelebrationAudioEngine {
       case "jet":
         this.playJetFlyby(ctx, startTime);
         break;
+      case "eagle":
+        this.playEagleScream(ctx, startTime);
+        break;
+      case "jaguar":
+        this.playBigCatRoar(ctx, startTime, 140);
+        break;
+      case "white_tiger":
+        this.playBigCatRoar(ctx, startTime, 110);
+        break;
+      case "polar_bear":
+        this.playPolarBearBreakout(ctx, startTime);
+        break;
       default:
         this.playBrassFanfare(ctx, startTime, false);
         this.playStadiumRoar(ctx, startTime, 1.6);
@@ -267,6 +287,77 @@ export class GtexCelebrationAudioEngine {
 
     noise.start(startTime);
     noise.stop(startTime + duration);
+  }
+
+  private static playEagleScream(ctx: AudioContext, startTime: number): void {
+    [0, 0.55, 1.15].forEach((offset, index) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const t = startTime + offset;
+      const peak = index === 1 ? 3200 : 2800;
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(peak, t);
+      osc.frequency.exponentialRampToValueAtTime(1400, t + 0.42);
+      gain.gain.setValueAtTime(0.001, t);
+      gain.gain.linearRampToValueAtTime(0.11, t + 0.04);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.48);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + 0.5);
+    });
+  }
+
+  private static playBigCatRoar(ctx: AudioContext, startTime: number, baseHz: number): void {
+    const duration = 2.4;
+    const sampleRate = ctx.sampleRate || 44100;
+    const buffer = ctx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(baseHz * 4, startTime);
+    filter.frequency.exponentialRampToValueAtTime(baseHz * 1.4, startTime + duration);
+    const osc = ctx.createOscillator();
+    osc.type = "sawtooth";
+    osc.frequency.setValueAtTime(baseHz, startTime);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(55, baseHz * 0.55), startTime + duration);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.001, startTime);
+    gain.gain.linearRampToValueAtTime(0.2, startTime + 0.18);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    noise.connect(filter);
+    filter.connect(gain);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(startTime);
+    osc.start(startTime);
+    noise.stop(startTime + duration);
+    osc.stop(startTime + duration);
+  }
+
+  private static playPolarBearBreakout(ctx: AudioContext, startTime: number): void {
+    const crackDuration = 0.45;
+    const sampleRate = ctx.sampleRate || 44100;
+    const crack = ctx.createBuffer(1, Math.floor(sampleRate * crackDuration), sampleRate);
+    const crackData = crack.getChannelData(0);
+    for (let i = 0; i < crackData.length; i++) crackData[i] = Math.random() * 2 - 1;
+    const crackSource = ctx.createBufferSource();
+    crackSource.buffer = crack;
+    const crackFilter = ctx.createBiquadFilter();
+    crackFilter.type = "highpass";
+    crackFilter.frequency.value = 900;
+    const crackGain = ctx.createGain();
+    crackGain.gain.setValueAtTime(0.22, startTime);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, startTime + crackDuration);
+    crackSource.connect(crackFilter);
+    crackFilter.connect(crackGain);
+    crackGain.connect(ctx.destination);
+    crackSource.start(startTime);
+    crackSource.stop(startTime + crackDuration);
+    this.playBigCatRoar(ctx, startTime + 0.35, 72);
   }
 
   private static playWhoosh(ctx: AudioContext, startTime: number): void {

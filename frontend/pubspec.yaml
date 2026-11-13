@@ -43,6 +43,8 @@ flutter:
     - assets/media/
     - assets/media/players/
     - assets/showroom/
+    - assets/gifting/films/
+    - assets/gifting/sounds/
   fonts:
     - family: BarlowCondensed
       fonts:
