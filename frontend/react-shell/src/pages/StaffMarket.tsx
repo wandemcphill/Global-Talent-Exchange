@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -26,12 +26,18 @@ export default function StaffMarket() {
   const [style, setStyle] = useState("");
   const [temperament, setTemperament] = useState("");
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [offerFor, setOfferFor] = useState<string | null>(null);
   const [salary, setSalary] = useState("");
   const [years, setYears] = useState("3");
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedSearch(search.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [search]);
+
   const query = useQuery({
-    queryKey: ["staff-market", clubId, role, wageMax, style, temperament, search],
+    queryKey: ["staff-market", clubId, role, wageMax, style, temperament, appliedSearch],
     enabled: Boolean(clubId),
     queryFn: async () => {
       const { data } = await api.get(
@@ -39,7 +45,7 @@ export default function StaffMarket() {
           wageMax,
           style,
           temperament,
-          search,
+          search: appliedSearch.length >= 2 ? appliedSearch : "",
         }),
       );
       return data;
@@ -81,18 +87,29 @@ export default function StaffMarket() {
       <PageHeader
         eyebrow="Club staff"
         title="Staff market"
-        sub="Filter by wage, style, and temperament. Each general manager works for one club. The free bench refills to 160, and the top wage band stays small."
+        sub="Search the whole market by name or country. A surname is enough, and accents are optional."
       />
-      <div className="grid gap-3 md:grid-cols-5">
+      <label className="block">
+        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search staff</span>
+        <input
+          className="gx-input w-full"
+          placeholder="Ferguson, Arteta, Chelle, Nigeria"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+          data-testid="staff-search-input"
+          autoComplete="off"
+        />
+      </label>
+      <div className="grid gap-3 md:grid-cols-4">
         <select className="gx-input" value={role} onChange={(event) => setRole(event.target.value)} data-testid="staff-role-filter">
           {ROLES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
         </select>
         <input className="gx-input" placeholder="Max wage" type="number" min="0" value={wageMax} onChange={(event) => setWageMax(event.target.value)} />
         <input className="gx-input" placeholder="Tactical style" value={style} onChange={(event) => setStyle(event.target.value)} />
         <input className="gx-input" placeholder="Temperament" value={temperament} onChange={(event) => setTemperament(event.target.value)} />
-        <input className="gx-input" placeholder="Search name" value={search} onChange={(event) => setSearch(event.target.value)} />
       </div>
       <p className="text-xs text-slate-400" data-testid="staff-supply-note">
+        {search.trim().length === 1 ? "Type one more letter to search the whole market. " : ""}
         {query.data?.total_count ?? 0} people match.
         {supply
           ? ` ${supply.general_manager_available} general managers are free to hire. When that number falls under ${supply.general_manager_floor}, new directors enter across foundation, established, and elite wages.`
@@ -100,7 +117,12 @@ export default function StaffMarket() {
       </p>
       {query.isLoading ? <Loading label="Opening the staff market..." /> : null}
       {query.isError ? <Empty title="Staff market unavailable" body={errMsg(query.error)} /> : null}
-      {!query.isLoading && candidates.length === 0 ? <Empty title="No staff match" body="Widen the wage, style, or temperament filter." /> : null}
+      {!query.isLoading && candidates.length === 0 ? (
+        <Empty
+          title="No staff match"
+          body={appliedSearch.length >= 2 ? `Nobody matches “${appliedSearch}”. Try a surname, or set the role to All staff.` : "Widen the wage, style, or temperament filter."}
+        />
+      ) : null}
       <div className="grid gap-3">
         {candidates.map((candidate: any) => (
           <article key={candidate.profile_id} className="rounded-xl border border-white/10 bg-slate-950/70 p-4" data-testid={`staff-candidate-${candidate.profile_id}`}>
@@ -111,7 +133,12 @@ export default function StaffMarket() {
                 ) : null}
                 <div>
                 <h2 className="text-lg font-black text-white">{candidate.name}</h2>
-                <p className="text-xs text-slate-400">{candidate.role_label} · rating {candidate.rating} · {candidate.style} · {candidate.temperament}</p>
+                <p className="text-xs text-slate-400">
+                  {candidate.role_label}
+                  {candidate.nation ? ` · ${candidate.nation}` : ""}
+                  {candidate.preferred_formation ? ` · ${candidate.preferred_formation}` : ""}
+                  {" · "}rating {candidate.rating} · {candidate.style} · {candidate.temperament}
+                </p>
                 <p className="mt-1 text-sm text-amber-200">Expected wage {coinWithNaira(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 0, "FAN")} / year</p>
                 </div>
               </div>

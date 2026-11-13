@@ -15,6 +15,7 @@ Implements the persistent, interconnected football employment market:
 from __future__ import annotations
 
 import logging
+import unicodedata
 from datetime import datetime, timezone, timedelta
 from typing import Any
 
@@ -53,6 +54,30 @@ SUPPORTED_MARKET_ROLES = [
     ROLE_YOUTH_COACH,
     ROLE_PERFORMANCE_ANALYST,
 ]
+
+def fold_staff_text(value: str | None) -> str:
+    """Lowercase a name so Ferguson, Éric, and Mc'Phill match plain typing."""
+    text = unicodedata.normalize("NFKD", str(value or ""))
+    text = "".join(ch for ch in text if not unicodedata.combining(ch))
+    return " ".join(text.lower().replace("'", "").replace("’", "").replace("-", " ").split())
+
+
+def staff_search_blob(*parts: Any) -> str:
+    words: list[str] = []
+    for part in parts:
+        if isinstance(part, (list, tuple)):
+            words.extend(str(item) for item in part if item)
+        elif part:
+            words.append(str(part))
+    return fold_staff_text(" ".join(words))
+
+
+def staff_search_matches(blob: str, query: str | None) -> bool:
+    tokens = fold_staff_text(query).split()
+    if not tokens:
+        return True
+    return all(token in blob for token in tokens)
+
 
 ROLE_DISPLAY_LABELS: dict[str, str] = {
     ROLE_FIRST_TEAM_MANAGER: "First-Team Manager",
@@ -330,12 +355,21 @@ def list_staff_market_candidates(
             continue
         if temperament_query and temperament_query not in candidate_temperament.lower():
             continue
-        if (
-            search_query
-            and search_query
-            not in " ".join([p.display_name or "", candidate_style, candidate_temperament, p.staff_type or ""]).lower()
-        ):
+        role_label = ROLE_DISPLAY_LABELS.get(p.staff_type, (p.staff_type or "").replace("_", " ").title())
+        search_blob = staff_search_blob(
+            p.display_name,
+            candidate_style,
+            candidate_temperament,
+            p.staff_type,
+            role_label,
+            meta.get("nation"),
+            meta.get("preferred_formation"),
+            meta.get("preferred_formations"),
+        )
+        if search_query and not staff_search_matches(search_blob, search_query):
             continue
+        name_blob = fold_staff_text(p.display_name)
+        name_hit = bool(search_query) and staff_search_matches(name_blob, search_query)
 
         min_p = _safe_int(meta.get("min_prestige"), 15)
         can_attract = state.prestige >= min_p
@@ -358,7 +392,7 @@ def list_staff_market_candidates(
                 "staff_id": meta.get("staff_id") or p.market_key.replace("staff:", ""),
                 "name": p.display_name,
                 "role_key": p.staff_type,
-                "role_label": ROLE_DISPLAY_LABELS.get(p.staff_type, p.staff_type.replace("_", " ").title()),
+                "role_label": role_label,
                 "rating": p.rating,
                 "rarity": p.rarity,
                 "skills": p.skills_json or [],
@@ -381,8 +415,15 @@ def list_staff_market_candidates(
                 "gender": meta.get("gender"),
                 "age": meta.get("age"),
                 "nation": meta.get("nation"),
+                "preferred_formation": meta.get("preferred_formation"),
+                "_name_hit": name_hit,
             }
         )
+
+    if search_query:
+        candidates.sort(key=lambda item: (0 if item.get("_name_hit") else 1, -(item.get("rating") or 0)))
+    for item in candidates:
+        item.pop("_name_hit", None)
 
     start = max(0, int(offset or 0))
     page_size = max(1, min(100, int(limit or 50)))

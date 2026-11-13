@@ -11,7 +11,7 @@
  *   - Dismissal to Free Agency with Severance Ledger settlement
  */
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { coinWithNaira } from "@/lib/money";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -94,6 +94,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   // Market filters
   const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>(initialRole || "all");
   const [searchQuery, setSearchQuery] = useState<string>("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [freeAgentsOnly, setFreeAgentsOnly] = useState<boolean>(true);
 
   // Candidate expanded dossier & offer sheet
@@ -132,16 +133,22 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   // 2. Fetch Market Candidates
   const roleParam = selectedRoleFilter === "all" ? undefined : selectedRoleFilter;
   const statusParam = freeAgentsOnly ? "unemployed" : "all";
+  const marketSearch = appliedSearch.length >= 2 ? appliedSearch : "";
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAppliedSearch(searchQuery.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [searchQuery]);
 
   const {
     data: marketData,
     isLoading: isMarketLoading,
     refetch: refetchMarket,
   } = useQuery<StaffMarketPoolResponse>({
-    queryKey: ["club-staff-market", clubId, roleParam, statusParam],
+    queryKey: ["club-staff-market", clubId, roleParam, statusParam, marketSearch],
     queryFn: async () => {
       const res = await api.get<StaffMarketPoolResponse>(
-        clubStaffMarketCandidatesEndpoint(clubId, roleParam, statusParam, 50)
+        clubStaffMarketCandidatesEndpoint(clubId, roleParam, statusParam, 50, { search: marketSearch })
       );
       return res.data;
     },
@@ -324,18 +331,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
     );
   };
 
-  // Filter candidates locally by search text
-  const filteredCandidates = (marketData?.candidates || []).filter((c) => {
-    if (!searchQuery) return true;
-    const q = searchQuery.toLowerCase();
-    return (
-      c.name.toLowerCase().includes(q) ||
-      c.role_label.toLowerCase().includes(q) ||
-      (c.style && c.style.toLowerCase().includes(q)) ||
-      (c.temperament && c.temperament.toLowerCase().includes(q)) ||
-      (c.skills && c.skills.some((s) => s.toLowerCase().includes(q)))
-    );
-  });
+  const filteredCandidates = marketData?.candidates || [];
 
   const clubPrestige = vacanciesData?.club_prestige || marketData?.club_prestige || 50;
 
@@ -774,15 +770,16 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                 </div>
 
                 {/* Search query */}
-                <div className="relative min-w-[220px]">
+                <div className="relative min-w-[260px] flex-1">
                   <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
                   <input
-                    type="text"
+                    type="search"
                     data-testid="market-search-input"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search name, tactical style, skills..."
+                    placeholder="Search the whole market: Ferguson, Arteta, Nigeria"
                     className="w-full rounded-lg border border-white/10 bg-slate-900 pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                    autoComplete="off"
                   />
                 </div>
               </div>
@@ -794,6 +791,13 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="candidates-grid">
+                  {filteredCandidates.length === 0 ? (
+                    <p className="text-sm text-slate-400 md:col-span-2" data-testid="market-search-empty">
+                      {marketSearch
+                        ? `Nobody matches “${marketSearch}”. Try a surname, or set the role to All.`
+                        : "No staff are free for this role."}
+                    </p>
+                  ) : null}
                   {filteredCandidates.map((cand) => {
                     const isNegotiating = negotiatingCandidate?.profile_id === cand.profile_id;
                     const isExpanded = expandedCandidateId === cand.profile_id;
@@ -831,6 +835,8 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                               </div>
                               <h4 className="mt-1.5 text-base font-bold text-white">{cand.name}</h4>
                               <p className="text-xs text-slate-400">
+                                {cand.nation ? `${cand.nation} • ` : ""}
+                                {cand.preferred_formation ? `${cand.preferred_formation} • ` : ""}
                                 {cand.style || "Standard"} • {cand.temperament || "Balanced"}
                               </p>
                             </div>

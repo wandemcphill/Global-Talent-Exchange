@@ -706,6 +706,9 @@ export interface StaffMarketCandidate {
   can_attract: boolean;
   interest_level: "very_high" | "interested" | "requires_premium" | "unlikely" | string;
   career_history: StaffCareerHistoryItem[];
+  nation?: string | null;
+  age?: number | null;
+  preferred_formation?: string | null;
 }
 
 export interface StaffMarketPoolResponse {
