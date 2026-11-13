@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-CATALOG_VERSION = 9
+CATALOG_VERSION = 10
 
 LEGENDARY_MANAGERS: list[dict[str, Any]] = [
     {
@@ -462,7 +462,6 @@ CURATED_GROUPS: dict[str, list[str]] = {
         "Paulo Bento",
         "Fernando Santos",
         "Sven-Goran Eriksson",
-        "Gus Hiddink",
         "Dick Advocaat",
         "Frank Rijkaard",
         "Ronald Koeman",
@@ -1320,14 +1319,19 @@ def _dedupe_names(names: list[str]) -> list[str]:
 
 
 def build_seed_catalog() -> list[dict[str, Any]]:
+    from app.owner_console.real_first_team_managers import EXTRA_SEED_RECORDS, canon_fold
+
     catalog: list[dict[str, Any]] = []
     seen_ids: set[str] = set()
+    seen_folds: set[str] = set()
 
     def add_record(record: dict[str, Any]) -> None:
         manager_id = _slug(record["name"])
-        if manager_id in seen_ids:
+        folded = canon_fold(record["name"])
+        if manager_id in seen_ids or folded in seen_folds:
             return
         seen_ids.add(manager_id)
+        seen_folds.add(folded)
         rarity = record.get("rarity", "popular")
         record = dict(record)
         record["rarity"] = rarity
@@ -1335,6 +1339,9 @@ def build_seed_catalog() -> list[dict[str, Any]]:
         catalog.append(record)
 
     for item in LEGENDARY_MANAGERS + ELITE_ACTIVE_MANAGERS:
+        add_record(item)
+
+    for item in EXTRA_SEED_RECORDS:
         add_record(item)
 
     grouped_names: list[str] = []

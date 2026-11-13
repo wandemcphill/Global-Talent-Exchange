@@ -215,9 +215,14 @@ class PlayRequest(BaseModel):
 
 class HostRequest(BaseModel):
     name: str = Field(min_length=3, max_length=120)
-    format: Literal["league", "knockout"] = "league"
+    format: Literal["league", "knockout", "cup", "group_knockout"] = "league"
     entry_fee: int = Field(ge=0, le=100000, default=0)
-    max_clubs: int = Field(ge=2, le=8, default=4)
+    contribution: int = Field(ge=0, le=100000, default=0)
+    winner_prize: int = Field(ge=0, le=10000000, default=0)
+    pin: str | None = Field(default=None, max_length=12)
+    template_key: str | None = None
+    club_id: str | None = None
+    max_clubs: int = Field(ge=2, le=32, default=4)
     allow_same_owner: bool = False
     description: str | None = None
 

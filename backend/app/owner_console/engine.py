@@ -588,6 +588,11 @@ if _catalog_file.is_file():
 
         logger.warning("Could not load executive_staff_catalog.json: %s", _e)
 
+from app.owner_console.real_first_team_managers import apply_real_first_team_managers
+
+apply_real_first_team_managers(EXECUTIVE_STAFF_CATALOG)
+_seen_ids.update(item.get("id") for item in EXECUTIVE_STAFF_CATALOG)
+
 from app.owner_console.regen_staff_catalog import build_regen_staff_catalog
 
 for _regen in build_regen_staff_catalog():

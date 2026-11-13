@@ -522,6 +522,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "growth_log": (p.growth_log_json or [])[-6:],
         "acquired_via": p.acquired_via,
         "squad_status": squad_status,
+        "promoted": bool(pers.get("promoted_to_senior")),
         "archetype": archetype,
         "mood_state": mood_state,
         "inner_monologue": inner_monologue,
@@ -2952,6 +2953,12 @@ def conduct_press_conference(
     session: Session, user_id: str, club_id: str, tone: str, statement: str = ""
 ) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
+    tone = {
+        "calm": "praise_squad",
+        "assertive": "demand_more",
+        "defiant": "defend_coach",
+        "ambitious": "flex_ambition",
+    }.get(tone, tone)
     valid_tones = {"praise_squad", "demand_more", "defend_coach", "flex_ambition"}
     if tone not in valid_tones:
         raise OwnerError(

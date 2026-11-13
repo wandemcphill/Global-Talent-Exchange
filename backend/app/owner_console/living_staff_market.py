@@ -114,6 +114,32 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
                 if item.get("source_job"):
                     meta["source_job"] = item.get("source_job")
                 profile.metadata_json = meta
+            if item.get("refresh_market_rating") and str(meta.get("employment_status") or "unemployed") == "unemployed":
+                profile.staff_type = canon_role
+                profile.rating = rating
+                profile.salary_minor = salary_minor
+                profile.rarity = str(item.get("rarity") or profile.rarity)
+                style = str(item.get("style") or meta.get("style") or "Balanced")
+                profile.skills_json = [canon_role, style]
+                meta["style"] = style
+                meta["temperament"] = str(item.get("temperament") or meta.get("temperament") or "pragmatic")
+                meta["preferred_roles"] = [canon_role, raw_role]
+                for field in (
+                    "preferred_formation",
+                    "preferred_formations",
+                    "gsi",
+                    "mentality",
+                    "tactics",
+                    "traits",
+                    "philosophy_summary",
+                    "bio",
+                    "youth_development",
+                    "tactical_flexibility",
+                ):
+                    if item.get(field) is not None:
+                        meta[field] = item[field]
+                meta["reputation"] = min(95, max(30, rating))
+                profile.metadata_json = meta
             continue
 
         meta = {
