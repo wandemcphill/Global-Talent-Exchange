@@ -507,12 +507,19 @@ export function ClubStory() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               {staff.map((s: any, idx: number) => (
                 <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
+                  <div className="flex items-center gap-3">
+                    {s.portrait_url ? (
+                      <img src={s.portrait_url} alt="" className="h-12 w-12 rounded-full object-cover bg-slate-800 shrink-0" />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between text-[11px] text-slate-400">
                     <span className="font-semibold text-amber-400 uppercase text-[10px]">{s.role || "Technical Staff"}</span>
                     <span>Rating: {s.rating ?? 75}/99</span>
                   </div>
                   <h3 className="text-sm font-bold text-white">{s.name}</h3>
                   <p className="text-xs text-slate-400">Mentality: {s.mentality || "Tactical"} · {s.reputation || "Professional"}</p>
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>

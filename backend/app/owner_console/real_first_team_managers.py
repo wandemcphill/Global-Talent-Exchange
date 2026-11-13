@@ -1702,6 +1702,26 @@ def _formations(record: dict[str, Any]) -> tuple[str, list[str]]:
     return primary, ordered[:4]
 
 
+def _stamp_portrait(item: dict[str, Any]) -> None:
+    """Real people keep a downloaded photo. Invented staff use the face bank."""
+    from app.owner_console.real_staff_portraits import fictional_staff_portrait_url, real_staff_portrait_url
+
+    if str(item.get("id") or "").startswith("regen-staff-") or item.get("origin") == "regen_staff":
+        return
+    folded = canon_fold(item.get("name"))
+    current = str(item.get("portrait_url") or "")
+    real_url = real_staff_portrait_url(folded)
+    if real_url and (not current or "mature_" in current):
+        item["portrait_url"] = real_url
+        return
+    if current or real_url:
+        return
+    gender = str(item.get("gender") or ("female" if folded in WOMEN else "male"))
+    bank = fictional_staff_portrait_url(folded, gender)
+    if bank:
+        item["portrait_url"] = bank
+
+
 def _bio(record: dict[str, Any]) -> str:
     philosophy = str(record.get("philosophy") or "").strip()
     clubs = [str(club) for club in record.get("club_associations") or [] if club]
@@ -1844,4 +1864,6 @@ def apply_real_first_team_managers(catalog: list[dict[str, Any]]) -> int:
         catalog.append(built)
         by_fold.setdefault(folded, []).append(built)
         created += 1
+    for item in catalog:
+        _stamp_portrait(item)
     return created

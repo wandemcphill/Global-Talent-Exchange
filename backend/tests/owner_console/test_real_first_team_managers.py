@@ -37,6 +37,14 @@ def test_staff_market_hires_missing_real_managers() -> None:
     assert "Boot Room" in paisley["style"]
     assert inzaghi["preferred_formation"] == "3-5-2"
     assert bompastor["gender"] == "female"
+    assert str(ferguson["portrait_url"]).startswith("/staff-portraits/real/")
+    assert str(bompastor["portrait_url"]).startswith("/staff-portraits/real/")
+    assert "mature_" not in str(ferguson["portrait_url"])
+    assert ferguson["portrait_url"] == _first_team("Sir Alex Ferguson")["portrait_url"]
+    tunde = next(item for item in EXECUTIVE_STAFF_CATALOG if item.get("id") == "gtex-staff-coach")
+    assert "mature_" in str(tunde["portrait_url"])
+    regen = next(item for item in EXECUTIVE_STAFF_CATALOG if str(item.get("id") or "").startswith("regen-staff-"))
+    assert str(regen["portrait_url"]).startswith("/staff-portraits/mature_")
     assert cruyff["rating"] >= 94
     assert "high defensive line" in cruyff["bio"]
 

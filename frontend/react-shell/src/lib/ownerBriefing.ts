@@ -700,6 +700,7 @@ export interface StaffMarketCandidate {
   loyalty: number;
   expected_salary_gtex: number;
   expected_salary_fan_coin?: number;
+  portrait_url?: string | null;
   min_prestige: number;
   employment_status: "employed" | "unemployed" | "retired" | string;
   current_club_id?: string | null;
@@ -735,6 +736,7 @@ export interface StaffFilledRoleItem {
   salary_gtex: number;
   salary_fan_coin?: number;
   mood: number;
+  portrait_url?: string | null;
 }
 
 export interface StaffVacanciesResponse {

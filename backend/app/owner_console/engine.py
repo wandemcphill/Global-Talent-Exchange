@@ -685,6 +685,8 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
             profile["preferred_formations"] = list(snapshot["preferred_formations"])
         if snapshot.get("uses_academy_players"):
             profile["uses_academy_players"] = True
+    if snapshot.get("portrait_url"):
+        profile["portrait_url"] = snapshot["portrait_url"]
     return profile
 
 

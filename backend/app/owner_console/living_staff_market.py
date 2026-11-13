@@ -130,6 +130,14 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
         if key in by_key:
             profile = by_key[key]
             meta = dict(profile.metadata_json or {})
+            incoming_portrait = str(item.get("portrait_url") or "")
+            stored_portrait = str(meta.get("portrait_url") or "")
+            replace_bank_face = (
+                bool(incoming_portrait) and "mature_" in stored_portrait and "/real/" in incoming_portrait
+            )
+            if incoming_portrait and (not stored_portrait or replace_bank_face):
+                meta["portrait_url"] = incoming_portrait
+                profile.metadata_json = meta
             if str(meta.get("employment_status") or "unemployed") == "unemployed" and profile.staff_type != canon_role:
                 profile.staff_type = canon_role
                 profile.rating = rating
@@ -277,6 +285,7 @@ def get_club_vacancies(session: Session, user_id: str, club_id: str) -> dict[str
                     "appointed_at": staff_data.get("appointed_at"),
                     "salary_gtex": _safe_int(staff_data.get("salary") or staff_data.get("salary_gtex") or 600),
                     "mood": _safe_int(staff_data.get("mood"), 75),
+                    "portrait_url": staff_data.get("portrait_url"),
                 }
             )
         else:
@@ -710,6 +719,7 @@ def hire_staff_from_market(
         "mood": 85,
         "contract_years": years,
         "is_appointed": True,
+        "portrait_url": meta.get("portrait_url"),
     }
     exec_staff[target_role] = appointed_dict
     facs["_executive_staff"] = exec_staff

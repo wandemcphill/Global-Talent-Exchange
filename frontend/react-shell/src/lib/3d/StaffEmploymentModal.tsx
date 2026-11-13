@@ -519,11 +519,16 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                         >
                           <div>
                             <div className="flex items-start justify-between">
-                              <div>
+                              <div className="flex items-start gap-3">
+                                {incumbent.portrait_url ? (
+                                  <img src={incumbent.portrait_url} alt="" className="h-12 w-12 rounded-full object-cover bg-slate-800 shrink-0" />
+                                ) : null}
+                                <div>
                                 <span className="inline-block rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300 uppercase">
                                   {incumbent.role_label}
                                 </span>
                                 <h4 className="mt-1 text-base font-bold text-white">{incumbent.incumbent_name}</h4>
+                                </div>
                               </div>
                               <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-xs font-mono text-emerald-300">
                                 Mood: {incumbent.mood}%
@@ -815,7 +820,11 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                         <div>
                           {/* Card Top: Name, Role, Rating */}
                           <div className="flex items-start justify-between">
-                            <div>
+                            <div className="flex items-start gap-3">
+                              {cand.portrait_url ? (
+                                <img src={cand.portrait_url} alt="" className="h-14 w-14 rounded-full object-cover bg-slate-800 shrink-0" />
+                              ) : null}
+                              <div>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="rounded bg-slate-800 px-2 py-0.5 text-[10px] font-mono text-slate-300 uppercase">
                                   {cand.role_label}
@@ -839,6 +848,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                                 {cand.preferred_formation ? `${cand.preferred_formation} • ` : ""}
                                 {cand.style || "Standard"} • {cand.temperament || "Balanced"}
                               </p>
+                              </div>
                             </div>
 
                             <div className="flex flex-col items-end">
