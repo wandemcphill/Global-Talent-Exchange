@@ -14,9 +14,9 @@ The **React + Three.js + WebGL** match presentation inside `frontend/react-shell
 
 | Platform | Official Role | Codebase Location |
 |---|---|---|
-| **React + Three.js + WebGL** | **Primary browser match experience** (3D stadium, 22 humanoid footballers, ball physics, broadcast cameras, HUD, stadium LED advertising network) | `frontend/react-shell/src/lib/3d/broadcast/` & `frontend/react-shell/src/pages/MatchCenter.tsx` |
+| **React 2D** | **Launch browser match.** `Pitch2DView` follows the backend replay. Perspective WebGL is an optional later picture. | `frontend/react-shell/src/pages/match-center/Pitch2DView.tsx` |
 | **GTEX Backend** | **Authoritative football match simulation, events, score, clock, fairness proofs, and commercial ad/sponsorship delivery** | `backend/app/match_engine/`, `backend/app/routes/match_viewer.py`, `backend/app/ads_engine/`, `backend/app/sponsorship_engine/` |
-| **React 2D SVG / Flutter Match Centre** | **2D tactical board & mobile companion** (also serves as graceful fallback when WebGL is unavailable) | `frontend/react-shell/src/pages/MatchCenter.tsx` (2D mode) & `frontend/lib/` |
+| **React + Three.js + WebGL** | Optional later picture (perspective stadium, broadcast cameras, HUD). It is not the default match. | `frontend/react-shell/src/lib/3d/broadcast/` |
 | **Unity** | **Existing separate desktop/historical visual runtime** (preserved historical engineering assets; not the browser match renderer) | `unity/`, `Gtex_Test_Migration/` |
 
 ---

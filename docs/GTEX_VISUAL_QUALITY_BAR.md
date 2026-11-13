@@ -1,6 +1,6 @@
 # GTEX Visual Quality Bar
 
-> **Architecture Update (2026-11-07):** Under the approved **GTEX Master 3D Matchday Build Specification**, **React + Three.js + WebGL (`frontend/react-shell/src/lib/3d/broadcast/MatchPitchLiveScene.tsx`) is the canonical primary browser match experience**. Flutter remains the 2D tactical/mobile companion, and the Unity `GTEX_OriginalVisualRuntime` documented below is preserved as a separate desktop/historical visual workstream. See [`docs/GTEX_WEBGL_MATCHDAY_3D_ARCHITECTURE.md`](./GTEX_WEBGL_MATCHDAY_3D_ARCHITECTURE.md) for the canonical browser architecture.
+> **Launch match (2026-11-13):** The browser launch match is the React 2D pitch in `frontend/react-shell/src/pages/match-center/Pitch2DView.tsx`, driven by the backend replay. Perspective WebGL is an optional later picture. Flutter stays the phone companion, and the Unity `GTEX_OriginalVisualRuntime` documented below remains a separate desktop workstream.
 
 Status: **locked**
 

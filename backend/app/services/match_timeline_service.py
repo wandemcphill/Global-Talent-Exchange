@@ -1475,7 +1475,7 @@ class MatchTimelineService:
                 last_possession = event.team_side
             prior_home_score = frames[-1].home_score if frames else 0
             prior_away_score = frames[-1].away_score if frames else 0
-            phase = self._phase_for_event(event.view.event_type)
+            phase = self._phase_for_event(event.view.event_type, event.metadata)
             possession_side = last_possession if non_possession_event else (event.team_side or last_possession)
             build_up = self._build_up_seconds(event.view)
             event_time = max(event.view.time_seconds, last_time + 0.1)
@@ -1874,7 +1874,7 @@ class MatchTimelineService:
                 append_frame(
                     time_seconds=last_time + self._settle_seconds(event.view.event_type),
                     clock_minute=min(
-                        120.0,
+                        150.0,
                         self._clock_value(event.view.minute, event.view.added_time) + 0.12,
                     ),
                     home_score=event.view.home_score,
@@ -1890,27 +1890,28 @@ class MatchTimelineService:
             if event.view.event_type is MatchViewerEventType.FULLTIME:
                 last_time = max(last_time, event_time)
 
-            if index == len(events) - 1 and frames[-1].time_seconds < duration_seconds:
-                self._append_circulation_frames(
-                    append_frame=append_frame,
-                    frames=frames,
-                    event=event,
-                    gap_end=duration_seconds,
-                    last_time=last_time,
-                    prior_home_score=frames[-1].home_score,
-                    prior_away_score=frames[-1].away_score,
-                    possession_side=last_possession,
-                    skip=False,
-                    home_name=home_runtime.view.team_name,
-                    away_name=away_runtime.view.team_name,
-                )
+            if index == len(events) - 1:
+                if frames[-1].time_seconds < duration_seconds:
+                    self._append_circulation_frames(
+                        append_frame=append_frame,
+                        frames=frames,
+                        event=event,
+                        gap_end=duration_seconds,
+                        last_time=last_time,
+                        prior_home_score=frames[-1].home_score,
+                        prior_away_score=frames[-1].away_score,
+                        possession_side=last_possession,
+                        skip=False,
+                        home_name=home_runtime.view.team_name,
+                        away_name=away_runtime.view.team_name,
+                    )
                 append_frame(
-                    time_seconds=duration_seconds,
+                    time_seconds=max(duration_seconds, frames[-1].time_seconds + 0.2),
                     clock_minute=max(90.0, frames[-1].clock_minute),
                     home_score=event.view.home_score,
                     away_score=event.view.away_score,
                     active_event=event,
-                    phase=MatchViewerPhase.FULLTIME,
+                    phase=MatchViewerPhase.COMPLETED,
                     stage="post",
                     possession_side=last_possession,
                     camera_preset=MatchViewerCameraPreset.BROADCAST,
@@ -1976,7 +1977,7 @@ class MatchTimelineService:
         return MatchTimelineFrameView(
             frame_id=f"{match_id}:{int(round(time_seconds * 100))}:{stage}",
             time_seconds=round(max(0.0, time_seconds), 2),
-            clock_minute=round(max(0.0, min(120.0, clock_minute)), 2),
+            clock_minute=round(max(0.0, min(150.0, clock_minute)), 2),
             phase=phase,
             home_score=home_score,
             away_score=away_score,
@@ -3090,15 +3091,26 @@ class MatchTimelineService:
             return MatchViewerEventType.MISS
         return MatchViewerEventType.NEUTRAL
 
-    def _phase_for_event(self, event_type: MatchViewerEventType) -> MatchViewerPhase:
+    def _phase_for_event(
+        self,
+        event_type: MatchViewerEventType,
+        metadata: dict[str, Any] | None = None,
+    ) -> MatchViewerPhase:
+        phase_name = str((metadata or {}).get("match_phase") or "").strip().lower()
+        if phase_name in {"penalty_shootout", "shootout"}:
+            return MatchViewerPhase.PENALTY_SHOOTOUT
+        if phase_name in {"extra_time", "extratime"}:
+            return MatchViewerPhase.EXTRA_TIME
+        if phase_name == "completed":
+            return MatchViewerPhase.COMPLETED
+        if phase_name in {"full_time", "fulltime"} or event_type is MatchViewerEventType.FULLTIME:
+            return MatchViewerPhase.FULLTIME
         if event_type is MatchViewerEventType.KICKOFF:
             return MatchViewerPhase.KICKOFF
         if event_type in {MatchViewerEventType.PENALTY, MatchViewerEventType.SET_PIECE}:
             return MatchViewerPhase.SET_PIECE
         if event_type is MatchViewerEventType.HALFTIME:
             return MatchViewerPhase.HALFTIME
-        if event_type is MatchViewerEventType.FULLTIME:
-            return MatchViewerPhase.FULLTIME
         return MatchViewerPhase.OPEN_PLAY
 
     def _build_up_seconds(self, event: MatchViewerEventView) -> float:

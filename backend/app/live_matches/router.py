@@ -1304,7 +1304,24 @@ def _v2_event_payload(event) -> dict[str, object]:
     }
 
 
-def _v2_team_payload(team, *, players: list[Any], score: int) -> dict[str, object]:
+def _v2_bench_payload(player) -> dict[str, object]:
+    return {
+        "player_id": getattr(player, "player_id", None),
+        "name": getattr(player, "player_name", None) or getattr(player, "name", None),
+        "shirt_number": getattr(player, "shirt_number", None) or 0,
+        "position": getattr(player, "role", None) or getattr(player, "line", None) or "N/A",
+    }
+
+
+def _v2_team_payload(
+    team,
+    *,
+    players: list[Any],
+    score: int,
+    bench: list[Any] | None = None,
+    crest_url: str | None = None,
+    goalkeeper_color: str | None = None,
+) -> dict[str, object]:
     return {
         "id": team.team_id,
         "team_id": team.team_id,
@@ -1313,11 +1330,36 @@ def _v2_team_payload(team, *, players: list[Any], score: int) -> dict[str, objec
         "score": int(score),
         "formation": team.formation,
         "primary_color_hex": team.primary_color,
+        "crest_url": crest_url,
+        "goalkeeper_color": goalkeeper_color,
         "players": [_v2_player_payload(player) for player in players],
+        "bench": [_v2_bench_payload(player) for player in (bench or [])],
     }
 
 
-def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[str, object]:
+def _possession_from_frames(frames: list[Any]) -> tuple[int | None, int | None]:
+    if not frames:
+        return None, None
+    home = 0
+    away = 0
+    for frame in frames:
+        side = str(_enum_value(getattr(frame, "possession_side", None)) or "").lower()
+        if side == "home":
+            home += 1
+        elif side == "away":
+            away += 1
+    total = home + away
+    if total <= 0:
+        return None, None
+    home_pct = int(round(100 * home / total))
+    return home_pct, 100 - home_pct
+
+
+def _v2_stats_payload(
+    frame: MatchTimelineFrameView,
+    events: list[Any],
+    frames: list[Any] | None = None,
+) -> dict[str, object]:
     home_team_id = next(
         (player.team_id for player in frame.players if (_enum_value(player.side) or "").lower() == "home"), None
     )
@@ -1358,21 +1400,33 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
     )
     home_xg = recorded_xg(home_shots_events, frame.home_score) if have_team_identity else None
     away_xg = recorded_xg(away_shots_events, frame.away_score) if have_team_identity else None
+
+    def card_count(kind: str, team_id: object) -> int | None:
+        if not shots_available or team_id is None:
+            return None
+        return sum(1 for event in events if _v2_event_type(event.event_type) == kind and event.team_id == team_id)
+
+    away_team_id = next((event.team_id for event in events if event.team_id and event.team_id != home_team_id), None)
     xg_available = home_xg is not None and away_xg is not None
+    home_possession, away_possession = _possession_from_frames(list(frames or []))
+    possession_available = home_possession is not None and away_possession is not None
     return {
         "available": bool(events),
         "source": "event_timeline" if events else "unavailable",
         "projections": {
             "shots": {"available": shots_available, "source": "event_timeline" if shots_available else "unavailable"},
-            "possession": {"available": False, "source": "unavailable"},
+            "possession": {
+                "available": possession_available,
+                "source": "frame_possession" if possession_available else "unavailable",
+            },
             "passing": {"available": False, "source": "unavailable"},
             "expected_goals": {
                 "available": xg_available,
                 "source": "recorded_shot_xg" if xg_available else "unavailable",
             },
         },
-        "home_possession": None,
-        "away_possession": None,
+        "home_possession": home_possession,
+        "away_possession": away_possession,
         "home_shots": home_shots,
         "away_shots": away_shots,
         "home_shots_on_target": home_on_target,
@@ -1381,6 +1435,14 @@ def _v2_stats_payload(frame: MatchTimelineFrameView, events: list[Any]) -> dict[
         "away_pass_accuracy": None,
         "home_expected_goals": home_xg,
         "away_expected_goals": away_xg,
+        "home_yellow_cards": card_count("yellow_card", home_team_id),
+        "away_yellow_cards": card_count("yellow_card", away_team_id),
+        "home_red_cards": card_count("red_card", home_team_id),
+        "away_red_cards": card_count("red_card", away_team_id),
+        "home_expected_threat": None,
+        "away_expected_threat": None,
+        "home_ppda": None,
+        "away_ppda": None,
     }
 
 
@@ -1619,7 +1681,23 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     view_state, frame, events, is_live = _load_strict_live_view_state(match_id, app)
     home_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "home"]
     away_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "away"]
-    stats_payload = _v2_stats_payload(frame, events)
+    played_frames = [item for item in view_state.frames if float(item.time_seconds) <= float(frame.time_seconds) + 0.01]
+    played_events = [event for event in view_state.events if float(event.minute) <= float(frame.clock_minute) + 0.2]
+    stats_payload = _v2_stats_payload(frame, played_events, frames=played_frames)
+    frame_index = next(
+        (index for index, item in enumerate(view_state.frames) if item.frame_id == frame.frame_id),
+        max(len(view_state.frames) - 1, 0),
+    )
+    active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
+    tactics = ensure_live_match_hub(app).get_tactics(match_id)
+    tactic_revision = int((tactics.get("home") or {}).get("tactic_revision") or 0) + int(
+        (tactics.get("away") or {}).get("tactic_revision") or 0
+    )
+    presentation = getattr(view_state, "presentation_package", None)
+    home_sheet = getattr(presentation, "home", None) if presentation is not None else None
+    away_sheet = getattr(presentation, "away", None) if presentation is not None else None
+    home_crest = getattr(getattr(home_sheet, "crest", None), "image_url", None)
+    away_crest = getattr(getattr(away_sheet, "crest", None), "image_url", None)
     return {
         "match_id": view_state.match_id,
         "matchId": view_state.match_id,
@@ -1629,11 +1707,29 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "source": view_state.source,
         "status": "LIVE" if is_live else "FT",
         "minute": int(round(_float_or_default(frame.clock_minute))),
+        "time_seconds": round(float(frame.time_seconds), 2),
+        "frame_id": frame.frame_id,
+        "snapshot_version": int(frame_index) + (int(len(view_state.events)) * 100000) + (tactic_revision * 1000000000),
         "phase": _enum_value(frame.phase) or "LIVE",
-        "home": _v2_team_payload(view_state.home_team, players=home_players, score=frame.home_score),
-        "away": _v2_team_payload(view_state.away_team, players=away_players, score=frame.away_score),
+        "home": _v2_team_payload(
+            view_state.home_team,
+            players=home_players,
+            score=frame.home_score,
+            bench=list(getattr(home_sheet, "bench", None) or []),
+            crest_url=home_crest,
+            goalkeeper_color=getattr(home_sheet, "goalkeeper_color", None),
+        ),
+        "away": _v2_team_payload(
+            view_state.away_team,
+            players=away_players,
+            score=frame.away_score,
+            bench=list(getattr(away_sheet, "bench", None) or []),
+            crest_url=away_crest,
+            goalkeeper_color=getattr(away_sheet, "goalkeeper_color", None),
+        ),
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
         "ball": _v2_ball_payload(getattr(frame, "ball", None)),
+        "active_event_type": _v2_event_type(active_event.event_type) if active_event is not None else None,
         "tactics": ensure_live_match_hub(app).get_tactics(match_id),
         "recent_gifts": ensure_live_match_hub(app).get_recent_gifts(match_id),
         "pre_match": _v2_pre_match_payload(match_id, view_state, app),

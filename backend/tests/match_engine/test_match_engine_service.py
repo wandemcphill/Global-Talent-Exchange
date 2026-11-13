@@ -11,6 +11,8 @@ from app.match_engine.schemas import (
     MatchTeamIdentityInput,
 )
 from app.match_engine.services.match_simulation_service import MatchSimulationService
+from app.schemas.match_viewer import MatchViewerPhase
+from app.services.match_timeline_service import MatchTimelineService
 from app.match_engine.simulation.models import (
     MatchCompetitionType,
     MatchEventType,
@@ -151,6 +153,11 @@ def test_cup_draws_go_straight_to_penalties_without_extra_time() -> None:
         event.event_type in {MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_MISS}
         for event in payload.timeline.events[fulltime_index + 1 :]
     )
+    view = MatchTimelineService().build_from_replay_payload(payload)
+    phases = [frame.phase for frame in view.frames]
+    assert MatchViewerPhase.PENALTY_SHOOTOUT in phases
+    assert phases[-1] == MatchViewerPhase.COMPLETED
+    assert phases.index(MatchViewerPhase.PENALTY_SHOOTOUT) < phases.index(MatchViewerPhase.COMPLETED)
 
 
 def test_red_card_switches_team_into_fallback_shape() -> None:

@@ -198,6 +198,8 @@ class _LiveMatchRuntime:
     last_snapshot: LiveMatchSnapshotView | None = None
     viewer_state: MatchViewStateView | None = None
     target_runtime_seconds: float = 0.0
+    simulation_request: dict[str, Any] | None = None
+    tactic_revision: int = 0
 
 
 @dataclass(slots=True)
@@ -247,6 +249,7 @@ class LiveMatchHub:
         target_runtime_seconds: float | None = None,
         on_batch: BatchCallback | None = None,
         on_complete: CompleteCallback | None = None,
+        simulation_request: dict[str, Any] | None = None,
     ) -> None:
         if self.is_match_halted(match_id):
             raise LiveMatchError("Match is currently halted by the admin kill switch.")
@@ -316,7 +319,9 @@ class LiveMatchHub:
             ),
             viewer_state=viewer_state,
             target_runtime_seconds=target_runtime_seconds_resolved,
+            simulation_request=simulation_request,
         )
+        self._remember_simulation_request(match_id, simulation_request)
         self._start_runtime(runtime)
 
     def start_synthetic_stream(
@@ -567,6 +572,116 @@ class LiveMatchHub:
                 return None
             return {"match_id": match_id, "enabled": True, **state}
 
+    def _remember_simulation_request(self, match_id: str, request: dict[str, Any] | None) -> None:
+        if not request or self.session_factory is None:
+            return
+        try:
+            from app.models.competition_match import CompetitionMatch
+
+            with self.session_factory() as session:
+                comp_match = session.get(CompetitionMatch, match_id)
+                if comp_match is None:
+                    return
+                meta = dict(comp_match.metadata_json or {})
+                meta["simulation_request"] = request
+                comp_match.metadata_json = meta
+                session.commit()
+        except Exception:
+            logger.debug("Failed to persist simulation request for %s", match_id, exc_info=True)
+
+    def _load_simulation_request(self, match_id: str) -> dict[str, Any] | None:
+        runtime = self._matches.get(match_id)
+        if runtime is not None and isinstance(runtime.simulation_request, dict):
+            return runtime.simulation_request
+        if self.session_factory is None:
+            return None
+        try:
+            from app.models.competition_match import CompetitionMatch
+
+            with self.session_factory() as session:
+                comp_match = session.get(CompetitionMatch, match_id)
+                saved = None if comp_match is None or not comp_match.metadata_json else comp_match.metadata_json.get("simulation_request")
+                if isinstance(saved, dict):
+                    if runtime is not None:
+                        runtime.simulation_request = saved
+                    return saved
+        except Exception:
+            logger.debug("Failed to load simulation request for %s", match_id, exc_info=True)
+        return None
+
+    def _resimulate_remaining(
+        self,
+        match_id: str,
+        *,
+        side: str,
+        minute: int | None,
+        revision: int,
+        formation: object,
+        mentality: object,
+        press_intensity: object,
+        tempo: object,
+        defensive_line: object,
+        changed: bool,
+    ) -> None:
+        if not changed or minute is None:
+            return
+        raw = self._load_simulation_request(match_id)
+        if raw is None:
+            raise LiveMatchError(
+                "The original match simulation request is not stored, so the unplayed minutes cannot be resimulated."
+            )
+        from app.match_engine.schemas import MatchSimulationRequest, MatchTacticalAdjustmentInput
+        from app.match_engine.services.match_simulation_service import MatchSimulationService
+        from app.match_engine.simulation.models import TacticalStyle
+
+        try:
+            request = MatchSimulationRequest.model_validate(raw)
+        except Exception as exc:
+            raise LiveMatchError(
+                "The stored match simulation request could not be rebuilt, so the unplayed minutes cannot be resimulated."
+            ) from exc
+        norm = str(mentality or "").strip().lower()
+        style = {
+            "attacking": TacticalStyle.ATTACKING,
+            "ultra_attacking": TacticalStyle.ATTACKING,
+            "defensive": TacticalStyle.DEFENSIVE,
+            "ultra_defensive": TacticalStyle.DEFENSIVE,
+            "cautious": TacticalStyle.DEFENSIVE,
+            "balanced": TacticalStyle.BALANCED,
+        }.get(norm)
+        adjustment = MatchTacticalAdjustmentInput(
+            formation=str(formation) if formation else None,
+            tempo=int(tempo) if tempo is not None else None,
+            pressing=int(press_intensity) if press_intensity is not None else None,
+            defensive_line=int(defensive_line) if defensive_line is not None else None,
+            mentality=style,
+        )
+        replay = MatchSimulationService().build_replay_payload(
+            request,
+            tail_cursor_minute=int(minute),
+            tail_rng_xor=int(revision),
+            tail_adjustment=(side, adjustment),
+        )
+        new_view = MatchTimelineService().build_from_replay_payload(replay)
+        runtime = self._matches.get(match_id)
+        if runtime is None:
+            return
+        if runtime.viewer_state is not None and runtime.viewer_state.frames:
+            prefix = [frame for frame in runtime.viewer_state.frames if float(frame.clock_minute) < float(minute)]
+            tail = [frame for frame in new_view.frames if float(frame.clock_minute) >= float(minute)]
+            runtime.viewer_state = new_view.model_copy(update={"frames": [*prefix, *tail] or list(new_view.frames)})
+        else:
+            runtime.viewer_state = new_view
+        future: list[LiveMatchStreamEventView] = []
+        for batch in self._build_batches(replay, stadium_profile=runtime.stadium_profile):
+            for event in batch.events:
+                if int(event.minute) >= int(minute):
+                    future.append(event)
+        runtime.event_batches = [
+            _LiveBatch(events=list(runtime.published_events)),
+            *self._build_event_batches(future, stadium_profile=runtime.stadium_profile),
+        ]
+
     def set_tactics(
         self,
         match_id: str,
@@ -698,6 +813,15 @@ class LiveMatchHub:
                     active_minute = float(active_frame.clock_minute)
             current_sub_count = int(current.get("substitution_count", 0))
 
+            shape_changed = any(
+                value is not None
+                for value in (formation, mentality, press_intensity, tempo, defensive_line)
+            )
+            if shape_changed and active_minute is not None and self._load_simulation_request(match_id) is None:
+                raise LiveMatchError(
+                    "The original match simulation request is not stored, so the unplayed minutes cannot be resimulated."
+                )
+
             if substitutions:
                 if current_sub_count + len(substitutions) > 5:
                     raise LiveMatchError(
@@ -764,6 +888,23 @@ class LiveMatchHub:
             if instructions is not None:
                 current["instructions"] = instructions
             current["updated_at"] = utcnow().isoformat()
+            current["tactic_revision"] = int(current.get("tactic_revision") or 0) + 1
+            current["effective_minute"] = int(round(active_minute)) if active_minute is not None else None
+            self._resimulate_remaining(
+                match_id,
+                side=side_norm,
+                minute=int(round(active_minute)) if active_minute is not None else None,
+                revision=int(current["tactic_revision"]),
+                formation=current.get("formation"),
+                mentality=current.get("mentality"),
+                press_intensity=current.get("press_intensity"),
+                tempo=current.get("tempo"),
+                defensive_line=current.get("defensive_line"),
+                changed=any(
+                    value is not None
+                    for value in (formation, mentality, press_intensity, tempo, defensive_line)
+                ),
+            )
 
             events_to_broadcast = []
             channel = None

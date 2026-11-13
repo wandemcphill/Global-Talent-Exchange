@@ -198,6 +198,7 @@ class MatchCompetitionContextInput(CommonSchema):
     stage: str = Field(default="regular", min_length=1)
     is_final: bool = False
     requires_winner: bool | None = None
+    extra_time: bool = False
     halftime_duration_seconds: int | None = Field(default=None, ge=60, le=120)
 
 
@@ -230,7 +231,7 @@ class MatchSubstitutionRequestInput(CommonSchema):
 class MatchTacticalChangeInput(CommonSchema):
     change_id: str | None = None
     team_id: str = Field(min_length=1)
-    requested_minute: int = Field(ge=0, le=120)
+    requested_minute: int = Field(ge=0, le=150)
     requested_second: int = Field(default=0, ge=0, le=59)
     urgency: str = Field(default="normal", min_length=3, max_length=16)
     condition: str | None = Field(default=None, min_length=2, max_length=64)
@@ -359,7 +360,7 @@ class MatchEventView(CommonSchema):
     event_id: str
     sequence: int
     event_type: MatchEventType
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     added_time: int = Field(default=0, ge=0, le=15)
     presentation_second: int = Field(ge=0)
     clock_label: str
@@ -377,7 +378,7 @@ class MatchEventView(CommonSchema):
 class ReplayEventLogEntryView(CommonSchema):
     sequence: int
     event_type: MatchEventType
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     added_time: int = Field(default=0, ge=0, le=15)
     team_id: str | None = None
     team_name: str | None = None
@@ -466,7 +467,7 @@ class MatchPlayerRatingView(CommonSchema):
 
 
 class MatchMomentumPointView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     value: float
 
 
@@ -670,7 +671,7 @@ class MatchRenderSyncEventView(CommonSchema):
     match_id: str
     event_id: str
     tick: int = Field(ge=0)
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     presentation_second: int = Field(ge=0)
     event_type: str
     team: str | None = None
@@ -696,9 +697,9 @@ class MatchTacticalChangeLogView(CommonSchema):
     change_id: str
     team_id: str
     team_name: str | None = None
-    requested_minute: int = Field(ge=0, le=120)
+    requested_minute: int = Field(ge=0, le=150)
     requested_second: int = Field(default=0, ge=0, le=59)
-    applied_minute: int = Field(ge=0, le=120)
+    applied_minute: int = Field(ge=0, le=150)
     applied_second: int = Field(default=0, ge=0, le=59)
     change_type: str
     urgency: str = "normal"
@@ -710,14 +711,14 @@ class MatchSubstitutionLogView(CommonSchema):
     team_name: str | None = None
     outgoing_player_id: str
     incoming_player_id: str
-    requested_minute: int = Field(ge=0, le=120)
-    applied_minute: int = Field(ge=0, le=120)
+    requested_minute: int = Field(ge=0, le=150)
+    applied_minute: int = Field(ge=0, le=150)
     reason: str | None = None
     urgency: str | None = None
 
 
 class MatchCriticalSnapshotView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     event_type: MatchEventType
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)
@@ -738,7 +739,7 @@ class MatchHighlightClipView(CommonSchema):
 
 
 class MatchInjuryReportView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     team_name: str
     player_name: str
     severity: str = Field(default="monitor")
@@ -804,7 +805,7 @@ class MatchEventTimelineView(CommonSchema):
 
 
 class MatchSimulationTimelineEventView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     type: str
     player: str | None = None
     team: str | None = None
@@ -870,7 +871,7 @@ class MatchPossessionZonesView(CommonSchema):
 
 class MatchShotMapItemView(CommonSchema):
     event_id: str
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     team_id: str
     team_name: str
     player_id: str | None = None
@@ -892,13 +893,13 @@ class MatchEntityHeatmapView(CommonSchema):
 
 
 class MatchXgTimelinePointView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     home_xg: float = Field(default=0.0, ge=0.0)
     away_xg: float = Field(default=0.0, ge=0.0)
 
 
 class MatchMomentumTimelinePointView(CommonSchema):
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     home_pressure: float = Field(default=0.0, ge=0.0)
     away_pressure: float = Field(default=0.0, ge=0.0)
 

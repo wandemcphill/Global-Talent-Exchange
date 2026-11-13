@@ -47,10 +47,17 @@ def _build_app() -> tuple[FastAPI, sessionmaker[Session]]:
     return app, session_factory
 
 
-def _insert_match(session_factory: sessionmaker[Session], replay_payload) -> None:
+def _insert_match(session_factory: sessionmaker[Session], replay_payload, *, simulation_request=None) -> None:
     with session_factory() as session:
         home_id = replay_payload.summary.home_stats.team_id
         away_id = replay_payload.summary.away_stats.team_id
+        metadata = {"replay_payload": replay_payload.model_dump(mode="json")}
+        if simulation_request is not None:
+            metadata["simulation_request"] = (
+                simulation_request
+                if isinstance(simulation_request, dict)
+                else simulation_request.model_dump(mode="json")
+            )
         session.add(
             CompetitionMatch(
                 id=replay_payload.match_id,
@@ -60,7 +67,7 @@ def _insert_match(session_factory: sessionmaker[Session], replay_payload) -> Non
                 home_club_id=home_id,
                 away_club_id=away_id,
                 status="completed",
-                metadata_json={"replay_payload": replay_payload.model_dump(mode="json")},
+                metadata_json=metadata,
             )
         )
         if not session.get(User, "home-manager-user"):
@@ -579,6 +586,32 @@ def test_tactical_validation_and_substitutions() -> None:
         restored_home_ids = [p["player_id"] for p in restored.json()["pitch_players"] if p["is_home"]]
         assert incoming_id in restored_home_ids
         assert outgoing_id not in restored_home_ids
+
+
+def test_live_tactics_without_stored_simulation_request_are_rejected() -> None:
+    app, session_factory = _build_app()
+    replay_payload = MatchSimulationService().build_replay_payload(build_request(seed=42))
+    _insert_match(session_factory, replay_payload)
+    match_id = replay_payload.match_id
+    hub = LiveMatchHub(session_factory=session_factory)
+    app.state.live_match_hub = hub
+    hub.start_stream(match_id, replay_payload)
+
+    app.dependency_overrides[get_current_match_user] = lambda: User(
+        id="home-manager-user",
+        email="home@example.com",
+        username="homemgr",
+        password_hash="hashed-password",  # pragma: allowlist secret
+        is_active=True,
+    )
+
+    with TestClient(app) as client:
+        response = client.post(
+            f"/api/matches/{match_id}/tactics",
+            json={"side": "home", "formation": "4-2-3-1", "mentality": "attacking"},
+        )
+    assert response.status_code == 400, response.text
+    assert "cannot be resimulated" in response.json()["detail"]
 
 
 def test_zero_zero_match_data_integrity() -> None:

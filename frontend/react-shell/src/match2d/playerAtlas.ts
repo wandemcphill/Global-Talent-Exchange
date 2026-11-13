@@ -1,0 +1,16 @@
+export {
+  ATLAS_COLUMNS,
+  ATLAS_FRAMES,
+  ATLAS_ROWS,
+  CELL,
+  RIG_ACTIONS,
+  actionIndex,
+  buildAtlasPixels,
+  buildDigitPixels,
+  cellUv,
+  paintRig,
+  rasterBall,
+  rasterPitch,
+  rasterRing,
+  sampleTrajectory,
+} from "./playerRig";

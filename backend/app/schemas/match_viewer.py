@@ -36,6 +36,9 @@ class MatchViewerPhase(StrEnum):
     SET_PIECE = "set_piece"
     HALFTIME = "halftime"
     FULLTIME = "fulltime"
+    EXTRA_TIME = "extra_time"
+    PENALTY_SHOOTOUT = "penalty_shootout"
+    COMPLETED = "completed"
 
 
 class MatchViewerPlaybackStage(StrEnum):
@@ -184,7 +187,7 @@ class MatchViewerEventView(CommonSchema):
     event_id: str
     sequence: int = Field(ge=0)
     event_type: MatchViewerEventType
-    minute: int = Field(ge=0, le=120)
+    minute: int = Field(ge=0, le=150)
     added_time: int = Field(default=0, ge=0, le=15)
     clock_label: str
     time_seconds: float = Field(ge=0.0)
@@ -226,7 +229,7 @@ class MatchViewerEventView(CommonSchema):
 class MatchTimelineFrameView(CommonSchema):
     frame_id: str
     time_seconds: float = Field(ge=0.0)
-    clock_minute: float = Field(ge=0.0, le=120.0)
+    clock_minute: float = Field(ge=0.0, le=150.0)
     phase: MatchViewerPhase
     home_score: int = Field(ge=0)
     away_score: int = Field(ge=0)

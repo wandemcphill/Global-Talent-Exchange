@@ -461,6 +461,9 @@ def _player_position(
             width=_instruction(runtime, "width"),
         )
     _drop_when_tired(position, line=line, attacks_right=attacks_right, clock_minute=clock_minute, player=player)
+    if len(getattr(runtime, "lineup", []) or []) < 11 and line in {"defense", "midfield"}:
+        position["y"] = _clamp(50.0 + (position["y"] - 50.0) * 0.88, 6.0, 94.0)
+        position["x"] = _clamp(position["x"] - (1.6 if attacks_right else -1.6), 4.0, 96.0)
     state = _engage_around_the_ball(
         position,
         runtime,

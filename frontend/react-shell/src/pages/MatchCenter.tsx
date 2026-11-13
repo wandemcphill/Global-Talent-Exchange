@@ -41,7 +41,7 @@ import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStr
 import { useMatchFullTimeGovernance } from "@/lib/3d/broadcast/useMatchFullTimeGovernance";
 import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
-import { MatchdayLineupBroadcast, useClubMatchdaySheet, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
+import { MatchdayLineupBroadcast, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
 import { useSkin } from "@/lib/skin-engine";
 import {
@@ -51,6 +51,8 @@ import {
 } from "@/components/advertising/GtexMatchBroadcastAds";
 import type { PublicBrandAd } from "@/lib/commercial/api";
 import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
+import { metricText, pitchSource, suppliedCrest } from "@/match2d/matchStateAdapter";
+import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 
 const GIFTS = [
   { code: "stadium_roar", name: "Stadium Roar", cost: 10, rarity: "common" },
@@ -493,7 +495,7 @@ function OwnerView({ view }: any) {
 }
 
 // 2D / 2.5D Broadcast Match Engine v2.0
-function Pitch2DView({
+function LegacyBroadcastPitch({
   selectedPlayer,
   onSelectPlayer,
   showHeatmap,
@@ -523,9 +525,11 @@ function Pitch2DView({
   durationSeconds,
   playbackSpeed = 1,
   paused = false,
+  matchId,
+  timeSeconds,
 }: {
-  selectedPlayer: number | null;
-  onSelectPlayer: (num: number | null) => void;
+  selectedPlayer: string | null;
+  onSelectPlayer: (key: string | null) => void;
   showHeatmap: boolean;
   showTactics: boolean;
   showLanes: boolean;
@@ -562,6 +566,8 @@ function Pitch2DView({
   durationSeconds?: number;
   playbackSpeed?: number;
   paused?: boolean;
+  matchId?: string;
+  timeSeconds?: number;
 }) {
   // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
   const [phaseTick, setPhaseTick] = useState(0);
@@ -578,8 +584,12 @@ function Pitch2DView({
     };
   }, [liveKey]);
   useEffect(() => {
+    if (frameCount > 1 && Number.isFinite(Number(timeSeconds))) {
+      playbackRef.current = Number(timeSeconds);
+      return;
+    }
     playbackRef.current = 0;
-  }, [frameCount]);
+  }, [frameCount, timeSeconds]);
   useEffect(() => {
     const interval = setInterval(() => {
       setPhaseTick((t) => (t + 1) % 3600);
@@ -680,6 +690,7 @@ function Pitch2DView({
           speedKmh: (21 + ((idx * 3 + phaseTick) % 12)).toFixed(1),
           vx: Math.cos(t + idx) * 14,
           vy: Math.sin(t + idx) * 9,
+          playerId: String(p.player_id || `home-${p.shirt_number || idx + 1}`),
         }));
       const a = livePlayers
         .filter((p) => !p.is_home)
@@ -694,6 +705,7 @@ function Pitch2DView({
           speedKmh: (20 + ((idx * 5 + phaseTick) % 11)).toFixed(1),
           vx: -Math.cos(t + idx) * 13,
           vy: Math.sin(t * 0.8 + idx) * 8,
+          playerId: String(p.player_id || `away-${p.shirt_number || idx + 1}`),
         }));
       const carrier = h.find((p) => p.hasBall) || a.find((p) => p.hasBall) || h[8] || h[0];
       const carrierIsHome = Boolean(carrier && h.includes(carrier));
@@ -711,6 +723,16 @@ function Pitch2DView({
         synthBall: liveBall,
         passTarget: target ? { x: target.x, y: target.y } : null,
         carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
+      };
+    }
+
+    if (matchId !== "u2a-006-showcase") {
+      return {
+        homeCoords: [],
+        awayCoords: [],
+        synthBall: { x: 0.5, y: 0.5 },
+        passTarget: null,
+        carrierInfo: null,
       };
     }
 
@@ -776,6 +798,7 @@ function Pitch2DView({
         speedKmh: (20 + (inPossession ? 6 : 2) + Math.abs(Math.sin(seconds + idx)) * 4).toFixed(1),
         vx: sign * (inPossession ? 14 : -6),
         vy: Math.cos(seconds + idx) * 4,
+        playerId: String(member?.player_id || `${isHome ? "home" : "away"}-${member?.shirt_number || tpl.num}`),
       };
     };
 
@@ -836,12 +859,12 @@ function Pitch2DView({
       passTarget: { x: receiver.x, y: receiver.y },
       carrierInfo: { ...shownCarrier, isHome: attackingHome },
     };
-  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster, frames]);
+  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster, frames, matchId]);
 
   const selectedObj =
-    homeCoords.find((p) => p.num === selectedPlayer) ||
-    awayCoords.find((p) => p.num === selectedPlayer) ||
-    homeCoords[9];
+    homeCoords.find((p) => `${"home"}:${p.playerId || p.num}` === selectedPlayer) ||
+    awayCoords.find((p) => `${"away"}:${p.playerId || p.num}` === selectedPlayer) ||
+    null;
 
   const ballX = synthBall.x * 1000;
   const ballY = synthBall.y * 625;
@@ -1207,16 +1230,17 @@ function Pitch2DView({
 
             {/* Home Squad 2D/2.5D Broadcast Tokens */}
             {homeCoords.map((p, idx) => {
-              const isSelected = selectedPlayer === p.num;
+              const selectKey = `home:${p.playerId || p.num}`;
+              const isSelected = selectedPlayer === selectKey;
               const hasBall = p.hasBall || (ballOwner?.team === "home" && ballOwner?.num === p.num);
               const staminaColor = p.stamina > 75 ? "#00E87A" : p.stamina > 55 ? "#FFB800" : "#F43F5E";
               const dashOffset = 100 - p.stamina;
               return (
                 <g
-                  key={`home-${p.num || idx}`}
+                  key={`home-${p.playerId || p.num || idx}`}
                   transform={`translate(${p.x * 1000}, ${p.y * 625})`}
                   className="cursor-pointer transition-transform duration-150 hover:scale-110"
-                  onClick={() => onSelectPlayer(isSelected ? null : p.num)}
+                  onClick={() => onSelectPlayer(isSelected ? null : selectKey)}
                 >
                   {/* Ground cast shadow */}
                   <ellipse cx="0" cy="12" rx="14" ry="6" fill="#000000" opacity="0.45" />
@@ -1289,15 +1313,16 @@ function Pitch2DView({
 
             {/* Away Squad 2D/2.5D Broadcast Tokens */}
             {awayCoords.map((p, idx) => {
-              const isSelected = selectedPlayer === p.num + 100;
+              const selectKey = `away:${p.playerId || p.num}`;
+              const isSelected = selectedPlayer === selectKey;
               const hasBall = p.hasBall || (ballOwner?.team === "away" && ballOwner?.num === p.num);
               const staminaColor = p.stamina > 75 ? "#FFB800" : p.stamina > 55 ? "#F59E0B" : "#F43F5E";
               return (
                 <g
-                  key={`away-${p.num || idx}`}
+                  key={`away-${p.playerId || p.num || idx}`}
                   transform={`translate(${p.x * 1000}, ${p.y * 625})`}
                   className="cursor-pointer transition-transform duration-150 hover:scale-110"
-                  onClick={() => onSelectPlayer(p.num)}
+                  onClick={() => onSelectPlayer(isSelected ? null : selectKey)}
                 >
                   <ellipse cx="0" cy="12" rx="14" ry="6" fill="#000000" opacity="0.45" />
                   {hasBall && (
@@ -1371,9 +1396,7 @@ function Pitch2DView({
                 </span>
               </div>
               <div className="gx-mono mt-0.5 flex items-center gap-3 text-[10px] text-slate-300">
-                <span>SPD {selectedObj.speedKmh} km/h</span>
                 <span className="text-emerald-400">STM {selectedObj.stamina}%</span>
-                <span className="text-cyan-300">xT 0.{14 + (selectedObj.num % 9)}</span>
               </div>
             </div>
           </div>
@@ -1447,6 +1470,9 @@ function Pitch2DView({
         )}
       </div>
 
+      {matchId === "u2a-006-showcase" ? (
+        <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</p>
+      ) : null}
       {/* Live Spatial Telemetry Bar under the 2D Pitch */}
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
         <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
@@ -1458,23 +1484,19 @@ function Pitch2DView({
         </div>
         <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">EXPECTED THREAT (xT)</span>
-          <span className="gx-mono text-xs font-black text-cyan-300">
-            {(1.42 + (press / 100) * 0.6).toFixed(2)} xT
-          </span>
+          <span className="gx-mono text-xs font-black text-cyan-300">—</span>
         </div>
         <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">PPDA PRESS INTENSITY</span>
-          <span className="gx-mono text-xs font-black text-emerald-300">
-            {(14.5 - (press / 100) * 6.8).toFixed(1)} PPDA
-          </span>
+          <span className="gx-mono text-xs font-black text-emerald-300">—</span>
         </div>
         <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">DEFENSIVE LINE HEIGHT</span>
-          <span className="gx-mono text-xs font-black text-amber-300">{(32 + line * 0.24).toFixed(1)}m</span>
+          <span className="gx-mono text-xs font-black text-amber-300">—</span>
         </div>
         <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
           <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">PASS NETWORK TEMPO</span>
-          <span className="gx-mono text-xs font-black text-white">{14 + Math.round(tempo * 0.18)} passes/min</span>
+          <span className="gx-mono text-xs font-black text-white">—</span>
         </div>
       </div>
     </div>
@@ -1499,6 +1521,8 @@ function TacticalHUD({
   homeScore,
   awayScore,
   side,
+  bench = [],
+  starters = [],
 }: {
   formation: string;
   setFormation: (f: string) => void;
@@ -1516,31 +1540,37 @@ function TacticalHUD({
   homeScore: number;
   awayScore: number;
   side: "home" | "away";
+  bench?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
+  starters?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
 }) {
   const [submitting, setSubmitting] = useState(false);
   const [advisorApplied, setAdvisorApplied] = useState(false);
+  const [outPlayerId, setOutPlayerId] = useState("");
+  const [inPlayerId, setInPlayerId] = useState("");
+  const myScore = side === "away" ? awayScore : homeScore;
+  const theirScore = side === "away" ? homeScore : awayScore;
 
   // Compute Assistant Manager Coach Karl's dynamic live advice
   const advisor = useMemo(() => {
-    if (minute >= 75 && homeScore > awayScore) {
+    if (minute >= 75 && myScore > theirScore) {
       return {
-        situation: `Lead Protection (${homeScore}-${awayScore} · ${minute}')`,
+        situation: `Lead Protection (${myScore}-${theirScore} · ${minute}')`,
         recommendation: "Opponent is overloading wide channels. Drop into Low Block 5-3-2 with counter outlet.",
         buttonText: "APPLY LOW BLOCK LOCKDOWN",
         preset: TACTICAL_PRESETS.find((p) => p.name === "LOW BLOCK"),
         color: "text-blue-400",
       };
-    } else if (minute >= 60 && homeScore < awayScore) {
+    } else if (minute >= 60 && myScore < theirScore) {
       return {
-        situation: `Goal Deficit (${homeScore}-${awayScore} · ${minute}')`,
+        situation: `Goal Deficit (${myScore}-${theirScore} · ${minute}')`,
         recommendation: "Need an equalizer. Shift into Gegenpress 4-2-4 with aggressive pressing line.",
         buttonText: "APPLY GEGENPRESS OVERLOAD",
         preset: TACTICAL_PRESETS.find((p) => p.name === "GEGENPRESS"),
         color: "text-rose-400",
       };
-    } else if (homeScore < awayScore) {
+    } else if (myScore < theirScore) {
       return {
-        situation: `Trailing (${homeScore}-${awayScore} · ${minute}')`,
+        situation: `Trailing (${myScore}-${theirScore} · ${minute}')`,
         recommendation: "Opponent high line leaves space in behind. Quick Counter 3-4-3 will catch them.",
         buttonText: "APPLY COUNTER ATTACK",
         preset: TACTICAL_PRESETS.find((p) => p.name === "COUNTER"),
@@ -1548,14 +1578,14 @@ function TacticalHUD({
       };
     } else {
       return {
-        situation: `Tactical Parity (${homeScore}-${awayScore} · ${minute}')`,
+        situation: `Tactical Parity (${myScore}-${theirScore} · ${minute}')`,
         recommendation: "Midfield contest is balanced. Tiki-Taka 4-3-3 will retain possession and control rhythm.",
         buttonText: "APPLY POSSESSION CONTROL",
         preset: TACTICAL_PRESETS.find((p) => p.name === "TIKI-TAKA"),
         color: "text-emerald-400",
       };
     }
-  }, [minute, homeScore, awayScore]);
+  }, [minute, myScore, theirScore]);
 
   const dispatchInstruction = async () => {
     setSubmitting(true);
@@ -1594,10 +1624,33 @@ function TacticalHUD({
         </div>
         <p className="mt-2 text-xs leading-relaxed text-slate-300">{advisor.recommendation}</p>
         <button
-          onClick={() => {
-            if (advisor.preset) onApplyPreset(advisor.preset);
-            setAdvisorApplied(true);
-            toast.success("Coach Karl's recommendation applied to tactical board!");
+          disabled={submitting}
+          onClick={async () => {
+            const preset = advisor.preset;
+            if (!preset) return;
+            onApplyPreset(preset);
+            const mentality = String(preset.mentality || "balanced").trim().toLowerCase().replace(/\s+/g, "_");
+            const accepted =
+              mentality === "counter" ? "attacking" : mentality === "ultra_attacking" ? "attacking" : mentality;
+            setSubmitting(true);
+            try {
+              await api.post(`/matches/${matchId}/tactics`, {
+                press_intensity: preset.press,
+                defensive_line: preset.line,
+                tempo: preset.tempo,
+                risk_level: preset.risk,
+                formation: preset.formation,
+                mentality: accepted,
+                side,
+              });
+              setAdvisorApplied(true);
+              toast.success("Coach Karl's order was accepted by the match.");
+            } catch (err: any) {
+              const msg = err?.response?.data?.detail || err?.message || "Tactical adjustment rejected";
+              toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
+            } finally {
+              setSubmitting(false);
+            }
           }}
           className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-sm py-2 text-xs font-black uppercase tracking-wider transition-colors ${
             advisorApplied
@@ -1713,6 +1766,61 @@ function TacticalHUD({
           />
         </div>
       </div>
+
+      <div className="mt-5 grid gap-2 sm:grid-cols-2">
+        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Player off
+          <select
+            value={outPlayerId}
+            onChange={(event) => setOutPlayerId(event.target.value)}
+            className="gx-input mt-1 w-full"
+          >
+            <option value="">Select starter</option>
+            {starters.map((player) => (
+              <option key={player.player_id} value={player.player_id}>
+                {player.shirt_number} {player.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Player on
+          <select
+            value={inPlayerId}
+            onChange={(event) => setInPlayerId(event.target.value)}
+            className="gx-input mt-1 w-full"
+          >
+            <option value="">Select bench</option>
+            {bench.map((player) => (
+              <option key={player.player_id} value={player.player_id}>
+                {player.shirt_number} {player.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <button
+        type="button"
+        disabled={submitting || !outPlayerId || !inPlayerId}
+        onClick={async () => {
+          setSubmitting(true);
+          try {
+            await api.post(`/matches/${matchId}/tactics`, {
+              side,
+              substitutions: [{ out_player_id: outPlayerId, in_player_id: inPlayerId }],
+            });
+            toast.success("Substitution sent to the match.");
+          } catch (err: any) {
+            const msg = err?.response?.data?.detail || err?.message || "Substitution rejected";
+            toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
+          } finally {
+            setSubmitting(false);
+          }
+        }}
+        className="mt-3 w-full rounded-sm border border-white/15 py-2 text-xs font-black uppercase tracking-wider text-slate-200 disabled:opacity-40"
+      >
+        Send substitution
+      </button>
 
       {/* Dispatch Button */}
       <button
@@ -2328,7 +2436,6 @@ export default function MatchCenter() {
   const matchView = getModuleView("match_center");
   // Public matches stay on the 2D pitch until an admin turns match_3d_gameplay on.
   const [view3DBroadcast, setView3DBroadcast] = useState<boolean>(false);
-  const applied3dDefault = useRef(false);
   const { data: clientFlags } = useQuery({
     queryKey: ["client-feature-flags"],
     queryFn: async () => {
@@ -2434,7 +2541,8 @@ export default function MatchCenter() {
     refetchInterval: (query) => {
       const data = query.state.data;
       if (!data) return false;
-      return data.phase === "full_time" || data.status === "FT" ? false : 2500;
+      const phase = String(data.phase || "").toLowerCase();
+      return phase === "completed" ? false : 2500;
     },
     enabled: !!id && id !== "u2a-006-showcase",
     retry: false,
@@ -2510,7 +2618,7 @@ export default function MatchCenter() {
 
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
-    enabled: Boolean(id && id !== "u2a-006-showcase" && (params.get("live") || view3DBroadcast)),
+    enabled: Boolean(id && id !== "u2a-006-showcase"),
     isAuthenticated: isViewerAuthenticated,
     requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
     onResyncRequired: () => {
@@ -2522,17 +2630,16 @@ export default function MatchCenter() {
   });
 
   // Clock & Playback Controls
-  const [localMinute, setLocalMinute] = useState(params.get("live") ? 0 : 120);
+  const [localMinute] = useState(0);
+  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const snapshotVersionRef = useRef(-1);
+  const [acceptedLive, setAcceptedLive] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState(Number(params.get("speed")) || 1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
-  const isMatchComplete = Boolean(
-    liveState?.phase === "full_time" ||
-      liveState?.status === "FT" ||
-      (typeof liveState?.minute === "number" && liveState.minute >= 90)
-  );
+  const isMatchComplete = String(acceptedLive?.phase || liveState?.phase || "").toLowerCase() === "completed";
   useMatchFullTimeGovernance(
     id,
     spectatorStream.recentEvents,
@@ -2553,7 +2660,7 @@ export default function MatchCenter() {
   const [showLanes, setShowLanes] = useState(true);
   const [showVoronoi, setShowVoronoi] = useState(true);
   const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom">("2.5d");
-  const [selectedPlayer, setSelectedPlayer] = useState<number | null>(9);
+  const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [show3DCutIn, setShow3DCutIn] = useState(false);
   useEffect(() => {
     if (!clientFlags) return;
@@ -2562,10 +2669,6 @@ export default function MatchCenter() {
       setIsTheatreMode(false);
       setShow3DCutIn(false);
       return;
-    }
-    if (!applied3dDefault.current) {
-      applied3dDefault.current = true;
-      setView3DBroadcast(true);
     }
   }, [clientFlags, match3dEnabled]);
   const [cutInScene, setCutInScene] = useState<Cinema3DSceneType>("signing_walkout");
@@ -2586,11 +2689,26 @@ export default function MatchCenter() {
   }, [liveState, enqueueGift]);
 
   useEffect(() => {
-    if (liveState || localMinute >= 120 || isPaused) return undefined;
-    const intervalMs = Math.max(80, Math.floor(380 / speed));
-    const t = setTimeout(() => setLocalMinute((x) => x + 2), intervalMs);
-    return () => clearTimeout(t);
-  }, [localMinute, isPaused, speed, liveState]);
+    if (!liveState) return;
+    const version = Number(liveState.snapshot_version ?? 0);
+    if (version < snapshotVersionRef.current) return;
+    snapshotVersionRef.current = version;
+    setAcceptedLive(liveState);
+    if (Number.isFinite(Number(liveState.time_seconds))) {
+      setPlaybackSeconds(Number(liveState.time_seconds));
+    }
+  }, [liveState]);
+
+  const recordedFrames = viewerData?.frames?.length ? viewerData.frames : m?.frames || [];
+  useEffect(() => {
+    if (acceptedLive || isPaused || recordedFrames.length < 2) return undefined;
+    const last = recordedFrames[recordedFrames.length - 1];
+    const end = Number(viewerData?.duration_seconds || m?.duration_seconds || last?.time_seconds || 0);
+    const timer = window.setTimeout(() => {
+      setPlaybackSeconds((current) => Math.min(end, current + 0.25 * speed));
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [acceptedLive, isPaused, recordedFrames, speed, viewerData, m]);
 
   const homeLivePitch = useMemo(
     () => (liveState?.pitch_players || []).filter((p: any) => p.is_home),
@@ -2600,19 +2718,8 @@ export default function MatchCenter() {
     () => (liveState?.pitch_players || []).filter((p: any) => !p.is_home),
     [liveState?.pitch_players],
   );
-  const homeSheetState = useClubMatchdaySheet({
-    clubId: m?.home_club_id,
-    clubName: m?.home_name || "Home XI",
-    formationOverride: formation,
-    pitchPlayers: homeLivePitch,
-  });
-  const awaySheetState = useClubMatchdaySheet({
-    clubId: m?.away_club_id,
-    clubName: m?.away_name || "Away XI",
-    pitchPlayers: awayLivePitch,
-  });
 
-  const minute = liveState ? liveState.minute : localMinute;
+  const minute = acceptedLive ? Number(acceptedLive.minute ?? 0) : localMinute;
   const isHalftime = Boolean(
     minute === 45 || String(liveState?.phase || "").toLowerCase().includes("half")
   );
@@ -2654,11 +2761,18 @@ export default function MatchCenter() {
     home: liveState?.home?.score ?? fallbackScore.home,
     away: liveState?.away?.score ?? fallbackScore.away,
   };
-  const done = liveState
-    ? liveState.phase === "full_time" || liveState.status === "FT" || minute >= 90
-    : localMinute >= 90;
+  const phaseName = String(acceptedLive?.phase || "").toLowerCase();
+  const done = phaseName === "completed";
   const isScheduled = liveState ? liveState.phase === "pre_match" && minute === 0 : localMinute === 0 && params.get("live");
   const side = m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away";
+
+  const sourceKind = pitchSource({
+    matchId: id,
+    hasSnapshot: Boolean(acceptedLive?.pitch_players?.length),
+    hasFrames: recordedFrames.length > 0,
+  });
+  const liveStats = acceptedLive?.stats;
+  const managerSide = side === "away" ? acceptedLive?.away : acceptedLive?.home;
 
   const applyPreset = (preset: any) => {
     setPress(preset.press);
@@ -2669,10 +2783,10 @@ export default function MatchCenter() {
   };
 
   return (
-    <div data-testid="match-center-page" className="grid gap-6 lg:grid-cols-12">
-      <div className="space-y-6 lg:col-span-8">
+    <div data-testid="match-center-page" className="grid gap-6 max-md:flex max-md:flex-col lg:grid-cols-12">
+      <div className="space-y-6 max-md:flex max-md:flex-col lg:col-span-8">
         {/* Main Match Header & Broadcast Scoreboard */}
-        <section className="gx-scoreboard-box gx-pitch-grid gx-panel-live relative overflow-hidden rounded-2xl border border-[#25354B] p-5 sm:p-6 shadow-2xl">
+        <section className="gx-scoreboard-box gx-pitch-grid gx-panel-live relative order-1 overflow-hidden rounded-2xl border border-[#25354B] p-5 sm:p-6 shadow-2xl">
           {/* Top Broadcast Venue & Status Strip */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-3.5">
             {/* Layer 3: Football Display Mode Switcher */}
@@ -2808,9 +2922,13 @@ export default function MatchCenter() {
                     <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">HOME</span>
                   </div>
                 </div>
+                {suppliedCrest(acceptedLive?.home?.crest_url) ? (
+                  <img src={suppliedCrest(acceptedLive?.home?.crest_url) || ""} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
+                ) : (
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#00E8A8] to-[#00A677] text-slate-950 font-black text-sm shadow-lg border border-white/20">
                   {m.home_name?.slice(0, 2).toUpperCase() || "HM"}
                 </div>
+                )}
               </div>
             </div>
 
@@ -2828,7 +2946,7 @@ export default function MatchCenter() {
                 </span>
               </div>
               <span className="gx-mono mt-1.5 text-[11px] font-black text-[#00E8A8] tracking-widest uppercase">
-                {done ? "FINAL" : `${Math.min(minute, 90)}' MATCHDAY`}
+                {done ? "FINAL" : phaseName === "penalty_shootout" ? "PENALTIES" : phaseName === "extra_time" ? `${minute}' EXTRA TIME` : phaseName === "full_time" || phaseName === "fulltime" ? "FULL TIME" : `${minute}' MATCHDAY`}
               </span>
               <p className="sr-only" data-testid="match-score">
                 {score.home} – {score.away}
@@ -2838,16 +2956,20 @@ export default function MatchCenter() {
             {/* Away Club Team Card */}
             <div className="col-span-4 flex flex-col items-center sm:items-start text-center sm:text-left">
               <div className="flex items-center gap-2.5">
+                {suppliedCrest(acceptedLive?.away?.crest_url) ? (
+                  <img src={suppliedCrest(acceptedLive?.away?.crest_url) || ""} alt="" className="size-10 shrink-0 rounded-xl object-cover" />
+                ) : (
                 <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[#F3CA5A] to-[#C79727] text-slate-950 font-black text-sm shadow-lg border border-white/20">
                   {m.away_name?.slice(0, 2).toUpperCase() || "AW"}
                 </div>
+                )}
                 <div>
                   <p className="gx-display text-lg sm:text-2xl font-black uppercase text-white tracking-tight leading-none" title={m.away_name}>
                     {m.away_name}
                   </p>
                   <div className="mt-1 flex items-center justify-center sm:justify-start gap-1.5">
                     <span className="gx-mono text-[10px] font-extrabold text-[#E5B63F] bg-[#E5B63F]/15 px-1.5 py-0.5 rounded border border-[#E5B63F]/30">
-                      4-3-3
+                      {acceptedLive?.away?.formation || "—"}
                     </span>
                     <span className="text-[10px] font-bold text-slate-400 uppercase hidden sm:inline">AWAY</span>
                   </div>
@@ -2872,7 +2994,7 @@ export default function MatchCenter() {
         </section>
 
         {/* Match Navigation Tabs */}
-        <div className="flex flex-wrap gap-2 border-b border-[#25354B] pb-3">
+        <div className="hidden flex-wrap gap-2 border-b border-[#25354B] pb-3 md:flex">
           {[
             { id: "pitch", label: view3DBroadcast ? "3D MATCHDAY BROADCAST (WEBGL)" : "2D / 2.5D MATCH PITCH", icon: Tv },
             { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
@@ -2901,8 +3023,7 @@ export default function MatchCenter() {
         </div>
 
         {/* Tab 1: 2D / 2.5D Match Pitch Board */}
-        {activeTab === "pitch" && (
-          <div className="space-y-4">
+        <div className={`${activeTab === "pitch" ? "block" : "hidden"} order-2 space-y-4 max-md:block`}>
             {/* Pitch Camera & Tactical Shader Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-slate-900/85 p-2.5">
               {/* Camera Perspective Switcher */}
@@ -3081,41 +3202,66 @@ export default function MatchCenter() {
                   />
                 )}
               </div>
-            ) : (
-              <Pitch2DView
-                selectedPlayer={selectedPlayer}
-                onSelectPlayer={setSelectedPlayer}
-                showHeatmap={showHeatmap}
-                showTactics={showTactics}
-                showLanes={showLanes}
-                showVoronoi={showVoronoi}
-                cameraMode={cameraMode}
-                ballOwner={null}
-                pitchPlayers={liveState?.pitch_players}
-                ball={liveState?.ball}
-                frames={viewerData?.frames?.length ? viewerData.frames : m?.frames}
-                durationSeconds={viewerData?.duration_seconds || m?.duration_seconds}
-                playbackSpeed={speed}
-                paused={isPaused}
-                activeGift={activeGift}
-                onGiftComplete={handleGiftAnimationComplete}
-                formation={formation}
-                press={press}
-                line={line}
-                tempo={tempo}
+            ) : sourceKind === "demo" ? (
+              <LegacyBroadcastPitch
+                matchId={id}
+                selectedPlayer={null}
+                onSelectPlayer={() => undefined}
+                showHeatmap={false}
+                showTactics={false}
+                showLanes={false}
                 minute={minute}
                 homeName={m.home_name}
                 awayName={m.away_name}
-                show3DCutIn={match3dEnabled && show3DCutIn}
-                cutInScene={cutInScene}
-                onClose3DCutIn={() => setShow3DCutIn(false)}
-                homeRoster={homeSheetState.sheet.starters}
-                awayRoster={awaySheetState.sheet.starters}
-                activePerimeterAd={matchAds.perimeterAd}
               />
+            ) : (
+              <div className="relative">
+                <Pitch2DView
+                  matchId={id}
+                  frames={recordedFrames}
+                  timeSeconds={playbackSeconds}
+                  snapshotPlayers={acceptedLive?.pitch_players}
+                  snapshotBall={acceptedLive?.ball}
+                  socketFrame={spectatorStream.lastFrame}
+                  events={acceptedLive?.events}
+                  activeEventType={acceptedLive?.active_event_type}
+                  homeColor={acceptedLive?.home?.primary_color_hex || "#00e87a"}
+                  awayColor={acceptedLive?.away?.primary_color_hex || "#ffb800"}
+                  goalkeeperHome={acceptedLive?.home?.goalkeeper_color || "#f8fafc"}
+                  goalkeeperAway={acceptedLive?.away?.goalkeeper_color || "#111827"}
+                  homeName={m.home_name}
+                  awayName={m.away_name}
+                  homeCrest={acceptedLive?.home?.crest_url}
+                  awayCrest={acceptedLive?.away?.crest_url}
+                  selectedKey={selectedPlayer}
+                  onSelect={setSelectedPlayer}
+                />
+                <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  {[
+                    ["Shots", `${metricText(liveStats?.home_shots)} – ${metricText(liveStats?.away_shots)}`],
+                    ["Possession", `${metricText(liveStats?.home_possession)} – ${metricText(liveStats?.away_possession)}`],
+                    ["xG", `${metricText(liveStats?.home_expected_goals)} – ${metricText(liveStats?.away_expected_goals)}`],
+                    ["Cards", `${metricText(liveStats?.home_yellow_cards)}/${metricText(liveStats?.home_red_cards)} – ${metricText(liveStats?.away_yellow_cards)}/${metricText(liveStats?.away_red_cards)}`],
+                    ["Pass accuracy", `${metricText(liveStats?.home_pass_accuracy)} – ${metricText(liveStats?.away_pass_accuracy)}`],
+                    ["xT", `${metricText(liveStats?.home_expected_threat)} – ${metricText(liveStats?.away_expected_threat)}`],
+                    ["PPDA", `${metricText(liveStats?.home_ppda)} – ${metricText(liveStats?.away_ppda)}`],
+                  ].map(([label, value]) => (
+                    <div key={label} className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
+                      <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+                      <span className="gx-mono text-xs font-black text-white">{value}</span>
+                    </div>
+                  ))}
+                </div>
+                {activeGift && (
+                  <CinematicGiftingEngine
+                    activeGift={activeGift}
+                    onAnimationComplete={handleGiftAnimationComplete}
+                    soundEnabled={true}
+                  />
+                )}
+              </div>
             )}
           </div>
-        )}
 
         {/* Tab 1B: Official Broadcast Matchday Lineups */}
         {activeTab === "lineups" && (
@@ -3142,7 +3288,7 @@ export default function MatchCenter() {
         )}
 
         {/* Tab 2: Tactics & In-Match Advisor */}
-        {activeTab === "tactics" && (
+        <div className={`${activeTab === "tactics" ? "block" : "hidden"} order-4 max-md:block`}>
           <TacticalHUD
             formation={formation}
             setFormation={setFormation}
@@ -3160,8 +3306,10 @@ export default function MatchCenter() {
             homeScore={score.home}
             awayScore={score.away}
             side={side}
+            bench={managerSide?.bench || []}
+            starters={managerSide?.players || []}
           />
-        )}
+        </div>
 
         {/* Tab 3: Pre-Match Package */}
         {activeTab === "pre_match" && (
@@ -3182,7 +3330,7 @@ export default function MatchCenter() {
         )}
 
         {/* Tab 5: Live Commentary & Events */}
-        {activeTab === "commentary" && (
+        <div className={`${activeTab === "commentary" ? "block" : "hidden"} order-3 max-md:block`}>
           <Panel eyebrow="Live commentary" title="Event feed" testid="commentary-feed">
             <ol className="space-y-2">
               {[...commentary].reverse().map((e: any, i: number) => (
@@ -3199,11 +3347,11 @@ export default function MatchCenter() {
               ))}
             </ol>
           </Panel>
-        )}
+        </div>
       </div>
 
       {/* Right Column: Commercial Broadcast Panel, Owner View, Gift Rail, Navigation */}
-      <div className="space-y-6 lg:col-span-4">
+      <div className="order-5 space-y-6 lg:col-span-4">
         <SilentMatchBroadcastPanel
           liveAd={matchAds.livePanelAd}
           halftimeAd={matchAds.halftimeAd}

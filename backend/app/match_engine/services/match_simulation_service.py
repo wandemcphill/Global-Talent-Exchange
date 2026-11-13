@@ -66,8 +66,30 @@ class MatchSimulationService:
         self.control_log_builder = control_log_builder or MatchControlLogBuilder()
         self.football_universe_builder = football_universe_builder or FootballUniverseBuilder()
 
-    def build_replay_payload(self, request: MatchSimulationRequest) -> MatchReplayPayloadView:
-        result = self.event_generator.simulate(request)
+    def build_replay_payload(
+        self,
+        request: MatchSimulationRequest,
+        *,
+        tail_cursor_minute: int | None = None,
+        tail_rng_xor: int = 0,
+        tail_adjustment: tuple[str, object] | None = None,
+    ) -> MatchReplayPayloadView:
+        if tail_cursor_minute is not None and tail_adjustment is not None:
+            side, adjustment = tail_adjustment
+            result = self.event_generator.simulate_tail(
+                request,
+                cursor_minute=int(tail_cursor_minute),
+                revision=int(tail_rng_xor),
+                side=str(side),
+                adjustment=adjustment,
+            )
+        else:
+            result = self.event_generator.simulate(
+                request,
+                tail_cursor_minute=tail_cursor_minute,
+                tail_rng_xor=tail_rng_xor,
+                tail_adjustment=tail_adjustment,
+            )
         timeline = self.commentary_generator.build(result)
         highlight_bundle = self.highlight_builder.build(result)
         halftime_analytics = self.halftime_builder.build(

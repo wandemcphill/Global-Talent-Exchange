@@ -271,7 +271,7 @@ class LocalMatchExecutionWorker:
             request = self.team_factory.build_request(job)
             replay_payload = self.match_service.build_replay_payload(request)
             self._persist_player_lifecycle_incidents(job, replay_payload)
-            self._persist_match_viewer_payload(job, replay_payload)
+            self._persist_match_viewer_payload(job, replay_payload, simulation_request=request)
             self._publish_match_lifecycle_event(
                 "competition.match.simulation.completed",
                 job,
@@ -720,6 +720,7 @@ class LocalMatchExecutionWorker:
         self,
         job: MatchSimulationJob,
         replay_payload: MatchReplayPayloadView,
+        simulation_request: Any | None = None,
     ) -> None:
         """Persist the replay payload and settle the match row in one transaction.
 
@@ -777,6 +778,11 @@ class LocalMatchExecutionWorker:
                 "replay_payload": replay_payload.model_dump(mode="json"),
                 "simulation_summary": summary.model_dump(mode="json"),
                 "simulation_seed": replay_payload.seed,
+                "simulation_request": (
+                    simulation_request.model_dump(mode="json")
+                    if simulation_request is not None and hasattr(simulation_request, "model_dump")
+                    else None
+                ),
                 "replay_id": replay_id,
                 "simulation_idempotency_key": job.idempotency_key,
             }

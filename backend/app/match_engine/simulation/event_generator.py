@@ -29,6 +29,7 @@ from app.match_engine.simulation.models import (
     PlayerVisualIdentity,
     SimulationResult,
     TacticalPlan,
+    TacticalStyle,
     TeamMatchStats,
     TeamRuntimeState,
     TeamVisualIdentity,
@@ -79,7 +80,31 @@ class MatchEventGenerator:
         self.ball_physics = ball_physics or BallPhysicsEngine()
         self.crowd_engine = crowd_engine or CrowdAtmosphereEngine()
 
-    def simulate(self, request: MatchSimulationRequest) -> SimulationResult:
+    def simulate_tail(
+        self,
+        request: MatchSimulationRequest,
+        *,
+        cursor_minute: int,
+        revision: int,
+        side: str,
+        adjustment: object,
+    ) -> SimulationResult:
+        """Replay the stored request, keep events before the cursor, and draw a new tail."""
+        return self.simulate(
+            request,
+            tail_cursor_minute=int(cursor_minute),
+            tail_rng_xor=int(revision),
+            tail_adjustment=(side, adjustment),
+        )
+
+    def simulate(
+        self,
+        request: MatchSimulationRequest,
+        *,
+        tail_cursor_minute: int | None = None,
+        tail_rng_xor: int = 0,
+        tail_adjustment: tuple[str, object] | None = None,
+    ) -> SimulationResult:
         seed = self._resolve_seed(request)
         rng = Random(seed)
         requires_winner = self._resolve_requires_winner(request)
@@ -96,6 +121,8 @@ class MatchEventGenerator:
         player_stats = self._initialize_player_stats(home_state, away_state)
         events: list[MatchEvent] = []
         event_counter = count(1)
+        phase_stamp: dict[str, str | None] = {"value": None}
+        tail_forked = False
 
         def record(entry: MatchEvent | list[MatchEvent] | tuple[MatchEvent, ...] | None) -> None:
             if entry is None:
@@ -104,8 +131,43 @@ class MatchEventGenerator:
                 for nested in entry:
                     record(nested)
                 return
-            events.append(entry)
-            self.crowd_engine.react(event=entry, home_state=home_state, away_state=away_state)
+            stamped = entry
+            if phase_stamp["value"]:
+                meta = dict(entry.metadata or {})
+                meta["match_phase"] = phase_stamp["value"]
+                stamped = replace(entry, metadata=meta)
+            events.append(stamped)
+            self.crowd_engine.react(event=stamped, home_state=home_state, away_state=away_state)
+
+        def fork_tail(minute: int) -> None:
+            nonlocal rng, tail_forked
+            if tail_cursor_minute is None or tail_forked or int(minute) < int(tail_cursor_minute):
+                return
+            tail_forked = True
+            rng = Random((int(seed) ^ int(tail_cursor_minute) ^ int(tail_rng_xor)) & 0xFFFFFFFFFFFF)
+            if tail_adjustment is None:
+                return
+            side_name, adjustment = tail_adjustment
+            if str(side_name).strip().lower() == "home":
+                state, opponent = home_state, away_state
+            else:
+                state, opponent = away_state, home_state
+            event = self._apply_tactical_change(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=int(tail_cursor_minute),
+                payload={
+                    "adjustment": adjustment,
+                    "change_id": f"live-tail-{int(tail_rng_xor)}",
+                    "requested_minute": int(tail_cursor_minute),
+                    "requested_second": 0,
+                    "urgency": "normal",
+                },
+            )
+            if event is not None:
+                record(event)
 
         record(
             self._make_event(
@@ -129,6 +191,7 @@ class MatchEventGenerator:
         schedule = self._merge_tactical_changes(schedule, request, home_state, away_state)
         halftime_added = False
         for item in schedule:
+            fork_tail(item.minute)
             if not halftime_added and item.minute >= 45:
                 halftime_added = True
                 self._apply_halftime_reset(home_state, away_state)
@@ -290,6 +353,9 @@ class MatchEventGenerator:
                     away_state=away_state,
                 )
             )
+        fork_tail(90)
+        level_at_full_time = home_state.stats.goals == away_state.stats.goals
+        play_extra_time = bool(getattr(request.competition, "extra_time", False)) and requires_winner and level_at_full_time
         record(
             self._make_event(
                 match_id=request.match_id,
@@ -299,20 +365,43 @@ class MatchEventGenerator:
                 home_state=home_state,
                 away_state=away_state,
                 metadata={
-                    "goes_to_penalties": bool(requires_winner and home_state.stats.goals == away_state.stats.goals)
+                    "match_phase": "full_time",
+                    "goes_to_extra_time": play_extra_time,
+                    "goes_to_penalties": bool(requires_winner and level_at_full_time and not play_extra_time),
                 },
             )
         )
+        if play_extra_time:
+            phase_stamp["value"] = "extra_time"
+            for minute, side_name in ((93, "home"), (99, "away"), (105, "home"), (111, "away"), (117, "home")):
+                attacking = home_state if side_name == "home" else away_state
+                defending = away_state if side_name == "home" else home_state
+                record(
+                    self._process_chance(
+                        match_id=request.match_id,
+                        event_counter=event_counter,
+                        attacking=attacking,
+                        defending=defending,
+                        minute=minute,
+                        player_stats=player_stats,
+                        rng=rng,
+                        narrative=narrative,
+                    )
+                )
+            phase_stamp["value"] = None
+        still_level = home_state.stats.goals == away_state.stats.goals
         shootout = None
-        if requires_winner and home_state.stats.goals == away_state.stats.goals:
+        if requires_winner and still_level:
+            phase_stamp["value"] = "penalty_shootout"
             shootout = self.penalty_generator.generate(home_state, away_state, rng)
+            penalty_origin = 121 if play_extra_time else 90
             for offset, attempt in enumerate(shootout.attempts, start=1):
                 record(
                     self._make_event(
                         match_id=request.match_id,
                         event_counter=event_counter,
                         event_type=MatchEventType.PENALTY_GOAL if attempt.scored else MatchEventType.PENALTY_MISS,
-                        minute=90 + offset,
+                        minute=penalty_origin + offset,
                         home_state=home_state,
                         away_state=away_state,
                         team_id=attempt.team_id,
@@ -327,9 +416,11 @@ class MatchEventGenerator:
                             "away_penalties": attempt.away_penalties,
                             "importance": 5,
                             "pressure_level": "shootout",
+                            "match_phase": "penalty_shootout",
                         },
                     )
                 )
+            phase_stamp["value"] = None
         self._resolve_possession(home_state, away_state, narrative=narrative)
         self._finalize_player_minutes(player_stats)
         winner_team_id, winner_team_name = self._resolve_winner(home_state, away_state, shootout)
