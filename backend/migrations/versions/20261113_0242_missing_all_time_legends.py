@@ -103,8 +103,7 @@ def _archive_regen(conn) -> None:
     if _holdings(conn, _SOCRATES_REGEN) != 0:
         return
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET real_player_tier = 'archived_duplicate',
                 is_tradable = false,
@@ -112,23 +111,19 @@ def _archive_regen(conn) -> None:
             WHERE id = :pid
               AND full_name = 'Sócrates'
               AND real_player_tier = 'regen'
-            """
-        ),
+            """),
         {"pid": _SOCRATES_REGEN},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_share_markets
             SET status = 'retired', updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"pid": _SOCRATES_REGEN},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_summary_read_models
             SET summary_json = (
                     COALESCE(summary_json::jsonb, '{}'::jsonb) ||
@@ -140,8 +135,7 @@ def _archive_regen(conn) -> None:
                 )::json,
                 updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"pid": _SOCRATES_REGEN},
     )
 
@@ -198,8 +192,7 @@ def _insert(conn, countries, player: dict) -> None:
     }
     reason = "Peak GSI for a retired international, governed 2026-11-13."
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO legendary_player_profiles (
                 id, slug, full_name, country_code, primary_position, secondary_positions_json,
                 preferred_foot, historical_height_cm, gtex_height_cm, era,
@@ -231,8 +224,7 @@ def _insert(conn, countries, player: dict) -> None:
                 governed_gsi = EXCLUDED.governed_gsi,
                 governed_potential_gsi = EXCLUDED.governed_potential_gsi,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "id": profile_id,
             "slug": slug,
@@ -253,8 +245,7 @@ def _insert(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO ingestion_players (
                 id, legendary_profile_id, source_provider, provider_external_id, country_id,
                 full_name, canonical_display_name, first_name, last_name, short_name,
@@ -293,8 +284,7 @@ def _insert(conn, countries, player: dict) -> None:
                 legendary_profile_id = EXCLUDED.legendary_profile_id,
                 dna_profile = EXCLUDED.dna_profile,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "id": player_id,
             "profile_id": profile_id,
@@ -320,8 +310,7 @@ def _insert(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO player_share_markets (
                 id, player_id, total_shares, circulating_shares, released_shares, share_price_coin,
                 status, revenue_distributed_coin, metadata_json, created_at, updated_at
@@ -337,8 +326,7 @@ def _insert(conn, countries, player: dict) -> None:
                 status = 'active',
                 updated_at = NOW()
             WHERE player_share_markets.circulating_shares = 0
-            """
-        ),
+            """),
         {
             "id": str(uuid.uuid5(_NS, "market:" + slug)),
             "pid": player_id,
@@ -347,8 +335,7 @@ def _insert(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO player_summary_read_models (
                 player_id, player_name, current_club_name, last_snapshot_at,
                 current_value_credits, previous_value_credits, movement_pct,
@@ -365,8 +352,7 @@ def _insert(conn, countries, player: dict) -> None:
                 average_rating = EXCLUDED.average_rating,
                 summary_json = EXCLUDED.summary_json,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "pid": player_id,
             "name": player["full_name"],

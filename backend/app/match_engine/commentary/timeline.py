@@ -30,7 +30,9 @@ class MatchCommentaryTimelineGenerator:
                     else None
                 ),
                 secondary_player=(
-                    MatchPlayerReferenceView(player_id=event.secondary_player_id, player_name=event.secondary_player_name)
+                    MatchPlayerReferenceView(
+                        player_id=event.secondary_player_id, player_name=event.secondary_player_name
+                    )
                     if event.secondary_player_id is not None and event.secondary_player_name is not None
                     else None
                 ),
@@ -101,11 +103,15 @@ class MatchCommentaryTimelineGenerator:
         minimum_gap = 5 if duration > MATCH_PRESENTATION_MAX_MINUTES * 60 else 6
         seconds = [0]
         for event in events[1:-1]:
-            raw_second = round(((event.minute + (event.added_time / 10.0)) / max(1.0, last_clock)) * (duration - minimum_gap))
+            raw_second = round(
+                ((event.minute + (event.added_time / 10.0)) / max(1.0, last_clock)) * (duration - minimum_gap)
+            )
             seconds.append(max(raw_second, seconds[-1] + minimum_gap))
         seconds.append(duration)
 
-        if max(seconds[:-1], default=0) >= duration or any(previous >= current for previous, current in zip(seconds, seconds[1:])):
+        if max(seconds[:-1], default=0) >= duration or any(
+            previous >= current for previous, current in zip(seconds, seconds[1:])
+        ):
             scale = duration / max(seconds)
             rescaled = [0]
             for index, second in enumerate(seconds[1:-1], start=1):
@@ -158,9 +164,7 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.SHOT_ON_TARGET:
             return self._attack_call(event, result, outcome="on_target", family_phrase=family_phrase)
         if event.event_type is MatchEventType.FOUL:
-            if event.metadata.get("reviewable") and event.metadata.get(
-                "review_decision"
-            ) == "disallowed":
+            if event.metadata.get("reviewable") and event.metadata.get("review_decision") == "disallowed":
                 return (
                     f"VAR overturns the foul call against {event.team_name}; "
                     f"{event.primary_player_name} gets away with it."
@@ -186,16 +190,12 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.WOODWORK:
             return self._attack_call(event, result, outcome="woodwork", family_phrase=family_phrase)
         if event.event_type is MatchEventType.GOAL:
-            if event.metadata.get("reviewable") and event.metadata.get(
-                "review_decision"
-            ) == "disallowed":
+            if event.metadata.get("reviewable") and event.metadata.get("review_decision") == "disallowed":
                 return (
                     f"Goal initially given for {event.team_name}, but VAR rules it out "
                     f"after reviewing {event.metadata.get('review_reason', 'the phase')}."
                 )
-            if event.metadata.get("reviewable") and event.metadata.get(
-                "review_decision"
-            ) == "confirmed":
+            if event.metadata.get("reviewable") and event.metadata.get("review_decision") == "confirmed":
                 return (
                     f"Goal for {event.team_name}. VAR checks the phase and confirms "
                     f"{event.primary_player_name}'s finish."
@@ -249,16 +249,26 @@ class MatchCommentaryTimelineGenerator:
         if event.event_type is MatchEventType.FULLTIME:
             return "The result reflected who managed the key moments with more control."
         if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.PENALTY_GOAL}:
-            return f"{event.team_name} attacked the moment decisively, and that is often what separates the better side."
+            return (
+                f"{event.team_name} attacked the moment decisively, and that is often what separates the better side."
+            )
         if event.event_type in {MatchEventType.RED_CARD, MatchEventType.YELLOW_CARD, MatchEventType.TACTICAL_FOUL}:
             return "Discipline is now shaping the match as much as quality on the ball."
-        if event.event_type in {MatchEventType.TACTICAL_CHANGE, MatchEventType.TACTICAL_SWING, MatchEventType.SUBSTITUTION_IMPACT}:
+        if event.event_type in {
+            MatchEventType.TACTICAL_CHANGE,
+            MatchEventType.TACTICAL_SWING,
+            MatchEventType.SUBSTITUTION_IMPACT,
+        }:
             return "That phase tells you the coaches are trying to alter the rhythm rather than simply react to it."
         if event.event_type in {MatchEventType.MISSED_BIG_CHANCE, MatchEventType.WOODWORK, MatchEventType.DOUBLE_SAVE}:
             return "Those are the margins that swing momentum and fan pressure very quickly."
         if event.event_type is MatchEventType.INJURY:
             return "That injury forces a structural decision, not just a personnel change."
-        if event.event_type in {MatchEventType.POSSESSION_SWING, MatchEventType.DANGEROUS_ATTACK, MatchEventType.COUNTER_ATTACK}:
+        if event.event_type in {
+            MatchEventType.POSSESSION_SWING,
+            MatchEventType.DANGEROUS_ATTACK,
+            MatchEventType.COUNTER_ATTACK,
+        }:
             route = self._route_phrase(event)
             if route:
                 return f"The move comes {route}, and the defending line has to travel with the ball."

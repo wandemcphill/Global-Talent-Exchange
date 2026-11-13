@@ -296,8 +296,7 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
             "He selects players under 26 and builds the side from academy graduates. GSI 76, potential 88."
         ),
         "philosophy_summary": (
-            "Balanced collective shapes in the USSR and Yugoslav school. "
-            "Players under 26, academy graduates first."
+            "Balanced collective shapes in the USSR and Yugoslav school. " "Players under 26, academy graduates first."
         ),
         "specialty": "Youth Collective Shape",
     },

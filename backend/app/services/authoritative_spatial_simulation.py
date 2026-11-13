@@ -363,9 +363,7 @@ def _player_position(
         state = (
             MatchViewerPlayerState.IDLE
             if line == "goalkeeper"
-            else MatchViewerPlayerState.ATTACKING
-            if line == "attack"
-            else MatchViewerPlayerState.MOVING
+            else MatchViewerPlayerState.ATTACKING if line == "attack" else MatchViewerPlayerState.MOVING
         )
     else:
         tuck = {"goalkeeper": 0.0, "defense": 3.8, "midfield": 1.4, "attack": -2.8}.get(line, 0.0)
@@ -489,7 +487,9 @@ def _player_position(
     return {"x": _clamp(position["x"]), "y": _clamp(position["y"])}, state, highlighted
 
 
-def _nearest_on_line(runtime: Any, attacks_right: bool, ball: dict[str, float], lines: set[str], exclude: str | None) -> str | None:
+def _nearest_on_line(
+    runtime: Any, attacks_right: bool, ball: dict[str, float], lines: set[str], exclude: str | None
+) -> str | None:
     anchors = _anchors(runtime, attacks_right)
     ranked: list[tuple[float, str]] = []
     for player_id in runtime.lineup:
@@ -505,9 +505,13 @@ def _nearest_on_line(runtime: Any, attacks_right: bool, ball: dict[str, float], 
     return ranked[0][1]
 
 
-def _support_id(runtime: Any, attacks_right: bool, ball: dict[str, float], direction: float, carrier_id: str | None) -> str | None:
+def _support_id(
+    runtime: Any, attacks_right: bool, ball: dict[str, float], direction: float, carrier_id: str | None
+) -> str | None:
     anchors = _anchors(runtime, attacks_right)
-    attackers = [player_id for player_id in runtime.lineup if _line(runtime, player_id) == "attack" and player_id != carrier_id]
+    attackers = [
+        player_id for player_id in runtime.lineup if _line(runtime, player_id) == "attack" and player_id != carrier_id
+    ]
     pool = attackers or [
         player_id for player_id in runtime.lineup if _line(runtime, player_id) == "midfield" and player_id != carrier_id
     ]
@@ -881,12 +885,10 @@ def build_ball_payload(
         state = "rolling"
         previous_approach = _smoothstep((max(-2.0, local - 0.05) + 2.0) / 1.85)
         velocity_x = (
-            (50.0 + ((origin["x"] - 50.0) * approach))
-            - (50.0 + ((origin["x"] - 50.0) * previous_approach))
+            (50.0 + ((origin["x"] - 50.0) * approach)) - (50.0 + ((origin["x"] - 50.0) * previous_approach))
         ) / 0.05
         velocity_y = (
-            (50.0 + ((origin["y"] - 50.0) * approach))
-            - (50.0 + ((origin["y"] - 50.0) * previous_approach))
+            (50.0 + ((origin["y"] - 50.0) * approach)) - (50.0 + ((origin["y"] - 50.0) * previous_approach))
         ) / 0.05
         velocity_z = 0.0
     elif event_type in flight_types and -0.15 <= local <= 2.8:

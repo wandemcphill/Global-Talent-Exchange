@@ -460,7 +460,9 @@ def test_high_line_and_press_change_the_block() -> None:
             possession_side=MatchViewerSide.HOME,
             time_seconds=40.0,
         )
-        line = [item["position"]["x"] for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+        line = [
+            item["position"]["x"] for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}
+        ]
         return abs((sum(line) / len(line)) - ball["position"]["x"])
 
     assert away_gap(85) < away_gap(20) - 2.0
@@ -483,18 +485,28 @@ def test_corner_packs_the_box_and_a_goal_does_not() -> None:
         metadata={"set_piece_kind": "corner"},
         render_contract={"origin": {"x": 92.0, "y": 12.0}, "target": {"x": 88.0, "y": 48.0}},
     )
-    packed = _open_play(home, away, active_event=corner, stage="event", phase_depth=None, time_seconds=8.0, clock_minute=20.0)
+    packed = _open_play(
+        home, away, active_event=corner, stage="event", phase_depth=None, time_seconds=8.0, clock_minute=20.0
+    )
     open_play = _open_play(home, away, phase_depth=None, time_seconds=8.0, clock_minute=20.0)
     taker = next(item for item in packed if item["player_id"] == "home-9")
     resting = next(item for item in open_play if item["player_id"] == "home-9")
     assert taker["position"]["y"] < resting["position"]["y"] - 8.0
-    packed_line = [item["position"]["x"] for item in packed if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
-    open_line = [item["position"]["x"] for item in open_play if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    packed_line = [
+        item["position"]["x"] for item in packed if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}
+    ]
+    open_line = [
+        item["position"]["x"] for item in open_play if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}
+    ]
     assert sum(packed_line) / len(packed_line) > (sum(open_line) / len(open_line)) + 4.0
 
     goal = _event()
-    during_goal = _open_play(home, away, active_event=goal, stage="event", phase_depth=None, time_seconds=2.0, clock_minute=12.0)
-    goal_line = [item["position"]["x"] for item in during_goal if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    during_goal = _open_play(
+        home, away, active_event=goal, stage="event", phase_depth=None, time_seconds=2.0, clock_minute=12.0
+    )
+    goal_line = [
+        item["position"]["x"] for item in during_goal if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}
+    ]
     assert sum(goal_line) / len(goal_line) < sum(packed_line) / len(packed_line)
 
 
@@ -533,9 +545,7 @@ def test_open_play_puts_a_runner_on_the_ball_and_a_presser_on_the_carrier() -> N
     assert abs(ball["position"]["x"] - carrier["position"]["x"]) < 1.5
 
     attackers = [
-        item
-        for item in players
-        if item["player_id"] in {"home-9", "home-10", "home-11"} and not item["has_possession"]
+        item for item in players if item["player_id"] in {"home-9", "home-10", "home-11"} and not item["has_possession"]
     ]
     assert max(item["position"]["x"] for item in attackers) > carrier["position"]["x"] + 3.0
 

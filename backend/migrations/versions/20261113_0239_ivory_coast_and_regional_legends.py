@@ -147,53 +147,47 @@ def _load_countries(conn) -> dict[str, dict[str, str]]:
 
 def _set_country(conn, countries, player_id: str, country_key: str) -> None:
     country = countries[country_key]
-    dna_patch = json.dumps({"nationality": country["name"], "nationality_code": _NAT_CODE.get(country_key, country_key)})
+    dna_patch = json.dumps(
+        {"nationality": country["name"], "nationality_code": _NAT_CODE.get(country_key, country_key)}
+    )
     summary_patch = json.dumps({"nationality": country["name"], "country_name": country["name"]})
     market_patch = json.dumps({"country": country["name"]})
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET country_id = :cid,
                 dna_profile = (COALESCE(dna_profile::jsonb, '{}'::jsonb) || CAST(:patch AS jsonb))::json,
                 updated_at = NOW()
             WHERE id = :pid
-            """
-        ),
+            """),
         {"cid": country["id"], "patch": dna_patch, "pid": player_id},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_summary_read_models
             SET summary_json = (COALESCE(summary_json::jsonb, '{}'::jsonb) || CAST(:patch AS jsonb))::json,
                 updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"patch": summary_patch, "pid": player_id},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_share_markets
             SET metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb) || CAST(:patch AS jsonb))::json,
                 updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"patch": market_patch, "pid": player_id},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE legendary_player_profiles AS lp
             SET country_code = :code, updated_at = NOW()
             FROM ingestion_players AS p
             WHERE p.legendary_profile_id = lp.id
               AND p.id = :pid
-            """
-        ),
+            """),
         {"code": _PROFILE_CODE.get(country_key, country_key), "pid": player_id},
     )
 
@@ -307,36 +301,31 @@ def _apply_rating(
         profile_sets.append("secondary_positions_json = CAST(:secondary AS json)")
         profile_params["secondary"] = json.dumps(secondary)
     conn.execute(
-        sa.text(
-            f"""
+        sa.text(f"""
             UPDATE legendary_player_profiles AS lp
             SET {", ".join(profile_sets)}
             FROM ingestion_players AS p
             WHERE p.legendary_profile_id = lp.id
               AND p.id = :pid
-            """
-        ),
+            """),
         profile_params,
     )
     summary_patch["share_price_coin"] = price
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_summary_read_models
             SET average_rating = :gsi,
                 current_value_credits = :price,
                 summary_json = (COALESCE(summary_json::jsonb, '{}'::jsonb) || CAST(:patch AS jsonb))::json,
                 updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"gsi": float(gsi), "price": price, "patch": json.dumps(summary_patch), "pid": player_id},
     )
     if legend_shares and _holdings(conn, player_id) == 0:
         summary_shares = json.dumps({"total_shares": 1, "released_shares": 1, "available_shares": 1})
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_share_markets
                 SET total_shares = 1,
                     released_shares = 1,
@@ -346,63 +335,53 @@ def _apply_rating(
                     metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb) || CAST(:meta AS jsonb))::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"price": price, "meta": json.dumps({"gsi": gsi, "governed_gsi": gsi}), "pid": player_id},
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_summary_read_models
                 SET summary_json = (COALESCE(summary_json::jsonb, '{}'::jsonb) || CAST(:patch AS jsonb))::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"patch": summary_shares, "pid": player_id},
         )
     else:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_share_markets
                 SET share_price_coin = :price,
                     metadata_json = (COALESCE(metadata_json::jsonb, '{}'::jsonb) || CAST(:meta AS jsonb))::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"price": price, "meta": json.dumps({"gsi": gsi, "governed_gsi": gsi}), "pid": player_id},
         )
 
 
 def _archive_placeholder(conn, player_id: str, full_name: str) -> None:
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET real_player_tier = 'archived_duplicate',
                 is_tradable = false,
                 updated_at = NOW()
             WHERE id = :pid
               AND full_name = :name
-            """
-        ),
+            """),
         {"pid": player_id, "name": full_name},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_share_markets
             SET status = 'retired', updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"pid": player_id},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE player_summary_read_models
             SET summary_json = (
                     COALESCE(summary_json::jsonb, '{}'::jsonb) ||
@@ -414,8 +393,7 @@ def _archive_placeholder(conn, player_id: str, full_name: str) -> None:
                 )::json,
                 updated_at = NOW()
             WHERE player_id = :pid
-            """
-        ),
+            """),
         {"pid": player_id},
     )
 
@@ -471,8 +449,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
         "market_visibility": {"status": "visible", "eligible": True},
     }
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO legendary_player_profiles (
                 id, slug, full_name, country_code, primary_position, secondary_positions_json,
                 preferred_foot, historical_height_cm, gtex_height_cm, era,
@@ -506,8 +483,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
                 is_searchable = true,
                 is_active = true,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "id": profile_id,
             "slug": slug,
@@ -528,8 +504,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO ingestion_players (
                 id, legendary_profile_id, source_provider, provider_external_id, country_id,
                 full_name, canonical_display_name, first_name, last_name, short_name,
@@ -569,8 +544,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
                 legendary_profile_id = EXCLUDED.legendary_profile_id,
                 dna_profile = EXCLUDED.dna_profile,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "id": player_id,
             "profile_id": profile_id,
@@ -596,8 +570,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO player_share_markets (
                 id, player_id, total_shares, circulating_shares, released_shares, share_price_coin,
                 status, revenue_distributed_coin, metadata_json, created_at, updated_at
@@ -613,8 +586,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
                 status = 'active',
                 metadata_json = EXCLUDED.metadata_json,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "id": str(uuid.uuid5(_NS, "market:" + slug)),
             "pid": player_id,
@@ -623,8 +595,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
         },
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             INSERT INTO player_summary_read_models (
                 player_id, player_name, current_club_name, last_snapshot_at,
                 current_value_credits, previous_value_credits, movement_pct,
@@ -641,8 +612,7 @@ def _insert_legend(conn, countries, player: dict) -> None:
                 average_rating = EXCLUDED.average_rating,
                 summary_json = EXCLUDED.summary_json,
                 updated_at = NOW()
-            """
-        ),
+            """),
         {
             "pid": player_id,
             "name": player["full_name"],
@@ -1322,8 +1292,7 @@ def upgrade() -> None:
 
     if _holdings(conn, _JUMA_BAH) == 0:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE ingestion_players
                 SET real_player_tier = 'established',
                     legendary_profile_id = NULL,
@@ -1332,13 +1301,11 @@ def upgrade() -> None:
                     updated_at = NOW()
                 WHERE id = :pid
                   AND real_player_tier = 'legend'
-                """
-            ),
+                """),
             {"pid": _JUMA_BAH},
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_share_markets
                 SET total_shares = 200,
                     released_shares = 200,
@@ -1347,13 +1314,11 @@ def upgrade() -> None:
                     updated_at = NOW()
                 WHERE player_id = :pid
                   AND total_shares = 1
-                """
-            ),
+                """),
             {"pid": _JUMA_BAH},
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_summary_read_models
                 SET summary_json = (
                         COALESCE(summary_json::jsonb, '{}'::jsonb) ||
@@ -1369,8 +1334,7 @@ def upgrade() -> None:
                     )::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"pid": _JUMA_BAH},
         )
 
@@ -1391,8 +1355,7 @@ def upgrade() -> None:
     )
     if _holdings(conn, _SESSEGNON) == 0:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 INSERT INTO legendary_player_profiles (
                     id, slug, full_name, country_code, primary_position, secondary_positions_json,
                     preferred_foot, historical_height_cm, gtex_height_cm, era,
@@ -1424,20 +1387,17 @@ def upgrade() -> None:
                     country_code = 'BEN',
                     is_searchable = true,
                     updated_at = NOW()
-                """
-            ),
+                """),
             {"id": _lid("stephane-sessegnon"), "game_dob": sessegnon_dob},
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE ingestion_players
                 SET legendary_profile_id = :lid,
                     height_cm = COALESCE(height_cm, 172),
                     updated_at = NOW()
                 WHERE id = :pid
-                """
-            ),
+                """),
             {"lid": _lid("stephane-sessegnon"), "pid": _SESSEGNON},
         )
 
@@ -1472,8 +1432,7 @@ def downgrade() -> None:
         legend_shares=True,
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET real_player_tier = 'established',
                 legendary_profile_id = NULL,
@@ -1486,49 +1445,40 @@ def downgrade() -> None:
                 date_of_birth = '2004-06-01',
                 updated_at = NOW()
             WHERE id = :pid
-            """
-        ),
+            """),
         {"pid": _SESSEGNON},
     )
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET real_player_tier = 'legend', updated_at = NOW()
             WHERE id = :pid
-            """
-        ),
+            """),
         {"pid": _JUMA_BAH},
     )
     if _holdings(conn, _JUMA_BAH) == 0:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_share_markets
                 SET total_shares = 1, released_shares = 1, circulating_shares = 0, updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"pid": _JUMA_BAH},
         )
     for player_id, _full_name in _PLACEHOLDER_REGENS:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE ingestion_players
                 SET real_player_tier = NULL, is_tradable = true, updated_at = NOW()
                 WHERE id = :pid
-                """
-            ),
+                """),
             {"pid": player_id},
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_share_markets
                 SET status = 'active', updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"pid": player_id},
         )

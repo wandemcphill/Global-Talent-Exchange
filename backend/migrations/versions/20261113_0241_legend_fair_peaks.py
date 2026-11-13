@@ -357,15 +357,13 @@ def _resolve(conn) -> list[tuple[str, int]]:
         if new < 80 or new > 96:
             problems.append(f"{name} peak {new} outside 80-96")
         rows = conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 SELECT id::text
                 FROM ingestion_players
                 WHERE full_name = :name
                   AND governed_gsi = :old
                   AND real_player_tier = 'legend'
-                """
-            ),
+                """),
             {"name": name, "old": old},
         ).fetchall()
         if len(rows) != 1:
@@ -383,9 +381,7 @@ def upgrade() -> None:
         return
     resolved = _resolve(conn)
     values = ", ".join(f"('{player_id}'::text, {gsi}::int)" for player_id, gsi in resolved)
-    conn.execute(
-        sa.text(
-            f"""
+    conn.execute(sa.text(f"""
             UPDATE ingestion_players AS ip
             SET governed_gsi = v.gsi,
                 governed_potential_gsi = v.gsi,
@@ -404,12 +400,8 @@ def upgrade() -> None:
                 updated_at = NOW()
             FROM (VALUES {values}) AS v(id, gsi)
             WHERE ip.id = v.id
-            """
-        )
-    )
-    conn.execute(
-        sa.text(
-            f"""
+            """))
+    conn.execute(sa.text(f"""
             UPDATE legendary_player_profiles AS lp
             SET governed_gsi = v.gsi,
                 governed_potential_gsi = v.gsi,
@@ -417,23 +409,15 @@ def upgrade() -> None:
             FROM ingestion_players AS ip
             JOIN (VALUES {values}) AS v(id, gsi) ON ip.id = v.id
             WHERE ip.legendary_profile_id = lp.id
-            """
-        )
-    )
-    conn.execute(
-        sa.text(
-            f"""
+            """))
+    conn.execute(sa.text(f"""
             UPDATE player_share_markets AS m
             SET share_price_coin = ROUND(250.0 * POWER(v.gsi / 90.0, 3.2) * 3.6, 2),
                 updated_at = NOW()
             FROM (VALUES {values}) AS v(id, gsi)
             WHERE m.player_id = v.id
-            """
-        )
-    )
-    conn.execute(
-        sa.text(
-            f"""
+            """))
+    conn.execute(sa.text(f"""
             UPDATE player_summary_read_models AS rm
             SET summary_json = (
                     COALESCE(rm.summary_json::jsonb, '{{}}'::jsonb)
@@ -450,9 +434,7 @@ def upgrade() -> None:
                 updated_at = NOW()
             FROM (VALUES {values}) AS v(id, gsi)
             WHERE rm.player_id = v.id
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:

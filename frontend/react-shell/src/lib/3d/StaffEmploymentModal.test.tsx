@@ -322,7 +322,7 @@ describe("StaffEmploymentModal", () => {
     // Candidate 1 rendered
     const cand1 = container.querySelector('[data-testid="candidate-card-prof-cand-1"]');
     expect(cand1?.textContent).toContain("Chidi Eze");
-    expect(cand1?.textContent).toContain("85,000 GTEX");
+    expect(cand1?.textContent).toContain("85,000 FAN");
     expect(cand1?.textContent).toContain("High Interest");
 
     // Expand Career History
@@ -459,7 +459,7 @@ describe("StaffEmploymentModal", () => {
 
     const dialog = container.querySelector('[data-testid="dismissal-confirmation-dialog"]');
     expect(dialog?.textContent).toContain("Emmanuel Amuneke");
-    expect(dialog?.textContent).toContain("60,000 GTEX"); // 50% of 120,000
+    expect(dialog?.textContent).toContain("60,000 FAN"); // 50% of 120,000
 
     // Confirm Dismiss
     const confirmBtn = container.querySelector(

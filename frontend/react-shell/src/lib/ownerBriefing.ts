@@ -699,6 +699,7 @@ export interface StaffMarketCandidate {
   ambition: number;
   loyalty: number;
   expected_salary_gtex: number;
+  expected_salary_fan_coin?: number;
   min_prestige: number;
   employment_status: "employed" | "unemployed" | "retired" | string;
   current_club_id?: string | null;
@@ -729,6 +730,7 @@ export interface StaffFilledRoleItem {
   staff_id: string;
   appointed_at?: string;
   salary_gtex: number;
+  salary_fan_coin?: number;
   mood: number;
 }
 
@@ -870,6 +872,7 @@ export interface GmDelegationOverviewResponse {
     role: string;
     rating: number;
     salary_gtex: number;
+    salary_fan_coin?: number;
     trust: number;
     tension: number;
     alignment: number;

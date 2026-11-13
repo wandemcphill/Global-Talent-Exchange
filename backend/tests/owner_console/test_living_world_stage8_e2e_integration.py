@@ -223,7 +223,6 @@ def _bootstrap_club(
         user_id=u.id,
         club_id=club_id,
         memo="Stage 8 E2E Fan Coin salary purse",
-    )
         check_funds=False,
     )
     session.commit()

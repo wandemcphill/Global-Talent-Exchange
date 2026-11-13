@@ -83,8 +83,7 @@ def _apply(conn, countries, row) -> None:
     if country_name:
         country = countries[country_name]
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE ingestion_players
                 SET country_id = :cid,
                     dna_profile = (
@@ -93,8 +92,7 @@ def _apply(conn, countries, row) -> None:
                     )::json,
                     updated_at = NOW()
                 WHERE id = :pid
-                """
-            ),
+                """),
             {
                 "cid": country["id"],
                 "patch": json.dumps({"nationality": country["name"], "nationality_code": profile_code or ""}),
@@ -102,8 +100,7 @@ def _apply(conn, countries, row) -> None:
             },
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_summary_read_models
                 SET summary_json = (
                         COALESCE(summary_json::jsonb, '{}'::jsonb)
@@ -111,8 +108,7 @@ def _apply(conn, countries, row) -> None:
                     )::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {
                 "patch": json.dumps({"nationality": country["name"], "country_name": country["name"]}),
                 "pid": player_id,
@@ -120,8 +116,7 @@ def _apply(conn, countries, row) -> None:
         )
     if position:
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE ingestion_players
                 SET position = :position,
                     normalized_position = :normalized,
@@ -132,8 +127,7 @@ def _apply(conn, countries, row) -> None:
                     )::json,
                     updated_at = NOW()
                 WHERE id = :pid
-                """
-            ),
+                """),
             {
                 "position": position,
                 "normalized": normalized,
@@ -143,8 +137,7 @@ def _apply(conn, countries, row) -> None:
             },
         )
         conn.execute(
-            sa.text(
-                """
+            sa.text("""
                 UPDATE player_summary_read_models
                 SET summary_json = (
                         COALESCE(summary_json::jsonb, '{}'::jsonb)
@@ -152,8 +145,7 @@ def _apply(conn, countries, row) -> None:
                     )::json,
                     updated_at = NOW()
                 WHERE player_id = :pid
-                """
-            ),
+                """),
             {"patch": json.dumps({"position": position}), "pid": player_id},
         )
     profile_sets = ["updated_at = NOW()"]
@@ -169,15 +161,13 @@ def _apply(conn, countries, row) -> None:
         params["secondary"] = json.dumps(secondary)
     if len(profile_sets) > 1:
         conn.execute(
-            sa.text(
-                f"""
+            sa.text(f"""
                 UPDATE legendary_player_profiles AS lp
                 SET {", ".join(profile_sets)}
                 FROM ingestion_players AS p
                 WHERE p.legendary_profile_id = lp.id
                   AND p.id = :pid
-                """
-            ),
+                """),
             params,
         )
 
