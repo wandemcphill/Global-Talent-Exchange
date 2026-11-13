@@ -3,7 +3,6 @@ from __future__ import annotations
 from datetime import date
 import hashlib
 from types import SimpleNamespace
-import pytest
 
 from app.players.gsi_service import resolve_player_gsi
 from app.services.regen_market_service import _compute_age
