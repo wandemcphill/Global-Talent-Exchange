@@ -288,7 +288,7 @@ def test_fm23_regens_facebank_index_and_manifest_coverage() -> None:
     from scripts.assign_fm23_regen_facebank_portraits import FaceBankIndex
 
     index = FaceBankIndex()
-    assert len(index.assets) == 8522
+    assert len(index.assets) == 11502
 
     required_ethnicities = {
         "african",
