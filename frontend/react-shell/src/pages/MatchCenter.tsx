@@ -231,7 +231,28 @@ type PitchDot = {
   vy: number;
   playerId?: string;
   idx?: number;
+  duty?: "press" | "run";
 };
+
+function markDuties(
+  home: PitchDot[],
+  away: PitchDot[],
+  ball: { x: number; y: number },
+  carrier: PitchDot | undefined,
+  carrierIsHome: boolean
+) {
+  const mates = carrierIsHome ? home : away;
+  const foes = carrierIsHome ? away : home;
+  const sign = carrierIsHome ? 1 : -1;
+  const presser = [...foes]
+    .filter((player) => !/^GK/i.test(player.role))
+    .sort((left, right) => Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
+  if (presser) presser.duty = "press";
+  const runner = [...mates]
+    .filter((player) => player !== carrier && (player.x - (carrier?.x ?? ball.x)) * sign > 0.015)
+    .sort((left, right) => (right.x - left.x) * sign || Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
+  if (runner) runner.duty = "run";
+}
 
 function interpolatedSquad(leftPlayers: any[], rightPlayers: any[], t: number, home: boolean): PitchDot[] {
   const rightById = new Map(rightPlayers.map((player) => [playerKey(player), player]));
@@ -541,7 +562,17 @@ function Pitch2DView({
   // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
   const [phaseTick, setPhaseTick] = useState(0);
   const playbackRef = useRef(0);
+  const liveTrack = useRef<{ from: typeof pitchPlayers; to: typeof pitchPlayers; at: number } | null>(null);
   const frameCount = Array.isArray(frames) ? frames.length : 0;
+  const liveKey = (pitchPlayers || []).map((player) => `${player.player_id}:${player.x}:${player.y}`).join("|");
+  useEffect(() => {
+    if (!pitchPlayers?.length) return;
+    liveTrack.current = {
+      from: liveTrack.current?.to?.length ? liveTrack.current.to : pitchPlayers,
+      to: pitchPlayers,
+      at: performance.now(),
+    };
+  }, [liveKey]);
   useEffect(() => {
     playbackRef.current = 0;
   }, [frameCount]);
@@ -591,14 +622,30 @@ function Pitch2DView({
       }
       const carrier = squad.find((player) => player.hasBall) || h[8] || h[0];
       const carrierIsHome = Boolean(carrier && h.includes(carrier));
+      const rightOwner = String(pair.right.ball?.owner_player_id || "");
+      const mates = carrierIsHome ? h : a;
+      const receiver =
+        squad.find((player) => rightOwner && player.playerId === rightOwner && player.playerId !== carrier?.playerId) ||
+        mates
+          .filter((player) => player.playerId !== carrier?.playerId)
+          .sort(
+            (left, right) =>
+              Math.hypot(left.x - rightBall.x, left.y - rightBall.y) -
+              Math.hypot(right.x - rightBall.x, right.y - rightBall.y)
+          )[0];
+      const shownBall = {
+        x: leftBall.x + (rightBall.x - leftBall.x) * pair.t,
+        y: leftBall.y + (rightBall.y - leftBall.y) * pair.t,
+      };
+      markDuties(h, a, shownBall, carrier, carrierIsHome);
       return {
         homeCoords: h,
         awayCoords: a,
-        synthBall: {
-          x: leftBall.x + (rightBall.x - leftBall.x) * pair.t,
-          y: leftBall.y + (rightBall.y - leftBall.y) * pair.t,
-        },
-        passTarget: carrier ? { x: carrier.x, y: carrier.y } : null,
+        synthBall: shownBall,
+        passTarget:
+          receiver && carrier && Math.hypot(receiver.x - carrier.x, receiver.y - carrier.y) > 0.03
+            ? { x: receiver.x, y: receiver.y }
+            : null,
         carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
       };
     }
@@ -606,7 +653,17 @@ function Pitch2DView({
     const t = phaseTick * 0.08 * (0.6 + tempo / 100);
 
     if (hasLiveCoords && pitchPlayers) {
-      const h = pitchPlayers
+      const track = liveTrack.current;
+      const blend = track ? smoothUnit((performance.now() - track.at) / 2200) : 1;
+      const livePlayers = pitchPlayers.map((player) => {
+        const previous = track?.from?.find((item) => item.player_id && item.player_id === player.player_id) || player;
+        return {
+          ...player,
+          x: Number(previous.x) + (Number(player.x) - Number(previous.x)) * blend,
+          y: Number(previous.y) + (Number(player.y) - Number(previous.y)) * blend,
+        };
+      });
+      const h = livePlayers
         .filter((p) => p.is_home)
         .map((p, idx) => ({
           x: p.x,
@@ -620,7 +677,7 @@ function Pitch2DView({
           vx: Math.cos(t + idx) * 14,
           vy: Math.sin(t + idx) * 9,
         }));
-      const a = pitchPlayers
+      const a = livePlayers
         .filter((p) => !p.is_home)
         .map((p, idx) => ({
           x: p.x,
@@ -635,13 +692,21 @@ function Pitch2DView({
           vy: Math.sin(t * 0.8 + idx) * 8,
         }));
       const carrier = h.find((p) => p.hasBall) || a.find((p) => p.hasBall) || h[8] || h[0];
-      const target = h[9] || h[0];
+      const carrierIsHome = Boolean(carrier && h.includes(carrier));
+      const liveBall = ball || (carrier ? { x: carrier.x, y: carrier.y } : { x: 0.5, y: 0.5 });
+      markDuties(h, a, liveBall, carrier, carrierIsHome);
+      const mates = (carrierIsHome ? h : a).filter((player) => player !== carrier);
+      const target = mates.sort(
+        (left, right) =>
+          Math.hypot(left.x - (ball?.x ?? carrier?.x ?? 0.5), left.y - (ball?.y ?? carrier?.y ?? 0.5)) -
+          Math.hypot(right.x - (ball?.x ?? carrier?.x ?? 0.5), right.y - (ball?.y ?? carrier?.y ?? 0.5))
+      )[0];
       return {
         homeCoords: h,
         awayCoords: a,
-        synthBall: ball || (carrier ? { x: carrier.x, y: carrier.y } : { x: 0.5, y: 0.5 }),
+        synthBall: liveBall,
         passTarget: target ? { x: target.x, y: target.y } : null,
-        carrierInfo: carrier ? { ...carrier, isHome: h.includes(carrier) } : null,
+        carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
       };
     }
 
@@ -680,11 +745,17 @@ function Pitch2DView({
           : "mid";
       const sign = isHome ? 1 : -1;
       const inPossession = attackingHome === isHome;
+      const lineBias = Math.max(-1, Math.min(1, (line - 50) / 50));
+      const pressBias = Math.max(-1, Math.min(1, (press - 50) / 50));
       const gaps: Record<string, number> = inPossession
-        ? { gk: 0, def: -0.15, mid: -0.045, att: 0.075 }
-        : { gk: 0, def: -0.1, mid: -0.02, att: 0.06 };
+        ? { gk: 0, def: -0.15 + lineBias * 0.06, mid: -0.045 + lineBias * 0.03, att: 0.075 }
+        : { gk: 0, def: -0.1 - pressBias * 0.05 - lineBias * 0.03, mid: -0.02 - pressBias * 0.04, att: 0.06 };
       const along = gaps[lineName] ?? 0;
       let x = lineName === "gk" ? (isHome ? 0.07 : 0.93) : shapedBallX + along * sign;
+      if (minute > 65 && lineName !== "gk") {
+        const late = Math.min(1, (minute - 65) / 25);
+        x -= (lineName === "att" ? 0.05 : 0.022) * late * sign;
+      }
       if (inPossession && lineName === "def" && Math.abs(tpl.by - 0.5) > 0.2) x += 0.045 * sign;
       x = Math.min(0.93, Math.max(0.07, x));
       const y = Math.min(0.9, Math.max(0.1, tpl.by * 0.7 + lane * 0.3 + Math.sin(seconds + idx) * 0.008));
@@ -709,6 +780,33 @@ function Pitch2DView({
       placeOutfield(tpl, idx, false, awayRoster, AWAY_NAMES[idx] || tpl.name)
     );
     const activeSquad = attackingHome ? h : a;
+    const ballPoint = { x: shapedBallX, y: lane };
+    const foes = attackingHome ? a : h;
+    const sign = attackingHome ? 1 : -1;
+    const pressBias = Math.max(-1, Math.min(1, (press - 50) / 50));
+    const closers = foes.filter((player) => (player.idx ?? 0) >= 5 && (player.idx ?? 0) <= 7);
+    const presser = [...(closers.length ? closers : foes.filter((player) => (player.idx ?? 0) > 0))].sort(
+      (left, right) =>
+        Math.hypot(left.x - ballPoint.x, left.y - ballPoint.y) - Math.hypot(right.x - ballPoint.x, right.y - ballPoint.y)
+    )[0];
+    if (presser) {
+      const dx = ballPoint.x - presser.x;
+      const dy = ballPoint.y - presser.y;
+      const dist = Math.hypot(dx, dy) || 1;
+      const stop = 0.05;
+      if (dist > stop) {
+        const scale = ((dist - stop) / dist) * (0.42 + pressBias * 0.18);
+        presser.x = Math.min(0.93, Math.max(0.07, presser.x + dx * scale));
+        presser.y = Math.min(0.9, Math.max(0.1, presser.y + dy * scale));
+      }
+    }
+    const runner = [...activeSquad]
+      .filter((player) => (player.idx ?? 0) >= 8 && player.idx !== fromSlot)
+      .sort((left, right) => Math.abs(left.y - lane) - Math.abs(right.y - lane))[0];
+    if (runner) {
+      runner.x = Math.min(0.93, Math.max(0.07, runner.x + 0.055 * sign));
+      runner.y = Math.min(0.9, Math.max(0.1, runner.y + (lane - runner.y) * 0.35));
+    }
     const carrier = activeSquad.find((player) => player.idx === fromSlot) || activeSquad[5] || activeSquad[0];
     const receiver = activeSquad.find((player) => player.idx === toSlot) || activeSquad[6] || activeSquad[0];
     if (!carrier || !receiver) {
@@ -725,6 +823,7 @@ function Pitch2DView({
     const bx = ball ? ball.x : carrier.x + (receiver.x - carrier.x) * passProgress;
     const by = ball ? ball.y : carrier.y + (receiver.y - carrier.y) * passProgress;
     const shownCarrier = passProgress < 0.72 ? carrier : receiver;
+    markDuties(h, a, { x: bx, y: by }, shownCarrier, attackingHome);
 
     return {
       homeCoords: h,
@@ -743,6 +842,13 @@ function Pitch2DView({
   const ballX = synthBall.x * 1000;
   const ballY = synthBall.y * 625;
   const homeAvgX = homeCoords.reduce((acc, p) => acc + p.x, 0) / Math.max(1, homeCoords.length);
+  const defendingSide = carrierInfo?.isHome ? awayCoords : homeCoords;
+  const lineHolders = defendingSide.filter((player) =>
+    /^(CB|LB|RB|LCB|RCB|CCB|RWB|LWB|DEF|FB)/i.test(String(player.role || ""))
+  );
+  const offsideX = lineHolders.length
+    ? (lineHolders.reduce((sum, player) => sum + player.x, 0) / lineHolders.length) * 1000
+    : null;
   const territorySplit = Math.min(72, Math.max(32, Math.round(homeAvgX * 105 + (press - 50) * 0.2)));
 
   // 2.5D Broadcast Tilt CSS Transform
@@ -1036,6 +1142,19 @@ function Pitch2DView({
                       />
                     ))}
 
+                {offsideX != null && (
+                  <line
+                    x1={offsideX}
+                    y1={36}
+                    x2={offsideX}
+                    y2={589}
+                    stroke="#f8fafc"
+                    strokeWidth="1.5"
+                    strokeDasharray="8 6"
+                    opacity="0.55"
+                  />
+                )}
+
                 {/* Lofted Pass Arc from Carrier to Target */}
                 {carrierInfo && passTarget && (
                   <g>
@@ -1109,6 +1228,10 @@ function Pitch2DView({
                       className="animate-ping"
                     />
                   )}
+                  {p.duty === "press" && (
+                    <circle r="19" fill="none" stroke="#F43F5E" strokeWidth="1.6" strokeDasharray="2 2" />
+                  )}
+                  {p.duty === "run" && <polygon points="0,-22 5,-14 -5,-14" fill="#FFFFFF" opacity="0.9" />}
 
                   {/* Velocity vector arrow */}
                   <line
@@ -1176,6 +1299,10 @@ function Pitch2DView({
                   {hasBall && (
                     <circle r="22" fill="none" stroke="#FFB800" strokeWidth="2" opacity="0.85" className="animate-ping" />
                   )}
+                  {p.duty === "press" && (
+                    <circle r="19" fill="none" stroke="#F43F5E" strokeWidth="1.6" strokeDasharray="2 2" />
+                  )}
+                  {p.duty === "run" && <polygon points="0,-22 5,-14 -5,-14" fill="#FFFFFF" opacity="0.9" />}
                   <line x1="0" y1="0" x2={p.vx} y2={p.vy} stroke="#FFB800" strokeWidth="1.8" opacity="0.7" />
                   <circle r="15.5" fill="#090D14" stroke={staminaColor} strokeWidth="2" />
                   <circle
@@ -2492,6 +2619,23 @@ export default function MatchCenter() {
     }
     return (m?.events || []).filter((e: any) => e.minute <= minute);
   }, [m, minute, liveState]);
+  const commentary = useMemo(() => {
+    const played = viewerData?.frames?.length ? viewerData.frames : m?.frames || [];
+    const calls = played
+      .filter((frame: { overlay_text?: string; clock_minute?: number }) => frame.overlay_text && Number(frame.clock_minute || 0) <= minute + 0.2)
+      .map((frame: { overlay_text?: string; clock_minute?: number }) => ({
+        minute: Math.max(1, Math.round(Number(frame.clock_minute || 0))),
+        text: String(frame.overlay_text),
+        type: "open_play",
+      }));
+    const merged: Array<{ minute: number; text?: string; title?: string; description?: string; type?: string }> = [];
+    for (const item of [...shown, ...calls].sort((left: { minute: number }, right: { minute: number }) => Number(left.minute) - Number(right.minute))) {
+      const text = String(item.text || item.title || item.description || "");
+      if (merged.length && String(merged[merged.length - 1].text || merged[merged.length - 1].title || "") === text) continue;
+      merged.push(item);
+    }
+    return merged;
+  }, [shown, viewerData, m, minute]);
 
   if (isLoading || !m) return <Loading label="Loading match" />;
 
@@ -3037,7 +3181,7 @@ export default function MatchCenter() {
         {activeTab === "commentary" && (
           <Panel eyebrow="Live commentary" title="Event feed" testid="commentary-feed">
             <ol className="space-y-2">
-              {[...shown].reverse().map((e: any, i: number) => (
+              {[...commentary].reverse().map((e: any, i: number) => (
                 <li
                   key={i}
                   className={`gx-rise flex gap-3 rounded-sm px-3 py-2 text-sm ${

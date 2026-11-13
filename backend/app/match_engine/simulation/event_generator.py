@@ -118,6 +118,8 @@ class MatchEventGenerator:
                 metadata={
                     "stage": request.competition.stage,
                     "upset_probability": round(narrative.upset_probability, 3),
+                    "home_tactics": self._shape_instructions(home_state),
+                    "away_tactics": self._shape_instructions(away_state),
                 },
             )
         )
@@ -2670,6 +2672,16 @@ class MatchEventGenerator:
         if any(event.event_type is MatchEventType.WOODWORK for event in events):
             notes.append("Fine margins mattered, with the woodwork stopping at least one high-leverage moment.")
         return tuple(notes[:4])
+
+    @staticmethod
+    def _shape_instructions(state) -> dict[str, int]:
+        tactics = state.tactics
+        return {
+            "pressing": int(tactics.pressing),
+            "defensive_line": int(tactics.defensive_line),
+            "width": int(tactics.width),
+            "tempo": int(tactics.tempo),
+        }
 
     def _make_event(
         self,

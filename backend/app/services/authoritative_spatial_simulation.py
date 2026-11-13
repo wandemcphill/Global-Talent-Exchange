@@ -91,7 +91,7 @@ def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
         base_x = tuple(21.0 + (gap * index) for index in range(len(sizes)))
     defensive_line = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
     width = float(getattr(runtime, "width", 50.0) or 50.0)
-    line_shift = (defensive_line - 50.0) * 0.12
+    line_shift = (defensive_line - 50.0) * 0.28
     adjusted_x = []
     for i, x in enumerate(base_x):
         if i == 0:
@@ -107,7 +107,7 @@ def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
     result = {runtime.lineup[0]: {"x": 8.0 if attacks_right else 92.0, "y": 50.0}}
     cursor = 0
     outfield = runtime.lineup[1:]
-    width_factor = 1.0 + ((width - 50.0) * 0.003)
+    width_factor = 1.0 + ((width - 50.0) * 0.008)
     for group_index, size in enumerate(sizes):
         ys = _LINE_Y.get(size, tuple(10.0 + ((i + 1) * (80.0 / (size + 1))) for i in range(size)))
         if width_factor != 1.0:
@@ -239,6 +239,10 @@ def _ball_from_depth(attacks_right: bool, depth: float) -> dict[str, float]:
     return {"x": _clamp(x), "y": _clamp(lane, 16.0, 84.0)}
 
 
+def _instruction(runtime: Any, name: str, default: float = 50.0) -> float:
+    return float(getattr(runtime, name, default) or default)
+
+
 def _shift_toward_block(
     position: dict[str, float],
     anchor: dict[str, float],
@@ -248,6 +252,9 @@ def _shift_toward_block(
     direction: float,
     in_possession: bool,
     blend: float,
+    defensive_line: float = 50.0,
+    press: float = 50.0,
+    width: float = 50.0,
 ) -> None:
     """Slide a whole line with the ball, the way a 2D match keeps its shape."""
     if blend <= 0.0:
@@ -255,22 +262,43 @@ def _shift_toward_block(
     if line == "goalkeeper":
         position["y"] += (ball["y"] - position["y"]) * min(0.1, blend * 0.12)
         return
+    line_bias = _clamp((defensive_line - 50.0) / 50.0, -1.0, 1.0)
+    press_bias = _clamp((press - 50.0) / 50.0, -1.0, 1.0)
+    width_bias = _clamp((width - 50.0) / 50.0, -1.0, 1.0)
     if in_possession:
         along = {"defense": -15.0, "midfield": -5.0, "attack": 8.0}.get(line, -4.0)
-        if line == "defense" and abs(anchor["y"] - 50.0) > 18.0:
-            along += 5.0
+        if line == "defense":
+            along += 6.0 * line_bias
+            if abs(anchor["y"] - 50.0) > 18.0:
+                along += 5.0 + (4.0 * width_bias)
+        elif line == "midfield":
+            along += 3.0 * line_bias
     else:
         along = {"defense": 11.0, "midfield": 3.0, "attack": -7.0}.get(line, 2.0)
+        if line == "defense":
+            along -= (6.0 * press_bias) + (3.0 * line_bias)
+        elif line == "midfield":
+            along -= 4.0 * press_bias
     desired_x = ball["x"] + along * direction
+    offside_gap = 4.5 - (1.4 * line_bias)
     if in_possession and line == "defense":
         if direction > 0:
-            desired_x = min(desired_x, ball["x"] - 4.5)
+            desired_x = min(desired_x, ball["x"] - offside_gap)
         else:
-            desired_x = max(desired_x, ball["x"] + 4.5)
+            desired_x = max(desired_x, ball["x"] + offside_gap)
+    elif not in_possession and line == "defense":
+        if direction > 0:
+            desired_x = max(desired_x, ball["x"] + offside_gap)
+        else:
+            desired_x = min(desired_x, ball["x"] - offside_gap)
     desired_x = _clamp(desired_x, 8.0, 92.0)
     lane_y = anchor["y"] * 0.74 + ball["y"] * 0.26
     if not in_possession and line in {"defense", "midfield"}:
-        lane_y = 50.0 + (lane_y - 50.0) * 0.84
+        compact = 0.84 + (0.12 * width_bias)
+        lane_y = 50.0 + (lane_y - 50.0) * compact
+    elif in_possession and line in {"defense", "attack"}:
+        spread = 1.0 + (0.16 * width_bias)
+        lane_y = 50.0 + (lane_y - 50.0) * spread
     position["x"] += (desired_x - position["x"]) * blend
     position["y"] += (_clamp(lane_y, 8.0, 92.0) - position["y"]) * blend
 
@@ -430,8 +458,221 @@ def _player_position(
             direction=direction,
             in_possession=in_possession,
             blend=block_blend,
+            defensive_line=_instruction(runtime, "defensive_line"),
+            press=_instruction(runtime, "press_intensity"),
+            width=_instruction(runtime, "width"),
         )
+    _drop_when_tired(position, line=line, attacks_right=attacks_right, clock_minute=clock_minute, player=player)
+    state = _engage_around_the_ball(
+        position,
+        runtime,
+        player,
+        line=line,
+        state=state,
+        ball_point=ball_point,
+        direction=direction,
+        in_possession=in_possession,
+        attacks_right=attacks_right,
+        phase_depth=phase_depth,
+        active_event=active_event,
+    )
+    _apply_restart(
+        position,
+        anchor,
+        line=line,
+        player=player,
+        active_event=active_event,
+        event_weight=event_weight,
+        in_possession=in_possession,
+        direction=direction,
+    )
     return {"x": _clamp(position["x"]), "y": _clamp(position["y"])}, state, highlighted
+
+
+def _nearest_on_line(runtime: Any, attacks_right: bool, ball: dict[str, float], lines: set[str], exclude: str | None) -> str | None:
+    anchors = _anchors(runtime, attacks_right)
+    ranked: list[tuple[float, str]] = []
+    for player_id in runtime.lineup:
+        if player_id == exclude or _line(runtime, player_id) not in lines:
+            continue
+        anchor = anchors[player_id]
+        channel_y = anchor["y"] * 0.74 + ball["y"] * 0.26
+        channel_y = 50.0 + (channel_y - 50.0) * 0.84
+        ranked.append((hypot(anchor["x"] - ball["x"], channel_y - ball["y"]), player_id))
+    if not ranked:
+        return None
+    ranked.sort()
+    return ranked[0][1]
+
+
+def _support_id(runtime: Any, attacks_right: bool, ball: dict[str, float], direction: float, carrier_id: str | None) -> str | None:
+    anchors = _anchors(runtime, attacks_right)
+    attackers = [player_id for player_id in runtime.lineup if _line(runtime, player_id) == "attack" and player_id != carrier_id]
+    pool = attackers or [
+        player_id for player_id in runtime.lineup if _line(runtime, player_id) == "midfield" and player_id != carrier_id
+    ]
+    if not pool:
+        return None
+
+    def score(player_id: str) -> tuple[float, float]:
+        anchor = anchors[player_id]
+        ahead = (anchor["x"] - ball["x"]) * direction
+        return (ahead, -abs(anchor["y"] - ball["y"]))
+
+    return max(pool, key=score)
+
+
+def _engage_around_the_ball(
+    position: dict[str, float],
+    runtime: Any,
+    player: Any,
+    *,
+    line: str,
+    state: MatchViewerPlayerState,
+    ball_point: dict[str, float] | None,
+    direction: float,
+    in_possession: bool,
+    attacks_right: bool,
+    phase_depth: float | None,
+    active_event: Any,
+) -> MatchViewerPlayerState:
+    """Put the carrier on the ball, send one runner, and step one opponent out."""
+    if ball_point is None or phase_depth is None or active_event is not None:
+        return state
+    carrier_id = _carrier_id(runtime, attacks_right, phase_depth) if in_possession else None
+    if in_possession and player.player_id == carrier_id:
+        position["x"] = ball_point["x"]
+        position["y"] = ball_point["y"]
+        return state
+    if in_possession:
+        support_id = _support_id(runtime, attacks_right, ball_point, direction, carrier_id)
+        if player.player_id == support_id:
+            position["x"] += 6.2 * direction
+            position["y"] += (ball_point["y"] - position["y"]) * 0.38
+            return MatchViewerPlayerState.ATTACKING if line == "attack" else MatchViewerPlayerState.MOVING
+        return state
+    if line == "goalkeeper":
+        position["y"] += (ball_point["y"] - position["y"]) * 0.4
+        return state
+    presser_id = _nearest_on_line(runtime, attacks_right, ball_point, {"midfield"}, None) or _nearest_on_line(
+        runtime, attacks_right, ball_point, {"attack"}, None
+    )
+    if player.player_id != presser_id:
+        return state
+    dx = ball_point["x"] - position["x"]
+    dy = ball_point["y"] - position["y"]
+    dist = hypot(dx, dy)
+    stop = 4.6
+    if dist > stop:
+        press = _clamp((_instruction(runtime, "press_intensity") - 50.0) / 50.0, -1.0, 1.0)
+        gain = 0.4 + (0.22 * press)
+        scale = (dist - stop) / dist
+        position["x"] += dx * scale * gain
+        position["y"] += dy * scale * gain
+    return MatchViewerPlayerState.PRESSING
+
+
+def _drop_when_tired(
+    position: dict[str, float],
+    *,
+    line: str,
+    attacks_right: bool,
+    clock_minute: float,
+    player: Any,
+) -> None:
+    if line == "goalkeeper":
+        return
+    late = _clamp((clock_minute - 65.0) / 25.0, 0.0, 1.0)
+    if late <= 0.0:
+        return
+    stamina = float(getattr(player, "base_stamina_pct", None) or 100.0)
+    tired = late * (1.15 if stamina < 72.0 else 0.55)
+    drop = tired * (4.8 if line == "attack" else 2.6 if line == "midfield" else 1.6)
+    position["x"] -= drop if attacks_right else -drop
+
+
+def _restart_kind(active_event: Any) -> str | None:
+    if active_event is None:
+        return None
+    event_type = str(getattr(getattr(active_event, "view", None), "event_type", "") or "")
+    event_type = event_type.split(".")[-1].lower()
+    metadata = getattr(active_event, "metadata", None) or {}
+    raw = str(metadata.get("set_piece_kind") or metadata.get("restart") or "").lower()
+    if event_type == "penalty" or raw == "penalty":
+        return "penalty"
+    if raw in {"corner", "free_kick", "throw_in", "throw"}:
+        return "throw_in" if raw == "throw" else raw
+    if event_type == "set_piece":
+        return "corner" if "corner" in raw else "free_kick"
+    if event_type == "foul":
+        return "free_kick"
+    if str(metadata.get("possession_route") or "") == "set_piece" and event_type in {"goal", "shot", "miss", "save"}:
+        return "free_kick"
+    return None
+
+
+def _apply_restart(
+    position: dict[str, float],
+    anchor: dict[str, float],
+    *,
+    line: str,
+    player: Any,
+    active_event: Any,
+    event_weight: float,
+    in_possession: bool,
+    direction: float,
+) -> None:
+    kind = _restart_kind(active_event)
+    if kind is None or event_weight <= 0.0:
+        return
+    origin = _event_point(active_event, "origin") or {"x": 70.0 if direction > 0 else 30.0, "y": 50.0}
+    blend = min(0.9, event_weight * 1.7)
+    is_taker = player.player_id == active_event.view.primary_player_id
+    spot_x = 88.0 if direction > 0 else 12.0
+    if kind == "penalty":
+        if is_taker and in_possession:
+            desired = {"x": spot_x, "y": 50.0}
+        elif line == "goalkeeper" and not in_possession:
+            desired = {"x": 94.0 if direction > 0 else 6.0, "y": 50.0}
+        elif in_possession:
+            desired = {"x": 70.0 if direction > 0 else 30.0, "y": anchor["y"]}
+        else:
+            desired = {"x": 78.0 if direction > 0 else 22.0, "y": anchor["y"]}
+    elif kind == "corner":
+        corner_y = 8.0 if origin["y"] < 50.0 else 92.0
+        corner_x = 98.0 if direction > 0 else 2.0
+        if is_taker and in_possession:
+            desired = {"x": corner_x, "y": corner_y}
+        elif in_possession and line == "attack":
+            desired = {"x": 84.0 if direction > 0 else 16.0, "y": anchor["y"]}
+        elif not in_possession and line == "defense":
+            desired = {"x": 88.0 if direction > 0 else 12.0, "y": anchor["y"]}
+        elif not in_possession and line == "goalkeeper":
+            desired = {"x": 94.0 if direction > 0 else 6.0, "y": 50.0 + ((corner_y - 50.0) * 0.15)}
+        else:
+            desired = {"x": 62.0 if direction > 0 else 38.0, "y": anchor["y"]}
+    elif kind == "throw_in":
+        touch_y = 6.0 if origin["y"] < 50.0 else 94.0
+        if is_taker and in_possession:
+            desired = {"x": origin["x"], "y": touch_y}
+        elif in_possession:
+            desired = {"x": origin["x"] + (6.0 * direction), "y": anchor["y"]}
+        else:
+            desired = {"x": origin["x"] + (10.0 * direction), "y": anchor["y"]}
+    else:
+        wall_x = origin["x"] + (9.0 * direction)
+        if is_taker and in_possession:
+            desired = {"x": origin["x"], "y": origin["y"]}
+        elif not in_possession and line == "defense" and abs(anchor["y"] - origin["y"]) < 22.0:
+            desired = {"x": wall_x, "y": origin["y"] + ((anchor["y"] - 50.0) * 0.18)}
+        elif in_possession and line == "attack":
+            desired = {"x": origin["x"] + (14.0 * direction), "y": anchor["y"]}
+        elif not in_possession and line == "goalkeeper":
+            desired = {"x": 92.0 if direction > 0 else 8.0, "y": 50.0}
+        else:
+            desired = {"x": origin["x"] - (8.0 * direction), "y": anchor["y"]}
+    position["x"] += (_clamp(desired["x"], 2.0, 98.0) - position["x"]) * blend
+    position["y"] += (_clamp(desired["y"], 4.0, 96.0) - position["y"]) * blend
 
 
 def _velocity_for_player(runtime: Any, player: Any, **kwargs: Any) -> tuple[float, float]:
@@ -671,10 +912,15 @@ def build_ball_payload(
         ) / 0.05
         velocity_z = height / 0.05
     else:
-        x, y = (owner_position or {"x": 50.0, "y": 50.0}).values()
+        owned = owner_position or {"x": 50.0, "y": 50.0}
+        x, y = owned["x"], owned["y"]
         height = 0.05
         state = "controlled" if owner_position else "rolling"
         velocity_x = velocity_y = velocity_z = 0.0
+        if state == "controlled" and active_event is None:
+            lead = 0.8 if _side_attacks_right(possession_side, home_attacks_right) else -0.8
+            x += lead
+            velocity_x = lead / 0.2
 
     spin = (
         trajectory_spin

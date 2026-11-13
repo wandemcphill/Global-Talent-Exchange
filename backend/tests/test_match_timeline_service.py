@@ -452,6 +452,8 @@ def test_open_play_frames_walk_the_ball_between_chances() -> None:
         for index, frame in enumerate(view_state.frames[:-1])
     ]
     assert max(gaps) <= 4.6
+    calls = [frame.overlay_text or "" for frame in circulation]
+    assert any("back" in text or "lines" in text or "runner" in text or "switch" in text for text in calls)
 
 
 def _archive_event_type(event_type: MatchEventType) -> str | None:

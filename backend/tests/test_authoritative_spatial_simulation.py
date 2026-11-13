@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from app.match_engine.simulation.models import PlayerRole
-from app.schemas.match_viewer import MatchViewerEventType, MatchViewerSide
+from app.schemas.match_viewer import MatchViewerEventType, MatchViewerPlayerState, MatchViewerSide
 from app.services.authoritative_spatial_simulation import (
     _line_sizes,
     build_ball_payload,
@@ -418,3 +418,134 @@ def test_open_play_depth_moves_the_block_and_hands_the_ball_to_one_carrier() -> 
     assert ball["state"] == "controlled"
     assert ball["owner_player_id"] == carriers[0]["player_id"]
     assert abs(ball["position"]["x"] - carriers[0]["position"]["x"]) < 1.5
+
+
+def _open_play(home: SimpleNamespace, away: SimpleNamespace, **overrides: object) -> list[dict]:
+    payload = {
+        "home_runtime": home,
+        "away_runtime": away,
+        "home_attacks_right": True,
+        "active_event": None,
+        "stage": "pre",
+        "clock_minute": 12.0,
+        "possession_side": MatchViewerSide.HOME,
+        "time_seconds": 40.0,
+        "phase_depth": 0.55,
+    }
+    payload.update(overrides)
+    return build_player_payloads(**payload)
+
+
+def test_high_line_and_press_change_the_block() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    def home_defense(line: float) -> float:
+        home.defensive_line = line
+        players = _open_play(home, away, phase_depth=0.45)
+        return next(item["position"]["x"] for item in players if item["player_id"] == "home-2")
+
+    assert home_defense(80) > home_defense(20) + 6.0
+
+    def away_gap(press: float) -> float:
+        away.press_intensity = press
+        players = _open_play(home, away, phase_depth=0.75)
+        ball = build_ball_payload(
+            player_payloads=players,
+            home_runtime=home,
+            away_runtime=away,
+            home_attacks_right=True,
+            active_event=None,
+            stage="pre",
+            possession_side=MatchViewerSide.HOME,
+            time_seconds=40.0,
+        )
+        line = [item["position"]["x"] for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+        return abs((sum(line) / len(line)) - ball["position"]["x"])
+
+    assert away_gap(85) < away_gap(20) - 2.0
+
+
+def test_corner_packs_the_box_and_a_goal_does_not() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+    corner = SimpleNamespace(
+        view=SimpleNamespace(
+            event_id="spatial-corner",
+            event_type=MatchViewerEventType.SET_PIECE,
+            time_seconds=8.0,
+            duration_ms=900,
+            highlighted_player_ids=["home-9"],
+            primary_player_id="home-9",
+            secondary_player_id=None,
+        ),
+        team_side=MatchViewerSide.HOME,
+        metadata={"set_piece_kind": "corner"},
+        render_contract={"origin": {"x": 92.0, "y": 12.0}, "target": {"x": 88.0, "y": 48.0}},
+    )
+    packed = _open_play(home, away, active_event=corner, stage="event", phase_depth=None, time_seconds=8.0, clock_minute=20.0)
+    open_play = _open_play(home, away, phase_depth=None, time_seconds=8.0, clock_minute=20.0)
+    taker = next(item for item in packed if item["player_id"] == "home-9")
+    resting = next(item for item in open_play if item["player_id"] == "home-9")
+    assert taker["position"]["y"] < resting["position"]["y"] - 8.0
+    packed_line = [item["position"]["x"] for item in packed if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    open_line = [item["position"]["x"] for item in open_play if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    assert sum(packed_line) / len(packed_line) > (sum(open_line) / len(open_line)) + 4.0
+
+    goal = _event()
+    during_goal = _open_play(home, away, active_event=goal, stage="event", phase_depth=None, time_seconds=2.0, clock_minute=12.0)
+    goal_line = [item["position"]["x"] for item in during_goal if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    assert sum(goal_line) / len(goal_line) < sum(packed_line) / len(packed_line)
+
+
+def test_late_minutes_drop_the_attack_deeper() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+
+    def attacker(clock: float) -> float:
+        players = _open_play(home, away, phase_depth=None, clock_minute=clock, time_seconds=clock * 60.0)
+        return next(item["position"]["x"] for item in players if item["player_id"] == "home-9")
+
+    early = attacker(10.0)
+    late = attacker(82.0)
+    assert late < early - 1.0
+    assert abs(attacker(20.0) - attacker(40.0)) < 0.05
+
+
+def test_open_play_puts_a_runner_on_the_ball_and_a_presser_on_the_carrier() -> None:
+    home = _runtime(MatchViewerSide.HOME, "home")
+    away = _runtime(MatchViewerSide.AWAY, "away")
+    players = _open_play(home, away, phase_depth=0.55)
+    carriers = [item for item in players if item["has_possession"]]
+    assert len(carriers) == 1
+    carrier = carriers[0]
+    ball = build_ball_payload(
+        player_payloads=players,
+        home_runtime=home,
+        away_runtime=away,
+        home_attacks_right=True,
+        active_event=None,
+        stage="pre",
+        possession_side=MatchViewerSide.HOME,
+        time_seconds=40.0,
+    )
+    assert ball["position"]["x"] > carrier["position"]["x"] + 0.4
+    assert abs(ball["position"]["x"] - carrier["position"]["x"]) < 1.5
+
+    attackers = [
+        item
+        for item in players
+        if item["player_id"] in {"home-9", "home-10", "home-11"} and not item["has_possession"]
+    ]
+    assert max(item["position"]["x"] for item in attackers) > carrier["position"]["x"] + 3.0
+
+    mids = [item for item in players if item["player_id"] in {"away-6", "away-7", "away-8"}]
+    pressing = [item for item in mids if item["state"] is MatchViewerPlayerState.PRESSING]
+    assert len(pressing) == 1
+
+    def gap(item: dict) -> float:
+        return abs(item["position"]["x"] - ball["position"]["x"]) + abs(item["position"]["y"] - ball["position"]["y"])
+
+    assert gap(pressing[0]) + 1.0 < min(gap(item) for item in mids if item is not pressing[0])
+    line = [item["position"]["x"] for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
+    assert max(line) - min(line) < 8.0

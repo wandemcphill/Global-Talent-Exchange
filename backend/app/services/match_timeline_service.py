@@ -1322,6 +1322,8 @@ class MatchTimelineService:
         prior_away_score: int,
         possession_side: MatchViewerSide,
         skip: bool,
+        home_name: str = "Home",
+        away_name: str = "Away",
     ) -> None:
         if skip:
             return
@@ -1352,7 +1354,47 @@ class MatchTimelineService:
                 possession_side=possession_side,
                 camera_preset=MatchViewerCameraPreset.BROADCAST,
                 phase_depth=self._circulation_depth(beat, beats),
+                overlay_text=self._circulation_call(
+                    home_name if possession_side is MatchViewerSide.HOME else away_name,
+                    self._circulation_depth(beat, beats),
+                    beat,
+                ),
             )
+
+    def _circulation_call(self, team_name: str, depth: float, beat: int) -> str:
+        if beat % 4 == 0:
+            return f"{team_name} switch the play."
+        if depth < 0.34:
+            return f"{team_name} play it out from the back."
+        if depth < 0.62:
+            return f"{team_name} move it through the lines."
+        return f"{team_name} look for the runner in the final third."
+
+    def _apply_shape_instructions(
+        self,
+        home_runtime: _TeamRuntime,
+        away_runtime: _TeamRuntime,
+        event: _ViewerEventContext,
+    ) -> None:
+        metadata = event.metadata or {}
+
+        def apply(runtime: _TeamRuntime, blob: object) -> None:
+            if not isinstance(blob, dict):
+                return
+            if blob.get("defensive_line") is not None:
+                runtime.defensive_line = float(blob["defensive_line"])
+            if blob.get("pressing") is not None:
+                runtime.press_intensity = float(blob["pressing"])
+            if blob.get("width") is not None:
+                runtime.width = float(blob["width"])
+            if blob.get("tempo") is not None:
+                runtime.tempo = float(blob["tempo"])
+
+        apply(home_runtime, metadata.get("home_tactics"))
+        apply(away_runtime, metadata.get("away_tactics"))
+        if event.team_side is not None:
+            runtime = home_runtime if event.team_side is MatchViewerSide.HOME else away_runtime
+            apply(runtime, metadata.get("adjustments"))
 
     def _build_frames(
         self,
@@ -1419,6 +1461,7 @@ class MatchTimelineService:
 
         for index, event in enumerate(events):
             event.team_side = self._team_side_from_team_id(home_runtime, away_runtime, event.view.team_id)
+            self._apply_shape_instructions(home_runtime, away_runtime, event)
             non_possession_event = event.view.event_type in {
                 MatchViewerEventType.YELLOW_CARD,
                 MatchViewerEventType.RED_CARD,
@@ -1501,6 +1544,8 @@ class MatchTimelineService:
                 prior_away_score=prior_away_score,
                 possession_side=possession_side,
                 skip=False,
+                home_name=home_runtime.view.team_name,
+                away_name=away_runtime.view.team_name,
             )
 
             if pre_time > last_time + 0.1:
@@ -1856,6 +1901,8 @@ class MatchTimelineService:
                     prior_away_score=frames[-1].away_score,
                     possession_side=last_possession,
                     skip=False,
+                    home_name=home_runtime.view.team_name,
+                    away_name=away_runtime.view.team_name,
                 )
                 append_frame(
                     time_seconds=duration_seconds,
