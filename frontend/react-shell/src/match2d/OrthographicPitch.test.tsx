@@ -51,4 +51,11 @@ describe("OrthographicPitch lifecycle", () => {
     act(() => root.unmount());
     expect(mockDispose).toHaveBeenCalled();
   });
+
+  test("does not import pixi and exports a memoized pitch", () => {
+    const source = require("fs").readFileSync(require("path").join(__dirname, "OrthographicPitch.tsx"), "utf8");
+    expect(source).not.toMatch(/pixi/i);
+    expect(source).toContain("memo(OrthographicPitchComponent)");
+    expect(source).toContain("webglcontextrestored");
+  });
 });

@@ -3,6 +3,7 @@ import {
   animationFor,
   effectFor,
   interpolate,
+  LiveRenderBuffer,
   pitchSource,
   sceneObjectCount,
   metricText,
@@ -55,7 +56,36 @@ describe("match state adapter", () => {
     expect(animationFor({ animationState: "header" })).toBe("header");
     expect(animationFor({ hasBall: true })).toBe("dribble");
     expect(effectFor("goal")).toBe("goal");
+    expect(effectFor("save")).toBe("save");
+    expect(effectFor("yellow_card")).toBe("card");
+    expect(effectFor("substitution")).toBe("substitution");
     expect(effectFor("unknown")).toBeNull();
+  });
+
+  test("live buffer blends and rejects stale versions", () => {
+    const buffer = new LiveRenderBuffer();
+    const a = {
+      timeSeconds: 10,
+      snapshotVersion: 1,
+      players: [{ playerId: "a", side: "home" as const, x: 0.2, y: 0.4, shirtNumber: 9, name: "A" }],
+      ball: { x: 0.2, y: 0.4 },
+    };
+    const b = {
+      timeSeconds: 12,
+      snapshotVersion: 2,
+      players: [{ playerId: "a", side: "home" as const, x: 0.6, y: 0.8, shirtNumber: 9, name: "A" }],
+      ball: { x: 0.6, y: 0.8 },
+    };
+    expect(buffer.push(a)).toBe(true);
+    expect(buffer.push(b)).toBe(true);
+    expect(buffer.push({ ...a, snapshotVersion: 1 })).toBe(false);
+    const mid = buffer.sampleAt(11);
+    expect(mid.frame?.players[0].x).toBeCloseTo(0.4);
+    expect(mid.trajectoryAlpha).toBeCloseTo(0.5);
+    buffer.replace({ ...b, snapshotVersion: 9, players: [{ ...b.players[0], x: 0.9 }] });
+    const after = buffer.sampleAt(11);
+    expect(after.frame?.players[0].x).toBeCloseTo(0.9);
+    expect(after.trajectoryAlpha).toBe(1);
   });
 
   test("a competitive match without frames is unavailable and the showcase is the only demo", () => {

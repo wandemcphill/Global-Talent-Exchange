@@ -23,9 +23,57 @@ export type PitchFrame = {
   players: PitchPlayer[];
   ball: PitchBall | null;
   eventType?: string | null;
+  snapshotVersion?: number;
+  ballTrajectory?: PitchBall[] | null;
 };
 
 export type SnapshotCursor = { snapshotVersion: number };
+
+export type LiveSample = PitchFrame & { snapshotVersion: number };
+
+/** Previous/next authoritative samples for a render clock separate from match time. */
+export class LiveRenderBuffer {
+  previous: LiveSample | null = null;
+  next: LiveSample | null = null;
+
+  push(sample: LiveSample): boolean {
+    if (this.next && sample.snapshotVersion < this.next.snapshotVersion) return false;
+    if (this.next && sample.snapshotVersion === this.next.snapshotVersion) {
+      this.next = sample;
+      return true;
+    }
+    this.previous = this.next || sample;
+    this.next = sample;
+    return true;
+  }
+
+  /** Replace both ends after reconnect; do not treat history as new incidents. */
+  replace(sample: LiveSample): void {
+    this.previous = sample;
+    this.next = sample;
+  }
+
+  sampleAt(renderTime: number): { frame: LiveSample | null; trajectoryAlpha: number } {
+    if (!this.next) return { frame: null, trajectoryAlpha: 1 };
+    if (!this.previous || this.previous === this.next) {
+      return { frame: this.next, trajectoryAlpha: 1 };
+    }
+    const span = this.next.timeSeconds - this.previous.timeSeconds;
+    const alpha =
+      span <= 0.001
+        ? 1
+        : Math.min(1, Math.max(0, (renderTime - this.previous.timeSeconds) / span));
+    const blended = interpolate(this.previous, this.next, alpha);
+    return {
+      frame: {
+        ...blended,
+        snapshotVersion: this.next.snapshotVersion,
+        ballTrajectory: this.next.ballTrajectory || this.previous.ballTrajectory || null,
+      },
+      trajectoryAlpha: alpha,
+    };
+  }
+}
 
 export type PlayerAction = RigAction;
 

@@ -1,8 +1,8 @@
-import React, { useEffect, useRef } from "react";
+import React, { memo, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 import * as matchRenderer from "./createMatchRenderer";
-import { animationFor, effectFor, type PitchPlayer } from "./matchStateAdapter";
+import { animationFor, effectFor, sceneObjectCount, type PitchPlayer } from "./matchStateAdapter";
 import {
   ATLAS_COLUMNS,
   ATLAS_ROWS,
@@ -37,6 +37,7 @@ export type OrthographicPitchProps = {
 
 const PITCH_W = 105;
 const PITCH_H = 68;
+const POOL_SIZE = 26;
 
 const VERTEX = `
   uniform vec2 uOffset;
@@ -86,7 +87,14 @@ const FRAGMENT = `
   }
 `;
 
-export const lastRenderProfile = { calls: 0, sampledFrames: 0 };
+export const lastRenderProfile = {
+  calls: 0,
+  sampledFrames: 0,
+  fps: 0,
+  frameMs: 0,
+  objectCount: 0,
+  logged: false,
+};
 
 function dataTexture(data: Uint8Array, width: number, height: number) {
   const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
@@ -98,7 +106,7 @@ function dataTexture(data: Uint8Array, width: number, height: number) {
   return texture;
 }
 
-export function OrthographicPitch({
+function OrthographicPitchComponent({
   players,
   ball,
   ballTrajectory = null,
@@ -127,6 +135,7 @@ export function OrthographicPitch({
     selectedKey,
   });
   const cameraRef = useRef({ zoom: 1, panX: 0, panY: 0, follow: false });
+  const [follow, setFollow] = useState(false);
   propsRef.current = {
     players,
     ball,
@@ -139,6 +148,7 @@ export function OrthographicPitch({
     goalkeeperAway,
     selectedKey,
   };
+  cameraRef.current.follow = follow;
 
   useEffect(() => {
     const host = hostRef.current;
@@ -147,7 +157,10 @@ export function OrthographicPitch({
     let fallback: CanvasRenderingContext2D | null = null;
     let fallbackCanvas: HTMLCanvasElement | null = null;
     let stopped = false;
+    let contextLost = false;
     let frameId = 0;
+    let fpsFrames = 0;
+    let fpsStarted = performance.now();
     const scene = new THREE.Scene();
     const camera = new THREE.OrthographicCamera(-PITCH_W / 2, PITCH_W / 2, PITCH_H / 2, -PITCH_H / 2, 0.1, 50);
     camera.position.set(0, 0, 10);
@@ -184,14 +197,59 @@ export function OrthographicPitch({
     );
     effect.visible = false;
     scene.add(effect);
-    const bodies = new Map<string, THREE.Mesh>();
+    const cueMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(2.2, 2.2),
+      new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    cueMesh.visible = false;
+    scene.add(cueMesh);
+
+    const pool: THREE.Mesh[] = [];
+    const assigned = new Map<string, THREE.Mesh>();
+    const free: THREE.Mesh[] = [];
+    const sharedGeometry = new THREE.PlaneGeometry(4.8, 4.8);
+    for (let index = 0; index < POOL_SIZE; index += 1) {
+      const material = new THREE.ShaderMaterial({
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: {
+          uBody: { value: bodyTexture },
+          uKit: { value: kitTexture },
+          uDigits: { value: digitTexture },
+          uKitColor: { value: new THREE.Color("#ffffff") },
+          uOffset: { value: new THREE.Vector2() },
+          uRepeat: { value: new THREE.Vector2(1 / ATLAS_COLUMNS, 1 / ATLAS_ROWS) },
+          uShirt: { value: 0 },
+        },
+        vertexShader: VERTEX,
+        fragmentShader: FRAGMENT,
+      });
+      const mesh = new THREE.Mesh(sharedGeometry, material);
+      mesh.visible = false;
+      scene.add(mesh);
+      pool.push(mesh);
+      free.push(mesh);
+    }
     const motion = new Map<string, { x: number; y: number; facing: number; speed: number }>();
     let previousBall: { x: number; y: number } | null = null;
+
+    const ensureFallback = () => {
+      if (fallbackCanvas) return;
+      fallbackCanvas = document.createElement("canvas");
+      try {
+        fallback = fallbackCanvas.getContext("2d");
+      } catch {
+        fallback = null;
+      }
+      host.appendChild(fallbackCanvas);
+      resize();
+    };
 
     const resize = () => {
       const width = Math.max(host.clientWidth, 320);
       const height = Math.max(Math.round(width * 0.62), 200);
-      if (renderer) renderer.setSize(width, height, false);
+      if (renderer && !contextLost) renderer.setSize(width, height, false);
       if (fallbackCanvas) {
         fallbackCanvas.width = width;
         fallbackCanvas.height = height;
@@ -204,19 +262,25 @@ export function OrthographicPitch({
       host.appendChild(renderer.domElement);
       renderer.domElement.addEventListener("webglcontextlost", (event) => {
         event.preventDefault();
+        contextLost = true;
+        ensureFallback();
+      });
+      renderer.domElement.addEventListener("webglcontextrestored", () => {
+        contextLost = false;
+        pitchTexture.needsUpdate = true;
+        bodyTexture.needsUpdate = true;
+        kitTexture.needsUpdate = true;
+        digitTexture.needsUpdate = true;
+        ballTexture.needsUpdate = true;
+        ringTexture.needsUpdate = true;
+        resize();
       });
       renderer.domElement.style.width = "100%";
       renderer.domElement.style.height = "100%";
       renderer.domElement.style.touchAction = "none";
     } catch {
       renderer = null;
-      fallbackCanvas = document.createElement("canvas");
-      try {
-        fallback = fallbackCanvas.getContext("2d");
-      } catch {
-        fallback = null;
-      }
-      host.appendChild(fallbackCanvas);
+      ensureFallback();
     }
     resize();
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
@@ -227,9 +291,20 @@ export function OrthographicPitch({
       y: (0.5 - y) * PITCH_H,
     });
 
+    const acquire = (playerId: string) => {
+      let mesh = assigned.get(playerId);
+      if (mesh) return mesh;
+      mesh = free.pop();
+      if (!mesh) return null;
+      mesh.visible = true;
+      assigned.set(playerId, mesh);
+      return mesh;
+    };
+
     const paint = () => {
       if (stopped) return;
       frameId = window.requestAnimationFrame(paint);
+      const frameStart = performance.now();
       const view = cameraRef.current;
       const current = propsRef.current;
       camera.zoom = view.zoom;
@@ -243,6 +318,8 @@ export function OrthographicPitch({
         const focus = toWorld(ballPoint.x, ballPoint.y);
         camera.position.x += (focus.x * 0.25 - camera.position.x) * 0.08;
         camera.position.y += (focus.y * 0.25 - camera.position.y) * 0.08;
+        view.panX = camera.position.x;
+        view.panY = camera.position.y;
       }
       camera.updateProjectionMatrix();
       const seen = new Set<string>();
@@ -274,28 +351,7 @@ export function OrthographicPitch({
             ? current.homeColor
             : current.awayColor;
         const point = toWorld(player.x, player.y);
-        let mesh = bodies.get(player.playerId);
-        if (!mesh && renderer) {
-          const material = new THREE.ShaderMaterial({
-            transparent: true,
-            depthWrite: false,
-            side: THREE.DoubleSide,
-            uniforms: {
-              uBody: { value: bodyTexture },
-              uKit: { value: kitTexture },
-              uDigits: { value: digitTexture },
-              uKitColor: { value: new THREE.Color(kitColor) },
-              uOffset: { value: new THREE.Vector2() },
-              uRepeat: { value: new THREE.Vector2(1 / ATLAS_COLUMNS, 1 / ATLAS_ROWS) },
-              uShirt: { value: player.shirtNumber },
-            },
-            vertexShader: VERTEX,
-            fragmentShader: FRAGMENT,
-          });
-          mesh = new THREE.Mesh(new THREE.PlaneGeometry(4.8, 4.8), material);
-          scene.add(mesh);
-          bodies.set(player.playerId, mesh);
-        }
+        const mesh = acquire(player.playerId);
         if (mesh) {
           mesh.position.set(point.x, point.y, 1);
           const material = mesh.material as THREE.ShaderMaterial;
@@ -303,7 +359,6 @@ export function OrthographicPitch({
           material.uniforms.uOffset.value.set(uv.offsetX, uv.offsetY);
           material.uniforms.uKitColor.value.set(kitColor);
           material.uniforms.uShirt.value = player.shirtNumber;
-          material.opacity = current.selectedKey === `${player.side}:${player.playerId}` ? 1 : 0.96;
         }
         if (current.selectedKey === `${player.side}:${player.playerId}`) {
           ring.visible = true;
@@ -311,19 +366,19 @@ export function OrthographicPitch({
         }
       });
       if (!current.players.some((player) => current.selectedKey === `${player.side}:${player.playerId}`)) ring.visible = false;
-      bodies.forEach((mesh, id) => {
+      assigned.forEach((mesh, id) => {
         if (!seen.has(id)) {
-          scene.remove(mesh);
-          (mesh.material as THREE.Material).dispose();
-          bodies.delete(id);
+          mesh.visible = false;
+          assigned.delete(id);
+          free.push(mesh);
           motion.delete(id);
         }
       });
+      const cue = effectFor(current.eventType);
       if (ballPoint) {
         const point = toWorld(ballPoint.x, ballPoint.y);
         ballMesh.position.set(point.x, point.y, 2);
         ballMesh.visible = true;
-        const cue = effectFor(current.eventType);
         const from = previousBall ? toWorld(previousBall.x, previousBall.y) : point;
         effect.visible = cue === "pass" || cue === "shot" || cue === "goal";
         if (effect.visible) {
@@ -342,17 +397,75 @@ export function OrthographicPitch({
         ballMesh.visible = false;
         effect.visible = false;
       }
-      if (renderer) {
+      if (cue === "save" || cue === "card" || cue === "substitution") {
+        const focus =
+          current.players.find((player) => current.selectedKey === `${player.side}:${player.playerId}`) ||
+          current.players.find((player) => player.hasBall) ||
+          current.players[0];
+        if (focus) {
+          const point = toWorld(focus.x, focus.y);
+          cueMesh.visible = true;
+          cueMesh.position.set(point.x, point.y + 2.2, 1.5);
+          const material = cueMesh.material as THREE.MeshBasicMaterial;
+          material.color.set(cue === "save" ? "#38bdf8" : cue === "card" ? "#facc15" : "#a78bfa");
+          material.opacity = 0.35 + Math.abs(Math.sin(performance.now() / 180)) * 0.35;
+        } else {
+          cueMesh.visible = false;
+        }
+      } else {
+        cueMesh.visible = false;
+      }
+
+      const objectCount = sceneObjectCount(current.players.length, Boolean(cue));
+      lastRenderProfile.objectCount = objectCount;
+      fpsFrames += 1;
+      const elapsed = performance.now() - fpsStarted;
+      if (elapsed >= 1000) {
+        lastRenderProfile.fps = Math.round((fpsFrames * 1000) / elapsed);
+        lastRenderProfile.frameMs = elapsed / Math.max(1, fpsFrames);
+        fpsFrames = 0;
+        fpsStarted = performance.now();
+        if (process.env.NODE_ENV !== "production" && !lastRenderProfile.logged) {
+          lastRenderProfile.logged = true;
+          // eslint-disable-next-line no-console
+          console.info("[match2d]", lastRenderProfile);
+        }
+      }
+      lastRenderProfile.frameMs = Math.max(lastRenderProfile.frameMs, performance.now() - frameStart);
+
+      if (renderer && !contextLost) {
         renderer.render(scene, camera);
         lastRenderProfile.calls = renderer.info.render.calls;
         lastRenderProfile.sampledFrames += 1;
       } else if (fallback && fallbackCanvas) {
         paintCanvasFallback(fallback, fallbackCanvas, pitchPixels, current, ballPoint, frame);
+        lastRenderProfile.sampledFrames += 1;
       }
     };
     paint();
 
+    let dragging = false;
+    let lastX = 0;
+    let lastY = 0;
+    const onPointerDown = (event: PointerEvent) => {
+      dragging = true;
+      lastX = event.clientX;
+      lastY = event.clientY;
+    };
+    const onPointerMove = (event: PointerEvent) => {
+      if (!dragging) return;
+      const dx = event.clientX - lastX;
+      const dy = event.clientY - lastY;
+      lastX = event.clientX;
+      lastY = event.clientY;
+      cameraRef.current.panX -= dx * 0.08;
+      cameraRef.current.panY += dy * 0.08;
+    };
+    const onPointerUp = () => {
+      dragging = false;
+    };
     const onClick = (event: MouseEvent) => {
+      if (Math.abs(event.movementX) + Math.abs(event.movementY) > 4) return;
       const rect = (renderer?.domElement || fallbackCanvas)?.getBoundingClientRect();
       if (!rect || !onSelect) return;
       const nx = (event.clientX - rect.left) / rect.width;
@@ -360,14 +473,22 @@ export function OrthographicPitch({
       const hit = propsRef.current.players.find((player) => Math.hypot(player.x - nx, player.y - ny) < 0.035);
       if (hit) onSelect(`${hit.side}:${hit.playerId}`);
     };
-    (renderer?.domElement || fallbackCanvas)?.addEventListener("click", onClick);
+    const target = renderer?.domElement || fallbackCanvas;
+    target?.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    target?.addEventListener("click", onClick);
 
     return () => {
       stopped = true;
       window.cancelAnimationFrame(frameId);
       observer?.disconnect();
-      (renderer?.domElement || fallbackCanvas)?.removeEventListener("click", onClick);
-      bodies.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      target?.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      target?.removeEventListener("click", onClick);
+      pool.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      sharedGeometry.dispose();
       pitchTexture.dispose();
       bodyTexture.dispose();
       kitTexture.dispose();
@@ -384,10 +505,41 @@ export function OrthographicPitch({
     <div className="space-y-2" data-testid="orthographic-pitch">
       <div ref={hostRef} className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-emerald-500/40 bg-[#0c2418]" />
       <div className="flex flex-wrap gap-2 text-[10px] font-black uppercase tracking-wider">
-        <button type="button" className="rounded border border-white/15 px-2 py-1" onClick={() => { cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: false }; }}>Fit</button>
-        <button type="button" className="rounded border border-white/15 px-2 py-1" onClick={() => { cameraRef.current.zoom = Math.min(2.4, cameraRef.current.zoom + 0.2); }}>Zoom in</button>
-        <button type="button" className="rounded border border-white/15 px-2 py-1" onClick={() => { cameraRef.current.zoom = Math.max(0.8, cameraRef.current.zoom - 0.2); }}>Zoom out</button>
-        <button type="button" className="rounded border border-white/15 px-2 py-1" onClick={() => { cameraRef.current.follow = !cameraRef.current.follow; }}>{cameraRef.current.follow ? "Follow on" : "Follow"}</button>
+        <button
+          type="button"
+          className="rounded border border-white/15 px-2 py-1"
+          onClick={() => {
+            cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: false };
+            setFollow(false);
+          }}
+        >
+          Fit
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/15 px-2 py-1"
+          onClick={() => {
+            cameraRef.current.zoom = Math.min(2.4, cameraRef.current.zoom + 0.2);
+          }}
+        >
+          Zoom in
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/15 px-2 py-1"
+          onClick={() => {
+            cameraRef.current.zoom = Math.max(0.8, cameraRef.current.zoom - 0.2);
+          }}
+        >
+          Zoom out
+        </button>
+        <button
+          type="button"
+          className="rounded border border-white/15 px-2 py-1"
+          onClick={() => setFollow((value) => !value)}
+        >
+          {follow ? "Follow on" : "Follow"}
+        </button>
       </div>
       {unavailable && (
         <p className="rounded border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-xs font-bold text-amber-200">
@@ -395,10 +547,14 @@ export function OrthographicPitch({
         </p>
       )}
       {demo && <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</p>}
-      <span className="sr-only">draw-budget {CELL}</span>
+      <span className="sr-only">
+        draw-budget {CELL} fps {lastRenderProfile.fps} objects {lastRenderProfile.objectCount}
+      </span>
     </div>
   );
 }
+
+export const OrthographicPitch = memo(OrthographicPitchComponent);
 
 function paintCanvasFallback(
   ctx: CanvasRenderingContext2D,

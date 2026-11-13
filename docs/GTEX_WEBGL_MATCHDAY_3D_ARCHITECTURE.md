@@ -1,22 +1,22 @@
 # GTEX WebGL Matchday 3D — Canonical Browser Architecture
 
 **Status:** Approved & Active  
-**Canonical Browser Renderer:** React + Three.js + WebGL (`frontend/react-shell`)  
+**Canonical Browser Renderer:** React WebGL 2D orthographic pitch (`frontend/react-shell/src/match2d`)  
 **Authoritative Match Engine:** GTEX Backend (`backend/app`)  
 
 ---
 
 ## 1. Executive Architecture Decision
 
-The **React + Three.js + WebGL** match presentation inside `frontend/react-shell` (`MatchPitchLiveScene` hosted in `MatchCenter.tsx`) is the **canonical primary GTEX browser match experience**.
+The **React WebGL 2D** orthographic pitch in `frontend/react-shell/src/match2d` is the **launch browser match**. Perspective `MatchPitchLiveScene` remains optional later and is not the default.
 
 ### Platform Role Matrix
 
 | Platform | Official Role | Codebase Location |
 |---|---|---|
-| **React 2D** | **Launch browser match.** `Pitch2DView` follows the backend replay. Perspective WebGL is an optional later picture. | `frontend/react-shell/src/pages/match-center/Pitch2DView.tsx` |
+| **React WebGL 2D** | **Launch browser match** (orthographic pitch, procedural players, authoritative snapshots). | `frontend/react-shell/src/match2d` |
 | **GTEX Backend** | **Authoritative football match simulation, events, score, clock, fairness proofs, and commercial ad/sponsorship delivery** | `backend/app/match_engine/`, `backend/app/routes/match_viewer.py`, `backend/app/ads_engine/`, `backend/app/sponsorship_engine/` |
-| **React + Three.js + WebGL** | Optional later picture (perspective stadium, broadcast cameras, HUD). It is not the default match. | `frontend/react-shell/src/lib/3d/broadcast/` |
+| **React + Three.js perspective** | Optional later picture (stadium, broadcast cameras, HUD). It is not the default match. | `frontend/react-shell/src/lib/3d/broadcast/` |
 | **Unity** | **Existing separate desktop/historical visual runtime** (preserved historical engineering assets; not the browser match renderer) | `unity/`, `Gtex_Test_Migration/` |
 
 ---

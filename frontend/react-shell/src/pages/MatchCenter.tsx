@@ -2616,24 +2616,27 @@ export default function MatchCenter() {
     setGiftQueue((prev) => prev.slice(1));
   }, []);
 
+  // Clock & Playback Controls
+  const [localMinute] = useState(0);
+  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const snapshotVersionRef = useRef(-1);
+  const [reconnectToken, setReconnectToken] = useState(0);
+  const [acceptedLive, setAcceptedLive] = useState<any>(null);
+
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
     enabled: Boolean(id && id !== "u2a-006-showcase"),
     isAuthenticated: isViewerAuthenticated,
     requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
     onResyncRequired: () => {
+      snapshotVersionRef.current = -1;
+      setReconnectToken((value) => value + 1);
       refetchViewerData();
     },
     onGiftReceived: (g: any) => {
       enqueueGift(g);
     },
   });
-
-  // Clock & Playback Controls
-  const [localMinute] = useState(0);
-  const [playbackSeconds, setPlaybackSeconds] = useState(0);
-  const snapshotVersionRef = useRef(-1);
-  const [acceptedLive, setAcceptedLive] = useState<any>(null);
   const [isPaused, setIsPaused] = useState(false);
   const [speed, setSpeed] = useState(Number(params.get("speed")) || 1.0);
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
@@ -2899,11 +2902,6 @@ export default function MatchCenter() {
               </button>
             </div>
 
-            {!done && !liveState && (
-              <Btn variant="ghost" onClick={() => setLocalMinute(120)} data-testid="skip-to-full-time">
-                Skip to full time →
-              </Btn>
-            )}
           </div>
 
           {/* Authentic Television Esports Scoreboard Hero */}
@@ -3202,24 +3200,13 @@ export default function MatchCenter() {
                   />
                 )}
               </div>
-            ) : sourceKind === "demo" ? (
-              <LegacyBroadcastPitch
-                matchId={id}
-                selectedPlayer={null}
-                onSelectPlayer={() => undefined}
-                showHeatmap={false}
-                showTactics={false}
-                showLanes={false}
-                minute={minute}
-                homeName={m.home_name}
-                awayName={m.away_name}
-              />
             ) : (
               <div className="relative">
                 <Pitch2DView
                   matchId={id}
                   frames={recordedFrames}
                   timeSeconds={playbackSeconds}
+                  snapshotVersion={Number(acceptedLive?.snapshot_version ?? 0)}
                   snapshotPlayers={acceptedLive?.pitch_players}
                   snapshotBall={acceptedLive?.ball}
                   socketFrame={spectatorStream.lastFrame}
@@ -3235,6 +3222,8 @@ export default function MatchCenter() {
                   awayCrest={acceptedLive?.away?.crest_url}
                   selectedKey={selectedPlayer}
                   onSelect={setSelectedPlayer}
+                  demo={sourceKind === "demo"}
+                  reconnectToken={reconnectToken}
                 />
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[

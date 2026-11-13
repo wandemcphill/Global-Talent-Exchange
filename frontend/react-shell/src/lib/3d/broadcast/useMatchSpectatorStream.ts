@@ -306,8 +306,10 @@ export function useMatchSpectatorStream(
           attemptsRef.current = 0;
           setReconnectAttempts(0);
 
-          if (wasReconnect && onResyncRef.current) {
-            onResyncRef.current();
+          if (wasReconnect) {
+            deduplicatorRef.current.reset();
+            setRecentEvents([]);
+            if (onResyncRef.current) onResyncRef.current();
           }
 
           pingTimerRef.current = setInterval(() => {
@@ -399,7 +401,10 @@ export function useMatchSpectatorStream(
 
             if (candidateEvent && candidateEvent.event_id) {
               const ev = candidateEvent as SpectatorSafeEventView;
-              setRecentEvents((prev) => [ev, ...prev].slice(0, 20));
+              setRecentEvents((prev) => {
+                if (prev.some((item) => item.event_id === ev.event_id)) return prev;
+                return [ev, ...prev].slice(0, 20);
+              });
               if (onEventRef.current) {
                 onEventRef.current(ev);
               }

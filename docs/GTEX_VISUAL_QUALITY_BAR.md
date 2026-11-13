@@ -1,6 +1,6 @@
 # GTEX Visual Quality Bar
 
-> **Launch match (2026-11-13):** The browser launch match is the React 2D pitch in `frontend/react-shell/src/pages/match-center/Pitch2DView.tsx`, driven by the backend replay. Perspective WebGL is an optional later picture. Flutter stays the phone companion, and the Unity `GTEX_OriginalVisualRuntime` documented below remains a separate desktop workstream.
+> **Launch match (2026-11-13):** The browser launch match is the React WebGL 2D orthographic pitch in `frontend/react-shell/src/match2d`, driven by the backend replay. Perspective stadium WebGL is an optional later picture. Flutter stays the phone companion, and the Unity `GTEX_OriginalVisualRuntime` documented below remains a separate desktop workstream.
 
 Status: **locked**
 

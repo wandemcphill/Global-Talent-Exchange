@@ -1,11 +1,13 @@
-import React, { useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 import { OrthographicPitch } from "@/match2d/OrthographicPitch";
 import {
+  LiveRenderBuffer,
   metricText,
   pitchSource,
   seekTime,
   suppliedCrest,
+  type PitchFrame,
   type PitchPlayer,
 } from "@/match2d/matchStateAdapter";
 
@@ -47,6 +49,7 @@ export type Pitch2DViewProps = {
   matchId?: string;
   frames?: RawFrame[] | null;
   timeSeconds?: number;
+  snapshotVersion?: number;
   snapshotPlayers?: RawPlayer[] | null;
   snapshotBall?: RawPoint | null;
   socketFrame?: {
@@ -68,6 +71,8 @@ export type Pitch2DViewProps = {
   awayCrest?: string | null;
   selectedKey?: string | null;
   onSelect?: (key: string) => void;
+  demo?: boolean;
+  reconnectToken?: number;
 };
 
 function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
@@ -131,10 +136,29 @@ function CrestMark({ url, name }: { url: string | null; name: string }) {
   );
 }
 
+function frameFromLive(
+  players: PitchPlayer[],
+  ball: { x: number; y: number } | null,
+  timeSeconds: number,
+  snapshotVersion: number,
+  eventType: string | null,
+  trajectory: { x: number; y: number }[] | null,
+): PitchFrame & { snapshotVersion: number } {
+  return {
+    timeSeconds,
+    snapshotVersion,
+    players,
+    ball,
+    eventType,
+    ballTrajectory: trajectory,
+  };
+}
+
 export function Pitch2DView({
   matchId,
   frames,
   timeSeconds = 0,
+  snapshotVersion = 0,
   snapshotPlayers,
   snapshotBall,
   socketFrame,
@@ -150,14 +174,19 @@ export function Pitch2DView({
   awayCrest = null,
   selectedKey,
   onSelect,
+  demo = false,
+  reconnectToken = 0,
 }: Pitch2DViewProps) {
   const lastGood = useRef<{ players: PitchPlayer[]; ball: { x: number; y: number } | null; eventType: string | null } | null>(null);
+  const bufferRef = useRef(new LiveRenderBuffer());
+  const [tick, setTick] = useState(0);
   const recorded = Array.isArray(frames) ? frames : [];
   const source = pitchSource({
     matchId,
     hasSnapshot: Boolean(snapshotPlayers?.length),
     hasFrames: recorded.length > 0,
   });
+  const isDemo = demo || source === "demo";
   const socketSeconds = Number(socketFrame?.time_seconds ?? -1);
   const socketRows = Array.isArray(socketFrame?.players)
     ? socketFrame?.players
@@ -165,19 +194,63 @@ export function Pitch2DView({
       ? socketFrame?.pitch_players
       : null;
 
+  useEffect(() => {
+    if (reconnectToken > 0) {
+      bufferRef.current = new LiveRenderBuffer();
+    }
+  }, [reconnectToken]);
+
+  useEffect(() => {
+    const id = window.setInterval(() => setTick((value) => value + 1), 50);
+    return () => window.clearInterval(id);
+  }, []);
+
   let players: PitchPlayer[] = [];
   let ball: { x: number; y: number } | null = null;
   let trajectory: { x: number; y: number }[] | null = null;
   let eventType: string | null = null;
+  let trajectoryAlpha = 1;
+
+  const pushLive = (
+    rows: RawPlayer[],
+    sampleBall: RawPoint | null | undefined,
+    sampleTime: number,
+    version: number,
+    sampleEvent: string | null,
+    path: RawPoint[] | null | undefined,
+  ) => {
+    const mapped = rows.map(toPitchPlayer);
+    const point = sampleBall ? unitPoint(sampleBall.position?.x ?? sampleBall.x, sampleBall.position?.y ?? sampleBall.y) : null;
+    const trail =
+      Array.isArray(path) && path.length > 1
+        ? path.map((item) => unitPoint(item.position?.x ?? item.x, item.position?.y ?? item.y))
+        : null;
+    const sample = frameFromLive(mapped, point, sampleTime, version, sampleEvent, trail);
+    if (reconnectToken > 0 && !bufferRef.current.next) {
+      bufferRef.current.replace(sample);
+    } else {
+      bufferRef.current.push(sample);
+    }
+  };
 
   if (socketRows?.length && socketSeconds + 0.01 >= timeSeconds) {
-    players = socketRows.map(toPitchPlayer);
-    ball = socketFrame?.ball ? unitPoint(socketFrame.ball.position?.x ?? socketFrame.ball.x, socketFrame.ball.position?.y ?? socketFrame.ball.y) : null;
-    eventType = socketFrame?.event_type || null;
+    pushLive(
+      socketRows,
+      socketFrame?.ball,
+      socketSeconds,
+      Math.max(snapshotVersion, Math.floor(socketSeconds * 100)),
+      socketFrame?.event_type || null,
+      (socketFrame?.ball as { trajectory?: RawPoint[] } | null | undefined)?.trajectory,
+    );
   } else if (snapshotPlayers?.length) {
-    players = snapshotPlayers.map(toPitchPlayer);
-    ball = snapshotBall ? unitPoint(snapshotBall.position?.x ?? snapshotBall.x, snapshotBall.position?.y ?? snapshotBall.y) : null;
-    eventType = activeEventType || events?.[events.length - 1]?.type || events?.[events.length - 1]?.event_type || null;
+    pushLive(
+      snapshotPlayers,
+      snapshotBall,
+      timeSeconds,
+      snapshotVersion || Math.floor(timeSeconds * 100),
+      activeEventType || events?.[events.length - 1]?.type || events?.[events.length - 1]?.event_type || null,
+      null,
+    );
   } else if (source !== "unavailable" && recorded.length > 1) {
     const timed = recorded.map((frame) => ({ ...frame, timeSeconds: Number(frame.time_seconds ?? frame.timeSeconds ?? 0) }));
     const pair = seekTime(timed, timeSeconds);
@@ -196,6 +269,34 @@ export function Pitch2DView({
         trajectory = path.map((point) => unitPoint(point.position?.x ?? point.x, point.position?.y ?? point.y));
       }
       eventType = String(pair.right?.event_type || pair.left.event_type || "") || null;
+      trajectoryAlpha = pair.t;
+    }
+  }
+
+  if (!players.length) {
+    const sampled = bufferRef.current.sampleAt(timeSeconds + tick * 0);
+    // Use wall-clock blend between previous/next by advancing a soft render time toward next.
+    const next = bufferRef.current.next;
+    const previous = bufferRef.current.previous;
+    let renderTime = timeSeconds;
+    if (previous && next && next !== previous) {
+      const span = Math.max(0.05, next.timeSeconds - previous.timeSeconds);
+      const elapsed = Math.min(span, ((tick % Math.ceil(span * 20)) / 20));
+      renderTime = previous.timeSeconds + elapsed;
+    }
+    const live = bufferRef.current.sampleAt(renderTime);
+    if (live.frame?.players?.length) {
+      players = live.frame.players;
+      ball = live.frame.ball;
+      trajectory = live.frame.ballTrajectory || null;
+      eventType = live.frame.eventType || null;
+      trajectoryAlpha = live.trajectoryAlpha;
+    } else if (sampled.frame?.players?.length) {
+      players = sampled.frame.players;
+      ball = sampled.frame.ball;
+      trajectory = sampled.frame.ballTrajectory || null;
+      eventType = sampled.frame.eventType || null;
+      trajectoryAlpha = sampled.trajectoryAlpha;
     }
   }
 
@@ -203,7 +304,7 @@ export function Pitch2DView({
   const shown = players.length ? players : lastGood.current?.players || [];
   const shownBall = players.length ? ball : lastGood.current?.ball || null;
   const shownEvent = players.length ? eventType : lastGood.current?.eventType || null;
-  const unavailable = source === "unavailable";
+  const unavailable = source === "unavailable" && !shown.length;
   const selected = shown.find((player) => `${player.side}:${player.playerId}` === selectedKey) || null;
   const rawSelected = (snapshotPlayers || []).find((player) => {
     const side = player.is_home === false || String(player.side || "").toLowerCase() === "away" ? "away" : "home";
@@ -216,13 +317,14 @@ export function Pitch2DView({
     <div data-testid="pitch-2d-view" className="space-y-2">
       <div className="flex items-center justify-between">
         <CrestMark url={homeCrest} name={homeName} />
-        {source === "demo" ? <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</span> : null}
+        {isDemo ? <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</span> : null}
         <CrestMark url={awayCrest} name={awayName} />
       </div>
       <OrthographicPitch
         players={shown}
         ball={shownBall}
         ballTrajectory={trajectory}
+        trajectoryAlpha={trajectoryAlpha}
         eventType={shownEvent}
         homeColor={homeColor}
         awayColor={awayColor}
@@ -231,7 +333,7 @@ export function Pitch2DView({
         selectedKey={selectedKey}
         onSelect={onSelect}
         unavailable={unavailable}
-        demo={source === "demo"}
+        demo={isDemo}
       />
       {selected && record ? (
         <div className="rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-200">
