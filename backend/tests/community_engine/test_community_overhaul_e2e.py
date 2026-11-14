@@ -143,7 +143,7 @@ def _setup_app() -> tuple[Session, dict[str, str], TestClient, RealtimeHub]:
             stage="active",
             prestige=74,
             manager_json=owner_engine.manager_profile(owner_engine.DEFAULT_MANAGER),
-            facilities_json={"secret_note": "Confidential medical and budget memo"},
+            facilities_json={"internal_note": "Confidential medical and budget memo"},
             world_day=12,
         )
     )

@@ -1,17 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
-import { OrthographicPitch, type PitchCameraMode } from "@/match2d/OrthographicPitch";
+import { OrthographicPitch } from "@/match2d/OrthographicPitch";
 import {
-  interpolate,
   LiveRenderBuffer,
   metricText,
   pitchSource,
-  playerIdentityKey,
-  resolveFeedPresentationStatus,
   seekTime,
   suppliedCrest,
-  type FeedFreshnessStatus,
-  type LivePitchSample,
   type PitchFrame,
   type PitchPlayer,
 } from "@/match2d/matchStateAdapter";
@@ -24,7 +19,6 @@ type RawPlayer = {
   label?: string;
   shirt_number?: number;
   role?: string;
-  line?: string;
   side?: string;
   is_home?: boolean;
   x?: number;
@@ -34,23 +28,14 @@ type RawPlayer = {
   has_possession?: boolean;
   animation_state?: string;
   state?: string;
-  speed_mps?: number;
   stamina_pct?: number | null;
 };
 type RawFrame = {
-  frame_id?: string;
   time_seconds?: number;
   timeSeconds?: number;
-  clock_minute?: number;
-  clockMinute?: number;
-  phase?: string;
-  home_score?: number;
-  away_score?: number;
   players?: RawPlayer[];
-  pitch_players?: RawPlayer[];
-  ball?: RawPoint & { owner_player_id?: string | null; trajectory?: RawPoint[]; state?: string };
+  ball?: RawPoint & { owner_player_id?: string; trajectory?: RawPoint[] };
   event_type?: string;
-  active_event?: { type?: string; event_type?: string } | null;
 };
 type MatchEventRow = {
   type?: string;
@@ -68,16 +53,11 @@ export type Pitch2DViewProps = {
   snapshotPlayers?: RawPlayer[] | null;
   snapshotBall?: RawPoint | null;
   socketFrame?: {
-    frame_id?: string;
-    sequence?: number;
     time_seconds?: number;
-    clock_minute?: number;
-    phase?: string;
     players?: RawPlayer[];
     pitch_players?: RawPlayer[];
     ball?: (RawPoint & { owner_player_id?: string | null; trajectory?: RawPoint[] }) | null;
     event_type?: string;
-    active_event?: { type?: string; event_type?: string } | null;
   } | null;
   events?: MatchEventRow[] | null;
   activeEventType?: string | null;
@@ -93,34 +73,19 @@ export type Pitch2DViewProps = {
   onSelect?: (key: string) => void;
   demo?: boolean;
   reconnectToken?: number;
-  connectionStatus?: "idle" | "connecting" | "connected" | "reconnecting" | "Closed" | "unavailable";
-  matchPhase?: string | null;
-  paused?: boolean;
-  playbackSpeed?: number;
-  cameraMode?: PitchCameraMode;
-  onCameraModeChange?: (mode: PitchCameraMode) => void;
-  showVoronoi?: boolean;
-  showHeatmap?: boolean;
-  showTactics?: boolean;
-  showPassingLanes?: boolean;
 };
 
 function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
   const x = Number(rawX ?? 50);
   const y = Number(rawY ?? 50);
-  const safeX = Number.isFinite(x) ? x : 50;
-  const safeY = Number.isFinite(y) ? y : 50;
-  return {
-    x: Math.max(0, Math.min(1, safeX > 1.5 ? safeX / 100 : safeX)),
-    y: Math.max(0, Math.min(1, safeY > 1.5 ? safeY / 100 : safeY)),
-  };
+  return { x: x > 1.5 ? x / 100 : x, y: y > 1.5 ? y / 100 : y };
 }
 
 function toPitchPlayer(raw: RawPlayer): PitchPlayer {
   const point = unitPoint(raw?.x ?? raw?.position?.x, raw?.y ?? raw?.position?.y);
   const sideName = String(raw?.side || "").toLowerCase();
   const side = raw?.is_home === false || sideName === "away" ? "away" : "home";
-  const role = String(raw?.role || raw?.line || "");
+  const role = String(raw?.role || "");
   return {
     playerId: String(raw?.player_id || raw?.id || `${side}-${raw?.shirt_number || role}`),
     side,
@@ -135,31 +100,13 @@ function toPitchPlayer(raw: RawPlayer): PitchPlayer {
   };
 }
 
-function toPitchFrame(raw: RawFrame): PitchFrame {
-  const rawPlayers = Array.isArray(raw.players)
-    ? raw.players
-    : Array.isArray(raw.pitch_players)
-      ? raw.pitch_players
-      : [];
-  const players = rawPlayers.map(toPitchPlayer);
-  const ballPoint = raw.ball
-    ? unitPoint(raw.ball.position?.x ?? raw.ball.x, raw.ball.position?.y ?? raw.ball.y)
-    : null;
-  const path = raw.ball?.trajectory;
-  const ballTrajectory =
-    Array.isArray(path) && path.length > 1
-      ? path.map((point) => unitPoint(point.position?.x ?? point.x, point.position?.y ?? point.y))
-      : null;
-  const eventType =
-    String(raw.event_type || raw.active_event?.type || raw.active_event?.event_type || "") || null;
-  return {
-    timeSeconds: Number(raw.time_seconds ?? raw.timeSeconds ?? 0),
-    clockMinute: raw.clock_minute ?? raw.clockMinute,
-    players,
-    ball: ballPoint,
-    eventType,
-    ballTrajectory,
-  };
+function blendPlayers(left: PitchPlayer[], right: PitchPlayer[], t: number): PitchPlayer[] {
+  const next = new Map(right.map((player) => [player.playerId, player]));
+  return left.map((player) => {
+    const target = next.get(player.playerId);
+    if (!target) return player;
+    return { ...target, x: player.x + (target.x - player.x) * t, y: player.y + (target.y - player.y) * t };
+  });
 }
 
 function recordFor(events: MatchEventRow[], playerId: string) {
@@ -189,54 +136,22 @@ function CrestMark({ url, name }: { url: string | null; name: string }) {
   );
 }
 
-function buildLiveSample(
-  rows: RawPlayer[],
-  sampleBall: RawPoint | null | undefined,
-  sampleTime: number,
-  options: {
-    snapshotVersion?: number;
-    frameId?: string;
-    sequence?: number;
-    source: "snapshot" | "stream";
-    eventType: string | null;
-    path?: RawPoint[] | null;
-  },
-): LivePitchSample {
-  const players = rows.map(toPitchPlayer);
-  const ball = sampleBall
-    ? unitPoint(sampleBall.position?.x ?? sampleBall.x, sampleBall.position?.y ?? sampleBall.y)
-    : null;
-  const ballTrajectory =
-    Array.isArray(options.path) && options.path.length > 1
-      ? options.path.map((item) => unitPoint(item.position?.x ?? item.x, item.position?.y ?? item.y))
-      : null;
+function frameFromLive(
+  players: PitchPlayer[],
+  ball: { x: number; y: number } | null,
+  timeSeconds: number,
+  snapshotVersion: number,
+  eventType: string | null,
+  trajectory: { x: number; y: number }[] | null,
+): PitchFrame & { snapshotVersion: number } {
   return {
-    timeSeconds: Number.isFinite(sampleTime) ? Math.max(0, sampleTime) : 0,
-    snapshotVersion: options.snapshotVersion,
-    frameId: options.frameId,
-    sequence: options.sequence,
-    source: options.source,
+    timeSeconds,
+    snapshotVersion,
     players,
     ball,
-    eventType: options.eventType,
-    ballTrajectory,
+    eventType,
+    ballTrajectory: trajectory,
   };
-}
-
-function statusBadgeStyle(status: FeedFreshnessStatus): string {
-  switch (status) {
-    case "LIVE":
-      return "border-emerald-400/35 bg-emerald-500/15 text-emerald-300";
-    case "DELAYED":
-      return "border-amber-400/35 bg-amber-500/15 text-amber-200";
-    case "RECONNECTING":
-      return "border-orange-400/40 bg-orange-500/15 text-orange-200";
-    case "FINAL":
-      return "border-sky-400/35 bg-sky-500/15 text-sky-200";
-    case "FEED UNAVAILABLE":
-    default:
-      return "border-rose-400/35 bg-rose-500/15 text-rose-200";
-  }
 }
 
 export function Pitch2DView({
@@ -261,383 +176,149 @@ export function Pitch2DView({
   onSelect,
   demo = false,
   reconnectToken = 0,
-  connectionStatus = "idle",
-  matchPhase = null,
-  paused = false,
-  playbackSpeed = 1,
-  cameraMode,
-  onCameraModeChange,
-  showVoronoi = false,
-  showHeatmap = false,
-  showTactics = false,
-  showPassingLanes = false,
 }: Pitch2DViewProps) {
+  const lastGood = useRef<{ players: PitchPlayer[]; ball: { x: number; y: number } | null; eventType: string | null } | null>(null);
   const bufferRef = useRef(new LiveRenderBuffer());
-  const lastGoodRef = useRef<{
-    players: PitchPlayer[];
-    ball: { x: number; y: number } | null;
-    ballTrajectory: { x: number; y: number }[] | null;
-    eventType: string | null;
-    trajectoryAlpha: number;
-  } | null>(null);
-  const lastReconnectRef = useRef(reconnectToken);
-  const pendingReconnectReplaceRef = useRef(false);
-  const lastStreamKeyRef = useRef<string>("");
-  const lastSnapshotKeyRef = useRef<string>("");
-  const [liveRevision, setLiveRevision] = useState(0);
-  const [freshnessTick, setFreshnessTick] = useState(0);
-
-  const recorded = useMemo(() => (Array.isArray(frames) ? frames : []), [frames]);
-  const timedRecorded = useMemo(() => recorded.map(toPitchFrame), [recorded]);
-  const socketRows = useMemo(
-    () =>
-      Array.isArray(socketFrame?.players)
-        ? socketFrame?.players
-        : Array.isArray(socketFrame?.pitch_players)
-          ? socketFrame?.pitch_players
-          : null,
-    [socketFrame],
-  );
-  const hasLiveFrame = Boolean(socketRows?.length || snapshotPlayers?.length);
+  const [tick, setTick] = useState(0);
+  const recorded = Array.isArray(frames) ? frames : [];
   const source = pitchSource({
     matchId,
-    hasSnapshot: hasLiveFrame,
-    hasFrames: timedRecorded.length > 0,
+    hasSnapshot: Boolean(snapshotPlayers?.length),
+    hasFrames: recorded.length > 0,
   });
   const isDemo = demo || source === "demo";
+  const socketSeconds = Number(socketFrame?.time_seconds ?? -1);
+  const socketRows = Array.isArray(socketFrame?.players)
+    ? socketFrame?.players
+    : Array.isArray(socketFrame?.pitch_players)
+      ? socketFrame?.pitch_players
+      : null;
 
-  // Flag pending reconnect replacement without wiping the last valid rendered state.
   useEffect(() => {
-    if (reconnectToken !== lastReconnectRef.current) {
-      lastReconnectRef.current = reconnectToken;
-      if (reconnectToken > 0) {
-        pendingReconnectReplaceRef.current = true;
-      }
+    if (reconnectToken > 0) {
+      bufferRef.current = new LiveRenderBuffer();
     }
   }, [reconnectToken]);
 
-  // Reset buffer when switching matches.
   useEffect(() => {
-    bufferRef.current.clear();
-    lastGoodRef.current = null;
-    lastStreamKeyRef.current = "";
-    lastSnapshotKeyRef.current = "";
-    pendingReconnectReplaceRef.current = false;
-  }, [matchId]);
-
-  // Ingest live WebSocket frames in a dedicated effect (never during render).
-  useEffect(() => {
-    if (!socketRows?.length || !socketFrame) return;
-    const socketSeconds = Number(socketFrame.time_seconds ?? timeSeconds);
-    const frameId = socketFrame.frame_id ? String(socketFrame.frame_id) : undefined;
-    const sequence = Number.isFinite(Number(socketFrame.sequence))
-      ? Number(socketFrame.sequence)
-      : undefined;
-    const eventType =
-      socketFrame.event_type ||
-      socketFrame.active_event?.type ||
-      socketFrame.active_event?.event_type ||
-      activeEventType ||
-      null;
-    const dedupeKey = `${frameId ?? ""}:${sequence ?? ""}:${socketSeconds.toFixed(3)}:${socketRows.length}:${eventType ?? ""}`;
-    if (dedupeKey === lastStreamKeyRef.current && !pendingReconnectReplaceRef.current) {
-      return;
-    }
-    const sample = buildLiveSample(socketRows, socketFrame.ball, socketSeconds, {
-      frameId,
-      sequence,
-      source: "stream",
-      eventType,
-      path: socketFrame.ball?.trajectory,
-    });
-    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (pendingReconnectReplaceRef.current) {
-      if (bufferRef.current.replace(sample, nowMs)) {
-        pendingReconnectReplaceRef.current = false;
-        lastStreamKeyRef.current = dedupeKey;
-        setLiveRevision((rev) => rev + 1);
-      }
-    } else if (bufferRef.current.push(sample, nowMs)) {
-      lastStreamKeyRef.current = dedupeKey;
-      setLiveRevision((rev) => rev + 1);
-    }
-  }, [socketFrame, socketRows, timeSeconds, activeEventType]);
-
-  // Ingest HTTP snapshot frames in a dedicated effect using their own snapshotVersion domain.
-  useEffect(() => {
-    if (!snapshotPlayers?.length) return;
-    // If the live stream is actively ahead of this snapshot and we are not recovering from a reconnect,
-    // do not let a slower poll overwrite newer stream positions.
-    const latestBufferedTime = bufferRef.current.next?.timeSeconds ?? -1;
-    if (
-      !pendingReconnectReplaceRef.current &&
-      bufferRef.current.next?.source === "stream" &&
-      timeSeconds + 0.05 < latestBufferedTime
-    ) {
-      return;
-    }
-    const fallbackEvent =
-      activeEventType ||
-      events?.[events.length - 1]?.type ||
-      events?.[events.length - 1]?.event_type ||
-      null;
-    const firstPlayer = snapshotPlayers[0];
-    const firstPos = `${firstPlayer?.x ?? firstPlayer?.position?.x ?? ""}:${firstPlayer?.y ?? firstPlayer?.position?.y ?? ""}`;
-    const dedupeKey = `${snapshotVersion}:${timeSeconds.toFixed(2)}:${snapshotPlayers.length}:${firstPos}:${fallbackEvent ?? ""}`;
-    if (dedupeKey === lastSnapshotKeyRef.current && !pendingReconnectReplaceRef.current) {
-      return;
-    }
-    const sample = buildLiveSample(snapshotPlayers, snapshotBall, timeSeconds, {
-      snapshotVersion: snapshotVersion > 0 ? snapshotVersion : undefined,
-      source: "snapshot",
-      eventType: fallbackEvent,
-      path: null,
-    });
-    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
-    if (pendingReconnectReplaceRef.current || !bufferRef.current.next) {
-      if (bufferRef.current.replace(sample, nowMs)) {
-        pendingReconnectReplaceRef.current = false;
-        lastSnapshotKeyRef.current = dedupeKey;
-        setLiveRevision((rev) => rev + 1);
-      }
-    } else if (bufferRef.current.push(sample, nowMs)) {
-      lastSnapshotKeyRef.current = dedupeKey;
-      setLiveRevision((rev) => rev + 1);
-    }
-  }, [snapshotPlayers, snapshotBall, snapshotVersion, timeSeconds, activeEventType, events]);
-
-  // Lightweight 1s freshness check in live mode so stale feeds transition honestly to DELAYED.
-  useEffect(() => {
-    if (source !== "live") return;
-    const id = window.setInterval(() => setFreshnessTick((tick) => tick + 1), 1000);
+    const id = window.setInterval(() => setTick((value) => value + 1), 50);
     return () => window.clearInterval(id);
-  }, [source]);
-
-  // Pure recorded-frame interpolation for timeline/replay mode.
-  const recordedSample = useMemo(() => {
-    if (source === "unavailable" || timedRecorded.length === 0) return null;
-    if (timedRecorded.length === 1) {
-      const only = timedRecorded[0];
-      return {
-        players: only.players,
-        ball: only.ball,
-        ballTrajectory: only.ballTrajectory || null,
-        eventType: only.eventType || activeEventType || null,
-        trajectoryAlpha: 1,
-      };
-    }
-    const pair = seekTime(timedRecorded, timeSeconds);
-    if (!pair.left) return null;
-    const right = pair.right || pair.left;
-    const blended = interpolate(pair.left, right, pair.t);
-    return {
-      players: blended.players,
-      ball: blended.ball,
-      ballTrajectory: blended.ballTrajectory || null,
-      eventType: blended.eventType || activeEventType || null,
-      trajectoryAlpha: pair.t,
-    };
-  }, [source, timedRecorded, timeSeconds, activeEventType]);
-
-  // Pure synchronous prop fallback for first render before effects commit.
-  const immediateLiveFallback = useMemo(() => {
-    if (socketRows?.length && socketFrame) {
-      const sample = buildLiveSample(
-        socketRows,
-        socketFrame.ball,
-        Number(socketFrame.time_seconds ?? timeSeconds),
-        {
-          source: "stream",
-          eventType:
-            socketFrame.event_type ||
-            socketFrame.active_event?.type ||
-            socketFrame.active_event?.event_type ||
-            activeEventType ||
-            null,
-          path: socketFrame.ball?.trajectory,
-        },
-      );
-      return {
-        players: sample.players,
-        ball: sample.ball,
-        ballTrajectory: sample.ballTrajectory || null,
-        eventType: sample.eventType || null,
-        trajectoryAlpha: 1,
-      };
-    }
-    if (snapshotPlayers?.length) {
-      const sample = buildLiveSample(snapshotPlayers, snapshotBall, timeSeconds, {
-        snapshotVersion: snapshotVersion > 0 ? snapshotVersion : undefined,
-        source: "snapshot",
-        eventType:
-          activeEventType ||
-          events?.[events.length - 1]?.type ||
-          events?.[events.length - 1]?.event_type ||
-          null,
-      });
-      return {
-        players: sample.players,
-        ball: sample.ball,
-        ballTrajectory: sample.ballTrajectory || null,
-        eventType: sample.eventType || null,
-        trajectoryAlpha: 1,
-      };
-    }
-    return null;
-  }, [socketRows, socketFrame, snapshotPlayers, snapshotBall, snapshotVersion, timeSeconds, activeEventType, events]);
-
-  const currentRenderData = useMemo(() => {
-    void liveRevision;
-    const buffered = bufferRef.current.next;
-    if (buffered?.players?.length) {
-      return {
-        players: buffered.players,
-        ball: buffered.ball,
-        ballTrajectory: buffered.ballTrajectory || null,
-        eventType: buffered.eventType || activeEventType || null,
-        trajectoryAlpha: 1,
-      };
-    }
-    if (immediateLiveFallback?.players?.length) {
-      return immediateLiveFallback;
-    }
-    if (recordedSample?.players?.length) {
-      return recordedSample;
-    }
-    return lastGoodRef.current;
-  }, [liveRevision, immediateLiveFallback, recordedSample, activeEventType]);
-
-  useEffect(() => {
-    if (currentRenderData?.players?.length) {
-      lastGoodRef.current = currentRenderData;
-    }
-  }, [currentRenderData]);
-
-  const latestRef = useRef({
-    paused,
-    playbackSpeed,
-    recordedSample,
-    immediateLiveFallback,
-    activeEventType,
-  });
-  latestRef.current = {
-    paused,
-    playbackSpeed,
-    recordedSample,
-    immediateLiveFallback,
-    activeEventType,
-  };
-
-  // Monotonic wall-clock sampler invoked by OrthographicPitch on every 60fps animation frame.
-  const sampleFrame = useCallback((nowMs: number) => {
-    const state = latestRef.current;
-    if (bufferRef.current.next) {
-      const sampled = bufferRef.current.advanceWallClock(nowMs, {
-        paused: state.paused,
-        speed: state.playbackSpeed,
-      });
-      if (sampled.frame?.players?.length) {
-        return {
-          players: sampled.frame.players,
-          ball: sampled.frame.ball,
-          ballTrajectory: sampled.frame.ballTrajectory || null,
-          trajectoryAlpha: sampled.trajectoryAlpha,
-          eventType: sampled.frame.eventType || state.activeEventType || null,
-        };
-      }
-    }
-    if (state.recordedSample?.players?.length) {
-      return state.recordedSample;
-    }
-    if (state.immediateLiveFallback?.players?.length) {
-      return state.immediateLiveFallback;
-    }
-    return lastGoodRef.current;
   }, []);
 
-  const shown = currentRenderData?.players || [];
-  const shownBall = currentRenderData?.ball || null;
-  const trajectory = currentRenderData?.ballTrajectory || null;
-  const shownEvent = currentRenderData?.eventType || null;
-  const trajectoryAlpha = currentRenderData?.trajectoryAlpha ?? 1;
+  let players: PitchPlayer[] = [];
+  let ball: { x: number; y: number } | null = null;
+  let trajectory: { x: number; y: number }[] | null = null;
+  let eventType: string | null = null;
+  let trajectoryAlpha = 1;
+
+  const pushLive = (
+    rows: RawPlayer[],
+    sampleBall: RawPoint | null | undefined,
+    sampleTime: number,
+    version: number,
+    sampleEvent: string | null,
+    path: RawPoint[] | null | undefined,
+  ) => {
+    const mapped = rows.map(toPitchPlayer);
+    const point = sampleBall ? unitPoint(sampleBall.position?.x ?? sampleBall.x, sampleBall.position?.y ?? sampleBall.y) : null;
+    const trail =
+      Array.isArray(path) && path.length > 1
+        ? path.map((item) => unitPoint(item.position?.x ?? item.x, item.position?.y ?? item.y))
+        : null;
+    const sample = frameFromLive(mapped, point, sampleTime, version, sampleEvent, trail);
+    if (reconnectToken > 0 && !bufferRef.current.next) {
+      bufferRef.current.replace(sample);
+    } else {
+      bufferRef.current.push(sample);
+    }
+  };
+
+  if (socketRows?.length && socketSeconds + 0.01 >= timeSeconds) {
+    pushLive(
+      socketRows,
+      socketFrame?.ball,
+      socketSeconds,
+      Math.max(snapshotVersion, Math.floor(socketSeconds * 100)),
+      socketFrame?.event_type || null,
+      (socketFrame?.ball as { trajectory?: RawPoint[] } | null | undefined)?.trajectory,
+    );
+  } else if (snapshotPlayers?.length) {
+    pushLive(
+      snapshotPlayers,
+      snapshotBall,
+      timeSeconds,
+      snapshotVersion || Math.floor(timeSeconds * 100),
+      activeEventType || events?.[events.length - 1]?.type || events?.[events.length - 1]?.event_type || null,
+      null,
+    );
+  } else if (source !== "unavailable" && recorded.length > 1) {
+    const timed = recorded.map((frame) => ({ ...frame, timeSeconds: Number(frame.time_seconds ?? frame.timeSeconds ?? 0) }));
+    const pair = seekTime(timed, timeSeconds);
+    if (pair.left) {
+      const leftPlayers = (pair.left.players || []).map(toPitchPlayer);
+      const rightPlayers = (pair.right?.players || pair.left.players || []).map(toPitchPlayer);
+      players = blendPlayers(leftPlayers, rightPlayers, pair.t);
+      const leftBall = unitPoint(pair.left.ball?.position?.x ?? pair.left.ball?.x, pair.left.ball?.position?.y ?? pair.left.ball?.y);
+      const rightBall = unitPoint(
+        pair.right?.ball?.position?.x ?? pair.right?.ball?.x ?? leftBall.x,
+        pair.right?.ball?.position?.y ?? pair.right?.ball?.y ?? leftBall.y,
+      );
+      ball = { x: leftBall.x + (rightBall.x - leftBall.x) * pair.t, y: leftBall.y + (rightBall.y - leftBall.y) * pair.t };
+      const path = pair.right?.ball?.trajectory || pair.left.ball?.trajectory;
+      if (Array.isArray(path) && path.length > 1) {
+        trajectory = path.map((point) => unitPoint(point.position?.x ?? point.x, point.position?.y ?? point.y));
+      }
+      eventType = String(pair.right?.event_type || pair.left.event_type || "") || null;
+      trajectoryAlpha = pair.t;
+    }
+  }
+
+  if (!players.length) {
+    const sampled = bufferRef.current.sampleAt(timeSeconds + tick * 0);
+    // Use wall-clock blend between previous/next by advancing a soft render time toward next.
+    const next = bufferRef.current.next;
+    const previous = bufferRef.current.previous;
+    let renderTime = timeSeconds;
+    if (previous && next && next !== previous) {
+      const span = Math.max(0.05, next.timeSeconds - previous.timeSeconds);
+      const elapsed = Math.min(span, ((tick % Math.ceil(span * 20)) / 20));
+      renderTime = previous.timeSeconds + elapsed;
+    }
+    const live = bufferRef.current.sampleAt(renderTime);
+    if (live.frame?.players?.length) {
+      players = live.frame.players;
+      ball = live.frame.ball;
+      trajectory = live.frame.ballTrajectory || null;
+      eventType = live.frame.eventType || null;
+      trajectoryAlpha = live.trajectoryAlpha;
+    } else if (sampled.frame?.players?.length) {
+      players = sampled.frame.players;
+      ball = sampled.frame.ball;
+      trajectory = sampled.frame.ballTrajectory || null;
+      eventType = sampled.frame.eventType || null;
+      trajectoryAlpha = sampled.trajectoryAlpha;
+    }
+  }
+
+  if (players.length) lastGood.current = { players, ball, eventType };
+  const shown = players.length ? players : lastGood.current?.players || [];
+  const shownBall = players.length ? ball : lastGood.current?.ball || null;
+  const shownEvent = players.length ? eventType : lastGood.current?.eventType || null;
   const unavailable = source === "unavailable" && !shown.length;
-
-  const feedStatus = useMemo(() => {
-    void freshnessTick;
-    void liveRevision;
-    const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
-    const effectivePhase = socketFrame?.phase || matchPhase || null;
-    const hasRecordedOnly = !hasLiveFrame && timedRecorded.length > 0 && !unavailable;
-    if (hasRecordedOnly && !effectivePhase) {
-      return { status: "LIVE" as FeedFreshnessStatus, ageMs: null };
-    }
-    return resolveFeedPresentationStatus({
-      unavailable,
-      phase: effectivePhase,
-      connectionStatus: hasLiveFrame && connectionStatus === "idle" ? "connected" : connectionStatus,
-      lastFrameReceivedAtMs: bufferRef.current.lastReceivedAtMs,
-      nowMs,
-      hasRenderableFrame: shown.length > 0,
-    });
-  }, [freshnessTick, liveRevision, socketFrame?.phase, matchPhase, hasLiveFrame, timedRecorded.length, unavailable, connectionStatus, shown.length]);
-
-  const selected = shown.find((player) => playerIdentityKey(player) === selectedKey) || null;
-  const rawPool = useMemo(() => {
-    if (socketRows?.length) return socketRows;
-    if (snapshotPlayers?.length) return snapshotPlayers;
-    if (recorded.length > 0) {
-      const latestRec = recorded[recorded.length - 1];
-      return latestRec.players || latestRec.pitch_players || [];
-    }
-    return [];
-  }, [socketRows, snapshotPlayers, recorded]);
-
-  const rawSelected = useMemo(() => {
-    if (!selectedKey) return null;
-    return rawPool.find((raw) => playerIdentityKey(toPitchPlayer(raw)) === selectedKey) || null;
-  }, [rawPool, selectedKey]);
-
+  const selected = shown.find((player) => `${player.side}:${player.playerId}` === selectedKey) || null;
+  const rawSelected = (snapshotPlayers || []).find((player) => {
+    const side = player.is_home === false || String(player.side || "").toLowerCase() === "away" ? "away" : "home";
+    const id = String(player.player_id || player.id || "");
+    return `${side}:${id}` === selectedKey;
+  });
   const record = selected ? recordFor(events || [], selected.playerId) : null;
 
   return (
     <div data-testid="pitch-2d-view" className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <CrestMark url={homeCrest} name={homeName} />
-          <span className="text-xs font-bold text-slate-200">{homeName}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          {isDemo ? (
-            <span
-              data-testid="pitch-demo-badge"
-              className="rounded border border-amber-400/40 bg-amber-500/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-amber-300"
-            >
-              DEMO
-            </span>
-          ) : null}
-          <span
-            data-testid="pitch-feed-status"
-            data-status={feedStatus.status}
-            className={`rounded border px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider ${statusBadgeStyle(feedStatus.status)}`}
-          >
-            {feedStatus.status}
-            {feedStatus.status === "DELAYED" && feedStatus.ageMs !== null
-              ? ` · ${Math.max(1, Math.round(feedStatus.ageMs / 1000))}s`
-              : ""}
-          </span>
-          {shownEvent ? (
-            <span
-              data-testid="pitch-active-event"
-              className="rounded border border-cyan-400/35 bg-cyan-500/15 px-2 py-0.5 font-mono text-[10px] font-bold uppercase tracking-wider text-cyan-200"
-            >
-              {shownEvent.replace(/_/g, " ")}
-            </span>
-          ) : null}
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-200">{awayName}</span>
-          <CrestMark url={awayCrest} name={awayName} />
-        </div>
+      <div className="flex items-center justify-between">
+        <CrestMark url={homeCrest} name={homeName} />
+        {isDemo ? <span className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</span> : null}
+        <CrestMark url={awayCrest} name={awayName} />
       </div>
       <OrthographicPitch
         players={shown}
@@ -653,23 +334,11 @@ export function Pitch2DView({
         onSelect={onSelect}
         unavailable={unavailable}
         demo={isDemo}
-        cameraMode={cameraMode}
-        onCameraModeChange={onCameraModeChange}
-        showVoronoi={showVoronoi}
-        showHeatmap={showHeatmap}
-        showTactics={showTactics}
-        showPassingLanes={showPassingLanes}
-        sampleFrame={sampleFrame}
-        feedFreshness={feedStatus.status}
       />
       {selected && record ? (
-        <div
-          data-testid="selected-player-card"
-          className="rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-200"
-        >
+        <div className="rounded-lg border border-white/10 bg-slate-950/80 px-3 py-2 text-xs text-slate-200">
           <div className="font-black text-white">
-            {selected.name} · #{selected.shirtNumber} · {selected.role || "—"} ·{" "}
-            <span className="uppercase text-slate-400">{selected.side}</span>
+            {selected.name} · #{selected.shirtNumber} · {selected.role || "—"}
           </div>
           <div className="mt-1 flex flex-wrap gap-3 font-mono text-[11px]">
             <span>Stamina {metricText(rawSelected?.stamina_pct)}</span>
@@ -682,4 +351,3 @@ export function Pitch2DView({
     </div>
   );
 }
-
