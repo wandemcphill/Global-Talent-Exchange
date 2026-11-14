@@ -1705,6 +1705,7 @@ def record_managerial_change(
     new_manager: dict[str, Any] | None = None,
     previous_manager: dict[str, Any] | None = None,
     reason: str = "boardroom_decision",
+    severance_fan_coin: int = 0,
     severance_gtex: int = 0,
     idempotency_key: str | None = None,
 ) -> None:
@@ -1731,8 +1732,14 @@ def record_managerial_change(
             row.departed_world_day = world_day
             row.departure_reason = reason
             row.severance_paid_gtex = Decimal(str(severance_gtex))
+            row.severance_paid_fan_coin = Decimal(str(severance_fan_coin))
+            severance_label = (
+                f"{severance_fan_coin:,} Fan Coin severance"
+                if severance_fan_coin
+                else (f"{severance_gtex:,} GTEX severance" if severance_gtex else "no severance")
+            )
             row.tenure_summary = (
-                f"{row.manager_name} departed on World Day {world_day} ({reason}) after {row.matches_managed} matches "
+                f"{row.manager_name} departed on World Day {world_day} ({reason}) with {severance_label} after {row.matches_managed} matches "
                 f"({row.wins}W-{row.draws}D-{row.losses}L, {row.trophies_won} trophies)."
             )
 
@@ -1742,7 +1749,15 @@ def record_managerial_change(
     title = (
         f"Managerial Appointment: {new_name} Named Head Coach of {state.club_name}"
         if action == "appointed"
-        else f"Managerial Departure: {prev_name} Relieved of Duties ({ severance_gtex } GTX Severance)"
+        else (
+            f"Managerial Departure: {prev_name} Relieved of Duties "
+            f"({severance_fan_coin:,} Fan Coin Severance)"
+            if severance_fan_coin
+            else (
+                f"Managerial Departure: {prev_name} Relieved of Duties "
+                f"({severance_gtex:,} GTX Severance)"
+            )
+        )
     )
     summary = (
         f"Owner appointed {new_name} ({(new_manager or {}).get('style', 'balanced')} philosophy) on World Day {world_day}."
@@ -1766,7 +1781,9 @@ def record_managerial_change(
             "previous_manager": prev_name,
             "new_manager": new_name,
             "world_day": world_day,
+            "severance_fan_coin": int(severance_fan_coin),
             "severance_gtex": int(severance_gtex),
+            "severance_currency": "FAN_COIN" if severance_fan_coin else ("GTEX_COIN" if severance_gtex else None),
         },
         is_major_milestone=True,
         idempotency_key=f"history:{idem}",
@@ -1803,7 +1820,9 @@ def record_managerial_change(
         source_id=idem,
         established_facts={
             "world_day": world_day,
+            "severance_fan_coin": int(severance_fan_coin),
             "severance_gtex": int(severance_gtex),
+            "severance_currency": "FAN_COIN" if severance_fan_coin else ("GTEX_COIN" if severance_gtex else None),
         },
         idempotency_key=f"media:{idem}",
         reputation_delta=1 if action == "appointed" else -1,
