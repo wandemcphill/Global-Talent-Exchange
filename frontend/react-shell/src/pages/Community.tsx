@@ -839,6 +839,20 @@ function PeopleTab({ viewerId, onMessage }: { viewerId?: string; onMessage: (use
 
 /* ------------------------------ Messages ------------------------------- */
 
+function getThreadUnreadCount(thread: any, viewerId?: string): number {
+  if (typeof thread?.unread_count === "number") {
+    return Math.max(0, thread.unread_count);
+  }
+  const me = (thread?.participants || []).find((p: any) => p.user_id === viewerId);
+  if (!me) return 0;
+  if (typeof me.last_read_seq === "number" && typeof thread?.last_message_seq === "number") {
+    return Math.max(0, thread.last_message_seq - me.last_read_seq);
+  }
+  if (!thread?.last_message_at) return 0;
+  if (!me.last_read_at) return 1;
+  return new Date(thread.last_message_at).getTime() > new Date(me.last_read_at).getTime() ? 1 : 0;
+}
+
 function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; startWith: string | null; clearStart: () => void }) {
   const qc = useQueryClient();
   const threads = useQuery({ queryKey: ["community-pm-threads"], enabled: !!viewerId, queryFn: async () => (await api.get("/community/private-messages/threads")).data as any[] });
@@ -850,33 +864,125 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
   const [groupTitle, setGroupTitle] = useState("");
   const [picker, setPicker] = useState("");
   const [selected, setSelected] = useState<any[]>([]);
+  const [readAckError, setReadAckError] = useState<{ threadId: string; upToSeq: number; upToMessageId: string | null; message: string } | null>(null);
   const lastSeq = useRef(0);
+  const activeThreadRef = useRef<string | null>(null);
+  const openSessionRef = useRef(0);
+  const loadingHistoryRef = useRef(false);
+  const pendingCatchUpRef = useRef(false);
+  const ackedSeqByThreadRef = useRef<Record<string, number>>({});
   const people = useQuery({ queryKey: ["pm-people", picker], enabled: !!viewerId && picker.length >= 2, queryFn: async () => (await api.get("/community/discovery/people", { params: { q: picker, limit: 8 } })).data.people as any[] });
 
-  const merge = useCallback((incoming: any[]) => {
+  const merge = useCallback((incoming: any[]): any[] => {
+    const sortedIncoming = [...incoming].sort((a, b) => (a.seq || 0) - (b.seq || 0));
+    const maxIncomingSeq = sortedIncoming.reduce((max, m) => Math.max(max, Number(m?.seq || 0)), 0);
+    if (maxIncomingSeq > lastSeq.current) {
+      lastSeq.current = maxIncomingSeq;
+    }
     setMessages((prev) => {
       const byId = new Map(prev.map((m) => [m.id, m]));
-      incoming.forEach((m) => byId.set(m.id, m));
+      sortedIncoming.forEach((m) => byId.set(m.id, m));
       const next = Array.from(byId.values()).sort((a, b) => (a.seq || 0) - (b.seq || 0));
-      lastSeq.current = next.length ? next[next.length - 1].seq || 0 : 0;
+      if (next.length) {
+        lastSeq.current = Math.max(lastSeq.current, Number(next[next.length - 1].seq || 0));
+      }
       return next;
     });
+    return sortedIncoming;
   }, []);
 
+  const acknowledgeRead = useCallback(async (threadId: string, upToSeq: number, upToMessageId: string | null, sessionToken?: number) => {
+    if (activeThreadRef.current !== threadId) return false;
+    if (sessionToken !== undefined && openSessionRef.current !== sessionToken) return false;
+    try {
+      const { data } = await api.post(`/community/private-messages/threads/${threadId}/read`, {
+        up_to_seq: upToSeq,
+        ...(upToMessageId ? { up_to_message_id: upToMessageId } : {}),
+      });
+      if (activeThreadRef.current !== threadId) return false;
+      if (sessionToken !== undefined && openSessionRef.current !== sessionToken) return false;
+      ackedSeqByThreadRef.current[threadId] = Math.max(ackedSeqByThreadRef.current[threadId] ?? 0, upToSeq);
+      setReadAckError((prev) => (prev?.threadId === threadId ? null : prev));
+      if (data && typeof data === "object" && data.id) {
+        qc.setQueryData(["community-pm-threads"], (old: any[] | undefined) =>
+          Array.isArray(old)
+            ? old.map((t) =>
+                t.id === threadId && (data.last_read_seq ?? 0) >= (t.last_read_seq ?? 0)
+                  ? { ...t, ...data }
+                  : t
+              )
+            : old
+        );
+      }
+      await qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+      qc.invalidateQueries({ queryKey: ["community-digest"] });
+      return true;
+    } catch (e) {
+      if (activeThreadRef.current === threadId && (sessionToken === undefined || openSessionRef.current === sessionToken)) {
+        const message = errMsg(e);
+        setReadAckError({ threadId, upToSeq, upToMessageId, message });
+        toast.error(message);
+      }
+      return false;
+    }
+  }, [qc]);
+
+  const catchUp = useCallback(async (threadIdArg?: string, sessionTokenArg?: number) => {
+    const targetThreadId = threadIdArg ?? activeThreadRef.current;
+    if (!targetThreadId) return;
+    const sessionToken = sessionTokenArg ?? openSessionRef.current;
+    try {
+      const { data } = await api.get(`/community/private-messages/threads/${targetThreadId}/messages/page`, { params: { after_seq: lastSeq.current } });
+      if (activeThreadRef.current !== targetThreadId || openSessionRef.current !== sessionToken) return;
+      const incoming: any[] = data?.messages || [];
+      if (incoming.length) {
+        const merged = merge(incoming);
+        const latest = merged.length ? merged[merged.length - 1] : incoming[incoming.length - 1];
+        const maxSeq = latest ? Number(latest.seq || 0) : lastSeq.current;
+        const prevAcked = ackedSeqByThreadRef.current[targetThreadId] ?? -1;
+        if (maxSeq > prevAcked) {
+          await acknowledgeRead(targetThreadId, maxSeq, latest?.id ?? null, sessionToken);
+        } else {
+          await qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+        }
+      }
+    } catch { /* retry on next reconnect */ }
+  }, [acknowledgeRead, merge, qc]);
+
   const open = useCallback(async (threadId: string) => {
+    const sessionToken = ++openSessionRef.current;
+    activeThreadRef.current = threadId;
+    loadingHistoryRef.current = true;
+    pendingCatchUpRef.current = false;
     setActive(threadId);
     setMessages([]);
+    setHasMore(false);
+    setNextBefore(null);
+    setReadAckError(null);
     lastSeq.current = 0;
     try {
       const { data } = await api.get(`/community/private-messages/threads/${threadId}/messages/page`, { params: { limit: 40 } });
-      merge(data.messages);
-      setHasMore(data.has_more);
-      setNextBefore(data.next_before_seq);
-      qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+      if (openSessionRef.current !== sessionToken || activeThreadRef.current !== threadId) return;
+      const pageMessages: any[] = data?.messages || [];
+      const merged = merge(pageMessages);
+      setHasMore(Boolean(data?.has_more));
+      setNextBefore(data?.next_before_seq ?? null);
+      loadingHistoryRef.current = false;
+      const latestDisplayed = merged.length ? merged[merged.length - 1] : (pageMessages.length ? pageMessages[pageMessages.length - 1] : null);
+      const maxDisplayedSeq = latestDisplayed ? Number(latestDisplayed.seq || 0) : 0;
+      await acknowledgeRead(threadId, maxDisplayedSeq, latestDisplayed?.id ?? null, sessionToken);
+      if (openSessionRef.current !== sessionToken || activeThreadRef.current !== threadId) return;
+      if (pendingCatchUpRef.current) {
+        pendingCatchUpRef.current = false;
+        await catchUp(threadId, sessionToken);
+      }
     } catch (e) {
-      toast.error(errMsg(e));
+      if (openSessionRef.current === sessionToken && activeThreadRef.current === threadId) {
+        loadingHistoryRef.current = false;
+        toast.error(errMsg(e));
+      }
     }
-  }, [merge, qc]);
+  }, [acknowledgeRead, catchUp, merge]);
 
   useEffect(() => {
     if (startWith && !selected.find((s) => s.id === startWith)) {
@@ -885,21 +991,32 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
     }
   }, [startWith, selected, clearStart]);
 
-  const catchUp = useCallback(async () => {
-    if (!active) return;
-    try {
-      const { data } = await api.get(`/community/private-messages/threads/${active}/messages/page`, { params: { after_seq: lastSeq.current } });
-      if (data.messages.length) merge(data.messages);
-    } catch { /* retry on next reconnect */ }
-  }, [active, merge]);
-
   useRealtimeTopics(
     active ? [`pm:${active}`, "user"] : ["user"],
     (ev) => {
-      if (ev.type === "pm_message" && ev.data?.thread_id === active) catchUp();
-      if (ev.type === "pm_message" || ev.type === "pm_thread_created") qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+      if (ev.type === "pm_message") {
+        const msgThreadId = ev.data?.thread_id;
+        if (msgThreadId && msgThreadId === activeThreadRef.current) {
+          if (loadingHistoryRef.current) {
+            pendingCatchUpRef.current = true;
+          } else {
+            void catchUp(msgThreadId, openSessionRef.current);
+          }
+        } else {
+          qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+          qc.invalidateQueries({ queryKey: ["community-digest"] });
+        }
+      } else if (ev.type === "pm_thread_created" || ev.type === "pm_read") {
+        qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+        qc.invalidateQueries({ queryKey: ["community-digest"] });
+      }
     },
-    catchUp,
+    () => {
+      qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+      if (activeThreadRef.current && !loadingHistoryRef.current) {
+        void catchUp(activeThreadRef.current, openSessionRef.current);
+      }
+    },
     !!viewerId
   );
 
@@ -914,7 +1031,7 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
       if (active) {
         await api.post(`/community/private-messages/threads/${active}/messages`, { body });
         setDraft("");
-        await catchUp();
+        await catchUp(active, openSessionRef.current);
       } else if (selected.length) {
         const { data } = await api.post("/community/private-messages/threads", {
           participant_user_ids: selected.map((s) => s.id),
@@ -935,19 +1052,56 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
   return (
     <div className="grid gap-4 md:grid-cols-[260px_1fr]">
       <div className="space-y-2 min-w-0">
-        <Btn variant="secondary" onClick={() => { setActive(null); setMessages([]); }}>New conversation</Btn>
-        {(threads.data || []).map((t: any) => (
-          <button key={t.id} type="button" onClick={() => open(t.id)} className={`block w-full rounded-lg border px-3 py-2 text-left text-xs ${active === t.id ? "border-[#00C991] bg-[#00C991]/10" : "border-[#25354B]"}`}>
-            <span className="flex items-center justify-between gap-2 font-bold text-white">
-              <span className="truncate">{t.subject || `Conversation · ${t.participants.length} people`}</span>
-              {t.is_group && <Chip tone="cyan">Group</Chip>}
-            </span>
-            <span className="text-slate-400">{fmtTime(t.last_message_at)}</span>
-          </button>
-        ))}
+        <Btn variant="secondary" onClick={() => { openSessionRef.current++; activeThreadRef.current = null; loadingHistoryRef.current = false; pendingCatchUpRef.current = false; setActive(null); setMessages([]); setReadAckError(null); }}>New conversation</Btn>
+        {(threads.data || []).map((t: any) => {
+          const unreadCount = getThreadUnreadCount(t, viewerId);
+          return (
+            <button key={t.id} data-testid={`pm-thread-${t.id}`} type="button" onClick={() => open(t.id)} className={`block w-full rounded-lg border px-3 py-2 text-left text-xs ${active === t.id ? "border-[#00C991] bg-[#00C991]/10" : "border-[#25354B]"}`}>
+              <span className="flex items-center justify-between gap-2 font-bold text-white">
+                <span className="truncate">{t.subject || `Conversation · ${t.participants.length} people`}</span>
+                <span className="flex items-center gap-1 shrink-0">
+                  {t.is_group && <Chip tone="cyan">Group</Chip>}
+                  {unreadCount > 0 && (
+                    <span
+                      data-testid={`pm-unread-${t.id}`}
+                      aria-label={`${unreadCount} unread`}
+                      className="inline-flex items-center justify-center rounded-full bg-[#00C991] px-1.5 py-0.5 text-[10px] font-black text-[#080F1C]"
+                    >
+                      {unreadCount}
+                    </span>
+                  )}
+                </span>
+              </span>
+              <span className="text-slate-400">{fmtTime(t.last_message_at)}</span>
+            </button>
+          );
+        })}
         {threads.data && threads.data.length === 0 && <p className="text-xs text-slate-400">No conversations yet.</p>}
       </div>
       <Panel title={activeThreadObj?.subject || (active ? "Conversation" : "New conversation")}>
+        {readAckError && readAckError.threadId === active && (
+          <div
+            role="alert"
+            data-testid="pm-read-ack-error"
+            className="mb-2 flex items-center justify-between gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+          >
+            <span>Could not sync read status: {readAckError.message}</span>
+            <Btn
+              variant="secondary"
+              data-testid="pm-retry-read-ack"
+              onClick={() =>
+                void acknowledgeRead(
+                  readAckError.threadId,
+                  readAckError.upToSeq,
+                  readAckError.upToMessageId,
+                  openSessionRef.current
+                )
+              }
+            >
+              Retry
+            </Btn>
+          </div>
+        )}
         {!active && (
           <div className="mb-3 space-y-2">
             <input className="gx-input w-full" placeholder="Find people to message (select 2+ for group)" value={picker} onChange={(e) => setPicker(e.target.value)} aria-label="Find people" />
@@ -961,7 +1115,7 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
           </div>
         )}
         <div className="max-h-[50vh] space-y-2 overflow-y-auto" role="log" aria-live="polite">
-          {hasMore && <Btn variant="secondary" onClick={async () => { const { data } = await api.get(`/community/private-messages/threads/${active}/messages/page`, { params: { before_seq: nextBefore } }); merge(data.messages); setHasMore(data.has_more); setNextBefore(data.next_before_seq); }}>Load older messages</Btn>}
+          {hasMore && <Btn variant="secondary" onClick={async () => { const currentThread = activeThreadRef.current; const sessionToken = openSessionRef.current; if (!currentThread) return; const { data } = await api.get(`/community/private-messages/threads/${currentThread}/messages/page`, { params: { before_seq: nextBefore } }); if (activeThreadRef.current !== currentThread || openSessionRef.current !== sessionToken) return; merge(data.messages); setHasMore(data.has_more); setNextBefore(data.next_before_seq); }}>Load older messages</Btn>}
           {messages.map((m) => (
             <div key={m.id} className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${m.sender_user_id === viewerId ? "ml-auto bg-[#00C991]/15" : "bg-[#14243A]"}`}>
               <p className="text-[10px] text-slate-400">{name(m.sender)} · {fmtTime(m.created_at)}</p>
@@ -975,9 +1129,9 @@ function MessagesTab({ viewerId, startWith, clearStart }: { viewerId?: string; s
         </form>
         {active && (
           <div className="mt-2 flex flex-wrap gap-3 text-xs">
-            <button type="button" className="text-slate-400 hover:text-white" onClick={async () => { try { await api.post(`/community/private-messages/threads/${active}/leave`); toast.success("Left conversation"); setActive(null); qc.invalidateQueries({ queryKey: ["community-pm-threads"] }); } catch (e) { toast.error(errMsg(e)); } }}>Leave group</button>
+            <button type="button" className="text-slate-400 hover:text-white" onClick={async () => { const targetId = active; try { await api.post(`/community/private-messages/threads/${targetId}/leave`); toast.success("Left conversation"); openSessionRef.current++; activeThreadRef.current = null; loadingHistoryRef.current = false; pendingCatchUpRef.current = false; setActive(null); setMessages([]); setReadAckError(null); qc.invalidateQueries({ queryKey: ["community-pm-threads"] }); qc.invalidateQueries({ queryKey: ["community-digest"] }); } catch (e) { toast.error(errMsg(e)); } }}>Leave group</button>
             {otherParticipant && (
-              <button type="button" className="text-red-400 hover:underline" onClick={async () => { try { await api.post(`/community/users/${otherParticipant.user_id}/block`); toast.success("User blocked"); setActive(null); qc.invalidateQueries({ queryKey: ["community-pm-threads"] }); } catch (e) { toast.error(errMsg(e)); } }}>Block user</button>
+              <button type="button" className="text-red-400 hover:underline" onClick={async () => { try { await api.post(`/community/users/${otherParticipant.user_id}/block`); toast.success("User blocked"); openSessionRef.current++; activeThreadRef.current = null; loadingHistoryRef.current = false; pendingCatchUpRef.current = false; setActive(null); setMessages([]); setReadAckError(null); qc.invalidateQueries({ queryKey: ["community-pm-threads"] }); qc.invalidateQueries({ queryKey: ["community-digest"] }); } catch (e) { toast.error(errMsg(e)); } }}>Block user</button>
             )}
           </div>
         )}
@@ -1045,6 +1199,29 @@ export default function CommunityPage() {
   const [dmTarget, setDmTarget] = useState<string | null>(null);
   const viewerId = user?.id as string | undefined;
   const ownedClubs = useMemo(() => (clubs || []).filter((c: any) => c?.club_id), [clubs]);
+  const qc = useQueryClient();
+  const pmThreads = useQuery({
+    queryKey: ["community-pm-threads"],
+    enabled: !!viewerId,
+    queryFn: async () => (await api.get("/community/private-messages/threads")).data as any[],
+  });
+  useRealtimeTopics(
+    ["user"],
+    (ev) => {
+      if (ev.type === "pm_message" || ev.type === "pm_thread_created" || ev.type === "pm_read") {
+        qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+        qc.invalidateQueries({ queryKey: ["community-digest"] });
+      }
+    },
+    () => {
+      qc.invalidateQueries({ queryKey: ["community-pm-threads"] });
+    },
+    !!viewerId && tab !== "messages"
+  );
+  const totalPmUnread = useMemo(
+    () => (pmThreads.data || []).reduce((sum, t) => sum + getThreadUnreadCount(t, viewerId), 0),
+    [pmThreads.data, viewerId]
+  );
 
   return (
     <div data-testid="community-page" className="min-w-0">
@@ -1059,6 +1236,15 @@ export default function CommunityPage() {
           <button key={t.id} role="tab" aria-selected={tab === t.id} type="button" data-testid={`community-tab-${t.id}`} onClick={() => setParams({ tab: t.id })} className={`shrink-0 rounded-full border px-4 py-1.5 text-xs font-bold uppercase tracking-wider ${tab === t.id ? "border-[#00C991] bg-[#00C991]/15 text-white" : "border-[#25354B] text-slate-300"}`}>
             {t.id === "moderation" && <ShieldAlert size={12} className="mr-1 inline" />}
             {t.label}
+            {t.id === "messages" && totalPmUnread > 0 && (
+              <span
+                data-testid="community-tab-messages-unread"
+                aria-label={`${totalPmUnread} unread messages`}
+                className="ml-1.5 inline-flex items-center justify-center rounded-full bg-[#00C991] px-1.5 py-0.5 text-[10px] font-black text-[#080F1C]"
+              >
+                {totalPmUnread}
+              </span>
+            )}
           </button>
         ))}
       </div>

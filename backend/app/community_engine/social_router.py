@@ -18,6 +18,7 @@ from app.community_engine.schemas import (
     ModerationReportView,
     PrivateMessageCreate,
     PrivateMessageParticipantView,
+    PrivateMessageReadAckRequest,
     PrivateMessageThreadCreate,
     PrivateMessageThreadView,
     PrivateMessageView,
@@ -38,16 +39,36 @@ def get_service(session: Session = Depends(get_session)) -> CommunityEngineServi
 
 def _raise(exc: CommunityEngineError) -> None:
     message = str(exc)
-    if "not found" in message.lower():
+    lowered = message.lower()
+    if "not found" in lowered:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
-    if "not a participant" in message.lower() or "blocked" in message.lower() or "locked" in message.lower():
+    if (
+        "not a participant" in lowered
+        or "left this conversation" in lowered
+        or "blocked" in lowered
+        or "locked" in lowered
+    ):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message) from exc
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
 
 
-def _private_thread_view(service: CommunityEngineService, thread) -> PrivateMessageThreadView:
+def _private_thread_view(
+    service: CommunityEngineService,
+    thread: object,
+    actor: User | None = None,
+) -> PrivateMessageThreadView:
     participants = service.list_private_thread_participants(thread_id=thread.id)
-    return PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
+    updates: dict[str, object] = {"participants": participants}
+    if actor is not None:
+        unread_state = service.calculate_thread_unread_state(thread=thread, actor_id=actor.id)
+        updates.update(
+            {
+                "unread_count": int(unread_state["unread_count"]),
+                "last_read_seq": int(unread_state["last_read_seq"]),
+                "last_read_at": unread_state["last_read_at"],
+            }
+        )
+    return PrivateMessageThreadView.model_validate(thread).model_copy(update=updates)
 
 
 @chat_router.get("/threads", response_model=list[PrivateMessageThreadView])
@@ -55,7 +76,10 @@ def list_chat_threads(
     current_user: User = Depends(get_current_social_user),
     service: CommunityEngineService = Depends(get_service),
 ) -> list[PrivateMessageThreadView]:
-    return [_private_thread_view(service, thread) for thread in service.list_private_threads(actor=current_user)]
+    return [
+        _private_thread_view(service, thread, current_user)
+        for thread in service.list_private_threads(actor=current_user)
+    ]
 
 
 @chat_router.post("/threads", response_model=PrivateMessageThreadView, status_code=status.HTTP_201_CREATED)
@@ -70,7 +94,7 @@ def create_chat_thread(
     except CommunityEngineError as exc:
         service.session.rollback()
         _raise(exc)
-    return _private_thread_view(service, thread)
+    return _private_thread_view(service, thread, current_user)
 
 
 @chat_router.get("/threads/{thread_id}", response_model=PrivateMessageThreadView)
@@ -85,7 +109,7 @@ def get_chat_thread(
     except CommunityEngineError as exc:
         service.session.rollback()
         _raise(exc)
-    return _private_thread_view(service, thread)
+    return _private_thread_view(service, thread, current_user)
 
 
 @chat_router.get("/threads/{thread_id}/messages", response_model=list[PrivateMessageView])
@@ -122,16 +146,22 @@ def post_chat_message(
 @chat_router.post("/threads/{thread_id}/read", response_model=PrivateMessageThreadView)
 def mark_chat_thread_read(
     thread_id: str,
+    payload: PrivateMessageReadAckRequest | None = None,
     current_user: User = Depends(get_current_social_user),
     service: CommunityEngineService = Depends(get_service),
 ) -> PrivateMessageThreadView:
     try:
-        thread = service.mark_private_thread_read(actor=current_user, thread_id=thread_id)
+        thread = service.mark_private_thread_read(
+            actor=current_user,
+            thread_id=thread_id,
+            up_to_seq=payload.up_to_seq if payload is not None else None,
+            up_to_message_id=payload.up_to_message_id if payload is not None else None,
+        )
         service.session.commit()
     except CommunityEngineError as exc:
         service.session.rollback()
         _raise(exc)
-    return _private_thread_view(service, thread)
+    return _private_thread_view(service, thread, current_user)
 
 
 @chat_router.post("/threads/{thread_id}/mute", response_model=PrivateMessageParticipantView)

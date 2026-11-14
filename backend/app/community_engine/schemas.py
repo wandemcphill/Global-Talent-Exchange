@@ -96,13 +96,20 @@ class PrivateMessageCreate(BaseModel):
     metadata_json: dict[str, object] = Field(default_factory=dict)
 
 
+class PrivateMessageReadAckRequest(BaseModel):
+    up_to_seq: int | None = Field(default=None, ge=0)
+    up_to_message_id: str | None = Field(default=None, max_length=64)
+
+
 class PrivateMessageParticipantView(BaseModel):
     id: str
     thread_id: str
     user_id: str
     is_muted: bool
+    last_read_seq: int = 0
     last_read_at: datetime | None
     joined_at: datetime
+    left_at: datetime | None = None
     metadata_json: dict[str, object]
 
     model_config = {"from_attributes": True}
@@ -111,6 +118,7 @@ class PrivateMessageParticipantView(BaseModel):
 class PrivateMessageView(BaseModel):
     id: str
     thread_id: str
+    seq: int = 0
     sender_user_id: str
     body: str
     visibility: MessageVisibility = MessageVisibility.PUBLIC
@@ -129,6 +137,9 @@ class PrivateMessageThreadView(BaseModel):
     is_group: bool = False
     last_message_seq: int = 0
     last_message_at: datetime | None
+    unread_count: int = 0
+    last_read_seq: int = 0
+    last_read_at: datetime | None = None
     metadata_json: dict[str, object]
     created_at: datetime
     updated_at: datetime

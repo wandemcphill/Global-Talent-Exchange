@@ -20,6 +20,7 @@ from app.models.club_trophy import ClubTrophy
 from app.models.community_engine import (
     CommunityReaction,
     CommunityUserBlock,
+    MessageVisibility,
     PrivateMessage,
     PrivateMessageParticipant,
     PrivateMessageThread,
@@ -1750,20 +1751,24 @@ class CommunitySocialService:
         after_seq: int | None = None,
         limit: int = 40,
     ) -> dict[str, Any]:
+        thread = self.session.get(PrivateMessageThread, thread_id)
+        if thread is None:
+            raise CommunitySocialError("Private message thread not found.", status_code=404)
         participant = self.session.scalar(
             select(PrivateMessageParticipant).where(
                 PrivateMessageParticipant.thread_id == thread_id,
                 PrivateMessageParticipant.user_id == actor.id,
-                PrivateMessageParticipant.left_at.is_(None),
             )
         )
         if participant is None:
-            raise CommunitySocialError("Private message thread not found.", status_code=404)
-        thread = self.session.get(PrivateMessageThread, thread_id)
-        if thread is None:
-            raise CommunitySocialError("Private message thread not found.", status_code=404)
+            raise CommunitySocialError("You are not a participant in this thread.", status_code=403)
+        if participant.left_at is not None:
+            raise CommunitySocialError("You have left this conversation.", status_code=403)
 
-        q = select(PrivateMessage).where(PrivateMessage.thread_id == thread_id)
+        q = select(PrivateMessage).where(
+            PrivateMessage.thread_id == thread_id,
+            PrivateMessage.visibility != MessageVisibility.HIDDEN,
+        )
         if after_seq is not None:
             q = q.where(PrivateMessage.seq > after_seq).order_by(PrivateMessage.seq.asc())
             rows = list(self.session.scalars(q.limit(limit)).all())
@@ -1779,6 +1784,13 @@ class CommunitySocialService:
             has_more = len(rows_desc) > limit
             rows = list(reversed(rows_desc[:limit]))
 
+        from app.community_engine.service import CommunityEngineService
+
+        unread_state = CommunityEngineService(self.session).calculate_thread_unread_state(
+            thread=thread,
+            actor_id=actor.id,
+        )
+
         sender_ids = list({m.sender_user_id for m in rows})
         senders = (
             {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(sender_ids))).all()}
@@ -1790,6 +1802,11 @@ class CommunitySocialService:
             "subject": thread.subject,
             "is_group": bool(getattr(thread, "is_group", False)),
             "latest_seq": int(getattr(thread, "last_message_seq", 0) or 0),
+            "unread_count": int(unread_state["unread_count"]),
+            "last_read_seq": int(unread_state["last_read_seq"]),
+            "last_read_at": (
+                unread_state["last_read_at"].isoformat() if unread_state["last_read_at"] is not None else None
+            ),
             "has_more": has_more,
             "next_before_seq": int(rows[0].seq) if has_more and rows and int(rows[0].seq or 0) > 0 else None,
             "messages": [
@@ -1809,17 +1826,20 @@ class CommunitySocialService:
         }
 
     def leave_pm_thread(self, *, thread_id: str, actor: User) -> dict[str, Any]:
+        thread = self.session.get(PrivateMessageThread, thread_id)
+        if thread is None:
+            raise CommunitySocialError("Private message thread not found.", status_code=404)
         part = self.session.scalar(
             select(PrivateMessageParticipant).where(
                 PrivateMessageParticipant.thread_id == thread_id,
                 PrivateMessageParticipant.user_id == actor.id,
-                PrivateMessageParticipant.left_at.is_(None),
             )
         )
         if part is None:
-            raise CommunitySocialError("Private message thread not found.", status_code=404)
-        thread = self.session.get(PrivateMessageThread, thread_id)
-        if thread is None or not bool(getattr(thread, "is_group", False)):
+            raise CommunitySocialError("You are not a participant in this thread.", status_code=403)
+        if part.left_at is not None:
+            raise CommunitySocialError("You have left this conversation.", status_code=403)
+        if not bool(getattr(thread, "is_group", False)):
             raise CommunitySocialError("You can only leave group conversations.")
         part.left_at = datetime.now(timezone.utc)
         self.session.flush()

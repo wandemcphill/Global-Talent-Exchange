@@ -35,8 +35,17 @@ jest.mock("@/lib/owner", () => ({
   useActiveClub: () => ({ clubs: mockClubs }),
 }));
 
+let latestRealtimeHandler: ((ev: any) => void) | null = null;
+let latestReconnectHandler: (() => void) | null = null;
+
 jest.mock("@/lib/realtime", () => ({
-  useRealtimeTopics: () => ({ status: "connected" }),
+  useRealtimeTopics: (_topics: string[], onEvent: (ev: any) => void, onReconnect?: () => void, enabled = true) => {
+    if (enabled !== false) {
+      latestRealtimeHandler = onEvent;
+      latestReconnectHandler = onReconnect || null;
+    }
+    return { status: "connected" };
+  },
 }));
 
 jest.mock("sonner", () => ({
@@ -402,6 +411,534 @@ describe("GTEX Community Page", () => {
       target_type: "post",
       target_id: "post-bad",
       action: "hide",
+    });
+  });
+
+  it("opens an unread conversation, acknowledges displayed messages, refreshes unread badges, and handles realtime messages in active vs inactive threads", async () => {
+    let pm1Unread = 2;
+    let pm1LastReadSeq = 0;
+    let pm2Unread = 0;
+    const pm1Messages: any[] = [
+      {
+        id: "m-1",
+        seq: 1,
+        sender_user_id: "u-2",
+        sender: { id: "u-2", display_name: "Coach Ada" },
+        body: "First scouting report",
+        created_at: "2026-11-13T18:20:00Z",
+      },
+      {
+        id: "m-2",
+        seq: 2,
+        sender_user_id: "u-2",
+        sender: { id: "u-2", display_name: "Coach Ada" },
+        body: "Second scouting report",
+        created_at: "2026-11-13T18:25:00Z",
+      },
+    ];
+
+    mockedApi.get.mockImplementation(async (url: string, config?: any) => {
+      if (url === "/community/private-messages/threads") {
+        return {
+          data: [
+            {
+              id: "pm-1",
+              subject: "Scouting Trio",
+              is_group: true,
+              unread_count: pm1Unread,
+              last_read_seq: pm1LastReadSeq,
+              last_message_seq: pm1Messages[pm1Messages.length - 1].seq,
+              participants: [{ user_id: "u-fan", last_read_seq: pm1LastReadSeq }, { user_id: "u-2" }, { user_id: "u-3" }],
+              last_message_at: "2026-11-13T18:30:00Z",
+            },
+            {
+              id: "pm-2",
+              subject: "Tactical Briefing",
+              is_group: false,
+              unread_count: pm2Unread,
+              last_read_seq: 1,
+              last_message_seq: 1 + pm2Unread,
+              participants: [{ user_id: "u-fan", last_read_seq: 1 }, { user_id: "u-3" }],
+              last_message_at: "2026-11-13T18:10:00Z",
+            },
+          ],
+        };
+      }
+      if (url === "/community/private-messages/threads/pm-1/messages/page") {
+        const afterSeq = config?.params?.after_seq;
+        const filtered = typeof afterSeq === "number" ? pm1Messages.filter((m) => m.seq > afterSeq) : pm1Messages;
+        return {
+          data: {
+            messages: filtered,
+            has_more: false,
+            next_before_seq: null,
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    mockedApi.post.mockImplementation(async (url: string, body?: any) => {
+      if (url === "/community/private-messages/threads/pm-1/read") {
+        pm1LastReadSeq = Math.max(pm1LastReadSeq, Number(body?.up_to_seq || 0));
+        pm1Unread = pm1Messages.filter((m) => m.sender_user_id !== "u-fan" && m.seq > pm1LastReadSeq).length;
+        return {
+          data: {
+            id: "pm-1",
+            subject: "Scouting Trio",
+            is_group: true,
+            unread_count: pm1Unread,
+            last_read_seq: pm1LastReadSeq,
+            last_message_seq: pm1Messages[pm1Messages.length - 1].seq,
+            participants: [{ user_id: "u-fan", last_read_seq: pm1LastReadSeq }, { user_id: "u-2" }, { user_id: "u-3" }],
+            last_message_at: "2026-11-13T18:30:00Z",
+          },
+        };
+      }
+      return { data: { status: "ok" } };
+    });
+
+    mockSearchParams = new URLSearchParams("tab=messages");
+    await renderPage();
+    await flush();
+
+    // Unread badges are shown on both the Messages tab and the pm-1 conversation item
+    expect(container.querySelector('[data-testid="community-tab-messages-unread"]')?.textContent).toBe("2");
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')?.textContent).toBe("2");
+    expect(container.querySelector('[data-testid="pm-unread-pm-2"]')).toBeNull();
+
+    // 1 & 2. Opening pm-1 loads the message page, calls /read with up_to_seq=2, and clears unread badges
+    const pm1Btn = container.querySelector('[data-testid="pm-thread-pm-1"]') as HTMLButtonElement;
+    await act(async () => {
+      pm1Btn.click();
+    });
+    await flush();
+
+    expect(mockedApi.get).toHaveBeenCalledWith("/community/private-messages/threads/pm-1/messages/page", {
+      params: { limit: 40 },
+    });
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-1/read", {
+      up_to_seq: 2,
+      up_to_message_id: "m-2",
+    });
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')).toBeNull();
+    expect(container.querySelector('[data-testid="community-tab-messages-unread"]')).toBeNull();
+
+    // 3. Receiving a real-time message in the currently open conversation (pm-1) catches up and acknowledges seq 3
+    pm1Messages.push({
+      id: "m-3",
+      seq: 3,
+      sender_user_id: "u-2",
+      sender: { id: "u-2", display_name: "Coach Ada" },
+      body: "Live update on striker contract",
+      created_at: "2026-11-13T18:35:00Z",
+    });
+    pm1Unread = 1;
+
+    await act(async () => {
+      latestRealtimeHandler?.({
+        type: "pm_message",
+        data: { id: "m-3", thread_id: "pm-1", seq: 3, sender_user_id: "u-2" },
+      });
+    });
+    await flush();
+
+    expect(container.textContent).toContain("Live update on striker contract");
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-1/read", {
+      up_to_seq: 3,
+      up_to_message_id: "m-3",
+    });
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')).toBeNull();
+
+    // 4. Receiving a real-time message in another conversation (pm-2) refreshes thread list without marking pm-2 read
+    pm2Unread = 1;
+    await act(async () => {
+      latestRealtimeHandler?.({
+        type: "pm_message",
+        data: { id: "m-other-2", thread_id: "pm-2", seq: 2, sender_user_id: "u-3" },
+      });
+    });
+    await flush();
+
+    expect(mockedApi.post).not.toHaveBeenCalledWith(
+      "/community/private-messages/threads/pm-2/read",
+      expect.anything()
+    );
+    expect(container.querySelector('[data-testid="pm-unread-pm-2"]')?.textContent).toBe("1");
+    expect(container.querySelector('[data-testid="community-tab-messages-unread"]')?.textContent).toBe("1");
+
+    // Verify reconnect handler also works without duplicating messages
+    await act(async () => {
+      latestReconnectHandler?.();
+    });
+    await flush();
+  });
+
+  it("prevents stale read acknowledgement when switching conversations rapidly and when leaving a group", async () => {
+    let resolvePm1Page: ((val: any) => void) | null = null;
+    let threadsList = [
+      {
+        id: "pm-1",
+        subject: "Slow Thread",
+        is_group: true,
+        unread_count: 1,
+        last_read_seq: 0,
+        last_message_seq: 1,
+        participants: [{ user_id: "u-fan", last_read_seq: 0 }, { user_id: "u-2" }, { user_id: "u-3" }],
+        last_message_at: "2026-11-13T18:30:00Z",
+      },
+      {
+        id: "pm-2",
+        subject: "Fast Group Thread",
+        is_group: true,
+        unread_count: 1,
+        last_read_seq: 0,
+        last_message_seq: 5,
+        participants: [{ user_id: "u-fan", last_read_seq: 0 }, { user_id: "u-2" }, { user_id: "u-3" }],
+        last_message_at: "2026-11-13T18:40:00Z",
+      },
+    ];
+
+    mockedApi.get.mockImplementation((url: string) => {
+      if (url === "/community/private-messages/threads") {
+        return Promise.resolve({ data: threadsList });
+      }
+      if (url === "/community/private-messages/threads/pm-1/messages/page") {
+        return new Promise((resolve) => {
+          resolvePm1Page = resolve;
+        });
+      }
+      if (url === "/community/private-messages/threads/pm-2/messages/page") {
+        return Promise.resolve({
+          data: {
+            messages: [
+              {
+                id: "m-fast-5",
+                seq: 5,
+                sender_user_id: "u-2",
+                sender: { id: "u-2", display_name: "Coach Ada" },
+                body: "Fast group message",
+                created_at: "2026-11-13T18:40:00Z",
+              },
+            ],
+            has_more: false,
+            next_before_seq: null,
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    mockedApi.post.mockImplementation(async (url: string) => {
+      if (url === "/community/private-messages/threads/pm-2/read") {
+        threadsList = threadsList.map((t) => (t.id === "pm-2" ? { ...t, unread_count: 0, last_read_seq: 5 } : t));
+        return { data: threadsList[1] };
+      }
+      if (url === "/community/private-messages/threads/pm-2/leave") {
+        threadsList = threadsList.filter((t) => t.id !== "pm-2");
+        return { data: { thread_id: "pm-2", left: true } };
+      }
+      return { data: { status: "ok" } };
+    });
+
+    mockSearchParams = new URLSearchParams("tab=messages");
+    await renderPage();
+    await flush();
+
+    // 5. Click pm-1 (slow page load), then immediately switch to pm-2 before pm-1 resolves
+    const pm1Btn = container.querySelector('[data-testid="pm-thread-pm-1"]') as HTMLButtonElement;
+    const pm2Btn = container.querySelector('[data-testid="pm-thread-pm-2"]') as HTMLButtonElement;
+    await act(async () => {
+      pm1Btn.click();
+      pm2Btn.click();
+    });
+    await flush();
+
+    // Now resolve the stale pm-1 page request
+    await act(async () => {
+      resolvePm1Page?.({
+        data: {
+          messages: [
+            {
+              id: "m-slow-1",
+              seq: 1,
+              sender_user_id: "u-2",
+              sender: { id: "u-2", display_name: "Coach Ada" },
+              body: "Stale message from pm-1",
+              created_at: "2026-11-13T18:30:00Z",
+            },
+          ],
+          has_more: false,
+          next_before_seq: null,
+        },
+      });
+    });
+    await flush();
+
+    // Only pm-2 was acknowledged; stale pm-1 was NOT acknowledged and its messages did not pollute pm-2
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-2/read", {
+      up_to_seq: 5,
+      up_to_message_id: "m-fast-5",
+    });
+    expect(mockedApi.post).not.toHaveBeenCalledWith(
+      "/community/private-messages/threads/pm-1/read",
+      expect.anything()
+    );
+    expect(container.textContent).toContain("Fast group message");
+    expect(container.textContent).not.toContain("Stale message from pm-1");
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')?.textContent).toBe("1");
+
+    // 6. Leaving the active group conversation removes it from active threads and prevents stale read calls
+    mockedApi.post.mockClear();
+    const leaveBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent?.includes("Leave group")
+    ) as HTMLButtonElement;
+    await act(async () => {
+      leaveBtn.click();
+    });
+    await flush();
+
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-2/leave");
+    expect(container.querySelector('[data-testid="pm-thread-pm-2"]')).toBeNull();
+
+    // Simulate a late realtime event for pm-2 after leaving
+    await act(async () => {
+      latestRealtimeHandler?.({
+        type: "pm_message",
+        data: { id: "m-fast-6", thread_id: "pm-2", seq: 6, sender_user_id: "u-2" },
+      });
+    });
+    await flush();
+    expect(mockedApi.post).not.toHaveBeenCalledWith(
+      "/community/private-messages/threads/pm-2/read",
+      expect.anything()
+    );
+  });
+
+  it("preserves unread badge when read acknowledgement fails and clears it on retry", async () => {
+    let unreadCount = 1;
+    let shouldFailAck = true;
+
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === "/community/private-messages/threads") {
+        return {
+          data: [
+            {
+              id: "pm-1",
+              subject: "Contract Talk",
+              is_group: false,
+              unread_count: unreadCount,
+              last_read_seq: unreadCount === 0 ? 1 : 0,
+              last_message_seq: 1,
+              participants: [{ user_id: "u-fan", last_read_seq: unreadCount === 0 ? 1 : 0 }, { user_id: "u-2" }],
+              last_message_at: "2026-11-13T18:30:00Z",
+            },
+          ],
+        };
+      }
+      if (url === "/community/private-messages/threads/pm-1/messages/page") {
+        return {
+          data: {
+            messages: [
+              {
+                id: "m-1",
+                seq: 1,
+                sender_user_id: "u-2",
+                sender: { id: "u-2", display_name: "Coach Ada" },
+                body: "Are you free for a call?",
+                created_at: "2026-11-13T18:25:00Z",
+              },
+            ],
+            has_more: false,
+            next_before_seq: null,
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    mockedApi.post.mockImplementation(async (url: string) => {
+      if (url === "/community/private-messages/threads/pm-1/read") {
+        if (shouldFailAck) {
+          throw new Error("Temporary network failure");
+        }
+        unreadCount = 0;
+        return {
+          data: {
+            id: "pm-1",
+            subject: "Contract Talk",
+            is_group: false,
+            unread_count: 0,
+            last_read_seq: 1,
+            last_message_seq: 1,
+            participants: [{ user_id: "u-fan", last_read_seq: 1 }, { user_id: "u-2" }],
+            last_message_at: "2026-11-13T18:30:00Z",
+          },
+        };
+      }
+      return { data: { status: "ok" } };
+    });
+
+    mockSearchParams = new URLSearchParams("tab=messages");
+    await renderPage();
+    await flush();
+
+    // 7. Open conversation while read acknowledgement fails
+    const pm1Btn = container.querySelector('[data-testid="pm-thread-pm-1"]') as HTMLButtonElement;
+    await act(async () => {
+      pm1Btn.click();
+    });
+    await flush();
+
+    // Messages still render, unread badge is NOT falsely cleared, and recoverable retry banner is shown
+    expect(container.textContent).toContain("Are you free for a call?");
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')?.textContent).toBe("1");
+    expect(container.querySelector('[data-testid="pm-read-ack-error"]')).not.toBeNull();
+
+    // Retry succeeds and clears both the error banner and the unread badge
+    shouldFailAck = false;
+    const retryBtn = container.querySelector('[data-testid="pm-retry-read-ack"]') as HTMLButtonElement;
+    await act(async () => {
+      retryBtn.click();
+    });
+    await flush();
+
+    expect(container.querySelector('[data-testid="pm-read-ack-error"]')).toBeNull();
+    expect(container.querySelector('[data-testid="pm-unread-pm-1"]')).toBeNull();
+    expect(container.querySelector('[data-testid="community-tab-messages-unread"]')).toBeNull();
+  });
+
+  it("handles opening an empty conversation and catches up messages arriving during initial history fetch", async () => {
+    let resolveInitialLoad: ((val: any) => void) | null = null;
+    let liveMessages = [
+      {
+        id: "m-init-1",
+        seq: 1,
+        sender_user_id: "u-2",
+        sender: { id: "u-2", display_name: "Coach Ada" },
+        body: "Initial history message",
+        created_at: "2026-11-13T18:20:00Z",
+      },
+    ];
+
+    mockedApi.get.mockImplementation((url: string, config?: any) => {
+      if (url === "/community/private-messages/threads") {
+        return Promise.resolve({
+          data: [
+            {
+              id: "pm-empty",
+              subject: "Empty Thread",
+              is_group: false,
+              unread_count: 0,
+              last_read_seq: 0,
+              last_message_seq: 0,
+              participants: [{ user_id: "u-fan", last_read_seq: 0 }, { user_id: "u-2" }],
+              last_message_at: null,
+            },
+            {
+              id: "pm-race",
+              subject: "Race Thread",
+              is_group: false,
+              unread_count: 1,
+              last_read_seq: 0,
+              last_message_seq: 1,
+              participants: [{ user_id: "u-fan", last_read_seq: 0 }, { user_id: "u-2" }],
+              last_message_at: "2026-11-13T18:20:00Z",
+            },
+          ],
+        });
+      }
+      if (url === "/community/private-messages/threads/pm-empty/messages/page") {
+        return Promise.resolve({ data: { messages: [], has_more: false, next_before_seq: null } });
+      }
+      if (url === "/community/private-messages/threads/pm-race/messages/page") {
+        const afterSeq = config?.params?.after_seq;
+        if (typeof afterSeq === "number") {
+          return Promise.resolve({
+            data: {
+              messages: liveMessages.filter((m) => m.seq > afterSeq),
+              has_more: false,
+              next_before_seq: null,
+            },
+          });
+        }
+        return new Promise((resolve) => {
+          resolveInitialLoad = resolve;
+        });
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    mockedApi.post.mockImplementation(async (url: string, body?: any) => {
+      return {
+        data: {
+          id: url.includes("pm-empty") ? "pm-empty" : "pm-race",
+          unread_count: 0,
+          last_read_seq: Number(body?.up_to_seq || 0),
+        },
+      };
+    });
+
+    mockSearchParams = new URLSearchParams("tab=messages");
+    await renderPage();
+    await flush();
+
+    // Open empty conversation -> acknowledges up_to_seq: 0 cleanly
+    const emptyBtn = container.querySelector('[data-testid="pm-thread-pm-empty"]') as HTMLButtonElement;
+    await act(async () => {
+      emptyBtn.click();
+    });
+    await flush();
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-empty/read", {
+      up_to_seq: 0,
+    });
+
+    // Open race thread, then emit realtime pm_message BEFORE initial history load resolves
+    mockedApi.post.mockClear();
+    const raceBtn = container.querySelector('[data-testid="pm-thread-pm-race"]') as HTMLButtonElement;
+    await act(async () => {
+      raceBtn.click();
+    });
+    await act(async () => {
+      liveMessages = [
+        ...liveMessages,
+        {
+          id: "m-race-2",
+          seq: 2,
+          sender_user_id: "u-2",
+          sender: { id: "u-2", display_name: "Coach Ada" },
+          body: "Arrived mid-load",
+          created_at: "2026-11-13T18:21:00Z",
+        },
+      ];
+      latestRealtimeHandler?.({
+        type: "pm_message",
+        data: { id: "m-race-2", thread_id: "pm-race", seq: 2, sender_user_id: "u-2" },
+      });
+    });
+
+    // Now resolve the initial history page (which only contained seq=1)
+    await act(async () => {
+      resolveInitialLoad?.({
+        data: {
+          messages: [liveMessages[0]],
+          has_more: false,
+          next_before_seq: null,
+        },
+      });
+    });
+    await flush();
+
+    // Both messages rendered, and both seq=1 and caught-up seq=2 were acknowledged
+    expect(container.textContent).toContain("Initial history message");
+    expect(container.textContent).toContain("Arrived mid-load");
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-race/read", {
+      up_to_seq: 1,
+      up_to_message_id: "m-init-1",
+    });
+    expect(mockedApi.post).toHaveBeenCalledWith("/community/private-messages/threads/pm-race/read", {
+      up_to_seq: 2,
+      up_to_message_id: "m-race-2",
     });
   });
 });

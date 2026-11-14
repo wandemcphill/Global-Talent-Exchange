@@ -137,6 +137,23 @@ def upgrade() -> None:
                 else:
                     seq_num = max(seq_num, int(msg.seq))
             thread.last_message_seq = max(int(thread.last_message_seq or 0), seq_num)
+            parts = list(
+                session.scalars(
+                    sa.select(PrivateMessageParticipant).where(PrivateMessageParticipant.thread_id == thread.id)
+                ).all()
+            )
+            for part in parts:
+                meta = dict(part.metadata_json or {})
+                if "last_read_seq" not in meta:
+                    if part.last_read_at is None:
+                        meta["last_read_seq"] = 0
+                    else:
+                        read_seq = 0
+                        for msg in msgs:
+                            if msg.created_at is not None and msg.created_at <= part.last_read_at:
+                                read_seq = max(read_seq, int(msg.seq or 0))
+                        meta["last_read_seq"] = read_seq
+                    part.metadata_json = meta
 
         if inspector.has_table("owner_club_states"):
             states = list(session.scalars(sa.select(OwnerClubState)).all())

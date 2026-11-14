@@ -466,3 +466,236 @@ def test_alembic_migration_20261113_0243_head_and_downgrade_upgrade_cycle(tmp_pa
             assert ver == "20261113_0243_community_and_owner_comms_overhaul"
     finally:
         eng.dispose()
+
+
+def test_private_message_read_acknowledgement_and_unread_synchronisation() -> None:
+    session, actor_state, client, hub = _setup_app()
+    try:
+        outsider = User(
+            id="outsider-u4",
+            email="outsider@gtex.test",
+            username="outsider_fan",
+            display_name="Outsider Fan",
+            password_hash="x",
+            role=UserRole.USER,
+            account_type=PublicAccountType.USER,
+            kyc_status=KycStatus.FULLY_VERIFIED,
+        )
+        session.add(outsider)
+        session.commit()
+
+        # 1. Creating a private thread and sending messages produces unread state for recipients
+        actor_state["id"] = "fan-u1"
+        created = client.post(
+            "/community/private-messages/threads",
+            json={
+                "participant_user_ids": ["org-u2", "admin-u3"],
+                "subject": "Transfer Summit",
+                "initial_message": "Opening bid at 150k",
+            },
+        )
+        assert created.status_code == 201
+        thread_id = created.json()["id"]
+        assert created.json()["unread_count"] == 0
+        assert created.json()["last_read_seq"] == 1
+
+        msg2 = client.post(
+            f"/community/private-messages/threads/{thread_id}/messages",
+            json={"body": "Can we structure performance add-ons?"},
+        )
+        assert msg2.status_code == 201
+        assert msg2.json()["seq"] == 2
+
+        # Recipient org-u2 sees unread_count == 2, digest unread_hint_count == 2
+        actor_state["id"] = "org-u2"
+        org_threads = client.get("/community/private-messages/threads").json()
+        org_thread = next(t for t in org_threads if t["id"] == thread_id)
+        assert org_thread["unread_count"] == 2
+        assert org_thread["last_read_seq"] == 0
+        assert org_thread["last_read_at"] is None
+        assert client.get("/community/digest").json()["unread_hint_count"] == 2
+
+        # 2. Loading paginated messages alone does not mark conversation as read
+        page = client.get(f"/community/private-messages/threads/{thread_id}/messages/page?limit=40")
+        assert page.status_code == 200
+        page_json = page.json()
+        assert len(page_json["messages"]) == 2
+        assert page_json["unread_count"] == 2
+        assert page_json["last_read_seq"] == 0
+
+        org_threads_after_page = client.get("/community/private-messages/threads").json()
+        org_thread_after_page = next(t for t in org_threads_after_page if t["id"] == thread_id)
+        assert org_thread_after_page["unread_count"] == 2
+        assert org_thread_after_page["last_read_at"] is None
+
+        # 6. Non-participants cannot read or acknowledge the conversation
+        actor_state["id"] = "outsider-u4"
+        assert client.get(f"/community/private-messages/threads/{thread_id}/messages/page").status_code == 403
+        assert (
+            client.post(f"/community/private-messages/threads/{thread_id}/read", json={"up_to_seq": 2}).status_code
+            == 403
+        )
+        assert client.post("/community/private-messages/threads/non-existent-thread/read").status_code == 404
+
+        # Partial read acknowledgement: if a 3rd message arrives before user acknowledges seq 2,
+        # acknowledging up_to_seq=2 leaves seq=3 unread!
+        actor_state["id"] = "fan-u1"
+        msg3 = client.post(
+            f"/community/private-messages/threads/{thread_id}/messages",
+            json={"body": "Also including a 10% sell-on clause."},
+        )
+        assert msg3.status_code == 201
+        assert msg3.json()["seq"] == 3
+
+        actor_state["id"] = "org-u2"
+        partial_ack = client.post(
+            f"/community/private-messages/threads/{thread_id}/read",
+            json={"up_to_seq": 2, "up_to_message_id": msg2.json()["id"]},
+        )
+        assert partial_ack.status_code == 200
+        assert partial_ack.json()["last_read_seq"] == 2
+        assert partial_ack.json()["unread_count"] == 1
+        assert partial_ack.json()["last_read_at"] is not None
+
+        # 3 & 4. Explicitly acknowledging up to seq 3 clears unread indicators for org-u2
+        full_ack = client.post(
+            f"/community/private-messages/threads/{thread_id}/read",
+            json={"up_to_seq": 3, "up_to_message_id": msg3.json()["id"]},
+        )
+        assert full_ack.status_code == 200
+        full_ack_json = full_ack.json()
+        assert full_ack_json["unread_count"] == 0
+        assert full_ack_json["last_read_seq"] == 3
+        assert full_ack_json["last_read_at"] is not None
+        assert client.get("/community/digest").json()["unread_hint_count"] == 0
+
+        # 9. Repeated read acknowledgements (including lower seq) are idempotent and monotonic
+        repeat_ack = client.post(
+            f"/community/private-messages/threads/{thread_id}/read",
+            json={"up_to_seq": 2},
+        )
+        assert repeat_ack.status_code == 200
+        assert repeat_ack.json()["last_read_seq"] == 3
+        assert repeat_ack.json()["unread_count"] == 0
+        assert repeat_ack.json()["last_read_at"] == full_ack_json["last_read_at"]
+
+        repeat_same = client.post(
+            f"/community/private-messages/threads/{thread_id}/read",
+            json={"up_to_seq": 3, "up_to_message_id": msg3.json()["id"]},
+        )
+        assert repeat_same.status_code == 200
+        assert repeat_same.json()["last_read_seq"] == 3
+        assert repeat_same.json()["last_read_at"] == full_ack_json["last_read_at"]
+
+        # 5. Other participants' last_read_at / last_read_seq remain unchanged
+        actor_state["id"] = "admin-u3"
+        admin_threads = client.get("/community/private-messages/threads").json()
+        admin_thread = next(t for t in admin_threads if t["id"] == thread_id)
+        assert admin_thread["unread_count"] == 3
+        assert admin_thread["last_read_seq"] == 0
+        assert admin_thread["last_read_at"] is None
+
+        # 8. A new message sent after acknowledgement makes the conversation unread again for other active participants
+        actor_state["id"] = "fan-u1"
+        msg4 = client.post(
+            f"/community/private-messages/threads/{thread_id}/messages",
+            json={"body": "Deal sheet ready for signature."},
+        )
+        assert msg4.status_code == 201
+        assert msg4.json()["seq"] == 4
+
+        actor_state["id"] = "org-u2"
+        org_threads_after_msg4 = client.get("/community/private-messages/threads").json()
+        org_thread_after_msg4 = next(t for t in org_threads_after_msg4 if t["id"] == thread_id)
+        assert org_thread_after_msg4["unread_count"] == 1
+        assert org_thread_after_msg4["last_read_seq"] == 3
+        assert client.get("/community/digest").json()["unread_hint_count"] == 1
+
+        # 7. A participant who left a group conversation cannot acknowledge or read it as an active member
+        actor_state["id"] = "admin-u3"
+        leave_res = client.post(f"/community/private-messages/threads/{thread_id}/leave")
+        assert leave_res.status_code == 200
+        assert (
+            client.post(f"/community/private-messages/threads/{thread_id}/read", json={"up_to_seq": 4}).status_code
+            == 403
+        )
+        assert client.get(f"/community/private-messages/threads/{thread_id}/messages/page").status_code == 403
+        assert client.get(f"/community/private-messages/threads/{thread_id}").status_code == 403
+
+        # 10. Same-timestamp race protection & authoritative message clamp:
+        # Two messages created at identical timestamp (seq=5 and seq=6): acknowledging msg5 even with inflated up_to_seq=999
+        # clamps read position to seq=5 and leaves seq=6 unread for org-u2.
+        from app.models.community_engine import PrivateMessage, PrivateMessageParticipant, PrivateMessageThread
+
+        same_ts = datetime(2026, 11, 14, 1, 0, 0, tzinfo=timezone.utc)
+        thread_row = session.get(PrivateMessageThread, thread_id)
+        assert thread_row is not None
+        msg5 = PrivateMessage(
+            thread_id=thread_id,
+            seq=5,
+            sender_user_id="fan-u1",
+            body="Simultaneous packet A",
+            created_at=same_ts,
+            metadata_json={},
+        )
+        msg6 = PrivateMessage(
+            thread_id=thread_id,
+            seq=6,
+            sender_user_id="fan-u1",
+            body="Simultaneous packet B",
+            created_at=same_ts,
+            metadata_json={},
+        )
+        session.add_all([msg5, msg6])
+        thread_row.last_message_seq = 6
+        thread_row.last_message_at = same_ts
+        session.commit()
+
+        actor_state["id"] = "org-u2"
+        clamped_ack = client.post(
+            f"/community/private-messages/threads/{thread_id}/read",
+            json={"up_to_seq": 999, "up_to_message_id": msg5.id},
+        )
+        assert clamped_ack.status_code == 200
+        assert clamped_ack.json()["last_read_seq"] == 5
+        assert clamped_ack.json()["unread_count"] == 1
+
+        # Replying when org-u2 STILL has unread msg6 must not silently mark msg6 as read
+        reply_while_unread = client.post(
+            f"/community/private-messages/threads/{thread_id}/messages",
+            json={"body": "Quick reply before reading packet B"},
+        )
+        assert reply_while_unread.status_code == 201
+        org_threads_still_unread = client.get("/community/private-messages/threads").json()
+        org_thread_still_unread = next(t for t in org_threads_still_unread if t["id"] == thread_id)
+        assert org_thread_still_unread["unread_count"] == 1
+        assert org_thread_still_unread["last_read_seq"] == 5
+
+        # Empty conversation (0 visible messages) read acknowledgement is clean and idempotent
+        empty_thread = PrivateMessageThread(
+            thread_key="pm-empty-test",
+            created_by_user_id="fan-u1",
+            subject="Empty Shell",
+            is_group=False,
+            last_message_seq=0,
+            metadata_json={},
+        )
+        session.add(empty_thread)
+        session.flush()
+        session.add_all(
+            [
+                PrivateMessageParticipant(thread_id=empty_thread.id, user_id="fan-u1"),
+                PrivateMessageParticipant(thread_id=empty_thread.id, user_id="org-u2"),
+            ]
+        )
+        session.commit()
+        empty_ack = client.post(
+            f"/community/private-messages/threads/{empty_thread.id}/read",
+            json={"up_to_seq": 0},
+        )
+        assert empty_ack.status_code == 200
+        assert empty_ack.json()["unread_count"] == 0
+        assert empty_ack.json()["last_read_seq"] == 0
+    finally:
+        realtime_service._GLOBAL_REALTIME_HUB = None
+        session.close()

@@ -13,6 +13,7 @@ from app.community_engine.schemas import (
     LiveThreadMessageView,
     LiveThreadView,
     PrivateMessageCreate,
+    PrivateMessageReadAckRequest,
     PrivateMessageThreadCreate,
     PrivateMessageThreadView,
     PrivateMessageView,
@@ -58,7 +59,35 @@ def get_creator_fan_service(session: Session = Depends(get_session)) -> CreatorF
 
 
 def _raise(exc: CommunityEngineError) -> None:
-    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    message = str(exc)
+    lowered = message.lower()
+    if "not found" in lowered:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=message) from exc
+    if (
+        "not a participant" in lowered
+        or "left this conversation" in lowered
+        or "blocked" in lowered
+        or "locked" in lowered
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=message) from exc
+    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=message) from exc
+
+
+def _serialize_private_thread(
+    service: CommunityEngineService,
+    thread: object,
+    current_user: User,
+) -> PrivateMessageThreadView:
+    participants = service.list_private_thread_participants(thread_id=thread.id)
+    unread_state = service.calculate_thread_unread_state(thread=thread, actor_id=current_user.id)
+    return PrivateMessageThreadView.model_validate(thread).model_copy(
+        update={
+            "participants": participants,
+            "unread_count": int(unread_state["unread_count"]),
+            "last_read_seq": int(unread_state["last_read_seq"]),
+            "last_read_at": unread_state["last_read_at"],
+        }
+    )
 
 
 def _raise_fan(exc: CreatorFanEngagementError) -> None:
@@ -180,12 +209,7 @@ def list_private_threads(
     current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)
 ) -> list[PrivateMessageThreadView]:
     threads = service.list_private_threads(actor=current_user)
-    output: list[PrivateMessageThreadView] = []
-    for thread in threads:
-        participants = service.list_private_thread_participants(thread_id=thread.id)
-        payload = PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
-        output.append(payload)
-    return output
+    return [_serialize_private_thread(service, thread, current_user) for thread in threads]
 
 
 @router.post("/private-messages/threads", response_model=PrivateMessageThreadView, status_code=status.HTTP_201_CREATED)
@@ -196,12 +220,11 @@ def create_private_thread(
 ) -> PrivateMessageThreadView:
     try:
         thread = service.create_private_thread(actor=current_user, **payload.model_dump())
-        participants = service.list_private_thread_participants(thread_id=thread.id)
         service.session.commit()
     except CommunityEngineError as exc:
         service.session.rollback()
         _raise(exc)
-    return PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
+    return _serialize_private_thread(service, thread, current_user)
 
 
 @router.get("/private-messages/threads/{thread_id}", response_model=PrivateMessageThreadView)
@@ -212,10 +235,32 @@ def get_private_thread(
 ) -> PrivateMessageThreadView:
     try:
         thread = service.get_private_thread(actor=current_user, thread_id=thread_id)
-        participants = service.list_private_thread_participants(thread_id=thread.id)
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
-    return PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
+    return _serialize_private_thread(service, thread, current_user)
+
+
+@router.post("/private-messages/threads/{thread_id}/read", response_model=PrivateMessageThreadView)
+def mark_private_thread_read(
+    thread_id: str,
+    payload: PrivateMessageReadAckRequest | None = None,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> PrivateMessageThreadView:
+    try:
+        thread = service.mark_private_thread_read(
+            actor=current_user,
+            thread_id=thread_id,
+            up_to_seq=payload.up_to_seq if payload is not None else None,
+            up_to_message_id=payload.up_to_message_id if payload is not None else None,
+        )
+        service.session.commit()
+    except CommunityEngineError as exc:
+        service.session.rollback()
+        _raise(exc)
+    return _serialize_private_thread(service, thread, current_user)
 
 
 @router.get("/private-messages/threads/{thread_id}/messages", response_model=list[PrivateMessageView])

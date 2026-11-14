@@ -137,6 +137,20 @@ class PrivateMessageParticipant(Base, UUIDPrimaryKeyMixin):
     left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
+    @property
+    def last_read_seq(self) -> int:
+        if isinstance(self.metadata_json, dict):
+            raw = self.metadata_json.get("last_read_seq")
+            if isinstance(raw, int) and raw >= 0:
+                return raw
+        return 0
+
+    @last_read_seq.setter
+    def last_read_seq(self, value: int) -> None:
+        base = dict(self.metadata_json) if isinstance(self.metadata_json, dict) else {}
+        base["last_read_seq"] = max(0, int(value))
+        self.metadata_json = base
+
 
 class PrivateMessage(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "private_messages"

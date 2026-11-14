@@ -29,6 +29,14 @@ class CommunityEngineError(ValueError):
     pass
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 DISCUSSION_CATEGORIES: tuple[dict[str, str], ...] = (
     {"code": "real_transfer_news", "label": "Real Football Transfer News"},
     {"code": "real_matches", "label": "Real Football Matches"},
@@ -207,18 +215,32 @@ class CommunityEngineService:
         )
         self.session.add(thread)
         self.session.flush()
+        now = datetime.now(UTC)
         participants = [actor.id, *participant_ids]
         for user_id in participants:
-            self.session.add(PrivateMessageParticipant(thread_id=thread.id, user_id=user_id))
+            is_creator = user_id == actor.id
+            self.session.add(
+                PrivateMessageParticipant(
+                    thread_id=thread.id,
+                    user_id=user_id,
+                    last_read_at=now if is_creator else None,
+                    metadata_json=(
+                        {"last_read_seq": 1, "last_read_seq_at": now.isoformat()}
+                        if is_creator
+                        else {"last_read_seq": 0}
+                    ),
+                )
+            )
         message = PrivateMessage(
             thread_id=thread.id,
             seq=1,
             sender_user_id=actor.id,
             body=initial_message,
+            created_at=now,
             metadata_json={"kind": "initial", **metadata_json},
         )
         self.session.add(message)
-        thread.last_message_at = datetime.now(UTC)
+        thread.last_message_at = now
         self.session.flush()
         try:
             from app.realtime.service import RealtimeDispatch, get_global_realtime_hub
@@ -249,78 +271,213 @@ class CommunityEngineService:
         )
         return list(self.session.scalars(stmt).all())
 
-    def get_private_thread(self, *, actor: User, thread_id: str) -> PrivateMessageThread:
+    def _require_active_participant(
+        self, *, actor: User, thread_id: str
+    ) -> tuple[PrivateMessageThread, PrivateMessageParticipant]:
         thread = self.session.get(PrivateMessageThread, thread_id)
         if thread is None:
             raise CommunityEngineError("Private thread was not found.")
         membership = self.session.scalar(
             select(PrivateMessageParticipant).where(
-                PrivateMessageParticipant.thread_id == thread_id, PrivateMessageParticipant.user_id == actor.id
-            )
-        )
-        if membership is None:
-            raise CommunityEngineError("You are not a participant in this thread.")
-        membership.last_read_at = datetime.now(UTC)
-        self.session.flush()
-        return thread
-
-    def mark_private_thread_read(self, *, actor: User, thread_id: str) -> PrivateMessageThread:
-        return self.get_private_thread(actor=actor, thread_id=thread_id)
-
-    def mute_private_thread(self, *, actor: User, thread_id: str, muted: bool = True) -> PrivateMessageParticipant:
-        self.get_private_thread(actor=actor, thread_id=thread_id)
-        participant = self.session.scalar(
-            select(PrivateMessageParticipant).where(
                 PrivateMessageParticipant.thread_id == thread_id,
                 PrivateMessageParticipant.user_id == actor.id,
             )
         )
-        if participant is None:
+        if membership is None:
             raise CommunityEngineError("You are not a participant in this thread.")
+        if membership.left_at is not None:
+            raise CommunityEngineError("You have left this conversation.")
+        return thread, membership
+
+    def _visible_thread_messages(self, *, thread_id: str) -> list[PrivateMessage]:
+        stmt = (
+            select(PrivateMessage)
+            .where(PrivateMessage.thread_id == thread_id, PrivateMessage.visibility != MessageVisibility.HIDDEN)
+            .order_by(PrivateMessage.seq.asc(), PrivateMessage.created_at.asc(), PrivateMessage.id.asc())
+        )
+        return list(self.session.scalars(stmt).all())
+
+    def _effective_participant_read_seq(
+        self,
+        *,
+        participant: PrivateMessageParticipant,
+        messages: list[PrivateMessage] | None = None,
+    ) -> int:
+        meta = dict(participant.metadata_json or {})
+        if "last_read_seq" in meta and meta["last_read_seq"] is not None:
+            try:
+                return max(0, int(meta["last_read_seq"]))
+            except (TypeError, ValueError):
+                pass
+        if participant.last_read_at is None:
+            return 0
+        read_at = _as_utc(participant.last_read_at)
+        if read_at is None:
+            return 0
+        visible = messages if messages is not None else self._visible_thread_messages(thread_id=participant.thread_id)
+        max_seq = 0
+        for msg in visible:
+            msg_ts = _as_utc(msg.created_at)
+            if msg_ts is not None and msg_ts <= read_at:
+                max_seq = max(max_seq, int(msg.seq or 0))
+        return max_seq
+
+    def calculate_thread_unread_state(
+        self,
+        *,
+        thread: PrivateMessageThread,
+        actor_id: str,
+    ) -> dict[str, object]:
+        participant = self.session.scalar(
+            select(PrivateMessageParticipant).where(
+                PrivateMessageParticipant.thread_id == thread.id,
+                PrivateMessageParticipant.user_id == actor_id,
+            )
+        )
+        if participant is None or participant.left_at is not None:
+            return {
+                "unread_count": 0,
+                "last_read_seq": int(participant.last_read_seq or 0) if participant is not None else 0,
+                "last_read_at": participant.last_read_at if participant is not None else None,
+            }
+        messages = self._visible_thread_messages(thread_id=thread.id)
+        read_seq = self._effective_participant_read_seq(participant=participant, messages=messages)
+        unread_messages = [m for m in messages if m.sender_user_id != actor_id and int(m.seq or 0) > read_seq]
+        return {
+            "unread_count": int(len(unread_messages)),
+            "last_read_seq": int(read_seq),
+            "last_read_at": participant.last_read_at,
+        }
+
+    def get_private_thread(self, *, actor: User, thread_id: str) -> PrivateMessageThread:
+        return self.mark_private_thread_read(actor=actor, thread_id=thread_id)
+
+    def mark_private_thread_read(
+        self,
+        *,
+        actor: User,
+        thread_id: str,
+        up_to_seq: int | None = None,
+        up_to_message_id: str | None = None,
+    ) -> PrivateMessageThread:
+        thread, membership = self._require_active_participant(actor=actor, thread_id=thread_id)
+        messages = self._visible_thread_messages(thread_id=thread_id)
+        current_seq = self._effective_participant_read_seq(participant=membership, messages=messages)
+        max_thread_seq = max((int(m.seq or 0) for m in messages), default=int(thread.last_message_seq or 0))
+
+        target_seq: int
+        if up_to_message_id is not None:
+            target_msg = next((m for m in messages if m.id == up_to_message_id), None)
+            if target_msg is None:
+                msg_row = self.session.get(PrivateMessage, up_to_message_id)
+                if msg_row is None or msg_row.thread_id != thread_id or msg_row.visibility == MessageVisibility.HIDDEN:
+                    raise CommunityEngineError("Message was not found in this thread.")
+                target_msg = msg_row
+            target_seq = int(target_msg.seq or 0)
+            if up_to_seq is not None:
+                target_seq = min(target_seq, max(0, int(up_to_seq)))
+        elif up_to_seq is not None:
+            target_seq = min(max(0, int(up_to_seq)), max_thread_seq)
+        else:
+            target_seq = max_thread_seq
+
+        new_seq = max(current_seq, target_seq)
+        ack_msg = None
+        for msg in messages:
+            if int(msg.seq or 0) <= new_seq:
+                ack_msg = msg
+
+        has_explicit_seq = "last_read_seq" in dict(membership.metadata_json or {})
+        if new_seq > current_seq or membership.last_read_at is None or not has_explicit_seq:
+            membership.last_read_seq = new_seq
+            if ack_msg is not None and ack_msg.created_at is not None:
+                ack_ts = _as_utc(ack_msg.created_at) or datetime.now(UTC)
+                if new_seq >= max_thread_seq and thread.last_message_at is not None:
+                    thread_ts = _as_utc(thread.last_message_at)
+                    if thread_ts is not None and thread_ts > ack_ts:
+                        ack_ts = thread_ts
+                current_read_at = _as_utc(membership.last_read_at)
+                if current_read_at is None or current_read_at < ack_ts:
+                    membership.last_read_at = ack_ts
+            elif membership.last_read_at is None:
+                membership.last_read_at = _as_utc(thread.last_message_at or thread.created_at) or datetime.now(UTC)
+            self.session.flush()
+            if new_seq > current_seq:
+                try:
+                    from app.realtime.service import RealtimeDispatch, get_global_realtime_hub
+
+                    hub = get_global_realtime_hub()
+                    if hub is not None:
+                        hub.publish_direct_sync(
+                            RealtimeDispatch(
+                                type="pm_read",
+                                topics=(f"user:{actor.id}",),
+                                data={
+                                    "thread_id": thread.id,
+                                    "user_id": actor.id,
+                                    "last_read_seq": new_seq,
+                                    "last_read_at": (
+                                        membership.last_read_at.isoformat() if membership.last_read_at else None
+                                    ),
+                                },
+                            )
+                        )
+                except Exception:
+                    pass
+        return thread
+
+    def mute_private_thread(self, *, actor: User, thread_id: str, muted: bool = True) -> PrivateMessageParticipant:
+        _, participant = self._require_active_participant(actor=actor, thread_id=thread_id)
         participant.is_muted = muted
         self.session.flush()
         return participant
 
-    def list_private_thread_participants(self, *, thread_id: str) -> list[PrivateMessageParticipant]:
-        stmt = (
-            select(PrivateMessageParticipant)
-            .where(PrivateMessageParticipant.thread_id == thread_id)
-            .order_by(PrivateMessageParticipant.joined_at.asc())
-        )
+    def list_private_thread_participants(
+        self, *, thread_id: str, active_only: bool = True
+    ) -> list[PrivateMessageParticipant]:
+        stmt = select(PrivateMessageParticipant).where(PrivateMessageParticipant.thread_id == thread_id)
+        if active_only:
+            stmt = stmt.where(PrivateMessageParticipant.left_at.is_(None))
+        stmt = stmt.order_by(PrivateMessageParticipant.joined_at.asc())
         return list(self.session.scalars(stmt).all())
 
     def list_private_messages(self, *, actor: User, thread_id: str) -> list[PrivateMessage]:
-        self.get_private_thread(actor=actor, thread_id=thread_id)
-        stmt = (
-            select(PrivateMessage)
-            .where(PrivateMessage.thread_id == thread_id, PrivateMessage.visibility != MessageVisibility.HIDDEN)
-            .order_by(PrivateMessage.created_at.asc())
-        )
-        return list(self.session.scalars(stmt).all())
+        self._require_active_participant(actor=actor, thread_id=thread_id)
+        return self._visible_thread_messages(thread_id=thread_id)
 
     def post_private_message(
         self, *, actor: User, thread_id: str, body: str, metadata_json: dict[str, object]
     ) -> PrivateMessage:
-        thread = self.get_private_thread(actor=actor, thread_id=thread_id)
+        thread, sender_membership = self._require_active_participant(actor=actor, thread_id=thread_id)
         if thread.status != PrivateMessageThreadStatus.ACTIVE:
             if thread.status == PrivateMessageThreadStatus.BLOCKED:
                 raise CommunityEngineError("Private thread is blocked.")
             raise CommunityEngineError("Private thread is not active.")
-        participants = self.list_private_thread_participants(thread_id=thread_id)
+        participants = self.list_private_thread_participants(thread_id=thread_id, active_only=True)
         for participant in participants:
             if participant.user_id != actor.id and self._is_blocked_between(actor.id, participant.user_id):
                 raise CommunityEngineError("A participant has blocked this conversation.")
+        prior_messages = self._visible_thread_messages(thread_id=thread_id)
+        prior_read_seq = self._effective_participant_read_seq(participant=sender_membership, messages=prior_messages)
+        has_unread_from_others = any(
+            m.sender_user_id != actor.id and int(m.seq or 0) > prior_read_seq for m in prior_messages
+        )
+        now = datetime.now(UTC)
         next_seq = int(getattr(thread, "last_message_seq", 0) or 0) + 1
         message = PrivateMessage(
             thread_id=thread.id,
             seq=next_seq,
             sender_user_id=actor.id,
             body=body,
+            created_at=now,
             metadata_json=metadata_json,
         )
         self.session.add(message)
         thread.last_message_seq = next_seq
-        thread.last_message_at = datetime.now(UTC)
+        thread.last_message_at = now
+        if not has_unread_from_others:
+            sender_membership.last_read_seq = next_seq
+            sender_membership.last_read_at = now
         self.session.flush()
         try:
             from app.realtime.service import RealtimeDispatch, get_global_realtime_hub
@@ -379,7 +536,7 @@ class CommunityEngineService:
         message = self.session.get(PrivateMessage, message_id)
         if message is None:
             raise CommunityEngineError("Message was not found.")
-        self.get_private_thread(actor=actor, thread_id=message.thread_id)
+        self._require_active_participant(actor=actor, thread_id=message.thread_id)
         return self._create_report(
             reporter=actor,
             target_type="chat_message",
@@ -620,29 +777,15 @@ class CommunityEngineService:
             )
             or 0
         )
-        private_thread_count = (
-            self.session.scalar(
-                select(func.count(PrivateMessageParticipant.id)).where(PrivateMessageParticipant.user_id == actor.id)
-            )
-            or 0
-        )
+        active_threads = self.list_private_threads(actor=actor)
+        private_thread_count = len(active_threads)
         live_thread_count = (
             self.session.scalar(select(func.count(LiveThread.id)).where(LiveThread.status != LiveThreadStatus.ARCHIVED))
             or 0
         )
-        unread_hint_count = (
-            self.session.scalar(
-                select(func.count(PrivateMessageThread.id))
-                .join(PrivateMessageParticipant, PrivateMessageParticipant.thread_id == PrivateMessageThread.id)
-                .where(
-                    PrivateMessageParticipant.user_id == actor.id,
-                    or_(
-                        PrivateMessageParticipant.last_read_at.is_(None),
-                        PrivateMessageThread.last_message_at > PrivateMessageParticipant.last_read_at,
-                    ),
-                )
-            )
-            or 0
+        unread_hint_count = sum(
+            int(self.calculate_thread_unread_state(thread=thread, actor_id=actor.id)["unread_count"])
+            for thread in active_threads
         )
         return {
             "watchlist_count": int(watchlist_count),
