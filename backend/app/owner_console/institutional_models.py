@@ -234,7 +234,9 @@ class OwnerClubManagerialTenure(Base):
     goals_against: Mapped[int] = mapped_column(Integer, default=0)
     trophies_won: Mapped[int] = mapped_column(Integer, default=0)
     departure_reason: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Historical GTEX severance remains separate from the new Fan Coin contract settlement field.
     severance_paid_gtex: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"))
+    severance_paid_fan_coin: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0.00"))
     honors_json: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
     tenure_summary: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_now)
