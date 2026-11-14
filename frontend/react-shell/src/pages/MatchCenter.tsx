@@ -51,7 +51,13 @@ import {
 } from "@/components/advertising/GtexMatchBroadcastAds";
 import type { PublicBrandAd } from "@/lib/commercial/api";
 import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
-import { metricText, pitchSource, suppliedCrest } from "@/match2d/matchStateAdapter";
+import {
+  metricText,
+  pitchSource,
+  seekTime,
+  stepReplayClock,
+  suppliedCrest,
+} from "@/match2d/matchStateAdapter";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 
 const GIFTS = [
@@ -130,185 +136,12 @@ const TACTICAL_PRESETS = [
   },
 ];
 
-// Formation Spatial Templates for 22-Player Autonomous 2D Engine Fallback
-const FORMATION_TEMPLATES: Record<
-  string,
-  Array<{ num: number; role: string; name: string; bx: number; by: number }>
-> = {
-  "4-3-3": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 2, role: "RB", name: "HAKIMI", bx: 0.24, by: 0.82 },
-    { num: 4, role: "CB", name: "DIAS", bx: 0.2, by: 0.62 },
-    { num: 5, role: "CB", name: "SALIBA", bx: 0.2, by: 0.38 },
-    { num: 3, role: "LB", name: "MENDES", bx: 0.24, by: 0.18 },
-    { num: 6, role: "DM", name: "RODRI", bx: 0.37, by: 0.5 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.46, by: 0.68 },
-    { num: 10, role: "AM", name: "BELLINGHAM", bx: 0.48, by: 0.32 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.67, by: 0.8 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.67, by: 0.2 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.5 },
-  ],
-  "4-2-4": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 2, role: "RB", name: "HAKIMI", bx: 0.26, by: 0.84 },
-    { num: 4, role: "CB", name: "DIAS", bx: 0.22, by: 0.62 },
-    { num: 5, role: "CB", name: "SALIBA", bx: 0.22, by: 0.38 },
-    { num: 3, role: "LB", name: "MENDES", bx: 0.26, by: 0.16 },
-    { num: 6, role: "CM", name: "RODRI", bx: 0.44, by: 0.62 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.44, by: 0.38 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.7, by: 0.84 },
-    { num: 10, role: "SS", name: "BELLINGHAM", bx: 0.68, by: 0.6 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.4 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.7, by: 0.16 },
-  ],
-  "5-3-2": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.06, by: 0.5 },
-    { num: 2, role: "RWB", name: "HAKIMI", bx: 0.26, by: 0.85 },
-    { num: 4, role: "RCB", name: "DIAS", bx: 0.17, by: 0.68 },
-    { num: 5, role: "CCB", name: "SALIBA", bx: 0.15, by: 0.5 },
-    { num: 6, role: "LCB", name: "BASTONI", bx: 0.17, by: 0.32 },
-    { num: 3, role: "LWB", name: "MENDES", bx: 0.26, by: 0.15 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.4, by: 0.68 },
-    { num: 10, role: "DM", name: "RODRI", bx: 0.36, by: 0.5 },
-    { num: 7, role: "CM", name: "CAMAVINGA", bx: 0.4, by: 0.32 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.66, by: 0.6 },
-    { num: 11, role: "ST", name: "VINICIUS", bx: 0.66, by: 0.4 },
-  ],
-  "3-4-3": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 4, role: "RCB", name: "DIAS", bx: 0.2, by: 0.7 },
-    { num: 5, role: "CCB", name: "SALIBA", bx: 0.18, by: 0.5 },
-    { num: 3, role: "LCB", name: "BASTONI", bx: 0.2, by: 0.3 },
-    { num: 2, role: "RM", name: "HAKIMI", bx: 0.45, by: 0.85 },
-    { num: 6, role: "CM", name: "RODRI", bx: 0.42, by: 0.6 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.42, by: 0.4 },
-    { num: 10, role: "LM", name: "MENDES", bx: 0.45, by: 0.15 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.69, by: 0.76 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.5 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.69, by: 0.24 },
-  ],
-};
-
-function frameClock(frame: any): number {
-  return Number(frame?.time_seconds ?? frame?.timeSeconds ?? 0);
-}
-
-function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
-  const x = Number(rawX ?? 50);
-  const y = Number(rawY ?? 50);
-  return { x: x > 1.5 ? x / 100 : x, y: y > 1.5 ? y / 100 : y };
-}
-
-function smoothUnit(value: number): number {
-  const t = Math.min(1, Math.max(0, value));
-  return t * t * (3 - 2 * t);
-}
-
-function playbackPair(frames: any[], time: number): { left: any; right: any; t: number } {
-  let left = frames[0];
-  let right = frames[frames.length - 1];
-  for (let index = 0; index < frames.length - 1; index += 1) {
-    if (time <= frameClock(frames[index + 1])) {
-      left = frames[index];
-      right = frames[index + 1];
-      break;
-    }
-  }
-  const span = frameClock(right) - frameClock(left);
-  const raw = span <= 0.001 ? 1 : (time - frameClock(left)) / span;
-  const t = span > 4.5 ? (raw < 0.5 ? 0 : 1) : smoothUnit(raw);
-  return { left, right, t };
-}
-
-function playerKey(player: any): string {
-  return String(player?.player_id ?? player?.id ?? player?.shirt_number ?? "");
-}
-
-type PitchDot = {
-  x: number;
-  y: number;
-  num: number;
-  role: string;
-  hasBall: boolean;
-  name: string;
-  stamina: number;
-  speedKmh: string;
-  vx: number;
-  vy: number;
-  playerId?: string;
-  idx?: number;
-  duty?: "press" | "run";
-};
-
-function markDuties(
-  home: PitchDot[],
-  away: PitchDot[],
-  ball: { x: number; y: number },
-  carrier: PitchDot | undefined,
-  carrierIsHome: boolean
-) {
-  const mates = carrierIsHome ? home : away;
-  const foes = carrierIsHome ? away : home;
-  const sign = carrierIsHome ? 1 : -1;
-  const presser = [...foes]
-    .filter((player) => !/^GK/i.test(player.role))
-    .sort((left, right) => Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
-  if (presser) presser.duty = "press";
-  const runner = [...mates]
-    .filter((player) => player !== carrier && (player.x - (carrier?.x ?? ball.x)) * sign > 0.015)
-    .sort((left, right) => (right.x - left.x) * sign || Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
-  if (runner) runner.duty = "run";
-}
-
-function interpolatedSquad(leftPlayers: any[], rightPlayers: any[], t: number, home: boolean): PitchDot[] {
-  const rightById = new Map(rightPlayers.map((player) => [playerKey(player), player]));
-  return leftPlayers
-    .filter((player) => {
-      const side = String(player?.side ?? "").toLowerCase();
-      if (side) return home ? side === "home" : side === "away";
-      return home ? Boolean(player?.is_home) : !player?.is_home;
-    })
-    .map((player, idx) => {
-      const next = rightById.get(playerKey(player)) || player;
-      const from = unitPoint(player?.position?.x ?? player?.x, player?.position?.y ?? player?.y);
-      const to = unitPoint(next?.position?.x ?? next?.x, next?.position?.y ?? next?.y);
-      const shirt = Number(player?.shirt_number ?? player?.num ?? idx + 1);
-      const label = String(player?.label ?? player?.name ?? `P${shirt}`);
-      const nearer = t < 0.5 ? player : next;
-      return {
-        x: from.x + (to.x - from.x) * t,
-        y: from.y + (to.y - from.y) * t,
-        num: shirt,
-        role: String(player?.role ?? "CM"),
-        hasBall: Boolean(nearer?.has_possession ?? nearer?.has_ball),
-        name: (label.split(" ").pop() || "PRO").toUpperCase(),
-        stamina: Number(player?.stamina_pct ?? nearer?.stamina_pct ?? 80),
-        speedKmh: (18 + Math.min(16, Math.hypot(to.x - from.x, to.y - from.y) * 80)).toFixed(1),
-        vx: (to.x - from.x) * 18,
-        vy: (to.y - from.y) * 18,
-        playerId: playerKey(player),
-      };
-    });
-}
-
-const AWAY_NAMES = [
-  "MAIGNAN",
-  "FRIMPONG",
-  "ARAUJO",
-  "VAN DIJK",
-  "HERNANDEZ",
-  "TCHOUAMENI",
-  "PEDRI",
-  "MUSIALA",
-  "YAMAL",
-  "LEAO",
-  "LAUTARO",
-];
-
 function GiftRail({ match, clubId, onGiftSent }: any) {
   const refresh = useRefreshOwner();
   const [feed, setFeed] = useState<string[]>([]);
-  const targets = [match.home_club_id, match.away_club_id].filter((c: string) => !c.startsWith("ai:"));
+  const targets = [match.home_club_id, match.away_club_id].filter(
+    (c: string | undefined): c is string => Boolean(c) && !String(c).startsWith("ai:"),
+  );
   const [target, setTarget] = useState(targets.includes(clubId) ? clubId : targets[0]);
   const [catalog, setCatalog] = useState<any[]>(GIFTS);
   const [sendingCode, setSendingCode] = useState<string | null>(null);
@@ -491,1015 +324,6 @@ function OwnerView({ view }: any) {
         <p className="mt-3 text-xs text-slate-500">Revenue: {view.revenue_notes.join(" · ")}. Sponsor income is split 70/30.</p>
       )}
     </Panel>
-  );
-}
-
-// 2D / 2.5D Broadcast Match Engine v2.0
-function LegacyBroadcastPitch({
-  selectedPlayer,
-  onSelectPlayer,
-  showHeatmap,
-  showTactics,
-  showLanes,
-  showVoronoi = true,
-  cameraMode = "2.5d",
-  ballOwner,
-  pitchPlayers,
-  ball,
-  activeGift,
-  onGiftComplete,
-  formation = "4-3-3",
-  press = 65,
-  line = 68,
-  tempo = 52,
-  minute = 45,
-  homeName = "HOME CLUB",
-  awayName = "AWAY CLUB",
-  show3DCutIn = false,
-  cutInScene = "signing_walkout",
-  onClose3DCutIn,
-  homeRoster,
-  awayRoster,
-  activePerimeterAd,
-  frames,
-  durationSeconds,
-  playbackSpeed = 1,
-  paused = false,
-  matchId,
-  timeSeconds,
-}: {
-  selectedPlayer: string | null;
-  onSelectPlayer: (key: string | null) => void;
-  showHeatmap: boolean;
-  showTactics: boolean;
-  showLanes: boolean;
-  showVoronoi?: boolean;
-  cameraMode?: "2d" | "2.5d" | "zoom";
-  ballOwner: { team: "home" | "away"; num: number } | null;
-  pitchPlayers?: Array<{
-    player_id?: string;
-    name?: string;
-    shirt_number?: number;
-    x: number;
-    y: number;
-    is_home?: boolean;
-    has_ball?: boolean;
-    role?: string;
-  }>;
-  ball?: { x: number; y: number } | null;
-  activeGift?: any;
-  onGiftComplete?: () => void;
-  formation?: string;
-  press?: number;
-  line?: number;
-  tempo?: number;
-  minute?: number;
-  homeName?: string;
-  awayName?: string;
-  show3DCutIn?: boolean;
-  cutInScene?: Cinema3DSceneType;
-  onClose3DCutIn?: () => void;
-  homeRoster?: MatchdaySquadMember[];
-  awayRoster?: MatchdaySquadMember[];
-  activePerimeterAd?: PublicBrandAd | null;
-  frames?: any[] | null;
-  durationSeconds?: number;
-  playbackSpeed?: number;
-  paused?: boolean;
-  matchId?: string;
-  timeSeconds?: number;
-}) {
-  // Autonomous 60fps Spatial Phase Ticker for live tactical fluid motion
-  const [phaseTick, setPhaseTick] = useState(0);
-  const playbackRef = useRef(0);
-  const liveTrack = useRef<{ from: typeof pitchPlayers; to: typeof pitchPlayers; at: number } | null>(null);
-  const frameCount = Array.isArray(frames) ? frames.length : 0;
-  const liveKey = (pitchPlayers || []).map((player) => `${player.player_id}:${player.x}:${player.y}`).join("|");
-  useEffect(() => {
-    if (!pitchPlayers?.length) return;
-    liveTrack.current = {
-      from: liveTrack.current?.to?.length ? liveTrack.current.to : pitchPlayers,
-      to: pitchPlayers,
-      at: performance.now(),
-    };
-  }, [liveKey]);
-  useEffect(() => {
-    if (frameCount > 1 && Number.isFinite(Number(timeSeconds))) {
-      playbackRef.current = Number(timeSeconds);
-      return;
-    }
-    playbackRef.current = 0;
-  }, [frameCount, timeSeconds]);
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setPhaseTick((t) => (t + 1) % 3600);
-    }, 90);
-    return () => clearInterval(interval);
-  }, []);
-  useEffect(() => {
-    if (paused || frameCount < 2 || !frames) return;
-    const last = frames[frames.length - 1];
-    const end = Number(durationSeconds) > 0 ? Number(durationSeconds) : frameClock(last);
-    playbackRef.current = Math.min(end, playbackRef.current + 0.09 * (playbackSpeed || 1));
-  }, [phaseTick, paused, frameCount, frames, durationSeconds, playbackSpeed]);
-
-  const hasLiveCoords = Boolean(pitchPlayers && pitchPlayers.length > 0);
-  const template = FORMATION_TEMPLATES[formation] || FORMATION_TEMPLATES["4-3-3"];
-  const awayTemplate = FORMATION_TEMPLATES["4-3-3"];
-
-  // Compute deterministic fluid 22-player coordinates (uses backend feed when present, or autonomous formation physics)
-  const { homeCoords, awayCoords, synthBall, passTarget, carrierInfo } = useMemo((): {
-    homeCoords: PitchDot[];
-    awayCoords: PitchDot[];
-    synthBall: { x: number; y: number };
-    passTarget: { x: number; y: number } | null;
-    carrierInfo: (PitchDot & { isHome: boolean }) | null;
-  } => {
-    if (Array.isArray(frames) && frames.length > 1 && Array.isArray(frames[0]?.players) && frames[0].players.length > 0) {
-      const pair = playbackPair(frames, playbackRef.current);
-      const h = interpolatedSquad(pair.left.players || [], pair.right.players || [], pair.t, true);
-      const a = interpolatedSquad(pair.left.players || [], pair.right.players || [], pair.t, false);
-      const leftBall = unitPoint(
-        pair.left.ball?.position?.x ?? pair.left.ball?.x,
-        pair.left.ball?.position?.y ?? pair.left.ball?.y
-      );
-      const rightBall = unitPoint(
-        pair.right.ball?.position?.x ?? pair.right.ball?.x,
-        pair.right.ball?.position?.y ?? pair.right.ball?.y
-      );
-      const ownerId = String(
-        (pair.t < 0.5 ? pair.left.ball?.owner_player_id : pair.right.ball?.owner_player_id) || ""
-      );
-      const squad = [...h, ...a];
-      if (ownerId) {
-        for (const player of squad) player.hasBall = player.playerId === ownerId;
-      }
-      const carrier = squad.find((player) => player.hasBall) || h[8] || h[0];
-      const carrierIsHome = Boolean(carrier && h.includes(carrier));
-      const rightOwner = String(pair.right.ball?.owner_player_id || "");
-      const mates = carrierIsHome ? h : a;
-      const receiver =
-        squad.find((player) => rightOwner && player.playerId === rightOwner && player.playerId !== carrier?.playerId) ||
-        mates
-          .filter((player) => player.playerId !== carrier?.playerId)
-          .sort(
-            (left, right) =>
-              Math.hypot(left.x - rightBall.x, left.y - rightBall.y) -
-              Math.hypot(right.x - rightBall.x, right.y - rightBall.y)
-          )[0];
-      const shownBall = {
-        x: leftBall.x + (rightBall.x - leftBall.x) * pair.t,
-        y: leftBall.y + (rightBall.y - leftBall.y) * pair.t,
-      };
-      markDuties(h, a, shownBall, carrier, carrierIsHome);
-      return {
-        homeCoords: h,
-        awayCoords: a,
-        synthBall: shownBall,
-        passTarget:
-          receiver && carrier && Math.hypot(receiver.x - carrier.x, receiver.y - carrier.y) > 0.03
-            ? { x: receiver.x, y: receiver.y }
-            : null,
-        carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
-      };
-    }
-
-    const t = phaseTick * 0.08 * (0.6 + tempo / 100);
-
-    if (hasLiveCoords && pitchPlayers) {
-      const track = liveTrack.current;
-      const blend = track ? smoothUnit((performance.now() - track.at) / 2200) : 1;
-      const livePlayers = pitchPlayers.map((player) => {
-        const previous = track?.from?.find((item) => item.player_id && item.player_id === player.player_id) || player;
-        return {
-          ...player,
-          x: Number(previous.x) + (Number(player.x) - Number(previous.x)) * blend,
-          y: Number(previous.y) + (Number(player.y) - Number(previous.y)) * blend,
-        };
-      });
-      const h = livePlayers
-        .filter((p) => p.is_home)
-        .map((p, idx) => ({
-          x: p.x,
-          y: p.y,
-          num: p.shirt_number || idx + 1,
-          role: p.role || template[idx]?.role || "CM",
-          hasBall: Boolean(p.has_ball),
-          name: (p.name || template[idx]?.name || `P${idx + 1}`).split(" ").pop() || "PRO",
-          stamina: Math.max(42, 98 - Math.floor(minute * 0.45) - (idx % 3) * 4),
-          speedKmh: (21 + ((idx * 3 + phaseTick) % 12)).toFixed(1),
-          vx: Math.cos(t + idx) * 14,
-          vy: Math.sin(t + idx) * 9,
-          playerId: String(p.player_id || `home-${p.shirt_number || idx + 1}`),
-        }));
-      const a = livePlayers
-        .filter((p) => !p.is_home)
-        .map((p, idx) => ({
-          x: p.x,
-          y: p.y,
-          num: p.shirt_number || idx + 1,
-          role: p.role || awayTemplate[idx]?.role || "CM",
-          hasBall: Boolean(p.has_ball),
-          name: (p.name || AWAY_NAMES[idx] || `A${idx + 1}`).split(" ").pop() || "PRO",
-          stamina: Math.max(40, 97 - Math.floor(minute * 0.46) - (idx % 4) * 3),
-          speedKmh: (20 + ((idx * 5 + phaseTick) % 11)).toFixed(1),
-          vx: -Math.cos(t + idx) * 13,
-          vy: Math.sin(t * 0.8 + idx) * 8,
-          playerId: String(p.player_id || `away-${p.shirt_number || idx + 1}`),
-        }));
-      const carrier = h.find((p) => p.hasBall) || a.find((p) => p.hasBall) || h[8] || h[0];
-      const carrierIsHome = Boolean(carrier && h.includes(carrier));
-      const liveBall = ball || (carrier ? { x: carrier.x, y: carrier.y } : { x: 0.5, y: 0.5 });
-      markDuties(h, a, liveBall, carrier, carrierIsHome);
-      const mates = (carrierIsHome ? h : a).filter((player) => player !== carrier);
-      const target = mates.sort(
-        (left, right) =>
-          Math.hypot(left.x - (ball?.x ?? carrier?.x ?? 0.5), left.y - (ball?.y ?? carrier?.y ?? 0.5)) -
-          Math.hypot(right.x - (ball?.x ?? carrier?.x ?? 0.5), right.y - (ball?.y ?? carrier?.y ?? 0.5))
-      )[0];
-      return {
-        homeCoords: h,
-        awayCoords: a,
-        synthBall: liveBall,
-        passTarget: target ? { x: target.x, y: target.y } : null,
-        carrierInfo: carrier ? { ...carrier, isHome: carrierIsHome } : null,
-      };
-    }
-
-    if (matchId !== "u2a-006-showcase") {
-      return {
-        homeCoords: [],
-        awayCoords: [],
-        synthBall: { x: 0.5, y: 0.5 },
-        passTarget: null,
-        carrierInfo: null,
-      };
-    }
-
-    // The side in possession walks a block up the pitch and plays through a short pass chain.
-    const seconds = phaseTick * 0.09;
-    const attackPeriod = 16;
-    const phase = seconds % (attackPeriod * 2);
-    const attackingHome = phase < attackPeriod;
-    const local = attackingHome ? phase : phase - attackPeriod;
-    const depth = 0.2 + 0.58 * (0.5 - 0.5 * Math.cos((local / attackPeriod) * Math.PI));
-    const beat = Math.floor(local / 1.8);
-    const chain = [0.24, 0.46, 0.7, 0.42][beat % 4];
-    const ballDepth = depth * 0.5 + chain * 0.5;
-    const lane = [0.34, 0.5, 0.66, 0.42][beat % 4];
-    const shapedBallX = attackingHome ? 0.2 + ballDepth * 0.62 : 0.8 - ballDepth * 0.62;
-    const chainSlots = [3, 5, 6, 10, 8, 9];
-    const fromSlot = chainSlots[beat % chainSlots.length];
-    const toSlot = chainSlots[(beat + 1) % chainSlots.length];
-    const passProgress = smoothUnit((local % 1.8) / 1.8);
-
-    const placeOutfield = (
-      tpl: { num: number; role: string; name: string; bx: number; by: number },
-      idx: number,
-      isHome: boolean,
-      roster: MatchdaySquadMember[] | undefined,
-      fallbackName: string
-    ) => {
-      const role = String(tpl.role || "").toUpperCase();
-      const lineName =
-        idx === 0 || role === "GK"
-          ? "gk"
-          : ["RB", "LB", "CB", "RCB", "LCB", "CCB", "RWB", "LWB"].includes(role)
-          ? "def"
-          : ["RW", "LW", "ST", "SS", "CF"].includes(role)
-          ? "att"
-          : "mid";
-      const sign = isHome ? 1 : -1;
-      const inPossession = attackingHome === isHome;
-      const lineBias = Math.max(-1, Math.min(1, (line - 50) / 50));
-      const pressBias = Math.max(-1, Math.min(1, (press - 50) / 50));
-      const gaps: Record<string, number> = inPossession
-        ? { gk: 0, def: -0.15 + lineBias * 0.06, mid: -0.045 + lineBias * 0.03, att: 0.075 }
-        : { gk: 0, def: -0.1 - pressBias * 0.05 - lineBias * 0.03, mid: -0.02 - pressBias * 0.04, att: 0.06 };
-      const along = gaps[lineName] ?? 0;
-      let x = lineName === "gk" ? (isHome ? 0.07 : 0.93) : shapedBallX + along * sign;
-      if (minute > 65 && lineName !== "gk") {
-        const late = Math.min(1, (minute - 65) / 25);
-        x -= (lineName === "att" ? 0.05 : 0.022) * late * sign;
-      }
-      if (inPossession && lineName === "def" && Math.abs(tpl.by - 0.5) > 0.2) x += 0.045 * sign;
-      x = Math.min(0.93, Math.max(0.07, x));
-      const y = Math.min(0.9, Math.max(0.1, tpl.by * 0.7 + lane * 0.3 + Math.sin(seconds + idx) * 0.008));
-      const member = roster?.[idx];
-      return {
-        x,
-        y,
-        idx,
-        num: member?.shirt_number || tpl.num,
-        role: member?.position || tpl.role,
-        hasBall: false,
-        name: (member?.short_name || fallbackName).toUpperCase(),
-        stamina: Math.max(44, 99 - Math.floor(minute * 0.42) - (idx > 5 ? 6 : 2)),
-        speedKmh: (20 + (inPossession ? 6 : 2) + Math.abs(Math.sin(seconds + idx)) * 4).toFixed(1),
-        vx: sign * (inPossession ? 14 : -6),
-        vy: Math.cos(seconds + idx) * 4,
-        playerId: String(member?.player_id || `${isHome ? "home" : "away"}-${member?.shirt_number || tpl.num}`),
-      };
-    };
-
-    const h = template.map((tpl, idx) => placeOutfield(tpl, idx, true, homeRoster, tpl.name));
-    const a = awayTemplate.map((tpl, idx) =>
-      placeOutfield(tpl, idx, false, awayRoster, AWAY_NAMES[idx] || tpl.name)
-    );
-    const activeSquad = attackingHome ? h : a;
-    const ballPoint = { x: shapedBallX, y: lane };
-    const foes = attackingHome ? a : h;
-    const sign = attackingHome ? 1 : -1;
-    const pressBias = Math.max(-1, Math.min(1, (press - 50) / 50));
-    const closers = foes.filter((player) => (player.idx ?? 0) >= 5 && (player.idx ?? 0) <= 7);
-    const presser = [...(closers.length ? closers : foes.filter((player) => (player.idx ?? 0) > 0))].sort(
-      (left, right) =>
-        Math.hypot(left.x - ballPoint.x, left.y - ballPoint.y) - Math.hypot(right.x - ballPoint.x, right.y - ballPoint.y)
-    )[0];
-    if (presser) {
-      const dx = ballPoint.x - presser.x;
-      const dy = ballPoint.y - presser.y;
-      const dist = Math.hypot(dx, dy) || 1;
-      const stop = 0.05;
-      if (dist > stop) {
-        const scale = ((dist - stop) / dist) * (0.42 + pressBias * 0.18);
-        presser.x = Math.min(0.93, Math.max(0.07, presser.x + dx * scale));
-        presser.y = Math.min(0.9, Math.max(0.1, presser.y + dy * scale));
-      }
-    }
-    const runner = [...activeSquad]
-      .filter((player) => (player.idx ?? 0) >= 8 && player.idx !== fromSlot)
-      .sort((left, right) => Math.abs(left.y - lane) - Math.abs(right.y - lane))[0];
-    if (runner) {
-      runner.x = Math.min(0.93, Math.max(0.07, runner.x + 0.055 * sign));
-      runner.y = Math.min(0.9, Math.max(0.1, runner.y + (lane - runner.y) * 0.35));
-    }
-    const carrier = activeSquad.find((player) => player.idx === fromSlot) || activeSquad[5] || activeSquad[0];
-    const receiver = activeSquad.find((player) => player.idx === toSlot) || activeSquad[6] || activeSquad[0];
-    if (!carrier || !receiver) {
-      return {
-        homeCoords: h,
-        awayCoords: a,
-        synthBall: { x: shapedBallX, y: lane },
-        passTarget: null,
-        carrierInfo: null,
-      };
-    }
-    carrier.hasBall = passProgress < 0.72;
-    receiver.hasBall = passProgress >= 0.72;
-    const bx = ball ? ball.x : carrier.x + (receiver.x - carrier.x) * passProgress;
-    const by = ball ? ball.y : carrier.y + (receiver.y - carrier.y) * passProgress;
-    const shownCarrier = passProgress < 0.72 ? carrier : receiver;
-    markDuties(h, a, { x: bx, y: by }, shownCarrier, attackingHome);
-
-    return {
-      homeCoords: h,
-      awayCoords: a,
-      synthBall: { x: bx, y: by },
-      passTarget: { x: receiver.x, y: receiver.y },
-      carrierInfo: { ...shownCarrier, isHome: attackingHome },
-    };
-  }, [hasLiveCoords, pitchPlayers, phaseTick, formation, press, line, tempo, minute, ball, template, awayTemplate, homeRoster, awayRoster, frames, matchId]);
-
-  const selectedObj =
-    homeCoords.find((p) => `${"home"}:${p.playerId || p.num}` === selectedPlayer) ||
-    awayCoords.find((p) => `${"away"}:${p.playerId || p.num}` === selectedPlayer) ||
-    null;
-
-  const ballX = synthBall.x * 1000;
-  const ballY = synthBall.y * 625;
-  const homeAvgX = homeCoords.reduce((acc, p) => acc + p.x, 0) / Math.max(1, homeCoords.length);
-  const defendingSide = carrierInfo?.isHome ? awayCoords : homeCoords;
-  const lineHolders = defendingSide.filter((player) =>
-    /^(CB|LB|RB|LCB|RCB|CCB|RWB|LWB|DEF|FB)/i.test(String(player.role || ""))
-  );
-  const offsideX = lineHolders.length
-    ? (lineHolders.reduce((sum, player) => sum + player.x, 0) / lineHolders.length) * 1000
-    : null;
-  const territorySplit = Math.min(72, Math.max(32, Math.round(homeAvgX * 105 + (press - 50) * 0.2)));
-
-  // 2.5D Broadcast Tilt CSS Transform
-  const pitchTransform =
-    cameraMode === "2.5d"
-      ? "perspective(1350px) rotateX(24deg) scale(0.96)"
-      : cameraMode === "zoom"
-      ? `perspective(1200px) rotateX(18deg) scale(1.12) translateX(${(0.5 - synthBall.x) * 140}px)`
-      : "none";
-
-  return (
-    <div className="space-y-2.5">
-      <div
-        className="relative aspect-[16/10] w-full overflow-hidden rounded-xl border border-emerald-500/35 bg-[#050E09] shadow-[0_24px_65px_rgba(0,0,0,0.85)]"
-        style={{
-          backgroundImage:
-            "radial-gradient(circle at 50% 0%, rgba(0,232,122,0.16), transparent 60%), radial-gradient(circle at 85% 95%, rgba(255,184,0,0.10), transparent 50%)",
-        }}
-      >
-        {/* Top Stadium Broadcast Score & Telemetry Ribbon */}
-        <div className="pointer-events-none absolute inset-x-3 top-2.5 z-20 flex items-center justify-between">
-          <div className="flex items-center gap-2 rounded-md border border-white/15 bg-slate-950/85 px-3 py-1 backdrop-blur-md">
-            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="gx-mono text-[10px] font-black uppercase tracking-widest text-emerald-300">
-              {cameraMode === "2.5d"
-                ? "2.5D STADIUM TV CAM"
-                : cameraMode === "zoom"
-                ? "DIRECTOR FOLLOW CAM"
-                : "2D TACTICAL OVERHEAD"}
-            </span>
-            <span className="text-[10px] text-slate-500">|</span>
-            <span className="gx-mono text-[10px] text-slate-300">60FPS SPATIAL ENGINE</span>
-          </div>
-
-          <div className="hidden items-center gap-3 rounded-md border border-white/10 bg-slate-950/85 px-3 py-1 text-[10px] backdrop-blur-md sm:flex">
-            <span className="text-slate-400">
-              CARRIER:{" "}
-              <strong className={carrierInfo?.isHome ? "text-emerald-300" : "text-amber-300"}>
-                #{carrierInfo?.num} {carrierInfo?.name}
-              </strong>
-            </span>
-            <span className="text-slate-600">·</span>
-            <span className="gx-mono text-cyan-300">BALL {(28 + (phaseTick % 14) * 2.3).toFixed(1)} KM/H</span>
-          </div>
-        </div>
-
-        {/* 360° Animated Stadium LED Advertising Perimeter Board (Visible in 2.5D / Zoom) */}
-        {cameraMode !== "2d" && (
-          <div
-            data-testid="stadium-perimeter-ad-board"
-            className="pointer-events-none absolute inset-x-8 top-10 z-10 flex items-center justify-around overflow-hidden rounded-sm border border-emerald-400/30 bg-gradient-to-r from-slate-950 via-emerald-950/90 to-slate-950 py-1 text-[9px] font-black tracking-[0.26em] text-emerald-300 shadow-[0_0_25px_rgba(0,232,122,0.25)]"
-          >
-            {activePerimeterAd ? (
-              <>
-                <span className="text-amber-300">SPONSORED PERIMETER · {activePerimeterAd.brand_name.toUpperCase()}</span>
-                <span className="text-white">{activePerimeterAd.headline.toUpperCase()}</span>
-                {activePerimeterAd.cta_label ? (
-                  <span className="hidden md:inline text-emerald-300">★ {activePerimeterAd.cta_label.toUpperCase()} ★</span>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <span>GTEX SOVEREIGN EXCHANGE</span>
-                <span className="text-amber-400">🎵 GTEX TRAX: KAZEEM – LAGOS NIGHTLIGHTS</span>
-                <span className="hidden md:inline">★ $TALENT LIQUIDITY POOL ★</span>
-                <span className="text-cyan-300">70/30 CLUB REVENUE SPLIT</span>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Main 2D / 2.5D Pitch SVG Viewport */}
-        <div
-          className="h-full w-full transition-transform duration-500 ease-out"
-          style={{ transform: pitchTransform, transformOrigin: "50% 54%" }}
-        >
-          <svg className="h-full w-full select-none" viewBox="0 0 1000 625">
-            <defs>
-              <radialGradient id="pitch-turf" cx="50%" cy="50%" r="70%">
-                <stop offset="0%" stopColor="#164226" />
-                <stop offset="65%" stopColor="#0E2C19" />
-                <stop offset="100%" stopColor="#07190E" />
-              </radialGradient>
-              <pattern id="grass-stripes" width="100" height="625" patternUnits="userSpaceOnUse">
-                <rect width="50" height="625" fill="#1B4D2E" opacity="0.32" />
-                <rect x="50" width="50" height="625" fill="#0B2214" opacity="0.14" />
-              </pattern>
-              <radialGradient id="heat-home" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#00E87A" stopOpacity="0.48" />
-                <stop offset="55%" stopColor="#00E87A" stopOpacity="0.16" />
-                <stop offset="100%" stopColor="#00E87A" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="heat-away" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#FFB800" stopOpacity="0.44" />
-                <stop offset="55%" stopColor="#FFB800" stopOpacity="0.14" />
-                <stop offset="100%" stopColor="#FFB800" stopOpacity="0" />
-              </radialGradient>
-              <radialGradient id="heat-ball" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#FF4500" stopOpacity="0.80" />
-                <stop offset="60%" stopColor="#FFA500" stopOpacity="0.30" />
-                <stop offset="100%" stopColor="#FFA500" stopOpacity="0" />
-              </radialGradient>
-              <linearGradient id="voronoi-home" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#00E87A" stopOpacity="0.16" />
-                <stop offset="75%" stopColor="#00E87A" stopOpacity="0.06" />
-                <stop offset="100%" stopColor="#00E87A" stopOpacity="0.0" />
-              </linearGradient>
-              <linearGradient id="voronoi-away" x1="100%" y1="0%" x2="0%" y2="0%">
-                <stop offset="0%" stopColor="#FFB800" stopOpacity="0.16" />
-                <stop offset="75%" stopColor="#FFB800" stopOpacity="0.06" />
-                <stop offset="100%" stopColor="#FFB800" stopOpacity="0.0" />
-              </linearGradient>
-              <linearGradient id="xg-cone" x1="0%" y1="50%" x2="100%" y2="50%">
-                <stop offset="0%" stopColor="#00E87A" stopOpacity="0.38" />
-                <stop offset="100%" stopColor="#00E87A" stopOpacity="0.03" />
-              </linearGradient>
-            </defs>
-
-            {/* Pitch Turf & Mowed Grass Stripes */}
-            <rect width="1000" height="625" fill="url(#pitch-turf)" />
-            <rect width="1000" height="625" fill="url(#grass-stripes)" />
-
-            {/* Voronoi / Territory Control Shader */}
-            {showVoronoi && (
-              <g>
-                <rect
-                  x="40"
-                  y="30"
-                  width={(territorySplit / 100) * 920}
-                  height="565"
-                  fill="url(#voronoi-home)"
-                />
-                <rect
-                  x={40 + (territorySplit / 100) * 920}
-                  y="30"
-                  width={920 - (territorySplit / 100) * 920}
-                  height="565"
-                  fill="url(#voronoi-away)"
-                />
-                <line
-                  x1={40 + (territorySplit / 100) * 920}
-                  y1="30"
-                  x2={40 + (territorySplit / 100) * 920}
-                  y2="595"
-                  stroke="#38BDF8"
-                  strokeWidth="1.5"
-                  strokeDasharray="3 5"
-                  opacity="0.55"
-                />
-                <rect
-                  x={40 + (territorySplit / 100) * 920 - 48}
-                  y="34"
-                  width="96"
-                  height="16"
-                  rx="3"
-                  fill="#090D14"
-                  opacity="0.85"
-                />
-                <text
-                  x={40 + (territorySplit / 100) * 920}
-                  y="45"
-                  textAnchor="middle"
-                  fill="#7DD3FC"
-                  fontSize="9"
-                  fontWeight="800"
-                  fontFamily="JetBrains Mono"
-                >
-                  TILT {territorySplit}% / {100 - territorySplit}%
-                </text>
-              </g>
-            )}
-
-            {/* Crisp Pitch Markings */}
-            <rect x="40" y="30" width="920" height="565" fill="none" stroke="#FFFFFF" strokeWidth="2.2" opacity="0.55" />
-            <line x1="500" y1="30" x2="500" y2="595" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <circle cx="500" cy="312.5" r="75" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <circle cx="500" cy="312.5" r="4" fill="#FFFFFF" opacity="0.8" />
-
-            {/* Tactical Thirds Subtle Grid */}
-            <line x1="346" y1="30" x2="346" y2="595" stroke="#FFFFFF" strokeWidth="1" strokeDasharray="4 8" opacity="0.14" />
-            <line x1="653" y1="30" x2="653" y2="595" stroke="#FFFFFF" strokeWidth="1" strokeDasharray="4 8" opacity="0.14" />
-
-            {/* Home Penalty Box & Goal Net */}
-            <rect x="18" y="252" width="22" height="120" fill="#FFFFFF" fillOpacity="0.08" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.45" />
-            <rect x="40" y="145" width="140" height="335" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <rect x="40" y="215" width="50" height="195" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <circle cx="130" cy="312.5" r="3.5" fill="#FFFFFF" opacity="0.75" />
-            <path d="M 180 260 A 65 65 0 0 1 180 365" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-
-            {/* Away Penalty Box & Goal Net */}
-            <rect x="960" y="252" width="22" height="120" fill="#FFFFFF" fillOpacity="0.08" stroke="#FFFFFF" strokeWidth="1.5" opacity="0.45" />
-            <rect x="820" y="145" width="140" height="335" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <rect x="910" y="215" width="50" height="195" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-            <circle cx="870" cy="312.5" r="3.5" fill="#FFFFFF" opacity="0.75" />
-            <path d="M 820 260 A 65 65 0 0 0 820 365" fill="none" stroke="#FFFFFF" strokeWidth="2" opacity="0.55" />
-
-            {/* Heatmap Overlay */}
-            {showHeatmap && (
-              <g className="transition-opacity duration-300">
-                {homeCoords.map((p, idx) => (
-                  <circle key={`heat-h-${p.num || idx}`} cx={p.x * 1000} cy={p.y * 625} r="95" fill="url(#heat-home)" />
-                ))}
-                {awayCoords.map((p, idx) => (
-                  <circle key={`heat-a-${p.num || idx}`} cx={p.x * 1000} cy={p.y * 625} r="95" fill="url(#heat-away)" />
-                ))}
-                <circle cx={ballX} cy={ballY} r="125" fill="url(#heat-ball)" />
-              </g>
-            )}
-
-            {/* Tactical Line & Compactness Polygon Overlay */}
-            {showTactics && (
-              <g>
-                {/* Home Defensive Line */}
-                <line
-                  x1={160 + ((line - 50) / 100) * 140}
-                  y1="35"
-                  x2={160 + ((line - 50) / 100) * 140}
-                  y2="590"
-                  stroke="#00E87A"
-                  strokeWidth="2"
-                  strokeDasharray="6 4"
-                  opacity="0.75"
-                />
-                {/* Away Defensive Line */}
-                <line
-                  x1="785"
-                  y1="35"
-                  x2="785"
-                  y2="590"
-                  stroke="#FFB800"
-                  strokeWidth="2"
-                  strokeDasharray="6 4"
-                  opacity="0.75"
-                />
-                {/* Midfield Pressing Block Polygon */}
-                {homeCoords.length >= 10 && (
-                  <polygon
-                    points={`${homeCoords[5].x * 1000},${homeCoords[5].y * 625} ${homeCoords[6].x * 1000},${homeCoords[6].y * 625} ${homeCoords[8].x * 1000},${homeCoords[8].y * 625} ${homeCoords[10].x * 1000},${homeCoords[10].y * 625} ${homeCoords[9].x * 1000},${homeCoords[9].y * 625} ${homeCoords[7].x * 1000},${homeCoords[7].y * 625}`}
-                    fill="#00E87A"
-                    fillOpacity="0.07"
-                    stroke="#00E87A"
-                    strokeWidth="1.2"
-                    strokeDasharray="4 4"
-                    opacity="0.6"
-                  />
-                )}
-              </g>
-            )}
-
-            {/* Passing Lanes, Lofted Pass Arcs & Final-Third xG Threat Cone */}
-            {showLanes && (
-              <g>
-                {/* Final-third xG Shot Threat Cone when ball is in attacking zone */}
-                {ballX > 620 && (
-                  <polygon
-                    points={`${ballX},${ballY} 960,262 960,362`}
-                    fill="url(#xg-cone)"
-                    stroke="#00E87A"
-                    strokeWidth="1"
-                    strokeDasharray="3 3"
-                    opacity="0.7"
-                  />
-                )}
-                {ballX < 380 && (
-                  <polygon
-                    points={`${ballX},${ballY} 40,262 40,362`}
-                    fill="url(#voronoi-away)"
-                    stroke="#FFB800"
-                    strokeWidth="1"
-                    strokeDasharray="3 3"
-                    opacity="0.7"
-                  />
-                )}
-
-                {/* Passing network from selected player */}
-                {selectedObj &&
-                  homeCoords
-                    .filter((p) => p.num !== selectedObj.num)
-                    .slice(0, 5)
-                    .map((p, idx) => (
-                      <line
-                        key={`lane-${p.num || idx}`}
-                        x1={selectedObj.x * 1000}
-                        y1={selectedObj.y * 625}
-                        x2={p.x * 1000}
-                        y2={p.y * 625}
-                        stroke="#00E87A"
-                        strokeWidth="1.5"
-                        strokeDasharray="4 4"
-                        opacity="0.45"
-                      />
-                    ))}
-
-                {offsideX != null && (
-                  <line
-                    x1={offsideX}
-                    y1={36}
-                    x2={offsideX}
-                    y2={589}
-                    stroke="#f8fafc"
-                    strokeWidth="1.5"
-                    strokeDasharray="8 6"
-                    opacity="0.55"
-                  />
-                )}
-
-                {/* Lofted Pass Arc from Carrier to Target */}
-                {carrierInfo && passTarget && (
-                  <g>
-                    {/* Ground shadow line */}
-                    <line
-                      x1={carrierInfo.x * 1000}
-                      y1={carrierInfo.y * 625}
-                      x2={passTarget.x * 1000}
-                      y2={passTarget.y * 625}
-                      stroke="#000000"
-                      strokeWidth="3"
-                      opacity="0.25"
-                    />
-                    {/* Bezier lofted pass trajectory */}
-                    <path
-                      d={`M ${carrierInfo.x * 1000} ${carrierInfo.y * 625} Q ${(carrierInfo.x + passTarget.x) * 500} ${
-                        (carrierInfo.y + passTarget.y) * 312.5 - 38
-                      } ${passTarget.x * 1000} ${passTarget.y * 625}`}
-                      fill="none"
-                      stroke={carrierInfo.isHome ? "#00E87A" : "#FFB800"}
-                      strokeWidth="2.4"
-                      strokeDasharray="6 3"
-                      opacity="0.9"
-                    />
-                    <circle
-                      cx={passTarget.x * 1000}
-                      cy={passTarget.y * 625}
-                      r="18"
-                      fill="none"
-                      stroke={carrierInfo.isHome ? "#00E87A" : "#FFB800"}
-                      strokeWidth="1.4"
-                      strokeDasharray="3 3"
-                      opacity="0.75"
-                    />
-                  </g>
-                )}
-              </g>
-            )}
-
-            {/* Preserve hidden fallback text node when backend pitch_players is empty so any DOM query passes */}
-            {!hasLiveCoords && (
-              <text x="500" y="618" textAnchor="middle" fill="#64748B" fontSize="8" opacity="0.01">
-                LIVE PLAYER COORDINATES UNAVAILABLE
-              </text>
-            )}
-
-            {/* Home Squad 2D/2.5D Broadcast Tokens */}
-            {homeCoords.map((p, idx) => {
-              const selectKey = `home:${p.playerId || p.num}`;
-              const isSelected = selectedPlayer === selectKey;
-              const hasBall = p.hasBall || (ballOwner?.team === "home" && ballOwner?.num === p.num);
-              const staminaColor = p.stamina > 75 ? "#00E87A" : p.stamina > 55 ? "#FFB800" : "#F43F5E";
-              const dashOffset = 100 - p.stamina;
-              return (
-                <g
-                  key={`home-${p.playerId || p.num || idx}`}
-                  transform={`translate(${p.x * 1000}, ${p.y * 625})`}
-                  className="cursor-pointer transition-transform duration-150 hover:scale-110"
-                  onClick={() => onSelectPlayer(isSelected ? null : selectKey)}
-                >
-                  {/* Ground cast shadow */}
-                  <ellipse cx="0" cy="12" rx="14" ry="6" fill="#000000" opacity="0.45" />
-
-                  {/* Active selection or ball carrier radar halo */}
-                  {(isSelected || hasBall) && (
-                    <circle
-                      r="23"
-                      fill="none"
-                      stroke="#00E87A"
-                      strokeWidth="2"
-                      opacity="0.85"
-                      className="animate-ping"
-                    />
-                  )}
-                  {p.duty === "press" && (
-                    <circle r="19" fill="none" stroke="#F43F5E" strokeWidth="1.6" strokeDasharray="2 2" />
-                  )}
-                  {p.duty === "run" && <polygon points="0,-22 5,-14 -5,-14" fill="#FFFFFF" opacity="0.9" />}
-
-                  {/* Velocity vector arrow */}
-                  <line
-                    x1="0"
-                    y1="0"
-                    x2={p.vx}
-                    y2={p.vy}
-                    stroke="#00E87A"
-                    strokeWidth="2"
-                    opacity="0.75"
-                  />
-
-                  {/* Outer Stamina Ring */}
-                  <circle r="16" fill="#090D14" opacity="0.9" />
-                  <circle
-                    r="15.5"
-                    fill="none"
-                    stroke={staminaColor}
-                    strokeWidth="2.2"
-                    strokeDasharray={`${(p.stamina / 100) * 97} 100`}
-                    strokeDashoffset={dashOffset}
-                    transform="rotate(-90)"
-                  />
-
-                  {/* Token Core */}
-                  <circle
-                    r="12"
-                    fill="#00E87A"
-                    stroke={hasBall ? "#FFFFFF" : "#052E16"}
-                    strokeWidth={hasBall ? 2.5 : 1.5}
-                  />
-                  <text
-                    y="4"
-                    textAnchor="middle"
-                    fill="#04130A"
-                    fontSize="10"
-                    fontWeight="900"
-                    fontFamily="JetBrains Mono"
-                  >
-                    {p.num || idx + 1}
-                  </text>
-
-                  {/* Broadcast Surname & Role Pill */}
-                  <rect x="-28" y="18" width="56" height="14" rx="3" fill="#05080D" stroke="#00E87A" strokeWidth="0.6" opacity="0.92" />
-                  <text y="27.5" textAnchor="middle" fill="#D1FAE5" fontSize="7.5" fontWeight="800" fontFamily="JetBrains Mono">
-                    {p.name.slice(0, 7)} · {p.role}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Away Squad 2D/2.5D Broadcast Tokens */}
-            {awayCoords.map((p, idx) => {
-              const selectKey = `away:${p.playerId || p.num}`;
-              const isSelected = selectedPlayer === selectKey;
-              const hasBall = p.hasBall || (ballOwner?.team === "away" && ballOwner?.num === p.num);
-              const staminaColor = p.stamina > 75 ? "#FFB800" : p.stamina > 55 ? "#F59E0B" : "#F43F5E";
-              return (
-                <g
-                  key={`away-${p.playerId || p.num || idx}`}
-                  transform={`translate(${p.x * 1000}, ${p.y * 625})`}
-                  className="cursor-pointer transition-transform duration-150 hover:scale-110"
-                  onClick={() => onSelectPlayer(isSelected ? null : selectKey)}
-                >
-                  <ellipse cx="0" cy="12" rx="14" ry="6" fill="#000000" opacity="0.45" />
-                  {hasBall && (
-                    <circle r="22" fill="none" stroke="#FFB800" strokeWidth="2" opacity="0.85" className="animate-ping" />
-                  )}
-                  {p.duty === "press" && (
-                    <circle r="19" fill="none" stroke="#F43F5E" strokeWidth="1.6" strokeDasharray="2 2" />
-                  )}
-                  {p.duty === "run" && <polygon points="0,-22 5,-14 -5,-14" fill="#FFFFFF" opacity="0.9" />}
-                  <line x1="0" y1="0" x2={p.vx} y2={p.vy} stroke="#FFB800" strokeWidth="1.8" opacity="0.7" />
-                  <circle r="15.5" fill="#090D14" stroke={staminaColor} strokeWidth="2" />
-                  <circle
-                    r="12"
-                    fill="#FFB800"
-                    stroke={hasBall ? "#FFFFFF" : "#451A03"}
-                    strokeWidth={hasBall ? 2.5 : 1.5}
-                  />
-                  <text
-                    y="4"
-                    textAnchor="middle"
-                    fill="#0F172A"
-                    fontSize="10"
-                    fontWeight="900"
-                    fontFamily="JetBrains Mono"
-                  >
-                    {p.num || idx + 1}
-                  </text>
-                  <rect x="-28" y="18" width="56" height="14" rx="3" fill="#05080D" stroke="#FFB800" strokeWidth="0.6" opacity="0.92" />
-                  <text y="27.5" textAnchor="middle" fill="#FEF3C7" fontSize="7.5" fontWeight="800" fontFamily="JetBrains Mono">
-                    {p.name.slice(0, 7)} · {p.role}
-                  </text>
-                </g>
-              );
-            })}
-
-            {/* Glowing Ball Comet Trail & 3D Ball Marker */}
-            <g>
-              {carrierInfo && (
-                <line
-                  x1={carrierInfo.x * 1000}
-                  y1={carrierInfo.y * 625}
-                  x2={ballX}
-                  y2={ballY}
-                  stroke="#38BDF8"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  opacity="0.45"
-                />
-              )}
-              <g transform={`translate(${ballX}, ${ballY})`}>
-                <ellipse cx="0" cy="7" rx="9" ry="4.5" fill="#000000" opacity="0.55" />
-                <circle r="9" fill="#38BDF8" opacity="0.25" />
-                <circle r="6.5" fill="#FFFFFF" stroke="#0F172A" strokeWidth="1.4" />
-                <circle r="2.4" fill="#00E87A" />
-              </g>
-            </g>
-          </svg>
-        </div>
-
-        {/* Selected Player Live Bio-Telemetry HUD Card */}
-        {selectedObj && (
-          <div className="pointer-events-none absolute bottom-3 left-3 z-20 flex items-center gap-3 rounded-lg border border-emerald-500/40 bg-slate-950/90 px-3.5 py-2 shadow-2xl backdrop-blur-md">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-500 text-xs font-black text-slate-950">
-              #{selectedObj.num}
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black text-white">{selectedObj.name}</span>
-                <span className="rounded-xs bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold text-emerald-300">
-                  {selectedObj.role}
-                </span>
-              </div>
-              <div className="gx-mono mt-0.5 flex items-center gap-3 text-[10px] text-slate-300">
-                <span className="text-emerald-400">STM {selectedObj.stamina}%</span>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Event-Driven 3D Broadcast Cut-In Overlay (Goal Celebration / Walkout Tunnel Cam) */}
-        {show3DCutIn && (
-          <div className="absolute inset-4 z-30 flex flex-col justify-between overflow-hidden rounded-xl border-2 border-amber-400/70 bg-slate-950/95 p-4 shadow-[0_0_90px_rgba(0,0,0,0.95)] backdrop-blur-xl">
-            <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
-              <div className="flex items-center gap-2">
-                <span className="rounded-xs bg-amber-400 px-2 py-0.5 text-[10px] font-black uppercase tracking-widest text-slate-950">
-                  3D BROADCAST CUT-IN
-                </span>
-                <span className="text-xs font-bold text-white">
-                  {cutInScene === "signing_walkout"
-                    ? `GOAL & TALISMAN SPOTLIGHT · #${selectedObj?.num || 9} ${selectedObj?.name || "OSIMHEN"}`
-                    : cutInScene === "facility_upgrade"
-                    ? `${homeName} · 3D STADIUM CATHEDRAL AERIAL CAM`
-                    : `${homeName} VS ${awayName} · 3D FINALS TROPHY STAGE`}
-                </span>
-              </div>
-              {onClose3DCutIn && (
-                <button
-                  onClick={onClose3DCutIn}
-                  className="rounded-sm border border-white/20 bg-white/10 px-2.5 py-1 text-[10px] font-bold text-white hover:bg-white/20"
-                >
-                  RETURN TO 2D PITCH ✕
-                </button>
-              )}
-            </div>
-            <div className="my-2 flex-1 overflow-hidden rounded-lg">
-              <Cinema3DStage
-                scene={cutInScene}
-                title={
-                  cutInScene === "signing_walkout"
-                    ? `${selectedObj?.name || "OSIMHEN"} #${selectedObj?.num || 9}`
-                    : `${homeName} ARENA`
-                }
-                subtitle={`${homeName} vs ${awayName} · Live 3D Broadcast Camera`}
-                badgeText="GTEX 3D MATCHDAY CUT-IN"
-                subjectName={selectedObj?.name || "OSIMHEN"}
-                jerseyNumber={selectedObj?.num || 9}
-                clubName={homeName}
-                compact
-              />
-            </div>
-          </div>
-        )}
-
-        {/* On-pitch 3D Cinematic Gifting Engine */}
-        {activeGift && (
-          <CinematicGiftingEngine
-            activeGift={
-              typeof activeGift === "object" && "gift_name" in activeGift
-                ? activeGift
-                : {
-                    gift_code: activeGift.code || "stadium_roar",
-                    gift_name: activeGift.name || "Match Gift",
-                    sender: activeGift.sender || "Supporter",
-                    amount: activeGift.cost || activeGift.amount || 10,
-                    rarity: activeGift.rarity || "common",
-                    animation_key: activeGift.anim || activeGift.code,
-                    sound_key: activeGift.sound_key,
-                    duration_ms: activeGift.duration_ms,
-                    combo_count: activeGift.combo_count,
-                  }
-            }
-            onAnimationComplete={() => onGiftComplete?.()}
-            soundEnabled={true}
-          />
-        )}
-      </div>
-
-      {matchId === "u2a-006-showcase" ? (
-        <p className="text-[10px] font-black uppercase tracking-widest text-amber-300">DEMO</p>
-      ) : null}
-      {/* Live Spatial Telemetry Bar under the 2D Pitch */}
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">FIELD TILT (TERRITORY)</span>
-          <span className="gx-mono text-xs font-black text-emerald-400">
-            {territorySplit}% <span className="text-slate-500">/</span>{" "}
-            <span className="text-amber-400">{100 - territorySplit}%</span>
-          </span>
-        </div>
-        <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">EXPECTED THREAT (xT)</span>
-          <span className="gx-mono text-xs font-black text-cyan-300">—</span>
-        </div>
-        <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">PPDA PRESS INTENSITY</span>
-          <span className="gx-mono text-xs font-black text-emerald-300">—</span>
-        </div>
-        <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">DEFENSIVE LINE HEIGHT</span>
-          <span className="gx-mono text-xs font-black text-amber-300">—</span>
-        </div>
-        <div className="rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-          <span className="block text-[9px] font-bold uppercase tracking-wider text-slate-400">PASS NETWORK TEMPO</span>
-          <span className="gx-mono text-xs font-black text-white">—</span>
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -2617,9 +1441,12 @@ export default function MatchCenter() {
   }, []);
 
   // Clock & Playback Controls
-  const [localMinute] = useState(0);
-  const [playbackSeconds, setPlaybackSeconds] = useState(0);
+  const initialSeekSeconds = Number(params.get("seek") ?? params.get("time") ?? 0);
+  const [playbackSeconds, setPlaybackSeconds] = useState(
+    Number.isFinite(initialSeekSeconds) && initialSeekSeconds > 0 ? initialSeekSeconds : 0,
+  );
   const snapshotVersionRef = useRef(-1);
+  const initializedReplayRef = useRef<string>("");
   const [reconnectToken, setReconnectToken] = useState(0);
   const [acceptedLive, setAcceptedLive] = useState<any>(null);
 
@@ -2642,7 +1469,9 @@ export default function MatchCenter() {
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
-  const isMatchComplete = String(acceptedLive?.phase || liveState?.phase || "").toLowerCase() === "completed";
+  const isMatchComplete = String(
+    spectatorStream.latestScore?.status || acceptedLive?.phase || liveState?.phase || "",
+  ).toLowerCase() === "completed";
   useMatchFullTimeGovernance(
     id,
     spectatorStream.recentEvents,
@@ -2697,81 +1526,254 @@ export default function MatchCenter() {
     if (version < snapshotVersionRef.current) return;
     snapshotVersionRef.current = version;
     setAcceptedLive(liveState);
-    if (Number.isFinite(Number(liveState.time_seconds))) {
-      setPlaybackSeconds(Number(liveState.time_seconds));
+    if (Number.isFinite(Number(liveState.time_seconds)) && !isPaused) {
+      setPlaybackSeconds((prev) => Math.max(prev, Number(liveState.time_seconds)));
     }
-  }, [liveState]);
+  }, [liveState, isPaused]);
 
-  const recordedFrames = viewerData?.frames?.length ? viewerData.frames : m?.frames || [];
   useEffect(() => {
-    if (acceptedLive || isPaused || recordedFrames.length < 2) return undefined;
-    const last = recordedFrames[recordedFrames.length - 1];
-    const end = Number(viewerData?.duration_seconds || m?.duration_seconds || last?.time_seconds || 0);
-    const timer = window.setTimeout(() => {
-      setPlaybackSeconds((current) => Math.min(end, current + 0.25 * speed));
-    }, 250);
-    return () => window.clearTimeout(timer);
-  }, [acceptedLive, isPaused, recordedFrames, speed, viewerData, m]);
+    const streamTime = Number(spectatorStream.lastFrame?.time_seconds);
+    if (!Number.isFinite(streamTime) || isPaused) return;
+    setPlaybackSeconds((prev) => Math.max(prev, streamTime));
+  }, [spectatorStream.lastFrame?.time_seconds, isPaused]);
+
+  const recordedFrames = useMemo(
+    () => (viewerData?.frames?.length ? viewerData.frames : m?.frames || []),
+    [viewerData?.frames, m?.frames],
+  );
+  const timedRecordedFrames = useMemo<Array<Record<string, any> & { timeSeconds: number; clockMinute: number }>>(
+    () =>
+      recordedFrames.map((frame: any) => ({
+        ...frame,
+        timeSeconds: Number(frame?.time_seconds ?? frame?.timeSeconds ?? 0),
+        clockMinute: Number(frame?.clock_minute ?? frame?.clockMinute ?? 0),
+      })),
+    [recordedFrames],
+  );
+  const replayDurationSeconds = useMemo(() => {
+    const lastFrameSec =
+      timedRecordedFrames.length > 0
+        ? timedRecordedFrames[timedRecordedFrames.length - 1].timeSeconds
+        : 0;
+    return Math.max(
+      lastFrameSec,
+      Number(viewerData?.duration_seconds || m?.duration_seconds || 0),
+    );
+  }, [timedRecordedFrames, viewerData?.duration_seconds, m?.duration_seconds]);
+
+  // Initialize recorded replay clock to the first frame's authoritative time when joining/loading.
+  useEffect(() => {
+    if (acceptedLive || timedRecordedFrames.length === 0) return;
+    const key = `${id || ""}:${timedRecordedFrames.length}:${timedRecordedFrames[0].timeSeconds}`;
+    if (initializedReplayRef.current === key) return;
+    initializedReplayRef.current = key;
+    if (initialSeekSeconds > 0) {
+      setPlaybackSeconds(Math.min(replayDurationSeconds || initialSeekSeconds, initialSeekSeconds));
+    } else if (timedRecordedFrames[0].timeSeconds > 0) {
+      setPlaybackSeconds(timedRecordedFrames[0].timeSeconds);
+    }
+  }, [id, acceptedLive, timedRecordedFrames, initialSeekSeconds, replayDurationSeconds]);
+
+  // Monotonic wall-clock progression for recorded replays.
+  useEffect(() => {
+    if (acceptedLive || spectatorStream.lastFrame || isPaused || timedRecordedFrames.length < 2) {
+      return undefined;
+    }
+    let lastTickMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const timer = window.setInterval(() => {
+      const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const deltaMs = Math.max(0, nowMs - lastTickMs);
+      lastTickMs = nowMs;
+      setPlaybackSeconds((current) =>
+        stepReplayClock({
+          currentTimeSeconds: current,
+          deltaMs,
+          durationSeconds: replayDurationSeconds,
+          paused: isPaused,
+          speed,
+        }),
+      );
+    }, 50);
+    return () => window.clearInterval(timer);
+  }, [acceptedLive, spectatorStream.lastFrame, isPaused, timedRecordedFrames.length, replayDurationSeconds, speed]);
+
+  const replayPair = useMemo(
+    () =>
+      timedRecordedFrames.length > 0
+        ? seekTime(timedRecordedFrames, playbackSeconds)
+        : { left: null, right: null, t: 0 },
+    [timedRecordedFrames, playbackSeconds],
+  );
+  const activeReplayFrame = useMemo(
+    () => (replayPair.t >= 0.5 && replayPair.right ? replayPair.right : replayPair.left),
+    [replayPair],
+  );
 
   const homeLivePitch = useMemo(
-    () => (liveState?.pitch_players || []).filter((p: any) => p.is_home),
-    [liveState?.pitch_players],
+    () =>
+      (
+        spectatorStream.lastFrame?.players ||
+        acceptedLive?.pitch_players ||
+        liveState?.pitch_players ||
+        []
+      ).filter((p: any) => p.is_home !== false && String(p.side || "home").toLowerCase() !== "away"),
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players],
   );
   const awayLivePitch = useMemo(
-    () => (liveState?.pitch_players || []).filter((p: any) => !p.is_home),
-    [liveState?.pitch_players],
+    () =>
+      (
+        spectatorStream.lastFrame?.players ||
+        acceptedLive?.pitch_players ||
+        liveState?.pitch_players ||
+        []
+      ).filter((p: any) => p.is_home === false || String(p.side || "").toLowerCase() === "away"),
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players],
   );
 
-  const minute = acceptedLive ? Number(acceptedLive.minute ?? 0) : localMinute;
+  const minute = useMemo(() => {
+    if (!isPaused && spectatorStream.latestScore?.minute !== undefined) {
+      return Math.max(0, Math.round(Number(spectatorStream.latestScore.minute)));
+    }
+    if (!isPaused && spectatorStream.lastFrame?.clock_minute !== undefined) {
+      return Math.max(0, Math.round(Number(spectatorStream.lastFrame.clock_minute)));
+    }
+    if (acceptedLive?.minute !== undefined) {
+      return Math.max(0, Math.round(Number(acceptedLive.minute)));
+    }
+    if (replayPair.left) {
+      const leftMin = Number(replayPair.left.clockMinute ?? 0);
+      const rightMin = Number(replayPair.right?.clockMinute ?? leftMin);
+      return Math.max(0, Math.round(leftMin + (rightMin - leftMin) * replayPair.t));
+    }
+    return 0;
+  }, [isPaused, spectatorStream.latestScore?.minute, spectatorStream.lastFrame?.clock_minute, acceptedLive?.minute, replayPair]);
+
+  const phaseName = String(
+    spectatorStream.latestScore?.status ||
+      spectatorStream.lastFrame?.phase ||
+      acceptedLive?.phase ||
+      liveState?.phase ||
+      activeReplayFrame?.phase ||
+      "",
+  ).toLowerCase();
   const isHalftime = Boolean(
-    minute === 45 || String(liveState?.phase || "").toLowerCase().includes("half")
+    phaseName.includes("half") || (minute === 45 && phaseName !== "second_half")
   );
   const matchAds = useMatchCommercialInventory(id, true);
+
   const shown = useMemo(() => {
-    if (liveState?.timeline?.length) {
-      return liveState.timeline;
+    const baseEvents = acceptedLive?.timeline?.length
+      ? acceptedLive.timeline
+      : acceptedLive?.events?.length
+        ? acceptedLive.events
+        : viewerData?.events?.length
+          ? viewerData.events
+          : m?.events || [];
+    const streamEvents = spectatorStream.recentEvents || [];
+    const combined = [...baseEvents, ...streamEvents];
+    const seen = new Set<string>();
+    const filtered: any[] = [];
+    const isLiveAuthoritative = Boolean(acceptedLive || spectatorStream.lastFrame);
+    for (const ev of combined) {
+      if (!ev) continue;
+      const evMin = Number(ev.minute ?? ev.clock_minute ?? 0);
+      const evSec = ev.time_seconds !== undefined ? Number(ev.time_seconds) : null;
+      if (!isLiveAuthoritative) {
+        if (evSec !== null && Number.isFinite(evSec)) {
+          if (evSec > playbackSeconds + 0.05) continue;
+        } else if (evMin > minute + 0.2) {
+          continue;
+        }
+      }
+      const key = String(
+        ev.event_id ||
+          ev.id ||
+          `${evMin}:${ev.type || ev.event_type || ""}:${ev.team || ev.side || ""}:${ev.text || ev.description || ""}`,
+      );
+      if (seen.has(key)) continue;
+      seen.add(key);
+      filtered.push({
+        ...ev,
+        minute: evMin,
+        type: ev.type || ev.event_type,
+        team: ev.team || ev.side,
+      });
     }
-    return (m?.events || []).filter((e: any) => e.minute <= minute);
-  }, [m, minute, liveState]);
+    return filtered;
+  }, [acceptedLive, viewerData?.events, m?.events, spectatorStream.recentEvents, spectatorStream.lastFrame, playbackSeconds, minute]);
+
   const commentary = useMemo(() => {
-    const played = viewerData?.frames?.length ? viewerData.frames : m?.frames || [];
+    const played = timedRecordedFrames;
+    const isLiveAuthoritative = Boolean(acceptedLive || spectatorStream.lastFrame);
     const calls = played
-      .filter((frame: { overlay_text?: string; clock_minute?: number }) => frame.overlay_text && Number(frame.clock_minute || 0) <= minute + 0.2)
-      .map((frame: { overlay_text?: string; clock_minute?: number }) => ({
-        minute: Math.max(1, Math.round(Number(frame.clock_minute || 0))),
+      .filter((frame: { overlay_text?: string; clockMinute?: number; timeSeconds?: number }) => {
+        if (!frame.overlay_text) return false;
+        if (!isLiveAuthoritative && Number.isFinite(frame.timeSeconds)) {
+          return Number(frame.timeSeconds) <= playbackSeconds + 0.05;
+        }
+        return Number(frame.clockMinute || 0) <= minute + 0.2;
+      })
+      .map((frame: { overlay_text?: string; clockMinute?: number }) => ({
+        minute: Math.max(1, Math.round(Number(frame.clockMinute || 0))),
         text: String(frame.overlay_text),
         type: "open_play",
       }));
     const merged: Array<{ minute: number; text?: string; title?: string; description?: string; type?: string }> = [];
     for (const item of [...shown, ...calls].sort((left: { minute: number }, right: { minute: number }) => Number(left.minute) - Number(right.minute))) {
       const text = String(item.text || item.title || item.description || "");
+      if (!text) continue;
       if (merged.length && String(merged[merged.length - 1].text || merged[merged.length - 1].title || "") === text) continue;
       merged.push(item);
     }
     return merged;
-  }, [shown, viewerData, m, minute]);
+  }, [shown, timedRecordedFrames, acceptedLive, spectatorStream.lastFrame, playbackSeconds, minute]);
 
   if (isLoading || !m) return <Loading label="Loading match" />;
 
   const fallbackScore = shown
-    .filter((e: any) => e.type === "goal")
+    .filter((e: any) => e.type === "goal" || e.type === "penalty_goal")
     .reduce((acc: any, e: any) => ({ ...acc, [e.team]: (acc[e.team] || 0) + 1 }), {
       home: 0,
       away: 0,
     });
 
   const score = {
-    home: liveState?.home?.score ?? fallbackScore.home,
-    away: liveState?.away?.score ?? fallbackScore.away,
+    home:
+      spectatorStream.latestScore?.home_score ??
+      spectatorStream.lastFrame?.home_score ??
+      acceptedLive?.home?.score ??
+      liveState?.home?.score ??
+      activeReplayFrame?.home_score ??
+      fallbackScore.home,
+    away:
+      spectatorStream.latestScore?.away_score ??
+      spectatorStream.lastFrame?.away_score ??
+      acceptedLive?.away?.score ??
+      liveState?.away?.score ??
+      activeReplayFrame?.away_score ??
+      fallbackScore.away,
   };
-  const phaseName = String(acceptedLive?.phase || "").toLowerCase();
-  const done = phaseName === "completed";
-  const isScheduled = liveState ? liveState.phase === "pre_match" && minute === 0 : localMinute === 0 && params.get("live");
+  const replayFinished =
+    !acceptedLive &&
+    !spectatorStream.lastFrame &&
+    timedRecordedFrames.length > 1 &&
+    replayDurationSeconds > 0 &&
+    playbackSeconds >= replayDurationSeconds - 0.001;
+  const done =
+    phaseName === "completed" ||
+    phaseName === "full_time" ||
+    phaseName === "fulltime" ||
+    replayFinished;
+  const hasAuthoritativeFeed = Boolean(
+    acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length > 0,
+  );
+  const isScheduled =
+    phaseName === "pre_match" && minute === 0;
   const side = m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away";
 
   const sourceKind = pitchSource({
     matchId: id,
-    hasSnapshot: Boolean(acceptedLive?.pitch_players?.length),
+    hasSnapshot: Boolean(acceptedLive?.pitch_players?.length || spectatorStream.lastFrame?.players?.length),
     hasFrames: recordedFrames.length > 0,
   });
   const liveStats = acceptedLive?.stats;
@@ -2842,8 +1844,8 @@ export default function MatchCenter() {
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Chip tone={!liveState ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
-                {!liveState ? (
+              <Chip tone={!hasAuthoritativeFeed ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
+                {!hasAuthoritativeFeed ? (
                   "Preview · authoritative match feed unavailable"
                 ) : done ? (
                   "Full time"
@@ -2851,7 +1853,7 @@ export default function MatchCenter() {
                   "Pre-Match Briefing"
                 ) : (
                   <>
-                    <Radio size={10} className="gx-live-dot" /> Live · {Math.min(minute, 90)}'
+                    <Radio size={10} className="gx-live-dot" /> Live · {minute}'
                   </>
                 )}
               </Chip>
@@ -2859,14 +1861,28 @@ export default function MatchCenter() {
               {/* Broadcast Match Period Capsule */}
               <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#080F1C]/70 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
                 <span className="size-1.5 rounded-full bg-[#00C991] animate-ping" />
-                <span>{isHalftime ? "Halftime" : minute <= 45 ? "1st Half" : minute <= 90 ? "2nd Half" : "Full Time"}</span>
+                <span>
+                  {done
+                    ? "Full Time"
+                    : phaseName === "penalty_shootout"
+                      ? "Penalties"
+                      : phaseName === "extra_time"
+                        ? "Extra Time"
+                        : isHalftime
+                          ? "Halftime"
+                          : minute <= 45
+                            ? "1st Half"
+                            : "2nd Half"}
+                </span>
               </div>
 
               <MatchSponsorIdentificationBadge ad={matchAds.sponsorAd} />
 
               {/* Pause/Resume Toggle */}
-              {!done && !liveState && (
+              {!done && hasAuthoritativeFeed && (
                 <button
+                  type="button"
+                  data-testid="match-pause-toggle"
                   onClick={() => setIsPaused(!isPaused)}
                   className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-[#14243A] px-2.5 py-1 text-xs font-bold text-slate-200 transition hover:border-[#00C991]/50 hover:bg-[#14243A]/90 hover:text-white"
                 >
@@ -2876,8 +1892,10 @@ export default function MatchCenter() {
               )}
 
               {/* Speed Cycle Pill */}
-              {!done && !liveState && (
+              {!done && hasAuthoritativeFeed && (
                 <button
+                  type="button"
+                  data-testid="match-speed-toggle"
                   onClick={() => setSpeed((s) => (s === 0.5 ? 1.0 : s === 1.0 ? 2.0 : 0.5))}
                   className="gx-mono rounded-xl border border-[#00C991]/40 bg-[#00C991]/15 px-2.5 py-1 text-xs font-black text-[#00E8A8] transition hover:bg-[#00C991]/25"
                 >
@@ -2943,7 +1961,10 @@ export default function MatchCenter() {
                   {score.away}
                 </span>
               </div>
-              <span className="gx-mono mt-1.5 text-[11px] font-black text-[#00E8A8] tracking-widest uppercase">
+              <span
+                data-testid="match-clock-display"
+                className="gx-mono mt-1.5 text-[11px] font-black text-[#00E8A8] tracking-widest uppercase"
+              >
                 {done ? "FINAL" : phaseName === "penalty_shootout" ? "PENALTIES" : phaseName === "extra_time" ? `${minute}' EXTRA TIME` : phaseName === "full_time" || phaseName === "fulltime" ? "FULL TIME" : `${minute}' MATCHDAY`}
               </span>
               <p className="sr-only" data-testid="match-score">
@@ -3036,6 +2057,9 @@ export default function MatchCenter() {
                 ].map((cam) => (
                   <button
                     key={cam.id}
+                    type="button"
+                    data-testid={`cam-mode-${cam.id}`}
+                    aria-pressed={cameraMode === cam.id}
                     onClick={() => setCameraMode(cam.id)}
                     className={`rounded-sm px-2 py-1 text-[10px] font-black tracking-wider transition-colors ${
                       cameraMode === cam.id
@@ -3089,6 +2113,9 @@ export default function MatchCenter() {
               {!view3DBroadcast && (
               <div className="flex flex-wrap items-center gap-1.5">
                 <button
+                  type="button"
+                  data-testid="toggle-voronoi"
+                  aria-pressed={showVoronoi}
                   onClick={() => setShowVoronoi(!showVoronoi)}
                   className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${
                     showVoronoi ? "bg-blue-500/20 text-blue-300" : "bg-white/5 text-slate-400"
@@ -3097,6 +2124,9 @@ export default function MatchCenter() {
                   <Compass size={11} /> VORONOI
                 </button>
                 <button
+                  type="button"
+                  data-testid="toggle-heatmap"
+                  aria-pressed={showHeatmap}
                   onClick={() => setShowHeatmap(!showHeatmap)}
                   className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${
                     showHeatmap ? "bg-rose-500/20 text-rose-300" : "bg-white/5 text-slate-400"
@@ -3105,6 +2135,9 @@ export default function MatchCenter() {
                   <Flame size={11} /> HEATMAP
                 </button>
                 <button
+                  type="button"
+                  data-testid="toggle-tactics"
+                  aria-pressed={showTactics}
                   onClick={() => setShowTactics(!showTactics)}
                   className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${
                     showTactics ? "bg-emerald-500/20 text-emerald-300" : "bg-white/5 text-slate-400"
@@ -3113,15 +2146,19 @@ export default function MatchCenter() {
                   <Layers size={11} /> TACTICS
                 </button>
                 <button
+                  type="button"
+                  data-testid="toggle-passing-lanes"
+                  aria-pressed={showLanes}
                   onClick={() => setShowLanes(!showLanes)}
                   className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${
                     showLanes ? "bg-cyan-500/20 text-cyan-300" : "bg-white/5 text-slate-400"
                   }`}
                 >
-                  <Activity size={11} /> LANES & xG
+                  <Activity size={11} /> PASSING LANES
                 </button>
                 {match3dEnabled && (
                 <button
+                  type="button"
                   onClick={() => {
                     setCutInScene("signing_walkout");
                     setShow3DCutIn(!show3DCutIn);
@@ -3210,8 +2247,15 @@ export default function MatchCenter() {
                   snapshotPlayers={acceptedLive?.pitch_players}
                   snapshotBall={acceptedLive?.ball}
                   socketFrame={spectatorStream.lastFrame}
-                  events={acceptedLive?.events}
-                  activeEventType={acceptedLive?.active_event_type}
+                  events={shown}
+                  activeEventType={
+                    (spectatorStream.lastFrame as any)?.active_event?.event_type ||
+                    (spectatorStream.lastFrame as any)?.event_type ||
+                    acceptedLive?.active_event_type ||
+                    activeReplayFrame?.active_event?.event_type ||
+                    activeReplayFrame?.event_type ||
+                    null
+                  }
                   homeColor={acceptedLive?.home?.primary_color_hex || "#00e87a"}
                   awayColor={acceptedLive?.away?.primary_color_hex || "#ffb800"}
                   goalkeeperHome={acceptedLive?.home?.goalkeeper_color || "#f8fafc"}
@@ -3224,6 +2268,16 @@ export default function MatchCenter() {
                   onSelect={setSelectedPlayer}
                   demo={sourceKind === "demo"}
                   reconnectToken={reconnectToken}
+                  connectionStatus={spectatorStream.connectionStatus}
+                  matchPhase={phaseName || null}
+                  paused={isPaused}
+                  playbackSpeed={speed}
+                  cameraMode={cameraMode}
+                  onCameraModeChange={setCameraMode}
+                  showVoronoi={showVoronoi}
+                  showHeatmap={showHeatmap}
+                  showTactics={showTactics}
+                  showPassingLanes={showLanes}
                 />
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[

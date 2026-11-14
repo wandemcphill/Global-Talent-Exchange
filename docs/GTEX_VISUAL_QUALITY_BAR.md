@@ -1,12 +1,14 @@
 # GTEX Visual Quality Bar
 
-> **Launch match (2026-11-13):** The browser launch match is the React WebGL 2D orthographic pitch in `frontend/react-shell/src/match2d`, driven by the backend replay. Perspective stadium WebGL is an optional later picture. Flutter stays the phone companion, and the Unity `GTEX_OriginalVisualRuntime` documented below remains a separate desktop workstream.
+> **Browser Launch Match vs. Desktop Unity 3D Runtime (2026-11-14):**
+> - **Browser Launch Match (Canonical Web App):** The React WebGL 2D orthographic pitch in `frontend/react-shell/src/match2d` (`OrthographicPitch.tsx`, `Pitch2DView.tsx`, `matchStateAdapter.ts`, `playerRig.ts`) is the canonical browser launch match experience, driven by authoritative backend snapshots and spectator WebSocket streams. Perspective Three.js 3D (`MatchPitchLiveScene`) is an optional mode behind `match_3d_gameplay`.
+> - **Desktop Unity 3D Runtime:** The sections below govern the standalone Unity desktop engine (`Gtex_Test_Migration` / `GTEX_OriginalVisualRuntime`), where `GTEX_OriginalVisualRuntime` + `VisualBridge` is the canonical FM23-class 3D desktop path.
 
 Status: **locked**
 
-## Product bar
+## Product bar (Unity Desktop 3D Runtime)
 
-Matchday 3D must look and play at least like **Football Manager 23**:
+Matchday 3D in the Unity desktop runtime must look and play at least like **Football Manager 23**:
 
 - real 3D pitch and players
 - ball travel with pass / shot / keeper action
@@ -15,14 +17,15 @@ Matchday 3D must look and play at least like **Football Manager 23**:
 
 Not FIFA photorealism. Not Flutter canvas / 2.5D markers.
 
-## Canonical visual runtime
+## Canonical visual runtime matrix
 
 | Surface | Role |
 |---|---|
-| Unity `Assets/Scenes/GTEX_OriginalVisualRuntime.unity` | **Only** FM23-class broadcast 3D path |
-| `Assets/Code/GTEX/VisualBridge/` | Only GTEX → original-sim integration seam |
+| React WebGL 2D (`frontend/react-shell/src/match2d`) | **Canonical browser launch match** (orthographic WebGL pitch, procedural sprites, tactical/spatial overlays, Canvas 2D fallback) |
+| Unity `Assets/Scenes/GTEX_OriginalVisualRuntime.unity` | **Only** FM23-class broadcast 3D desktop path |
+| `Assets/Code/GTEX/VisualBridge/` | Only GTEX → original-sim Unity integration seam |
 | Flutter match center 2D pitch | Tactical / phone companion only |
-| `Gtex_MainScene` live transform playback | Legacy ship path until OVR replaces it |
+| `Gtex_MainScene` live transform playback | Legacy Unity ship path until OVR replaces it |
 
 ## Rules
 

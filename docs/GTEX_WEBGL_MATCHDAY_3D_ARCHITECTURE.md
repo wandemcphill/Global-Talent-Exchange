@@ -8,15 +8,15 @@
 
 ## 1. Executive Architecture Decision
 
-The **React WebGL 2D** orthographic pitch in `frontend/react-shell/src/match2d` is the **launch browser match**. Perspective `MatchPitchLiveScene` remains optional later and is not the default.
+The **React WebGL 2D** orthographic pitch in `frontend/react-shell/src/match2d` (`OrthographicPitch.tsx`, `matchStateAdapter.ts`, `playerRig.ts`, `createMatchRenderer.ts`, and `Pitch2DView.tsx`) is the **canonical launch browser match experience**. Perspective 3D (`MatchPitchLiveScene`) remains an optional companion mode gated behind `match_3d_gameplay` and is not the default launch surface.
 
 ### Platform Role Matrix
 
 | Platform | Official Role | Codebase Location |
 |---|---|---|
-| **React WebGL 2D** | **Launch browser match** (orthographic pitch, procedural players, authoritative snapshots). | `frontend/react-shell/src/match2d` |
+| **React WebGL 2D** | **Canonical launch browser match** (Three.js orthographic WebGL pitch, 15-action procedural footballer sprite rig, monotonic wall-clock interpolation, tactical/spatial overlays, and cached Canvas 2D context-loss fallback). | `frontend/react-shell/src/match2d/`, `frontend/react-shell/src/pages/match-center/Pitch2DView.tsx` |
 | **GTEX Backend** | **Authoritative football match simulation, events, score, clock, fairness proofs, and commercial ad/sponsorship delivery** | `backend/app/match_engine/`, `backend/app/routes/match_viewer.py`, `backend/app/ads_engine/`, `backend/app/sponsorship_engine/` |
-| **React + Three.js perspective** | Optional later picture (stadium, broadcast cameras, HUD). It is not the default match. | `frontend/react-shell/src/lib/3d/broadcast/` |
+| **React + Three.js perspective** | Optional perspective 3D broadcast view (stadium, broadcast cameras, HUD) gated behind `match_3d_gameplay`. Not the default launch match. | `frontend/react-shell/src/lib/3d/broadcast/` |
 | **Unity** | **Existing separate desktop/historical visual runtime** (preserved historical engineering assets; not the browser match renderer) | `unity/`, `Gtex_Test_Migration/` |
 
 ---
@@ -25,11 +25,16 @@ The **React WebGL 2D** orthographic pitch in `frontend/react-shell/src/match2d` 
 
 1. **Strict Separation of Simulation Authority and Browser Presentation:**
    - **GTEX Backend Simulation → Authoritative Match Event/State Stream → React/WebGL Match Presentation → Stadium & Broadcast Graphics.**
-   - The browser renderer never decides match outcomes, goals, cards, substitutions, or final scores. All scores, clocks, and match events are derived strictly from the authoritative backend contract (`SpectatorSafeMatchView` / `MatchViewStateView`).
-2. **Single Canonical Browser Scene (`MatchPitchLiveScene`):**
-   - All 3D browser match rendering builds on `MatchPitchLiveScene`, `StadiumArenaEnvironment`, `StadiumAdvertisingNetwork`, `HumanoidFootballerRig`, `FootballAnimationStateMachine`, `CameraDirector`, `BroadcastOverlayHUD`, and `SpatialInterpolator`.
-   - No competing browser 3D scenes, duplicate playback engines, or secondary scoreboard authorities are permitted.
-3. **Commercial Integrity in Stadium LED Advertising:**
+   - The browser renderer never decides match outcomes, goals, cards, substitutions, or final scores. All scores, clocks, and match events are derived strictly from the authoritative backend contract (`SpectatorSafeMatchView` / `MatchViewStateView` / `/matches/{id}/live`).
+2. **Canonical Launch Browser Renderer (`frontend/react-shell/src/match2d`):**
+   - The default Match Center pitch renders through `Pitch2DView` and `OrthographicPitch` using a single pooled Three.js `WebGLRenderer` (`createMatchRenderer`), an orthographic camera with inverse world-space hit-testing, a cached procedural footballer sprite atlas (`playerRig.ts`), and `LiveRenderBuffer` monotonic wall-clock interpolation (`matchStateAdapter.ts`).
+   - Composite player identities (`side:playerId`) prevent home/away ID collisions and ensure accurate substitution boundaries.
+   - `PlayerMotionTracker` computes velocity from elapsed time between authoritative position updates so high-frequency 60fps animation frames never flicker to idle between network packets.
+   - On `webglcontextlost` or WebGL initialization failure, `OrthographicPitch` switches seamlessly to a cached Canvas 2D fallback and recovers automatically on `webglcontextrestored`.
+3. **Optional Perspective 3D Broadcast Companion (`MatchPitchLiveScene`):**
+   - When `match_3d_gameplay` is explicitly enabled, perspective 3D match rendering builds on `MatchPitchLiveScene`, `StadiumArenaEnvironment`, `StadiumAdvertisingNetwork`, `HumanoidFootballerRig`, `FootballAnimationStateMachine`, `CameraDirector`, `BroadcastOverlayHUD`, and `SpatialInterpolator`.
+   - No competing browser 2D/SVG legacy pitch or duplicate scoreboard authority is permitted.
+4. **Commercial Integrity in Stadium LED Advertising:**
    - Stadium perimeter LED boards (`StadiumAdvertisingNetwork`) consume real GTEX advertising and sponsorship data (`/public/ads/campaigns`, `/sponsorship/placements`, `MatchViewerMonetizationView`, and club/competition sponsorship contracts).
    - Expired, unapproved, paused, or budget-exhausted campaigns are never displayed. When no external campaign is active, the boards fall back cleanly to official GTEX house creatives.
    - Campaign rotations occur on configurable slot boundaries (`10s` default) without per-frame texture or material allocations, and verified impressions are reported through the approved idempotent `/public/ads/events` endpoint.
