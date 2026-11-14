@@ -3363,7 +3363,7 @@ def get_club_institutional_history_view(
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    from app.owner_console import living_institution
+    from app.owner_console import living_institution, storytelling
 
     def _op() -> dict[str, Any]:
         state = service.get_state(session, club_id)
@@ -3374,6 +3374,7 @@ def get_club_institutional_history_view(
             state,
             category=category,
             limit=limit,
+            include_internal=storytelling.can_view_private_club_data(session, user.id, club_id),
         )
 
     return _run(session, _op)
@@ -3385,13 +3386,18 @@ def get_club_institutional_pulse_view(
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    from app.owner_console import living_institution
+    from app.owner_console import living_institution, storytelling
 
     def _op() -> dict[str, Any]:
         state = service.get_state(session, club_id)
         if state is None:
             raise service.OwnerError("club_not_found", 404)
-        return living_institution.get_unified_club_pulse(session, state)
+        include_internal = storytelling.can_view_private_club_data(session, user.id, club_id)
+        return living_institution.get_unified_club_pulse(
+            session,
+            state,
+            include_internal=include_internal,
+        )
 
     return _run(session, _op)
 

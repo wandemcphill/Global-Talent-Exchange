@@ -123,7 +123,7 @@ function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
 }
 
 export function ControlCenter() {
-  const { data, isLoading, isError } = useControlCenter();
+  const { data, isLoading, isError, refetch } = useControlCenter();
   const { active: activeClub } = useActiveClub();
   const { data: clubDetail } = useClub(activeClub?.club_id);
   const { data: institutionalPulse } = useClubInstitutionalPulse(activeClub?.club_id);
@@ -164,7 +164,20 @@ export function ControlCenter() {
   };
 
   if (isLoading) return <Loading label="Loading your GTEX workspace..." />;
-  if (isError || !data) return <Empty title="GTEX workspace unavailable" body="We could not load your account right now. Please refresh and try again." />;
+  if (isError || !data) {
+    return (
+      <Empty
+        testid="control-center-error-state"
+        title="GTEX workspace unavailable"
+        body="We could not load your account right now. Please refresh and try again."
+        action={
+          <Btn variant="secondary" onClick={() => refetch()} data-testid="control-center-retry-btn">
+            Retry
+          </Btn>
+        }
+      />
+    );
+  }
   if (!(data.clubs || []).length) return <NoClubDashboard onCreateClub={() => navigate("/onboarding")} />;
 
   const wallet = data.economy?.wallet || {};

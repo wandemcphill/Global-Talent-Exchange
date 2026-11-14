@@ -850,8 +850,12 @@ def ensure_staff_relationship(
 
     if existing is not None:
         meta = dict(existing.metadata_json or {})
-        recorded_staff_id = str(meta.get("staff_id") or "")
-        if recorded_staff_id and recorded_staff_id != staff_id and existing.participant_b_name != staff_name:
+        recorded_staff_id = str(meta.get("staff_id") or existing.participant_b_id or "")
+        if (
+            (recorded_staff_id and recorded_staff_id != staff_id)
+            or (existing.participant_b_name and existing.participant_b_name != staff_name)
+            or existing.status in ("former", "vacant", "resigned")
+        ):
             # Archive predecessor relationship snapshot and reset for new appointee!
             archived = list(fac.get("_archived_staff_relationships") or [])
             archived.append(
@@ -882,7 +886,7 @@ def ensure_staff_relationship(
             existing.tension = 16
             existing.alignment = 70
             existing.influence = 65
-            existing.loyalty = int(personality_profile.get("loyalty", 70))
+            existing.loyalty = int(profile.get("loyalty", 70))
             existing.status = "aligned"
             existing.metadata_json = {
                 "staff_id": staff_id,
@@ -948,7 +952,7 @@ def ensure_staff_relationship(
         tension=16,
         alignment=70,
         influence=65,
-        loyalty=int(personality_profile.get("loyalty", 70)),
+        loyalty=int(profile.get("loyalty", 70)),
         status="aligned",
         metadata_json={
             "staff_id": staff_id,
@@ -969,6 +973,51 @@ def ensure_staff_relationship(
     db.add(rel)
     db.flush()
     return rel
+
+
+def retire_staff_relationship_on_vacancy(db: Session, state: OwnerClubState, *, role_key: str) -> None:
+    """Archive an executive/staff relationship when a role becomes vacant without immediate replacement."""
+    clean_role = str(role_key or "").strip().lower()
+    if clean_role == "head_coach":
+        clean_role = "first_team_manager"
+    pairing_key = f"{state.club_id}:owner:{clean_role}"
+    existing = db.scalar(
+        select(OwnerClubRelationship).where(
+            OwnerClubRelationship.club_id == state.club_id,
+            OwnerClubRelationship.pairing_key == pairing_key,
+        )
+    )
+    if existing is None or existing.status in ("former", "vacant"):
+        return
+    fac = dict(state.facilities_json or {})
+    archived = list(fac.get("_archived_staff_relationships") or [])
+    meta = dict(existing.metadata_json or {})
+    archived.append(
+        {
+            "relationship_id": existing.id,
+            "staff_id": str(meta.get("staff_id") or existing.participant_b_id or ""),
+            "staff_name": existing.participant_b_name,
+            "role": clean_role,
+            "trust": existing.trust,
+            "respect": existing.respect,
+            "alignment": existing.alignment,
+            "tension": existing.tension,
+            "loyalty": existing.loyalty,
+            "status": existing.status,
+            "metadata": meta,
+            "archived_at": _utcnow().isoformat(),
+        }
+    )
+    fac["_archived_staff_relationships"] = archived[-25:]
+    state.facilities_json = fac
+    flag_modified(state, "facilities_json")
+    existing.status = "former"
+    meta["archived_world_day"] = int(state.world_day or 1)
+    meta["vacated_at"] = _utcnow().isoformat()
+    existing.metadata_json = meta
+    flag_modified(existing, "metadata_json")
+    existing.updated_at = _utcnow()
+    db.flush()
 
 
 def serialize_relationship_health(rel: OwnerClubRelationship) -> dict[str, Any]:
@@ -1824,6 +1873,7 @@ def evaluate_layer_a_staff_decision(
     flag_modified(relationship, "metadata_json")
     relationship.updated_at = _utcnow()
 
+    decision_rel_snapshot = serialize_relationship_health(relationship)
     db.add(
         OwnerClubRelationshipHistory(
             id=str(uuid4()),
@@ -1840,7 +1890,7 @@ def evaluate_layer_a_staff_decision(
             delta_alignment=deltas["alignment"],
             delta_influence=0,
             delta_loyalty=deltas["loyalty"],
-            snapshot_json=serialize_relationship_health(relationship),
+            snapshot_json=decision_rel_snapshot,
             created_at=_utcnow(),
         )
     )
@@ -1862,7 +1912,7 @@ def evaluate_layer_a_staff_decision(
         "intent": intent,
         "reasoning_trace": reasoning_trace,
         "relationship_deltas": deltas,
-        "relationship_snapshot": serialize_relationship_health(relationship),
+        "relationship_snapshot": decision_rel_snapshot,
         "state_effects": state_effects,
     }
 
@@ -2007,7 +2057,7 @@ def _apply_layer_a_state_effects(
         state_effects["recommended_candidate"] = assignment.recommended_candidate_json
 
     if "staff_resigned" in state_effects:
-        from app.owner_console import living_institution
+        from app.owner_console import comms_persistence, living_club_world, living_institution
 
         history = list(fac.get("_staff_career_history") or [])
         history.append(
@@ -2058,21 +2108,51 @@ def _apply_layer_a_state_effects(
                 idempotency_key=f"resign:{state.club_id}:{staff_id}:d{int(state.world_day or 1)}",
             )
             state_effects["canonical_event_id"] = resign_ev.id
-        else:
-            living_institution.emit_canonical_club_event(
+            ensure_staff_relationship(
                 db,
                 state,
-                category="governance",
-                event_type="staff_resignation",
-                source_subsystem="autonomous_staff",
-                title=f"{staff_name} Resigns Over Sporting Autonomy",
-                description=f"{staff_name} stepped down after repeated interference in professional responsibilities.",
+                role_key="first_team_manager",
+                staff_id=str(caretaker_mgr["id"]),
+                staff_name=str(caretaker_mgr["name"]),
+                staff_title="First-Team Manager (Caretaker)",
+                personality_profile=caretaker_mgr["personality_profile"],
+            )
+            living_club_world.reconcile_staff_relationships(db, state)
+            comms_persistence.rotate_staff_conversation_on_change(
+                db,
+                state,
+                role_key="first_team_manager",
+                previous_staff_name=staff_name,
+                new_staff_name=str(caretaker_mgr["name"]),
+            )
+        else:
+            exec_staff = dict(fac.get("_executive_staff") or {})
+            exec_staff.pop(role_key, None)
+            fac["_executive_staff"] = exec_staff
+            state.facilities_json = fac
+            flag_modified(state, "facilities_json")
+            db.flush()
+
+            resign_ev = living_institution.record_executive_staff_change(
+                db,
+                state,
+                action="dismissed",
+                staff_role=role_key,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                fee_gtex=0,
+                reason="resigned_owner_interference",
                 idempotency_key=f"resign:{state.club_id}:{staff_id}:d{int(state.world_day or 1)}",
-                visibility_classification=living_institution.VISIBILITY_OFFICIAL_ANNOUNCEMENT,
-                severity="critical",
-                source_type="staff",
-                source_id=staff_id,
-                payload={"staff_id": staff_id, "role": role_key, "reason": "resigned_owner_interference"},
+            )
+            state_effects["canonical_event_id"] = resign_ev.id
+            retire_staff_relationship_on_vacancy(db, state, role_key=role_key)
+            living_club_world.reconcile_staff_relationships(db, state)
+            comms_persistence.rotate_staff_conversation_on_change(
+                db,
+                state,
+                role_key=role_key,
+                previous_staff_name=staff_name,
+                new_staff_name=None,
             )
 
         db.add(
@@ -2468,11 +2548,10 @@ def execute_authorized_recruitment_signing(
             assignment.updated_at = _utcnow()
         if decision is not None:
             decision.execution_status = "failed_insufficient_funds"
-            decision.execution_notes = (
+            decision.outcome_text = (
                 f"Signing of {player_name} blocked: required {float(fee_dec):,.2f} GTX, "
                 f"treasury holds {float(actual_cash):,.2f} GTX."
             )
-            decision.updated_at = _utcnow()
         living_institution.emit_canonical_club_event(
             db,
             state,
@@ -2527,7 +2606,7 @@ def execute_authorized_recruitment_signing(
             assignment.gm_evaluation_status = "failed_insufficient_funds"
         if decision is not None:
             decision.execution_status = "failed_insufficient_funds"
-            decision.execution_notes = str(exc)
+            decision.outcome_text = str(exc)
         db.flush()
         return {
             "executed": False,
@@ -2592,8 +2671,7 @@ def execute_authorized_recruitment_signing(
         if decision.status in ("pending_approval", "escalated"):
             decision.status = "approved"
         decision.resolved_at = decision.resolved_at or _utcnow()
-        decision.execution_notes = f"Completed signing of {player_name} ({pos}, {gsi} OVR) for {int(fee_dec):,} GTX."
-        decision.updated_at = _utcnow()
+        decision.outcome_text = f"Completed signing of {player_name} ({pos}, {gsi} OVR) for {int(fee_dec):,} GTX."
 
     transfer_rec = living_institution.record_transfer_movement(
         db,
@@ -2966,7 +3044,16 @@ def generate_proactive_staff_initiatives(
         p for p in players if str(p.position or "").upper() in ("CB", "DEFENDER") and int(p.injured_days or 0) == 0
     ]
 
-    if not lw_players and _can_fire("mgr_lw_recruitment_request", min_days=4):
+    open_lw_assignment = db.scalar(
+        select(OwnerRecruitmentAssignment).where(
+            OwnerRecruitmentAssignment.club_id == state.club_id,
+            OwnerRecruitmentAssignment.target_position == "LW",
+            OwnerRecruitmentAssignment.gm_evaluation_status.notin_(
+                ("completed", "signed_to_first_team", "rejected_by_owner", "failed_insufficient_funds")
+            ),
+        )
+    )
+    if not lw_players and open_lw_assignment is None and _can_fire("mgr_lw_recruitment_request", min_days=7):
         assignment = execute_inter_staff_recruitment_workflow(
             db,
             state,
@@ -2988,7 +3075,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "First-Team Manager",
                 "topic": "Sporting Requirement: Left Winger (GSI 80–85)",
                 "priority": "high",
-                "event_key": f"proactive:mgr_lw_gap:day_{world_day}",
+                "event_key": f"proactive:mgr_lw_gap:{assignment.id}",
                 "body": (
                     f"Our current wide attacking options are limited for our {mgr_profile.get('preferred_tactical_philosophy', 'positional_play').replace('_', ' ')} shape. "
                     f"I have submitted a formal sporting requirement to {gm['name']} (GM) to recruit a left winger with a GSI between 80 and 85 "
@@ -3012,7 +3099,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "General Manager",
                 "topic": f"GM Recruitment Assessment: {rec.get('player_name', 'Left Winger Target')} (LW)",
                 "priority": "high",
-                "event_key": f"proactive:gm_lw_evaluation:day_{world_day}",
+                "event_key": f"proactive:gm_lw_evaluation:{assignment.id}",
                 "body": (
                     f"Following {mgr['name']}'s sporting request for an 80–85 GSI left winger, I reviewed our recruitment budget "
                     f"(treasury {treasury:,.0f} GTX) and tasked {scout['name']} (Chief Scout) with compiling targets. "
@@ -3030,7 +3117,7 @@ def generate_proactive_staff_initiatives(
             }
         )
 
-    if len(cb_players) < 3 and _can_fire("mgr_cb_depth_concern", min_days=5):
+    if len(cb_players) < 3 and _can_fire("mgr_cb_depth_concern", min_days=14):
         generated.append(
             {
                 "sender_role": "first_team_manager",
@@ -3039,7 +3126,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "First-Team Manager",
                 "topic": "Squad Depth Warning: Centre-Back Cover",
                 "priority": "normal",
-                "event_key": f"proactive:mgr_cb_depth:day_{world_day}",
+                "event_key": f"proactive:mgr_cb_depth:w{(world_day - 1) // 14 + 1}",
                 "body": (
                     f"I am concerned about our defensive depth. We currently have only {len(cb_players)} healthy natural centre-backs available, "
                     f"and our {mgr_profile.get('preferred_formations', ['4-3-3'])[0]} structure leaves us exposed if injuries or suspensions hit."
@@ -3049,8 +3136,9 @@ def generate_proactive_staff_initiatives(
         )
 
     academy_prospects = [p for p in players if _player_is_academy(p) and int(p.potential or 0) >= 82]
-    if academy_prospects and _can_fire("hoyd_academy_promotion", min_days=5):
+    if academy_prospects and _can_fire("hoyd_academy_promotion", min_days=14):
         top_prospect = sorted(academy_prospects, key=lambda p: -int(p.potential or 0))[0]
+        rating_band = (int(top_prospect.rating or 0) // 5) * 5
         generated.append(
             {
                 "sender_role": "head_of_youth_development",
@@ -3059,7 +3147,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "Head of Youth Development",
                 "topic": f"Academy Pathway Recommendation: {top_prospect.name} ({top_prospect.position})",
                 "priority": "normal",
-                "event_key": f"proactive:hoyd_prospect:{top_prospect.id}:day_{world_day}",
+                "event_key": f"proactive:hoyd_prospect:{top_prospect.id}:band_{rating_band}",
                 "body": (
                     f"I have been monitoring {top_prospect.name} (age {top_prospect.age}, {top_prospect.position}, GSI {top_prospect.rating}, "
                     f"potential {top_prospect.potential}). His technical development in academy fixtures has plateaued because he needs senior speed of play. "
@@ -3078,7 +3166,7 @@ def generate_proactive_staff_initiatives(
         )
 
     injured_or_fatigued = [p for p in players if int(p.injured_days or 0) > 0 or _player_fitness(p) < 72]
-    if injured_or_fatigued and _can_fire("med_load_warning", min_days=4):
+    if injured_or_fatigued and _can_fire("med_load_warning", min_days=7):
         names_list = ", ".join(p.name for p in injured_or_fatigued[:3])
         generated.append(
             {
@@ -3088,7 +3176,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "Medical Director",
                 "topic": "Biometric Load & Injury Prevention Alert",
                 "priority": "high" if len(injured_or_fatigued) >= 3 else "normal",
-                "event_key": f"proactive:med_load:day_{world_day}",
+                "event_key": f"proactive:med_load:w{(world_day - 1) // 7 + 1}",
                 "body": (
                     f"Our sports-science screening flagged elevated soft-tissue risk across {len(injured_or_fatigued)} squad members "
                     f"({names_list}). I have advised {mgr['name']} to rotate high-minute starters in the upcoming microcycle."
@@ -3101,7 +3189,7 @@ def generate_proactive_staff_initiatives(
             }
         )
 
-    if assistants and _can_fire("assistant_specialist_brief", min_days=6):
+    if assistants and _can_fire("assistant_specialist_brief", min_days=14):
         def_coach = next((a for a in assistants if a.get("specialist_role") == "defensive_organisation"), assistants[0])
         generated.append(
             {
@@ -3111,7 +3199,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": str(def_coach["title"]),
                 "topic": "Coaching Staff Specialist Note: Rest-Defence & Transition Spacing",
                 "priority": "normal",
-                "event_key": f"proactive:ac_def_note:day_{world_day}",
+                "event_key": f"proactive:ac_def_note:w{(world_day - 1) // 14 + 1}",
                 "body": (
                     f"In my video review with {mgr['name']}, I highlighted spacing between our pivot and centre-backs during high-pressing transitions. "
                     f"We are dedicating two tactical drills this week to rest-defence compactness."
@@ -3145,7 +3233,7 @@ def generate_proactive_staff_initiatives(
         protest_stage in ("petition", "banner_protest", "organised_boycott")
         or (ticket_tier in ("premium", "exploitative") and overall_sent < 60)
         or att_mod <= -8
-    ) and _can_fire("gm_supporter_commercial_alert", min_days=3):
+    ) and _can_fire("gm_supporter_commercial_alert", min_days=7):
         generated.append(
             {
                 "sender_role": "general_manager",
@@ -3154,7 +3242,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "General Manager",
                 "topic": f"Supporter & Matchday Revenue Alert ({protest_stage.replace('_', ' ').title()})",
                 "priority": "high" if protest_stage in ("banner_protest", "organised_boycott") else "normal",
-                "event_key": f"proactive:gm_supporter_alert:day_{world_day}",
+                "event_key": f"proactive:gm_supporter_alert:{protest_stage}:w{(world_day - 1) // 7 + 1}",
                 "body": (
                     f"From a commercial and governance perspective, our supporter sentiment sits at {overall_sent}/100 "
                     f"with active protest stage '{protest_stage.replace('_', ' ')}' under '{ticket_tier}' ticket pricing. "
@@ -3176,7 +3264,7 @@ def generate_proactive_staff_initiatives(
         int(sup_profile.confidence_in_manager or 68) <= 55
         or protest_stage in ("banner_protest", "organised_boycott")
         or high_media_pressure
-    ) and _can_fire("mgr_public_pressure_brief", min_days=4):
+    ) and _can_fire("mgr_public_pressure_brief", min_days=7):
         headline_ref = recent_stories[0].headline if recent_stories else "recent public scrutiny"
         generated.append(
             {
@@ -3186,7 +3274,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "First-Team Manager",
                 "topic": "Dressing-Room Focus Amid Media & Terrace Pressure",
                 "priority": "high",
-                "event_key": f"proactive:mgr_pressure_brief:day_{world_day}",
+                "event_key": f"proactive:mgr_pressure_brief:{protest_stage}:w{(world_day - 1) // 7 + 1}",
                 "body": (
                     f"The dressing room is aware of external noise surrounding '{headline_ref[:90]}' "
                     f"(supporter confidence in dugout: {sup_profile.confidence_in_manager}/100). "
@@ -3202,7 +3290,7 @@ def generate_proactive_staff_initiatives(
 
     if (
         int(sup_profile.accumulated_frustration or 0) >= 20 or int(fac.get("_manager_youth_rejection_streak") or 0) >= 1
-    ) and _can_fire("hoyd_supporter_youth_brief", min_days=5):
+    ) and _can_fire("hoyd_supporter_youth_brief", min_days=10):
         generated.append(
             {
                 "sender_role": "head_of_youth_development",
@@ -3211,7 +3299,7 @@ def generate_proactive_staff_initiatives(
                 "sender_title": "Head of Youth Development",
                 "topic": "Supporter Appetite for Homegrown Pathway Visibility",
                 "priority": "normal",
-                "event_key": f"proactive:hoyd_youth_sentiment:day_{world_day}",
+                "event_key": f"proactive:hoyd_youth_sentiment:w{(world_day - 1) // 10 + 1}",
                 "body": (
                     f"Community and regular matchgoing segments closely track our homegrown pathway. "
                     f"With accumulated supporter frustration at {sup_profile.accumulated_frustration}/100, "

@@ -630,7 +630,7 @@ def calculate_staff_effects(appointed_staff: dict[str, Any]) -> dict[str, Any]:
 
 def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
 
-    manager_id = str(snapshot.get("manager_id") or "gtex-staff-coach")
+    manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "gtex-staff-coach")
 
     rng = seeded("manager", manager_id)
 

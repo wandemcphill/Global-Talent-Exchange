@@ -2075,7 +2075,12 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
     supporters_data = living_institution.get_supporters_overview(session, state)
     media_data = living_institution.get_media_ecosystem_overview(session, state, limit=30)
-    archive_data = living_institution.get_institutional_history_archive(session, state, limit=80)
+    archive_data = living_institution.get_institutional_history_archive(
+        session,
+        state,
+        limit=80,
+        include_internal=can_private,
+    )
 
     # Merge permanent institutional history entries into timeline
     seen_ids = {t.get("id") for t in timeline}
@@ -2095,7 +2100,11 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                 }
             )
 
-    unified_pulse = living_institution.get_unified_club_pulse(session, state)
+    unified_pulse = living_institution.get_unified_club_pulse(
+        session,
+        state,
+        include_internal=can_private,
+    )
 
     return {
         "club": {

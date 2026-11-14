@@ -36,7 +36,7 @@ export function ClubStory() {
   const clubId = routeClubId || active?.club_id;
   const qc = useQueryClient();
 
-  const { data, isLoading } = useClubStory(clubId);
+  const { data, isLoading, isError, refetch } = useClubStory(clubId);
   const { data: clubProfile } = useClub(clubId);
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
@@ -176,6 +176,43 @@ export function ClubStory() {
     }
   };
 
+  if (!clubId) {
+    return (
+      <div
+        className="max-w-3xl mx-auto my-12 rounded-2xl border border-dashed border-slate-700 bg-slate-900/60 p-10 text-center space-y-3"
+        data-testid="club-story-empty"
+      >
+        <p className="text-base font-bold text-white">No Club Selected</p>
+        <p className="text-xs text-slate-400">
+          Claim or activate a club from the Control Center to view its institutional chronicle and living history.
+        </p>
+        <Link to="/app" className="inline-block px-4 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-black">
+          Return to Control Center
+        </Link>
+      </div>
+    );
+  }
+  if (isError) {
+    return (
+      <div
+        className="max-w-3xl mx-auto my-12 rounded-2xl border border-rose-500/30 bg-rose-950/20 p-10 text-center space-y-3"
+        data-testid="club-story-error"
+      >
+        <p className="text-base font-bold text-white">Unable to Load Club Chronicle</p>
+        <p className="text-xs text-rose-200/80">
+          Institutional history and supporter sentiment could not be reached right now.
+        </p>
+        <button
+          type="button"
+          onClick={() => refetch()}
+          className="px-4 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-black"
+          data-testid="club-story-retry-btn"
+        >
+          Retry Chronicle
+        </button>
+      </div>
+    );
+  }
   if (isLoading || !data) {
     return (
       <div className="py-24 text-center text-slate-500" data-testid="club-story-loading">

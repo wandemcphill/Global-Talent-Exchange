@@ -79,7 +79,7 @@ export function Newsroom() {
   }, [clubId]);
 
   // Map UI filter keys to backend category keys when querying, or filter client-side
-  const { data, isLoading, refetch } = useNewsroom(undefined, "all", 60);
+  const { data, isLoading, isError, refetch } = useNewsroom(undefined, "all", 60);
   const allArticles: any[] = data?.articles || [];
 
   const articles = allArticles.filter((a) => {
@@ -476,6 +476,25 @@ export function Newsroom() {
 
       {isLoading ? (
         <Loading label="Transmitting verified dispatches from the news wire..." />
+      ) : isError ? (
+        <div
+          className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-10 text-center space-y-4"
+          data-testid="newsroom-error-state"
+        >
+          <Newspaper className="mx-auto size-10 text-rose-400" />
+          <h3 className="gx-display text-2xl font-bold uppercase text-white">News Wire Temporarily Unavailable</h3>
+          <p className="text-sm text-rose-200/80 max-w-md mx-auto">
+            Unable to retrieve verified club dispatches right now. Retry the wire connection to resume live coverage.
+          </p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="px-5 py-2.5 rounded-xl bg-rose-500 hover:bg-rose-400 text-slate-950 text-xs font-black"
+            data-testid="newsroom-retry-btn"
+          >
+            Retry Wire Connection
+          </button>
+        </div>
       ) : articles.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/10 p-16 text-center space-y-4">
           <Newspaper className="mx-auto size-12 text-slate-600 mb-3" />

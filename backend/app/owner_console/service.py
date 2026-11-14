@@ -4,6 +4,7 @@ import logging
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any
+from uuid import uuid4
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
@@ -1235,6 +1236,7 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
             previous_staff_name=prev_mgr.get("name"),
             new_staff_name=profile.get("name"),
         )
+        comms_persistence.ensure_club_conversations_seeded(session, state)
     except Exception:
         logger.debug("rotate_staff_conversation_on_change skipped during appoint_manager", exc_info=True)
     autonomous_staff_engine.ensure_staff_relationship(
@@ -1258,13 +1260,14 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     try:
         from app.owner_console import living_institution
 
-        living_institution.record_managerial_change(
-            session,
-            state,
-            action="appointed",
-            new_manager=profile,
-            reason="owner_appointment",
-        )
+        with session.begin_nested():
+            living_institution.record_managerial_change(
+                session,
+                state,
+                action="appointed",
+                new_manager=profile,
+                reason="owner_appointment",
+            )
     except Exception as mgr_err:
         logger.warning("record_managerial_change appointed failed: %s", mgr_err)
 
@@ -1354,29 +1357,42 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
+    from app.owner_console import autonomous_staff_engine, comms_persistence, living_club_world, living_institution
+
     default_mgr = engine.manager_profile(engine.DEFAULT_MANAGER)
+    default_mgr["personality_profile"] = autonomous_staff_engine.derive_manager_personality(default_mgr)
     state.manager_json = default_mgr
     _morale_shift(session, club_id, -6)
 
     try:
-        from app.owner_console import living_institution, comms_persistence
-
-        living_institution.record_managerial_change(
-            session,
-            state,
-            action="dismissed",
-            new_manager=default_mgr,
-            previous_manager=current,
-            reason="dismissed_by_owner",
-            severance_gtex=compensation,
-        )
-        comms_persistence.rotate_staff_conversation_on_change(
-            session,
-            state,
-            role_key="first_team_manager",
-            previous_staff_name=current.get("name"),
-            new_staff_name=default_mgr.get("name"),
-        )
+        with session.begin_nested():
+            living_institution.record_managerial_change(
+                session,
+                state,
+                action="dismissed",
+                new_manager=default_mgr,
+                previous_manager=current,
+                reason="dismissed_by_owner",
+                severance_gtex=compensation,
+            )
+            comms_persistence.rotate_staff_conversation_on_change(
+                session,
+                state,
+                role_key="first_team_manager",
+                previous_staff_name=current.get("name"),
+                new_staff_name=default_mgr.get("name"),
+            )
+            comms_persistence.ensure_club_conversations_seeded(session, state)
+            autonomous_staff_engine.ensure_staff_relationship(
+                session,
+                state,
+                role_key="first_team_manager",
+                staff_id=str(default_mgr.get("manager_id") or "mgr-caretaker"),
+                staff_name=str(default_mgr.get("name") or "Caretaker Manager"),
+                staff_title="Caretaker Manager",
+                personality_profile=default_mgr.get("personality_profile"),
+            )
+            living_club_world.reconcile_staff_relationships(session, state)
     except Exception as mgr_err:
         logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
 
@@ -1728,6 +1744,27 @@ def tick_club(
 ) -> dict[str, Any]:
     from sqlalchemy.orm.attributes import flag_modified
     from app.owner_console import prestige_campus_comms
+
+    if _owner_tick_supports_row_locks(session):
+        locked_state = session.scalar(
+            select(OwnerClubState)
+            .where(OwnerClubState.club_id == state.club_id)
+            .execution_options(populate_existing=True)
+            .with_for_update()
+        )
+        if locked_state is not None:
+            state = locked_state
+
+    if (
+        world_tick_date is not None
+        and state.last_world_tick_date is not None
+        and state.last_world_tick_date >= world_tick_date
+    ):
+        return {
+            "world_day": state.world_day,
+            "new_items": 0,
+            "already_ticked": True,
+        }
 
     state.world_day += 1
     state.last_tick_at = now()
@@ -2163,21 +2200,58 @@ def tick_club(
     living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
 
     # Stage 3: Institutional ecosystem tick (supporters, media, rumours & 9-dimension reputation reconciliation)
-    try:
-        institutional_tick = living_institution.process_world_day_institutional_tick(session, state)
-    except Exception as inst_err:
-        logger.warning("process_world_day_institutional_tick failed: %s", inst_err)
-        institutional_tick = {}
+    current_world_day = int(state.world_day or 1)
+    pending_retry_days = sorted(
+        {
+            int(d)
+            for d in ((state.facilities_json or {}).get("_pending_institutional_retry_days") or [])
+            if int(d) < current_world_day
+        }
+    )
+    days_to_reconcile = [*pending_retry_days, current_world_day]
+    completed_days: list[int] = []
+    institutional_tick: dict[str, Any] = {}
+    failed_err: Exception | None = None
+    for target_day in days_to_reconcile:
+        try:
+            with session.begin_nested():
+                if target_day != current_world_day:
+                    state.world_day = target_day
+                institutional_tick = living_institution.process_world_day_institutional_tick(session, state)
+                completed_days.append(target_day)
+        except Exception as inst_err:
+            logger.warning("process_world_day_institutional_tick failed (world_day=%s): %s", target_day, inst_err)
+            failed_err = inst_err
+            break
+        finally:
+            if int(state.world_day or 1) != current_world_day:
+                state.world_day = current_world_day
+
+    if failed_err is None:
+        fac_clear = dict(state.facilities_json or {})
+        if "_pending_institutional_retry_days" in fac_clear:
+            fac_clear.pop("_pending_institutional_retry_days", None)
+            state.facilities_json = fac_clear
+            flag_modified(state, "facilities_json")
+    else:
+        fac_retry = dict(state.facilities_json or {})
+        remaining_days = [d for d in days_to_reconcile if d not in completed_days]
+        fac_retry["_pending_institutional_retry_days"] = remaining_days[-10:]
+        state.facilities_json = fac_retry
+        flag_modified(state, "facilities_json")
+        institutional_tick = {"error": str(failed_err), "retry_queued": True, "world_day": current_world_day}
 
     # Stage 4: Staff autonomy & proactive communications evaluated AFTER world + supporter + media reconciliation
     try:
-        autonomous_staff_engine.ensure_club_staff_identities(session, state)
-        comms_persistence.trigger_proactive_staff_communications_durable(
-            session,
-            user_id=state.owner_user_id,
-            club_id=state.club_id,
-            trigger_reason="world_tick",
-        )
+        with session.begin_nested():
+            autonomous_staff_engine.ensure_club_staff_identities(session, state)
+            comms_persistence.trigger_proactive_staff_communications_durable(
+                session,
+                user_id=state.owner_user_id,
+                club_id=state.club_id,
+                trigger_reason="world_tick",
+                include_overview=False,
+            )
     except Exception:
         logger.debug("proactive staff communications bypassed during tick", exc_info=True)
 
@@ -2952,45 +3026,50 @@ def hire_executive_staff(
         try:
             from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_managerial_change(
-                session,
-                state,
-                action="appointed",
-                new_manager=state.manager_json,
-                previous_manager=prev_mgr_holder if prev_mgr_holder.get("name") else None,
-                reason="staff_market_appointment",
-            )
-            comms_persistence.rotate_staff_conversation_on_change(
-                session,
-                state,
-                role_key="first_team_manager",
-                previous_staff_name=prev_mgr_holder.get("name"),
-                new_staff_name=state.manager_json.get("name"),
-            )
+            with session.begin_nested():
+                living_institution.record_managerial_change(
+                    session,
+                    state,
+                    action="appointed",
+                    new_manager=state.manager_json,
+                    previous_manager=prev_mgr_holder if prev_mgr_holder.get("name") else None,
+                    reason="staff_market_appointment",
+                )
+                comms_persistence.rotate_staff_conversation_on_change(
+                    session,
+                    state,
+                    role_key="first_team_manager",
+                    previous_staff_name=prev_mgr_holder.get("name"),
+                    new_staff_name=state.manager_json.get("name"),
+                )
+                comms_persistence.ensure_club_conversations_seeded(session, state)
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff hire failed: %s", mgr_err)
     else:
         try:
             from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_executive_staff_change(
-                session,
-                state,
-                action="hired",
-                staff_role=target_role,
-                staff_id=str(staff_id),
-                staff_name=str(candidate.get("name", "Executive")),
-                fee_gtex=int(signing_fee),
-                reason="executive_market_appointment",
-                idempotency_key=f"exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}",
-            )
-            comms_persistence.rotate_staff_conversation_on_change(
-                session,
-                state,
-                role_key=target_role,
-                previous_staff_name=prev_exec_holder.get("name"),
-                new_staff_name=str(candidate.get("name", "Executive")),
-            )
+            with session.begin_nested():
+                exec_count = len(exec_staff)
+                living_institution.record_executive_staff_change(
+                    session,
+                    state,
+                    action="hired",
+                    staff_role=target_role,
+                    staff_id=str(staff_id),
+                    staff_name=str(candidate.get("name", "Executive")),
+                    fee_gtex=int(signing_fee),
+                    reason="executive_market_appointment",
+                    idempotency_key=f"exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}:s{exec_count}:{appointed_record['appointed_at'][:19]}",
+                )
+                comms_persistence.rotate_staff_conversation_on_change(
+                    session,
+                    state,
+                    role_key=target_role,
+                    previous_staff_name=prev_exec_holder.get("name"),
+                    new_staff_name=str(candidate.get("name", "Executive")),
+                )
+                comms_persistence.ensure_club_conversations_seeded(session, state)
         except Exception as exec_err:
             logger.warning("executive appointment history hook failed: %s", exec_err)
 
@@ -3070,52 +3149,72 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
     state.facilities_json = facs
 
     if role == "first_team_manager":
+        from app.owner_console import autonomous_staff_engine, living_club_world
+
         default_mgr = engine.manager_profile(engine.DEFAULT_MANAGER)
+        default_mgr["personality_profile"] = autonomous_staff_engine.derive_manager_personality(default_mgr)
         state.manager_json = default_mgr
         _morale_shift(session, club_id, -4)
         try:
             from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_managerial_change(
-                session,
-                state,
-                action="dismissed",
-                new_manager=default_mgr,
-                previous_manager=current,
-                reason="dismissed_by_owner",
-                severance_gtex=compensation,
-            )
-            comms_persistence.rotate_staff_conversation_on_change(
-                session,
-                state,
-                role_key="first_team_manager",
-                previous_staff_name=current.get("name"),
-                new_staff_name=default_mgr.get("name"),
-            )
+            with session.begin_nested():
+                living_institution.record_managerial_change(
+                    session,
+                    state,
+                    action="dismissed",
+                    new_manager=default_mgr,
+                    previous_manager=current,
+                    reason="dismissed_by_owner",
+                    severance_gtex=compensation,
+                )
+                comms_persistence.rotate_staff_conversation_on_change(
+                    session,
+                    state,
+                    role_key="first_team_manager",
+                    previous_staff_name=current.get("name"),
+                    new_staff_name=default_mgr.get("name"),
+                )
+                comms_persistence.ensure_club_conversations_seeded(session, state)
+                autonomous_staff_engine.ensure_staff_relationship(
+                    session,
+                    state,
+                    role_key="first_team_manager",
+                    staff_id=str(default_mgr.get("manager_id") or "mgr-caretaker"),
+                    staff_name=str(default_mgr.get("name") or "Caretaker Manager"),
+                    staff_title="Caretaker Manager",
+                    personality_profile=default_mgr.get("personality_profile"),
+                )
+                living_club_world.reconcile_staff_relationships(session, state)
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff fire failed: %s", mgr_err)
     else:
+        from app.owner_console import autonomous_staff_engine, living_club_world
+
         try:
             from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_executive_staff_change(
-                session,
-                state,
-                action="dismissed",
-                staff_role=role,
-                staff_id=str(current.get("id") or role),
-                staff_name=str(current.get("name", "Executive")),
-                fee_gtex=int(compensation),
-                reason="dismissed_by_owner",
-                idempotency_key=f"exec_fire:{club_id}:{role}:d{state.world_day}",
-            )
-            comms_persistence.rotate_staff_conversation_on_change(
-                session,
-                state,
-                role_key=role,
-                previous_staff_name=current.get("name"),
-                new_staff_name=None,
-            )
+            with session.begin_nested():
+                living_institution.record_executive_staff_change(
+                    session,
+                    state,
+                    action="dismissed",
+                    staff_role=role,
+                    staff_id=str(current.get("id") or role),
+                    staff_name=str(current.get("name", "Executive")),
+                    fee_gtex=int(compensation),
+                    reason="dismissed_by_owner",
+                    idempotency_key=f"exec_fire:{club_id}:{role}:{current.get('id') or 'exec'}:d{state.world_day}:{uuid4().hex[:8]}",
+                )
+                comms_persistence.rotate_staff_conversation_on_change(
+                    session,
+                    state,
+                    role_key=role,
+                    previous_staff_name=current.get("name"),
+                    new_staff_name=None,
+                )
+                autonomous_staff_engine.retire_staff_relationship_on_vacancy(session, state, role_key=role)
+                living_club_world.reconcile_staff_relationships(session, state)
         except Exception as exec_err:
             logger.warning("executive dismissal history hook failed: %s", exec_err)
 

@@ -589,6 +589,7 @@ def rotate_staff_conversation_on_change(
 def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) -> None:
     backfill_legacy_club_communications(session, state)
 
+    identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
     squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
@@ -600,10 +601,16 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
 
     for member in STAFF_DIRECTORY:
         rk = member["role_key"]
+        raw_exec = exec_staff.get(rk)
+        if isinstance(raw_exec, dict) and raw_exec.get("is_vacant"):
+            continue
+        identity_entry = dict(identities.get(rk) or {})
+        if identity_entry.get("is_vacant"):
+            continue
         resolved_name = (
-            mgr.get("name", member["name"])
+            mgr.get("name") or identity_entry.get("name") or member["name"]
             if rk == "first_team_manager"
-            else (exec_staff.get(rk) or {}).get("name", member["name"])
+            else (raw_exec or {}).get("name") or identity_entry.get("name") or member["name"]
         )
         conv = _get_or_create_conversation(
             session,
@@ -669,7 +676,9 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         subject="Squad Morale, Matchday Preparation & Dressing Room",
     )
     if staff_conv.last_message_seq == 0:
-        gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
+        gm_name = (exec_staff.get("general_manager") or {}).get("name") or (
+            identities.get("general_manager") or {}
+        ).get("name", "Dayo Adeleke")
         mgr_name = mgr.get("name", "First-Team Head Coach")
         _append_message(
             session,
@@ -738,9 +747,13 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         session.scalar(select(func.count(OwnerClubMeeting.id)).where(OwnerClubMeeting.club_id == state.club_id)) or 0
     )
     if existing_mtg_count == 0:
-        gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
+        gm_name = (exec_staff.get("general_manager") or {}).get("name") or (
+            identities.get("general_manager") or {}
+        ).get("name", "Dayo Adeleke")
         mgr_name = mgr.get("name", "First-Team Head Coach")
-        hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name", "Femi Ogunleye")
+        hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name") or (
+            identities.get("head_of_youth_development") or {}
+        ).get("name", "Femi Ogunleye")
         seed_minutes = [
             {
                 "speaker": gm_name,
@@ -827,8 +840,36 @@ def sync_living_club_communications(
         or 0
     )
     treasury = int(_treasury_gtex(session, state.club_id))
+    week_bucket = (max(1, int(state.world_day or 1)) - 1) // 7 + 1
+    identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+    fac = dict(state.facilities_json or {})
+    exec_staff = dict(fac.get("_executive_staff") or {})
 
-    if injured:
+    med_info = dict(identities.get("medical_director") or {})
+    med_exec = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else None
+    med_vacant = bool(med_info.get("is_vacant") or (med_exec and med_exec.get("is_vacant")))
+    med_name = str((med_exec or {}).get("name") or med_info.get("name") or "Dr. Amara Okafor")
+
+    hoyd_info = dict(identities.get("head_of_youth_development") or {})
+    hoyd_exec = (
+        exec_staff.get("head_of_youth_development")
+        if isinstance(exec_staff.get("head_of_youth_development"), dict)
+        else None
+    )
+    hoyd_vacant = bool(hoyd_info.get("is_vacant") or (hoyd_exec and hoyd_exec.get("is_vacant")))
+    hoyd_name = str((hoyd_exec or {}).get("name") or hoyd_info.get("name") or "Femi Ogunleye")
+
+    scout_info = dict(identities.get("chief_scout") or {})
+    scout_exec = exec_staff.get("chief_scout") if isinstance(exec_staff.get("chief_scout"), dict) else None
+    scout_vacant = bool(scout_info.get("is_vacant") or (scout_exec and scout_exec.get("is_vacant")))
+    scout_name = str((scout_exec or {}).get("name") or scout_info.get("name") or "Kelechi Nwosu")
+
+    gm_info = dict(identities.get("general_manager") or {})
+    gm_exec = exec_staff.get("general_manager") if isinstance(exec_staff.get("general_manager"), dict) else None
+    gm_vacant = bool(gm_info.get("is_vacant") or (gm_exec and gm_exec.get("is_vacant")))
+    gm_name = str((gm_exec or {}).get("name") or gm_info.get("name") or "Dayo Adeleke")
+
+    if injured and not med_vacant:
         lead = injured[0]
         names = ", ".join(f"{p.name} ({p.injured_days}d)" for p in injured[:3])
         conv = _get_or_create_conversation(
@@ -839,13 +880,11 @@ def sync_living_club_communications(
             thread_key="staff:medical_director",
             participant_type="staff",
             participant_id="staff:medical_director",
-            participant_name="Dr. Amara Okafor",
+            participant_name=med_name,
             participant_role="Medical Director",
-            subject="Medical & Injury Availability",
+            subject=f"Medical & Injury Availability · {med_name}",
         )
-        ev_key = (
-            f"living:medical:{state.club_id}:day:{int(state.world_day or 1)}:{lead.id}:{int(lead.injured_days or 0)}"
-        )
+        ev_key = f"living:medical:{state.club_id}:{conv.id[:8]}:{lead.id}:w{week_bucket}"
         created.append(
             _append_message(
                 session,
@@ -853,7 +892,7 @@ def sync_living_club_communications(
                 sender_user_id=None,
                 sender_type="staff",
                 sender_id="staff:medical_director",
-                sender_name="Dr. Amara Okafor",
+                sender_name=med_name,
                 sender_role="Medical Director",
                 topic="Injury Assessment",
                 body=f"Medical bulletin: {len(injured)} squad player(s) injured — {names}. Recommend load management before next selection.",
@@ -871,7 +910,7 @@ def sync_living_club_communications(
             )
         )
 
-    if regens:
+    if regens and not hoyd_vacant:
         top_regen = max(regens, key=lambda item: int(item.potential or item.rating or 0))
         conv = _get_or_create_conversation(
             session,
@@ -881,11 +920,11 @@ def sync_living_club_communications(
             thread_key="staff:head_of_youth_development",
             participant_type="staff",
             participant_id="staff:head_of_youth_development",
-            participant_name="Femi Ogunleye",
+            participant_name=hoyd_name,
             participant_role="Head of Youth Development",
-            subject="Academy Prospect & Regen Pathway",
+            subject=f"Academy Prospect & Regen Pathway · {hoyd_name}",
         )
-        ev_key = f"living:hoyd:{state.club_id}:{top_regen.id}:rtg:{int(top_regen.rating or 0)}"
+        ev_key = f"living:hoyd:{state.club_id}:{conv.id[:8]}:w{week_bucket}"
         created.append(
             _append_message(
                 session,
@@ -893,7 +932,7 @@ def sync_living_club_communications(
                 sender_user_id=None,
                 sender_type="staff",
                 sender_id="staff:head_of_youth_development",
-                sender_name="Femi Ogunleye",
+                sender_name=hoyd_name,
                 sender_role="Head of Youth Development",
                 topic="Academy Standout",
                 body=f"{top_regen.name} ({top_regen.position}, age {top_regen.age}) leads the academy at OVR {top_regen.rating} / POT {top_regen.potential}. Consider structured senior minutes.",
@@ -911,7 +950,7 @@ def sync_living_club_communications(
             )
         )
 
-    if len(squad) < 18 or watchlist_count > 0:
+    if (len(squad) < 18 or watchlist_count > 0) and not scout_vacant:
         conv = _get_or_create_conversation(
             session,
             club_id=state.club_id,
@@ -920,11 +959,11 @@ def sync_living_club_communications(
             thread_key="staff:chief_scout",
             participant_type="staff",
             participant_id="staff:chief_scout",
-            participant_name="Kelechi Nwosu",
+            participant_name=scout_name,
             participant_role="Chief Scout",
-            subject="Recruitment & Watchlist Dossier",
+            subject=f"Recruitment & Watchlist Dossier · {scout_name}",
         )
-        ev_key = f"living:scout:{state.club_id}:sq:{len(squad)}:wl:{watchlist_count}"
+        ev_key = f"living:scout:{state.club_id}:{conv.id[:8]}:sq:{len(squad)}:wl:{watchlist_count}"
         created.append(
             _append_message(
                 session,
@@ -932,7 +971,7 @@ def sync_living_club_communications(
                 sender_user_id=None,
                 sender_type="staff",
                 sender_id="staff:chief_scout",
-                sender_name="Kelechi Nwosu",
+                sender_name=scout_name,
                 sender_role="Chief Scout",
                 topic="Recruitment Readiness",
                 body=f"Scouting desk logs {len(squad)} registered players and {watchlist_count} tracked prospect(s). Ready to propose targets matching treasury ({treasury} GTX).",
@@ -949,7 +988,7 @@ def sync_living_club_communications(
             )
         )
 
-    if pending_inbox > 0:
+    if pending_inbox > 0 and not gm_vacant:
         conv = _get_or_create_conversation(
             session,
             club_id=state.club_id,
@@ -958,11 +997,11 @@ def sync_living_club_communications(
             thread_key="staff:general_manager",
             participant_type="staff",
             participant_id="staff:general_manager",
-            participant_name="Dayo Adeleke",
+            participant_name=gm_name,
             participant_role="General Manager",
-            subject="Executive Boardroom & Pending Decisions",
+            subject=f"Executive Boardroom & Pending Decisions · {gm_name}",
         )
-        ev_key = f"living:gm:{state.club_id}:pending:{pending_inbox}:day:{int(state.world_day or 1)}"
+        ev_key = f"living:gm:{state.club_id}:{conv.id[:8]}:pending:w{week_bucket}"
         created.append(
             _append_message(
                 session,
@@ -970,7 +1009,7 @@ def sync_living_club_communications(
                 sender_user_id=None,
                 sender_type="staff",
                 sender_id="staff:general_manager",
-                sender_name="Dayo Adeleke",
+                sender_name=gm_name,
                 sender_role="General Manager",
                 topic="Pending Approvals",
                 body=f"You have {pending_inbox} open executive decision(s) awaiting sign-off. Treasury balance stands at {treasury} GTX.",
@@ -2285,6 +2324,7 @@ def trigger_proactive_staff_communications_durable(
     user_id: str,
     club_id: str,
     trigger_reason: str = "world_tick",
+    include_overview: bool = True,
 ) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
     ensure_club_conversations_seeded(session, state)
@@ -2328,12 +2368,14 @@ def trigger_proactive_staff_communications_durable(
         )
         delivered.append(_message_dict(msg))
     session.flush()
-    return {
+    payload: dict[str, Any] = {
         "club_id": club_id,
         "proactive_messages_delivered": len(delivered),
         "messages": delivered,
-        "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
     }
+    if include_overview:
+        payload["communications"] = get_club_communications_durable(session, user_id=user_id, club_id=club_id)
+    return payload
 
 
 def publish_club_announcement_durable(
