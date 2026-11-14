@@ -3,6 +3,7 @@ import { createRoot, Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { ClubOperationsCentre3D } from "./ClubOperationsCentre3D";
+import { buildDepartmentInterior } from "./operationsRoomInteriors";
 import type { DailyBriefing, LivingWorldTimelineResponse } from "@/lib/ownerBriefing";
 
 var mockToastSuccess = jest.fn();
@@ -883,4 +884,40 @@ describe("ClubOperationsCentre3D Living World Timeline Integration", () => {
     expect(resolvedUrl).toBe("/owner/clubs/club-tl-1/living-world/events/ev-actionable-1/resolve");
     expect(resolvedBody).toEqual({ action: "endorse_tactics" });
   });
+});
+
+describe("Club Operations Centre department interior blueprints", () => {
+  const departments = [
+    ["executive_office", "inspect_briefing"],
+    ["managers_office", "set_mentality"],
+    ["general_managers_office", "configure_delegation"],
+    ["academy_department", "commission_intake"],
+    ["medical_department", "run_conditioning"],
+    ["finance_commercial_office", "inspect_ledger"],
+  ] as const;
+
+  test.each(departments)(
+    "%s creates its own room and exposes its physical station action",
+    (destinationKey, action) => {
+      const built = buildDepartmentInterior({
+        destination_key: destinationKey,
+        label: destinationKey.replace(/_/g, " "),
+        subtitle: "Departmental operations and live club data",
+        accent_color: "#38bdf8",
+        hotspots: [
+          {
+            id: "primary_station",
+            label: "Primary Operations Terminal",
+            action,
+            offset: [0, 1.2, 0.5],
+          },
+        ],
+      } as any);
+
+      expect(built.group.name).toBe("department-interior-" + destinationKey);
+      expect(built.pickables).toHaveLength(3);
+      expect(built.pickables.every((item) => item.userData.destinationKey === destinationKey)).toBe(true);
+      expect(built.pickables[0].userData.hotspotAction).toBe(action);
+    },
+  );
 });
