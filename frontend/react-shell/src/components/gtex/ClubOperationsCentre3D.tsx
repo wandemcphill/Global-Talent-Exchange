@@ -6,6 +6,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { buildDepartmentInterior } from "./operationsRoomInteriors";
 import {
   Building2,
   Compass,
@@ -208,6 +209,8 @@ export function ClubOperationsCentre3D({
   const {
     data: hub,
     isLoading,
+    isError: isHubError,
+    error: hubError,
     refetch,
   } = useQuery<ClubOperationsHubPayload | null>({
     queryKey: ["club-operations-hub", clubId],
@@ -220,6 +223,23 @@ export function ClubOperationsCentre3D({
   });
 
   const destinations = useMemo(() => hub?.destinations || [], [hub?.destinations]);
+  const sceneConfigurationKey = useMemo(
+    () =>
+      destinations
+        .map((destination) =>
+          [
+            destination.destination_key,
+            destination.glb_model,
+            destination.position_3d.join(","),
+            destination.accent_color,
+            (destination.hotspots || [])
+              .map((hotspot) => [hotspot.id, hotspot.action, hotspot.label, hotspot.offset.join(",")].join("~"))
+              .join(";"),
+          ].join("|"),
+        )
+        .join("||"),
+    [destinations],
+  );
   const activeDestination: OperationsHubDestination | undefined = useMemo(
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
@@ -244,6 +264,11 @@ export function ClubOperationsCentre3D({
   const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...OVERVIEW_CAMERA_TARGET));
   const isTransitioningRef = useRef<boolean>(true);
   const roomGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const lightingObjectsRef = useRef<{
+    scene: THREE.Scene;
+    hemisphere: THREE.HemisphereLight;
+    sun: THREE.DirectionalLight;
+  } | null>(null);
   const activeDestRef = useRef<string>(activeDestKey);
   activeDestRef.current = activeDestKey;
   const lightingRef = useRef<"day" | "night">(lightingMode);
@@ -272,6 +297,9 @@ export function ClubOperationsCentre3D({
     }
     const container = mountRef.current;
     if (!container || destinations.length === 0) return;
+
+    setLoadedGlbCount(0);
+    setFailedGlbModels([]);
 
     let renderer: THREE.WebGLRenderer;
     try {
@@ -345,6 +373,7 @@ export function ClubOperationsCentre3D({
     sunLight.shadow.camera.top = d;
     sunLight.shadow.camera.bottom = -d;
     scene.add(sunLight);
+    lightingObjectsRef.current = { scene, hemisphere: hemiLight, sun: sunLight };
 
     // Architectural HQ Plaza Ground & Central Rotunda
     const plazaGeo = new THREE.CylinderGeometry(34, 36, 0.8, 64);
@@ -387,105 +416,11 @@ export function ClubOperationsCentre3D({
 
       const accent = new THREE.Color(dest.accent_color || "#38bdf8");
 
-      // Architectural Room Floor Pad
-      const padGeo = new THREE.BoxGeometry(10.5, 0.32, 8.5);
-      const padMat = new THREE.MeshStandardMaterial({
-        color: 0x111c33,
-        roughness: 0.35,
-        metalness: 0.4,
-      });
-      const padMesh = new THREE.Mesh(padGeo, padMat);
-      padMesh.position.y = 0.16;
-      padMesh.receiveShadow = true;
-      padMesh.userData = { destinationKey: dest.destination_key };
-      group.add(padMesh);
-      pickables.push(padMesh);
-
-      // Luminous Room Perimeter Frame
-      const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(10.6, 0.36, 8.6));
-      const borderMat = new THREE.LineBasicMaterial({ color: accent });
-      const borderLines = new THREE.LineSegments(borderGeo, borderMat);
-      borderLines.position.y = 0.18;
-      borderLines.name = "room-border";
-      group.add(borderLines);
-
-      // Glass Cutaway Partition Walls (Back & Side)
-      const glassMat = new THREE.MeshPhysicalMaterial({
-        color: accent,
-        transparent: true,
-        opacity: 0.16,
-        roughness: 0.15,
-        metalness: 0.1,
-      });
-      const backWall = new THREE.Mesh(new THREE.BoxGeometry(10.4, 3.2, 0.14), glassMat);
-      backWall.position.set(0, 1.75, -4.15);
-      backWall.userData = { destinationKey: dest.destination_key };
-      group.add(backWall);
-      pickables.push(backWall);
-
-      // Interior Command Desk / Tactical Table
-      const deskMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, 0.85, 1.6),
-        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.6 })
-      );
-      deskMesh.position.set(0, 0.75, 0.3);
-      deskMesh.castShadow = true;
-      deskMesh.userData = { destinationKey: dest.destination_key };
-      group.add(deskMesh);
-      pickables.push(deskMesh);
-
-      // Holographic Display Screen above Desk
-      const holoMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.6, 1.1),
-        new THREE.MeshBasicMaterial({
-          color: accent,
-          transparent: true,
-          opacity: 0.42,
-          side: THREE.DoubleSide,
-        })
-      );
-      holoMesh.position.set(0, 2.05, 0.3);
-      holoMesh.userData = { destinationKey: dest.destination_key };
-      group.add(holoMesh);
-      pickables.push(holoMesh);
-
-      // Dedicated Room PointLight
-      const roomLight = new THREE.PointLight(accent, 2.2, 16);
-      roomLight.position.set(0, 4.2, 0);
-      group.add(roomLight);
-
-      // Interactive Hotspot Beacons inside the Room
-      (dest.hotspots || []).forEach((hs) => {
-        const [hx, hy, hz] = hs.offset;
-        const beaconGroup = new THREE.Group();
-        beaconGroup.position.set(hx, hy, hz);
-
-        const orb = new THREE.Mesh(
-          new THREE.SphereGeometry(0.36, 20, 20),
-          new THREE.MeshStandardMaterial({
-            color: accent,
-            emissive: accent,
-            emissiveIntensity: 0.85,
-            roughness: 0.2,
-          })
-        );
-        orb.userData = {
-          destinationKey: dest.destination_key,
-          hotspotId: hs.id,
-          hotspotLabel: hs.label,
-        };
-        beaconGroup.add(orb);
-        pickables.push(orb);
-
-        const stem = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.05, 0.05, Math.max(0.4, hy), 8),
-          new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5 })
-        );
-        stem.position.y = -hy / 2;
-        beaconGroup.add(stem);
-
-        group.add(beaconGroup);
-      });
+      // Build a department-specific, walk-in cutaway interior.
+      // Each room has its own furniture, equipment, surfaces and named physical stations.
+      const interiorBuild = buildDepartmentInterior(dest);
+      group.add(interiorBuild.group);
+      pickables.push(...interiorBuild.pickables);
 
       // Corridor Light Path to Central Atrium
       const distToCenter = Math.hypot(rx, rz);
@@ -513,7 +448,7 @@ export function ClubOperationsCentre3D({
           box.getCenter(center);
 
           const maxDim = Math.max(size.x, size.y, size.z, 1);
-          const targetSpan = 5.4;
+          const targetSpan = 2.8;
           const scale = targetSpan / maxDim;
           model.scale.setScalar(scale);
 
@@ -521,9 +456,11 @@ export function ClubOperationsCentre3D({
           const scaledCenter = new THREE.Vector3();
           scaledBox.getCenter(scaledCenter);
 
-          model.position.x = -scaledCenter.x;
-          model.position.z = -scaledCenter.z - 1.5;
-          model.position.y = -scaledBox.min.y + 0.32;
+          // Keep the certified campus asset visible as an exterior landmark beside
+          // the department, rather than allowing it to obscure the new interior.
+          model.position.x = 7.0 - scaledCenter.x;
+          model.position.z = -scaledCenter.z - 0.8;
+          model.position.y = -scaledBox.min.y + 0.12;
 
           model.traverse((child) => {
             if ((child as THREE.Mesh).isMesh) {
@@ -615,6 +552,16 @@ export function ClubOperationsCentre3D({
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", onResize);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    resizeObserver?.observe(container);
+
+    const onWebglContextLost = (event: Event) => {
+      event.preventDefault();
+      setWebglStatus("fallback");
+      setRenderMode("2d");
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onWebglContextLost);
 
     setWebglStatus("ready");
 
@@ -658,17 +605,69 @@ export function ClubOperationsCentre3D({
       mounted = false;
       cancelAnimationFrame(animFrameId);
       window.removeEventListener("resize", onResize);
+      resizeObserver?.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("webglcontextlost", onWebglContextLost);
+      controls.removeEventListener("start", stopAutoTransition);
       controls.dispose();
+
+      // Release room geometry, GLB materials and generated screen textures on every teardown.
+      const disposedMaterials = new Set<THREE.Material>();
+      const disposedTextures = new Set<THREE.Texture>();
+      scene.traverse((object) => {
+        const renderable = object as THREE.Mesh;
+        const geometry = renderable.geometry;
+        if (geometry && typeof geometry.dispose === "function") geometry.dispose();
+        const materialValue = renderable.material;
+        const materials = Array.isArray(materialValue)
+          ? materialValue
+          : materialValue
+            ? [materialValue]
+            : [];
+        materials.forEach((material) => {
+          if (disposedMaterials.has(material)) return;
+          disposedMaterials.add(material);
+          Object.values(material as unknown as Record<string, unknown>).forEach((value) => {
+            if (
+              value &&
+              typeof value === "object" &&
+              "isTexture" in value &&
+              Boolean((value as THREE.Texture & { isTexture?: boolean }).isTexture)
+            ) {
+              const texture = value as THREE.Texture;
+              if (!disposedTextures.has(texture)) {
+                disposedTextures.add(texture);
+                texture.dispose();
+              }
+            }
+          });
+          material.dispose();
+        });
+      });
       envTex.dispose();
       pmrem.dispose();
       renderer.dispose();
+      lightingObjectsRef.current = null;
+      roomGroupsRef.current.clear();
       if (typeof window !== "undefined") {
         delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
       }
     };
-  }, [renderMode, destinations.length, lightingMode]);
+  }, [renderMode, sceneConfigurationKey]);
+
+  // Day/night is a light-rig change, not a reason to destroy and reload the entire scene.
+  useEffect(() => {
+    const lighting = lightingObjectsRef.current;
+    if (!lighting) return;
+    const night = lightingMode === "night";
+    const background = night ? 0x040914 : 0x091526;
+    lighting.scene.background = new THREE.Color(background);
+    lighting.scene.fog = new THREE.FogExp2(background, 0.0085);
+    lighting.hemisphere.intensity = night ? 0.45 : 1.1;
+    lighting.sun.color.setHex(night ? 0x60a5fa : 0xfffbeb);
+    lighting.sun.intensity = night ? 0.9 : 2.1;
+  }, [lightingMode]);
 
   const invalidateAll = async () => {
     await refetch();
@@ -923,6 +922,34 @@ export function ClubOperationsCentre3D({
         <div className="flex items-center gap-2 text-sm font-bold text-sky-300">
           <RefreshCw size={16} className="animate-spin" />
           <span>Initialising 3D Living Club Management Centre…</span>
+        </div>
+      </section>
+    );
+  }
+
+  if (isHubError) {
+    return (
+      <section
+        data-testid="living-club-management-centre-error"
+        className="rounded-2xl border border-rose-400/30 bg-[#060d1a] p-6 text-slate-200"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="mt-0.5 text-rose-300" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-black text-white">Club Operations Centre could not load</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              The department scene and operational controls are unavailable until the club data request succeeds.
+            </p>
+            <p className="mt-2 break-words text-xs text-rose-200">{errMsg(hubError)}</p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-500/25"
+            >
+              <RefreshCw size={13} />
+              Retry operations data
+            </button>
+          </div>
         </div>
       </section>
     );
