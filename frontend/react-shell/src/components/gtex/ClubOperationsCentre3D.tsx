@@ -7,6 +7,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { buildDepartmentInterior } from "./operationsRoomInteriors";
+import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
 import {
   Building2,
   Compass,
@@ -152,6 +153,7 @@ export function ClubOperationsCentre3D({
   const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
   const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
+  const activeQualityProfile = useMemo(() => GtexSceneRegistry.detectDeviceQuality(), []);
 
   // Interactive department action states
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
@@ -347,18 +349,18 @@ export function ClubOperationsCentre3D({
     setLoadedGlbCount(0);
     setFailedGlbModels([]);
 
-    const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 8;
-    const hardwareConcurrency = navigator.hardwareConcurrency || 8;
     const isCompactViewport =
       typeof window.matchMedia === "function"
         ? window.matchMedia("(max-width: 768px)").matches
         : window.innerWidth <= 768;
-    const lowPowerDevice = isCompactViewport || deviceMemory <= 4 || hardwareConcurrency <= 4;
+    const qualityTier = isCompactViewport && activeQualityProfile.tier === "ultra" ? "high" : activeQualityProfile.tier;
+    const qualityProfile = QUALITY_PROFILES[qualityTier];
+    const lowPowerDevice = qualityTier === "low" || qualityTier === "medium";
 
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: !lowPowerDevice,
+        antialias: qualityProfile.antialias,
         powerPreference: lowPowerDevice ? "low-power" : "high-performance",
       });
     } catch {
@@ -370,8 +372,8 @@ export function ClubOperationsCentre3D({
     const width = Math.max(320, container.clientWidth || 960);
     const height = Math.max(380, container.clientHeight || 520);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPowerDevice ? 1.25 : 1.75));
-    renderer.shadowMap.enabled = !lowPowerDevice;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+    renderer.shadowMap.enabled = qualityProfile.shadowsEnabled;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -416,8 +418,9 @@ export function ClubOperationsCentre3D({
       lightingRef.current === "day" ? 2.1 : 0.9
     );
     sunLight.position.set(28, 42, 24);
-    sunLight.castShadow = !lowPowerDevice;
-    sunLight.shadow.mapSize.set(lowPowerDevice ? 512 : 1024, lowPowerDevice ? 512 : 1024);
+    sunLight.castShadow = qualityProfile.shadowsEnabled;
+    const shadowMapSize = qualityTier === "ultra" ? 2048 : qualityTier === "high" ? 1024 : 512;
+    sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     sunLight.shadow.camera.near = 2;
     sunLight.shadow.camera.far = 120;
     const d = 38;
@@ -615,10 +618,17 @@ export function ClubOperationsCentre3D({
 
     const onWebglContextLost = (event: Event) => {
       event.preventDefault();
+      // Keep the canvas mounted so the browser can restore this WebGL context.
+      // The owner can still choose the 2D floorplan manually if restoration fails.
       setWebglStatus("fallback");
-      setRenderMode("2d");
+    };
+    const onWebglContextRestored = () => {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+      onResize();
+      setWebglStatus("ready");
     };
     renderer.domElement.addEventListener("webglcontextlost", onWebglContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", onWebglContextRestored);
 
     setWebglStatus("ready");
 
@@ -632,8 +642,59 @@ export function ClubOperationsCentre3D({
     }
 
     let animFrameId = 0;
-    const animate = () => {
+    let lastRenderAt = 0;
+    let qualityWindowStartedAt = performance.now();
+    let qualityFrameCount = 0;
+    let qualityFrameTotalMs = 0;
+    let slowQualityWindows = 0;
+    let fastQualityWindows = 0;
+    let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
+    const targetFrameInterval = 1000 / qualityProfile.targetFps;
+    const animate = (now: number) => {
       animFrameId = requestAnimationFrame(animate);
+      if (now - lastRenderAt < targetFrameInterval) return;
+      const frameDelta = lastRenderAt > 0 ? now - lastRenderAt : targetFrameInterval;
+      lastRenderAt = now;
+      qualityFrameCount += 1;
+      qualityFrameTotalMs += frameDelta;
+      if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
+        const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
+        if (averageFrameMs > 24) {
+          slowQualityWindows += 1;
+          fastQualityWindows = 0;
+        } else if (averageFrameMs < 18) {
+          fastQualityWindows += 1;
+          slowQualityWindows = 0;
+        } else {
+          slowQualityWindows = 0;
+          fastQualityWindows = 0;
+        }
+        if (slowQualityWindows >= 2 && adaptivePixelRatio > 0.85) {
+          adaptivePixelRatio = Math.max(0.85, adaptivePixelRatio * 0.85);
+          renderer.setPixelRatio(adaptivePixelRatio);
+          renderer.shadowMap.enabled = false;
+          sunLight.castShadow = false;
+          slowQualityWindows = 0;
+        } else if (
+          fastQualityWindows >= 3 &&
+          adaptivePixelRatio < Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio)
+        ) {
+          adaptivePixelRatio = Math.min(
+            window.devicePixelRatio || 1,
+            qualityProfile.pixelRatio,
+            adaptivePixelRatio / 0.85,
+          );
+          renderer.setPixelRatio(adaptivePixelRatio);
+          if (qualityProfile.shadowsEnabled) {
+            renderer.shadowMap.enabled = true;
+            sunLight.castShadow = true;
+          }
+          fastQualityWindows = 0;
+        }
+        qualityWindowStartedAt = now;
+        qualityFrameCount = 0;
+        qualityFrameTotalMs = 0;
+      }
 
       // Smoothly interpolate camera & target during room transitions without reloading scene
       if (isTransitioningRef.current) {
@@ -656,7 +717,7 @@ export function ClubOperationsCentre3D({
       controls.update();
       renderer.render(scene, camera);
     };
-    animate();
+    animate(performance.now());
 
     return () => {
       mounted = false;
@@ -666,6 +727,7 @@ export function ClubOperationsCentre3D({
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
       renderer.domElement.removeEventListener("webglcontextlost", onWebglContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", onWebglContextRestored);
       controls.removeEventListener("start", stopAutoTransition);
       controls.dispose();
 
