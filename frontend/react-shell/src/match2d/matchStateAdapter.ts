@@ -486,9 +486,66 @@ export function seekTime<T extends { timeSeconds: number }>(frames: T[], timeSec
   return { left, right, t };
 }
 
+export type HighlightPlaybackMode = "full" | "extended" | "key";
+
+const KEY_HIGHLIGHT_TYPES = new Set([
+  "goal",
+  "penalty_goal",
+  "own_goal",
+  "penalty",
+  "red_card",
+  "save",
+  "shot",
+]);
+
+const EXTENDED_HIGHLIGHT_TYPES = new Set([
+  ...Array.from(KEY_HIGHLIGHT_TYPES),
+  "miss",
+  "corner",
+  "free_kick",
+  "yellow_card",
+  "substitution",
+  "foul",
+  "header",
+  "through_ball",
+  "cross",
+]);
+
+/**
+ * Determines whether `timeSeconds` falls within the build-up or aftermath window `[-7s, +5s]`
+ * of an authoritative match event for the selected highlight mode (`full`, `extended`, or `key`).
+ */
+export function isHighlightMoment(
+  timeSeconds: number,
+  events: ReadonlyArray<Record<string, any>> | null | undefined,
+  mode: HighlightPlaybackMode = "full",
+): boolean {
+  if (mode === "full") return true;
+  if (!Array.isArray(events) || events.length === 0) return true;
+  const allowed = mode === "key" ? KEY_HIGHLIGHT_TYPES : EXTENDED_HIGHLIGHT_TYPES;
+  // Opening kickoff (0..8s) is always shown
+  if (timeSeconds <= 8) return true;
+  for (const ev of events) {
+    if (!ev) continue;
+    const rawType = String(ev.type || ev.event_type || "").toLowerCase();
+    if (!allowed.has(rawType)) continue;
+    const evSec = Number.isFinite(Number(ev.time_seconds))
+      ? Number(ev.time_seconds)
+      : Number.isFinite(Number(ev.minute ?? ev.clock_minute))
+        ? Number(ev.minute ?? ev.clock_minute) * 60
+        : NaN;
+    if (!Number.isFinite(evSec)) continue;
+    if (timeSeconds >= evSec - 7 && timeSeconds <= evSec + 5) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Steps a recorded replay cursor forward monotonically, respecting pause/resume,
- * playback speed changes, and clamping at the authoritative end-of-replay timestamp.
+ * playback speed changes, highlight mode fast-forwarding between dead phases,
+ * and clamping at the authoritative end-of-replay timestamp.
  */
 export function stepReplayClock(input: {
   currentTimeSeconds: number;
@@ -496,6 +553,8 @@ export function stepReplayClock(input: {
   durationSeconds: number;
   paused?: boolean;
   speed?: number;
+  highlightMode?: HighlightPlaybackMode;
+  events?: ReadonlyArray<Record<string, any>> | null;
 }): number {
   const maxDuration =
     Number.isFinite(input.durationSeconds) && input.durationSeconds > 0
@@ -508,9 +567,12 @@ export function stepReplayClock(input: {
   if (input.paused) {
     return current;
   }
-  const speed = Number.isFinite(input.speed) && (input.speed as number) > 0 ? (input.speed as number) : 1;
+  const baseSpeed = Number.isFinite(input.speed) && (input.speed as number) > 0 ? (input.speed as number) : 1;
+  const mode = input.highlightMode || "full";
+  const inHighlight = isHighlightMoment(current, input.events, mode);
+  const effectiveSpeed = mode === "full" || inHighlight ? baseSpeed : Math.max(baseSpeed * 3.5, 4.2);
   const deltaSeconds = Math.max(0, Number.isFinite(input.deltaMs) ? input.deltaMs / 1000 : 0);
-  return Math.min(maxDuration, current + deltaSeconds * speed);
+  return Math.min(maxDuration, current + deltaSeconds * effectiveSpeed);
 }
 
 export function acceptSnapshot<T extends SnapshotCursor>(previous: T | null, next: T | null): T | null {
@@ -1428,3 +1490,211 @@ export function resolveFeedPresentationStatus(input: {
 export function sceneObjectCount(playerCount: number, effect: boolean): number {
   return 1 + playerCount + 1 + (effect ? 1 : 0);
 }
+
+export type PitchShotMarker = {
+  id: string;
+  x: number;
+  y: number;
+  side: PitchSide;
+  outcome: "goal" | "saved" | "missed";
+  xg: number;
+  minute: number;
+  playerName?: string;
+};
+
+/**
+ * Extracts normalized on-pitch shot markers from authoritative match events and/or recorded frames
+ * so the interactive Shot Map overlay can render cumulative xG shot circles and goal trajectories.
+ */
+export function extractShotMarkers(
+  events: ReadonlyArray<Record<string, any>> | null | undefined,
+  frames?: ReadonlyArray<PitchFrame> | null,
+): PitchShotMarker[] {
+  if (!Array.isArray(events) || events.length === 0) return [];
+  const markers: PitchShotMarker[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < events.length; i += 1) {
+    const ev = events[i];
+    if (!ev) continue;
+    const rawType = String(ev.type || ev.event_type || "").toLowerCase();
+    if (!["goal", "penalty_goal", "shot", "save", "miss"].includes(rawType)) continue;
+
+    const minute = Number.isFinite(Number(ev.minute ?? ev.clock_minute))
+      ? Math.max(0, Math.round(Number(ev.minute ?? ev.clock_minute)))
+      : Number.isFinite(Number(ev.time_seconds))
+        ? Math.max(0, Math.floor(Number(ev.time_seconds) / 60))
+        : 0;
+    const sec = Number.isFinite(Number(ev.time_seconds)) ? Number(ev.time_seconds) : minute * 60;
+    const rawSide = String(ev.team || ev.side || "").toLowerCase();
+    // Note: on a "save" event, if the event team is the defending team, the shot was taken by the opposite side
+    let side: PitchSide = rawSide === "away" ? "away" : "home";
+    const id = String(ev.event_id || ev.id || `${rawType}:${Math.round(sec)}:${i}`);
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    // Check explicit coordinates on the event first, or look up the frame near `sec`
+    let x = Number(ev.x ?? ev.position?.x);
+    let y = Number(ev.y ?? ev.position?.y);
+    if ((!Number.isFinite(x) || !Number.isFinite(y)) && Array.isArray(frames) && frames.length > 0) {
+      const pair = seekTime(frames as PitchFrame[], Math.max(0, sec - 0.5));
+      const refFrame = pair.left;
+      if (refFrame) {
+        const shooter =
+          (ev.player_id || ev.primary_player_id
+            ? refFrame.players.find((p) => p.playerId === String(ev.player_id || ev.primary_player_id))
+            : null) ||
+          refFrame.players.find((p) => p.hasBall) ||
+          null;
+        if (shooter) {
+          x = shooter.x;
+          y = shooter.y;
+          side = shooter.side;
+        } else if (refFrame.ball) {
+          x = refFrame.ball.x;
+          y = refFrame.ball.y;
+        }
+      }
+    }
+
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      // Deterministic box/edge-of-box fallback coordinate based on side when event lacks spatial coords
+      x = side === "home" ? 0.84 : 0.16;
+      y = 0.5 + (((i % 5) - 2) * 0.06);
+    } else {
+      x = x > 1.5 ? x / 100 : x;
+      y = y > 1.5 ? y / 100 : y;
+    }
+
+    const clampedX = clampUnit(x, side === "home" ? 0.84 : 0.16);
+    const clampedY = clampUnit(y, 0.5);
+    const goalX = side === "home" ? 1 : 0;
+    const distToGoal = Math.hypot(goalX - clampedX, 0.5 - clampedY);
+    const rawXg = Number(ev.xg ?? ev.expected_goals);
+    const xg =
+      Number.isFinite(rawXg) && rawXg > 0
+        ? Math.min(0.95, Math.max(0.03, rawXg))
+        : rawType === "penalty_goal"
+          ? 0.78
+          : Math.min(0.68, Math.max(0.05, Number((0.52 * Math.exp(-distToGoal * 4.2)).toFixed(2))));
+
+    const outcome: PitchShotMarker["outcome"] =
+      rawType === "goal" || rawType === "penalty_goal"
+        ? "goal"
+        : rawType === "save"
+          ? "saved"
+          : "missed";
+
+    markers.push({
+      id,
+      x: clampedX,
+      y: clampedY,
+      side,
+      outcome,
+      xg,
+      minute,
+      playerName: String(ev.player_name || ev.primary_player_name || "").trim() || undefined,
+    });
+  }
+
+  return markers;
+}
+
+export type TouchlineNudge = {
+  id: string;
+  kind: "fatigue" | "discipline" | "deficit" | "protect_lead" | "momentum";
+  title: string;
+  detail: string;
+  actionLabel: string;
+  presetName?: "GEGENPRESS" | "LOW BLOCK" | "COUNTER" | "TIKI-TAKA";
+  playerId?: string;
+};
+
+/**
+ * Computes a contextual Assistant Manager touchline nudge strictly from authoritative live/replay state
+ * (player stamina, yellow cards, or second-half scoreline). Returns null when no intervention is warranted.
+ */
+export function deriveTouchlineNudge(input: {
+  players: ReadonlyArray<PitchPlayer>;
+  events?: ReadonlyArray<Record<string, any>> | null;
+  side: PitchSide;
+  minute: number;
+  homeScore: number;
+  awayScore: number;
+}): TouchlineNudge | null {
+  const { players, events, side, minute, homeScore, awayScore } = input;
+  const myPlayers = players.filter((p) => p.side === side);
+  if (myPlayers.length === 0) return null;
+
+  // 1. Fatigued player alert (< 48% stamina)
+  const fatigued = [...myPlayers]
+    .filter((p) => typeof p.staminaPct === "number" && Number.isFinite(p.staminaPct) && p.staminaPct < 48)
+    .sort((a, b) => (a.staminaPct ?? 100) - (b.staminaPct ?? 100))[0];
+  if (fatigued) {
+    const pct = Math.round(fatigued.staminaPct ?? 45);
+    return {
+      id: `fatigue:${fatigued.playerId}`,
+      kind: "fatigue",
+      title: `FATIGUE ALERT · #${fatigued.shirtNumber} ${fatigued.name} (${pct}% Stamina)`,
+      detail: "Work rate is dropping in transition. Consider a fresh substitution or slower tempo.",
+      actionLabel: "SHIFT TO TIKI-TAKA CONTROL",
+      presetName: "TIKI-TAKA",
+      playerId: fatigued.playerId,
+    };
+  }
+
+  // 2. Cautioned player on a yellow card
+  if (Array.isArray(events) && events.length > 0) {
+    const bookedIds = new Set<string>();
+    for (const ev of events) {
+      if (!ev) continue;
+      const t = String(ev.type || ev.event_type || "").toLowerCase();
+      if (t === "yellow_card") {
+        const pid = String(ev.player_id || ev.primary_player_id || "");
+        if (pid) bookedIds.add(pid);
+      }
+    }
+    const bookedOnPitch = myPlayers.find((p) => bookedIds.has(p.playerId));
+    if (bookedOnPitch) {
+      return {
+        id: `discipline:${bookedOnPitch.playerId}`,
+        kind: "discipline",
+        title: `DISCIPLINE RISK · #${bookedOnPitch.shirtNumber} ${bookedOnPitch.name} on a Yellow Card`,
+        detail: "One mistimed challenge away from a dismissal. Ease pressing intensity or prepare a sub.",
+        actionLabel: "EASE PRESS (TIKI-TAKA)",
+        presetName: "TIKI-TAKA",
+        playerId: bookedOnPitch.playerId,
+      };
+    }
+  }
+
+  const myScore = side === "away" ? awayScore : homeScore;
+  const theirScore = side === "away" ? homeScore : awayScore;
+
+  // 3. Second-half deficit
+  if (minute >= 55 && myScore < theirScore) {
+    return {
+      id: `deficit:${minute >= 75 ? "late" : "mid"}:${myScore}-${theirScore}`,
+      kind: "deficit",
+      title: `TOUCHLINE NUDGE · Trailing ${myScore}-${theirScore} (${minute}')`,
+      detail: "Push the defensive line +14m and trigger aggressive counter-pressing in the final third.",
+      actionLabel: "APPLY GEGENPRESS OVERLOAD",
+      presetName: "GEGENPRESS",
+    };
+  }
+
+  // 4. Late lead protection
+  if (minute >= 72 && myScore > theirScore) {
+    return {
+      id: `protect:${myScore}-${theirScore}`,
+      kind: "protect_lead",
+      title: `LEAD PROTECTION · Leading ${myScore}-${theirScore} (${minute}')`,
+      detail: "Compact the central block into a 5-3-2 Low Block to deny space in behind.",
+      actionLabel: "LOCK DOWN LOW BLOCK",
+      presetName: "LOW BLOCK",
+    };
+  }
+
+  return null;
+}
+

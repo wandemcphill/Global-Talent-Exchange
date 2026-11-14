@@ -253,4 +253,74 @@ describe("Pitch2DView broadcast HUD, honesty states, and live frame ingestion", 
     expect(lastPitchProps?.players[0]?.speedRatio).toBeCloseTo(0.78, 2);
     expect(lastPitchProps?.players[0]?.staminaPct).toBeCloseTo(89, 1);
   });
+
+  test("renders instant replay controls on goals, tactical touchline banner, and forwards shotMarkers", () => {
+    const onWatchReplay = jest.fn();
+    const onExitReplay = jest.fn();
+    act(() => {
+      root.render(
+        <Pitch2DView
+          matchId="match-replay-test"
+          timeSeconds={120}
+          homeScore={1}
+          awayScore={0}
+          showShotMap={true}
+          onWatchReplay={onWatchReplay}
+          isInstantReplay={false}
+          onExitInstantReplay={onExitReplay}
+          tacticalBanner="4-2-4 GEGENPRESS · PRESS 88% · LINE 82%"
+          events={[
+            {
+              event_id: "g-1",
+              type: "goal",
+              time_seconds: 120,
+              minute: 24,
+              team: "home",
+              player_id: "h9",
+              player_name: "V. Osimhen",
+              xg: 0.44,
+              x: 88,
+              y: 48,
+            } as any,
+          ]}
+          socketFrame={{
+            frame_id: "f-goal",
+            sequence: 10,
+            time_seconds: 120,
+            clock_minute: 24,
+            phase: "first_half",
+            event_type: "goal",
+            players: [
+              {
+                player_id: "h9",
+                side: "home",
+                name: "V. Osimhen",
+                shirt_number: 9,
+                role: "ST",
+                x: 88,
+                y: 48,
+                has_ball: true,
+              } as any,
+            ],
+            ball: { x: 99, y: 50, z: 0.4, owner_player_id: "h9" },
+          }}
+        />,
+      );
+    });
+
+    const tacticalToast = container.querySelector('[data-testid="touchline-tactical-toast"]');
+    expect(tacticalToast).not.toBeNull();
+    expect(tacticalToast?.textContent).toContain("4-2-4 GEGENPRESS");
+
+    const watchBtn = container.querySelector('[data-testid="watch-instant-replay-btn"]') as HTMLButtonElement;
+    expect(watchBtn).not.toBeNull();
+    act(() => {
+      watchBtn.click();
+    });
+    expect(onWatchReplay).toHaveBeenCalledWith(114);
+
+    expect(lastPitchProps?.showShotMap).toBe(true);
+    expect(lastPitchProps?.shotMarkers).toHaveLength(1);
+    expect(lastPitchProps?.shotMarkers[0]?.outcome).toBe("goal");
+  });
 });

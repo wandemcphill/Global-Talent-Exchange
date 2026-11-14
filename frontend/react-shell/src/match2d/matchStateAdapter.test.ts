@@ -12,8 +12,12 @@ import {
   seekTime,
   stepReplayClock,
   suppliedCrest,
+  isHighlightMoment,
+  extractShotMarkers,
+  deriveTouchlineNudge,
   type PitchFrame,
 } from "./matchStateAdapter";
+import { MatchAudioEngine } from "./matchAudio";
 
 describe("match state adapter", () => {
   const frames = [
@@ -428,6 +432,84 @@ describe("match state adapter", () => {
 
   test("one frame with 22 players, the ball and one effect is a bounded draw set", () => {
     expect(sceneObjectCount(22, true)).toBe(25);
+  });
+
+  test("highlight playback modes fast-forward dead phases and drop to normal speed during key moments", () => {
+    const events = [
+      { event_id: "g1", type: "goal", time_seconds: 60 },
+      { event_id: "c1", type: "corner", time_seconds: 120 },
+    ];
+    expect(isHighlightMoment(56, events, "key")).toBe(true);
+    expect(isHighlightMoment(30, events, "key")).toBe(false);
+    expect(isHighlightMoment(118, events, "key")).toBe(false);
+    expect(isHighlightMoment(118, events, "extended")).toBe(true);
+
+    const fastStep = stepReplayClock({
+      currentTimeSeconds: 30,
+      deltaMs: 1000,
+      durationSeconds: 300,
+      speed: 1,
+      highlightMode: "key",
+      events,
+    });
+    const normalStep = stepReplayClock({
+      currentTimeSeconds: 56,
+      deltaMs: 1000,
+      durationSeconds: 300,
+      speed: 1,
+      highlightMode: "key",
+      events,
+    });
+    expect(fastStep - 30).toBeGreaterThan(3.5);
+    expect(normalStep - 56).toBeCloseTo(1, 3);
+  });
+
+  test("extractShotMarkers and deriveTouchlineNudge derive accurate spatial & tactical insights", () => {
+    const markers = extractShotMarkers([
+      { event_id: "s1", type: "goal", time_seconds: 50, minute: 10, team: "home", x: 88, y: 50, xg: 0.42 },
+      { event_id: "s2", type: "save", time_seconds: 95, minute: 19, team: "away", x: 14, y: 46, xg: 0.28 },
+    ]);
+    expect(markers).toHaveLength(2);
+    expect(markers[0].outcome).toBe("goal");
+    expect(markers[0].xg).toBeCloseTo(0.42, 2);
+    expect(markers[1].outcome).toBe("saved");
+
+    const fatigueNudge = deriveTouchlineNudge({
+      players: [
+        { playerId: "p1", side: "home", x: 0.6, y: 0.4, shirtNumber: 11, name: "El Mala", staminaPct: 41 },
+      ],
+      events: [],
+      side: "home",
+      minute: 64,
+      homeScore: 1,
+      awayScore: 1,
+    });
+    expect(fatigueNudge?.kind).toBe("fatigue");
+    expect(fatigueNudge?.title).toContain("El Mala");
+
+    const deficitNudge = deriveTouchlineNudge({
+      players: [
+        { playerId: "p1", side: "home", x: 0.6, y: 0.4, shirtNumber: 11, name: "El Mala", staminaPct: 84 },
+      ],
+      events: [],
+      side: "home",
+      minute: 68,
+      homeScore: 0,
+      awayScore: 1,
+    });
+    expect(deficitNudge?.kind).toBe("deficit");
+    expect(deficitNudge?.presetName).toBe("GEGENPRESS");
+  });
+
+  test("MatchAudioEngine safely toggles and processes atmosphere updates in headless environments", () => {
+    const audio = new MatchAudioEngine();
+    expect(audio.isEnabled()).toBe(false);
+    audio.setEnabled(true);
+    expect(audio.isEnabled()).toBe(true);
+    audio.updateAtmosphere({ ballX: 0.88, dangerZone: "box", eventType: "goal", minute: 24 });
+    audio.triggerCue("tactical_order");
+    audio.dispose();
+    expect(audio.isEnabled()).toBe(false);
   });
 });
 

@@ -52,12 +52,16 @@ import {
 import type { PublicBrandAd } from "@/lib/commercial/api";
 import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
 import {
+  deriveTouchlineNudge,
   metricText,
   pitchSource,
   seekTime,
   stepReplayClock,
   suppliedCrest,
+  type HighlightPlaybackMode,
+  type PitchPlayer,
 } from "@/match2d/matchStateAdapter";
+import { sharedMatchAudio } from "@/match2d/matchAudio";
 import { MatchTimelineScrubber, buildTimelineModel } from "./match-center/MatchTimelineScrubber";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 
@@ -1492,6 +1496,17 @@ export default function MatchCenter() {
   const [showTactics, setShowTactics] = useState(false);
   const [showLanes, setShowLanes] = useState(false);
   const [showVoronoi, setShowVoronoi] = useState(false);
+  const [showShotMap, setShowShotMap] = useState(false);
+  const [highlightMode, setHighlightMode] = useState<HighlightPlaybackMode>("full");
+  const [instantReplay, setInstantReplay] = useState<{
+    returnSeconds: number;
+    endSeconds: number;
+    prevSpeed: number;
+    prevCamera: "2d" | "2.5d" | "zoom";
+  } | null>(null);
+  const [tacticalBanner, setTacticalBanner] = useState<string | null>(null);
+  const [dismissedNudgeId, setDismissedNudgeId] = useState<string | null>(null);
+  const tacticalFlashTimerRef = useRef<number | null>(null);
   const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom">("2.5d");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [show3DCutIn, setShow3DCutIn] = useState(false);
@@ -1575,7 +1590,39 @@ export default function MatchCenter() {
     }
   }, [id, acceptedLive, timedRecordedFrames, initialSeekSeconds, replayDurationSeconds]);
 
-  // Monotonic wall-clock progression for recorded replays.
+  const allMatchEvents = useMemo(
+    () => (viewerData?.events?.length ? viewerData.events : m?.events || []),
+    [viewerData?.events, m?.events],
+  );
+
+  const triggerInstantReplay = useCallback(
+    (replayStartSeconds: number) => {
+      const start = Math.max(0, replayStartSeconds);
+      setInstantReplay((prev) => ({
+        returnSeconds: prev ? prev.returnSeconds : Math.max(playbackSeconds, start + 6),
+        endSeconds: Math.min(replayDurationSeconds || start + 8, start + 8),
+        prevSpeed: prev ? prev.prevSpeed : speed,
+        prevCamera: prev ? prev.prevCamera : cameraMode,
+      }));
+      setPlaybackSeconds(start);
+      setSpeed(0.75);
+      setCameraMode("zoom");
+      setIsPaused(false);
+    },
+    [playbackSeconds, replayDurationSeconds, speed, cameraMode],
+  );
+
+  const exitInstantReplay = useCallback(() => {
+    setInstantReplay((prev) => {
+      if (!prev) return null;
+      setPlaybackSeconds(prev.returnSeconds);
+      setSpeed(prev.prevSpeed);
+      setCameraMode(prev.prevCamera);
+      return null;
+    });
+  }, []);
+
+  // Monotonic wall-clock progression for recorded replays (with Highlight Mode & Instant Replay support).
   useEffect(() => {
     if (acceptedLive || spectatorStream.lastFrame || isPaused || timedRecordedFrames.length < 2) {
       return undefined;
@@ -1585,18 +1632,37 @@ export default function MatchCenter() {
       const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
       const deltaMs = Math.max(0, nowMs - lastTickMs);
       lastTickMs = nowMs;
-      setPlaybackSeconds((current) =>
-        stepReplayClock({
+      setPlaybackSeconds((current) => {
+        if (instantReplay && current >= instantReplay.endSeconds) {
+          const ret = instantReplay.returnSeconds;
+          setSpeed(instantReplay.prevSpeed);
+          setCameraMode(instantReplay.prevCamera);
+          setInstantReplay(null);
+          return ret;
+        }
+        return stepReplayClock({
           currentTimeSeconds: current,
           deltaMs,
           durationSeconds: replayDurationSeconds,
           paused: isPaused,
           speed,
-        }),
-      );
+          highlightMode: instantReplay ? "full" : highlightMode,
+          events: allMatchEvents,
+        });
+      });
     }, 50);
     return () => window.clearInterval(timer);
-  }, [acceptedLive, spectatorStream.lastFrame, isPaused, timedRecordedFrames.length, replayDurationSeconds, speed]);
+  }, [
+    acceptedLive,
+    spectatorStream.lastFrame,
+    isPaused,
+    timedRecordedFrames.length,
+    replayDurationSeconds,
+    speed,
+    highlightMode,
+    allMatchEvents,
+    instantReplay,
+  ]);
 
   const replayPair = useMemo(
     () =>
@@ -1775,6 +1841,47 @@ export default function MatchCenter() {
     } as any;
   }, [acceptedLive?.stats, shown, viewerData?.home_team?.team_id, viewerData?.away_team?.team_id]);
 
+  // Synchronize Procedural Web Audio Engine with stadium audio toggle and active match events
+  useEffect(() => {
+    sharedMatchAudio.setEnabled(audioAtmosphere);
+  }, [audioAtmosphere]);
+
+  useEffect(() => {
+    return () => {
+      sharedMatchAudio.setEnabled(false);
+      if (tacticalFlashTimerRef.current) {
+        window.clearTimeout(tacticalFlashTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!audioAtmosphere) return;
+    const activeEv =
+      (spectatorStream.lastFrame as any)?.active_event?.event_type ||
+      (spectatorStream.lastFrame as any)?.event_type ||
+      acceptedLive?.active_event_type ||
+      activeReplayFrame?.active_event?.event_type ||
+      activeReplayFrame?.event_type ||
+      null;
+    const rawBall =
+      spectatorStream.lastFrame?.ball || acceptedLive?.ball || activeReplayFrame?.ball || null;
+    const rawBx = Number(rawBall?.position?.x ?? rawBall?.x ?? 50);
+    const normBx = Number.isFinite(rawBx) ? (rawBx > 1.5 ? rawBx / 100 : rawBx) : 0.5;
+    sharedMatchAudio.updateAtmosphere({
+      ballX: normBx,
+      dangerZone: (activeReplayFrame as any)?.danger_zone || null,
+      eventType: activeEv,
+      minute,
+    });
+  }, [
+    audioAtmosphere,
+    spectatorStream.lastFrame,
+    acceptedLive,
+    activeReplayFrame,
+    minute,
+  ]);
+
   if (isLoading || !m) return <Loading label="Loading match" />;
 
   const fallbackScore = shown
@@ -1832,7 +1939,50 @@ export default function MatchCenter() {
     setTempo(preset.tempo);
     setRisk(preset.risk);
     setFormation(preset.formation);
+    const label = `${preset.formation} ${preset.name || "TACTICS"} · PRESS ${preset.press}% · LINE ${preset.line}%`;
+    setTacticalBanner(label);
+    setShowTactics(true);
+    sharedMatchAudio.triggerCue("tactical_order");
+    if (tacticalFlashTimerRef.current) {
+      window.clearTimeout(tacticalFlashTimerRef.current);
+    }
+    tacticalFlashTimerRef.current = window.setTimeout(() => {
+      setTacticalBanner(null);
+      setShowTactics(false);
+    }, 3500);
   };
+
+  const activeRawPlayers: any[] =
+    spectatorStream.lastFrame?.players ||
+    (spectatorStream.lastFrame as any)?.pitch_players ||
+    acceptedLive?.pitch_players ||
+    activeReplayFrame?.players ||
+    activeReplayFrame?.pitch_players ||
+    [];
+  const activeNormalizedPlayers: PitchPlayer[] = activeRawPlayers.map((p: any) => {
+    const rawSide = String(p?.side || "").toLowerCase();
+    const pSide = p?.is_home === false || rawSide === "away" ? "away" : "home";
+    return {
+      playerId: String(p?.player_id || p?.id || `${pSide}-${p?.shirt_number || 0}`),
+      side: pSide,
+      x: Number(p?.x ?? p?.position?.x ?? 0.5),
+      y: Number(p?.y ?? p?.position?.y ?? 0.5),
+      shirtNumber: Number(p?.shirt_number || 0),
+      name: String(p?.name || p?.label || "Player"),
+      role: String(p?.role || p?.line || ""),
+      staminaPct: p?.stamina_pct ?? null,
+    };
+  });
+  const rawNudge = deriveTouchlineNudge({
+    players: activeNormalizedPlayers,
+    events: shown,
+    side,
+    minute,
+    homeScore: score.home,
+    awayScore: score.away,
+  });
+  const activeTouchlineNudge =
+    !done && rawNudge && rawNudge.id !== dismissedNudgeId ? rawNudge : null;
 
   return (
     <div data-testid="match-center-page" className="grid gap-6 max-md:flex max-md:flex-col lg:grid-cols-12">
@@ -1962,6 +2112,9 @@ export default function MatchCenter() {
 
               {/* Stadium Audio Ambiance Toggle */}
               <button
+                type="button"
+                data-testid="match-audio-toggle"
+                aria-pressed={audioAtmosphere}
                 onClick={() => {
                   setAudioAtmosphere(!audioAtmosphere);
                   toast.info(audioAtmosphere ? "Stadium crowd audio muted" : "Synthesized stadium atmosphere active");
@@ -2213,6 +2366,46 @@ export default function MatchCenter() {
                 >
                   <Activity size={11} /> PASSING LANES
                 </button>
+                <button
+                  type="button"
+                  data-testid="toggle-shot-map"
+                  aria-pressed={showShotMap}
+                  onClick={() => setShowShotMap(!showShotMap)}
+                  className={`flex items-center gap-1 rounded-sm px-2 py-1 text-[10px] font-bold transition-colors ${
+                    showShotMap ? "bg-amber-500/20 text-amber-300" : "bg-white/5 text-slate-400"
+                  }`}
+                >
+                  <Target size={11} /> SHOT MAP
+                </button>
+                {isRecordedReplay && (
+                  <div
+                    data-testid="highlight-mode-selector"
+                    className="flex items-center gap-0.5 rounded-sm border border-white/10 bg-black/40 p-0.5"
+                  >
+                    {(
+                      [
+                        { id: "full" as const, label: "FULL" },
+                        { id: "extended" as const, label: "EXTENDED" },
+                        { id: "key" as const, label: "KEY" },
+                      ] as const
+                    ).map((hm) => (
+                      <button
+                        key={hm.id}
+                        type="button"
+                        data-testid={`highlight-mode-${hm.id}`}
+                        aria-pressed={highlightMode === hm.id}
+                        onClick={() => setHighlightMode(hm.id)}
+                        className={`rounded-xs px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider transition-colors ${
+                          highlightMode === hm.id
+                            ? "bg-emerald-500 text-slate-950"
+                            : "text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {hm.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {match3dEnabled && (
                 <button
                   type="button"
@@ -2337,7 +2530,54 @@ export default function MatchCenter() {
                   showHeatmap={showHeatmap}
                   showTactics={showTactics}
                   showPassingLanes={showLanes}
+                  showShotMap={showShotMap}
+                  onWatchReplay={isRecordedReplay ? triggerInstantReplay : undefined}
+                  isInstantReplay={Boolean(instantReplay)}
+                  onExitInstantReplay={exitInstantReplay}
+                  tacticalBanner={tacticalBanner}
                 />
+                {activeTouchlineNudge && (
+                  <div
+                    data-testid="assistant-touchline-nudge"
+                    data-nudge-kind={activeTouchlineNudge.kind}
+                    className="mt-2 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-emerald-400/45 bg-slate-950/90 px-3 py-2 text-xs text-slate-200 shadow-lg"
+                  >
+                    <div className="flex min-w-0 items-center gap-2">
+                      <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-300">
+                        <Zap size={12} />
+                      </span>
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-emerald-300">{activeTouchlineNudge.title}</p>
+                        <p className="truncate text-[11px] text-slate-300">{activeTouchlineNudge.detail}</p>
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <button
+                        type="button"
+                        data-testid="apply-touchline-nudge-btn"
+                        onClick={() => {
+                          const preset = TACTICAL_PRESETS.find((p) => p.name === activeTouchlineNudge.presetName);
+                          if (preset) {
+                            applyPreset(preset);
+                          }
+                          setDismissedNudgeId(activeTouchlineNudge.id);
+                          toast.success(`Touchline adjustment applied: ${activeTouchlineNudge.actionLabel}`);
+                        }}
+                        className="rounded border border-emerald-400/60 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500 hover:text-slate-950"
+                      >
+                        {activeTouchlineNudge.actionLabel}
+                      </button>
+                      <button
+                        type="button"
+                        data-testid="dismiss-touchline-nudge-btn"
+                        onClick={() => setDismissedNudgeId(activeTouchlineNudge.id)}
+                        className="rounded border border-white/15 bg-white/5 px-2 py-1 text-[10px] font-bold uppercase text-slate-400 hover:text-white"
+                      >
+                        Dismiss
+                      </button>
+                    </div>
+                  </div>
+                )}
                 {isRecordedReplay && (<MatchTimelineScrubber model={timelineModel} currentSeconds={playbackSeconds} onSeek={(s) => setPlaybackSeconds(s)} />)}
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[

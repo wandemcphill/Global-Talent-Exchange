@@ -74,4 +74,49 @@ describe("match timeline scrubber", () => {
     act(() => root.unmount());
     host.remove();
   });
+
+  test("hovering a pin shows the rich event preview card and prev/next key buttons navigate between pins", () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onSeek = jest.fn();
+    const model = buildTimelineModel(
+      frames,
+      [
+        { event_id: "g1", type: "goal", time_seconds: 60, team: "home", player_name: "Osimhen" },
+        { event_id: "s1", type: "save", time_seconds: 240, team: "away", player_name: "Maignan" },
+      ],
+      400,
+    );
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(<MatchTimelineScrubber model={model} currentSeconds={120} onSeek={onSeek} />);
+    });
+
+    const prevBtn = host.querySelector("[data-testid='timeline-prev-event']") as HTMLButtonElement;
+    const nextBtn = host.querySelector("[data-testid='timeline-next-event']") as HTMLButtonElement;
+    expect(prevBtn).not.toBeNull();
+    expect(nextBtn).not.toBeNull();
+
+    act(() => {
+      prevBtn.click();
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(54);
+
+    act(() => {
+      nextBtn.click();
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(234);
+
+    const firstPin = host.querySelector("[data-testid='match-timeline-pin']") as HTMLButtonElement;
+    act(() => {
+      firstPin.focus();
+    });
+    const preview = host.querySelector("[data-testid='timeline-pin-preview']");
+    expect(preview).not.toBeNull();
+    expect(preview?.textContent).toContain("Osimhen");
+
+    act(() => root.unmount());
+    host.remove();
+  });
 });

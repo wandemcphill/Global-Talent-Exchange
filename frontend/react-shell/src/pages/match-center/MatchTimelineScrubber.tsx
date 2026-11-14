@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 
 export type TimelinePin = {
   id: string;
@@ -119,6 +119,16 @@ const PIN_STYLE: Record<TimelinePin["type"], string> = {
   save: "bg-sky-400",
 };
 
+const PIN_BADGE: Record<TimelinePin["type"], { text: string; tone: string }> = {
+  goal: { text: "⚽ GOAL", tone: "border-emerald-400/60 bg-emerald-500/20 text-emerald-200" },
+  penalty: { text: "PENALTY", tone: "border-cyan-400/60 bg-cyan-500/20 text-cyan-200" },
+  yellow_card: { text: "YELLOW CARD", tone: "border-yellow-400/60 bg-yellow-500/20 text-yellow-200" },
+  red_card: { text: "RED CARD", tone: "border-rose-400/60 bg-rose-500/20 text-rose-200" },
+  substitution: { text: "SUB", tone: "border-violet-400/60 bg-violet-500/20 text-violet-200" },
+  shot: { text: "SHOT", tone: "border-orange-400/60 bg-orange-500/20 text-orange-200" },
+  save: { text: "GREAT SAVE", tone: "border-sky-400/60 bg-sky-500/20 text-sky-200" },
+};
+
 export function MatchTimelineScrubber({
   model,
   currentSeconds,
@@ -128,21 +138,68 @@ export function MatchTimelineScrubber({
   currentSeconds: number;
   onSeek: (seconds: number) => void;
 }) {
+  const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const { durationSeconds, segments, pins } = model;
   if (durationSeconds <= 0) return null;
   const clamped = Math.min(durationSeconds, Math.max(0, currentSeconds));
   const pct = (sec: number) => `${Math.min(100, Math.max(0, (sec / durationSeconds) * 100))}%`;
   const activeSegment = segments.find((s) => clamped >= s.startSeconds && clamped <= s.endSeconds);
+  const hoveredPin = hoveredPinId ? pins.find((p) => p.id === hoveredPinId) || null : null;
+
+  const prevPin = [...pins].reverse().find((p) => p.timeSeconds < clamped - 2) || null;
+  const nextPin = pins.find((p) => p.timeSeconds > clamped + 2) || null;
 
   return (
-    <div data-testid="match-timeline-scrubber" className="mt-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
-      <div className="mb-1 flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
-        <span data-testid="match-timeline-phase">{activeSegment?.label || "Replay"}</span>
+    <div data-testid="match-timeline-scrubber" className="relative mt-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
+      <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+        <div className="flex items-center gap-2">
+          <span data-testid="match-timeline-phase">{activeSegment?.label || "Replay"}</span>
+          {pins.length > 0 && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-testid="timeline-prev-event"
+                disabled={!prevPin}
+                onClick={() => prevPin && onSeek(Math.max(0, prevPin.timeSeconds - 6))}
+                title={prevPin ? `Previous: ${prevPin.label}` : "No earlier key moment"}
+                className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[9px] font-black text-slate-300 transition hover:border-emerald-400/50 hover:text-white disabled:opacity-35"
+              >
+                ⏮ PREV KEY
+              </button>
+              <button
+                type="button"
+                data-testid="timeline-next-event"
+                disabled={!nextPin}
+                onClick={() => nextPin && onSeek(Math.max(0, nextPin.timeSeconds - 6))}
+                title={nextPin ? `Next: ${nextPin.label}` : "No later key moment"}
+                className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[9px] font-black text-slate-300 transition hover:border-emerald-400/50 hover:text-white disabled:opacity-35"
+              >
+                NEXT KEY ⏭
+              </button>
+            </div>
+          )}
+        </div>
         <span className="font-mono">
           {Math.floor(clamped / 60)}:{String(Math.floor(clamped % 60)).padStart(2, "0")} /{" "}
           {Math.floor(durationSeconds / 60)}:{String(Math.floor(durationSeconds % 60)).padStart(2, "0")}
         </span>
       </div>
+      {hoveredPin && (
+        <div
+          data-testid="timeline-pin-preview"
+          className="mb-1.5 flex items-center justify-between gap-2 rounded border border-white/15 bg-slate-900/95 px-2.5 py-1 text-[11px] text-slate-100 shadow-lg"
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span
+              className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${PIN_BADGE[hoveredPin.type].tone}`}
+            >
+              {PIN_BADGE[hoveredPin.type].text}
+            </span>
+            <span className="truncate font-bold">{hoveredPin.label}</span>
+          </div>
+          <span className="shrink-0 font-mono text-[10px] text-emerald-300">Click to watch build-up (-6s)</span>
+        </div>
+      )}
       <div className="relative h-6">
         <div className="absolute inset-x-0 top-2.5 flex h-1.5 overflow-hidden rounded-full bg-slate-800">
           {segments.map((s) => (
@@ -163,8 +220,12 @@ export function MatchTimelineScrubber({
             data-pin-type={pin.type}
             title={pin.label}
             aria-label={pin.label}
+            onMouseEnter={() => setHoveredPinId(pin.id)}
+            onMouseLeave={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
+            onFocus={() => setHoveredPinId(pin.id)}
+            onBlur={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
             onClick={() => onSeek(Math.max(0, pin.timeSeconds - 6))}
-            className={`absolute top-0 h-3 w-1.5 -translate-x-1/2 rounded-sm ${PIN_STYLE[pin.type]} hover:scale-150`}
+            className={`absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm transition-transform ${PIN_STYLE[pin.type]} hover:scale-150`}
             style={{ left: pct(pin.timeSeconds) }}
           />
         ))}

@@ -12,6 +12,7 @@ import {
   type PitchBall,
   type PitchFrame,
   type PitchPlayer,
+  type PitchShotMarker,
   type PitchSide,
 } from "./matchStateAdapter";
 import {
@@ -83,6 +84,8 @@ export type OrthographicPitchProps = {
   showHeatmap?: boolean;
   showTactics?: boolean;
   showPassingLanes?: boolean;
+  showShotMap?: boolean;
+  shotMarkers?: PitchShotMarker[];
   feedStatus?: FeedPresentationStatus;
   feedFreshness?: FeedPresentationStatus;
   feedAgeSeconds?: number | null;
@@ -370,6 +373,8 @@ function OrthographicPitchComponent({
   showHeatmap = false,
   showTactics = false,
   showPassingLanes = false,
+  showShotMap = false,
+  shotMarkers = [],
   feedStatus = "LIVE",
   feedFreshness,
   feedAgeSeconds = null,
@@ -401,6 +406,8 @@ function OrthographicPitchComponent({
     showHeatmap,
     showTactics,
     showPassingLanes,
+    showShotMap,
+    shotMarkers,
     feedStatus: effectiveFeedStatus,
     sampleFrame,
   });
@@ -432,6 +439,8 @@ function OrthographicPitchComponent({
     showHeatmap,
     showTactics,
     showPassingLanes,
+    showShotMap,
+    shotMarkers,
     feedStatus: effectiveFeedStatus,
     sampleFrame,
   };
@@ -980,6 +989,7 @@ function OrthographicPitchComponent({
       const hasCalloutOrTrajectory = Boolean(
         carrierPlayerObj ||
           selectedPlayerObj ||
+          activeEvent ||
           (activeTrajectory && activeTrajectory.length > 1 && resolvedBall?.inFlight),
       );
       const anyOverlayActive = Boolean(
@@ -987,6 +997,7 @@ function OrthographicPitchComponent({
           current.showHeatmap ||
           current.showTactics ||
           current.showPassingLanes ||
+          current.showShotMap ||
           hasCalloutOrTrajectory) &&
           activePlayers.length > 0,
       );
@@ -994,7 +1005,7 @@ function OrthographicPitchComponent({
       const activeOverlayCtx = anyOverlayActive ? getOverlayCtx() : null;
       if (anyOverlayActive && activeOverlayCtx) {
         const carrierKey = carrierPlayerObj ? playerIdentityKey(carrierPlayerObj) : "";
-        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.selectedKey || ""}:${carrierKey}:${activeEvent || ""}`;
+        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.showShotMap ? 1 : 0}:${current.shotMarkers?.length || 0}:${current.selectedKey || ""}:${carrierKey}:${activeEvent || ""}`;
         if (sig !== lastOverlaySignature || frameStart - lastOverlayPaintMs >= 55) {
           lastOverlaySignature = sig;
           lastOverlayPaintMs = frameStart;
@@ -1004,6 +1015,7 @@ function OrthographicPitchComponent({
             resolvedBall,
             ballTrajectory: activeTrajectory,
             trajectoryAlpha: activeAlpha,
+            eventType: activeEvent,
             selectedKey: current.selectedKey || null,
             carrierPlayer: carrierPlayerObj,
             selectedPlayer: selectedPlayerObj,
@@ -1013,6 +1025,8 @@ function OrthographicPitchComponent({
             showHeatmap: Boolean(current.showHeatmap),
             showTactics: Boolean(current.showTactics),
             showPassingLanes: Boolean(current.showPassingLanes),
+            showShotMap: Boolean(current.showShotMap),
+            shotMarkers: current.shotMarkers || [],
             heatmapBins,
             motionTracker,
           });
@@ -1293,6 +1307,7 @@ function OrthographicPitchComponent({
       data-overlay-heatmap={showHeatmap ? "on" : "off"}
       data-overlay-tactics={showTactics ? "on" : "off"}
       data-overlay-lanes={showPassingLanes ? "on" : "off"}
+      data-overlay-shotmap={showShotMap ? "on" : "off"}
       data-feed-status={effectiveFeedStatus}
     >
       <div
@@ -1388,6 +1403,11 @@ function OrthographicPitchComponent({
               PASSING LANES
             </span>
           )}
+          {showShotMap && (
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-amber-300" data-testid="active-overlay-shotmap">
+              SHOT MAP (xG)
+            </span>
+          )}
           {feedAgeSeconds !== null && feedAgeSeconds > 0 && feedStatus === "DELAYED" && (
             <span className="font-mono text-amber-300" data-testid="pitch-feed-age">
               {feedAgeSeconds}s old
@@ -1433,6 +1453,7 @@ function paintTacticalOverlays(
     resolvedBall?: ReturnType<typeof resolveBallPresentation>;
     ballTrajectory?: PitchBall[] | null;
     trajectoryAlpha?: number;
+    eventType?: string | null;
     selectedKey: string | null;
     carrierPlayer: PitchPlayer | null;
     selectedPlayer: PitchPlayer | null;
@@ -1442,6 +1463,8 @@ function paintTacticalOverlays(
     showHeatmap: boolean;
     showTactics: boolean;
     showPassingLanes: boolean;
+    showShotMap: boolean;
+    shotMarkers?: PitchShotMarker[];
     heatmapBins: Float32Array;
     motionTracker: PlayerMotionTracker;
   },
@@ -1767,6 +1790,214 @@ function paintTacticalOverlays(
       ctx.lineTo(pt.x * OVERLAY_W, pt.y * OVERLAY_H - liftOffset);
     }
     ctx.stroke();
+    ctx.restore();
+  }
+
+  const activeEventLower = String(input.eventType || "").toLowerCase();
+
+  // 5B. Set-Piece Staging & Delivery Target Zone (Corners, Free Kicks, Penalties)
+  if (
+    ball &&
+    (activeEventLower === "corner" || activeEventLower === "free_kick" || activeEventLower === "penalty")
+  ) {
+    ctx.save();
+    const bx = ball.x * OVERLAY_W;
+    const by = ball.y * OVERLAY_H;
+    const attackingRight = ball.x >= 0.5;
+    const targetX = (attackingRight ? 0.89 : 0.11) * OVERLAY_W;
+    const targetY = OVERLAY_H * 0.5;
+
+    if (activeEventLower === "penalty") {
+      strokePolyCircle(ctx, bx, by, 18, 12, 24);
+      ctx.strokeStyle = "rgba(250, 204, 21, 0.9)";
+      ctx.lineWidth = 2.0;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.lineTo((attackingRight ? 0.985 : 0.015) * OVERLAY_W, targetY - 18);
+      ctx.moveTo(bx, by);
+      ctx.lineTo((attackingRight ? 0.985 : 0.015) * OVERLAY_W, targetY + 18);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      drawRoundedBannerBox(
+        ctx,
+        Math.min(OVERLAY_W - 140, Math.max(8, bx - 64)),
+        Math.max(10, by - 36),
+        128,
+        16,
+        "rgba(2, 6, 23, 0.88)",
+        "rgba(250, 204, 21, 0.85)",
+      );
+      ctx.font = "bold 8.5px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#fde047";
+      safeFillText(
+        ctx,
+        "PENALTY SPOT · 12 YDS",
+        Math.min(OVERLAY_W - 76, Math.max(72, bx)),
+        Math.max(21, by - 25),
+      );
+    } else {
+      // Corner or Free Kick delivery corridor & box target zone
+      ctx.fillStyle = "rgba(56, 189, 248, 0.14)";
+      fillPolyCircle(ctx, targetX, targetY, 34, 48, 24);
+      ctx.strokeStyle = "rgba(56, 189, 248, 0.78)";
+      ctx.lineWidth = 1.8;
+      ctx.setLineDash([5, 4]);
+      strokePolyCircle(ctx, targetX, targetY, 34, 48, 24);
+
+      const midX = (bx + targetX) * 0.5;
+      const midY = (by + targetY) * 0.5 - 28;
+      ctx.beginPath();
+      ctx.moveTo(bx, by);
+      ctx.quadraticCurveTo(midX, midY, targetX, targetY);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const label = activeEventLower === "corner" ? "CORNER TARGET ZONE" : "SET-PIECE TARGET ZONE";
+      drawRoundedBannerBox(
+        ctx,
+        Math.min(OVERLAY_W - 134, Math.max(8, targetX - 64)),
+        targetY - 64,
+        128,
+        16,
+        "rgba(2, 6, 23, 0.88)",
+        "rgba(56, 189, 248, 0.8)",
+      );
+      ctx.font = "bold 8.5px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#7dd3fc";
+      safeFillText(ctx, label, Math.min(OVERLAY_W - 70, Math.max(72, targetX)), targetY - 53);
+    }
+    ctx.restore();
+  }
+
+  // 5C. Off-Ball Attacking Run Chevrons & Physical 50/50 Duel Ring
+  if (input.carrierPlayer) {
+    const carrier = input.carrierPlayer;
+    const attackDir = carrier.side === "home" ? 1 : -1;
+    const runners = players
+      .filter(
+        (p) =>
+          p.side === carrier.side &&
+          p.playerId !== carrier.playerId &&
+          !p.isGoalkeeper &&
+          ((p.speedRatio ?? 0) >= 0.66 ||
+            `${p.state || ""} ${p.animationState || ""}`.toLowerCase().includes("sprint") ||
+            `${p.state || ""} ${p.animationState || ""}`.toLowerCase().includes("attack")),
+      )
+      .slice(0, 2);
+
+    ctx.save();
+    for (const runner of runners) {
+      const tracked = input.motionTracker.get(playerIdentityKey(runner));
+      const angle = tracked ? tracked.facing : attackDir > 0 ? 0 : Math.PI;
+      const rx = runner.x * OVERLAY_W + Math.cos(angle) * 14;
+      const ry = runner.y * OVERLAY_H - Math.sin(angle) * 14;
+      const accent = runner.side === "home" ? homeColor : awayColor;
+      ctx.strokeStyle = hexToRgbaString(accent, 0.85);
+      ctx.lineWidth = 1.8;
+      for (let step = 0; step < 2; step += 1) {
+        const cx = rx + Math.cos(angle) * (step * 6);
+        const cy = ry - Math.sin(angle) * (step * 6);
+        ctx.beginPath();
+        ctx.moveTo(cx - Math.cos(angle - 0.65) * 5, cy + Math.sin(angle - 0.65) * 5);
+        ctx.lineTo(cx, cy);
+        ctx.lineTo(cx - Math.cos(angle + 0.65) * 5, cy + Math.sin(angle + 0.65) * 5);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
+  if (
+    ball &&
+    (activeEventLower === "tackle" || activeEventLower === "foul" || activeEventLower === "header")
+  ) {
+    ctx.save();
+    const bx = ball.x * OVERLAY_W;
+    const by = ball.y * OVERLAY_H;
+    ctx.strokeStyle =
+      activeEventLower === "foul" ? "rgba(251, 191, 36, 0.9)" : "rgba(56, 189, 248, 0.88)";
+    ctx.lineWidth = 2.2;
+    strokePolyCircle(ctx, bx, by, 16, 11, 18);
+    strokePolyCircle(ctx, bx, by, 24, 16, 18);
+    ctx.restore();
+  }
+
+  // 5D. Live Shot xG Threat Ring & Cumulative Interactive Shot Map Overlay
+  if (
+    ball &&
+    (activeEventLower === "shot" ||
+      activeEventLower === "goal" ||
+      activeEventLower === "save" ||
+      activeEventLower === "miss")
+  ) {
+    const startPt = ballTrajectory && ballTrajectory.length > 0 ? ballTrajectory[0] : ball;
+    const sx = startPt.x * OVERLAY_W;
+    const sy = startPt.y * OVERLAY_H;
+    ctx.save();
+    ctx.strokeStyle =
+      activeEventLower === "goal" ? "rgba(16, 185, 129, 0.92)" : "rgba(244, 63, 94, 0.88)";
+    ctx.lineWidth = 2.2;
+    strokePolyCircle(ctx, sx, sy, 18, 12, 20);
+    ctx.restore();
+  }
+
+  if (input.showShotMap) {
+    const markers = input.shotMarkers || [];
+    let homeXgSum = 0;
+    let awayXgSum = 0;
+    ctx.save();
+    for (const m of markers) {
+      if (m.side === "home") homeXgSum += m.xg;
+      else awayXgSum += m.xg;
+      const sx = m.x * OVERLAY_W;
+      const sy = m.y * OVERLAY_H;
+      const gx = (m.side === "home" ? 0.99 : 0.01) * OVERLAY_W;
+      const gy = OVERLAY_H * 0.5;
+      const radius = Math.max(5.5, Math.min(14, 4.5 + m.xg * 14));
+      const color =
+        m.outcome === "goal"
+          ? "#10b981"
+          : m.outcome === "saved"
+            ? "#38bdf8"
+            : "#f43f5e";
+
+      ctx.strokeStyle = hexToRgbaString(color, 0.55);
+      ctx.lineWidth = m.outcome === "goal" ? 2.2 : 1.3;
+      ctx.setLineDash(m.outcome === "goal" ? [] : [4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(sx, sy);
+      ctx.lineTo(gx, gy);
+      ctx.stroke();
+
+      ctx.setLineDash([]);
+      ctx.fillStyle = hexToRgbaString(color, 0.82);
+      fillPolyCircle(ctx, sx, sy, radius, radius, 18);
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.4;
+      strokePolyCircle(ctx, sx, sy, radius, radius, 18);
+    }
+
+    drawRoundedBannerBox(
+      ctx,
+      OVERLAY_W / 2 - 164,
+      OVERLAY_H - 28,
+      328,
+      20,
+      "rgba(2, 6, 23, 0.88)",
+      "rgba(251, 191, 36, 0.65)",
+    );
+    ctx.font = "bold 9.5px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#fde68a";
+    safeFillText(
+      ctx,
+      `ON-PITCH SHOT MAP · HOME ${homeXgSum.toFixed(2)} xG (${markers.filter((m) => m.side === "home").length}) — AWAY ${awayXgSum.toFixed(2)} xG (${markers.filter((m) => m.side === "away").length})`,
+      OVERLAY_W / 2,
+      OVERLAY_H - 15,
+    );
     ctx.restore();
   }
 
