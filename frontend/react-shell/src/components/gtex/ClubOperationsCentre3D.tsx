@@ -880,7 +880,7 @@ export function ClubOperationsCentre3D({
         `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/contract`
       );
       await invalidateAll();
-      toast.success(`Improved ${playerName}'s academy contract for 1,000 GTEX.`);
+      toast.success(`Improved ${playerName}'s academy contract for 1,000 Fan Coin.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
