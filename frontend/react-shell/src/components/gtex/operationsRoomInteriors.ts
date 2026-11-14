@@ -11,7 +11,11 @@ type Hotspot = OperationsHubDestination["hotspots"][number];
 
 const ROOM_WIDTH = 10.5;
 const ROOM_DEPTH = 8.5;
-const WALL_HEIGHT = 3.8;
+const WALL_HEIGHT = 4.25;
+
+function accentCssColor(accent: THREE.ColorRepresentation): string {
+  return typeof accent === "string" ? accent : `#${new THREE.Color(accent).getHexString()}`;
+}
 
 function standardMaterial(
   color: THREE.ColorRepresentation,
@@ -212,9 +216,16 @@ function addRoomShell(
   trim.position.set(0, 0.06, ROOM_DEPTH / 2 - 0.18);
   root.add(trim);
 
-  addDepartmentScreen(root, departmentLabel, departmentSubtitle, String(accent), [0, 2.85, -ROOM_DEPTH / 2 + 0.115], [3.4, 1.1]);
+  addDepartmentScreen(
+    root,
+    departmentLabel,
+    departmentSubtitle,
+    accentCssColor(accent),
+    [0, 3.55, -ROOM_DEPTH / 2 + 0.115],
+    [3.4, 0.92],
+  );
   const ceilingLight = new THREE.PointLight(accent, 1.8, 18);
-  ceilingLight.position.set(0, 3.35, -0.2);
+  ceilingLight.position.set(0, 3.85, -0.2);
   root.add(ceilingLight);
 }
 
@@ -271,8 +282,8 @@ function addExecutiveBoardroom(root: THREE.Group): void {
   });
   addBox(root, [3.2, 0.045, 0.025], [0, 1.13, -1.95], standardMaterial(0xd6b56d, 0.25, 0.7));
   addBox(root, [1.7, 0.08, 0.6], [0, 1.14, -1.95], standardMaterial(0x0d2235, 0.25, 0.2));
-  addBox(root, [2.4, 1.6, 0.12], [0, 1.75, -4.02], standardMaterial(0x0d1a2b, 0.28, 0.32));
-  addDepartmentScreen(root, "Boardroom", "Strategy, governance and owner decisions", "#d6b56d", [0, 1.95, -3.94], [2.1, 1.0]);
+  addBox(root, [2.4, 1.45, 0.12], [0, 1.82, -4.02], standardMaterial(0x0d1a2b, 0.28, 0.32));
+  addDepartmentScreen(root, "Boardroom", "Strategy, governance and owner decisions", "#d6b56d", [0, 1.88, -3.94], [2.1, 0.96]);
   addCylinder(root, 0.62, 0.62, 0.14, [-4.1, 0.08, -3.2], standardMaterial(0x162c3d, 0.3, 0.35));
   addCylinder(root, 0.48, 0.48, 0.28, [-4.1, 0.27, -3.2], standardMaterial(0x2c4b58, 0.25, 0.42));
   addBox(root, [1.0, 1.2, 0.5], [4.1, 0.6, -3.1], standardMaterial(0x202f40, 0.58, 0.18));
@@ -295,8 +306,8 @@ function addManagerTechnicalRoom(root: THREE.Group): void {
   pitchMark.rotation.x = -Math.PI / 2;
   pitchMark.position.set(0, 0.12, -2.25);
   root.add(pitchMark);
-  addBox(root, [3.8, 1.7, 0.16], [0, 2.15, -4.02], standardMaterial(0x0c1727, 0.22, 0.52));
-  addDepartmentScreen(root, "Tactical Theatre", "Formation, match preparation and squad decisions", "#38bdf8", [0, 2.1, -3.92], [3.3, 1.25]);
+  addBox(root, [3.8, 1.5, 0.16], [0, 1.9, -4.02], standardMaterial(0x0c1727, 0.22, 0.52));
+  addDepartmentScreen(root, "Tactical Theatre", "Formation, match preparation and squad decisions", "#38bdf8", [0, 1.9, -3.92], [3.3, 1.15]);
   for (let i = 0; i < 5; i += 1) {
     addBox(root, [0.74, 0.16, 0.46], [-4.15 + i * 0.92, 0.16, 3.55], standardMaterial(0x26384e, 0.42, 0.24));
     addBox(root, [0.74, 1.1, 0.08], [-4.15 + i * 0.92, 0.76, 3.73], standardMaterial(0x1c2c40, 0.52, 0.2));
@@ -316,8 +327,8 @@ function addGeneralManagerSuite(root: THREE.Group): void {
     addBox(root, [1.1, 0.16, 0.72], [4.0, 0.36 + index * 0.62, z], standardMaterial(0x26384a, 0.52, 0.14));
     addBox(root, [0.95, 0.05, 0.55], [4.0, 0.47 + index * 0.62, z], standardMaterial(0x394d61, 0.65, 0.08));
   });
-  addBox(root, [3.0, 1.8, 0.15], [0, 2.0, -4.02], standardMaterial(0x141d32, 0.32, 0.38));
-  addDepartmentScreen(root, "Administration", "Delegation, staffing and campus masterplan", "#a78bfa", [0, 2.0, -3.92], [2.7, 1.15]);
+  addBox(root, [3.0, 1.5, 0.15], [0, 1.85, -4.02], standardMaterial(0x141d32, 0.32, 0.38));
+  addDepartmentScreen(root, "Administration", "Delegation, staffing and campus masterplan", "#a78bfa", [0, 1.85, -3.92], [2.7, 1.1]);
   addBox(root, [1.0, 0.05, 0.65], [-3.9, 0.12, -3.4], standardMaterial(0x34485e, 0.52, 0.12));
 }
 
@@ -359,8 +370,8 @@ function addMedicalRehabilitationSuite(root: THREE.Group): void {
     addCylinder(root, 0.045, 0.045, 0.75, [x - 0.48, 0.26, -1.05], standardMaterial(0x526a7d), 10);
     addCylinder(root, 0.045, 0.045, 0.75, [x + 0.48, 0.26, -1.05], standardMaterial(0x526a7d), 10);
   });
-  addBox(root, [3.8, 1.55, 0.16], [0, 2.05, -4.02], standardMaterial(0x10283a, 0.3, 0.42));
-  addDepartmentScreen(root, "Sports Medicine", "Rehabilitation, player strain and recovery protocols", "#ec4899", [0, 2.1, -3.92], [3.2, 1.18]);
+  addBox(root, [3.8, 1.45, 0.16], [0, 1.9, -4.02], standardMaterial(0x10283a, 0.3, 0.42));
+  addDepartmentScreen(root, "Sports Medicine", "Rehabilitation, player strain and recovery protocols", "#ec4899", [0, 1.9, -3.92], [3.2, 1.1]);
   addBox(root, [0.12, 2.2, 0.12], [-0.4, 1.1, 2.9], standardMaterial(0x64748b, 0.3, 0.65));
   addBox(root, [0.12, 2.2, 0.12], [0.4, 1.1, 2.9], standardMaterial(0x64748b, 0.3, 0.65));
   addBox(root, [0.92, 0.08, 0.08], [0, 2.08, 2.9], standardMaterial(0x94a3b8, 0.3, 0.6));

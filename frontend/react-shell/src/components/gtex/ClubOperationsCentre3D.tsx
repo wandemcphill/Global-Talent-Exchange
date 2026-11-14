@@ -695,10 +695,13 @@ export function ClubOperationsCentre3D({
     let fastQualityWindows = 0;
     let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
     const targetFrameInterval = 1000 / qualityProfile.targetFps;
+    // Allow 2.5ms of rAF timer jitter so 60Hz monitors never drop every second frame
+    // and trigger false-positive adaptive quality downgrades.
+    const frameCapThreshold = Math.max(0, targetFrameInterval - 2.5);
     const animate = (now: number) => {
       animFrameId = requestAnimationFrame(animate);
-      if (now - lastRenderAt < targetFrameInterval) return;
-      const frameDelta = lastRenderAt > 0 ? now - lastRenderAt : targetFrameInterval;
+      if (lastRenderAt > 0 && now - lastRenderAt < frameCapThreshold) return;
+      const frameDelta = lastRenderAt > 0 ? Math.min(250, now - lastRenderAt) : targetFrameInterval;
       lastRenderAt = now;
       qualityFrameCount += 1;
       qualityFrameTotalMs += frameDelta;
@@ -1264,7 +1267,7 @@ export function ClubOperationsCentre3D({
               /* Non-WebGL / 2D Interactive Architectural Floorplan Fallback */
               <div
                 data-testid="club-operations-2d-floorplan"
-                className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-[#071224] via-[#091930] to-[#050c18] p-4 sm:p-6"
+                className="flex h-full w-full flex-col justify-between overflow-y-auto bg-gradient-to-br from-[#071224] via-[#091930] to-[#050c18] p-4 pt-14 sm:p-6 sm:pt-14"
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                   <div>
@@ -1379,32 +1382,34 @@ export function ClubOperationsCentre3D({
               </div>
             )}
 
-            {/* Interactive Room Hotspots Bar at Bottom of Viewport */}
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/90 p-1.5 backdrop-blur-md">
-                <span className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  Room Stations:
-                </span>
-                {activeDestination.hotspots.map((hs) => {
-                  const isHsActive = activeHotspotId === hs.id;
-                  return (
-                    <button
-                      key={hs.id}
-                      type="button"
-                      data-testid={`room-hotspot-${hs.id}`}
-                      onClick={() => setActiveHotspotId(hs.id)}
-                      className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
-                        isHsActive
-                          ? "bg-sky-500 text-slate-950 font-black"
-                          : "bg-white/5 text-slate-200 hover:bg-white/15"
-                      }`}
-                    >
-                      {hs.label}
-                    </button>
-                  );
-                })}
+            {/* Interactive Room Hotspots Bar at Bottom of 3D Viewport (2D cards render stations inline) */}
+            {renderMode === "3d" && (
+              <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/90 p-1.5 backdrop-blur-md">
+                  <span className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Room Stations:
+                  </span>
+                  {activeDestination.hotspots.map((hs) => {
+                    const isHsActive = activeHotspotId === hs.id;
+                    return (
+                      <button
+                        key={hs.id}
+                        type="button"
+                        data-testid={`room-hotspot-${hs.id}`}
+                        onClick={() => setActiveHotspotId(hs.id)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                          isHsActive
+                            ? "bg-sky-500 text-slate-950 font-black"
+                            : "bg-white/5 text-slate-200 hover:bg-white/15"
+                        }`}
+                      >
+                        {hs.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Quick Staff Communication Bar for Active Room Lead */}
