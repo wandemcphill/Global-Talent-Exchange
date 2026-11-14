@@ -920,4 +920,27 @@ describe("Club Operations Centre department interior blueprints", () => {
       expect(built.pickables[0].userData.hotspotAction).toBe(action);
     },
   );
+  test("shows a retryable error state when the operations hub request fails", async () => {
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) {
+        return Promise.reject(new Error("Operations hub temporarily unavailable"));
+      }
+      return Promise.resolve({ data: {} });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 60));
+    });
+
+    expect(container?.querySelector('[data-testid="living-club-management-centre-error"]')).not.toBeNull();
+    expect(container?.textContent).toContain("Retry operations data");
+  });
+
 });
