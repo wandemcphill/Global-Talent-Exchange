@@ -326,7 +326,7 @@ export function buildDepartmentInterior(destination: OperationsHubDestination): 
   group.name = "department-interior-" + destination.destination_key;
   group.userData = { destinationKey: destination.destination_key, departmentInterior: true };
   const pickables: THREE.Object3D[] = [];
-  const accent = new THREE.Color(destination.accent_color || "#38bdf8");
+  const accent = destination.accent_color || "#38bdf8";
 
   addRoomShell(group, accent, destination.label, destination.subtitle);
 
