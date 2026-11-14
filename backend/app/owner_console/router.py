@@ -663,7 +663,16 @@ def advance(club_id: str, user=Depends(get_current_user), session: Session = Dep
 
 @router.get("/clubs/{club_id}/supporters")
 def supporters(club_id: str, session: Session = Depends(get_session), user=Depends(get_current_user)) -> dict[str, Any]:
-    return {"leaderboard": money.supporter_leaderboard(session, club_id)}
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        payload: dict[str, Any] = {"leaderboard": money.supporter_leaderboard(session, club_id)}
+        state = service.get_state(session, club_id)
+        if state is not None:
+            payload.update(living_institution.get_supporters_overview(session, state))
+        return payload
+
+    return _run(session, _op)
 
 
 @router.get("/world/clubs")
@@ -3227,3 +3236,145 @@ def post_living_world_politics_matchday_bridge(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     return _run(session, _op)
+
+
+# ==============================================================================
+# Living Supporter, Media & Club Institutional History Ecosystem
+# ==============================================================================
+
+
+class SupporterEngagementRequest(BaseModel):
+    action_type: str = Field(
+        default="public_statement",
+        pattern="^(public_statement|supporter_meeting|community_initiative|respond_to_concern|ticketing_decision)$",
+    )
+    stance: str | None = Field(default=None, max_length=64)
+    tone: str | None = Field(default=None, max_length=64)
+    message: str | None = Field(default=None, max_length=1000)
+    statement: str | None = Field(default=None, max_length=1000)
+    ticket_price_tier: str | None = Field(default=None, max_length=32)
+    ticket_price_gtex: int | None = Field(default=None, ge=1, le=500)
+    community_investment_gtex: int = Field(default=0, ge=0, le=50000)
+
+
+class MediaStoryRespondRequest(BaseModel):
+    speaker_role: str | None = Field(default=None, pattern="^(owner|first_team_manager|general_manager)$")
+    responder_role: str | None = Field(default=None, pattern="^(owner|first_team_manager|general_manager)$")
+    response_stance: str | None = Field(default=None, max_length=64)
+    response_tone: str | None = Field(default=None, max_length=64)
+    statement_text: str | None = Field(default=None, max_length=1000)
+    response_text: str | None = Field(default=None, max_length=1000)
+
+
+@router.post("/clubs/{club_id}/supporters/engage")
+def post_club_supporters_engage(
+    club_id: str,
+    payload: SupporterEngagementRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        state = service.require_state(session, club_id, user.id)
+        tier = payload.ticket_price_tier
+        if tier is None and payload.ticket_price_gtex is not None:
+            if payload.ticket_price_gtex <= 12:
+                tier = "affordable"
+            elif payload.ticket_price_gtex <= 22:
+                tier = "standard"
+            elif payload.ticket_price_gtex <= 35:
+                tier = "premium"
+            else:
+                tier = "exploitative"
+        return living_institution.engage_supporters(
+            session,
+            state,
+            action_type=payload.action_type,
+            stance=payload.stance or payload.tone or "collaborative",
+            message=payload.message or payload.statement or "",
+            ticket_price_tier=tier,
+            community_investment_gtex=payload.community_investment_gtex,
+        )
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/media")
+def get_club_media_ecosystem_view(
+    club_id: str,
+    classification: str | None = None,
+    story_type: str | None = None,
+    outlet_key: str | None = None,
+    limit: int = 40,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        state = service.get_state(session, club_id)
+        if state is None:
+            raise service.OwnerError("club_not_found", 404)
+        return living_institution.get_media_ecosystem_overview(
+            session,
+            state,
+            classification=classification,
+            story_type=story_type,
+            outlet_key=outlet_key,
+            limit=limit,
+        )
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/media/{story_id}/respond")
+def post_club_media_story_respond(
+    club_id: str,
+    story_id: str,
+    payload: MediaStoryRespondRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        state = service.require_state(session, club_id, user.id)
+        try:
+            return living_institution.respond_to_media_story(
+                session,
+                state,
+                story_id=story_id,
+                speaker_role=payload.speaker_role or payload.responder_role or "owner",
+                response_stance=payload.response_stance or payload.response_tone or "measured",
+                statement_text=payload.statement_text or payload.response_text or "",
+            )
+        except ValueError as exc:
+            raise service.OwnerError(str(exc), 404) from exc
+
+    return _run(session, _op)
+
+
+@router.get("/clubs/{club_id}/history")
+def get_club_institutional_history_view(
+    club_id: str,
+    category: str | None = None,
+    limit: int = 80,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        state = service.get_state(session, club_id)
+        if state is None:
+            raise service.OwnerError("club_not_found", 404)
+        return living_institution.get_institutional_history_archive(
+            session,
+            state,
+            category=category,
+            limit=limit,
+        )
+
+    return _run(session, _op)
+

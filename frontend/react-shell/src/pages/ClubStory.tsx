@@ -12,7 +12,6 @@ import {
   Users,
   Search,
   Calendar,
-  Gift,
   Plus,
   Trash2,
   CheckCircle,
@@ -22,7 +21,13 @@ import {
   Newspaper,
   Inbox,
   Gauge,
-  ShoppingBag,
+  Megaphone,
+  Flame,
+  Trophy,
+  Sprout,
+  Swords,
+  History,
+  AlertTriangle,
 } from "lucide-react";
 
 export function ClubStory() {
@@ -35,25 +40,56 @@ export function ClubStory() {
   const { data: clubProfile } = useClub(clubId);
   const location = useLocation();
   const searchParams = new URLSearchParams(location.search);
+  const tabParam = searchParams.get("tab");
   const wantsLegacy =
     location.pathname.includes("trophies") ||
     location.pathname.includes("dynasty") ||
-    searchParams.get("tab") === "legacy" ||
+    tabParam === "legacy" ||
     location.hash === "#legacy";
+  const wantsSupporters = tabParam === "supporters" || location.hash === "#supporters";
+  const wantsArchive = tabParam === "archive" || location.hash === "#archive";
+
   const [activeTab, setActiveTab] = useState<
-    "timeline" | "issues" | "relationships" | "watchlist" | "schedule" | "dispatches" | "legacy"
-  >(wantsLegacy ? "legacy" : "timeline");
+    | "timeline"
+    | "supporters"
+    | "archive"
+    | "issues"
+    | "relationships"
+    | "watchlist"
+    | "schedule"
+    | "dispatches"
+    | "legacy"
+  >(wantsLegacy ? "legacy" : wantsSupporters ? "supporters" : wantsArchive ? "archive" : "timeline");
+
+  const [timelineCategoryFilter, setTimelineCategoryFilter] = useState<string>("all");
+
+  // Supporter engagement state
+  const [engageAction, setEngageAction] = useState<
+    "public_statement" | "supporter_meeting" | "community_initiative" | "respond_to_concern" | "ticketing_decision"
+  >("public_statement");
+  const [engageStance, setEngageStance] = useState<string>("collaborative");
+  const [engageMessage, setEngageMessage] = useState<string>(
+    "We respect our supporters' heritage and are building sustainable long-term success together."
+  );
+  const [engageTicketTier, setEngageTicketTier] = useState<string>("standard");
+  const [engageInvestment, setEngageInvestment] = useState<number>(300);
+  const [isEngaging, setIsEngaging] = useState<boolean>(false);
+  const [engageFeedback, setEngageFeedback] = useState<string | null>(null);
 
   useEffect(() => {
     if (
       location.pathname.includes("trophies") ||
       location.pathname.includes("dynasty") ||
-      searchParams.get("tab") === "legacy" ||
+      tabParam === "legacy" ||
       location.hash === "#legacy"
     ) {
       setActiveTab("legacy");
+    } else if (tabParam === "supporters" || location.hash === "#supporters") {
+      setActiveTab("supporters");
+    } else if (tabParam === "archive" || location.hash === "#archive") {
+      setActiveTab("archive");
     }
-  }, [location.pathname, location.search, location.hash]);
+  }, [location.pathname, location.search, location.hash, tabParam]);
 
   // Watchlist modal state
   const [isAddWatchlistOpen, setIsAddWatchlistOpen] = useState(false);
@@ -107,6 +143,39 @@ export function ClubStory() {
     }
   };
 
+  const handleEngageSupporters = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!clubId || isEngaging) return;
+    setIsEngaging(true);
+    setEngageFeedback(null);
+    try {
+      const res = await api.post(`/owner/clubs/${clubId}/supporters/engage`, {
+        action_type: engageAction,
+        stance: engageStance,
+        message: engageMessage,
+        ticket_price_tier: engageAction === "ticketing_decision" ? engageTicketTier : undefined,
+        community_investment_gtex: engageAction === "community_initiative" ? Number(engageInvestment) : 0,
+      });
+      const latestReaction = res.data?.recent_reactions?.[0];
+      if (latestReaction?.contradiction_detected) {
+        setEngageFeedback(
+          `Contradiction detected by supporters: ${latestReaction.contradiction_reason || latestReaction.summary}`
+        );
+      } else {
+        setEngageFeedback(
+          latestReaction?.headline || "Supporter engagement recorded and sentiment updated across all segments."
+        );
+      }
+      qc.invalidateQueries({ queryKey: ["story", clubId] });
+      qc.invalidateQueries({ queryKey: ["supporters", clubId] });
+      qc.invalidateQueries({ queryKey: ["club-history", clubId] });
+    } catch (err: any) {
+      setEngageFeedback(err?.response?.data?.detail?.detail || "Unable to complete supporter engagement action.");
+    } finally {
+      setIsEngaging(false);
+    }
+  };
+
   if (isLoading || !data) {
     return (
       <div className="py-24 text-center text-slate-500" data-testid="club-story-loading">
@@ -134,15 +203,54 @@ export function ClubStory() {
   const owner_legacy = data.owner_legacy || {};
   const prestige = owner_legacy.prestige ?? club.prestige ?? data.prestige ?? 50;
 
+  // Supporter Ecosystem & Institutional Archive payloads
+  const supportersData = data.supporters || {};
+  const supProfile = supportersData.profile || {
+    supporter_culture_label: "Community & Youth Traditionalists",
+    overall_sentiment: 65,
+    confidence_in_owner: 65,
+    confidence_in_manager: 68,
+    loyalty_index: 72,
+    matchday_enthusiasm: 66,
+    accumulated_frustration: 0,
+    ticket_price_tier: "standard",
+    active_protest_stage: "none",
+    attendance_modifier_pct: 0,
+    owner_credibility_score: 72,
+  };
+  const supSegments: any[] = supportersData.segments || [];
+  const supAtmosphere = supportersData.matchday_atmosphere || {};
+  const supReactions: any[] = supportersData.recent_reactions || [];
+
+  const archiveData = data.institutional_archive || {};
+  const seasonArchive: any[] = archiveData.season_archive || [];
+  const managerialHistory: any[] = archiveData.managerial_history || [];
+  const transferHistory: any[] = archiveData.transfer_history || [];
+  const academyLegacy: any[] = archiveData.academy_legacy || [];
+  const historicRivalries: any[] = archiveData.historic_rivalries || [];
+  const clubRecords = archiveData.club_records || {};
+  const narrativeChapters: any[] = archiveData.narrative_chapters || [];
+
+  const filteredTimeline = timeline.filter((item: any) => {
+    if (timelineCategoryFilter === "all") return true;
+    return item.category === timelineCategoryFilter;
+  });
+
   const manager = relationships.manager;
-  const staff = relationships.staff || (manager ? [{
-    name: manager.name || "Head Coach",
-    role: manager.role || "Head Coach",
-    rating: manager.rating ?? 75,
-    mentality: manager.mentality || "Tactical",
-    reputation: manager.reputation ?? "Regional",
-    portrait_url: manager.portrait_url,
-  }] : []);
+  const staff =
+    relationships.staff ||
+    (manager
+      ? [
+          {
+            name: manager.name || "Head Coach",
+            role: manager.role || "Head Coach",
+            rating: manager.rating ?? 75,
+            mentality: manager.mentality || "Tactical",
+            reputation: manager.reputation ?? "Regional",
+            portrait_url: manager.portrait_url,
+          },
+        ]
+      : []);
   const players = relationships.players || [];
 
   return (
@@ -222,8 +330,8 @@ export function ClubStory() {
           <div className="text-xs space-y-1">
             <p className="font-semibold text-amber-300">Shared Save Participant View</p>
             <p className="text-slate-300">
-              World match records, achievements, and public milestones are synchronized across this save.
-              Confidential scouting watchlists, internal contract expectations, and private owner inbox items are isolated and
+              World match records, achievements, and public milestones are synchronized across this save. Confidential
+              scouting watchlists, internal contract expectations, and private owner inbox items are isolated and
               redacted for non-owners.
             </p>
           </div>
@@ -257,17 +365,25 @@ export function ClubStory() {
                 {is_owner ? "Your Club" : "Opponent Club"}
               </span>
               <span className="text-xs text-slate-400">World Day {world_day}</span>
-              {club.city && <span className="text-xs text-slate-500">· {club.city}{club.country_code ? `, ${club.country_code}` : ""}</span>}
+              {club.city && (
+                <span className="text-xs text-slate-500">
+                  · {club.city}
+                  {club.country_code ? `, ${club.country_code}` : ""}
+                </span>
+              )}
             </div>
-            <h1 className="text-3xl font-extrabold text-white" data-testid="club-story-title">{club_name}</h1>
+            <h1 className="text-3xl font-extrabold text-white" data-testid="club-story-title">
+              {club_name}
+            </h1>
             <p className="text-xs text-slate-400">
-              {owner_legacy.tier || owner_legacy.era_label || "Modern Football Era"} · Prestige Level {prestige}/100
+              {owner_legacy.tier || owner_legacy.era_label || "Modern Football Era"} · Prestige Level {prestige}/100 ·{" "}
+              <span className="text-emerald-400 font-semibold">{supProfile.supporter_culture_label}</span>
             </p>
           </div>
         </div>
 
-        {/* Legacy Benchmarks */}
-        <div className="grid grid-cols-3 gap-3 shrink-0 text-center w-full md:w-auto">
+        {/* Legacy & Supporter Benchmarks */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 shrink-0 text-center w-full md:w-auto">
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
             <div className="text-[10px] uppercase font-bold text-slate-400">Honors</div>
             <div className="text-xl font-bold text-amber-400 mt-0.5">{achievements.length}</div>
@@ -277,6 +393,10 @@ export function ClubStory() {
             <div className="text-xl font-bold text-emerald-400 mt-0.5">{owner_legacy.win_rate_pct ?? 0}%</div>
           </div>
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
+            <div className="text-[10px] uppercase font-bold text-slate-400">Fan Sentiment</div>
+            <div className="text-xl font-bold text-cyan-400 mt-0.5">{supProfile.overall_sentiment}/100</div>
+          </div>
+          <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
             <div className="text-[10px] uppercase font-bold text-slate-400">Squad</div>
             <div className="text-xl font-bold text-blue-400 mt-0.5">{players.length}</div>
           </div>
@@ -284,13 +404,28 @@ export function ClubStory() {
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar" data-testid="club-story-tabs">
+      <div
+        className="flex items-center space-x-2 border-b border-slate-800 pb-3 overflow-x-auto no-scrollbar"
+        data-testid="club-story-tabs"
+      >
         {[
           { key: "timeline", label: "Timeline & Lore", icon: Clock },
+          { key: "supporters", label: `Supporters & Atmosphere (${supSegments.length || 6})`, icon: Megaphone },
+          { key: "archive", label: "Institutional Archive", icon: History },
           { key: "dispatches", label: `Club Dispatches (${club_news.length})`, icon: Newspaper },
-          { key: "issues", label: `Unresolved Issues (${unresolved_issues.length})`, icon: Shield, hidden: privacy_redacted },
+          {
+            key: "issues",
+            label: `Unresolved Issues (${unresolved_issues.length})`,
+            icon: Shield,
+            hidden: privacy_redacted,
+          },
           { key: "relationships", label: "Staff & Squad", icon: Users },
-          { key: "watchlist", label: `Scouting Dossier (${scouting_watchlist.length})`, icon: Search, hidden: privacy_redacted },
+          {
+            key: "watchlist",
+            label: `Scouting Dossier (${scouting_watchlist.length})`,
+            icon: Search,
+            hidden: privacy_redacted,
+          },
           { key: "schedule", label: `Save Fixtures (${upcomingMatches.length + recentMatches.length})`, icon: Calendar },
           { key: "legacy", label: "Owner Legacy", icon: Award },
         ]
@@ -319,18 +454,47 @@ export function ClubStory() {
       {/* TAB CONTENT: TIMELINE */}
       {activeTab === "timeline" && (
         <div className="space-y-4" data-testid="timeline-tab-content">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white">Chronological Club Events</h2>
-            <span className="text-xs text-slate-400">Verified transactions & pitch outcomes</span>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-bold text-white">Chronological Club Events & Institutional Ledger</h2>
+              <span className="text-xs text-slate-400">
+                Permanent club milestones, managerial transitions, transfers, academy debuts & pitch outcomes
+              </span>
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {[
+                { key: "all", label: "All Events" },
+                { key: "club_creation", label: "Founding" },
+                { key: "managerial_change", label: "Managers" },
+                { key: "player_signing", label: "Signings" },
+                { key: "academy_debut", label: "Academy Debuts" },
+                { key: "historic_rivalry", label: "Rivalries" },
+                { key: "supporter_movement", label: "Supporters" },
+              ].map((flt) => (
+                <button
+                  key={flt.key}
+                  type="button"
+                  onClick={() => setTimelineCategoryFilter(flt.key)}
+                  className={`px-2.5 py-1 rounded text-[11px] font-semibold transition-colors ${
+                    timelineCategoryFilter === flt.key
+                      ? "bg-amber-400 text-slate-950 font-bold"
+                      : "bg-slate-900 text-slate-400 hover:text-white border border-slate-800"
+                  }`}
+                >
+                  {flt.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {timeline.length === 0 ? (
+          {filteredTimeline.length === 0 ? (
             <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-12 text-center text-slate-500 text-xs">
-              No milestone events recorded yet. Complete showroom acquisitions, facility upgrades, or match days to populate the chronicle.
+              No milestone events recorded yet. Complete showroom acquisitions, facility upgrades, or match days to
+              populate the chronicle.
             </div>
           ) : (
             <div className="relative pl-6 border-l-2 border-slate-800 space-y-6">
-              {timeline.map((item: any, i: number) => {
+              {filteredTimeline.map((item: any, i: number) => {
                 return (
                   <div key={item.id || i} className="relative group">
                     {/* Bullet */}
@@ -340,9 +504,19 @@ export function ClubStory() {
 
                     <div className="bg-slate-900/70 border border-slate-800/80 rounded-xl p-4 space-y-2 hover:border-slate-700 transition-colors">
                       <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span className="uppercase font-semibold text-amber-400 tracking-wider text-[10px]">
-                          {item.category?.replace(/_/g, " ")}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <span className="uppercase font-semibold text-amber-400 tracking-wider text-[10px]">
+                            {item.category?.replace(/_/g, " ")}
+                          </span>
+                          {item.world_day && (
+                            <span className="text-[10px] text-slate-500">· World Day {item.world_day}</span>
+                          )}
+                          {item.is_major_milestone && (
+                            <span className="px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[9px] font-bold uppercase">
+                              Milestone
+                            </span>
+                          )}
+                        </div>
                         {item.created_at && <span>{new Date(item.created_at).toLocaleDateString()}</span>}
                       </div>
 
@@ -379,13 +553,565 @@ export function ClubStory() {
         </div>
       )}
 
+      {/* TAB CONTENT: SUPPORTERS & ATMOSPHERE */}
+      {activeTab === "supporters" && (
+        <div className="space-y-8" data-testid="supporters-tab-content">
+          {/* Active Protest / Campaign Banner if triggered */}
+          {supProfile.active_protest_stage && supProfile.active_protest_stage !== "none" && (
+            <div
+              className="rounded-2xl border border-rose-500/40 bg-rose-950/30 p-5 flex items-start gap-4 text-rose-200"
+              data-testid="supporter-protest-alert"
+            >
+              <AlertTriangle className="w-6 h-6 text-rose-400 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="text-[10px] font-black uppercase tracking-widest text-rose-400">
+                  Active Supporter Campaign · Stage: {String(supProfile.active_protest_stage).replace(/_/g, " ")}
+                </div>
+                <h3 className="text-base font-bold text-white">
+                  {supProfile.active_campaign_headline ||
+                    "Supporter Groups Demand Accountability & Clear Institutional Direction"}
+                </h3>
+                <p className="text-xs text-slate-300">
+                  Accumulated frustration ({supProfile.accumulated_frustration}/100) and recent decisions have triggered
+                  organised supporter action. Attendance impact: {supProfile.attendance_modifier_pct}%.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Supporter Overview KPIs */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Overall Sentiment</div>
+              <div className="text-2xl font-black text-emerald-400 mt-1">{supProfile.overall_sentiment}/100</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Weighted across 6 segments</div>
+            </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Owner Credibility</div>
+              <div className="text-2xl font-black text-amber-400 mt-1">{supProfile.owner_credibility_score}/100</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Statement vs action alignment</div>
+            </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Loyalty Index</div>
+              <div className="text-2xl font-black text-cyan-400 mt-1">{supProfile.loyalty_index}/100</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Institutional attachment</div>
+            </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Scar Tissue Memory</div>
+              <div className="text-2xl font-black text-rose-400 mt-1">{supProfile.accumulated_frustration}/100</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">Dampens single-win recovery</div>
+            </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Ticket Policy</div>
+              <div className="text-lg font-black text-white uppercase mt-1">{supProfile.ticket_price_tier}</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                Attendance mod: {supProfile.attendance_modifier_pct >= 0 ? "+" : ""}
+                {supProfile.attendance_modifier_pct}%
+              </div>
+            </div>
+            <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
+              <div className="text-[10px] uppercase font-bold text-slate-400">Matchday Atmosphere</div>
+              <div className="text-2xl font-black text-purple-400 mt-1">
+                {supAtmosphere.crowd_intensity ?? supProfile.matchday_enthusiasm}/100
+              </div>
+              <div className="text-[11px] text-slate-500 mt-0.5">{supAtmosphere.chant_volume_db ?? 94} dB roar</div>
+            </div>
+          </div>
+
+          {/* 6 Distinct Supporter Segments */}
+          <div className="space-y-4">
+            <div>
+              <h2 className="text-lg font-bold text-white">Supporter Segments & Distinct Expectations</h2>
+              <p className="text-xs text-slate-400">
+                Different supporter groups interpret club decisions, ticket pricing, signings, and youth pathways
+                differently.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="supporter-segments-grid">
+              {supSegments.map((seg: any) => (
+                <div
+                  key={seg.segment_key}
+                  data-testid={`segment-${seg.segment_key}`}
+                  className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3 flex flex-col justify-between"
+                >
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                        {seg.population_share_pct}% Share · {fmt(seg.member_count)} Fans
+                      </span>
+                      <span
+                        className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                          seg.sentiment >= 68
+                            ? "bg-emerald-500/20 text-emerald-300"
+                            : seg.sentiment >= 45
+                            ? "bg-amber-500/20 text-amber-300"
+                            : "bg-rose-500/20 text-rose-300"
+                        }`}
+                      >
+                        {seg.status_label}
+                      </span>
+                    </div>
+                    <h3 className="text-base font-bold text-white">{seg.segment_name}</h3>
+                    <p className="text-xs text-slate-400">{seg.expectations?.core_demand}</p>
+
+                    <div className="space-y-1 pt-1">
+                      <div className="flex justify-between text-[11px]">
+                        <span className="text-slate-400">Sentiment</span>
+                        <span className="font-mono font-bold text-white">{seg.sentiment}/100</span>
+                      </div>
+                      <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            seg.sentiment >= 68
+                              ? "bg-emerald-400"
+                              : seg.sentiment >= 45
+                              ? "bg-amber-400"
+                              : "bg-rose-400"
+                          }`}
+                          style={{ width: `${Math.min(100, seg.sentiment)}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2 text-[10px] text-slate-400">
+                      <div className="bg-slate-950/60 rounded p-2">
+                        <span className="block text-slate-500">Loyalty</span>
+                        <span className="font-bold text-cyan-300">{seg.loyalty}/100</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded p-2">
+                        <span className="block text-slate-500">Owner Trust</span>
+                        <span className="font-bold text-amber-300">{seg.owner_approval}/100</span>
+                      </div>
+                      <div className="bg-slate-950/60 rounded p-2">
+                        <span className="block text-slate-500">Scar Tissue</span>
+                        <span className="font-bold text-rose-300">{seg.scar_tissue}/100</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {seg.recent_memory && seg.recent_memory.length > 0 && (
+                    <div className="pt-3 border-t border-slate-800/80 text-[11px] text-slate-300">
+                      <span className="text-[10px] uppercase font-bold text-slate-500 block mb-1">Latest Memory</span>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate">{seg.recent_memory[0].headline}</span>
+                        <span
+                          className={`font-mono font-bold shrink-0 ${
+                            seg.recent_memory[0].delta >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {seg.recent_memory[0].delta >= 0 ? "+" : ""}
+                          {seg.recent_memory[0].delta}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Matchday Atmosphere & Owner Engagement Console */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Matchday Atmosphere Presentation Layer */}
+            <div className="bg-slate-900/85 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-400">
+                    Matchday Presentation Layer
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Stadium Atmosphere & Terrace Activity</h3>
+                </div>
+                <Flame className="w-5 h-5 text-amber-400" />
+              </div>
+
+              <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
+                <div className="text-xs font-bold text-emerald-300">
+                  {supAtmosphere.stadium_ambience || "Vibrant Home Support — Steady Chants from the Match-Going Core"}
+                </div>
+                <div className="text-[11px] text-slate-400">
+                  Dominant Mood:{" "}
+                  <b className="text-white uppercase">{String(supAtmosphere.dominant_mood || "committed").replace(/_/g, " ")}</b>{" "}
+                  · Rivalry Heat: <b className="text-amber-300">{supAtmosphere.rivalry_intensity ?? 15}/100</b>
+                </div>
+              </div>
+
+              {supAtmosphere.banners && supAtmosphere.banners.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Visible Stadium Banners</div>
+                  {supAtmosphere.banners.map((b: string, idx: number) => (
+                    <div
+                      key={idx}
+                      className="px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-xs font-mono font-bold text-amber-200"
+                    >
+                      "{b}"
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {supAtmosphere.chants && supAtmosphere.chants.length > 0 && (
+                <div className="space-y-1.5">
+                  <div className="text-[10px] font-bold uppercase text-slate-400">Terrace Chants & Reactions</div>
+                  {supAtmosphere.chants.map((c: string, idx: number) => (
+                    <div key={idx} className="text-xs text-slate-300 italic">
+                      ♪ "{c}"
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Owner Supporter Engagement Console */}
+            {is_owner && (
+              <div className="bg-slate-900/85 border border-slate-800 rounded-2xl p-6 space-y-4">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    Owner Engagement & Governance
+                  </div>
+                  <h3 className="text-lg font-bold text-white">Engage With Supporters</h3>
+                  <p className="text-xs text-slate-400">
+                    Statements that contradict actual club behaviour (such as promising affordable access while charging
+                    exploitative prices) reduce credibility instead of restoring confidence.
+                  </p>
+                </div>
+
+                <form onSubmit={handleEngageSupporters} className="space-y-3" data-testid="supporter-engage-form">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-semibold text-slate-300">Engagement Action</label>
+                      <select
+                        value={engageAction}
+                        onChange={(e) => setEngageAction(e.target.value as any)}
+                        data-testid="supporter-engage-action-select"
+                        className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                      >
+                        <option value="public_statement">Issue Public Club Statement</option>
+                        <option value="supporter_meeting">Convene Supporter Trust Meeting</option>
+                        <option value="community_initiative">Launch Community Initiative</option>
+                        <option value="respond_to_concern">Respond to Supporter Concerns</option>
+                        <option value="ticketing_decision">Update Matchday Ticket Pricing Policy</option>
+                      </select>
+                    </div>
+
+                    {engageAction === "ticketing_decision" ? (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300">Ticket Pricing Tier</label>
+                        <select
+                          value={engageTicketTier}
+                          onChange={(e) => setEngageTicketTier(e.target.value)}
+                          data-testid="supporter-ticket-tier-select"
+                          className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                        >
+                          <option value="affordable">Affordable (Community Access)</option>
+                          <option value="standard">Standard Matchday Rate</option>
+                          <option value="premium">Premium Pricing</option>
+                          <option value="exploitative">Exploitative Max Extraction</option>
+                        </select>
+                      </div>
+                    ) : engageAction === "community_initiative" ? (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300">Community Commitment (GTX)</label>
+                        <input
+                          type="number"
+                          min={100}
+                          max={10000}
+                          value={engageInvestment}
+                          onChange={(e) => setEngageInvestment(Number(e.target.value))}
+                          className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-semibold text-slate-300">Posture / Stance</label>
+                        <select
+                          value={engageStance}
+                          onChange={(e) => setEngageStance(e.target.value)}
+                          className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                        >
+                          <option value="collaborative">Collaborative & Transparent</option>
+                          <option value="concessional">Concessional & Reform-Minded</option>
+                          <option value="ambitious">Ambitious & High-Standards</option>
+                          <option value="dismissive">Dismissive / Defiant</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-slate-300">Official Message / Policy Note</label>
+                    <textarea
+                      rows={2}
+                      value={engageMessage}
+                      onChange={(e) => setEngageMessage(e.target.value)}
+                      data-testid="supporter-engage-message"
+                      className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-xs text-white"
+                    />
+                  </div>
+
+                  {engageFeedback && (
+                    <div
+                      className="p-3 rounded-lg bg-slate-950 border border-amber-500/30 text-xs text-amber-200"
+                      data-testid="supporter-engage-feedback"
+                    >
+                      {engageFeedback}
+                    </div>
+                  )}
+
+                  <button
+                    type="submit"
+                    disabled={isEngaging}
+                    data-testid="supporter-engage-submit"
+                    className="px-4 py-2 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs transition-colors"
+                  >
+                    {isEngaging ? "Recording..." : "Execute Supporter Engagement"}
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* TAB CONTENT: INSTITUTIONAL ARCHIVE */}
+      {activeTab === "archive" && (
+        <div className="space-y-8" data-testid="archive-tab-content">
+          {/* Fact-Grounded Historical Narrative Chapters */}
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-white">Historical Storytelling & Defining Eras</h2>
+            <p className="text-xs text-slate-400">
+              Generated strictly from verified club milestones, competition finishes, managerial tenures, and academy
+              breakthroughs.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="archive-narrative-chapters">
+              {narrativeChapters.map((ch: any) => (
+                <div
+                  key={ch.chapter_key}
+                  className="bg-slate-900/80 border border-amber-500/20 rounded-2xl p-5 space-y-2"
+                >
+                  <div className="text-[10px] font-black uppercase tracking-wider text-amber-400">{ch.era_label}</div>
+                  <h3 className="text-base font-bold text-white">{ch.title}</h3>
+                  <p className="text-xs text-slate-300 leading-relaxed">{ch.narrative}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Club All-Time Records */}
+          <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Trophy className="w-4 h-4 text-amber-400" /> All-Time Institutional Club Records
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 text-xs">
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Most Appearances</span>
+                <span className="font-bold text-white block mt-1">
+                  {clubRecords.most_appearances?.player_name || "—"}
+                </span>
+                <span className="text-[11px] text-emerald-400">
+                  {clubRecords.most_appearances ? `${clubRecords.most_appearances.appearances} apps` : "No matches yet"}
+                </span>
+              </div>
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Leading Goalscorer</span>
+                <span className="font-bold text-white block mt-1">
+                  {clubRecords.all_time_top_scorer?.player_name || "—"}
+                </span>
+                <span className="text-[11px] text-amber-400">
+                  {clubRecords.all_time_top_scorer ? `${clubRecords.all_time_top_scorer.goals} goals` : "0 goals"}
+                </span>
+              </div>
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Biggest Victory</span>
+                <span className="font-bold text-white block mt-1">
+                  {clubRecords.biggest_victory ? clubRecords.biggest_victory.score : "—"}
+                </span>
+                <span className="text-[11px] text-slate-400 truncate block">
+                  {clubRecords.biggest_victory ? `vs ${clubRecords.biggest_victory.opponent}` : "No wins yet"}
+                </span>
+              </div>
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Heaviest Defeat</span>
+                <span className="font-bold text-white block mt-1">
+                  {clubRecords.heaviest_defeat ? clubRecords.heaviest_defeat.score : "—"}
+                </span>
+                <span className="text-[11px] text-slate-400 truncate block">
+                  {clubRecords.heaviest_defeat ? `vs ${clubRecords.heaviest_defeat.opponent}` : "Unbeaten"}
+                </span>
+              </div>
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Record Signing</span>
+                <span className="font-bold text-white block mt-1">
+                  {clubRecords.record_signing?.player_name || "—"}
+                </span>
+                <span className="text-[11px] text-cyan-400">
+                  {clubRecords.record_signing ? `${fmt(clubRecords.record_signing.fee_gtex)} GTX` : "—"}
+                </span>
+              </div>
+              <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-3">
+                <span className="text-[10px] uppercase text-slate-500 block">Record Sale</span>
+                <span className="font-bold text-white block mt-1">{clubRecords.record_sale?.player_name || "—"}</span>
+                <span className="text-[11px] text-emerald-400">
+                  {clubRecords.record_sale ? `${fmt(clubRecords.record_sale.fee_gtex)} GTX` : "—"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Managerial History & Season Archive Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Managerial History */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-white">Managerial Roll of Honour & Tenures</h3>
+              {managerialHistory.length === 0 ? (
+                <p className="text-xs text-slate-500">No managerial tenures recorded yet.</p>
+              ) : (
+                <div className="space-y-3" data-testid="managerial-history-list">
+                  {managerialHistory.map((m: any) => (
+                    <div key={m.id} className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">{m.manager_name}</span>
+                        <span
+                          className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${
+                            m.status === "active"
+                              ? "bg-emerald-500/20 text-emerald-300"
+                              : "bg-slate-800 text-slate-400"
+                          }`}
+                        >
+                          {m.status}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300">{m.tenure_summary}</p>
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        Record: {m.wins}W-{m.draws}D-{m.losses}L ({m.win_rate_pct}% win) · Trophies: {m.trophies_won}
+                        {m.departure_reason ? ` · Reason: ${m.departure_reason.replace(/_/g, " ")}` : ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Season Archive */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-white">Season Campaign Archive</h3>
+              {seasonArchive.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  Complete your first competition season to populate the permanent season archive.
+                </p>
+              ) : (
+                <div className="space-y-3" data-testid="season-archive-list">
+                  {seasonArchive.map((s: any) => (
+                    <div key={s.id} className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-white">
+                          {s.season_label} · {s.competition_name}
+                        </span>
+                        <span className="text-xs font-black text-amber-400">
+                          Position #{s.final_position} ({s.promotion_status.replace(/_/g, " ")})
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-300">{s.narrative_summary}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Academy Legacy, Transfer Ledger & Historic Rivalries */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Academy Legacy */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Sprout className="w-4 h-4 text-emerald-400" /> Academy Graduates & Debuts ({academyLegacy.length})
+              </h3>
+              {academyLegacy.length === 0 ? (
+                <p className="text-xs text-slate-500">Promote academy prospects and play them in matches to record debuts.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {academyLegacy.slice(0, 6).map((g: any) => (
+                    <div key={g.id} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
+                      <div className="flex justify-between font-bold text-white">
+                        <span>
+                          {g.player_name} ({g.position})
+                        </span>
+                        <span className="text-emerald-400">{g.current_rating} OVR</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">
+                        Apps: {g.first_team_appearances} · Goals: {g.first_team_goals} ·{" "}
+                        {g.debut_opponent_name ? `Debut vs ${g.debut_opponent_name}` : "Awaiting senior debut"}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Transfer History */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-white">Transfer History Ledger ({transferHistory.length})</h3>
+              {transferHistory.length === 0 ? (
+                <p className="text-xs text-slate-500">No player arrivals or departures recorded yet.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {transferHistory.slice(0, 6).map((t: any) => (
+                    <div key={t.id} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
+                      <div className="flex justify-between font-bold text-white">
+                        <span>
+                          {t.player_name} ({t.overall_rating} OVR)
+                        </span>
+                        <span className={t.direction === "arrival" ? "text-cyan-400" : "text-amber-400"}>
+                          {t.direction.toUpperCase()} · {fmt(t.fee_gtex)} GTX
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400">{t.narrative_note}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Historic Rivalries */}
+            <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-5 space-y-3">
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                <Swords className="w-4 h-4 text-rose-400" /> Historic Rivalries ({historicRivalries.length})
+              </h3>
+              {historicRivalries.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  Rivalries evolve organically from repeated competition encounters and high-stakes clashes.
+                </p>
+              ) : (
+                <div className="space-y-2.5" data-testid="historic-rivalries-list">
+                  {historicRivalries.slice(0, 6).map((r: any) => (
+                    <div key={r.id} className="p-3 rounded-xl bg-slate-950/60 border border-slate-800 text-xs space-y-1">
+                      <div className="flex justify-between font-bold text-white">
+                        <span>vs {r.rival_club_name}</span>
+                        <span className="text-rose-400 uppercase text-[10px]">
+                          {r.rivalry_tier.replace(/_/g, " ")} ({r.intensity_score}/100)
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono">
+                        Played {r.matches_played}: {r.wins}W-{r.draws}D-{r.losses}L (GF {r.goals_for} / GA{" "}
+                        {r.goals_against})
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* TAB CONTENT: CLUB DISPATCHES */}
       {activeTab === "dispatches" && (
         <div className="space-y-4" data-testid="dispatches-tab-content">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-lg font-bold text-white">Verified Club Dispatches</h2>
-              <p className="text-xs text-slate-400">Public announcements and editorial reports grounded in club milestones</p>
+              <p className="text-xs text-slate-400">
+                Public announcements and editorial reports grounded in club milestones
+              </p>
             </div>
             <Link
               to="/app/newsroom"
@@ -399,7 +1125,8 @@ export function ClubStory() {
           {club_news.length === 0 ? (
             <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-12 text-center text-slate-500 text-xs">
               <Newspaper className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-              No public news dispatches recorded for this club yet. Match outcomes and major acquisitions will publish dispatches here.
+              No public news dispatches recorded for this club yet. Match outcomes and major acquisitions will publish
+              dispatches here.
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -474,7 +1201,13 @@ export function ClubStory() {
                       {issue.deadline_at && (
                         <span className="text-[11px] text-amber-400 font-mono flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
-                          <span>Due: {new Date(issue.deadline_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                          <span>
+                            Due:{" "}
+                            {new Date(issue.deadline_at).toLocaleTimeString([], {
+                              hour: "2-digit",
+                              minute: "2-digit",
+                            })}
+                          </span>
                         </span>
                       )}
                     </div>
@@ -509,15 +1242,23 @@ export function ClubStory() {
                 <div key={idx} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
                   <div className="flex items-center gap-3">
                     {s.portrait_url ? (
-                      <img src={s.portrait_url} alt="" className="h-12 w-12 rounded-full object-cover bg-slate-800 shrink-0" />
+                      <img
+                        src={s.portrait_url}
+                        alt=""
+                        className="h-12 w-12 rounded-full object-cover bg-slate-800 shrink-0"
+                      />
                     ) : null}
                     <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between text-[11px] text-slate-400">
-                    <span className="font-semibold text-amber-400 uppercase text-[10px]">{s.role || "Technical Staff"}</span>
-                    <span>Rating: {s.rating ?? 75}/99</span>
-                  </div>
-                  <h3 className="text-sm font-bold text-white">{s.name}</h3>
-                  <p className="text-xs text-slate-400">Mentality: {s.mentality || "Tactical"} · {s.reputation || "Professional"}</p>
+                      <div className="flex items-center justify-between text-[11px] text-slate-400">
+                        <span className="font-semibold text-amber-400 uppercase text-[10px]">
+                          {s.role || "Technical Staff"}
+                        </span>
+                        <span>Rating: {s.rating ?? 75}/99</span>
+                      </div>
+                      <h3 className="text-sm font-bold text-white">{s.name}</h3>
+                      <p className="text-xs text-slate-400">
+                        Mentality: {s.mentality || "Tactical"} · {s.reputation || "Professional"}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -535,7 +1276,7 @@ export function ClubStory() {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {players.map((p: any) => (
                 <div
-                  key={p.id}
+                  key={p.id || p.player_id}
                   className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center space-x-4 hover:border-slate-700 transition-colors"
                 >
                   {p.portrait_url ? (
@@ -558,7 +1299,9 @@ export function ClubStory() {
                       <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-slate-800 text-slate-300">
                         {p.position || "Player"}
                       </span>
-                      <span className="text-xs font-mono text-emerald-400 font-bold">{p.rating ?? p.overall_rating ?? "—"} OVR</span>
+                      <span className="text-xs font-mono text-emerald-400 font-bold">
+                        {p.rating ?? p.overall_rating ?? "—"} OVR
+                      </span>
                     </div>
 
                     <h4 className="text-sm font-bold text-white truncate">{p.name}</h4>
@@ -577,7 +1320,11 @@ export function ClubStory() {
                       <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            (p.morale ?? 75) > 75 ? "bg-emerald-400" : (p.morale ?? 75) > 50 ? "bg-amber-400" : "bg-red-400"
+                            (p.morale ?? 75) > 75
+                              ? "bg-emerald-400"
+                              : (p.morale ?? 75) > 50
+                              ? "bg-amber-400"
+                              : "bg-red-400"
                           }`}
                           style={{ width: `${Math.min(100, p.morale ?? 75)}%` }}
                         ></div>
@@ -637,7 +1384,9 @@ export function ClubStory() {
                     </div>
 
                     <div className="text-right">
-                      <div className="text-sm font-bold text-emerald-400">{w.current_rating} → {w.potential_rating} POT</div>
+                      <div className="text-sm font-bold text-emerald-400">
+                        {w.current_rating} → {w.potential_rating} POT
+                      </div>
                       <div className="text-[11px] text-slate-400 font-mono">{fmt(w.estimated_value_gtex)} GTX</div>
                     </div>
                   </div>
@@ -675,15 +1424,22 @@ export function ClubStory() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Upcoming */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Upcoming Fixtures ({upcomingMatches.length})</h3>
+              <h3 className="text-sm font-bold text-amber-400 uppercase tracking-wider">
+                Upcoming Fixtures ({upcomingMatches.length})
+              </h3>
               {upcomingMatches.length === 0 ? (
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                   No scheduled fixtures.
                 </div>
               ) : (
                 upcomingMatches.map((m: any) => (
-                  <div key={m.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-white">{m.home_name} vs {m.away_name}</span>
+                  <div
+                    key={m.id}
+                    className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between"
+                  >
+                    <span className="text-xs font-semibold text-white">
+                      {m.home_name} vs {m.away_name}
+                    </span>
                     <span className="text-[11px] text-slate-400">Round {m.round}</span>
                   </div>
                 ))
@@ -692,15 +1448,22 @@ export function ClubStory() {
 
             {/* Recent */}
             <div className="space-y-3">
-              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">Recent Results ({recentMatches.length})</h3>
+              <h3 className="text-sm font-bold text-emerald-400 uppercase tracking-wider">
+                Recent Results ({recentMatches.length})
+              </h3>
               {recentMatches.length === 0 ? (
                 <div className="bg-slate-900/40 border border-slate-800 rounded-xl p-8 text-center text-slate-500 text-xs">
                   No completed fixtures recorded.
                 </div>
               ) : (
                 recentMatches.map((m: any) => (
-                  <div key={m.id} className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-white">{m.home_name} {m.home_goals} - {m.away_goals} {m.away_name}</span>
+                  <div
+                    key={m.id}
+                    className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 flex items-center justify-between"
+                  >
+                    <span className="text-xs font-semibold text-white">
+                      {m.home_name} {m.home_goals} - {m.away_goals} {m.away_name}
+                    </span>
                     <span className="text-[11px] text-emerald-400 font-mono">FT (R{m.round})</span>
                   </div>
                 ))
@@ -717,7 +1480,10 @@ export function ClubStory() {
             <h2 className="text-lg font-bold text-white">Boardroom Honors & Legacy</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {achievements.map((ach: any) => (
-                <div key={ach.id} className="bg-slate-950/70 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3">
+                <div
+                  key={ach.id}
+                  className="bg-slate-950/70 border border-amber-500/20 rounded-xl p-4 flex items-start space-x-3"
+                >
                   <Award className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
                   <div>
                     <h3 className="text-sm font-bold text-white">{ach.title}</h3>
@@ -769,8 +1535,7 @@ export function ClubStory() {
                     value={targetAge}
                     onChange={(e) => setTargetAge(Number(e.target.value))}
                     className="w-full mt-1 bg-slate-950 border border-slate-800 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-400"
-                  >
-                  </input>
+                  />
                 </div>
               </div>
 

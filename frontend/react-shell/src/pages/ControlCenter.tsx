@@ -405,6 +405,95 @@ export function ControlCenter() {
         ))}
       </section>
 
+      {/* 2a-ii. INSTITUTIONAL PULSE: SUPPORTERS, MEDIA & PERMANENT CLUB ARCHIVE */}
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="institutional-pulse-strip">
+        <Link
+          to="/app/story"
+          data-testid="control-center-supporters-card"
+          className="group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-5 transition-all hover:border-gtex-emerald/50 hover:bg-gtex-slate hover:-translate-y-0.5 shadow-xl space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+              Supporter Ecosystem & Atmosphere
+            </span>
+            <Chip
+              tone={
+                (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 65
+                  ? "emerald"
+                  : (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 45
+                  ? "gold"
+                  : "red"
+              }
+            >
+              Sentiment {clubDetail?.supporters_summary?.overall_sentiment ?? 65}/100
+            </Chip>
+          </div>
+          <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-emerald-300">
+            {clubDetail?.supporters_summary?.identity_archetype
+              ? label(clubDetail.supporters_summary.identity_archetype)
+              : "6 Supporter Segments"}
+          </h3>
+          <p className="text-xs text-slate-400">
+            Protest stage:{" "}
+            <b className="text-slate-200">
+              {label(clubDetail?.supporters_summary?.protest_stage || "none")}
+            </b>{" "}
+            · Gate modifier:{" "}
+            <b className="text-emerald-300">
+              {(clubDetail?.supporters_summary?.attendance_modifier_pct ?? 0) >= 0 ? "+" : ""}
+              {clubDetail?.supporters_summary?.attendance_modifier_pct ?? 0}%
+            </b>
+          </p>
+        </Link>
+
+        <Link
+          to="/app/newsroom"
+          data-testid="control-center-media-card"
+          className="group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-5 transition-all hover:border-cyan-400/50 hover:bg-gtex-slate hover:-translate-y-0.5 shadow-xl space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-cyan-300">
+              Media Scrutiny & Public Standing
+            </span>
+            <Chip tone="blue">
+              Rep {clubDetail?.media_standing?.public_reputation_score ?? activeClubProfile.prestige ?? 50}
+            </Chip>
+          </div>
+          <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-cyan-300">
+            {clubDetail?.media_standing?.reputation_tier || "Established"} Standing
+          </h3>
+          <p className="text-xs text-slate-400">
+            Leadership pressure:{" "}
+            <b className="text-amber-300">
+              {clubDetail?.media_standing?.leadership_pressure_index ?? 25}/100
+            </b>{" "}
+            · Commercial:{" "}
+            <b className="text-emerald-300">
+              {clubDetail?.media_standing?.commercial_attractiveness_index ?? 50}/100
+            </b>
+          </p>
+        </Link>
+
+        <Link
+          to="/app/story"
+          data-testid="control-center-history-card"
+          className="group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-5 transition-all hover:border-amber-400/50 hover:bg-gtex-slate hover:-translate-y-0.5 shadow-xl space-y-2"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+              Permanent Institutional Archive
+            </span>
+            <Chip tone="gold">Durable Ledger</Chip>
+          </div>
+          <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-amber-300">
+            Club History, Tenures & Records
+          </h3>
+          <p className="text-xs text-slate-400">
+            Explore season archive, managerial tenures, transfer ledger, academy graduates & rivalries →
+          </p>
+        </Link>
+      </section>
+
       {/* 2a-3D. INTERACTIVE 3D CEREMONIAL & BOARDROOM PRESENTATION SUITE */}
       <section className="rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 shadow-2xl space-y-4" data-testid="executive-3d-suite">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">

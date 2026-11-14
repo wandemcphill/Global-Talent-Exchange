@@ -137,8 +137,6 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
         data["history_read_only"] = mapping is None
         data["standings_source"] = "canonical" if mapping is not None else "legacy_historical"
         if mapping is not None:
-            from decimal import Decimal
-
             from app.common.enums.competition_status import CompetitionStatus
             from app.models.competition import UserCompetition
             from app.models.competition_match import CompetitionMatch
@@ -925,11 +923,16 @@ def _post_match_club(
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + result * 5, 0, 100))
         state.manager_json = manager
     if is_home:
+        from app.owner_console import living_institution
+
+        sup_profile, _ = living_institution.ensure_club_institutional_ecosystem(session, state)
         stadium_level = int((state.facilities_json or {}).get("stadium", 1))
         matchday_rev_pct = int(campus_effects.get("matchday_revenue_bonus_pct", 15))
         vip_hospitality_gtex = int(campus_effects.get("vip_hospitality_flat_gtex", 0))
+        att_mod_pct = int(sup_profile.attendance_modifier_pct or 0)
+        effective_fans = max(200, int(round(state.fans * (1.0 + att_mod_pct / 100.0))))
         att_info = engine.calculate_match_attendance(
-            fans=state.fans,
+            fans=effective_fans,
             prestige=state.prestige,
             stadium_level=stadium_level,
             campus_effects=campus_effects,
@@ -948,6 +951,7 @@ def _post_match_club(
                 "capacity_utilization_pct": att_info["capacity_utilization_pct"],
                 "sold_out": att_info["sold_out"],
                 "gate_receipts_gtex": gate,
+                "supporter_attendance_modifier_pct": att_mod_pct,
             }
         )
         match.narrative_json = match_narrative
@@ -1294,7 +1298,22 @@ def play_next(
             )
         for side_key, side, entry_obj, gf, ga in (("home", home, home_e, hg, ag), ("away", away, away_e, ag, hg)):
             if side["state"] is not None:
+                from app.owner_console import living_institution
+
                 notes = _post_match_club(session, side, side_key == "home", gf, ga, m)
+                try:
+                    living_institution.record_match_institutional_impact(
+                        session,
+                        m,
+                        comp,
+                        side,
+                        away if side_key == "home" else home,
+                        side_key == "home",
+                        gf,
+                        ga,
+                    )
+                except Exception as inst_err:
+                    logger.warning("living_institution match hook failed: %s", inst_err)
                 narrative.update(dict(m.narrative_json or {}))
                 expl = engine.explain_match(
                     sim,
@@ -1310,6 +1329,7 @@ def play_next(
                 expl["revenue_notes"] = notes
                 expl["attendance"] = narrative.get("attendance")
                 expl["stadium_capacity"] = narrative.get("stadium_capacity")
+                expl["atmosphere"] = narrative.get(f"{side_key}_atmosphere") or narrative.get("atmosphere")
                 narrative[f"{side_key}_owner_view"] = expl
         if comp.format == "knockout":
             winner_home = hg > ag or (hg == ag and sim.get("penalty_winner") == "home")
@@ -1412,6 +1432,12 @@ def _finalize(session: Session, comp: OwnerCompetition) -> None:
         if state:
             state.prestige = int(engine.clamp(state.prestige + (4 - e.final_position) * 3, 0, 100))
     comp.status = "finished"
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_season_completion_archive(session, comp, rows)
+    except Exception as arch_err:
+        logger.warning("season archive hook failed: %s", arch_err)
     session.flush()
     ensure_seed(session)
 

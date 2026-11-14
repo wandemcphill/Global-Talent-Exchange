@@ -1810,6 +1810,23 @@ def add_to_watchlist(
     )
     session.add(item)
     session.flush()
+    state = _get_club_state(session, club_id)
+    if state is not None and priority == "high":
+        try:
+            from app.owner_console import living_institution
+
+            living_institution.generate_grounded_transfer_rumour(
+                session,
+                state,
+                target_name=name,
+                position=position,
+                age=int(age),
+                current_rating=int(current_rating),
+                estimated_value_gtex=int(estimated_value_gtex),
+                source_id=item.id,
+            )
+        except Exception as rum_err:
+            logger.debug("generate_grounded_transfer_rumour skipped: %s", rum_err)
     return watchlist_dict(item)
 
 
@@ -2054,6 +2071,30 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         },
     }
 
+    from app.owner_console import living_institution
+
+    supporters_data = living_institution.get_supporters_overview(session, state)
+    media_data = living_institution.get_media_ecosystem_overview(session, state, limit=30)
+    archive_data = living_institution.get_institutional_history_archive(session, state, limit=80)
+
+    # Merge permanent institutional history entries into timeline
+    seen_ids = {t.get("id") for t in timeline}
+    for hist_item in archive_data.get("timeline", []):
+        if hist_item["id"] not in seen_ids:
+            timeline.append(
+                {
+                    "id": hist_item["id"],
+                    "type": "institutional_history",
+                    "category": hist_item["category"],
+                    "title": hist_item["title"],
+                    "summary": hist_item["narrative_summary"],
+                    "world_day": hist_item["world_day"],
+                    "season_number": hist_item["season_number"],
+                    "is_major_milestone": hist_item["is_major_milestone"],
+                    "created_at": hist_item["created_at"],
+                }
+            )
+
     return {
         "club": {
             "club_id": state.club_id,
@@ -2080,6 +2121,9 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         "club_news": club_news,
         "achievements": achievements,
         "owner_legacy": owner_legacy,
+        "supporters": supporters_data,
+        "media_ecosystem": media_data,
+        "institutional_archive": archive_data,
     }
 
 

@@ -792,6 +792,25 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
     )
     session.add(signed)
     session.flush()
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_transfer_movement(
+            session,
+            state,
+            direction="arrival",
+            transfer_type="market_signing",
+            player_id=str(signed.player_ref or signed.id),
+            player_name=signed.name,
+            position=signed.position,
+            age=int(signed.age),
+            overall_rating=int(signed.rating),
+            fee_gtex=price,
+            counterparty_club_name="GTEX Transfer Market",
+            idempotency_key=f"transfer:arrival:{club_id}:{signed.id}",
+        )
+    except Exception as tr_err:
+        logger.warning("record_transfer_movement arrival failed: %s", tr_err)
     _advance_stage_after_squad(session, state)
     return signed
 
@@ -820,6 +839,26 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
             related_id=target.player_ref or target.id,
             memo=f"Released {target.name} (refund)",
         )
+
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_transfer_movement(
+            session,
+            state,
+            direction="departure",
+            transfer_type="contract_release",
+            player_id=str(target.player_ref or target.id),
+            player_name=target.name,
+            position=target.position,
+            age=int(target.age),
+            overall_rating=int(target.rating),
+            fee_gtex=refund_amount,
+            counterparty_club_name="GTEX Transfer Market",
+            idempotency_key=f"transfer:departure:{club_id}:{target.id}:d{state.world_day}",
+        )
+    except Exception as tr_err:
+        logger.warning("record_transfer_movement departure failed: %s", tr_err)
 
     session.delete(target)
     session.flush()
@@ -1203,6 +1242,19 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
             state.stage = "competition"
     _morale_shift(session, club_id, 3)
 
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_managerial_change(
+            session,
+            state,
+            action="appointed",
+            new_manager=profile,
+            reason="owner_appointment",
+        )
+    except Exception as mgr_err:
+        logger.warning("record_managerial_change appointed failed: %s", mgr_err)
+
     # Bridge to canonical club_growth staff contracts and assignments
     try:
         from app.models.club_growth import ClubStaffProfile, ClubStaffContract, ClubStaffAssignment
@@ -1289,8 +1341,24 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
-    state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
+    default_mgr = engine.manager_profile(engine.DEFAULT_MANAGER)
+    state.manager_json = default_mgr
     _morale_shift(session, club_id, -6)
+
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_managerial_change(
+            session,
+            state,
+            action="dismissed",
+            new_manager=default_mgr,
+            previous_manager=current,
+            reason="dismissed_by_owner",
+            severance_gtex=compensation,
+        )
+    except Exception as mgr_err:
+        logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
 
     # Terminate canonical club_growth staff assignment/contract
     try:
@@ -1369,6 +1437,45 @@ def upgrade_facility(session: Session, user_id: str, club_id: str, kind: str) ->
         idempotency_key=f"facility:{club_id}:{kind}:{level + 1}",
         payload_json={"facility_kind": kind, "facility_level": level + 1},
     )
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_history_entry(
+            session,
+            club_id=club_id,
+            season_number=living_institution._season_number_for_state(state),
+            world_day=int(state.world_day or 1),
+            category="facility_development",
+            event_type=f"facility_upgrade_{kind}",
+            title=f"Infrastructure Milestone: {kind.title()} Facility Upgraded to Level {level + 1}",
+            narrative_summary=(
+                f"{state.club_name} invested {cost:,} GTX to expand its {kind} infrastructure to Level {level + 1}."
+            ),
+            entity_type="facility",
+            entity_id=kind,
+            entity_name=f"{kind.title()} Level {level + 1}",
+            established_facts={"facility": kind, "new_level": level + 1, "cost_gtex": cost},
+            is_major_milestone=(level + 1) >= 3,
+            idempotency_key=f"history:facility:{club_id}:{kind}:{level + 1}",
+        )
+        living_institution.apply_supporter_reaction(
+            session,
+            state,
+            event_type="facility_upgrade_reaction",
+            trigger_source_type="facility",
+            trigger_source_id=f"{kind}:{level + 1}",
+            headline=f"Supporters Applaud {kind.title()} Upgrade to Level {level + 1}",
+            summary=f"Investment of {cost:,} GTX in {kind} infrastructure boosted supporter confidence in ownership.",
+            driver_Impacts={
+                "owner_conduct": 6.0,
+                "club_identity": 5.0,
+                "matchday_experience": 8.0 if kind == "stadium" else 3.0,
+                "youth_academy": 8.0 if kind == "academy" else 2.0,
+            },
+            idempotency_key=f"supporter:facility:{club_id}:{kind}:{level + 1}",
+        )
+    except Exception as fac_err:
+        logger.warning("facility institutional hook failed: %s", fac_err)
     manager = dict(state.manager_json or {})
     if manager:
         manager["mood"] = int(engine.clamp(manager.get("mood", 70) + 6, 0, 100))
@@ -2013,7 +2120,12 @@ def tick_club(
     snapshot_value(session, state)
     session.flush()
 
-    from app.owner_console import autonomous_staff_engine, comms_persistence, living_club_world
+    from app.owner_console import (
+        autonomous_staff_engine,
+        comms_persistence,
+        living_club_world,
+        living_institution,
+    )
 
     # Evolve long-term club culture transition gradually over world ticks
     fac_tick = dict(state.facilities_json or {})
@@ -2039,6 +2151,11 @@ def tick_club(
         logger.debug("proactive staff communications bypassed during tick", exc_info=True)
 
     living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
+    try:
+        institutional_tick = living_institution.process_world_day_institutional_tick(session, state)
+    except Exception as inst_err:
+        logger.warning("process_world_day_institutional_tick failed: %s", inst_err)
+        institutional_tick = {}
 
     return {
         "world_day": state.world_day,
@@ -2046,6 +2163,7 @@ def tick_club(
         "growth": growth_report,
         "campus_effects": campus_effects,
         "living_world": living_world_summary,
+        "institutional_ecosystem": institutional_tick,
         "medical_recovery": {
             "healed_players_count": healed_players_count,
             "daily_injury_heal_days": daily_injury_heal_days,
@@ -2156,6 +2274,26 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
             pref = manager.get("transfer_preference")
             mood(-6 if pref in ("proven-veterans", "system-fits") else 2)
             outcome = f"{player.name} sold for {bid:,} (5% platform fee). Funds added to club cash."
+            if state is not None:
+                try:
+                    from app.owner_console import living_institution
+
+                    living_institution.record_transfer_movement(
+                        session,
+                        state,
+                        direction="departure",
+                        transfer_type="transfer_bid_sale",
+                        player_id=str(player.id),
+                        player_name=player.name,
+                        position=player.position,
+                        age=int(player.age),
+                        overall_rating=int(player.rating),
+                        fee_gtex=bid,
+                        counterparty_club_name=str(payload.get("bidder") or "Rival Club"),
+                        idempotency_key=f"transfer:sale:{item.id}",
+                    )
+                except Exception as sale_err:
+                    logger.warning("transfer_bid sale institutional hook failed: %s", sale_err)
         else:
             if player.is_regen and player.personality_json.get("ambition", 10) >= 14:
                 player.morale = max(0, player.morale - 8)
@@ -2361,16 +2499,21 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
 
 
 def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
-    from app.owner_console import storytelling
+    from app.owner_console import living_institution, storytelling
 
     state = require_state(session, club_id, user_id)
     deals = session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())
     ).all()
     facilities = state.facilities_json or {}
+    supporters_overview = living_institution.get_supporters_overview(session, state)
+    media_overview = living_institution.get_media_ecosystem_overview(session, state, limit=12)
     return {
         **club_card(session, state),
         "manager_profile": state.manager_json,
+        "supporters_summary": supporters_overview.get("profile"),
+        "matchday_atmosphere": supporters_overview.get("matchday_atmosphere"),
+        "media_standing": media_overview.get("media_standing"),
         "facilities": {
             k: {
                 "level": int(facilities.get(k, 1)),
@@ -2776,6 +2919,48 @@ def hire_executive_staff(
         mgr_prof["personality_profile"] = staff_personality
         state.manager_json = mgr_prof
         _morale_shift(session, club_id, 3)
+        try:
+            from app.owner_console import living_institution
+
+            living_institution.record_managerial_change(
+                session,
+                state,
+                action="appointed",
+                new_manager=state.manager_json,
+                reason="staff_market_appointment",
+            )
+        except Exception as mgr_err:
+            logger.warning("record_managerial_change staff hire failed: %s", mgr_err)
+    else:
+        try:
+            from app.owner_console import living_institution
+
+            living_institution.record_history_entry(
+                session,
+                club_id=club_id,
+                season_number=living_institution._season_number_for_state(state),
+                world_day=int(state.world_day or 1),
+                category="executive_appointment",
+                event_type=f"appointed_{target_role}",
+                title=f"Executive Appointment: {candidate.get('name', 'Executive')} Named {target_role.replace('_', ' ').title()}",
+                narrative_summary=(
+                    f"{state.club_name} appointed {candidate.get('name', 'Executive')} as {target_role.replace('_', ' ').title()} "
+                    f"on a {years}-year contract."
+                ),
+                entity_type="staff",
+                entity_id=str(staff_id),
+                entity_name=str(candidate.get("name", "Executive")),
+                established_facts={
+                    "role": target_role,
+                    "staff_name": str(candidate.get("name", "Executive")),
+                    "contract_years": years,
+                    "signing_fee": int(signing_fee),
+                },
+                is_major_milestone=True,
+                idempotency_key=f"history:exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}",
+            )
+        except Exception as exec_err:
+            logger.warning("executive appointment history hook failed: %s", exec_err)
 
     autonomous_staff_engine.ensure_staff_relationship(
         session,
@@ -2853,8 +3038,48 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
     state.facilities_json = facs
 
     if role == "first_team_manager":
-        state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
+        default_mgr = engine.manager_profile(engine.DEFAULT_MANAGER)
+        state.manager_json = default_mgr
         _morale_shift(session, club_id, -4)
+        try:
+            from app.owner_console import living_institution
+
+            living_institution.record_managerial_change(
+                session,
+                state,
+                action="dismissed",
+                new_manager=default_mgr,
+                previous_manager=current,
+                reason="dismissed_by_owner",
+                severance_gtex=compensation,
+            )
+        except Exception as mgr_err:
+            logger.warning("record_managerial_change staff fire failed: %s", mgr_err)
+    else:
+        try:
+            from app.owner_console import living_institution
+
+            living_institution.record_history_entry(
+                session,
+                club_id=club_id,
+                season_number=living_institution._season_number_for_state(state),
+                world_day=int(state.world_day or 1),
+                category="executive_appointment",
+                event_type=f"dismissed_{role}",
+                title=f"Executive Departure: {current.get('name', 'Executive')} Relieved of {role.replace('_', ' ').title()} Duties",
+                narrative_summary=(
+                    f"{current.get('name', 'Executive')} departed {state.club_name} ({role.replace('_', ' ')}) "
+                    f"with {compensation:,} GTX severance."
+                ),
+                entity_type="staff",
+                entity_id=str(current.get("id") or role),
+                entity_name=str(current.get("name", "Executive")),
+                established_facts={"role": role, "severance_paid": int(compensation)},
+                is_major_milestone=False,
+                idempotency_key=f"history:exec_fire:{club_id}:{role}:d{state.world_day}",
+            )
+        except Exception as exec_err:
+            logger.warning("executive dismissal history hook failed: %s", exec_err)
 
     return {
         "status": "dismissed",
@@ -2957,8 +3182,22 @@ def academy_promote(session: Session, user_id: str, club_id: str, player_id: str
     pers = dict(player.personality_json or {})
     pers["squad_status"] = "senior"
     pers["promoted_to_senior"] = True
+    pers["academy_graduate"] = True
     player.personality_json = pers
     session.flush()
+
+    state = require_state(session, club_id, user_id)
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_academy_promotion_milestone(
+            session,
+            state,
+            academy_player=player,
+            squad_player=player,
+        )
+    except Exception as acad_err:
+        logger.warning("record_academy_promotion_milestone failed: %s", acad_err)
 
     from app.owner_console import storytelling
 

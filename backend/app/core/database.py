@@ -51,6 +51,7 @@ MODEL_MODULES = (
     "app.talent.models",
     "app.value_engine.read_models",
     "app.owner_console.models",
+    "app.owner_console.institutional_models",
 )
 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
 DEFAULT_DATABASE_INIT_RETRIES = 3

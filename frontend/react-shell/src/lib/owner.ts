@@ -136,6 +136,49 @@ export function useClubStaff(clubId?: string) {
   });
 }
 
+export function useClubSupporters(clubId?: string) {
+  return useQuery({
+    queryKey: ["supporters", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/supporters`)).data,
+    enabled: !!clubId,
+  });
+}
+
+export function useClubMedia(
+  clubId?: string,
+  opts?: { classification?: string; storyType?: string; outletKey?: string; limit?: number }
+) {
+  const classification = opts?.classification || "all";
+  const storyType = opts?.storyType || "all";
+  const outletKey = opts?.outletKey || "all";
+  const limit = opts?.limit || 40;
+  return useQuery({
+    queryKey: ["club-media", clubId, classification, storyType, outletKey, limit],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (classification && classification !== "all") params.set("classification", classification);
+      if (storyType && storyType !== "all") params.set("story_type", storyType);
+      if (outletKey && outletKey !== "all") params.set("outlet_key", outletKey);
+      params.set("limit", String(limit));
+      return (await api.get(`/owner/clubs/${clubId}/media?${params.toString()}`)).data;
+    },
+    enabled: !!clubId,
+  });
+}
+
+export function useClubHistory(clubId?: string, category = "all", limit = 80) {
+  return useQuery({
+    queryKey: ["club-history", clubId, category, limit],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (category && category !== "all") params.set("category", category);
+      params.set("limit", String(limit));
+      return (await api.get(`/owner/clubs/${clubId}/history?${params.toString()}`)).data;
+    },
+    enabled: !!clubId,
+  });
+}
+
 export function useRefreshOwner() {
   const qc = useQueryClient();
   return () => {
@@ -153,6 +196,9 @@ export function useRefreshOwner() {
     qc.invalidateQueries({ queryKey: ["story"] });
     qc.invalidateQueries({ queryKey: ["showroom"] });
     qc.invalidateQueries({ queryKey: ["watchlist"] });
+    qc.invalidateQueries({ queryKey: ["supporters"] });
+    qc.invalidateQueries({ queryKey: ["club-media"] });
+    qc.invalidateQueries({ queryKey: ["club-history"] });
   };
 }
 

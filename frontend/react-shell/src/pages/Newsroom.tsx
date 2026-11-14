@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { useActiveClub, useNewsroom, useRefreshOwner, fmt } from "@/lib/owner";
+import { useActiveClub, useNewsroom, useRefreshOwner } from "@/lib/owner";
 import { publicAssetPath } from "@/lib/publicPath";
 import {
   Building,
@@ -19,8 +19,9 @@ import {
   X,
   RefreshCw,
   Compass,
-  Sparkles,
   AlertOctagon,
+  Megaphone,
+  AlertTriangle,
 } from "lucide-react";
 import { Loading } from "@/components/gtex/ui";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
@@ -49,8 +50,32 @@ export function Newsroom() {
   const refresh = useRefreshOwner();
 
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedClassification, setSelectedClassification] = useState<string>("all");
   const [activeStory, setActiveStory] = useState<any | null>(null);
   const [syncing, setSyncing] = useState<boolean>(false);
+
+  // Club Media Ecosystem state (journalists, rumours vs verified facts, standing, responses)
+  const [clubMedia, setClubMedia] = useState<any | null>(null);
+  const [responseSpeaker, setResponseSpeaker] = useState<"owner" | "first_team_manager">("owner");
+  const [responseStance, setResponseStance] = useState<string>("measured");
+  const [responseText, setResponseText] = useState<string>(
+    "Our institution remains focused on sustainable progress and transparent governance."
+  );
+  const [submittingResponse, setSubmittingResponse] = useState<boolean>(false);
+
+  const loadClubMedia = async () => {
+    if (!clubId) return;
+    try {
+      const res = await api.get(`/owner/clubs/${clubId}/media`);
+      if (res?.data) setClubMedia(res.data);
+    } catch {
+      // Graceful fallback when running in isolated test mocks
+    }
+  };
+
+  useEffect(() => {
+    loadClubMedia();
+  }, [clubId]);
 
   // Map UI filter keys to backend category keys when querying, or filter client-side
   const { data, isLoading, refetch } = useNewsroom(undefined, "all", 60);
@@ -64,11 +89,18 @@ export function Newsroom() {
     if (selectedCategory === "private_jet_purchase") return ["private_jet_purchase", "fleet_aviation"].includes(cat);
     if (selectedCategory === "player_gift") return ["player_gift", "squad_culture"].includes(cat);
     if (selectedCategory === "build_a_son_induction")
-      return ["build_a_son_induction", "academy_breakthrough"].includes(cat);
+      return ["build_a_son_induction", "academy_breakthrough", "academy_development"].includes(cat);
     if (selectedCategory === "press_conference")
       return ["press_conference", "club_announcement"].includes(cat);
     return cat === selectedCategory;
   });
+
+  const mediaStories: any[] = (clubMedia?.stories || []).filter((s: any) => {
+    if (selectedClassification === "all") return true;
+    return s.classification === selectedClassification;
+  });
+  const mediaOutlets: any[] = clubMedia?.outlets || [];
+  const mediaStanding = clubMedia?.media_standing || null;
 
   const categories = [
     { key: "all", label: "Top Stories & Wire" },
@@ -90,6 +122,7 @@ export function Newsroom() {
         `Newsroom synchronized (${res.data?.synced_new_articles || 0} new verified dispatches indexed).`
       );
       refetch();
+      loadClubMedia();
       refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail?.detail || "Unable to sync newsroom");
@@ -117,6 +150,25 @@ export function Newsroom() {
       refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail?.detail || "Editorial update failed");
+    }
+  };
+
+  const handleRespondToClubMediaStory = async (storyId: string) => {
+    if (!clubId || submittingResponse) return;
+    setSubmittingResponse(true);
+    try {
+      const res = await api.post(`/owner/clubs/${clubId}/media/${storyId}/respond`, {
+        speaker_role: responseSpeaker,
+        response_stance: responseStance,
+        statement_text: responseText,
+      });
+      toast.success(res.data?.response?.effect_summary || "Official club response published.");
+      await loadClubMedia();
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail?.detail || "Failed to publish response");
+    } finally {
+      setSubmittingResponse(false);
     }
   };
 
@@ -196,6 +248,171 @@ export function Newsroom() {
           })}
         </nav>
       </header>
+
+      {/* Club Media Standing, Outlets & Credibility Separation (Verified vs Rumour vs Opinion) */}
+      {mediaStanding && (
+        <section
+          className="rounded-3xl border border-white/10 bg-slate-900/75 p-6 space-y-6"
+          data-testid="club-media-ecosystem-panel"
+        >
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-white/10 pb-4">
+            <div>
+              <div className="text-[10px] font-black uppercase tracking-widest text-amber-400">
+                Living Football Media Ecosystem · Credibility & Classification Engine
+              </div>
+              <h2 className="text-xl font-bold text-white">
+                {clubMedia?.club_name || active?.club_name} Public Standing & Accredited Press Room
+              </h2>
+              <p className="text-xs text-slate-400">
+                Strict separation between verified events, reported information, unconfirmed rumours, and editorial
+                opinion.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 text-center">
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                <div className="text-[10px] uppercase text-slate-400">Reputation</div>
+                <div className="text-base font-black text-emerald-400">{mediaStanding.public_reputation}/100</div>
+              </div>
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                <div className="text-[10px] uppercase text-slate-400">Commercial</div>
+                <div className="text-base font-black text-cyan-400">
+                  {mediaStanding.commercial_attractiveness_index}/100
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                <div className="text-[10px] uppercase text-slate-400">Sponsor Pull</div>
+                <div className="text-base font-black text-amber-400">
+                  {mediaStanding.sponsorship_interest_index}/100
+                </div>
+              </div>
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                <div className="text-[10px] uppercase text-slate-400">Press Scrutiny</div>
+                <div className="text-base font-black text-rose-400">{mediaStanding.leadership_pressure_index}/100</div>
+              </div>
+              <div className="rounded-xl bg-slate-950/80 border border-slate-800 px-3 py-2">
+                <div className="text-[10px] uppercase text-slate-400">Credibility</div>
+                <div className="text-base font-black text-white">{mediaStanding.owner_credibility_score}/100</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Accredited Media Outlets & Journalists */}
+          {mediaOutlets.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3" data-testid="media-outlets-strip">
+              {mediaOutlets.map((o: any) => (
+                <div
+                  key={o.outlet_key}
+                  className="rounded-xl bg-slate-950/60 border border-slate-800 p-3 text-xs space-y-1"
+                >
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-amber-400 font-bold uppercase">{o.editorial_focus.replace(/_/g, " ")}</span>
+                    <span className="font-mono text-emerald-400">{o.credibility_score}% Cred</span>
+                  </div>
+                  <div className="font-bold text-white truncate">{o.outlet_name}</div>
+                  <div className="text-[11px] text-slate-400 truncate">
+                    {o.journalist_name} · {o.journalist_role}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Classification Filter & Club Media Stories */}
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { key: "all", label: `All Coverage (${(clubMedia?.stories || []).length})` },
+                  { key: "verified_event", label: `Verified Events (${mediaStanding.verified_count || 0})` },
+                  { key: "reported_information", label: `Reported Info (${mediaStanding.reported_count || 0})` },
+                  { key: "rumour", label: `Unconfirmed Rumours (${mediaStanding.rumour_count || 0})` },
+                  { key: "opinion", label: `Editorial Opinion (${mediaStanding.opinion_count || 0})` },
+                ].map((clf) => (
+                  <button
+                    key={clf.key}
+                    type="button"
+                    onClick={() => setSelectedClassification(clf.key)}
+                    data-testid={`media-clf-${clf.key}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
+                      selectedClassification === clf.key
+                        ? "bg-amber-500 text-slate-950"
+                        : "bg-slate-950 text-slate-300 border border-slate-800 hover:text-white"
+                    }`}
+                  >
+                    {clf.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {mediaStories.length > 0 && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4" data-testid="club-media-stories-list">
+                {mediaStories.slice(0, 8).map((ms: any) => (
+                  <div
+                    key={ms.id}
+                    className="rounded-2xl bg-slate-950/80 border border-slate-800 p-5 space-y-3 flex flex-col justify-between"
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2 text-[10px]">
+                        <span className="font-bold text-slate-300">
+                          {ms.outlet_name} · <span className="text-amber-400">{ms.journalist_name}</span>
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded font-black uppercase ${
+                            ms.classification === "verified_event"
+                              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                              : ms.classification === "rumour"
+                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                              : ms.classification === "opinion"
+                              ? "bg-purple-500/20 text-purple-300 border border-purple-500/30"
+                              : "bg-cyan-500/20 text-cyan-300 border border-cyan-500/30"
+                          }`}
+                        >
+                          {ms.classification === "rumour"
+                            ? "UNCONFIRMED RUMOUR (NOT FACT)"
+                            : ms.classification.replace(/_/g, " ")}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white">{ms.headline}</h4>
+                      {ms.subheadline && <p className="text-xs text-slate-400">{ms.subheadline}</p>}
+                      <p className="text-xs text-slate-300 leading-relaxed">{ms.body}</p>
+                    </div>
+
+                    <div className="pt-3 border-t border-slate-800/80 space-y-2">
+                      {ms.owner_response ? (
+                        <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-xs text-emerald-200">
+                          <span className="font-bold block text-[10px] uppercase text-emerald-400">
+                            Official Response ({ms.owner_response.speaker_name} · {ms.owner_response.stance})
+                          </span>
+                          "{ms.owner_response.statement_text}"
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            <span>Rep {ms.consequences?.reputation_delta >= 0 ? "+" : ""}{ms.consequences?.reputation_delta || 0}</span>
+                            <span>·</span>
+                            <span>Fans {ms.consequences?.supporter_sentiment_delta >= 0 ? "+" : ""}{ms.consequences?.supporter_sentiment_delta || 0}</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleRespondToClubMediaStory(ms.id)}
+                            disabled={submittingResponse}
+                            data-testid={`respond-media-${ms.id}`}
+                            className="px-3 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-300 text-[11px] font-bold flex items-center gap-1"
+                          >
+                            <Megaphone className="w-3 h-3" /> Issue Club Response
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </section>
+      )}
 
       {/* 3D Global Flex Wire & 3D Official Club Announcement Studio */}
       <div className="grid gap-6 lg:grid-cols-2" data-testid="newsroom-3d-broadcast-row">
