@@ -253,6 +253,22 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
   const nationality = p.nationality || "Global";
   const club = p.current_club_name || "GTEX Academy";
   const image = p.portrait_url || p.image_url;
+  const playstyle: string | undefined =
+    p.playstyle ||
+    p.summary_json?.playstyle ||
+    p.metadata_json?.playstyle ||
+    cardInfo.archetype ||
+    p.archetype;
+  const playerTraits: string[] =
+    Array.isArray(p.traits) && p.traits.length > 0
+      ? p.traits
+      : Array.isArray(p.skills) && p.skills.length > 0
+        ? p.skills
+        : Array.isArray(p.summary_json?.traits) && p.summary_json.traits.length > 0
+          ? p.summary_json.traits
+          : Array.isArray(p.metadata_json?.traits) && p.metadata_json.traits.length > 0
+            ? p.metadata_json.traits
+            : [];
 
   // Construct Sources for Journey Projection
   const reportSource: Source<any> = {
@@ -453,7 +469,8 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                   club={club}
                   image={image}
                   generation={cardInfo.generation ?? 1}
-                  archetype={cardInfo.archetype ?? "Academy Prodigy"}
+                  archetype={playstyle ?? cardInfo.archetype ?? "Academy Prodigy"}
+                  traits={playerTraits.length > 0 ? playerTraits : undefined}
                   serial={cardInfo.serial_number}
                   price={regenData?.market_value_coin}
                   variant="full"
@@ -468,6 +485,8 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                   nationality={nationality}
                   club={club}
                   image={image}
+                  archetype={playstyle}
+                  traits={playerTraits}
                   variant="full"
                 />
               )}
@@ -632,6 +651,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
               <div className="flex flex-wrap gap-2">
                 <Chip tone="emerald">{isRegen ? "Gen 1-3 Verified Regen" : "Established Professional"}</Chip>
                 <Chip tone="cyan">{position}</Chip>
+                {playstyle && <Chip tone="gold">{playstyle}</Chip>}
                 <Chip tone="gold">{nationality}</Chip>
                 {potential - rating >= 10 && <Chip tone="purple">Wonderkid Potential</Chip>}
               </div>
@@ -641,6 +661,38 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                 </p>
               )}
             </div>
+
+            {/* Style of Play & Signature Traits */}
+            {(playstyle || playerTraits.length > 0) && (
+              <div
+                className="rounded-md border border-cyan-500/25 bg-cyan-950/15 p-4 space-y-3"
+                data-testid="dossier-traits-section"
+              >
+                <div className="flex items-center justify-between border-b border-cyan-500/20 pb-2">
+                  <span className="gx-eyebrow text-cyan-300">Style of Play & Signature Traits</span>
+                  {playstyle && (
+                    <span
+                      className="rounded bg-cyan-500/20 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200"
+                      data-testid="dossier-playstyle"
+                    >
+                      {playstyle}
+                    </span>
+                  )}
+                </div>
+                {playerTraits.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5" data-testid="dossier-traits-list">
+                    {playerTraits.map((trait, i) => (
+                      <span
+                        key={`${trait}-${i}`}
+                        className="rounded border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-slate-200"
+                      >
+                        {trait}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Attributes Breakdown */}
             <div className="rounded-md border border-white/10 bg-slate-900/60 p-4 space-y-3">

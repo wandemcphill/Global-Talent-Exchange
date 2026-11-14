@@ -110,6 +110,11 @@ export function MarketTableView({
                     {isLegend && <Crown size={12} className="text-amber-400 shrink-0" />}
                     {isWonderkid && <Sparkles size={12} className="text-emerald-400 shrink-0" />}
                   </button>
+                  {p.playstyle && (
+                    <p className="text-[10px] font-medium text-cyan-400/90 mt-0.5 truncate max-w-[180px]">
+                      {p.playstyle}
+                    </p>
+                  )}
                 </td>
 
                 {/* Nat */}

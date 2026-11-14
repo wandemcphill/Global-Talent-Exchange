@@ -87,6 +87,12 @@ function RegenDossier({ playerId }: { playerId: string }) {
   if (isLoading || !m) return <Loading label="Pulling the academy file" />;
   const id = m.identity || {};
   const a = m.attributes || {};
+  const regenPlaystyle: string | undefined = id.playstyle || m.playstyle;
+  const regenTraits: string[] = Array.isArray(id.traits) && id.traits.length > 0
+    ? id.traits
+    : Array.isArray(id.skills) && id.skills.length > 0
+      ? id.skills
+      : [];
   return (
     <div className="space-y-5" data-testid="drawer-regen-dossier">
       <div className="mx-auto max-w-[240px]">
@@ -101,6 +107,8 @@ function RegenDossier({ playerId }: { playerId: string }) {
           club={id.current_club_name}
           image={id.image_url}
           regen
+          archetype={regenPlaystyle}
+          traits={regenTraits}
           badge={a.potential - a.overall >= 15 ? "Wonderkid" : "Regen"}
           stats={[
             { k: "Ceiling", v: `+${Math.max(0, (a.potential || 0) - (a.overall || 0))}` },
@@ -112,7 +120,38 @@ function RegenDossier({ playerId }: { playerId: string }) {
       <div className="flex flex-wrap gap-2">
         <Chip tone="emerald">Pre-seeded national regen</Chip>
         {id.position && <Chip tone="cyan">{id.position}</Chip>}
+        {regenPlaystyle && <Chip tone="gold">{regenPlaystyle}</Chip>}
       </div>
+      {(regenPlaystyle || regenTraits.length > 0) && (
+        <div
+          className="rounded-sm border border-cyan-500/20 bg-cyan-500/[0.04] p-3.5 text-xs space-y-2"
+          data-testid="drawer-regen-traits"
+        >
+          {regenPlaystyle && (
+            <div className="flex items-center justify-between">
+              <span className="gx-eyebrow text-cyan-300">Style of Play</span>
+              <span className="rounded bg-cyan-500/20 px-2 py-0.5 text-[11px] font-bold text-cyan-200">
+                {regenPlaystyle}
+              </span>
+            </div>
+          )}
+          {regenTraits.length > 0 && (
+            <div>
+              <p className="gx-eyebrow text-slate-400 mb-1.5">Traits & Skills</p>
+              <div className="flex flex-wrap gap-1.5">
+                {regenTraits.map((trait, i) => (
+                  <span
+                    key={`${trait}-${i}`}
+                    className="rounded border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium text-slate-200"
+                  >
+                    {trait}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
       <div className="space-y-2.5" data-testid="drawer-regen-attributes">
         {["pace", "shooting", "passing", "dribbling", "defending", "physical"].map((k) => (
           <TraitBar key={k} label={label(k)} value={a[k] ?? 0} max={99} />
@@ -164,6 +203,21 @@ export function PlayerDrawer({
       : p?.normalized_signals || {};
   const isLegend = String(p?.real_player_tier || "").toLowerCase() === "legend";
   const honors: string[] = Array.isArray(p?.metadata_json?.honors) ? p.metadata_json.honors : [];
+  const playstyle: string | undefined =
+    p?.playstyle ||
+    p?.summary_json?.playstyle ||
+    p?.metadata_json?.playstyle ||
+    p?.metadata_json?.archetype;
+  const playerTraits: string[] =
+    Array.isArray(p?.traits) && p.traits.length > 0
+      ? p.traits
+      : Array.isArray(p?.skills) && p.skills.length > 0
+        ? p.skills
+        : Array.isArray(p?.summary_json?.traits) && p.summary_json.traits.length > 0
+          ? p.summary_json.traits
+          : Array.isArray(p?.metadata_json?.traits) && p.metadata_json.traits.length > 0
+            ? p.metadata_json.traits
+            : [];
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm"
@@ -206,6 +260,8 @@ export function PlayerDrawer({
                 image={p.image_url}
                 tier={isLegend ? "legendary" : undefined}
                 badge={isLegend ? "ICON · 1 OF 1" : undefined}
+                archetype={playstyle}
+                traits={playerTraits}
                 stats={[
                   { k: "Fee", v: fmt(quote?.price) },
                   {
@@ -221,11 +277,42 @@ export function PlayerDrawer({
             </div>
             <div className="flex flex-wrap gap-2">
               <Chip tone="cyan">{p.primary_position || p.position}</Chip>
+              {playstyle && <Chip tone="gold">{playstyle}</Chip>}
               {p.current_league_name && <Chip>{p.current_league_name}</Chip>}
               {p.real_player_tier && <Chip tone="gold">{label(p.real_player_tier)}</Chip>}
               {p.lifecycle_status_label && <Chip tone="emerald">{p.lifecycle_status_label}</Chip>}
               {p.height_cm && <Chip>{p.height_cm} cm</Chip>}
             </div>
+            {(playstyle || playerTraits.length > 0) && (
+              <div
+                className="rounded-sm border border-cyan-500/20 bg-cyan-500/[0.04] p-3.5 text-xs space-y-2.5"
+                data-testid="drawer-traits"
+              >
+                {playstyle && (
+                  <div className="flex items-center justify-between" data-testid="drawer-playstyle">
+                    <span className="gx-eyebrow text-cyan-300">Style of Play</span>
+                    <span className="rounded bg-cyan-500/20 px-2.5 py-0.5 text-[11px] font-bold text-cyan-200">
+                      {playstyle}
+                    </span>
+                  </div>
+                )}
+                {playerTraits.length > 0 && (
+                  <div>
+                    <p className="gx-eyebrow text-slate-400 mb-1.5">Traits & Skills</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {playerTraits.map((trait, i) => (
+                        <span
+                          key={`${trait}-${i}`}
+                          className="rounded border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium text-slate-200"
+                        >
+                          {trait}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             {honors.length > 0 && (
               <div className="rounded-sm border border-amber-400/20 bg-amber-500/[0.04] p-3.5 text-xs space-y-1">
                 <p className="gx-eyebrow text-amber-300 mb-1">Career Honors</p>

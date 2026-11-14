@@ -492,6 +492,11 @@ export function PlayerCard(props: PlayerCardProps) {
         <p className="mt-1 truncate text-xs text-slate-300 font-medium">
           {[club, age ? `${age} yrs` : null].filter(Boolean).join(" · ")}
         </p>
+        {props.archetype && (
+          <p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wider text-[#42B9EC]">
+            {props.archetype}
+          </p>
+        )}
       </div>
 
       {/* Key attributes row */}

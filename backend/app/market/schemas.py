@@ -239,6 +239,9 @@ class MarketPlayerListItemView(BaseModel):
     image_url: str | None
     avatar: PlayerAvatarView
     attributes: MarketPlayerAttributesView | None = None
+    playstyle: str | None = None
+    traits: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
 
 
 class MarketPlayerListView(BaseModel):
@@ -299,6 +302,9 @@ class MarketPlayerIdentityView(BaseModel):
     current_competition_name: str | None
     image_url: str | None
     avatar: PlayerAvatarView
+    playstyle: str | None = None
+    traits: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
 
 
 class MarketPlayerMarketProfileView(BaseModel):

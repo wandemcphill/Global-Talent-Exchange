@@ -16,6 +16,7 @@ from app.models.real_player_profile import RealPlayerProfile
 from app.models.real_player_source_link import RealPlayerSourceLink
 from app.players.read_models import PlayerSummaryReadModel
 from app.players.gsi_service import resolve_player_gsi
+from app.players.traits_service import resolve_player_traits_and_playstyle
 from app.players.real_player_schemas import RealPlayerMatchRequest
 from app.players.real_player_read_models import (
     RealPlayerUniverseDetail,
@@ -692,6 +693,7 @@ class RealPlayerUniverseQueryService:
         prof_ref = profile.source_last_refreshed_at if profile is not None else None
         prof_upd = profile.updated_at if profile is not None else player.updated_at
         is_ver = bool(source_link.is_verified_real_player) if source_link is not None else True
+        playstyle, traits, skills = resolve_player_traits_and_playstyle(player, profile, summary)
 
         return RealPlayerUniverseListItem(
             player_id=player.id,
@@ -719,6 +721,9 @@ class RealPlayerUniverseQueryService:
             source_last_refreshed_at=prof_ref or player.source_last_refreshed_at,
             is_verified_real_player=is_ver,
             updated_at=prof_upd,
+            playstyle=playstyle,
+            traits=traits,
+            skills=skills,
         )
 
     def _build_detail(
@@ -759,6 +764,20 @@ class RealPlayerUniverseQueryService:
         )
         cur_gsi, pot_gsi = resolve_player_gsi(player)
         detail_potential = None if is_legend else (player.potential or pot_gsi)
+        playstyle, traits, skills = resolve_player_traits_and_playstyle(player, profile, summary)
+        merged_metadata = {
+            **dna,
+            **dict((profile.metadata_json if profile is not None else None) or {}),
+            "playstyle": playstyle,
+            "traits": list(traits),
+            "skills": list(skills),
+        }
+        detail_summary_json = {
+            **self._summary_payload(summary),
+            "playstyle": playstyle,
+            "traits": list(traits),
+            "skills": list(skills),
+        }
         return RealPlayerUniverseDetail(
             player_id=player.id,
             player_name=player.full_name,
@@ -834,12 +853,15 @@ class RealPlayerUniverseQueryService:
                 (profile.normalization_profile_version if profile is not None else None)
                 or player.normalization_profile_version
             ),
-            metadata_json=dict((profile.metadata_json if profile is not None else None) or dna),
-            summary_json=self._summary_payload(summary),
+            metadata_json=merged_metadata,
+            summary_json=detail_summary_json,
             updated_at=profile.updated_at if profile is not None else player.updated_at,
             governed_gsi=cur_gsi,
             potential=detail_potential,
             attributes=football_attributes,
+            playstyle=playstyle,
+            traits=traits,
+            skills=skills,
         )
 
     def _build_match_candidate_snapshot(

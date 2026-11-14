@@ -163,7 +163,12 @@ export function ShareMarket() {
                               </span>
                             )}
                           </p>
-                          <p className="truncate text-xs text-slate-500">{m.nationality}</p>
+                          <p className="truncate text-xs text-slate-500">
+                            {m.nationality}
+                            {m.playstyle && (
+                              <span className="ml-1.5 text-cyan-400/90">· {m.playstyle}</span>
+                            )}
+                          </p>
                         </div>
                       </div>
                     </td>

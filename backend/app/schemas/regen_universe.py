@@ -252,6 +252,9 @@ class RegenPlayerView(CommonSchema):
     club_id: str | None = None
     source_type: str = "regen"
     market_value_coin: int | None = None
+    playstyle: str | None = None
+    traits: list[str] = Field(default_factory=list)
+    skills: list[str] = Field(default_factory=list)
     market_access: RegenPlayerMarketAccessView = Field(default_factory=RegenPlayerMarketAccessView)
 
 

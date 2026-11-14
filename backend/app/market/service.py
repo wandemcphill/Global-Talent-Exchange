@@ -37,6 +37,7 @@ from app.market.repositories import (
 from app.models.transfer_market import TransferListing
 from app.pricing.models import CandleSeries, MarketMoverItem, MarketMovers, PlayerExecution, PlayerPricingSnapshot
 from app.pricing.service import MarketPricingService, PricingValidationError
+from app.players.traits_service import resolve_player_traits_and_playstyle
 from app.schemas.avatar import PlayerAvatarView
 from app.services.avatar_service import AvatarIdentityInput, AvatarService
 from app.services.runtime_control_service import RuntimeControlService
@@ -783,6 +784,9 @@ class MarketPlayerListItem:
     image_url: str | None
     avatar: PlayerAvatarView
     attributes: "MarketPlayerAttributes"
+    playstyle: str | None = None
+    traits: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -839,6 +843,9 @@ class MarketPlayerIdentity:
     current_competition_name: str | None
     image_url: str | None
     avatar: PlayerAvatarView
+    playstyle: str | None = None
+    traits: list[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -1213,6 +1220,7 @@ class MarketPlayerQueryService:
         breakdown_payload = self._breakdown_payload(record)
         real_world_impact = self._real_world_impact(player.id)
         status_code, status_label = resolve_player_lifecycle_status(player, getattr(player, "share_market", None))
+        playstyle, traits, skills = resolve_player_traits_and_playstyle(player, summary=record.summary)
 
         return MarketPlayerDetail(
             player_id=player.id,
@@ -1238,6 +1246,9 @@ class MarketPlayerQueryService:
                 current_competition_name=self._catalog_league_label(record),
                 image_url=self._image_url(record),
                 avatar=self._avatar(record),
+                playstyle=playstyle,
+                traits=list(traits),
+                skills=list(skills),
             ),
             market_profile=MarketPlayerMarketProfile(
                 is_tradable=is_transfer_market_eligible(player),
@@ -1660,6 +1671,7 @@ class MarketPlayerQueryService:
         open_listing: TransferListing | None = None,
         share_price_coin: Decimal | None = None,
     ) -> MarketPlayerListItem:
+        playstyle, traits, skills = resolve_player_traits_and_playstyle(record.player, summary=record.summary)
         return MarketPlayerListItem(
             player_id=record.player.id,
             player_name=record.player.full_name,
@@ -1707,6 +1719,9 @@ class MarketPlayerQueryService:
                 record.player,
                 self._coerce_int(self._global_scouting_index(record)),
             ),
+            playstyle=playstyle,
+            traits=list(traits),
+            skills=list(skills),
         )
 
     def _share_prices_by_player_id(self, records: list[MarketPlayerRecord]) -> dict[str, Decimal]:

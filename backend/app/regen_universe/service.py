@@ -1012,6 +1012,31 @@ class RegenUniverseService:
             return None
 
     def _player_summary_payload(self, prospect: _UniverseProspect) -> dict[str, object]:
+        from app.players.traits_service import derive_playstyle_and_traits, resolve_player_traits_and_playstyle
+
+        playstyle: str | None = None
+        traits_list: list[str] = []
+        skills_list: list[str] = []
+        if prospect.player_id:
+            player_obj = self.session.get(Player, prospect.player_id)
+            if player_obj is not None:
+                ps, tr, sk = resolve_player_traits_and_playstyle(player_obj)
+                playstyle, traits_list, skills_list = ps, list(tr), list(sk)
+        if not playstyle or not traits_list:
+            ps, tr = derive_playstyle_and_traits(
+                player_id=prospect.lookup_id,
+                full_name=prospect.name,
+                position=prospect.position,
+                normalized_position=prospect.position,
+                preferred_foot=None,
+                height_cm=None,
+                gsi=prospect.current_rating,
+                dna={},
+            )
+            playstyle = playstyle or ps
+            traits_list = traits_list or list(tr)
+            skills_list = skills_list or list(tr)
+
         return {
             "id": prospect.lookup_id,
             "name": prospect.name,
@@ -1027,6 +1052,9 @@ class RegenUniverseService:
             "club_id": prospect.club_id,
             "source_type": prospect.source_type,
             "market_value_coin": prospect.market_value_coin,
+            "playstyle": playstyle,
+            "traits": traits_list,
+            "skills": skills_list,
             "market_access": self._prospect_market_access_payload(prospect),
         }
 

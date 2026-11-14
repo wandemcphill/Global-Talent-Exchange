@@ -116,11 +116,49 @@ export function PlayerStatisticalProfileView({
             <p className="gx-mono text-2xl font-black text-emerald-400 mt-0.5">+{Math.max(0, potential - rating)}</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase font-bold text-slate-400">Archetype</p>
-            <p className="text-xs font-bold text-cyan-300 mt-1 truncate">{player.archetype || "Tactical Specialist"}</p>
+            <p className="text-[10px] uppercase font-bold text-slate-400">Style of Play</p>
+            <p className="text-xs font-bold text-cyan-300 mt-1 truncate">
+              {player.playstyle ||
+                player.summary_json?.playstyle ||
+                player.metadata_json?.playstyle ||
+                player.archetype ||
+                "Tactical Specialist"}
+            </p>
           </div>
         </div>
       </div>
+
+      {/* Signature Traits & Skills */}
+      {(() => {
+        const traitsList: string[] =
+          Array.isArray(player.traits) && player.traits.length > 0
+            ? player.traits
+            : Array.isArray(player.skills) && player.skills.length > 0
+              ? player.skills
+              : Array.isArray(player.summary_json?.traits) && player.summary_json.traits.length > 0
+                ? player.summary_json.traits
+                : Array.isArray(player.metadata_json?.traits) && player.metadata_json.traits.length > 0
+                  ? player.metadata_json.traits
+                  : [];
+        if (traitsList.length === 0) return null;
+        return (
+          <div className="rounded-xl border border-white/10 bg-slate-900/60 p-3.5 space-y-2">
+            <p className="text-[10px] font-black uppercase tracking-wider text-cyan-400">
+              Traits & Skills
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {traitsList.map((trait, idx) => (
+                <span
+                  key={`${trait}-${idx}`}
+                  className="rounded border border-white/10 bg-white/[0.05] px-2.5 py-0.5 text-[11px] font-semibold text-slate-200"
+                >
+                  {trait}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* FM 3-Column Attribute Grid */}
       <div className="grid gap-4 sm:grid-cols-3">

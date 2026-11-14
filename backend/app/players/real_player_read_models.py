@@ -32,6 +32,9 @@ class RealPlayerUniverseListItem:
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool
     updated_at: datetime
+    playstyle: str | None = None
+    traits: tuple[str, ...] = ()
+    skills: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -111,6 +114,9 @@ class RealPlayerUniverseDetail:
     governed_gsi: int | None = None
     potential: int | None = None
     attributes: dict[str, Any] = field(default_factory=dict)
+    playstyle: str | None = None
+    traits: tuple[str, ...] = ()
+    skills: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

@@ -159,6 +159,9 @@ class PlayerShareMarketListItemView(BaseModel):
     circulating_shares: int
     status: str
     market_issued: bool = True
+    playstyle: str | None = None
+    traits: list[str] = []
+    skills: list[str] = []
     metadata_json: dict[str, object] = {}
     created_at: datetime
     updated_at: datetime

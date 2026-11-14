@@ -36,6 +36,9 @@ class RealPlayerUniverseListItemView(BaseModel):
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool
     updated_at: datetime
+    playstyle: str | None = None
+    traits: tuple[str, ...] = ()
+    skills: tuple[str, ...] = ()
 
 
 class RealPlayerUniverseListView(BaseModel):
@@ -119,6 +122,9 @@ class RealPlayerUniverseDetailView(BaseModel):
     governed_gsi: int | None = None
     potential: int | None = None
     attributes: dict[str, Any] = Field(default_factory=dict)
+    playstyle: str | None = None
+    traits: tuple[str, ...] = ()
+    skills: tuple[str, ...] = ()
 
 
 class RealPlayerMatchRangePreference(BaseModel):

@@ -1228,8 +1228,14 @@ class PlayerTokenMarketService:
             ):
                 portrait = None
         from app.players.gsi_service import resolve_player_gsi
+        from app.players.traits_service import resolve_player_traits_and_playstyle
 
         cur_rating, pot_rating = resolve_player_gsi(player, market)
+        playstyle, traits, skills = resolve_player_traits_and_playstyle(player)
+        meta_out = dict(market.metadata_json or {})
+        meta_out.setdefault("playstyle", playstyle)
+        meta_out.setdefault("traits", list(traits))
+        meta_out.setdefault("skills", list(skills))
         return {
             "player_id": player.id,
             "player_name": player.canonical_display_name or player.full_name,
@@ -1250,7 +1256,10 @@ class PlayerTokenMarketService:
             "circulating_shares": int(market.circulating_shares or 0),
             "status": market.status,
             "market_issued": True,
-            "metadata_json": dict(market.metadata_json or {}),
+            "playstyle": playstyle,
+            "traits": list(traits),
+            "skills": list(skills),
+            "metadata_json": meta_out,
             "created_at": market.created_at,
             "updated_at": market.updated_at,
         }
