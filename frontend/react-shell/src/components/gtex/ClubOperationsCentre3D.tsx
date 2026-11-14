@@ -495,6 +495,7 @@ export function ClubOperationsCentre3D({
     scene.add(rotundaRing);
 
     const pickables: THREE.Object3D[] = [];
+    const animatedActors: THREE.Group[] = [];
     const loader = new GLTFLoader();
     let mounted = true;
     let loadedModels = 0;
@@ -515,6 +516,7 @@ export function ClubOperationsCentre3D({
       const interiorBuild = buildDepartmentInterior(dest);
       group.add(interiorBuild.group);
       pickables.push(...interiorBuild.pickables);
+      animatedActors.push(...interiorBuild.animatedActors);
 
       // Corridor Light Path to Central Atrium
       const distToCenter = Math.hypot(rx, rz);
@@ -752,6 +754,20 @@ export function ClubOperationsCentre3D({
           isTransitioningRef.current = false;
         }
       }
+
+      // Quiet idle motion keeps each department inhabited without a heavy
+      // skeletal animation dependency or extra network-loaded character assets.
+      animatedActors.forEach((actor) => {
+        const phase = Number(actor.userData.idlePhase || 0);
+        const wave = Math.sin(now * 0.00115 + phase);
+        actor.position.y = Number(actor.userData.baseY || 0) + wave * 0.025;
+        const leftArm = actor.userData.leftArmPivot as THREE.Group | undefined;
+        const rightArm = actor.userData.rightArmPivot as THREE.Group | undefined;
+        const head = actor.userData.headPivot as THREE.Group | undefined;
+        if (leftArm) leftArm.rotation.z = wave * 0.035;
+        if (rightArm) rightArm.rotation.z = -wave * 0.035;
+        if (head) head.rotation.y = Math.sin(now * 0.00055 + phase) * 0.075;
+      });
 
       // Highlight selected room wing
       roomGroupsRef.current.forEach((grp, key) => {
