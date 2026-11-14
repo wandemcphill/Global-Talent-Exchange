@@ -52,7 +52,9 @@ import {
 import type { PublicBrandAd } from "@/lib/commercial/api";
 import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
 import {
+  computeLiveXgTotals,
   deriveTouchlineNudge,
+  extractShotMarkers,
   metricText,
   pitchSource,
   seekTime,
@@ -1921,6 +1923,10 @@ export default function MatchCenter() {
   const hasAuthoritativeFeed = Boolean(
     acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length > 0,
   );
+  // Live xG running totals — only shots up to the current clock minute (no replay spoilers)
+  const liveXg = computeLiveXgTotals(
+    extractShotMarkers(allMatchEvents as ReadonlyArray<Record<string, any>>).filter((s) => done || s.minute <= minute),
+  );
   const isScheduled =
     phaseName === "pre_match" && minute === 0;
   const side = m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away";
@@ -2180,6 +2186,15 @@ export default function MatchCenter() {
               <p className="sr-only" data-testid="match-score">
                 {score.home} – {score.away}
               </p>
+              {liveXg.homeShots + liveXg.awayShots > 0 && (
+                <span
+                  data-testid="live-xg-totals"
+                  className="gx-mono mt-1 rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] font-bold tracking-wider text-slate-300"
+                  title={`Shots: ${liveXg.homeShots} – ${liveXg.awayShots}`}
+                >
+                  xG {liveXg.home.toFixed(2)} – {liveXg.away.toFixed(2)}
+                </span>
+              )}
             </div>
 
             {/* Away Club Team Card */}

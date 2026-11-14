@@ -806,9 +806,12 @@ function resolveIndividualMovementAction(player: {
   if (combinedState.includes("celebrat")) return "celebrate";
   if (combinedState.includes("save")) return "save";
   if (combinedState.includes("dive")) return "dive";
+  if (combinedState.includes("slide")) return "slide_tackle";
   if (combinedState.includes("shoot") || combinedState.includes("shot")) return "shoot";
   if (combinedState.includes("pass")) return "pass";
   if (combinedState.includes("tackle") || combinedState.includes("foul")) return "tackle";
+  if (combinedState.includes("feint") || combinedState.includes("skill")) return "feint";
+  if (combinedState.includes("control") || combinedState.includes("first_touch") || combinedState.includes("cushion")) return "control";
   if (combinedState.includes("jump") || combinedState.includes("aerial")) return "jump";
   if (combinedState.includes("turn")) return "turn";
   if (combinedState.includes("accel")) return "accelerate";
@@ -969,6 +972,8 @@ export function animationFor(
 
   if (event === "foul" || event === "tackle" || event === "yellow_card" || event === "red_card") {
     if (isPrimaryActor || isSecondaryActor || distToBall <= 0.065) {
+      // Distinguish sliding vs standing tackle from state string
+      if (state.includes("slide")) return "slide_tackle";
       return "tackle";
     }
     return resolveIndividualMovementAction(player);
@@ -976,6 +981,18 @@ export function animationFor(
 
   if (event === "substitution" || event === "halftime" || event === "fulltime") {
     return "idle";
+  }
+
+  // First-touch / ball-control: receiver cushioning an incoming pass or cross
+  if ((event === "pass" || event === "cross" || event === "through_ball") && !isPrimaryActor && distToBall <= 0.045) {
+    if (state.includes("control") || state.includes("first_touch") || state.includes("receive")) {
+      return "control";
+    }
+  }
+
+  // Feint: dribbler performing a skill move against a close defender
+  if (isPrimaryActor && player.hasBall && (state.includes("feint") || state.includes("skill") || state.includes("dribble"))) {
+    if ((player.speedRatio ?? 0) > 0.4) return "feint";
   }
 
   return resolveIndividualMovementAction(player);
@@ -1696,5 +1713,77 @@ export function deriveTouchlineNudge(input: {
   }
 
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Duel outcome overlay — "WON BALL" pill shown above tackling player
+// ---------------------------------------------------------------------------
+
+export type DuelOutcomeOverlay = {
+  /** Player who won the ball */
+  playerId: string;
+  side: PitchSide;
+  /** Canvas-normalised pitch position (0-1) */
+  x: number;
+  y: number;
+  /** Ms timestamp when the overlay was triggered */
+  triggeredAtMs: number;
+  /** Display duration in ms */
+  durationMs: number;
+};
+
+/**
+ * Derives a temporary "WON BALL" duel-outcome overlay from the current event frame.
+ * Returns null when the event is not a successful tackle/foul won by the primary actor.
+ */
+export function deriveDuelOutcomeOverlay(
+  frame: Pick<PitchFrame, "eventType" | "primaryPlayerId" | "secondaryPlayerId" | "players">,
+  nowMs: number,
+): DuelOutcomeOverlay | null {
+  const event = String(frame.eventType || "").toLowerCase();
+  if (event !== "tackle") return null;
+  if (!frame.primaryPlayerId) return null;
+  const winner = frame.players.find((p) => p.playerId === frame.primaryPlayerId);
+  if (!winner) return null;
+  return {
+    playerId: winner.playerId,
+    side: winner.side,
+    x: winner.x,
+    y: winner.y,
+    triggeredAtMs: nowMs,
+    durationMs: 1200,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Live xG running totals — computed from accumulated PitchShotMarker list
+// ---------------------------------------------------------------------------
+
+export type LiveXgTotals = {
+  home: number;
+  away: number;
+  homeShots: number;
+  awayShots: number;
+};
+
+/**
+ * Aggregates expected goals from an accumulated shot-marker list produced by extractShotMarkers().
+ * Safe to call on every render frame — O(n) over shot count which is always small.
+ */
+export function computeLiveXgTotals(markers: Array<{ side: PitchSide; xg: number }>): LiveXgTotals {
+  let home = 0;
+  let away = 0;
+  let homeShots = 0;
+  let awayShots = 0;
+  for (const m of markers) {
+    if (m.side === "home") {
+      home += m.xg;
+      homeShots += 1;
+    } else {
+      away += m.xg;
+      awayShots += 1;
+    }
+  }
+  return { home, away, homeShots, awayShots };
 }
 

@@ -646,6 +646,10 @@ function OrthographicPitchComponent({
     let lastOverlayPaintMs = -1000;
     let lastOverlaySignature = "";
     let previousBall: { x: number; y: number } | null = null;
+    // Ball spin / bounce state
+    let ballSpinAngle = 0;
+    let ballBounceScale = 1;
+    let lastBallHeightMeters = 0;
 
     const resize = () => {
       const width = Math.max(host.clientWidth, 320);
@@ -1055,6 +1059,27 @@ function OrthographicPitchComponent({
         ballMesh.position.set(point.x, point.y + liftY, 2.1);
         ballMesh.scale.set(scaleBoost, scaleBoost, 1);
         ballMesh.visible = true;
+
+        // Ball spin rotation — rate proportional to speed; faster when aerial
+        const spinRate = resolvedBall
+          ? resolvedBall.speedNorm * (resolvedBall.inFlight ? 0.14 : 0.06)
+          : 0;
+        ballSpinAngle += spinRate;
+        ballMesh.rotation.z = ballSpinAngle;
+
+        // Ground bounce squash/stretch — trigger when ball transitions from aerial to ground
+        const curElev = elev;
+        if (lastBallHeightMeters > 0.4 && curElev < 0.12) {
+          // Landing detected — trigger squash pulse
+          ballBounceScale = 0.7;
+        }
+        lastBallHeightMeters = curElev;
+        // Recover bounce scale back to 1 smoothly
+        if (ballBounceScale < 1) {
+          ballBounceScale = Math.min(1, ballBounceScale + 0.08);
+          const stretchX = 1 / Math.max(0.6, ballBounceScale);
+          ballMesh.scale.set(scaleBoost * stretchX, scaleBoost * ballBounceScale, 1);
+        }
 
         const from = previousBall ? toWorld(previousBall.x, previousBall.y) : point;
         effect.visible = cue === "pass" || cue === "shot" || cue === "goal";
@@ -1923,6 +1948,35 @@ function paintTacticalOverlays(
     strokePolyCircle(ctx, bx, by, 16, 11, 18);
     strokePolyCircle(ctx, bx, by, 24, 16, 18);
     ctx.restore();
+
+    // Duel outcome pill — "WON BALL" (tackle) or "FOUL" (foul) above the primary duel player
+    if (activeEventLower === "tackle" || activeEventLower === "foul") {
+      const duelPlayer =
+        input.carrierPlayer ||
+        [...players].sort(
+          (a, b) => Math.hypot(a.x - ball.x, a.y - ball.y) - Math.hypot(b.x - ball.x, b.y - ball.y),
+        )[0];
+      if (duelPlayer) {
+        const isFoul = activeEventLower === "foul";
+        const label = isFoul ? "FOUL" : "WON BALL";
+        const px = duelPlayer.x * OVERLAY_W;
+        const py = Math.max(30, duelPlayer.y * OVERLAY_H - 40);
+        const w = isFoul ? 40 : 60;
+        drawRoundedBannerBox(
+          ctx,
+          px - w / 2,
+          py,
+          w,
+          14,
+          isFoul ? "rgba(127, 29, 29, 0.9)" : "rgba(6, 78, 59, 0.9)",
+          isFoul ? "rgba(248, 113, 113, 0.85)" : "rgba(52, 211, 153, 0.85)",
+        );
+        ctx.font = "bold 8.5px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = isFoul ? "#fecaca" : "#d1fae5";
+        safeFillText(ctx, label, px, py + 10);
+      }
+    }
   }
 
   // 5D. Live Shot xG Threat Ring & Cumulative Interactive Shot Map Overlay
@@ -1942,6 +1996,88 @@ function paintTacticalOverlays(
     ctx.lineWidth = 2.2;
     strokePolyCircle(ctx, sx, sy, 18, 12, 20);
     ctx.restore();
+
+    // Shot power meter — brief bar above the shooter fading on contact
+    const shooterPlayer = input.players.find(
+      (p) => p.hasBall || (startPt && Math.hypot(p.x - startPt.x, p.y - startPt.y) < 0.08),
+    );
+    if (shooterPlayer && activeEventLower === "shot") {
+      const shooterX = shooterPlayer.x * OVERLAY_W;
+      const shooterY = Math.max(14, shooterPlayer.y * OVERLAY_H - 32);
+      const barW = 32;
+      const barH = 5;
+      // Power proxy: closer to goal = higher power
+      const goalX = shooterPlayer.side === "home" ? 1.0 : 0.0;
+      const distToGoal = Math.abs(shooterPlayer.x - goalX);
+      const powerFill = Math.max(0.18, Math.min(0.98, 1 - distToGoal * 1.4));
+      ctx.save();
+      ctx.fillStyle = "rgba(2, 6, 23, 0.72)";
+      ctx.fillRect(shooterX - barW / 2, shooterY, barW, barH);
+      const powerColor =
+        powerFill > 0.72 ? "#f43f5e" : powerFill > 0.45 ? "#fb923c" : "#facc15";
+      ctx.fillStyle = powerColor;
+      ctx.fillRect(shooterX - barW / 2, shooterY, barW * powerFill, barH);
+      ctx.strokeStyle = "rgba(255,255,255,0.4)";
+      ctx.lineWidth = 0.8;
+      ctx.strokeRect(shooterX - barW / 2, shooterY, barW, barH);
+      ctx.restore();
+    }
+
+    // Goalkeeper dive direction arrow — from keeper toward ball trajectory intercept
+    const keeperPlayer = input.players.find((p) => p.isGoalkeeper || /gk|goal/i.test(String(p.role || "")));
+    if (keeperPlayer && ballTrajectory && ballTrajectory.length > 0) {
+      const finalPt = ballTrajectory[ballTrajectory.length - 1];
+      const kx = keeperPlayer.x * OVERLAY_W;
+      const ky = keeperPlayer.y * OVERLAY_H;
+      const tx = finalPt.x * OVERLAY_W;
+      const ty = finalPt.y * OVERLAY_H;
+      const dist = Math.hypot(tx - kx, ty - ky);
+      if (dist > 4) {
+        const arrowLen = Math.min(28, dist * 0.55);
+        const arrowAngle = Math.atan2(ty - ky, tx - kx);
+        const ex = kx + Math.cos(arrowAngle) * arrowLen;
+        const ey = ky + Math.sin(arrowAngle) * arrowLen;
+        ctx.save();
+        ctx.strokeStyle = "rgba(56, 189, 248, 0.88)";
+        ctx.lineWidth = 2.0;
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath();
+        ctx.moveTo(kx, ky);
+        ctx.lineTo(ex, ey);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(56, 189, 248, 0.88)";
+        ctx.beginPath();
+        ctx.moveTo(ex, ey);
+        ctx.lineTo(ex - Math.cos(arrowAngle - 0.42) * 7, ey - Math.sin(arrowAngle - 0.42) * 7);
+        ctx.lineTo(ex - Math.cos(arrowAngle + 0.42) * 7, ey - Math.sin(arrowAngle + 0.42) * 7);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
+
+    // Crossbar / post hit detection — when ball is near goal line and horizontally near post
+    if (ball) {
+      const nearGoalLine = ball.x < 0.07 || ball.x > 0.93;
+      const nearPost = Math.abs(ball.y - 0.5) > 0.07 && Math.abs(ball.y - 0.5) < 0.16;
+      if (nearGoalLine && nearPost && (activeEventLower === "miss" || activeEventLower === "shot")) {
+        const bx2 = ball.x * OVERLAY_W;
+        const by2 = ball.y * OVERLAY_H;
+        ctx.save();
+        ctx.strokeStyle = "rgba(203, 213, 225, 0.92)";
+        ctx.lineWidth = 2.6;
+        strokePolyCircle(ctx, bx2, by2, 10, 7, 8);
+        strokePolyCircle(ctx, bx2, by2, 18, 12, 8);
+        ctx.restore();
+        // "WOODWORK!" callout
+        drawRoundedBannerBox(ctx, bx2 - 36, by2 - 24, 72, 15, "rgba(2,6,23,0.88)", "rgba(203,213,225,0.7)");
+        ctx.font = "bold 8.5px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillStyle = "#e2e8f0";
+        safeFillText(ctx, "WOODWORK!", bx2, by2 - 13);
+      }
+    }
   }
 
   if (input.showShotMap) {

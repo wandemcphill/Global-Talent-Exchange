@@ -12,6 +12,9 @@ export const RIG_ACTIONS = [
   "pass",
   "shoot",
   "tackle",
+  "slide_tackle",
+  "control",
+  "feint",
   "jump",
   "header",
   "save",
@@ -125,14 +128,18 @@ export function poseFor(action: RigAction, frame: number): Pose {
   }
   if (action === "shoot") {
     const strike = step * 0.5;
+    // phase 0: plant foot (frame 0-1) → phase 1: strike contact (frame 2) → phase 2: follow-through (frame 3)
+    const phase = frame % ATLAS_FRAMES;
+    const plantLean = phase < 2 ? 0.08 : -0.18 + strike * 0.1;
+    const plantLeftLeg: [number, number] = phase < 2 ? [0.55, 0.42] : [0.45 - strike * 0.2, 0.35];
     return {
-      lean: -0.18 + strike * 0.1,
+      lean: plantLean,
       headLift: 2,
       jump: 1 + Math.max(0, step) * 1.5,
-      torsoTilt: -0.15 - strike * 0.1,
-      leftArm: [0.8 + strike * 0.3, 0.4],
+      torsoTilt: -0.15 - strike * 0.1 + (phase === 3 ? 0.08 : 0),
+      leftArm: [0.8 + strike * 0.3 + (phase === 3 ? 0.3 : 0), 0.4],
       rightArm: [1.3 - strike * 0.3, 0.2],
-      leftLeg: [0.45 - strike * 0.2, 0.35],
+      leftLeg: plantLeftLeg,
       rightLeg: [-1.35 + strike * 0.9, 0.08 + Math.max(0, -step) * 0.25],
     };
   }
@@ -147,6 +154,48 @@ export function poseFor(action: RigAction, frame: number): Pose {
       rightArm: [0.4 - lunge * 0.2, 0.2],
       leftLeg: [0.2 - lunge * 0.15, 0.4],
       rightLeg: [-1.25 - Math.abs(lunge) * 0.2, 0.05],
+    };
+  }
+  // Sliding tackle — horizontal dive with right leg fully extended, left leg tucked, arms bracing
+  if (action === "slide_tackle") {
+    const glide = Math.max(0, beat);
+    return {
+      lean: 0.92 + glide * 0.06,
+      headLift: -0.5,
+      jump: 0,
+      torsoTilt: 1.15 + glide * 0.08,
+      leftArm: [0.6 + glide * 0.2, 0.3],
+      rightArm: [2.1 - glide * 0.2, 0.15],
+      leftLeg: [0.55 + glide * 0.1, 0.65],
+      rightLeg: [-2.4 + glide * 0.15, 0.04],
+    };
+  }
+  // Ball control / first touch — body hunched over ball, one leg raised to cushion
+  if (action === "control") {
+    const cushion = Math.max(0, step) * 0.3;
+    return {
+      lean: 0.42 + cushion * 0.08,
+      headLift: -1,
+      jump: cushion * 1.2,
+      torsoTilt: 0.18 + cushion * 0.06,
+      leftArm: [0.5 - cushion * 0.1, 0.25],
+      rightArm: [0.5 + cushion * 0.1, 0.25],
+      leftLeg: [0.65 + cushion * 0.25, 0.55 + cushion * 0.15],
+      rightLeg: [-0.3 - cushion * 0.1, 0.1],
+    };
+  }
+  // Body feint — exaggerated torso twist, weight shift against opponent
+  if (action === "feint") {
+    const twist = step * 1.1;
+    return {
+      lean: 0.22 + Math.abs(twist) * 0.06,
+      headLift: 0.5,
+      jump: Math.abs(twist) * 0.4,
+      torsoTilt: twist * 0.85,
+      leftArm: [0.6 + twist * 0.4, 0.2],
+      rightArm: [0.6 - twist * 0.4, 0.2],
+      leftLeg: [0.38 - twist * 0.18, 0.28],
+      rightLeg: [-0.42 + twist * 0.18, 0.28],
     };
   }
   if (action === "jump") {
@@ -227,6 +276,9 @@ const PRIORITY_ACTIONS = new Set<RigAction>([
   "pass",
   "shoot",
   "tackle",
+  "slide_tackle",
+  "control",
+  "feint",
   "header",
   "jump",
   "save",
@@ -251,7 +303,6 @@ export function presentationAction(
   if (motion.speed > 0.0035) return "walk";
   return action === "sprint" || action === "jog" || action === "walk" || action === "dribble" ? action : "idle";
 }
-
 export type TrackedPlayerMotion = {
   sampleX: number;
   sampleY: number;
