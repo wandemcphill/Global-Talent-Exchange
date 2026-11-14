@@ -2325,7 +2325,7 @@ def execute_owner_operational_decision(
                 res = service.academy_contract(session, user_id, club_id, pid)
                 facs = dict(state.facilities_json or {})
                 outcome_text = (
-                    f"Awarded improved academy contract to {res['player']['name']} for {res['cost_gtex']:,} GTX "
+                    f"Awarded improved academy contract to {res['player']['name']} for {res['cost_fan_coin']:,} Fan Coin "
                     f"(+{res['morale_boost']} Morale, +{res['loyalty_boost']} Loyalty)."
                 )
             elif op_key == "academy_intake":
