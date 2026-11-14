@@ -10,7 +10,6 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20261114_0247_living_supporter_media_club_history"
 down_revision = "20261114_0246_autonomous_staff_and_living_club_decisions"
 branch_labels = None
@@ -28,7 +27,12 @@ def upgrade() -> None:
             sa.Column("id", sa.String(length=36), primary_key=True),
             sa.Column("club_id", sa.String(length=36), nullable=False),
             sa.Column("owner_user_id", sa.String(length=36), nullable=False),
-            sa.Column("supporter_culture_label", sa.String(length=120), nullable=False, server_default="Community & Youth Traditionalists"),
+            sa.Column(
+                "supporter_culture_label",
+                sa.String(length=120),
+                nullable=False,
+                server_default="Community & Youth Traditionalists",
+            ),
             sa.Column("overall_sentiment", sa.Integer(), nullable=False, server_default="65"),
             sa.Column("confidence_in_owner", sa.Integer(), nullable=False, server_default="65"),
             sa.Column("confidence_in_manager", sa.Integer(), nullable=False, server_default="68"),
@@ -110,7 +114,9 @@ def upgrade() -> None:
             sa.Column("outlet_key", sa.String(length=64), nullable=False),
             sa.Column("outlet_name", sa.String(length=120), nullable=False),
             sa.Column("journalist_name", sa.String(length=120), nullable=False),
-            sa.Column("journalist_role", sa.String(length=80), nullable=False, server_default="Senior Football Correspondent"),
+            sa.Column(
+                "journalist_role", sa.String(length=80), nullable=False, server_default="Senior Football Correspondent"
+            ),
             sa.Column("editorial_focus", sa.String(length=48), nullable=False),
             sa.Column("credibility_tier", sa.String(length=32), nullable=False, server_default="tier_1_authoritative"),
             sa.Column("credibility_score", sa.Integer(), nullable=False, server_default="88"),
@@ -181,7 +187,9 @@ def upgrade() -> None:
         op.create_index("ix_owner_club_history_entries_club_id", "owner_club_history_entries", ["club_id"])
         op.create_index("ix_owner_club_history_entries_category", "owner_club_history_entries", ["category"])
         op.create_index("ix_owner_club_history_entries_world_day", "owner_club_history_entries", ["world_day"])
-        op.create_index("ix_owner_club_history_entries_idempotency_key", "owner_club_history_entries", ["idempotency_key"])
+        op.create_index(
+            "ix_owner_club_history_entries_idempotency_key", "owner_club_history_entries", ["idempotency_key"]
+        )
 
     if "owner_club_season_archives" not in existing_tables:
         op.create_table(
@@ -216,7 +224,9 @@ def upgrade() -> None:
             sa.UniqueConstraint("idempotency_key", name="uq_owner_club_season_archives_idempotency"),
         )
         op.create_index("ix_owner_club_season_archives_club_id", "owner_club_season_archives", ["club_id"])
-        op.create_index("ix_owner_club_season_archives_competition_id", "owner_club_season_archives", ["competition_id"])
+        op.create_index(
+            "ix_owner_club_season_archives_competition_id", "owner_club_season_archives", ["competition_id"]
+        )
 
     if "owner_club_managerial_tenures" not in existing_tables:
         op.create_table(
@@ -261,7 +271,9 @@ def upgrade() -> None:
             sa.Column("overall_rating", sa.Integer(), nullable=False, server_default="70"),
             sa.Column("fee_gtex", sa.Numeric(precision=18, scale=2), nullable=False, server_default="0"),
             sa.Column("wage_gtex", sa.Numeric(precision=18, scale=2), nullable=False, server_default="0"),
-            sa.Column("counterparty_club_name", sa.String(length=120), nullable=False, server_default="GTEX Transfer Market"),
+            sa.Column(
+                "counterparty_club_name", sa.String(length=120), nullable=False, server_default="GTEX Transfer Market"
+            ),
             sa.Column("season_number", sa.Integer(), nullable=False, server_default="1"),
             sa.Column("world_day", sa.Integer(), nullable=False, server_default="1"),
             sa.Column("is_record_signing", sa.Boolean(), nullable=False, server_default=sa.false()),

@@ -1355,7 +1355,7 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
             new_manager=default_mgr,
             previous_manager=current,
             reason="dismissed_by_owner",
-            severance_fan_coin=compensation_fan_coin,
+            severance_gtex=compensation,
         )
     except Exception as mgr_err:
         logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
@@ -3053,7 +3053,7 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 new_manager=default_mgr,
                 previous_manager=current,
                 reason="dismissed_by_owner",
-                severance_gtex=compensation,
+                severance_fan_coin=compensation_fan_coin,
             )
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff fire failed: %s", mgr_err)
@@ -3091,7 +3091,7 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
         "status": "dismissed",
         "role": role,
         "staff_name": current.get("name"),
-        "severance_paid": compensation,
+        "severance_paid": compensation_fan_coin,
     }
 
 

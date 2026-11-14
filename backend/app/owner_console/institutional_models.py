@@ -28,9 +28,7 @@ class OwnerSupporterProfile(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     club_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
     owner_user_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
-    supporter_culture_label: Mapped[str] = mapped_column(
-        String(120), default="Community & Youth Traditionalists"
-    )
+    supporter_culture_label: Mapped[str] = mapped_column(String(120), default="Community & Youth Traditionalists")
     overall_sentiment: Mapped[int] = mapped_column(Integer, default=65)
     confidence_in_owner: Mapped[int] = mapped_column(Integer, default=65)
     confidence_in_manager: Mapped[int] = mapped_column(Integer, default=68)
@@ -56,9 +54,7 @@ class OwnerSupporterSegment(Base):
     """Persistent supporter segment with distinct expectations, priorities, and sentiment memory."""
 
     __tablename__ = "owner_supporter_segments"
-    __table_args__ = (
-        UniqueConstraint("club_id", "segment_key", name="uq_owner_supporter_segments_club_segment"),
-    )
+    __table_args__ = (UniqueConstraint("club_id", "segment_key", name="uq_owner_supporter_segments_club_segment"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     club_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)
@@ -302,9 +298,7 @@ class OwnerClubRivalry(Base):
     """Permanent historic rivalry record evolving from repeated encounters and competitive stakes."""
 
     __tablename__ = "owner_club_rivalries"
-    __table_args__ = (
-        UniqueConstraint("club_id", "rival_club_id", name="uq_owner_club_rivalries_club_rival"),
-    )
+    __table_args__ = (UniqueConstraint("club_id", "rival_club_id", name="uq_owner_club_rivalries_club_rival"),)
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=_uuid)
     club_id: Mapped[str] = mapped_column(String(36), index=True, nullable=False)

@@ -23,6 +23,19 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
+from app.owner_console.institutional_models import (
+    OwnerClubAcademyGraduate,
+    OwnerClubHistoryEntry,
+    OwnerClubManagerialTenure,
+    OwnerClubRivalry,
+    OwnerClubSeasonArchive,
+    OwnerClubTransferRecord,
+    OwnerMediaOutlet,
+    OwnerMediaStory,
+    OwnerSupporterEvent,
+    OwnerSupporterProfile,
+    OwnerSupporterSegment,
+)
 
 
 class OwnerClubState(UUIDPrimaryKeyMixin, Base):
@@ -683,9 +696,7 @@ class OwnerRecruitmentAssignment(UUIDPrimaryKeyMixin, Base):
     """Durable inter-staff recruitment workflow assignment linking Manager requirements, GM evaluation, and Chief Scout targets."""
 
     __tablename__ = "owner_recruitment_assignments"
-    __table_args__ = (
-        Index("ix_owner_recruitment_assignments_club_status", "club_id", "gm_evaluation_status"),
-    )
+    __table_args__ = (Index("ix_owner_recruitment_assignments_club_status", "club_id", "gm_evaluation_status"),)
 
     club_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     initiated_by_role: Mapped[str] = mapped_column(String(64), nullable=False, default="first_team_manager")
@@ -693,7 +704,9 @@ class OwnerRecruitmentAssignment(UUIDPrimaryKeyMixin, Base):
     target_position: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     min_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=80, server_default="80")
     max_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=85, server_default="85")
-    tactical_profile: Mapped[str] = mapped_column(String(128), nullable=False, default="balanced", server_default="balanced")
+    tactical_profile: Mapped[str] = mapped_column(
+        String(128), nullable=False, default="balanced", server_default="balanced"
+    )
     max_fee: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     max_weekly_wage: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     gm_evaluation_status: Mapped[str] = mapped_column(
@@ -739,4 +752,15 @@ OWNER_CONSOLE_TABLES = (
     OwnerClubAnnouncement.__table__,
     OwnerStaffDecisionRecord.__table__,
     OwnerRecruitmentAssignment.__table__,
+    OwnerSupporterProfile.__table__,
+    OwnerSupporterSegment.__table__,
+    OwnerSupporterEvent.__table__,
+    OwnerMediaOutlet.__table__,
+    OwnerMediaStory.__table__,
+    OwnerClubHistoryEntry.__table__,
+    OwnerClubSeasonArchive.__table__,
+    OwnerClubManagerialTenure.__table__,
+    OwnerClubTransferRecord.__table__,
+    OwnerClubAcademyGraduate.__table__,
+    OwnerClubRivalry.__table__,
 )

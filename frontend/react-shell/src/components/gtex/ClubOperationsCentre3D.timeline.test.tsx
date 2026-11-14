@@ -1006,26 +1006,43 @@ describe("Club Operations Centre department interior blueprints", () => {
     },
   );
   test("shows a retryable error state when the operations hub request fails", async () => {
-    jest.spyOn(api, "get").mockImplementation((url: string) => {
+    const testContainer = document.createElement("div");
+    document.body.appendChild(testContainer);
+    const testRoot = createRoot(testContainer);
+    const testQueryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false, gcTime: 0 },
+      },
+    });
+    const getSpy = jest.spyOn(api, "get").mockImplementation((url: string) => {
       if (url.includes("/operations-hub")) {
         return Promise.reject(new Error("Operations hub temporarily unavailable"));
       }
       return Promise.resolve({ data: {} });
     });
 
-    await act(async () => {
-      root!.render(
-        <QueryClientProvider client={queryClient}>
-          <ClubOperationsCentre3D clubId="club-tl-1" />
-        </QueryClientProvider>,
-      );
-    });
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 60));
-    });
+    try {
+      await act(async () => {
+        testRoot.render(
+          <QueryClientProvider client={testQueryClient}>
+            <ClubOperationsCentre3D clubId="club-tl-1" />
+          </QueryClientProvider>,
+        );
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      });
 
-    expect(container?.querySelector('[data-testid="living-club-management-centre-error"]')).not.toBeNull();
-    expect(container?.textContent).toContain("Retry operations data");
+      expect(testContainer.querySelector('[data-testid="living-club-management-centre-error"]')).not.toBeNull();
+      expect(testContainer.textContent).toContain("Retry operations data");
+    } finally {
+      act(() => {
+        testRoot.unmount();
+      });
+      testContainer.remove();
+      testQueryClient.clear();
+      getSpy.mockRestore();
+    }
   });
 
 });

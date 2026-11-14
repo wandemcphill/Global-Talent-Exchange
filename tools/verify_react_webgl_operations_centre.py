@@ -47,7 +47,7 @@ EXPECTED_GLBS = {
     "general_managers_office": "/models/campus/vip_skybox_concourse.glb",
     "academy_department": "/models/campus/elite_academy_complex.glb",
     "medical_department": "/models/campus/recovery_hydro_hub.glb",
-    "finance_commercial_office": "/models/campus/high_performance_centre.glb",
+    "finance_commercial_office": "/models/campus/club_hq.glb",
 }
 
 

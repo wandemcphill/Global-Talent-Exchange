@@ -72,7 +72,6 @@ from app.services.player_lifecycle_service import (
     PlayerLifecycleService,
     PlayerLifecycleValidationError,
 )
-from app.services.regen_transfer_addon import AUTO_CONVERSION_PREMIUM_BPS
 from app.wallets.service import LedgerPosting, WalletService
 from tests.support.club_treasury import fund_club_treasury
 

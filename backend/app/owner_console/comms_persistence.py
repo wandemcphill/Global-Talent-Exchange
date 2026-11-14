@@ -1215,7 +1215,9 @@ def _resolve_staff_identity_for_conversation(
     """
     identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
     p_id = str(conv.participant_id or conv.thread_key or "staff:first_team_manager").lower()
-    staff_meta = STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
+    staff_meta = (
+        STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
+    )
     role_key = staff_meta["role_key"]
 
     if role_key == "first_team_manager":
@@ -1669,8 +1671,16 @@ def send_club_message_durable(
         )
         if existing_decision is not None and existing_decision.conversation_id:
             existing_conv = session.get(OwnerClubConversation, existing_decision.conversation_id)
-            req_msg = session.get(OwnerClubMessage, existing_decision.request_message_id) if existing_decision.request_message_id else None
-            rep_msg = session.get(OwnerClubMessage, existing_decision.response_message_id) if existing_decision.response_message_id else None
+            req_msg = (
+                session.get(OwnerClubMessage, existing_decision.request_message_id)
+                if existing_decision.request_message_id
+                else None
+            )
+            rep_msg = (
+                session.get(OwnerClubMessage, existing_decision.response_message_id)
+                if existing_decision.response_message_id
+                else None
+            )
             if existing_conv is not None:
                 return {
                     "status": "sent",
@@ -1867,9 +1877,7 @@ def send_club_message_durable(
             )
             or 1
         )
-        squad_players = list(
-            session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
-        )
+        squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
 
         # Layer A: Authoritative Staff Decision Engine
         intent_data = autonomous_staff_engine.classify_owner_request(

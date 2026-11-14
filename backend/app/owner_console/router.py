@@ -3383,4 +3383,3 @@ def get_club_institutional_history_view(
         )
 
     return _run(session, _op)
-

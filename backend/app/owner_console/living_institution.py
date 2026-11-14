@@ -10,7 +10,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.owner_console import engine, ledger
+from app.owner_console import ledger
 from app.owner_console.institutional_models import (
     OwnerClubAcademyGraduate,
     OwnerClubHistoryEntry,
@@ -25,11 +25,9 @@ from app.owner_console.institutional_models import (
     OwnerSupporterSegment,
 )
 from app.owner_console.models import (
-    OwnerBroadcastEvent,
     OwnerClubState,
     OwnerCompetition,
     OwnerCompetitionEntry,
-    OwnerInboxItem,
     OwnerMatch,
     OwnerNewsroomArticle,
     OwnerScoutingWatchlist,
@@ -284,10 +282,7 @@ DEFAULT_MEDIA_OUTLETS: tuple[dict[str, Any], ...] = (
 
 def ensure_media_outlets(session: Session) -> dict[str, OwnerMediaOutlet]:
     """Ensure the canonical set of media outlets and journalists exist."""
-    existing = {
-        row.outlet_key: row
-        for row in session.scalars(select(OwnerMediaOutlet)).all()
-    }
+    existing = {row.outlet_key: row for row in session.scalars(select(OwnerMediaOutlet)).all()}
     for spec in DEFAULT_MEDIA_OUTLETS:
         if spec["outlet_key"] not in existing:
             outlet = OwnerMediaOutlet(
@@ -318,9 +313,7 @@ def ensure_club_institutional_ecosystem(
     """Idempotently initialize or reconcile supporter profile, segments, media outlets, and founding history."""
     ensure_media_outlets(session)
 
-    profile = session.scalar(
-        select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == state.club_id)
-    )
+    profile = session.scalar(select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == state.club_id))
     total_fans = max(200, int(state.fans or 1200))
     world_day = int(state.world_day or 1)
 
@@ -587,9 +580,7 @@ def _recompute_profile_aggregates(
         or (profile.consecutive_disappointments >= 5 and profile.overall_sentiment <= 35)
     ):
         profile.active_protest_stage = "organised_boycott"
-        profile.active_campaign_headline = (
-            "Supporter Coalition Calls for Matchday Walkout & Boardroom Accountability"
-        )
+        profile.active_campaign_headline = "Supporter Coalition Calls for Matchday Walkout & Boardroom Accountability"
     elif (
         org_sent <= 32
         or profile.overall_sentiment <= 34
@@ -660,9 +651,7 @@ def apply_supporter_reaction(
     contradiction_reason: str | None = None,
 ) -> OwnerSupporterEvent:
     """Apply a differentiated reaction across all 6 supporter segments with scar-tissue memory."""
-    existing = session.scalar(
-        select(OwnerSupporterEvent).where(OwnerSupporterEvent.idempotency_key == idempotency_key)
-    )
+    existing = session.scalar(select(OwnerSupporterEvent).where(OwnerSupporterEvent.idempotency_key == idempotency_key))
     if existing is not None:
         return existing
 
@@ -832,7 +821,9 @@ def compute_matchday_atmosphere(
         visible_reactions.append("Organised supporter groups hold up protest banners in the 18th minute.")
     elif rivalry_intensity >= 55:
         dominant_mood = "ferocious_derby_cauldron"
-        stadium_ambience = f"Electric Derby Cauldron vs {opponent_name or (rivalry.rival_club_name if rivalry else 'Rivals')}"
+        stadium_ambience = (
+            f"Electric Derby Cauldron vs {opponent_name or (rivalry.rival_club_name if rivalry else 'Rivals')}"
+        )
         banners.append(f"PRIDE OF {state.club_name.upper()} — NEVER YIELD THIS DERBY")
         chants.append(f"Stand up for {state.club_name} — Derby Day Roar!")
         visible_reactions.append("Full-stand tifo display and flares welcome the players onto the pitch.")
@@ -904,9 +895,7 @@ def publish_media_story(
 ) -> OwnerMediaStory:
     """Publish a persistent, grounded media story with verified/rumour/opinion classification and consequences."""
     idem = idempotency_key or f"media:{state.club_id}:{story_type}:{uuid4().hex[:10]}"
-    existing = session.scalar(
-        select(OwnerMediaStory).where(OwnerMediaStory.idempotency_key == idem)
-    )
+    existing = session.scalar(select(OwnerMediaStory).where(OwnerMediaStory.idempotency_key == idem))
     if existing is not None:
         return existing
 
@@ -991,7 +980,9 @@ def publish_media_story(
                     source_event_id=story.id,
                     category=story_type,
                     headline=headline[:200],
-                    subheadline=f"{outlet.outlet_name} · {outlet.journalist_name} ({clean_classification.replace('_', ' ').title()})"[:240],
+                    subheadline=f"{outlet.outlet_name} · {outlet.journalist_name} ({clean_classification.replace('_', ' ').title()})"[
+                        :240
+                    ],
                     editorial_narration=body,
                     established_facts_json=facts,
                     grounding_report_json=grounding_report,
@@ -1026,9 +1017,7 @@ def record_match_institutional_impact(
 
     idem_prefix = f"match:{match.id}:club:{state.club_id}"
     existing_hist = session.scalar(
-        select(OwnerClubHistoryEntry).where(
-            OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result"
-        )
+        select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result")
     )
     if existing_hist is not None:
         return {"already_recorded": True}
@@ -1166,14 +1155,10 @@ def record_match_institutional_impact(
     match_events = list(match.events_json or [])
     team_tag = "home" if is_home else "away"
     goal_texts = [
-        str(ev.get("text") or "")
-        for ev in match_events
-        if ev.get("type") == "goal" and ev.get("team") == team_tag
+        str(ev.get("text") or "") for ev in match_events if ev.get("type") == "goal" and ev.get("team") == team_tag
     ]
 
-    for sq_player in session.scalars(
-        select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)
-    ).all():
+    for sq_player in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all():
         if sq_player.id not in xi_ids:
             continue
         pers = dict(sq_player.personality_json or {})
@@ -1319,7 +1304,9 @@ def record_match_institutional_impact(
         if debutants:
             drivers["youth_academy"] = 5.0
         sup_headline = f"Mixed Terrace Verdict After {gf}-{ga} Draw With {opp_name}"
-        sup_summary = f"Supporters debated a hard-fought {gf}-{ga} draw against {opp_name} in Round {match.round_number}."
+        sup_summary = (
+            f"Supporters debated a hard-fought {gf}-{ga} draw against {opp_name} in Round {match.round_number}."
+        )
     else:
         loss_sev = (-7.0 - min(8.0, abs(margin) * 2.5)) * rivalry_factor
         drivers = {
@@ -1375,7 +1362,11 @@ def record_match_institutional_impact(
     flag_modified(match, "narrative_json")
 
     # 7. Publish Grounded Media Coverage (Match Report + Conditional Streak/Protest/Debut Stories)
-    rep_delta = 2 if (gf > ga and margin >= 2) else 1 if gf > ga else -2 if (gf < ga and abs(margin) >= 2) else -1 if gf < ga else 0
+    rep_delta = (
+        2
+        if (gf > ga and margin >= 2)
+        else 1 if gf > ga else -2 if (gf < ga and abs(margin) >= 2) else -1 if gf < ga else 0
+    )
     publish_media_story(
         session,
         state,
@@ -1590,7 +1581,11 @@ def record_season_completion_archive(
         archives.append(archive)
 
         # Record in permanent club history ledger
-        hist_cat = "trophy_award" if trophy_won else "promotion_relegation" if promo_status in ("promoted", "relegated") else "competition_participation"
+        hist_cat = (
+            "trophy_award"
+            if trophy_won
+            else "promotion_relegation" if promo_status in ("promoted", "relegated") else "competition_participation"
+        )
         record_history_entry(
             session,
             club_id=state.club_id,
@@ -1809,9 +1804,7 @@ def record_managerial_change(
         classification="verified_event",
         headline=title,
         subheadline=f"Official dugout transition at {state.club_name} on World Day {world_day}",
-        body=(
-            f"On World Day {world_day}, {state.club_name} confirmed a dugout transition: {summary}"
-        ),
+        body=(f"On World Day {world_day}, {state.club_name} confirmed a dugout transition: {summary}"),
         source_type="manager_change",
         source_id=idem,
         established_facts={
@@ -1850,9 +1843,7 @@ def record_transfer_movement(
     wage_dec = Decimal(str(wage_gtex or 0))
     idem = idempotency_key or f"transfer:{state.club_id}:{direction}:{player_id}:d{world_day}"
 
-    existing = session.scalar(
-        select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == idem)
-    )
+    existing = session.scalar(select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == idem))
     if existing is not None:
         return existing
 
@@ -2014,9 +2005,7 @@ def record_academy_promotion_milestone(
     season_num = _season_number_for_state(state)
     idem = f"academy_grad:{state.club_id}:{squad_player.id}"
 
-    grad = session.scalar(
-        select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.idempotency_key == idem)
-    )
+    grad = session.scalar(select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.idempotency_key == idem))
     if grad is None:
         grad = OwnerClubAcademyGraduate(
             club_id=state.club_id,
@@ -2212,22 +2201,17 @@ def engage_supporters(
     elif action_type == "public_statement":
         msg_lower = clean_msg.lower()
         # Check for contradictions between statement claims and actual club behavior
-        if (
-            any(w in msg_lower for w in ("affordable", "accessible", "working-class", "fair ticket", "community access"))
-            and profile.ticket_price_tier in ("premium", "exploitative")
-        ):
+        if any(
+            w in msg_lower for w in ("affordable", "accessible", "working-class", "fair ticket", "community access")
+        ) and profile.ticket_price_tier in ("premium", "exploitative"):
             contradiction_detected = True
-            contradiction_reason = (
-                f"Statement promised affordable supporter access while club ticket pricing is set to '{profile.ticket_price_tier}'."
-            )
+            contradiction_reason = f"Statement promised affordable supporter access while club ticket pricing is set to '{profile.ticket_price_tier}'."
         elif (
             any(w in msg_lower for w in ("dominant", "unbeaten", "crisis is over", "flawless form"))
             and profile.consecutive_disappointments >= 2
         ):
             contradiction_detected = True
-            contradiction_reason = (
-                f"Statement claimed strong on-pitch momentum despite {profile.consecutive_disappointments} consecutive disappointments."
-            )
+            contradiction_reason = f"Statement claimed strong on-pitch momentum despite {profile.consecutive_disappointments} consecutive disappointments."
         elif stance == "dismissive" or any(w in msg_lower for w in ("ignore", "stop complaining", "quiet")):
             contradiction_detected = True
             contradiction_reason = "Dismissive posture toward supporter concerns alienated organised groups."
@@ -2246,10 +2230,12 @@ def engage_supporters(
     elif action_type == "supporter_meeting":
         if profile.ticket_price_tier == "exploitative" and stance != "concessional":
             contradiction_detected = True
-            contradiction_reason = "Owner convened a supporter meeting but refused to address exploitative ticket pricing."
+            contradiction_reason = (
+                "Owner convened a supporter meeting but refused to address exploitative ticket pricing."
+            )
             drivers = {"owner_conduct": -8.0, "ticket_pricing": -10.0}
             credibility_delta = -8
-            headline = f"Tense Supporter Town Hall Ends in Stalemate Over Pricing"
+            headline = "Tense Supporter Town Hall Ends in Stalemate Over Pricing"
             summary = contradiction_reason
         else:
             drivers = {"owner_conduct": 9.0, "club_identity": 8.0, "ticket_pricing": 4.0}
@@ -2312,7 +2298,8 @@ def engage_supporters(
         summary=summary,
         driver_Impacts=drivers,
         idempotency_key=f"supporter:engage:{state.club_id}:{action_type}:{event_token}",
-        is_disappointment=contradiction_detected or (action_type == "ticketing_decision" and profile.ticket_price_tier in ("premium", "exploitative")),
+        is_disappointment=contradiction_detected
+        or (action_type == "ticketing_decision" and profile.ticket_price_tier in ("premium", "exploitative")),
         credibility_delta=credibility_delta,
         contradiction_detected=contradiction_detected,
         contradiction_reason=contradiction_reason,
@@ -2362,7 +2349,9 @@ def engage_supporters(
         established_facts={
             "overall_sentiment": int(profile.overall_sentiment),
             "owner_credibility_score": int(profile.owner_credibility_score),
-            "community_investment_gtex": int(community_investment_gtex or 250) if action_type == "community_initiative" else 0,
+            "community_investment_gtex": (
+                int(community_investment_gtex or 250) if action_type == "community_initiative" else 0
+            ),
         },
         idempotency_key=f"media:engage:{state.club_id}:{event_token}",
         reputation_delta=-2 if contradiction_detected else 1,
@@ -2407,15 +2396,16 @@ def respond_to_media_story(
     # Domain governance: Owner handles ownership/business/institutional stories; sporting press belongs to football staff
     sporting_story_types = {"match_report", "player_story", "academy_development"}
     role_mismatch_penalty = False
-    if speaker_role == "owner" and story.story_type in sporting_story_types and response_stance == "tactical_interference":
+    if (
+        speaker_role == "owner"
+        and story.story_type in sporting_story_types
+        and response_stance == "tactical_interference"
+    ):
         role_mismatch_penalty = True
 
     contradiction = False
     contradiction_note = None
-    if (
-        story.classification == "verified_event"
-        and response_stance == "deny_facts"
-    ):
+    if story.classification == "verified_event" and response_stance == "deny_facts":
         contradiction = True
         contradiction_note = "Attempted to deny a verified ledger/match event."
 
@@ -2529,9 +2519,7 @@ def process_world_day_institutional_tick(
 
     # 1. If the club has high-priority watchlist targets, occasionally generate a clearly labeled transfer rumour
     watchlist_items = list(
-        session.scalars(
-            select(OwnerScoutingWatchlist).where(OwnerScoutingWatchlist.club_id == state.club_id)
-        ).all()
+        session.scalars(select(OwnerScoutingWatchlist).where(OwnerScoutingWatchlist.club_id == state.club_id)).all()
     )
     rumours_generated = 0
     if watchlist_items and (world_day % 3 == 0):
@@ -2723,9 +2711,7 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
                 "status_label": seg.status_label,
                 "primary_expectation": (seg.expectations_json or {}).get("core_demand", "Competitive progress"),
                 "recent_reaction": (
-                    (seg.recent_memory_json or [{}])[0].get("headline")
-                    if seg.recent_memory_json
-                    else seg.status_label
+                    (seg.recent_memory_json or [{}])[0].get("headline") if seg.recent_memory_json else seg.status_label
                 ),
                 "priorities": dict(seg.priorities_json or {}),
                 "expectations": dict(seg.expectations_json or {}),
@@ -2780,11 +2766,11 @@ def get_media_ecosystem_overview(
     rep_tier = (
         "Global Powerhouse"
         if rep_score >= 80
-        else "Continental Contender"
-        if rep_score >= 60
-        else "Established Institution"
-        if rep_score >= 35
-        else "Emerging Challenger"
+        else (
+            "Continental Contender"
+            if rep_score >= 60
+            else "Established Institution" if rep_score >= 35 else "Emerging Challenger"
+        )
     )
     standing_obj = {
         "public_reputation": rep_score,
@@ -2852,7 +2838,12 @@ def compute_club_records_and_chapters(
         goals = int(pers.get("club_goals", 0))
         if apps > most_apps:
             most_apps = apps
-            most_apps_player = {"player_id": sp.id, "player_name": sp.name, "position": sp.position, "appearances": apps}
+            most_apps_player = {
+                "player_id": sp.id,
+                "player_name": sp.name,
+                "position": sp.position,
+                "appearances": apps,
+            }
         if goals > top_goals:
             top_goals = goals
             top_goal_player = {"player_id": sp.id, "player_name": sp.name, "position": sp.position, "goals": goals}
@@ -2913,7 +2904,9 @@ def compute_club_records_and_chapters(
     departures = [t for t in transfers if t.direction in ("departure", "out")]
     rec_signing = max(arrivals, key=lambda t: Decimal(str(t.fee_gtex or 0)), default=None)
     rec_sale = max(departures, key=lambda t: Decimal(str(t.fee_gtex or 0)), default=None)
-    best_season = min(season_archives, key=lambda s: (int(s.division_level or 4), int(s.final_position or 99)), default=None)
+    best_season = min(
+        season_archives, key=lambda s: (int(s.division_level or 4), int(s.final_position or 99)), default=None
+    )
 
     club_records = {
         "most_appearances": most_apps_player,
@@ -2971,7 +2964,9 @@ def compute_club_records_and_chapters(
         }
     ]
 
-    first_promo_or_title = next((s for s in reversed(season_archives) if s.trophy_won or s.promotion_status == "promoted"), None)
+    first_promo_or_title = next(
+        (s for s in reversed(season_archives) if s.trophy_won or s.promotion_status == "promoted"), None
+    )
     if first_promo_or_title:
         chapters.append(
             {
@@ -3001,7 +2996,8 @@ def compute_club_records_and_chapters(
                     if best_mgr.trophies_won > 0
                     else f"The Dugout Tenure of {best_mgr.manager_name}"
                 ),
-                "era_label": f"World Day {best_mgr.appointed_world_day}" + (f"–{best_mgr.departed_world_day}" if best_mgr.departed_world_day else "–Present"),
+                "era_label": f"World Day {best_mgr.appointed_world_day}"
+                + (f"–{best_mgr.departed_world_day}" if best_mgr.departed_world_day else "–Present"),
                 "narrative": best_mgr.tenure_summary,
                 "grounded_facts": {
                     "manager_name": best_mgr.manager_name,
@@ -3012,7 +3008,9 @@ def compute_club_records_and_chapters(
             }
         )
 
-    star_grad = max(academy_graduates, key=lambda g: (g.first_team_goals, g.first_team_appearances, g.current_rating), default=None)
+    star_grad = max(
+        academy_graduates, key=lambda g: (g.first_team_goals, g.first_team_appearances, g.current_rating), default=None
+    )
     if star_grad:
         chapters.append(
             {
@@ -3101,7 +3099,9 @@ def get_institutional_history_archive(
         session.scalars(
             select(OwnerClubAcademyGraduate)
             .where(OwnerClubAcademyGraduate.club_id == state.club_id)
-            .order_by(desc(OwnerClubAcademyGraduate.first_team_appearances), desc(OwnerClubAcademyGraduate.current_rating))
+            .order_by(
+                desc(OwnerClubAcademyGraduate.first_team_appearances), desc(OwnerClubAcademyGraduate.current_rating)
+            )
         ).all()
     )
     rivalries = list(
