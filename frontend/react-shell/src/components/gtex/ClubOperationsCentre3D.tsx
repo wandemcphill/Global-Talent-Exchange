@@ -866,7 +866,7 @@ export function ClubOperationsCentre3D({
     }
   };
 
-  const handleOfferYouthContract = async (playerId: string, playerName: string, wage: number) => {
+  const handleOfferYouthContract = async (playerId: string, playerName: string) => {
     setBusyAction(`contract:${playerId}`);
     try {
       await api.post(
@@ -2023,7 +2023,7 @@ export function ClubOperationsCentre3D({
                           <button
                             type="button"
                             disabled={Boolean(busyAction)}
-                            onClick={() => handleOfferYouthContract(p.id, p.name, p.contract_wage)}
+                            onClick={() => handleOfferYouthContract(p.id, p.name)}
                             className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[9px] font-bold uppercase text-sky-200 hover:bg-sky-500/30"
                           >
                             Extend
