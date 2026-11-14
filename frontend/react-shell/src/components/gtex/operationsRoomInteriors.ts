@@ -106,7 +106,12 @@ function addDepartmentScreen(
   return screen;
 }
 
-function addRoomShell(root: THREE.Group, accent: THREE.ColorRepresentation): void {
+function addRoomShell(
+  root: THREE.Group,
+  accent: THREE.ColorRepresentation,
+  departmentLabel: string,
+  departmentSubtitle: string,
+): void {
   const floor = addBox(
     root,
     [ROOM_WIDTH, 0.24, ROOM_DEPTH],
@@ -146,10 +151,9 @@ function addRoomShell(root: THREE.Group, accent: THREE.ColorRepresentation): voi
   trim.position.set(0, 0.06, ROOM_DEPTH / 2 - 0.18);
   root.add(trim);
 
-  addDepartmentScreen(root, "Department", "Club Operations Headquarters", String(accent), [0, 2.85, -ROOM_DEPTH / 2 + 0.115], [3.4, 1.1]);
-  const ceilingLight = new THREE.RectAreaLight(accent, 5, 5.5, 1.1);
-  ceilingLight.position.set(0, 3.55, -0.2);
-  ceilingLight.rotation.x = -Math.PI / 2;
+  addDepartmentScreen(root, departmentLabel, departmentSubtitle, String(accent), [0, 2.85, -ROOM_DEPTH / 2 + 0.115], [3.4, 1.1]);
+  const ceilingLight = new THREE.PointLight(accent, 1.8, 18);
+  ceilingLight.position.set(0, 3.35, -0.2);
   root.add(ceilingLight);
 }
 
@@ -324,7 +328,7 @@ export function buildDepartmentInterior(destination: OperationsHubDestination): 
   const pickables: THREE.Object3D[] = [];
   const accent = new THREE.Color(destination.accent_color || "#38bdf8");
 
-  addRoomShell(group, accent);
+  addRoomShell(group, accent, destination.label, destination.subtitle);
 
   switch (destination.destination_key) {
     case "executive_office":
