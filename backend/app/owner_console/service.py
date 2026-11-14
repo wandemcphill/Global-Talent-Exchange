@@ -1355,7 +1355,7 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
             new_manager=default_mgr,
             previous_manager=current,
             reason="dismissed_by_owner",
-            severance_gtex=compensation,
+            severance_fan_coin=compensation_fan_coin,
         )
     except Exception as mgr_err:
         logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
@@ -3019,20 +3019,20 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
     if not current or current.get("is_default"):
         raise OwnerError("no_appointed_staff", 400, f"No appointed staff member for role {role}.")
 
-    compensation = 1_500 + int(current.get("loyalty", 10)) * 75
+    compensation_fan_coin = 1_500 + int(current.get("loyalty", 10)) * 75
     try:
         ledger.record(
             session,
             event_type="staff_compensation",
             source=ledger.club_account(club_id),
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
-            gross=compensation,
+            currency=ledger.FAN,
+            gross=compensation_fan_coin,
             club_id=club_id,
             user_id=user_id,
             related_type="staff",
             related_id=current.get("id") or current.get("staff_id"),
-            memo=f"Severance compensation for {current.get('name')}",
+            memo=f"Severance compensation for {current.get('name')} (Fan Coin)",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
@@ -3074,12 +3074,12 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 title=f"Executive Departure: {current.get('name', 'Executive')} Relieved of {role.replace('_', ' ').title()} Duties",
                 narrative_summary=(
                     f"{current.get('name', 'Executive')} departed {state.club_name} ({role.replace('_', ' ')}) "
-                    f"with {compensation:,} GTX severance."
+                    f"with {compensation_fan_coin:,} Fan Coin severance."
                 ),
                 entity_type="staff",
                 entity_id=str(current.get("id") or role),
                 entity_name=str(current.get("name", "Executive")),
-                established_facts={"role": role, "severance_paid": int(compensation)},
+                established_facts={"role": role, "severance_paid_fan_coin": int(compensation_fan_coin), "currency": ledger.FAN},
                 is_major_milestone=False,
                 idempotency_key=f"history:exec_fire:{club_id}:{role}:d{state.world_day}",
             )
