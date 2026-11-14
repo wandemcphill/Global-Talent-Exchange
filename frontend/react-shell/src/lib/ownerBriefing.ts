@@ -788,6 +788,8 @@ export interface StaffVacanciesResponse {
 export interface StaffOfferSubmitPayload {
   profile_id: string;
   role?: string;
+  offered_salary_fan_coin?: number;
+  /** @deprecated Legacy alias. Value is Fan Coin, not GTEX. */
   offered_salary_gtex?: number;
   contract_years: number;
   marquee_wage_premium?: boolean;
