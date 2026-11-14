@@ -65,6 +65,42 @@ function detectWebGLAvailable(): boolean {
   }
 }
 
+function disposeObjectResources(root: THREE.Object3D): void {
+  const disposedMaterials = new Set<THREE.Material>();
+  const disposedTextures = new Set<THREE.Texture>();
+  root.traverse((object) => {
+    const renderable = object as THREE.Mesh;
+    if (renderable.geometry && typeof renderable.geometry.dispose === "function") {
+      renderable.geometry.dispose();
+    }
+    const materialValue = renderable.material;
+    const materials = Array.isArray(materialValue)
+      ? materialValue
+      : materialValue
+        ? [materialValue]
+        : [];
+    materials.forEach((material) => {
+      if (disposedMaterials.has(material)) return;
+      disposedMaterials.add(material);
+      Object.values(material as unknown as Record<string, unknown>).forEach((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "isTexture" in value &&
+          Boolean((value as THREE.Texture & { isTexture?: boolean }).isTexture)
+        ) {
+          const texture = value as THREE.Texture;
+          if (!disposedTextures.has(texture)) {
+            disposedTextures.add(texture);
+            texture.dispose();
+          }
+        }
+      });
+      material.dispose();
+    });
+  });
+}
+
 const DESTINATION_ICONS: Record<string, React.ReactNode> = {
   executive_office: <Building2 size={15} />,
   managers_office: <Users size={15} />,
@@ -495,7 +531,12 @@ export function ClubOperationsCentre3D({
       loader.load(
         glbUrl,
         (gltf) => {
-          if (!mounted) return;
+          if (!mounted) {
+            // A GLB may finish downloading after this scene has been unmounted.
+            // Release its GPU resources instead of leaking a late asset response.
+            disposeObjectResources(gltf.scene);
+            return;
+          }
           const model = gltf.scene.clone(true);
           const box = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
@@ -659,10 +700,12 @@ export function ClubOperationsCentre3D({
       qualityFrameTotalMs += frameDelta;
       if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
         const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
-        if (averageFrameMs > 24) {
+        const slowFrameThreshold = Math.max(24, targetFrameInterval * 1.25);
+        const fastFrameThreshold = Math.max(18, targetFrameInterval * 0.9);
+        if (averageFrameMs > slowFrameThreshold) {
           slowQualityWindows += 1;
           fastQualityWindows = 0;
-        } else if (averageFrameMs < 18) {
+        } else if (averageFrameMs < fastFrameThreshold) {
           fastQualityWindows += 1;
           slowQualityWindows = 0;
         } else {
@@ -732,38 +775,7 @@ export function ClubOperationsCentre3D({
       controls.dispose();
 
       // Release room geometry, GLB materials and generated screen textures on every teardown.
-      const disposedMaterials = new Set<THREE.Material>();
-      const disposedTextures = new Set<THREE.Texture>();
-      scene.traverse((object) => {
-        const renderable = object as THREE.Mesh;
-        const geometry = renderable.geometry;
-        if (geometry && typeof geometry.dispose === "function") geometry.dispose();
-        const materialValue = renderable.material;
-        const materials = Array.isArray(materialValue)
-          ? materialValue
-          : materialValue
-            ? [materialValue]
-            : [];
-        materials.forEach((material) => {
-          if (disposedMaterials.has(material)) return;
-          disposedMaterials.add(material);
-          Object.values(material as unknown as Record<string, unknown>).forEach((value) => {
-            if (
-              value &&
-              typeof value === "object" &&
-              "isTexture" in value &&
-              Boolean((value as THREE.Texture & { isTexture?: boolean }).isTexture)
-            ) {
-              const texture = value as THREE.Texture;
-              if (!disposedTextures.has(texture)) {
-                disposedTextures.add(texture);
-                texture.dispose();
-              }
-            }
-          });
-          material.dispose();
-        });
-      });
+      disposeObjectResources(scene);
       envTex.dispose();
       pmrem.dispose();
       renderer.domElement.remove();
