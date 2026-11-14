@@ -347,12 +347,19 @@ export function ClubOperationsCentre3D({
     setLoadedGlbCount(0);
     setFailedGlbModels([]);
 
+    const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory || 8;
+    const hardwareConcurrency = navigator.hardwareConcurrency || 8;
+    const isCompactViewport =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 768px)").matches
+        : window.innerWidth <= 768;
+    const lowPowerDevice = isCompactViewport || deviceMemory <= 4 || hardwareConcurrency <= 4;
+
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        powerPreference: "high-performance",
-        preserveDrawingBuffer: true,
+        antialias: !lowPowerDevice,
+        powerPreference: lowPowerDevice ? "low-power" : "high-performance",
       });
     } catch {
       setWebglStatus("fallback");
@@ -363,8 +370,8 @@ export function ClubOperationsCentre3D({
     const width = Math.max(320, container.clientWidth || 960);
     const height = Math.max(380, container.clientHeight || 520);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, lowPowerDevice ? 1.25 : 1.75));
+    renderer.shadowMap.enabled = !lowPowerDevice;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -409,8 +416,8 @@ export function ClubOperationsCentre3D({
       lightingRef.current === "day" ? 2.1 : 0.9
     );
     sunLight.position.set(28, 42, 24);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
+    sunLight.castShadow = !lowPowerDevice;
+    sunLight.shadow.mapSize.set(lowPowerDevice ? 512 : 1024, lowPowerDevice ? 512 : 1024);
     sunLight.shadow.camera.near = 2;
     sunLight.shadow.camera.far = 120;
     const d = 38;
