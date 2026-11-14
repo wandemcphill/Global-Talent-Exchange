@@ -652,6 +652,7 @@ export function ClubOperationsCentre3D({
       });
       envTex.dispose();
       pmrem.dispose();
+      renderer.domElement.remove();
       renderer.dispose();
       lightingObjectsRef.current = null;
       roomGroupsRef.current.clear();
@@ -932,7 +933,7 @@ export function ClubOperationsCentre3D({
     );
   }
 
-  if (isHubError) {
+  if (isHubError && !hub) {
     return (
       <section
         data-testid="living-club-management-centre-error"
