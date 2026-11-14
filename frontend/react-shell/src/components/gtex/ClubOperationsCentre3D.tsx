@@ -242,6 +242,8 @@ export function ClubOperationsCentre3D({
         .join("||"),
     [destinations],
   );
+  const destinationsRef = useRef<OperationsHubDestination[]>(destinations);
+  destinationsRef.current = destinations;
   const activeDestination: OperationsHubDestination | undefined = useMemo(
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
@@ -298,7 +300,8 @@ export function ClubOperationsCentre3D({
       return;
     }
     const container = mountRef.current;
-    if (!container || destinations.length === 0) return;
+    const sceneDestinations = destinationsRef.current;
+    if (!container || sceneDestinations.length === 0) return;
 
     setLoadedGlbCount(0);
     setFailedGlbModels([]);
@@ -409,7 +412,7 @@ export function ClubOperationsCentre3D({
     roomGroupsRef.current.clear();
 
     // Build each of the 6 Operational Destination Wings
-    destinations.forEach((dest) => {
+    sceneDestinations.forEach((dest) => {
       const group = new THREE.Group();
       const [rx, ry, rz] = dest.position_3d;
       group.position.set(rx, ry, rz);
