@@ -1,11 +1,19 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from hashlib import md5
 from math import cos, hypot, sin, tau
 from typing import Any
 
+from app.config.competition_constants import STANDARD_BROADCAST_MAX_SECONDS
 from app.live_matches.schemas import LiveMatchStateView, LiveMatchStreamEventView
+from app.match_engine.simulation.offside_var import (
+    BROADCAST_CATEGORY_MAX_SECONDS,
+    MatchBroadcastCategory,
+    build_universal_broadcast_session,
+    resolve_match_broadcast_category,
+)
 from app.match_engine.schemas import (
     MatchBadgeVisualView,
     MatchCrowdStateView,
@@ -161,18 +169,44 @@ class MatchTimelineService:
             events=events,
             duration_seconds=float(replay_payload.timeline.presentation_duration_seconds),
         )
+        kickoff_meta = dict(replay_payload.timeline.events[0].metadata or {}) if replay_payload.timeline.events else {}
+        resolved_category = resolve_match_broadcast_category(
+            is_final=bool(kickoff_meta.get("competition_category") == MatchBroadcastCategory.FINAL.value),
+            stage=str(kickoff_meta.get("stage") or ""),
+            competition_type=str(kickoff_meta.get("competition_type") or ""),
+            approved_shorter_presentation=bool(kickoff_meta.get("approved_shorter_presentation", False)),
+            metadata=kickoff_meta,
+        )
+        hard_cap = BROADCAST_CATEGORY_MAX_SECONDS[resolved_category]
+        final_duration = min(
+            hard_cap,
+            max(
+                replay_payload.timeline.presentation_duration_seconds,
+                int(frames[-1].time_seconds) if frames else 0,
+            ),
+        )
+        session_payload = build_universal_broadcast_session(
+            match_id=replay_payload.match_id,
+            category=resolved_category,
+            assigned_duration_seconds=final_duration,
+            server_start_timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            current_position_seconds=float(final_duration),
+            broadcast_status="completed",
+            events=[item.view.model_dump(mode="json") for item in events],
+            completion_timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+        )
         return MatchViewStateView(
             match_id=replay_payload.match_id,
             source="simulation",
+            competition_category=resolved_category.value,
             supports_offside=any(item.view.event_type is MatchViewerEventType.OFFSIDE for item in events),
             deterministic_seed=replay_payload.seed,
-            duration_seconds=max(
-                replay_payload.timeline.presentation_duration_seconds, int(frames[-1].time_seconds) if frames else 0
-            ),
+            duration_seconds=final_duration,
             home_team=home_team,
             away_team=away_team,
             events=[item.view for item in events],
             frames=frames,
+            broadcast_session=session_payload,
             presentation_package=MatchViewerPresentationPackageView(
                 match_label=f"{home_team.team_name} vs {away_team.team_name}",
                 home=self._presentation_team_view(
@@ -204,7 +238,9 @@ class MatchTimelineService:
         )
         home_runtime = self._team_runtime(record.visual_identity.home_team, home_team)
         away_runtime = self._team_runtime(record.visual_identity.away_team, away_team)
-        duration_seconds = float(max(180, (record.competition_context.presentation_duration_minutes or 3) * 60))
+        duration_seconds = float(
+            max(180, min(900, (record.competition_context.presentation_duration_minutes or 8) * 60))
+        )
         events = self._archive_events(record, duration_seconds=duration_seconds)
         frames = self._build_frames(
             match_id=record.fixture_id,
@@ -213,16 +249,36 @@ class MatchTimelineService:
             events=events,
             duration_seconds=duration_seconds,
         )
+        resolved_duration = max(int(duration_seconds), int(frames[-1].time_seconds) if frames else 0)
+        resolved_category = resolve_match_broadcast_category(
+            is_final=bool(getattr(record.competition_context, "is_final", False)),
+            stage=str(getattr(record.competition_context, "stage_name", "") or ""),
+            competition_type=str(getattr(record.competition_context, "competition_type", "") or ""),
+            approved_shorter_presentation=(resolved_duration <= 420),
+        )
+        hard_cap = BROADCAST_CATEGORY_MAX_SECONDS[resolved_category]
+        final_duration = min(hard_cap, resolved_duration)
         return MatchViewStateView(
             match_id=record.fixture_id,
             source="replay_archive",
+            competition_category=resolved_category.value,
             supports_offside=any(item.view.event_type is MatchViewerEventType.OFFSIDE for item in events),
             deterministic_seed=None,
-            duration_seconds=max(int(duration_seconds), int(frames[-1].time_seconds) if frames else 0),
+            duration_seconds=final_duration,
             home_team=home_team,
             away_team=away_team,
             events=[item.view for item in events],
             frames=frames,
+            broadcast_session=build_universal_broadcast_session(
+                match_id=record.fixture_id,
+                category=resolved_category,
+                assigned_duration_seconds=final_duration,
+                server_start_timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+                current_position_seconds=float(final_duration),
+                broadcast_status="completed",
+                events=[item.view.model_dump(mode="json") for item in events],
+                completion_timestamp=datetime(2026, 1, 1, tzinfo=UTC),
+            ),
         )
 
     def build_from_live_stream(
@@ -304,10 +360,18 @@ class MatchTimelineService:
             if live_state is not None
             else (max((item.minute for item in ordered_events), default=0))
         )
-        duration_seconds = max(
-            max((self._live_event_time_seconds(item) for item in ordered_events), default=0.0),
-            float(current_minute * 60),
-            90.0,
+        event_duration = max((self._live_event_time_seconds(item) for item in ordered_events), default=0.0)
+        scaled_minute_seconds = (
+            min(
+                float(STANDARD_BROADCAST_MAX_SECONDS),
+                max(90.0, (float(max(current_minute, 0)) / 90.0) * float(STANDARD_BROADCAST_MAX_SECONDS)),
+            )
+            if current_minute > 0
+            else 90.0
+        )
+        duration_seconds = min(
+            float(STANDARD_BROADCAST_MAX_SECONDS),
+            max(event_duration, scaled_minute_seconds, 90.0),
         )
         final_home_score, final_away_score = self._live_scoreline(ordered_events, live_state=live_state)
         contexts = self._ensure_control_events(
@@ -376,6 +440,13 @@ class MatchTimelineService:
             secondary_color=team.selected_kit.secondary_color,
             accent_color=team.selected_kit.accent_color,
             goalkeeper_color=team.goalkeeper_kit.primary_color,
+            kit_pattern=getattr(team.selected_kit, "pattern_type", "solid") or "solid",
+            shorts_color=getattr(team.selected_kit, "shorts_color", None),
+            socks_color=getattr(team.selected_kit, "socks_color", None),
+            crest_url=getattr(team.badge, "badge_url", None),
+            sponsor_text=getattr(team.selected_kit, "front_text", None),
+            goalkeeper_secondary_color=getattr(team.goalkeeper_kit, "secondary_color", None),
+            goalkeeper_pattern=getattr(team.goalkeeper_kit, "pattern_type", "solid") or "solid",
         )
 
     def _presentation_team_view(
@@ -518,6 +589,19 @@ class MatchTimelineService:
                 duration_ms=self._event_duration_ms(context_metadata),
                 positions=self._event_positions_from_metadata(context_metadata),
                 ball=self._event_ball_from_metadata(context_metadata),
+                offside_snapshot=(
+                    context_metadata.get("offside_snapshot")
+                    if isinstance(context_metadata.get("offside_snapshot"), dict)
+                    else None
+                ),
+                var_review=(
+                    context_metadata.get("var_review") if isinstance(context_metadata.get("var_review"), dict) else None
+                ),
+                card_detail=(
+                    context_metadata.get("card_detail")
+                    if isinstance(context_metadata.get("card_detail"), dict)
+                    else None
+                ),
             ),
             source_type=event.event_type.value,
             team_side=None,
@@ -671,6 +755,19 @@ class MatchTimelineService:
                 duration_ms=self._event_duration_ms(context_metadata),
                 positions=self._event_positions_from_metadata(context_metadata),
                 ball=self._event_ball_from_metadata(context_metadata),
+                offside_snapshot=(
+                    context_metadata.get("offside_snapshot")
+                    if isinstance(context_metadata.get("offside_snapshot"), dict)
+                    else None
+                ),
+                var_review=(
+                    context_metadata.get("var_review") if isinstance(context_metadata.get("var_review"), dict) else None
+                ),
+                card_detail=(
+                    context_metadata.get("card_detail")
+                    if isinstance(context_metadata.get("card_detail"), dict)
+                    else None
+                ),
             ),
             source_type=raw_event_type,
             team_side=team_side,
@@ -1113,8 +1210,16 @@ class MatchTimelineService:
         if meta_second is not None:
             return float(meta_second)
         if event.tick is not None:
-            return float(event.tick)
-        return float(max(0, event.minute * 60))
+            return min(float(STANDARD_BROADCAST_MAX_SECONDS), float(event.tick))
+        return float(
+            max(
+                0,
+                min(
+                    STANDARD_BROADCAST_MAX_SECONDS,
+                    round((max(0, event.minute) / 90.0) * STANDARD_BROADCAST_MAX_SECONDS),
+                ),
+            )
+        )
 
     def _live_team_side(
         self,
@@ -2143,9 +2248,15 @@ class MatchTimelineService:
                     runtime.bench.remove(incoming)
                 runtime.bench.append(outgoing)
         if event.view.event_type is MatchViewerEventType.RED_CARD and event.view.primary_player_id in runtime.lineup:
-            runtime.lineup.remove(event.view.primary_player_id)
-            if event.fallback_formation:
-                runtime.current_formation = self._normalize_formation(event.fallback_formation)
+            var_decision = (
+                (event.view.var_review or {}).get("decision_outcome")
+                if isinstance(event.view.var_review, dict)
+                else None
+            )
+            if var_decision not in {"red_card_rescinded", "second_yellow_rescinded"}:
+                runtime.lineup.remove(event.view.primary_player_id)
+                if event.fallback_formation:
+                    runtime.current_formation = self._normalize_formation(event.fallback_formation)
 
     def _anchors_for_team(
         self,

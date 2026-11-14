@@ -37,10 +37,20 @@ class SmartHighlightService:
                 session.scalars(
                     select(HighlightEvent)
                     .where(HighlightEvent.match_id == match_id)
-                    .order_by(HighlightEvent.importance_score.desc(), HighlightEvent.minute.desc(), HighlightEvent.created_at.asc())
+                    .order_by(
+                        HighlightEvent.importance_score.desc(),
+                        HighlightEvent.minute.asc(),
+                        HighlightEvent.created_at.asc(),
+                    )
                     .limit(limit)
                 ).all()
             )
+        rows.sort(
+            key=lambda row: (
+                int(row.minute or 0),
+                int((row.metadata_json or {}).get("sequence_id") or 0),
+            )
+        )
         return [
             MatchHighlightSummaryView(
                 minute=row.minute,
@@ -113,7 +123,8 @@ class SmartHighlightService:
         *,
         session: Session | None = None,
     ) -> list[MatchHighlightSummaryView]:
-        highlights = self._detect_highlights(source_events)[:10]
+        highlights = self._detect_highlights(source_events)[:16]
+        highlights.sort(key=lambda item: (item[0], int(item[4].get("sequence_id") or 0)))
         if session is not None:
             self._store_highlights(session, match_id, highlights)
         elif self.session_factory is not None:
@@ -162,7 +173,11 @@ class SmartHighlightService:
         for event in source_events:
             dedupe_key = str(
                 event.source_event_id
-                or (f"seq:{event.sequence_id}" if event.sequence_id is not None else f"{event.minute}:{event.event_type}:{event.team_name or ''}")
+                or (
+                    f"seq:{event.sequence_id}"
+                    if event.sequence_id is not None
+                    else f"{event.minute}:{event.event_type}:{event.team_name or ''}"
+                )
             )
             if dedupe_key in seen_keys:
                 previous_home = event.home_score
@@ -221,15 +236,76 @@ class SmartHighlightService:
                 "missed_chance",
                 "missed_chances",
                 "shot_on_target",
+                "shot",
                 "woodwork",
                 "double_save",
+                "save",
+                "goalkeeper_save",
             }:
+                label_type = (
+                    "woodwork"
+                    if normalized == "woodwork"
+                    else (
+                        "goalkeeper_save"
+                        if normalized in {"save", "goalkeeper_save", "double_save", "shot_on_target"}
+                        else "big_chance"
+                    )
+                )
                 detected.append(
                     (
                         event.minute,
-                        "big_chance",
-                        max(0.9, float(event.importance_score or 0.0)),
+                        label_type,
+                        max(
+                            1.05 if normalized in {"woodwork", "double_save", "missed_big_chance"} else 0.85,
+                            float(event.importance_score or 0.0),
+                        ),
                         self._big_chance_description(event),
+                        {
+                            "team_name": event.team_name,
+                            "player_name": event.player_name,
+                            "source_event_id": event.source_event_id,
+                            "sequence_id": event.sequence_id,
+                        },
+                    )
+                )
+            elif normalized in {
+                "offside",
+                "penalty_awarded",
+                "penalty_missed",
+                "foul",
+                "tactical_foul",
+                "set_piece_chance",
+                "counter_attack",
+                "dangerous_attack",
+                "defensive_error",
+                "injury",
+                "substitution",
+            }:
+                base_importance = {
+                    "penalty_awarded": 1.75,
+                    "penalty_missed": 1.65,
+                    "offside": 1.15,
+                    "set_piece_chance": 0.95,
+                    "counter_attack": 0.95,
+                    "defensive_error": 1.0,
+                    "dangerous_attack": 0.85,
+                    "tactical_foul": 0.8,
+                    "foul": 0.75,
+                    "injury": 0.9,
+                    "substitution": 0.7,
+                }.get(normalized, 0.75)
+                player = event.player_name or "Player"
+                team = event.team_name or "Club"
+                desc = (
+                    event.description
+                    or f"{event.minute}' Key moment ({normalized.replace('_', ' ')}) involving {player} ({team})."
+                )
+                detected.append(
+                    (
+                        event.minute,
+                        normalized,
+                        max(base_importance, float(event.importance_score or 0.0)),
+                        desc,
                         {
                             "team_name": event.team_name,
                             "player_name": event.player_name,

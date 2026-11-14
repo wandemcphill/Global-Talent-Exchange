@@ -332,6 +332,7 @@ describe("useMatchSpectatorStream", () => {
           options={{
             matchId: "match-auth-fail-1",
             isAuthenticated: true,
+            maxReconnectAttempts: 0,
             requestTicket: failingRequestTicket,
             wsUrl: "ws://localhost:8000/ws/spectate/match-auth-fail-1",
           }}
@@ -342,6 +343,62 @@ describe("useMatchSpectatorStream", () => {
     expect(failingRequestTicket).toHaveBeenCalledTimes(1);
     expect(MockWebSocket.instances.length).toBe(0);
     expect(latestResult?.connectionStatus).toBe("error");
+  });
+
+  it("recovers via reconnect backoff after ticket acquisition failure without downgrading to guest", async () => {
+    jest.useFakeTimers();
+    try {
+      let attempt = 0;
+      const flakyRequestTicket = jest.fn(async () => {
+        attempt += 1;
+        if (attempt === 1) {
+          throw new Error("Transient 503 ticket error");
+        }
+        if (attempt === 2) {
+          return "  ";
+        }
+        return "fresh_ticket_after_backoff";
+      });
+
+      await act(async () => {
+        root.render(
+          <StreamConsumer
+            options={{
+              matchId: "match-auth-recover-1",
+              isAuthenticated: true,
+              maxReconnectAttempts: 3,
+              requestTicket: flakyRequestTicket,
+              wsUrl: "ws://localhost:8000/ws/spectate/match-auth-recover-1",
+            }}
+          />
+        );
+      });
+
+      expect(flakyRequestTicket).toHaveBeenCalledTimes(1);
+      expect(MockWebSocket.instances.length).toBe(0);
+      expect(latestResult?.connectionStatus).toBe("reconnecting");
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+      });
+      expect(flakyRequestTicket).toHaveBeenCalledTimes(2);
+      expect(MockWebSocket.instances.length).toBe(0);
+      expect(latestResult?.connectionStatus).toBe("reconnecting");
+
+      await act(async () => {
+        jest.advanceTimersByTime(2000);
+      });
+      expect(flakyRequestTicket).toHaveBeenCalledTimes(3);
+      expect(MockWebSocket.instances.length).toBe(1);
+      expect(MockWebSocket.instances[0].url).toContain("ticket=fresh_ticket_after_backoff");
+
+      act(() => {
+        MockWebSocket.instances[0].triggerOpen();
+      });
+      expect(latestResult?.connectionStatus).toBe("connected");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("prevents concurrent reconnect calls from racing while a ticket request is in flight", async () => {

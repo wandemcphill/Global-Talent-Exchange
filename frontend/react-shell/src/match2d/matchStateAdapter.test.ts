@@ -254,7 +254,7 @@ describe("match state adapter", () => {
     expect(afterReconnect.renderTimeSeconds).toBeCloseTo(18);
   });
 
-  test("monotonic wall-clock interpolation handles variable intervals, pause/resume, and speed without rewinding", () => {
+  test("monotonic wall-clock interpolation ignores viewer pause/speed overrides on universal broadcast clock", () => {
     const buffer = new LiveRenderBuffer();
     const p = { playerId: "home-8", side: "home" as const, x: 0.2, y: 0.5, shirtNumber: 8, name: "Eight" };
 
@@ -291,7 +291,7 @@ describe("match state adapter", () => {
       expect(xs[i]).toBeGreaterThanOrEqual(xs[i - 1] - 1e-6);
     }
 
-    // Push a third frame with a shorter 0.5s interval, test pause and 2x speed
+    // Push a third frame with a shorter 0.5s interval; universal stream cannot be paused or accelerated by viewer options
     buffer.push(
       {
         timeSeconds: 102.5,
@@ -304,44 +304,41 @@ describe("match state adapter", () => {
       5500,
     );
 
-    const beforePause = buffer.advanceWallClock(5600, { paused: false, speed: 1 });
-    const duringPause1 = buffer.advanceWallClock(6000, { paused: true, speed: 1 });
-    const duringPause2 = buffer.advanceWallClock(6500, { paused: true, speed: 1 });
-    expect(duringPause1.renderTimeSeconds).toBeCloseTo(beforePause.renderTimeSeconds, 5);
-    expect(duringPause2.renderTimeSeconds).toBeCloseTo(beforePause.renderTimeSeconds, 5);
-
-    const resumedFast = buffer.advanceWallClock(6750, { paused: false, speed: 2 });
-    expect(resumedFast.renderTimeSeconds).toBeGreaterThan(duringPause2.renderTimeSeconds);
-    expect(resumedFast.renderTimeSeconds).toBeLessThanOrEqual(102.5);
+    const beforeAttemptedPause = buffer.advanceWallClock(5600, { paused: false, speed: 1 });
+    const withPausedFlag = buffer.advanceWallClock(6000, { paused: true, speed: 1 });
+    const withSpeedFlag = buffer.advanceWallClock(6500, { paused: false, speed: 4 });
+    expect(withPausedFlag.renderTimeSeconds).toBeGreaterThan(beforeAttemptedPause.renderTimeSeconds);
+    expect(withSpeedFlag.renderTimeSeconds - withPausedFlag.renderTimeSeconds).toBeLessThanOrEqual(0.51);
+    expect(withSpeedFlag.renderTimeSeconds).toBeLessThanOrEqual(102.5);
   });
 
-  test("stepReplayClock advances monotonically, respects pause and speed, and stops cleanly at end of replay", () => {
-    const pausedTime = stepReplayClock({
+  test("stepReplayClock enforces universal 1.0x broadcast timing and stops cleanly at end of duration", () => {
+    const ignoredPause = stepReplayClock({
       currentTimeSeconds: 120,
       deltaMs: 500,
       durationSeconds: 300,
       paused: true,
       speed: 1,
     });
-    expect(pausedTime).toBe(120);
+    expect(ignoredPause).toBeCloseTo(120.5, 4);
 
-    const halfSpeed = stepReplayClock({
+    const ignoredHalfSpeed = stepReplayClock({
       currentTimeSeconds: 120,
       deltaMs: 1000,
       durationSeconds: 300,
       paused: false,
       speed: 0.5,
     });
-    expect(halfSpeed).toBeCloseTo(120.5);
+    expect(ignoredHalfSpeed).toBeCloseTo(121, 4);
 
-    const doubleSpeed = stepReplayClock({
+    const ignoredDoubleSpeed = stepReplayClock({
       currentTimeSeconds: 120,
       deltaMs: 1000,
       durationSeconds: 300,
       paused: false,
       speed: 2,
     });
-    expect(doubleSpeed).toBeCloseTo(122);
+    expect(ignoredDoubleSpeed).toBeCloseTo(121, 4);
 
     const clampedEnd = stepReplayClock({
       currentTimeSeconds: 299.5,
@@ -434,7 +431,7 @@ describe("match state adapter", () => {
     expect(sceneObjectCount(22, true)).toBe(25);
   });
 
-  test("highlight playback modes fast-forward dead phases and drop to normal speed during key moments", () => {
+  test("highlightMode does not accelerate the shared broadcast clock", () => {
     const events = [
       { event_id: "g1", type: "goal", time_seconds: 60 },
       { event_id: "c1", type: "corner", time_seconds: 120 },
@@ -444,7 +441,7 @@ describe("match state adapter", () => {
     expect(isHighlightMoment(118, events, "key")).toBe(false);
     expect(isHighlightMoment(118, events, "extended")).toBe(true);
 
-    const fastStep = stepReplayClock({
+    const deadPhaseStep = stepReplayClock({
       currentTimeSeconds: 30,
       deltaMs: 1000,
       durationSeconds: 300,
@@ -452,7 +449,7 @@ describe("match state adapter", () => {
       highlightMode: "key",
       events,
     });
-    const normalStep = stepReplayClock({
+    const keyMomentStep = stepReplayClock({
       currentTimeSeconds: 56,
       deltaMs: 1000,
       durationSeconds: 300,
@@ -460,8 +457,8 @@ describe("match state adapter", () => {
       highlightMode: "key",
       events,
     });
-    expect(fastStep - 30).toBeGreaterThan(3.5);
-    expect(normalStep - 56).toBeCloseTo(1, 3);
+    expect(deadPhaseStep - 30).toBeCloseTo(1, 3);
+    expect(keyMomentStep - 56).toBeCloseTo(1, 3);
   });
 
   test("extractShotMarkers and deriveTouchlineNudge derive accurate spatial & tactical insights", () => {

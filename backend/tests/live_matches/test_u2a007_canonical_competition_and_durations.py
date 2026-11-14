@@ -347,7 +347,8 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
         assert authoritative_home_score >= 0
         assert authoritative_away_score >= 0
 
-    # Verify HTTP /match-viewer/{match_id} and exact durations: 180s, 300s, 420s, 600s
+    # Verify HTTP /match-viewer/{match_id} ignores viewer duration/mode overrides and
+    # serves one universal server-determined broadcast duration <= 600s for league play
     client = TestClient(app)
     match_id = "00000000-0000-0000-0000-000000000902"
 
@@ -359,21 +360,26 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
     ]
 
     baseline_auth_signature = None
+    canonical_duration_seconds: int | None = None
     exported_payloads: dict[int, dict[str, object]] = {}
 
-    for target_sec, mode_val in duration_configs:
+    for requested_sec, mode_val in duration_configs:
         resp = client.get(
             f"/match-viewer/{match_id}",
-            params={"mode": mode_val, "target_duration_seconds": target_sec},
+            params={"mode": mode_val, "target_duration_seconds": requested_sec},
         )
         assert resp.status_code == 200, resp.text
         data = resp.json()
-        exported_payloads[target_sec] = data
+        exported_payloads[requested_sec] = data
 
-        # 1. Exact output duration
-        assert data["duration_seconds"] == target_sec
+        # 1. Server-authoritative universal duration (ignores viewer query overrides)
+        assert 480 <= data["duration_seconds"] <= 600
+        if canonical_duration_seconds is None:
+            canonical_duration_seconds = int(data["duration_seconds"])
+        else:
+            assert int(data["duration_seconds"]) == canonical_duration_seconds
         assert data["frames"][0]["time_seconds"] == 0.0
-        assert data["frames"][-1]["time_seconds"] == float(target_sec)
+        assert data["frames"][-1]["time_seconds"] == float(canonical_duration_seconds)
 
         # 2. Canonical club identity & kits preserved
         assert data["home_team"]["team_id"] == "00000000-0000-0000-0000-000000000101"
@@ -408,13 +414,13 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
         if baseline_auth_signature is None:
             baseline_auth_signature = sig
         else:
-            assert sig == baseline_auth_signature, f"Authoritative events diverged at {target_sec}s"
+            assert sig == baseline_auth_signature, f"Authoritative events diverged on request {requested_sec}s"
 
-        # Monotonic timestamps within [0, target_sec]
+        # Monotonic timestamps within [0, canonical_duration_seconds]
         event_times = [ev["time_seconds"] for ev in data["events"]]
         assert event_times == sorted(event_times)
         assert event_times[0] == 0.0
-        assert event_times[-1] == float(target_sec)
+        assert event_times[-1] == float(canonical_duration_seconds)
 
     # 5. Verify live spectator WebSocket gateway (/ws/spectate/{match_id}) on the canonical competition match
     with session_factory() as session:

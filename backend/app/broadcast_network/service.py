@@ -21,15 +21,18 @@ from app.broadcast_network.schemas import (
 )
 from app.core.cache import CacheBackend, JsonCacheNamespace, NullCacheBackend
 from app.infinite_league.service import ensure_infinite_league_runtime
-from app.live_matches.schemas import LiveMatchSpeedModeView, SpectatorSessionView
+from app.live_matches.schemas import SpectatorSessionView
 from app.live_matches.service import ensure_live_match_hub
 from app.live_ops.service import LiveOpsService
 from app.models.broadcast_watch_session import BroadcastWatchSession
 from app.models.competition_match import CompetitionMatch
 
-_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
-    60.0,
-    float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
+_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = min(
+    600.0,
+    max(
+        60.0,
+        float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "540")),
+    ),
 )
 _PROTECTED_APP_ENVS = {"production", "prod", "staging", "release"}
 
@@ -693,11 +696,7 @@ class BroadcastNetworkRuntime:
             presence_websocket_path=f"/ws/spectate/{match_id}",
             tts_websocket_path="/tts/live?voice=default",
             replay_route=f"/api/matches/{match_id}/replay",
-            speed_modes=[
-                LiveMatchSpeedModeView(key="normal", label="Normal", target_duration_seconds=90),
-                LiveMatchSpeedModeView(key="fast", label="Fast", target_duration_seconds=30),
-                LiveMatchSpeedModeView(key="turbo", label="Turbo", target_duration_seconds=10),
-            ],
+            speed_modes=[],
             access_source=access_payload.get("access_source"),
             rights_owner_id=access_payload.get("rights_owner_id"),
             viewing_fee_coin=access_payload.get("viewing_fee_coin") or 0,
