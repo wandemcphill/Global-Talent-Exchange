@@ -17,6 +17,7 @@ from app.owner_console.models import (
     OwnerClubConversation,
     OwnerClubMeeting,
     OwnerClubMessage,
+    OwnerClubRelationship,
     OwnerClubState,
     OwnerInboxItem,
     OwnerRecruitmentAssignment,
