@@ -149,6 +149,8 @@ def _quote_fan_coin_contract_funding(
         can_cover_shortfall=(shortfall == Decimal("0.0000")),
         premium_note=FAN_COIN_CONTRACT_FUNDING_NOTE,
     )
+
+
 DEFAULT_INJURY_RECOVERY_DAYS: dict[InjurySeverity, int] = {
     InjurySeverity.MINOR: 7,
     InjurySeverity.MODERATE: 21,
