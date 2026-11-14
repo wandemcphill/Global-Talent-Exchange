@@ -101,6 +101,8 @@ jest.mock("three", () => {
     AmbientLight: class {},
     DirectionalLight: class {
       position = new MockVector3();
+      color = { setHex: () => {} };
+      intensity = 1;
       castShadow = false;
       shadow = {
         mapSize: { set: () => {} },
@@ -149,6 +151,12 @@ jest.mock("three", () => {
     MeshBasicMaterial: class {},
     MeshPhysicalMaterial: class {},
     LineBasicMaterial: class {},
+    CanvasTexture: class {
+      colorSpace: any;
+      anisotropy = 1;
+      dispose = () => {};
+      constructor(_canvas?: HTMLCanvasElement) {}
+    },
     Vector3: MockVector3,
     Vector2: class {
       x = 0;
