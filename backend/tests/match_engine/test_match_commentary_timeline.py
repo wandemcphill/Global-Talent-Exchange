@@ -111,7 +111,10 @@ def test_replay_commentary_calls_every_goal_with_the_score() -> None:
 
     assert goals
     for event in goals:
-        assert event.commentary.startswith("Goal for ")
-        assert f"The score is {event.home_score}-{event.away_score}." in event.commentary
+        if event.metadata.get("review_decision") == "disallowed":
+            assert "VAR rules it out" in event.commentary
+        else:
+            assert event.commentary.startswith("Goal for ")
+            assert f"The score is {event.home_score}-{event.away_score}." in event.commentary
         assert event.commentary.strip().endswith(".") or event.commentary.strip().endswith("!")
     assert all(event.commentary.strip() for event in replay.timeline.events)

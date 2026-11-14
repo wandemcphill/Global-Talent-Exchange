@@ -261,20 +261,34 @@ class LiveMatchHub:
             atmosphere_profile=replay_payload.atmosphere_profile or "standard",
         )
         event_batches = self._build_batches(replay_payload, stadium_profile=stadium_profile)
+        viewer_state = None
+        try:
+            viewer_state = MatchTimelineService().build_from_replay_payload(replay_payload)
+        except Exception:
+            viewer_state = None
+        from app.match_engine.simulation.offside_var import BROADCAST_CATEGORY_MAX_SECONDS
+
+        category_key = getattr(viewer_state, "competition_category", None) or "ordinary_league"
+        category_cap_seconds = float(BROADCAST_CATEGORY_MAX_SECONDS.get(str(category_key), 600))
+        effective_target_runtime_seconds: float | None
+        if target_runtime_seconds is not None and target_runtime_seconds > 0:
+            effective_target_runtime_seconds = min(float(target_runtime_seconds), category_cap_seconds)
+        elif viewer_state is not None and self.step_interval_seconds >= 0.25:
+            effective_target_runtime_seconds = min(
+                float(getattr(viewer_state, "duration_seconds", 540) or 540),
+                category_cap_seconds,
+            )
+        else:
+            effective_target_runtime_seconds = target_runtime_seconds
         step_interval_seconds = self._resolve_step_interval(
             batch_count=len(event_batches),
-            target_runtime_seconds=target_runtime_seconds,
+            target_runtime_seconds=effective_target_runtime_seconds,
         )
         target_runtime_seconds_resolved = max(
             step_interval_seconds * max(len(event_batches), 1),
             step_interval_seconds,
             1.0,
         )
-        viewer_state = None
-        try:
-            viewer_state = MatchTimelineService().build_from_replay_payload(replay_payload)
-        except Exception:
-            viewer_state = None
         runtime = _LiveMatchRuntime(
             match_id=match_id,
             channel=f"match:{match_id}:events",
@@ -299,9 +313,7 @@ class LiveMatchHub:
             max_latency_ms=(
                 replay_payload.sync_contract.max_latency_ms if replay_payload.sync_contract is not None else 320
             ),
-            pause_replay_enabled=(
-                replay_payload.spectator_package.can_pause if replay_payload.spectator_package is not None else False
-            ),
+            pause_replay_enabled=False,
             reactions_enabled=(
                 replay_payload.spectator_package.reactions_enabled
                 if replay_payload.spectator_package is not None
@@ -398,7 +410,7 @@ class LiveMatchHub:
             sync_strategy=sync_strategy,
             checkpoint_interval_seconds=checkpoint_interval_seconds,
             max_latency_ms=max_latency_ms,
-            pause_replay_enabled=pause_replay_enabled,
+            pause_replay_enabled=False,
             reactions_enabled=reactions_enabled,
             read_only=read_only,
             step_interval_seconds=step_interval_seconds,
@@ -1041,6 +1053,7 @@ class LiveMatchHub:
                 channel = runtime.channel
 
             result = dict(current)
+            result["applied_substitutions"] = list(substitutions or [])
 
             # Persist tactics across restarts: Hot cache and database
             full_tactics = {
@@ -2055,7 +2068,7 @@ def _runtime_spectator_sync(runtime: _LiveMatchRuntime) -> MatchSpectatorSyncVie
         tick=tick,
         max_latency_ms=runtime.max_latency_ms,
         checkpoint_interval_seconds=runtime.checkpoint_interval_seconds,
-        pause_replay_enabled=runtime.pause_replay_enabled,
+        pause_replay_enabled=False,
         reactions_enabled=runtime.reactions_enabled,
     )
 

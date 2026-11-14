@@ -207,6 +207,7 @@ class MatchIntegrityService:
             match_id=view_state.match_id,
             source=view_state.source,
             match_mode=view_state.match_mode,
+            competition_category=view_state.competition_category,
             supports_offside=view_state.supports_offside,
             deterministic_seed=None,
             duration_seconds=revealed_through_seconds,
@@ -214,6 +215,7 @@ class MatchIntegrityService:
             away_team=view_state.away_team,
             events=visible_events,
             frames=visible_frames,
+            broadcast_session=view_state.broadcast_session,
         )
 
     def _sha_hash_view_state(self, view_state: MatchViewStateView) -> str:

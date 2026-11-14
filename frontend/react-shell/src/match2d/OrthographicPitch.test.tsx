@@ -8,6 +8,7 @@ import {
   clampCameraPan,
   lastRenderProfile,
   pickPlayerAtPoint,
+  projectPitchToView,
   screenToPitchPoint,
 } from "./OrthographicPitch";
 import * as matchRenderer from "./createMatchRenderer";
@@ -333,10 +334,34 @@ describe("OrthographicPitch lifecycle, camera transform, selection, and recovery
     expect(lastRenderProfile.activeRenderers).toBe(0);
   });
 
-  test("does not import pixi and exports a memoized pitch", () => {
+  test("2.5d oblique perspective projection differs distinctly from flat 2d and inverts accurately in screenToPitchPoint", () => {
+    const farOrtho = projectPitchToView(0.1, 0.05, "2d");
+    const farPersp = projectPitchToView(0.1, 0.05, "2.5d");
+    const nearPersp = projectPitchToView(0.1, 0.95, "2.5d");
+
+    expect(farOrtho.vx).toBeCloseTo(0.1, 6);
+    expect(farOrtho.depthScale).toBe(1);
+    // In 2.5d perspective, the far touchline narrows toward center X and scales smaller than the near touchline
+    expect(farPersp.vx).toBeGreaterThan(farOrtho.vx);
+    expect(nearPersp.vx).toBeLessThan(0.1);
+    expect(farPersp.depthScale).toBeLessThan(nearPersp.depthScale);
+
+    // Inverse screenToPitchPoint recovers original pitch point in 2.5d camera mode
+    const camera = { zoom: 1, panX: 0, panY: 0, cameraMode: "2.5d" as const };
+    const rect = { left: 0, top: 0, width: 1000, height: 600 };
+    const clientX = farPersp.vx * rect.width;
+    const clientY = farPersp.vy * rect.height;
+    const recovered = screenToPitchPoint(clientX, clientY, rect, camera);
+    expect(recovered.x).toBeCloseTo(0.1, 4);
+    expect(recovered.y).toBeCloseTo(0.05, 4);
+  });
+
+  test("does not import pixi and exports a memoized pitch without canvas arc() calls", () => {
     const source = require("fs").readFileSync(require("path").join(__dirname, "OrthographicPitch.tsx"), "utf8");
     expect(source).not.toMatch(/pixi/i);
+    expect(source).not.toMatch(/\.arc\(/);
     expect(source).toContain("memo(OrthographicPitchComponent)");
     expect(source).toContain("webglcontextrestored");
+    expect(source).toContain("offsideSnapshot");
   });
 });

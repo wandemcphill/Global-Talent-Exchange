@@ -1,5 +1,12 @@
 from __future__ import annotations
 
+from app.match_engine.simulation.offside_var import (
+    BROADCAST_CATEGORY_DURATION_WINDOWS,
+    BROADCAST_CATEGORY_MAX_SECONDS,
+    MatchBroadcastCategory,
+    build_universal_broadcast_session,
+    resolve_match_broadcast_category,
+)
 from app.schemas.match_viewer import (
     MatchMode,
     MatchTimelineFrameView,
@@ -17,8 +24,8 @@ from app.schemas.match_viewer import (
 _PRESENTATION_ONLY_FLAG = "presentation_only"
 _SYNTHETIC_CINEMATIC_FLAG = "synthetic_cinematic"
 _MODE_WINDOWS = {
-    MatchMode.QUICK: (180, 300),
-    MatchMode.STANDARD: (420, 600),
+    MatchMode.QUICK: (180, 420),
+    MatchMode.STANDARD: (480, 600),
     MatchMode.CINEMATIC: (600, 900),
 }
 _BUILDUP_TYPES = {
@@ -64,20 +71,45 @@ class MatchViewerScalingService:
         base_frames = [
             frame for frame in view_state.frames if frame.active_event_id is None or frame.active_event_id in event_ids
         ]
+        category = resolve_match_broadcast_category(
+            metadata={"competition_category": getattr(view_state, "competition_category", None)},
+        )
+        hard_cap = BROADCAST_CATEGORY_MAX_SECONDS[category]
+        min_win, max_win = BROADCAST_CATEGORY_DURATION_WINDOWS[category]
+        resolved_mode = (
+            MatchMode.CINEMATIC
+            if category
+            in {MatchBroadcastCategory.FINAL, MatchBroadcastCategory.SEMI_FINAL, MatchBroadcastCategory.MAJOR_KNOCKOUT}
+            else MatchMode.STANDARD
+        )
         base_duration = self._base_duration(view_state)
+        persisted_assigned = (
+            (view_state.broadcast_session or {}).get("assigned_duration_seconds")
+            if isinstance(view_state.broadcast_session, dict)
+            else None
+        )
         if target_duration_seconds is not None:
-            target_duration = max(60, min(900, int(target_duration_seconds)))
+            target_duration = max(min_win, min(hard_cap, int(target_duration_seconds)))
+        elif isinstance(persisted_assigned, int) and persisted_assigned >= 60:
+            target_duration = max(min_win, min(hard_cap, int(persisted_assigned)))
+        elif min_win <= int(view_state.duration_seconds) <= hard_cap:
+            target_duration = int(view_state.duration_seconds)
         else:
-            target_duration = self._target_duration(authoritative_events, frame_count=len(base_frames), mode=mode)
+            target_duration = self._target_duration_for_window(
+                authoritative_events,
+                frame_count=len(base_frames),
+                minimum=min_win,
+                maximum=min(max_win, hard_cap),
+            )
         scaled_events = self._scale_authoritative_events(
             authoritative_events,
             base_duration=base_duration,
             target_duration=target_duration,
-            mode=mode,
+            mode=resolved_mode,
         )
         events = (
             scaled_events
-            if mode is not MatchMode.CINEMATIC
+            if resolved_mode is not MatchMode.CINEMATIC
             else self._with_cinematic_events(scaled_events, target_duration)
         )
         event_lookup = {event.event_id: event for event in events}
@@ -86,10 +118,10 @@ class MatchViewerScalingService:
             match_id=view_state.match_id,
             base_duration=base_duration,
             target_duration=target_duration,
-            mode=mode,
+            mode=resolved_mode,
             event_lookup=event_lookup,
         )
-        if mode is MatchMode.CINEMATIC:
+        if resolved_mode is MatchMode.CINEMATIC:
             frames = self._with_cinematic_frames(
                 frames,
                 events=events,
@@ -102,12 +134,40 @@ class MatchViewerScalingService:
             target_duration=target_duration,
             event_lookup=event_lookup,
         )
+        updated_session = build_universal_broadcast_session(
+            match_id=view_state.match_id,
+            category=category,
+            assigned_duration_seconds=target_duration,
+            server_start_timestamp=(
+                (view_state.broadcast_session or {}).get("server_start_timestamp")
+                if isinstance(view_state.broadcast_session, dict)
+                else None
+            ),
+            current_position_seconds=float(
+                (view_state.broadcast_session or {}).get("current_broadcast_position_seconds", target_duration)
+                if isinstance(view_state.broadcast_session, dict)
+                else target_duration
+            ),
+            broadcast_status=str(
+                (view_state.broadcast_session or {}).get("broadcast_status", "completed")
+                if isinstance(view_state.broadcast_session, dict)
+                else "completed"
+            ),
+            events=[item.model_dump(mode="json") for item in events],
+            completion_timestamp=(
+                (view_state.broadcast_session or {}).get("completion_timestamp")
+                if isinstance(view_state.broadcast_session, dict)
+                else None
+            ),
+        )
         return view_state.model_copy(
             update={
-                "match_mode": mode,
+                "match_mode": resolved_mode,
+                "competition_category": category.value,
                 "duration_seconds": target_duration,
                 "events": events,
                 "frames": frames,
+                "broadcast_session": updated_session,
             }
         )
 
@@ -119,6 +179,18 @@ class MatchViewerScalingService:
             maxima.append(max(frame.time_seconds for frame in view_state.frames))
         return max(maxima)
 
+    def _target_duration_for_window(
+        self,
+        events: list[MatchViewerEventView],
+        *,
+        frame_count: int,
+        minimum: int,
+        maximum: int,
+    ) -> int:
+        richness = self._richness_score(events, frame_count)
+        normalized = min(0.92, max(0.08, (richness - 6.0) / 10.0))
+        return int(round(minimum + ((maximum - minimum) * normalized)))
+
     def _target_duration(
         self,
         events: list[MatchViewerEventView],
@@ -127,9 +199,7 @@ class MatchViewerScalingService:
         mode: MatchMode,
     ) -> int:
         minimum, maximum = _MODE_WINDOWS[mode]
-        richness = self._richness_score(events, frame_count)
-        normalized = min(1.0, max(0.0, (richness - 6.0) / 10.0))
-        return int(round(minimum + ((maximum - minimum) * normalized)))
+        return self._target_duration_for_window(events, frame_count=frame_count, minimum=minimum, maximum=maximum)
 
     def _richness_score(self, events: list[MatchViewerEventView], frame_count: int) -> float:
         score = min(frame_count / 80.0, 1.0)

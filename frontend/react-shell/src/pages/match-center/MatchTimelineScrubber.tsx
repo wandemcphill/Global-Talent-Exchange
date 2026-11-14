@@ -132,11 +132,10 @@ const PIN_BADGE: Record<TimelinePin["type"], { text: string; tone: string }> = {
 export function MatchTimelineScrubber({
   model,
   currentSeconds,
-  onSeek,
 }: {
   model: TimelineModel;
   currentSeconds: number;
-  onSeek: (seconds: number) => void;
+  onSeek?: (seconds: number) => void;
 }) {
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const { durationSeconds, segments, pins } = model;
@@ -146,38 +145,14 @@ export function MatchTimelineScrubber({
   const activeSegment = segments.find((s) => clamped >= s.startSeconds && clamped <= s.endSeconds);
   const hoveredPin = hoveredPinId ? pins.find((p) => p.id === hoveredPinId) || null : null;
 
-  const prevPin = [...pins].reverse().find((p) => p.timeSeconds < clamped - 2) || null;
-  const nextPin = pins.find((p) => p.timeSeconds > clamped + 2) || null;
-
   return (
     <div data-testid="match-timeline-scrubber" className="relative mt-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
         <div className="flex items-center gap-2">
-          <span data-testid="match-timeline-phase">{activeSegment?.label || "Replay"}</span>
-          {pins.length > 0 && (
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                data-testid="timeline-prev-event"
-                disabled={!prevPin}
-                onClick={() => prevPin && onSeek(Math.max(0, prevPin.timeSeconds - 6))}
-                title={prevPin ? `Previous: ${prevPin.label}` : "No earlier key moment"}
-                className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[9px] font-black text-slate-300 transition hover:border-emerald-400/50 hover:text-white disabled:opacity-35"
-              >
-                ⏮ PREV KEY
-              </button>
-              <button
-                type="button"
-                data-testid="timeline-next-event"
-                disabled={!nextPin}
-                onClick={() => nextPin && onSeek(Math.max(0, nextPin.timeSeconds - 6))}
-                title={nextPin ? `Next: ${nextPin.label}` : "No later key moment"}
-                className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[9px] font-black text-slate-300 transition hover:border-emerald-400/50 hover:text-white disabled:opacity-35"
-              >
-                NEXT KEY ⏭
-              </button>
-            </div>
-          )}
+          <span data-testid="match-timeline-phase">{activeSegment?.label || "Broadcast"}</span>
+          <span className="rounded border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-black text-emerald-300">
+            Universal Broadcast Timeline
+          </span>
         </div>
         <span className="font-mono">
           {Math.floor(clamped / 60)}:{String(Math.floor(clamped % 60)).padStart(2, "0")} /{" "}
@@ -197,10 +172,10 @@ export function MatchTimelineScrubber({
             </span>
             <span className="truncate font-bold">{hoveredPin.label}</span>
           </div>
-          <span className="shrink-0 font-mono text-[10px] text-emerald-300">Click to watch build-up (-6s)</span>
+          <span className="shrink-0 font-mono text-[10px] text-slate-400">Broadcast incident</span>
         </div>
       )}
-      <div className="relative h-6">
+      <div className="relative h-6" role="progressbar" aria-label="Universal broadcast progress" aria-valuemin={0} aria-valuemax={Math.round(durationSeconds)} aria-valuenow={Math.round(clamped)}>
         <div className="absolute inset-x-0 top-2.5 flex h-1.5 overflow-hidden rounded-full bg-slate-800">
           {segments.map((s) => (
             <div
@@ -213,34 +188,23 @@ export function MatchTimelineScrubber({
           ))}
         </div>
         {pins.map((pin) => (
-          <button
+          <div
             key={pin.id}
-            type="button"
             data-testid="match-timeline-pin"
             data-pin-type={pin.type}
             title={pin.label}
             aria-label={pin.label}
+            tabIndex={0}
             onMouseEnter={() => setHoveredPinId(pin.id)}
             onMouseLeave={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
             onFocus={() => setHoveredPinId(pin.id)}
             onBlur={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
-            onClick={() => onSeek(Math.max(0, pin.timeSeconds - 6))}
-            className={`absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm transition-transform ${PIN_STYLE[pin.type]} hover:scale-150`}
+            className={`pointer-events-auto absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm ${PIN_STYLE[pin.type]}`}
             style={{ left: pct(pin.timeSeconds) }}
           />
         ))}
-        <input
-          type="range"
-          data-testid="match-timeline-range"
-          aria-label="Match timeline"
-          min={0}
-          max={durationSeconds}
-          step={1}
-          value={clamped}
-          onChange={(event) => onSeek(Number(event.target.value))}
-          className="absolute inset-x-0 top-1.5 h-4 w-full cursor-pointer opacity-0"
-        />
         <div
+          data-testid="match-timeline-playhead"
           className="pointer-events-none absolute top-1.5 h-4 w-0.5 -translate-x-1/2 bg-white"
           style={{ left: pct(clamped) }}
         />

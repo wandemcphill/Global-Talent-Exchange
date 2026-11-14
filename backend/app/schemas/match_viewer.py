@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import StrEnum
+from typing import Any
 
 from pydantic import Field, field_validator
 
@@ -139,6 +140,13 @@ class MatchViewerTeamView(CommonSchema):
     secondary_color: str
     accent_color: str
     goalkeeper_color: str
+    kit_pattern: str = "solid"
+    shorts_color: str | None = None
+    socks_color: str | None = None
+    crest_url: str | None = None
+    sponsor_text: str | None = None
+    goalkeeper_secondary_color: str | None = None
+    goalkeeper_pattern: str = "solid"
 
 
 class MatchViewerPlayerFrameView(CommonSchema):
@@ -161,6 +169,12 @@ class MatchViewerPlayerFrameView(CommonSchema):
     has_possession: bool = False
     facing: MatchViewerVector2View = Field(default_factory=MatchViewerVector2View)
     velocity: MatchViewerVector2View = Field(default_factory=MatchViewerVector2View)
+    skin_tone: str | None = None
+    hair_style: str | None = None
+    hair_color: str | None = None
+    build_profile: str | None = None
+    height_cm: int | None = None
+    boot_color: str | None = None
 
 
 class MatchViewerBallFrameView(CommonSchema):
@@ -213,6 +227,9 @@ class MatchViewerEventView(CommonSchema):
     duration_ms: int = Field(default=500, ge=300, le=800)
     positions: list[MatchViewerEventPositionView] = Field(default_factory=list)
     ball: MatchViewerBallFrameView | None = None
+    offside_snapshot: dict[str, Any] | None = None
+    var_review: dict[str, Any] | None = None
+    card_detail: dict[str, Any] | None = None
 
     @field_validator("duration_ms", mode="before")
     @classmethod
@@ -259,6 +276,7 @@ class MatchViewStateView(CommonSchema):
     match_id: str
     source: str
     match_mode: MatchMode = MatchMode.STANDARD
+    competition_category: str = "ordinary_league"
     supports_offside: bool = False
     deterministic_seed: int | None = Field(default=None, ge=0)
     duration_seconds: int = Field(ge=0)
@@ -268,6 +286,7 @@ class MatchViewStateView(CommonSchema):
     frames: list[MatchTimelineFrameView] = Field(default_factory=list)
     presentation_package: "MatchViewerPresentationPackageView | None" = None
     monetization: MatchViewerMonetizationView | None = None
+    broadcast_session: dict[str, Any] | None = None
 
 
 class MatchViewerPresentationPlayerView(CommonSchema):

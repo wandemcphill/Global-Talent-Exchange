@@ -46,6 +46,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
         event_publisher=event_publisher,
         league_service=league_service,
         team_factory=SyntheticSquadFactory(allow_synthetic_fallback=True),
+        stream_update_interval_seconds=0.0,
     )
     event_publisher.subscribe(worker.handle_event)
     execution = LeagueFixtureExecutionService(
@@ -90,7 +91,7 @@ def test_local_execution_worker_runs_league_pipeline_end_to_end() -> None:
 
     latest_replay = replay_archive.repository.get_latest_record(f"replay:{fixtures[-1].fixture_id}")
     assert latest_replay is not None
-    assert latest_replay.competition_context.presentation_duration_minutes in {3, 4, 5}
+    assert 3 <= latest_replay.competition_context.presentation_duration_minutes <= 10
     assert latest_replay.timeline
     assert latest_replay.visual_identity is not None
 

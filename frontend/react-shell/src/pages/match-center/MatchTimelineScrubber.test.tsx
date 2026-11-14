@@ -40,7 +40,7 @@ describe("match timeline scrubber", () => {
     expect(model.pins[0].side).toBe("home");
   });
 
-  test("clicking a pin or moving the range seeks; renders nothing without a duration", () => {
+  test("renders read-only broadcast progress bar without viewer seek controls and hides without duration", () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const onSeek = jest.fn();
     const model = buildTimelineModel(frames, [{ event_id: "g1", type: "goal", time_seconds: 120 }], 400);
@@ -51,19 +51,12 @@ describe("match timeline scrubber", () => {
       root.render(<MatchTimelineScrubber model={model} currentSeconds={210} onSeek={onSeek} />);
     });
     expect(host.querySelector("[data-testid='match-timeline-phase']")?.textContent).toBe("Half-Time");
+    expect(host.querySelector("[data-testid='match-timeline-range']")).toBeNull();
 
     act(() => {
-      (host.querySelector("[data-testid='match-timeline-pin']") as HTMLButtonElement).click();
+      (host.querySelector("[data-testid='match-timeline-pin']") as HTMLElement).click();
     });
-    expect(onSeek).toHaveBeenLastCalledWith(114);
-
-    const range = host.querySelector("[data-testid='match-timeline-range']") as HTMLInputElement;
-    act(() => {
-      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-      setter.call(range, "300");
-      range.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    expect(onSeek).toHaveBeenLastCalledWith(300);
+    expect(onSeek).not.toHaveBeenCalled();
 
     act(() => {
       root.render(
@@ -75,7 +68,7 @@ describe("match timeline scrubber", () => {
     host.remove();
   });
 
-  test("hovering a pin shows the rich event preview card and prev/next key buttons navigate between pins", () => {
+  test("hovering or focusing a pin shows read-only incident info without prev/next skip buttons", () => {
     (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     const onSeek = jest.fn();
     const model = buildTimelineModel(
@@ -93,28 +86,17 @@ describe("match timeline scrubber", () => {
       root.render(<MatchTimelineScrubber model={model} currentSeconds={120} onSeek={onSeek} />);
     });
 
-    const prevBtn = host.querySelector("[data-testid='timeline-prev-event']") as HTMLButtonElement;
-    const nextBtn = host.querySelector("[data-testid='timeline-next-event']") as HTMLButtonElement;
-    expect(prevBtn).not.toBeNull();
-    expect(nextBtn).not.toBeNull();
+    expect(host.querySelector("[data-testid='timeline-prev-event']")).toBeNull();
+    expect(host.querySelector("[data-testid='timeline-next-event']")).toBeNull();
 
-    act(() => {
-      prevBtn.click();
-    });
-    expect(onSeek).toHaveBeenLastCalledWith(54);
-
-    act(() => {
-      nextBtn.click();
-    });
-    expect(onSeek).toHaveBeenLastCalledWith(234);
-
-    const firstPin = host.querySelector("[data-testid='match-timeline-pin']") as HTMLButtonElement;
+    const firstPin = host.querySelector("[data-testid='match-timeline-pin']") as HTMLElement;
     act(() => {
       firstPin.focus();
     });
     const preview = host.querySelector("[data-testid='timeline-pin-preview']");
     expect(preview).not.toBeNull();
     expect(preview?.textContent).toContain("Osimhen");
+    expect(preview?.textContent).not.toContain("Click to watch");
 
     act(() => root.unmount());
     host.remove();

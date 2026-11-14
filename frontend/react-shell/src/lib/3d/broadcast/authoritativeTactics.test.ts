@@ -69,20 +69,20 @@ describe("authoritative tactical mapping (GET /matches/{id}/tactics contract)", 
   });
 });
 
-describe("MatchCenter 3D/2D toolbar contract", () => {
+describe("MatchCenter canonical 2D/2.5D broadcast & authoritative tactics contract", () => {
   const src = fs.readFileSync(path.resolve(__dirname, "../../../pages/MatchCenter.tsx"), "utf-8");
 
-  test("2D-only camera and shader toolbars are guarded by !view3DBroadcast", () => {
-    const guards = src.match(/\{!view3DBroadcast && \(/g) || [];
-    expect(guards.length).toBeGreaterThanOrEqual(2);
-    const camIdx = src.indexOf("2D TOP-DOWN");
-    expect(src.lastIndexOf("{!view3DBroadcast && (", camIdx)).toBeGreaterThan(src.lastIndexOf("Camera Perspective Switcher", camIdx));
-    const vorIdx = src.indexOf("VORONOI");
-    expect(src.lastIndexOf("{!view3DBroadcast && (", vorIdx)).toBeGreaterThan(src.lastIndexOf("Spatial Shaders + Event-Driven", vorIdx));
+  test("2D/2.5D camera and shader toolbars remain active without closed 3D runtime toggles", () => {
+    expect(src).toContain("2D TOP-DOWN");
+    expect(src).toContain("VORONOI");
+    expect(src).not.toContain("view3DBroadcast");
+    expect(src).not.toContain("<MatchPitchLiveScene");
   });
 
-  test("scene receives authoritative tactics, not slider drafts or risk-derived width", () => {
-    expect(src).toContain("tacticalConfig={authoritativeTactics}");
+  test("tactical HUD consumes authoritative tactics without mutable owner controls or risk-derived width", () => {
+    expect(src).toContain("mapAuthoritativeTactics(appliedTactics)");
+    expect(src).toContain("authoritativeTactics?.homeFormation");
     expect(src).not.toContain("homeWidth");
+    expect(src).not.toContain("setPress(");
   });
 });

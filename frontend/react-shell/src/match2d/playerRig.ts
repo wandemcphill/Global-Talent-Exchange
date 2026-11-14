@@ -8,18 +8,28 @@ export const RIG_ACTIONS = [
   "sprint",
   "turn",
   "accelerate",
-  "dribble",
-  "pass",
-  "shoot",
+  "decelerate",
+  "run",
   "tackle",
   "slide_tackle",
+  "intercept",
   "control",
   "feint",
   "jump",
   "header",
+  "dribble",
+  "pass",
+  "shoot",
+  "cross",
+  "through_pass",
+  "long_pass",
+  "block",
   "save",
   "dive",
+  "catch",
+  "parry",
   "celebrate",
+  "frustrated",
 ] as const;
 
 export type RigAction = (typeof RIG_ACTIONS)[number];
@@ -41,6 +51,66 @@ const KIT = [255, 255, 255, 255] as const;
 const KIT_SHADE = [218, 226, 236, 255] as const;
 const SOCK_BAND = [245, 248, 252, 235] as const;
 
+export type KitPattern = "solid" | "stripes" | "hoops" | "sash" | "halves" | "chevron";
+export type BuildProfile = "slim" | "balanced" | "stocky" | "tall";
+export type HairStyle = "short" | "fade" | "afro" | "bun" | "buzz" | "curly";
+
+export type PlayerAppearanceSpec = {
+  primaryColor?: string;
+  secondaryColor?: string;
+  accentColor?: string;
+  shortsColor?: string;
+  socksColor?: string;
+  bootColor?: string;
+  skinTone?: string;
+  hairColor?: string;
+  hairStyle?: HairStyle;
+  buildProfile?: BuildProfile;
+  kitPattern?: KitPattern;
+  sponsorColor?: string;
+  isGoalkeeper?: boolean;
+  hasGloves?: boolean;
+  active?: boolean;
+};
+
+export const PART_NONE = 0;
+export const PART_SHIRT = 1;
+export const PART_SHORTS = 2;
+export const PART_SOCKS = 3;
+export const PART_SKIN = 4;
+export const PART_HAIR = 5;
+export const PART_BOOTS = 6;
+export const PART_GLOVES = 7;
+
+export function deterministicAppearance(seedKey: string): Required<Omit<PlayerAppearanceSpec, "isGoalkeeper" | "hasGloves" | "active">> {
+  let h = 2166136261;
+  for (let i = 0; i < seedKey.length; i += 1) {
+    h ^= seedKey.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const u = (shift: number) => ((h >>> shift) & 0xff) / 255;
+  const skinPalette = ["#f4c7a5", "#dfa278", "#c28056", "#9a5d3b", "#6f3e26", "#f0b794"];
+  const hairPalette = ["#1c1917", "#3f2c22", "#6b4423", "#b48a4e", "#0f172a", "#4a3728"];
+  const bootPalette = ["#0f172a", "#f8fafc", "#ef4444", "#38bdf8", "#a3e635", "#f97316"];
+  const styles: HairStyle[] = ["short", "fade", "afro", "bun", "buzz", "curly"];
+  const builds: BuildProfile[] = ["slim", "balanced", "stocky", "tall"];
+  const patterns: KitPattern[] = ["solid", "stripes", "hoops", "sash", "halves", "chevron"];
+  return {
+    primaryColor: "#00e87a",
+    secondaryColor: "#0f172a",
+    accentColor: "#f8fafc",
+    shortsColor: "#0f172a",
+    socksColor: "#f8fafc",
+    bootColor: bootPalette[Math.floor(u(0) * bootPalette.length) % bootPalette.length],
+    skinTone: skinPalette[Math.floor(u(8) * skinPalette.length) % skinPalette.length],
+    hairColor: hairPalette[Math.floor(u(16) * hairPalette.length) % hairPalette.length],
+    hairStyle: styles[Math.floor(u(20) * styles.length) % styles.length],
+    buildProfile: builds[Math.floor(u(4) * builds.length) % builds.length],
+    kitPattern: patterns[Math.floor(u(12) * patterns.length) % patterns.length],
+    sponsorColor: "#e2e8f0",
+  };
+}
+
 export type Pose = {
   lean: number;
   headLift: number;
@@ -52,10 +122,10 @@ export type Pose = {
   rightLeg: [number, number];
 };
 
-type Cell = { body: Uint8ClampedArray; kit: Uint8ClampedArray };
+type Cell = { body: Uint8ClampedArray; kit: Uint8ClampedArray; parts: Uint8Array };
 
 const cellCache = new Map<string, Cell>();
-let cachedAtlas: { body: Uint8Array; kit: Uint8Array; width: number; height: number } | null = null;
+let cachedAtlas: { body: Uint8Array; kit: Uint8Array; parts: Uint8Array; width: number; height: number } | null = null;
 let cachedDigits: { data: Uint8Array; width: number; height: number } | null = null;
 const cachedPitchPixels = new Map<string, Uint8Array>();
 let cachedBallPixels: Uint8Array | null = null;
@@ -247,6 +317,114 @@ export function poseFor(action: RigAction, frame: number): Pose {
       rightLeg: [0.35 - step * 0.1, 0.15],
     };
   }
+  if (action === "run") {
+    return {
+      lean: 0.28 + Math.abs(step) * 0.06,
+      headLift: -0.6,
+      jump: Math.max(0, -Math.cos(frame * Math.PI * 0.5)) * 1.4,
+      torsoTilt: step * 0.12,
+      leftArm: [0.58 - step * 0.72, 0.55],
+      rightArm: [-0.58 + step * 0.72, 0.55],
+      leftLeg: [0.76 * step, 0.22 + Math.max(0, -step) * 0.5],
+      rightLeg: [-0.76 * step, 0.22 + Math.max(0, step) * 0.5],
+    };
+  }
+  if (action === "decelerate") {
+    return {
+      lean: -0.14,
+      headLift: 0.4,
+      jump: 0,
+      torsoTilt: -0.1 + step * 0.08,
+      leftArm: [0.85, 0.3],
+      rightArm: [-0.85, -0.3],
+      leftLeg: [0.38, 0.36],
+      rightLeg: [-0.32, 0.46],
+    };
+  }
+  if (action === "cross") {
+    return {
+      lean: 0.22 + beat * 0.1,
+      headLift: 0.8,
+      jump: Math.max(0, step) * 1.5,
+      torsoTilt: 0.28 * beat,
+      leftArm: [1.85 - step * 0.2, 0.22],
+      rightArm: [-0.95 + step * 0.25, 0.25],
+      leftLeg: [1.05 * beat, 0.18 + Math.max(0, -beat) * 0.4],
+      rightLeg: [-0.48 * beat, 0.32],
+    };
+  }
+  if (action === "through_pass") {
+    return {
+      lean: 0.14,
+      headLift: 1.0,
+      jump: 0,
+      torsoTilt: step * 0.22,
+      leftArm: [1.1 - step * 0.2, 0.2],
+      rightArm: [-0.7 + step * 0.2, 0.2],
+      leftLeg: [0.72 * beat, 0.22],
+      rightLeg: [-0.28, 0.25],
+    };
+  }
+  if (action === "long_pass") {
+    return {
+      lean: -0.18 + beat * 0.08,
+      headLift: 1.2,
+      jump: Math.max(0, beat) * 1.2,
+      torsoTilt: -0.25 + beat * 0.35,
+      leftArm: [2.05, 0.14],
+      rightArm: [-1.15, 0.2],
+      leftLeg: [1.1 * beat, 0.12],
+      rightLeg: [-0.52, 0.28],
+    };
+  }
+  if (action === "block") {
+    return {
+      lean: 0.26,
+      headLift: -0.4,
+      jump: 1,
+      torsoTilt: 0.16,
+      leftArm: [0.32, 0.58],
+      rightArm: [-0.32, -0.58],
+      leftLeg: [0.85, 0.65],
+      rightLeg: [-0.55, 0.7],
+    };
+  }
+  if (action === "catch") {
+    return {
+      lean: 0.08,
+      headLift: 2.4,
+      jump: 3 + Math.abs(step) * 1.5,
+      torsoTilt: 0.08,
+      leftArm: [1.7 + step * 0.1, 0.78],
+      rightArm: [1.7 - step * 0.1, -0.78],
+      leftLeg: [0.22, 0.22],
+      rightLeg: [-0.22, 0.24],
+    };
+  }
+  if (action === "parry") {
+    return {
+      lean: 0.32,
+      headLift: 2,
+      jump: 5 + Math.abs(step) * 2,
+      torsoTilt: 0.95 + Math.abs(step) * 0.14,
+      leftArm: [2.85, 0.04],
+      rightArm: [1.45, 0.15],
+      leftLeg: [0.55, 0.25],
+      rightLeg: [-0.15, 0.3],
+    };
+  }
+  if (action === "frustrated") {
+    return {
+      lean: 0.25,
+      headLift: -1.6,
+      jump: 0,
+      torsoTilt: step * 0.08,
+      leftArm: [0.46, 0.88],
+      rightArm: [-0.46, -0.88],
+      leftLeg: [0.14, 0.12],
+      rightLeg: [-0.14, 0.12],
+    };
+  }
   // celebrate
   return {
     lean: -0.05,
@@ -275,33 +453,57 @@ export function footSpread(pose: Pose): number {
 const PRIORITY_ACTIONS = new Set<RigAction>([
   "pass",
   "shoot",
+  "cross",
+  "through_pass",
+  "long_pass",
   "tackle",
   "slide_tackle",
+  "intercept",
+  "block",
   "control",
   "feint",
   "header",
   "jump",
   "save",
   "dive",
+  "catch",
+  "parry",
   "celebrate",
+  "frustrated",
 ]);
 
 export function presentationAction(
   base: string,
   motion: { facingDelta: number; speed: number; previousSpeed: number; hasBall: boolean },
 ): RigAction {
-  const known = (RIG_ACTIONS as readonly string[]).includes(base);
-  const action = known ? (base as RigAction) : "idle";
+  const normalized = base.toLowerCase();
+  const mapped =
+    normalized === "shot"
+      ? "shoot"
+      : normalized === "through_ball"
+        ? "through_pass"
+        : normalized === "clearance" || normalized === "long_kick"
+          ? "long_pass"
+          : normalized === "miss" || normalized === "woodwork"
+            ? "frustrated"
+            : normalized === "interception"
+              ? "intercept"
+              : normalized;
+  const known = (RIG_ACTIONS as readonly string[]).includes(mapped);
+  const action = known ? (mapped as RigAction) : "idle";
   if (PRIORITY_ACTIONS.has(action)) {
     return action;
   }
   if (Math.abs(motion.facingDelta) > 0.9 && motion.speed > 0.002) return "turn";
   if (motion.speed - motion.previousSpeed > 0.008 && motion.speed > 0.006) return "accelerate";
+  if (motion.previousSpeed - motion.speed > 0.008 && motion.speed > 0.004) return "decelerate";
   if (motion.hasBall && motion.speed > 0.0035) return "dribble";
   if (motion.speed > 0.02) return "sprint";
   if (motion.speed > 0.01) return "jog";
   if (motion.speed > 0.0035) return "walk";
-  return action === "sprint" || action === "jog" || action === "walk" || action === "dribble" ? action : "idle";
+  return action === "sprint" || action === "run" || action === "jog" || action === "walk" || action === "dribble"
+    ? action
+    : "idle";
 }
 export type TrackedPlayerMotion = {
   sampleX: number;
@@ -526,11 +728,22 @@ export class PlayerMotionTracker {
   }
 }
 
-function plot(data: Uint8ClampedArray, x: number, y: number, color: readonly [number, number, number, number]) {
+function plot(
+  data: Uint8ClampedArray,
+  x: number,
+  y: number,
+  color: readonly [number, number, number, number],
+  partMask?: Uint8Array,
+  partId?: number,
+) {
   const ix = x | 0;
   const iy = y | 0;
   if (ix < 0 || iy < 0 || ix >= CELL || iy >= CELL || color[3] <= 0) return;
-  const index = (iy * CELL + ix) * 4;
+  const cellIndex = iy * CELL + ix;
+  if (partMask && partId && color[3] >= 120) {
+    partMask[cellIndex] = partId;
+  }
+  const index = cellIndex * 4;
   const src = color[3] / 255;
   const dst = data[index + 3] / 255;
   const out = src + dst * (1 - src);
@@ -548,6 +761,8 @@ function fillDisk(
   rx: number,
   ry: number,
   color: readonly [number, number, number, number],
+  partMask?: Uint8Array,
+  partId?: number,
 ) {
   const left = Math.floor(cx - rx - 1);
   const right = Math.ceil(cx + rx + 1);
@@ -557,7 +772,7 @@ function fillDisk(
     for (let x = left; x <= right; x += 1) {
       const nx = (x - cx) / rx;
       const ny = (y - cy) / ry;
-      if (nx * nx + ny * ny <= 1) plot(data, x, y, color);
+      if (nx * nx + ny * ny <= 1) plot(data, x, y, color, partMask, partId);
     }
   }
 }
@@ -570,12 +785,14 @@ function capsule(
   y1: number,
   radius: number,
   color: readonly [number, number, number, number],
+  partMask?: Uint8Array,
+  partId?: number,
 ) {
   const length = Math.hypot(x1 - x0, y1 - y0);
   const steps = Math.max(1, Math.ceil(length));
   for (let step = 0; step <= steps; step += 1) {
     const t = step / steps;
-    fillDisk(data, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, radius, radius, color);
+    fillDisk(data, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, radius, radius, color, partMask, partId);
   }
 }
 
@@ -587,6 +804,8 @@ function fillTaper(
   topHalf: number,
   bottomHalf: number,
   color: readonly [number, number, number, number],
+  partMask?: Uint8Array,
+  partId?: number,
 ) {
   const start = Math.floor(Math.min(top, bottom));
   const end = Math.ceil(Math.max(top, bottom));
@@ -594,7 +813,9 @@ function fillTaper(
   for (let y = start; y <= end; y += 1) {
     const t = (y - top) / span;
     const half = topHalf + (bottomHalf - topHalf) * t;
-    for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half); x += 1) plot(data, x, y, color);
+    for (let x = Math.floor(cx - half); x <= Math.ceil(cx + half); x += 1) {
+      plot(data, x, y, color, partMask, partId);
+    }
   }
 }
 
@@ -607,6 +828,7 @@ export function rasterizeCell(action: RigAction, frame: number, direction: numbe
   const pose = poseFor(action, safeFrame);
   const body = new Uint8ClampedArray(CELL * CELL * 4);
   const kit = new Uint8ClampedArray(CELL * CELL * 4);
+  const parts = new Uint8Array(CELL * CELL);
   const dirAngle = (safeDirection / ATLAS_DIRECTIONS) * Math.PI * 2;
   const cosDir = Math.cos(dirAngle);
   const sinDir = Math.sin(dirAngle);
@@ -618,25 +840,24 @@ export function rasterizeCell(action: RigAction, frame: number, direction: numbe
   const shoulderY = hipY - 16;
   const headY = shoulderY - 9 - pose.headLift;
 
-  // Ground contact shadow + subtle directional chevron
-  fillDisk(body, cx, 56, 13.5, 3.4, [0, 0, 0, 88]);
-  fillDisk(body, cx + cosDir * 6, 56 - sinDir * 1.6, 3.2, 1.4, [255, 255, 255, 64]);
+  // Crisp pitched contact shadow + turf ambient AO
+  fillDisk(body, cx + 1.5, 56.5, 14.5, 3.8, [0, 0, 0, 74]);
+  fillDisk(body, cx, 55.8, 11.2, 2.8, [0, 0, 0, 102]);
+  fillDisk(body, cx + cosDir * 6.5, 55.6 - sinDir * 1.4, 2.8, 1.3, [255, 255, 255, 62]);
 
-  const isKeeperAction = action === "save" || action === "dive";
+  const isKeeperAction = action === "save" || action === "dive" || action === "catch" || action === "parry";
   const arm = (angles: [number, number], originX: number, outline: boolean) => {
     const shoulder = { x: originX, y: shoulderY + 2 };
     const elbow = boneEnd(shoulder.x, shoulder.y, angles[0], UPPER_ARM);
     const hand = boneEnd(elbow.x, elbow.y, angles[0] + angles[1], FOREARM);
     const swayElbow = { x: shoulder.x + (elbow.x - shoulder.x) * xMul, y: elbow.y };
     const swayHand = { x: swayElbow.x + (hand.x - elbow.x) * xMul, y: hand.y };
-    if (outline) capsule(body, shoulder.x, shoulder.y, swayHand.x, swayHand.y, 3.3, OUTLINE);
-    // Short sleeve kit cap
-    capsule(kit, shoulder.x, shoulder.y, (shoulder.x + swayElbow.x) * 0.5, (shoulder.y + swayElbow.y) * 0.5, 2.6, KIT);
-    capsule(body, (shoulder.x + swayElbow.x) * 0.5, (shoulder.y + swayElbow.y) * 0.5, swayElbow.x, swayElbow.y, 2.4, SKIN);
-    capsule(body, swayElbow.x, swayElbow.y, swayHand.x, swayHand.y, 2.1, SKIN);
-    if (isKeeperAction) {
-      fillDisk(body, swayHand.x, swayHand.y, 2.9, 2.9, [248, 250, 252, 255]);
-    }
+    if (outline) capsule(body, shoulder.x, shoulder.y, swayHand.x, swayHand.y, 3.4, OUTLINE);
+    // Athletic sleeve cap
+    capsule(kit, shoulder.x, shoulder.y, (shoulder.x + swayElbow.x) * 0.5, (shoulder.y + swayElbow.y) * 0.5, 2.7, KIT, parts, PART_SHIRT);
+    capsule(body, (shoulder.x + swayElbow.x) * 0.5, (shoulder.y + swayElbow.y) * 0.5, swayElbow.x, swayElbow.y, 2.4, SKIN, parts, PART_SKIN);
+    capsule(body, swayElbow.x, swayElbow.y, swayHand.x, swayHand.y, 2.1, SKIN, parts, PART_SKIN);
+    fillDisk(body, swayHand.x, swayHand.y, isKeeperAction ? 3.1 : 2.1, isKeeperAction ? 3.1 : 2.1, isKeeperAction ? [248, 250, 252, 255] : SKIN, parts, PART_GLOVES);
   };
   const leg = (angles: [number, number], originX: number) => {
     const hip = { x: originX, y: hipY };
@@ -644,30 +865,32 @@ export function rasterizeCell(action: RigAction, frame: number, direction: numbe
     const foot = boneEnd(knee.x, knee.y, angles[0] + angles[1], SHIN);
     const swayKnee = { x: hip.x + (knee.x - hip.x) * xMul + pose.torsoTilt * 4, y: knee.y };
     const swayFoot = { x: swayKnee.x + (foot.x - knee.x) * xMul, y: foot.y };
-    capsule(body, hip.x, hip.y, swayFoot.x, swayFoot.y, 3.4, OUTLINE);
-    capsule(kit, hip.x, hip.y + 2, swayKnee.x, swayKnee.y, 2.5, KIT);
-    capsule(kit, swayKnee.x, swayKnee.y, swayFoot.x, swayFoot.y - 3, 2.1, KIT_SHADE);
-    fillDisk(body, swayFoot.x, swayFoot.y - 3.5, 2.1, 1.1, SOCK_BAND);
-    const toeOffset = Math.sin(angles[0]) * 3 + cosDir * 1.2;
-    capsule(body, swayFoot.x, swayFoot.y - 1, swayFoot.x + toeOffset, swayFoot.y + 1, 2.3, BOOT);
-    plot(body, swayFoot.x + toeOffset * 0.6, swayFoot.y + 1.5, BOOT_STUD);
+    capsule(body, hip.x, hip.y, swayFoot.x, swayFoot.y, 3.5, OUTLINE);
+    capsule(kit, hip.x, hip.y + 2, swayKnee.x, swayKnee.y, 2.6, KIT, parts, PART_SHORTS);
+    capsule(kit, swayKnee.x, swayKnee.y, swayFoot.x, swayFoot.y - 3, 2.2, KIT_SHADE, parts, PART_SOCKS);
+    fillDisk(body, swayFoot.x, swayFoot.y - 3.5, 2.1, 1.1, SOCK_BAND, parts, PART_SOCKS);
+    const toeOffset = Math.sin(angles[0]) * 3.1 + cosDir * 1.4;
+    capsule(body, swayFoot.x, swayFoot.y - 1, swayFoot.x + toeOffset, swayFoot.y + 1, 2.4, BOOT, parts, PART_BOOTS);
+    plot(body, swayFoot.x + toeOffset * 0.65, swayFoot.y + 1.5, BOOT_STUD);
   };
   const leftHip = cx - stance;
   const rightHip = cx + stance;
   arm(pose.leftArm, leftHip, true);
   leg(pose.leftLeg, leftHip);
   const tilt = pose.torsoTilt * 8;
-  fillTaper(body, cx + tilt, shoulderY - 1, hipY + 1, 10.2, 7.6, OUTLINE);
-  fillTaper(kit, cx + tilt, shoulderY, hipY, 8.4, 6.4, KIT);
-  // Subtle collar detail on jersey
-  fillDisk(body, cx + tilt + cosDir * 1.4, shoulderY + 1.2, 3.2, 1.5, OUTLINE);
-  fillTaper(kit, cx + tilt * 0.4, hipY - 1, hipY + 7, 7.5, 8.3, KIT_SHADE);
+  fillTaper(body, cx + tilt, shoulderY - 1, hipY + 1, 10.6, 7.8, OUTLINE);
+  fillTaper(kit, cx + tilt, shoulderY, hipY, 8.8, 6.6, KIT, parts, PART_SHIRT);
+  // Shoulder rim lighting + collar + waist tuck
+  fillDisk(body, cx + tilt + cosDir * 1.4, shoulderY + 1.1, 3.2, 1.4, OUTLINE);
+  fillTaper(kit, cx + tilt * 0.4, hipY - 1, hipY + 7.2, 7.6, 8.6, KIT_SHADE, parts, PART_SHORTS);
   arm(pose.rightArm, rightHip, true);
   leg(pose.rightLeg, rightHip);
-  fillDisk(body, cx + tilt, headY, 6.2, 7.1, OUTLINE);
-  fillDisk(body, cx + tilt + cosDir * 0.9, headY, 5.2, 6.1, SKIN);
-  fillDisk(body, cx + tilt - cosDir * 0.8, headY - 3.2 - sinDir * 0.6, 5.4, 3.5, HAIR);
-  const cell = { body, kit };
+  // Neck + sculpted head & hair crown
+  capsule(body, cx + tilt, shoulderY - 2, cx + tilt, headY + 4, 2.3, SKIN, parts, PART_SKIN);
+  fillDisk(body, cx + tilt, headY, 6.2, 7.0, OUTLINE);
+  fillDisk(body, cx + tilt + cosDir * 0.9, headY, 5.2, 6.0, SKIN, parts, PART_SKIN);
+  fillDisk(body, cx + tilt - cosDir * 0.7, headY - 3.3 - sinDir * 0.6, 5.5, 3.6, HAIR, parts, PART_HAIR);
+  const cell = { body, kit, parts };
   cellCache.set(key, cell);
   return cell;
 }
@@ -678,6 +901,7 @@ export function buildAtlasPixels() {
   const height = ATLAS_ROWS * CELL;
   const body = new Uint8Array(width * height * 4);
   const kit = new Uint8Array(width * height * 4);
+  const parts = new Uint8Array(width * height * 4);
   RIG_ACTIONS.forEach((action, row) => {
     for (let direction = 0; direction < ATLAS_DIRECTIONS; direction += 1) {
       for (let frame = 0; frame < ATLAS_FRAMES; frame += 1) {
@@ -686,10 +910,20 @@ export function buildAtlasPixels() {
         const originY = row * CELL;
         blit(body, width, cell.body, originX, originY);
         blit(kit, width, cell.kit, originX, originY);
+        for (let y = 0; y < CELL; y += 1) {
+          for (let x = 0; x < CELL; x += 1) {
+            const p = cell.parts[y * CELL + x] || 0;
+            const dst = ((originY + y) * width + (originX + x)) * 4;
+            parts[dst] = p * 32;
+            parts[dst + 1] = p * 32;
+            parts[dst + 2] = p * 32;
+            parts[dst + 3] = 255;
+          }
+        }
       }
     }
   });
-  cachedAtlas = { body, kit, width, height };
+  cachedAtlas = { body, kit, parts, width, height };
   return cachedAtlas;
 }
 
@@ -734,37 +968,91 @@ export function buildDigitPixels() {
   return cachedDigits;
 }
 
-function stampNumber(target: Uint8ClampedArray, shirtNumber: number) {
+function stampNumber(target: Uint8ClampedArray, shirtNumber: number, colorHex = "#f8fafc") {
   const digits = String(Math.max(0, Math.min(99, Math.floor(shirtNumber)))).padStart(shirtNumber >= 10 ? 2 : 1, "0");
   const scale = 1;
   const totalWidth = digits.length * 5 * scale + (digits.length - 1);
   let cursor = Math.round(CELL / 2 - totalWidth / 2);
   const top = 28;
+  const rgb = hexToRgb(colorHex);
+  const rgba: readonly [number, number, number, number] = [rgb[0], rgb[1], rgb[2], 255];
   for (const char of digits) {
     const rows = DIGIT_ROWS[Number(char)] || DIGIT_ROWS[0];
     rows.forEach((row, y) => {
       for (let x = 0; x < 5; x += 1) {
         if (row[x] !== "1") continue;
-        plot(target, cursor + x * scale, top + y * scale, [248, 250, 252, 255]);
+        plot(target, cursor + x * scale, top + y * scale, rgba);
       }
     });
     cursor += 6;
   }
 }
 
-export function compositeCell(cell: Cell, kitColor: string, shirtNumber: number): Uint8ClampedArray {
+export function compositeCell(
+  cell: Cell,
+  kitColor: string,
+  shirtNumber: number,
+  options?: PlayerAppearanceSpec,
+): Uint8ClampedArray {
   const merged = new Uint8ClampedArray(cell.body);
-  const tint = hexToRgb(kitColor);
+  const tint = hexToRgb(options?.primaryColor || kitColor);
+  const secondary = hexToRgb(options?.secondaryColor || "#ffffff");
+  const accent = hexToRgb(options?.accentColor || "#e2e8f0");
+  const shorts = hexToRgb(options?.shortsColor || "#0f172a");
+  const socks = hexToRgb(options?.socksColor || kitColor);
+  const skin = options?.skinTone ? hexToRgb(options.skinTone) : null;
+  const hair = options?.hairColor ? hexToRgb(options.hairColor) : null;
+  const boots = options?.bootColor ? hexToRgb(options.bootColor) : null;
+  const gloves = options?.hasGloves || options?.isGoalkeeper ? ([244, 248, 255] as const) : null;
+  const pattern: KitPattern = options?.kitPattern || "solid";
+
   for (let index = 0; index < cell.kit.length; index += 4) {
+    const px = (index / 4) % CELL;
+    const py = Math.floor(index / 4 / CELL);
+    const nx = px / CELL;
+    const ny = py / CELL;
+    const part = cell.parts?.[index / 4] ?? PART_NONE;
+
+    if (skin && part === PART_SKIN && merged[index + 3] > 20) {
+      merged[index] = Math.round(skin[0] * 0.92 + 12);
+      merged[index + 1] = Math.round(skin[1] * 0.9 + 8);
+      merged[index + 2] = Math.round(skin[2] * 0.88 + 6);
+    } else if (hair && part === PART_HAIR && merged[index + 3] > 20) {
+      merged[index] = hair[0];
+      merged[index + 1] = hair[1];
+      merged[index + 2] = hair[2];
+    } else if (boots && part === PART_BOOTS && merged[index + 3] > 20) {
+      merged[index] = boots[0];
+      merged[index + 1] = boots[1];
+      merged[index + 2] = boots[2];
+    } else if (gloves && part === PART_GLOVES && merged[index + 3] > 20) {
+      merged[index] = gloves[0];
+      merged[index + 1] = gloves[1];
+      merged[index + 2] = gloves[2];
+    }
+
     const cover = cell.kit[index + 3] / 255;
     if (cover <= 0) continue;
     const shade = cell.kit[index] / 255;
-    merged[index] = tint[0] * shade * cover + merged[index] * (1 - cover);
-    merged[index + 1] = tint[1] * shade * cover + merged[index + 1] * (1 - cover);
-    merged[index + 2] = tint[2] * shade * cover + merged[index + 2] * (1 - cover);
+    let rgb = tint;
+    if (part === PART_SHORTS || (part === PART_NONE && ny > 0.51 && ny <= 0.67)) {
+      rgb = shorts;
+    } else if (part === PART_SOCKS || (part === PART_NONE && ny > 0.67)) {
+      rgb = socks;
+    } else {
+      if (pattern === "stripes" && px % 6 < 3) rgb = secondary;
+      else if (pattern === "hoops" && py % 6 < 3) rgb = secondary;
+      else if (pattern === "sash" && Math.abs(nx - ny - 0.05) < 0.09) rgb = secondary;
+      else if (pattern === "halves" && nx >= 0.5) rgb = secondary;
+      else if (pattern === "chevron" && Math.abs(ny - (0.34 + Math.abs(nx - 0.5) * 0.28)) < 0.065) rgb = secondary;
+      else if (ny < 0.31) rgb = accent; // Collar & trim cue
+    }
+    merged[index] = rgb[0] * shade * cover + merged[index] * (1 - cover);
+    merged[index + 1] = rgb[1] * shade * cover + merged[index + 1] * (1 - cover);
+    merged[index + 2] = rgb[2] * shade * cover + merged[index + 2] * (1 - cover);
     merged[index + 3] = Math.max(merged[index + 3], cell.kit[index + 3]);
   }
-  stampNumber(merged, shirtNumber);
+  stampNumber(merged, shirtNumber, options?.accentColor || "#f8fafc");
   return merged;
 }
 
@@ -774,11 +1062,16 @@ function getCachedSpriteCanvas(spec: {
   direction: number;
   kitColor: string;
   shirtNumber: number;
+  appearance?: PlayerAppearanceSpec;
 }): HTMLCanvasElement | null {
   const safeDirection = ((Math.round(spec.direction) % ATLAS_DIRECTIONS) + ATLAS_DIRECTIONS) % ATLAS_DIRECTIONS;
   const safeFrame = ((Math.floor(spec.frame) % ATLAS_FRAMES) + ATLAS_FRAMES) % ATLAS_FRAMES;
   const safeShirt = Math.max(0, Math.min(99, Math.floor(spec.shirtNumber || 0)));
-  const cacheKey = `${spec.action}:${safeFrame}:${safeDirection}:${spec.kitColor}:${safeShirt}`;
+  const ap = spec.appearance;
+  const apKey = ap
+    ? `${ap.kitPattern || "s"}:${ap.secondaryColor || ""}:${ap.shortsColor || ""}:${ap.socksColor || ""}:${ap.skinTone || ""}:${ap.hairColor || ""}:${ap.bootColor || ""}:${ap.hasGloves || ap.isGoalkeeper ? "gk" : "out"}`
+    : "base";
+  const cacheKey = `${spec.action}:${safeFrame}:${safeDirection}:${spec.kitColor}:${safeShirt}:${apKey}`;
   const existing = spriteCanvasCache.get(cacheKey);
   if (existing) return existing;
 
@@ -794,7 +1087,7 @@ function getCachedSpriteCanvas(spec: {
   }
   if (!local) return null;
 
-  const merged = compositeCell(rasterizeCell(spec.action, safeFrame, safeDirection), spec.kitColor, safeShirt);
+  const merged = compositeCell(rasterizeCell(spec.action, safeFrame, safeDirection), spec.kitColor, safeShirt, ap);
   if (typeof ImageData !== "undefined") {
     local.putImageData(new ImageData(new Uint8ClampedArray(merged), CELL, CELL), 0, 0);
   }
@@ -811,11 +1104,21 @@ export function paintRig(
   x: number,
   y: number,
   size: number,
-  spec: { action: RigAction; frame: number; direction: number; kitColor: string; shirtNumber: number },
+  spec: {
+    action: RigAction;
+    frame: number;
+    direction: number;
+    kitColor: string;
+    shirtNumber: number;
+    appearance?: PlayerAppearanceSpec;
+  },
 ) {
   const cached = getCachedSpriteCanvas(spec);
   if (!cached) return;
-  ctx.drawImage(cached, x - size / 2, y - size * 0.85, size, size);
+  const build = spec.appearance?.buildProfile;
+  const sx = build === "stocky" ? size * 1.09 : build === "slim" ? size * 0.91 : size;
+  const sy = build === "tall" ? size * 1.07 : build === "stocky" ? size * 0.96 : size;
+  ctx.drawImage(cached, x - sx / 2, y - sy * 0.85, sx, sy);
 }
 
 export function getCachedPitchBitmap(width = 512, height = 320): HTMLCanvasElement | null {

@@ -24,7 +24,7 @@ def _create_authenticated_user(app, *, email: str, username: str, display_name: 
             password="SuperSecret1",
             display_name=display_name,
         )
-        token, _ = service.issue_access_token(user)
+        token, _ = service.issue_access_token(user, session=session)
         session.commit()
         session.refresh(user)
         return user, {"Authorization": f"Bearer {token}"}
@@ -136,11 +136,13 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         assert spectate_payload["presence_channel"] == f"match:{duel_id}:events"
         assert spectate_payload["presence_websocket_path"] == f"/ws/spectate/{duel_id}"
         assert spectate_payload["replay_route"] == f"/api/matches/{duel_id}/replay"
-        assert [item["key"] for item in spectate_payload["speed_modes"]] == ["normal", "fast", "turbo"]
+        assert spectate_payload["speed_modes"] == []
         assert spectate_payload["sync_strategy"] == "deterministic_playback"
         assert spectate_payload["watch_party_enabled"] is True
         assert spectate_payload["reactions_enabled"] is True
-        assert spectate_payload["commentary_websocket_path"].endswith(f"/api/matches/{duel_id}/commentary/stream?session_id={spectate_payload['id']}")
+        assert spectate_payload["commentary_websocket_path"].endswith(
+            f"/api/matches/{duel_id}/commentary/stream?session_id={spectate_payload['id']}"
+        )
         assert spectate_payload["tts_websocket_path"] == "/tts/live?voice=default"
 
         websocket_path = spectate_payload["websocket_path"]
@@ -148,9 +150,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
             first_message = websocket.receive_json()
             assert first_message["channel"] == f"match:{duel_id}:events"
             assert first_message["kind"] == "snapshot"
-            assert {"home", "draw", "away"} <= set(
-                first_message["payload"]["win_probability"].keys()
-            )
+            assert {"home", "draw", "away"} <= set(first_message["payload"]["win_probability"].keys())
             assert {"home_line", "draw_line", "away_line", "volatility", "tension"} <= set(
                 first_message["payload"]["market_pulse"].keys()
             )
@@ -162,7 +162,10 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
                     assert message["payload"][0]["experience"]["motion"]["model_key"] == "gtex_motion_blend_v1"
                     assert message["payload"][0]["experience"]["commentary"]["tts_ready"] is True
                     assert message["payload"][0]["experience"]["crowd"]["profile"]
-                    assert message["payload"][0]["experience"]["spectator_sync"]["sync_strategy"] == "deterministic_playback"
+                    assert (
+                        message["payload"][0]["experience"]["spectator_sync"]["sync_strategy"]
+                        == "deterministic_playback"
+                    )
                     saw_event_batch = True
                     break
             assert saw_event_batch is True
@@ -186,9 +189,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
         assert completed_payload["live_state"]["is_live"] is False
         assert completed_payload["live_state"]["crowd_state"]["profile"]
         assert completed_payload["live_state"]["spectator_sync"]["sync_strategy"] == "deterministic_playback"
-        assert {"home", "draw", "away"} <= set(
-            completed_payload["live_state"]["snapshot"]["win_probability"].keys()
-        )
+        assert {"home", "draw", "away"} <= set(completed_payload["live_state"]["snapshot"]["win_probability"].keys())
         assert completed_payload["live_state"]["snapshot"]["market_pulse"]["home_line"] > 0
 
         commentary_response = client.get(

@@ -15,6 +15,11 @@ from app.match_engine.schemas import MatchKitIdentityInput, MatchSimulationReque
 from app.match_engine.simulation.ball_physics import BallPhysicsEngine
 from app.match_engine.simulation.crowd import CrowdAtmosphereEngine
 from app.match_engine.simulation.decision_ai import PlayerDecisionAI
+from app.match_engine.simulation.offside_var import (
+    evaluate_law11_offside,
+    evaluate_var_review_2026_27,
+    resolve_match_broadcast_category,
+)
 from app.match_engine.simulation.models import (
     BadgeVisualIdentity,
     InternalPlayer,
@@ -55,6 +60,7 @@ class MatchNarrativeContext:
     rivalry_intensity: float
     home_advantage_note: str
     clash_resolved: bool
+    competition_allows_corner_var: bool = False
 
 
 class MatchEventGenerator:
@@ -178,6 +184,27 @@ class MatchEventGenerator:
                 away_state=away_state,
                 metadata={
                     "stage": request.competition.stage,
+                    "competition_type": request.competition.competition_type.value,
+                    "approved_shorter_presentation": bool(
+                        getattr(request.competition, "approved_shorter_presentation", False)
+                    ),
+                    "designated_major_knockout": bool(getattr(request.competition, "designated_major_knockout", False)),
+                    "competition_allows_corner_var": bool(
+                        getattr(request.competition, "competition_allows_corner_var", False)
+                    ),
+                    "competition_category": resolve_match_broadcast_category(
+                        is_final=request.competition.is_final,
+                        stage=request.competition.stage,
+                        competition_type=request.competition.competition_type.value,
+                        approved_shorter_presentation=bool(
+                            getattr(request.competition, "approved_shorter_presentation", False)
+                        ),
+                        metadata={
+                            "designated_major_knockout": bool(
+                                getattr(request.competition, "designated_major_knockout", False)
+                            )
+                        },
+                    ).value,
                     "upset_probability": round(narrative.upset_probability, 3),
                     "home_tactics": self._shape_instructions(home_state),
                     "away_tactics": self._shape_instructions(away_state),
@@ -782,6 +809,7 @@ class MatchEventGenerator:
             rivalry_intensity=rivalry,
             home_advantage_note=note,
             clash_resolved=clash_resolved,
+            competition_allows_corner_var=bool(getattr(request.competition, "competition_allows_corner_var", False)),
         )
 
     def _build_schedule(
@@ -1387,6 +1415,24 @@ class MatchEventGenerator:
         player_stats[player.player_id].yellow_cards += 1
         state.dynamic_morale = self._clamp(state.dynamic_morale - 0.8, 30.0, 99.0)
         home_state, away_state = self._ordered_states(state, opponent)
+        yellow_reasons = (
+            "Reckless challenge",
+            "Tactical pullback stopping a promising attack",
+            "Late sliding tackle",
+            "Persistent infringement",
+            "Unsporting behaviour",
+        )
+        reason_idx = (minute + len(player.player_id)) % len(yellow_reasons)
+        yellow_reason = yellow_reasons[reason_idx]
+        var_silent = evaluate_var_review_2026_27(
+            review_id=f"{match_id}:var:yc:{minute}:{player.player_id}",
+            category="red_card",
+            original_decision="yellow_card",
+            clear_and_obvious_error=False,
+            reason=f"Silent VAR check: {yellow_reason} does not meet serious foul play threshold.",
+            offending_player_id=player.player_id,
+            offending_player_name=player.player_name,
+        )
         return self._make_event(
             match_id=match_id,
             event_counter=event_counter,
@@ -1403,6 +1449,22 @@ class MatchEventGenerator:
                 "pressure_level": self._pressure_level(state, opponent, minute),
                 "build_up_profile": "foul",
                 "score_commit": "never",
+                "card_type": "yellow",
+                "card_reason": yellow_reason,
+                "card_detail": {
+                    "card_type": "yellow",
+                    "is_second_yellow_dismissal": False,
+                    "is_direct_red": False,
+                    "dismissal": False,
+                    "player_id": player.player_id,
+                    "player_name": player.player_name,
+                    "team_id": state.team_id,
+                    "team_name": state.team_name,
+                    "minute": minute,
+                    "reason": yellow_reason,
+                    "referee_signal": "single_yellow_card",
+                },
+                "var_review": var_silent.to_dict() if var_silent is not None else None,
             },
         )
 
@@ -1439,6 +1501,27 @@ class MatchEventGenerator:
         opponent.dynamic_morale = self._clamp(opponent.dynamic_morale + 3.0, 25.0, 99.0)
         opponent.momentum = self._clamp(opponent.momentum + 2.2, -12.0, 14.0)
         home_state, away_state = self._ordered_states(state, opponent)
+        is_second_yellow = source == "second_yellow"
+        direct_red_reasons = (
+            "Denying an obvious goal-scoring opportunity (DOGSO)",
+            "Serious foul play — excessive force",
+            "Violent conduct",
+        )
+        red_reason = (
+            "Second bookable offence (second yellow card)"
+            if is_second_yellow
+            else direct_red_reasons[(minute + len(player.player_id)) % len(direct_red_reasons)]
+        )
+        var_red = evaluate_var_review_2026_27(
+            review_id=f"{match_id}:var:rc:{minute}:{player.player_id}",
+            category="red_card",
+            original_decision="second_yellow_red" if is_second_yellow else "direct_red",
+            clear_and_obvious_error=False,
+            is_second_yellow_review=is_second_yellow,
+            reason=f"IFAB 2026/27 VAR check confirmed dismissal: {red_reason}.",
+            offending_player_id=player.player_id,
+            offending_player_name=player.player_name,
+        )
         return self._make_event(
             match_id=match_id,
             event_counter=event_counter,
@@ -1456,6 +1539,22 @@ class MatchEventGenerator:
                 "importance": 5,
                 "build_up_profile": "foul",
                 "score_commit": "never",
+                "card_type": "second_yellow" if is_second_yellow else "direct_red",
+                "card_reason": red_reason,
+                "card_detail": {
+                    "card_type": "second_yellow" if is_second_yellow else "direct_red",
+                    "is_second_yellow_dismissal": is_second_yellow,
+                    "is_direct_red": not is_second_yellow,
+                    "dismissal": True,
+                    "player_id": player.player_id,
+                    "player_name": player.player_name,
+                    "team_id": state.team_id,
+                    "team_name": state.team_name,
+                    "minute": minute,
+                    "reason": red_reason,
+                    "referee_signal": "yellow_then_red_card" if is_second_yellow else "direct_red_card",
+                },
+                "var_review": var_red.to_dict() if var_red is not None else None,
             },
         )
 
@@ -1801,6 +1900,21 @@ class MatchEventGenerator:
                 )
             )
         if family in {"set_piece_header", "back_post_header"}:
+            set_piece_meta = dict(metadata)
+            if narrative.competition_allows_corner_var:
+                corner_var = evaluate_var_review_2026_27(
+                    review_id=f"{match_id}:var:corner:{minute}:{shooter.player_id}",
+                    category="corner_kick",
+                    original_decision="corner_kick",
+                    clear_and_obvious_error=(rng.random() < 0.25),
+                    factual_incident=True,
+                    competition_allows_corner_var=True,
+                    restart_already_taken_or_delayed=False,
+                    reason="IFAB 2026/27 optional corner kick check before restart.",
+                    offending_player_id=shooter.player_id,
+                    offending_player_name=shooter.player_name,
+                )
+                set_piece_meta["var_review"] = corner_var.to_dict() if corner_var is not None else None
             events.append(
                 self._make_event(
                     match_id=match_id,
@@ -1813,7 +1927,7 @@ class MatchEventGenerator:
                     team_name=attacking.team_name,
                     primary_player_id=shooter.player_id,
                     primary_player_name=shooter.player_name,
-                    metadata=metadata,
+                    metadata=set_piece_meta,
                 )
             )
         if family == "defensive_error":
@@ -1862,6 +1976,62 @@ class MatchEventGenerator:
             defensive_actor = self._choose_defensive_actor(defending, rng)
             if defensive_actor is not None:
                 player_stats[defensive_actor.player_id].interceptions += 1
+            attack_right = (attacking.is_home and minute < 45) or ((not attacking.is_home) and minute >= 45)
+            atk_dir = 1 if attack_right else -1
+            line_base_x = 81.5 if atk_dir == 1 else 18.5
+            attacker_x = line_base_x + (atk_dir * (0.45 + ((minute % 5) * 0.22)))
+            attacker_y = 36.0 + ((minute * 7) % 28)
+            passer_x = line_base_x - (atk_dir * 14.0)
+            passer_y = 48.0 + (((minute * 3) % 16) - 8.0)
+            body_parts = ("foot", "torso", "head")
+            chosen_body_part = body_parts[(minute + len(shooter.player_id)) % len(body_parts)]
+            offside_snap = evaluate_law11_offside(
+                pass_contact_second=max(0.0, (minute * 60.0) - 1.6),
+                attacking_direction=atk_dir,
+                ball_x=passer_x,
+                ball_y=passer_y,
+                attacker_id=shooter.player_id,
+                attacker_name=shooter.player_name,
+                attacker_x=attacker_x,
+                attacker_y=attacker_y,
+                attacker_body_part=chosen_body_part,
+                attacker_lean_offset_x=0.58,
+                opponents=[
+                    {
+                        "player_id": keeper.player_id if keeper is not None else "opp-gk",
+                        "player_name": keeper.player_name if keeper is not None else "Goalkeeper",
+                        "x": 95.5 if atk_dir == 1 else 4.5,
+                        "y": 50.0,
+                        "body_part": "torso",
+                        "lean_offset_x": 0.25,
+                    },
+                    {
+                        "player_id": defensive_actor.player_id if defensive_actor is not None else "opp-def",
+                        "player_name": defensive_actor.player_name if defensive_actor is not None else "Defender",
+                        "x": line_base_x,
+                        "y": max(15.0, min(85.0, attacker_y + 4.5)),
+                        "body_part": "foot",
+                        "lean_offset_x": 0.35,
+                    },
+                ],
+                passer_id=creator.player_id if creator is not None else None,
+                passer_name=creator.player_name if creator is not None else None,
+                active_involvement=True,
+                involvement_type="interfering_with_play",
+            )
+            var_offside = evaluate_var_review_2026_27(
+                review_id=f"{match_id}:var:offside:{minute}:{shooter.player_id}",
+                category="goal_no_goal",
+                original_decision="offside_indirect_free_kick",
+                clear_and_obvious_error=False,
+                factual_incident=True,
+                reason=(
+                    f"Semi-automated offside line confirmed {shooter.player_name} ({offside_snap.attacker_body_part}) "
+                    f"was {offside_snap.margin_meters:.2f}m beyond second-last opponent at ball-play contact."
+                ),
+                offending_player_id=shooter.player_id,
+                offending_player_name=shooter.player_name,
+            )
             events.append(
                 self._make_event(
                     match_id=match_id,
@@ -1874,12 +2044,16 @@ class MatchEventGenerator:
                     team_name=attacking.team_name,
                     primary_player_id=shooter.player_id,
                     primary_player_name=shooter.player_name,
+                    secondary_player_id=creator.player_id if creator is not None else None,
+                    secondary_player_name=creator.player_name if creator is not None else None,
                     metadata={
                         **metadata,
                         "build_up_profile": "offside",
                         "score_commit": "never",
                         "defensive_actor_id": defensive_actor.player_id if defensive_actor is not None else None,
                         "defensive_actor_name": defensive_actor.player_name if defensive_actor is not None else None,
+                        "offside_snapshot": offside_snap.to_dict(),
+                        "var_review": var_offside.to_dict() if var_offside is not None else None,
                     },
                 )
             )
@@ -1889,6 +2063,15 @@ class MatchEventGenerator:
         if rng.random() < penalty_award_chance:
             if creator is not None and creator.player_id != shooter.player_id:
                 player_stats[creator.player_id].key_passes += 1
+            var_pen = evaluate_var_review_2026_27(
+                review_id=f"{match_id}:var:pen:{minute}:{shooter.player_id}",
+                category="penalty_no_penalty",
+                original_decision="penalty_awarded",
+                clear_and_obvious_error=False,
+                reason="VAR penalty check complete: contact occurred inside the 18-yard box; on-field penalty stands.",
+                offending_player_id=shooter.player_id,
+                offending_player_name=shooter.player_name,
+            )
             events.append(
                 self._make_event(
                     match_id=match_id,
@@ -1901,7 +2084,10 @@ class MatchEventGenerator:
                     team_name=attacking.team_name,
                     primary_player_id=shooter.player_id,
                     primary_player_name=shooter.player_name,
-                    metadata=metadata,
+                    metadata={
+                        **metadata,
+                        "var_review": var_pen.to_dict() if var_pen is not None else None,
+                    },
                 )
             )
             penalty_quality = self._clamp(
@@ -2028,6 +2214,69 @@ class MatchEventGenerator:
                     chance_family=family,
                 )
                 reviewable = review_decision is not None
+                attack_right = (attacking.is_home and minute < 45) or ((not attacking.is_home) and minute >= 45)
+                atk_dir = 1 if attack_right else -1
+                def_line_x = 83.2 if atk_dir == 1 else 16.8
+                is_disallowed = review_decision == "disallowed"
+                attacker_x = (
+                    def_line_x + (atk_dir * 0.62)
+                    if is_disallowed
+                    else def_line_x - (atk_dir * (0.38 + ((minute % 4) * 0.18)))
+                )
+                attacker_y = 42.0 + ((minute * 5) % 18)
+                goal_def_actor = defending.active_outfielders()[0] if defending.active_outfielders() else None
+                goal_offside_snap = evaluate_law11_offside(
+                    pass_contact_second=max(0.0, (minute * 60.0) - 2.1),
+                    attacking_direction=atk_dir,
+                    ball_x=def_line_x - (atk_dir * 12.5),
+                    ball_y=49.0,
+                    attacker_id=shooter.player_id,
+                    attacker_name=shooter.player_name,
+                    attacker_x=attacker_x,
+                    attacker_y=attacker_y,
+                    attacker_body_part="foot",
+                    attacker_lean_offset_x=0.45,
+                    opponents=[
+                        {
+                            "player_id": keeper.player_id if keeper is not None else "opp-gk",
+                            "player_name": keeper.player_name if keeper is not None else "Goalkeeper",
+                            "x": 96.0 if atk_dir == 1 else 4.0,
+                            "y": 50.0,
+                            "body_part": "torso",
+                            "lean_offset_x": 0.22,
+                        },
+                        {
+                            "player_id": (goal_def_actor.player_id if goal_def_actor is not None else "opp-def"),
+                            "player_name": (goal_def_actor.player_name if goal_def_actor is not None else "Defender"),
+                            "x": def_line_x,
+                            "y": max(18.0, min(82.0, attacker_y + 3.8)),
+                            "body_part": "foot",
+                            "lean_offset_x": 0.42,
+                        },
+                    ],
+                    passer_id=creator.player_id if creator is not None else None,
+                    passer_name=creator.player_name if creator is not None else None,
+                    active_involvement=True,
+                    involvement_type="interfering_with_play",
+                )
+                goal_var_review = evaluate_var_review_2026_27(
+                    review_id=f"{match_id}:var:goal:{minute}:{shooter.player_id}",
+                    category="goal_no_goal",
+                    original_decision="goal_awarded",
+                    clear_and_obvious_error=is_disallowed,
+                    factual_incident=True,
+                    reason=(
+                        "VAR offside line check: attacker was beyond the second-last opponent at ball-play contact; goal disallowed."
+                        if is_disallowed
+                        else (
+                            f"VAR offside line check complete: {shooter.player_name} was onside ({abs(goal_offside_snap.margin_meters):.2f}m behind/level with second-last defender); goal confirmed."
+                            if reviewable
+                            else "Silent VAR goal check complete: no attacking offence or offside in build-up."
+                        )
+                    ),
+                    offending_player_id=shooter.player_id,
+                    offending_player_name=shooter.player_name,
+                )
                 goal_metadata = {
                     **metadata,
                     "assisted": creator is not None,
@@ -2040,6 +2289,8 @@ class MatchEventGenerator:
                         if review_decision == "confirmed"
                         else "never" if review_decision == "disallowed" else "immediate"
                     ),
+                    "offside_snapshot": goal_offside_snap.to_dict(),
+                    "var_review": goal_var_review.to_dict() if goal_var_review is not None else None,
                 }
                 if review_decision == "disallowed":
                     attacking.dynamic_morale = self._clamp(
@@ -2520,7 +2771,7 @@ class MatchEventGenerator:
             review_chance += 0.05
         if rng.random() >= self._clamp(review_chance, 0.0, 0.36):
             return None
-        return "confirmed"
+        return "disallowed" if rng.random() < 0.28 else "confirmed"
 
     def _foul_review_outcome(self, rng: Random) -> str:
         return "confirmed" if rng.random() < 0.68 else "disallowed"
