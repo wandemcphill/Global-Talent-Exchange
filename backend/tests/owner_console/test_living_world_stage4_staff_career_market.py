@@ -266,13 +266,15 @@ def test_hire_staff_from_market_ratification():
     session.add(prof)
     session.flush()
 
+    fan_before = ledger.balance(session, ledger.club_account(c.id), ledger.FAN)
+    gtex_before = ledger.balance(session, ledger.club_account(c.id), ledger.GTEX)
     hire_res = living_staff_market.hire_staff_from_market(
         session,
         user_id=u.id,
         club_id=c.id,
         profile_id=prof.id,
         role="first_team_manager",
-        offered_salary_gtex=900,
+        offered_salary_fan_coin=900,
         contract_years=3,
     )
 
@@ -285,6 +287,10 @@ def test_hire_staff_from_market_ratification():
     assert contract is not None
     assert contract.status == "active"
     assert contract.salary_minor == 90000
+    assert hire_res["total_contract_fee_fan_coin"] == 1_350
+    assert hire_res["currency"] == ledger.FAN
+    assert ledger.balance(session, ledger.club_account(c.id), ledger.FAN) == fan_before - 1_350
+    assert ledger.balance(session, ledger.club_account(c.id), ledger.GTEX) == gtex_before
 
     # Verify ClubStaffAssignment was created
     assignment = session.scalar(
