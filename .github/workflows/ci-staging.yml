@@ -111,6 +111,8 @@ jobs:
         working-directory: frontend
     steps:
       - uses: actions/checkout@v4
+      - name: Free runner disk space for Android build
+        run: sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost
       - uses: actions/setup-java@v4
         with:
           distribution: 'temurin'

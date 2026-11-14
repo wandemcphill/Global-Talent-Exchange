@@ -79,8 +79,32 @@ class ConsoleSPARequestHandler(SimpleHTTPRequestHandler):
         pass
 
 
+def _ensure_verifier_tables(session) -> None:
+    """Create optional cross-module tables queried by club_detail in the isolated SQLite fixture."""
+    from app.ingestion.models import Player
+    from app.models.academy_player import AcademyPlayer
+    from app.models.academy_program import AcademyProgram
+    from app.models.club_growth import ClubStaffAssignment, ClubStaffContract, ClubStaffProfile
+    from app.models.player_contract import PlayerContract
+    from app.models.player_token_market import PlayerShareMarket
+
+    bind = session.get_bind()
+    for model_cls in (
+        Player,
+        AcademyProgram,
+        AcademyPlayer,
+        PlayerContract,
+        ClubStaffProfile,
+        ClubStaffContract,
+        ClubStaffAssignment,
+        PlayerShareMarket,
+    ):
+        model_cls.__table__.create(bind=bind, checkfirst=True)
+
+
 def seed_test_database():
     session = _session()
+    _ensure_verifier_tables(session)
     state = _seed_club(session, prestige=82, cash=500_000)
     user_id = state.owner_user_id
     club_id = state.club_id
@@ -220,8 +244,7 @@ def run_verification(headless: bool = True) -> int:
                     briefing = daily_operations_hub.build_authoritative_daily_briefing(session, user_id, club_id)
                     return ok(briefing)
                 if path.endswith(f"/owner/clubs/{club_id}"):
-                    state = service.get_state(session, club_id)
-                    return ok(service.club_profile(session, state))
+                    return ok(service.club_detail(session, user_id, club_id))
                 if "/living-world/timeline" in path:
                     from urllib.parse import parse_qs
 
@@ -369,86 +392,6 @@ def run_verification(headless: bool = True) -> int:
         print("[PASS] No asset warning banner present during complete 6/6 load.")
 
         # -------------------------------------------------------------
-        # TEST 2: Asset Failure Warning & Procedural Wireframe Fallback
-        # -------------------------------------------------------------
-        print("\n--- Test 2: Asset Failure Warning & Wireframe Fallback Mesh ---")
-        context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
-        page_fail = context_fail.new_page()
-        page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
-        page_fail.on(
-            "response",
-            lambda response: (
-                print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
-            ),
-        )
-        page_fail.route("**/api/**", handle_api)
-        page_fail.route("http://localhost:8000/**", handle_api)
-        page_fail.route("http://127.0.0.1:8000/**", handle_api)
-
-        # Block one specific GLB to simulate missing/corrupt asset
-        blocked_glb = "high_performance_centre.glb"
-        page_fail.route(
-            f"**/{blocked_glb}",
-            lambda route: route.abort("failed"),
-        )
-
-        page_fail.goto(f"{console_url}/", wait_until="domcontentloaded")
-        page_fail.evaluate(f"""() => {{
-                localStorage.setItem('gtex_access', 'live-phase2-3-owner-token');
-                localStorage.setItem('gtex_active_club', '{club_id}');
-            }}""")
-
-        page_fail.goto(f"{console_url}/app", wait_until="domcontentloaded")
-        page_fail.wait_for_selector('[data-testid="living-club-management-centre"]', timeout=30000)
-
-        # Wait for asset warning banner to appear
-        page_fail.wait_for_selector('[data-testid="glb-asset-warning"]', timeout=20000)
-        warning_text = page_fail.locator('[data-testid="glb-asset-warning"]').inner_text()
-        print(f"[PASS] Asset warning displayed: '{warning_text}'")
-        assert "finance_commercial_office" in warning_text or "1 3D model" in warning_text
-
-        # Verify wireframe fallback destination button remains interactive
-        btn_fallback = page_fail.locator('[data-testid="destination-tab-finance_commercial_office"]')
-        assert btn_fallback.is_visible()
-        btn_fallback.click()
-        print("[PASS] Fallback wireframe destination is selectable and interactive.")
-
-        # Reliable assertion for the actual fallback wireframe mesh in the Three.js scene
-        fallback_mesh_info = page_fail.evaluate("""() => {
-                const api = window.__GTEX_OPERATIONS_3D__;
-                if (!api || !api.roomGroups) return null;
-                const grp = api.roomGroups.get("finance_commercial_office");
-                if (!grp) return null;
-                const mesh = grp.children.find(
-                    (c) => c.name === "fallback-wireframe-finance_commercial_office" || c.userData?.isFallbackWireframe
-                );
-                if (!mesh) return null;
-                return {
-                    name: mesh.name,
-                    isMesh: Boolean(mesh.isMesh),
-                    isWireframe: Boolean(mesh.material && mesh.material.wireframe),
-                    visible: Boolean(mesh.visible),
-                    position: [mesh.position.x, mesh.position.y, mesh.position.z],
-                    userData: mesh.userData,
-                };
-            }""")
-        print(f"  [SCENE AUDIT] Fallback mesh in Three.js scene: {fallback_mesh_info}")
-        assert fallback_mesh_info is not None, "Fallback wireframe mesh was NOT found in Three.js scene group!"
-        assert fallback_mesh_info["isMesh"] is True, "Fallback scene object is not a THREE.Mesh"
-        assert fallback_mesh_info["isWireframe"] is True, "Fallback mesh material is not wireframe"
-        assert fallback_mesh_info["visible"] is True, "Fallback mesh is not visible"
-        assert (
-            fallback_mesh_info["userData"].get("isFallbackWireframe") is True
-        ), "Fallback mesh missing isFallbackWireframe"
-        print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
-
-        # Release the failure-injection browser context before the next
-        # WebGL test. Keeping two Three.js scenes alive can contend for GPU
-        # resources and starve browser-side React interactions in headless CI.
-        context_fail.close()
-        print("[INFO] Closed the isolated GLB-failure browser context.")
-
-        # -------------------------------------------------------------
         # TEST 3: 2D Floorplan Fallback Switch & Navigation
         # -------------------------------------------------------------
         print("\n--- Test 3: 2D Floorplan Fallback Switch & Navigation ---")
@@ -579,19 +522,99 @@ def run_verification(headless: bool = True) -> int:
         )
         print("[PASS] Timeline drawer closed successfully.")
 
+        # Release the primary WebGL browser context before opening the
+        # failure-injection context. Keeping two Three.js scenes alive at once
+        # can contend for GPU resources and starve React visibility checks in headless CI.
+        context.close()
+        print("[INFO] Closed the primary WebGL browser context.")
+
+        # -------------------------------------------------------------
+        # TEST 2: Asset Failure Warning & Procedural Wireframe Fallback
+        # -------------------------------------------------------------
+        print("\n--- Test 2: Asset Failure Warning & Wireframe Fallback Mesh ---")
+        context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
+        page_fail = context_fail.new_page()
+        page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
+        page_fail.on(
+            "response",
+            lambda response: (
+                print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
+            ),
+        )
+        page_fail.route("**/api/**", handle_api)
+        page_fail.route("http://localhost:8000/**", handle_api)
+        page_fail.route("http://127.0.0.1:8000/**", handle_api)
+
+        # Block one specific GLB to simulate missing/corrupt asset
+        blocked_glb = "high_performance_centre.glb"
+        page_fail.route(
+            f"**/{blocked_glb}",
+            lambda route: route.abort("failed"),
+        )
+
+        page_fail.goto(f"{console_url}/", wait_until="domcontentloaded")
+        page_fail.evaluate(f"""() => {{
+                localStorage.setItem('gtex_access', 'live-phase2-3-owner-token');
+                localStorage.setItem('gtex_active_club', '{club_id}');
+            }}""")
+
+        page_fail.goto(f"{console_url}/app", wait_until="domcontentloaded")
+        page_fail.wait_for_selector('[data-testid="living-club-management-centre"]', timeout=30000)
+
+        # Wait for asset warning banner to appear
+        page_fail.wait_for_selector('[data-testid="glb-asset-warning"]', timeout=20000)
+        warning_text = page_fail.locator('[data-testid="glb-asset-warning"]').inner_text()
+        print(f"[PASS] Asset warning displayed: '{warning_text}'")
+        assert "finance_commercial_office" in warning_text or "1 3D model" in warning_text
+
+        # Verify wireframe fallback destination button remains interactive
+        btn_fallback = page_fail.locator('[data-testid="destination-tab-finance_commercial_office"]')
+        assert btn_fallback.is_visible()
+        btn_fallback.click()
+        print("[PASS] Fallback wireframe destination is selectable and interactive.")
+
+        # Reliable assertion for the actual fallback wireframe mesh in the Three.js scene
+        fallback_mesh_info = page_fail.evaluate("""() => {
+                const api = window.__GTEX_OPERATIONS_3D__;
+                if (!api || !api.roomGroups) return null;
+                const grp = api.roomGroups.get("finance_commercial_office");
+                if (!grp) return null;
+                const mesh = grp.children.find(
+                    (c) => c.name === "fallback-wireframe-finance_commercial_office" || c.userData?.isFallbackWireframe
+                );
+                if (!mesh) return null;
+                return {
+                    name: mesh.name,
+                    isMesh: Boolean(mesh.isMesh),
+                    isWireframe: Boolean(mesh.material && mesh.material.wireframe),
+                    visible: Boolean(mesh.visible),
+                    position: [mesh.position.x, mesh.position.y, mesh.position.z],
+                    userData: mesh.userData,
+                };
+            }""")
+        print(f"  [SCENE AUDIT] Fallback mesh in Three.js scene: {fallback_mesh_info}")
+        assert fallback_mesh_info is not None, "Fallback wireframe mesh was NOT found in Three.js scene group!"
+        assert fallback_mesh_info["isMesh"] is True, "Fallback scene object is not a THREE.Mesh"
+        assert fallback_mesh_info["isWireframe"] is True, "Fallback mesh material is not wireframe"
+        assert fallback_mesh_info["visible"] is True, "Fallback mesh is not visible"
+        assert (
+            fallback_mesh_info["userData"].get("isFallbackWireframe") is True
+        ), "Fallback mesh missing isFallbackWireframe"
+        print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
+
+        context_fail.close()
+        print("[INFO] Closed the isolated GLB-failure browser context.")
+
         # Fail verification if unexpected JavaScript page errors occurred on either page context
         if page_errors:
             print(f"\n[FAIL] Unexpected JavaScript page errors encountered ({len(page_errors)}):")
             for pe in page_errors:
                 print(f"  - {pe}")
-            context_fail.close()
-            context.close()
             browser.close()
             server.shutdown()
             return 1
         print("[PASS] Zero unhandled JavaScript page errors detected across all browser contexts.")
 
-        context.close()
         browser.close()
         server.shutdown()
 
