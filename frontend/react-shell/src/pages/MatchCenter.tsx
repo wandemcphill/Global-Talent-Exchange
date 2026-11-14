@@ -56,6 +56,7 @@ import {
   deriveTouchlineNudge,
   extractShotMarkers,
   metricText,
+  momentumAt,
   pitchSource,
   seekTime,
   stepReplayClock,
@@ -1684,9 +1685,11 @@ export default function MatchCenter() {
         spectatorStream.lastFrame?.players ||
         acceptedLive?.pitch_players ||
         liveState?.pitch_players ||
+        activeReplayFrame?.players ||
+        activeReplayFrame?.pitch_players ||
         []
       ).filter((p: any) => p.is_home !== false && String(p.side || "home").toLowerCase() !== "away"),
-    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players],
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame],
   );
   const awayLivePitch = useMemo(
     () =>
@@ -1694,9 +1697,11 @@ export default function MatchCenter() {
         spectatorStream.lastFrame?.players ||
         acceptedLive?.pitch_players ||
         liveState?.pitch_players ||
+        activeReplayFrame?.players ||
+        activeReplayFrame?.pitch_players ||
         []
       ).filter((p: any) => p.is_home === false || String(p.side || "").toLowerCase() === "away"),
-    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players],
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame],
   );
 
   const minute = useMemo(() => {
@@ -1870,11 +1875,15 @@ export default function MatchCenter() {
       spectatorStream.lastFrame?.ball || acceptedLive?.ball || activeReplayFrame?.ball || null;
     const rawBx = Number(rawBall?.position?.x ?? rawBall?.x ?? 50);
     const normBx = Number.isFinite(rawBx) ? (rawBx > 1.5 ? rawBx / 100 : rawBx) : 0.5;
+    const rawBy = Number(rawBall?.position?.y ?? rawBall?.y ?? 50);
+    const normBy = Number.isFinite(rawBy) ? (rawBy > 1.5 ? rawBy / 100 : rawBy) : 0.5;
     sharedMatchAudio.updateAtmosphere({
       ballX: normBx,
+      ballY: normBy,
       dangerZone: (activeReplayFrame as any)?.danger_zone || null,
       eventType: activeEv,
       minute,
+      momentum: momentumAt(m?.narrative?.momentum, minute),
     });
   }, [
     audioAtmosphere,
@@ -1882,6 +1891,7 @@ export default function MatchCenter() {
     acceptedLive,
     activeReplayFrame,
     minute,
+    m?.narrative?.momentum,
   ]);
 
   if (isLoading || !m) return <Loading label="Loading match" />;

@@ -1787,3 +1787,151 @@ export function computeLiveXgTotals(markers: Array<{ side: PitchSide; xg: number
   return { home, away, homeShots, awayShots };
 }
 
+
+// ---------------------------------------------------------------------------
+// Woodwork detection — ball on the goal line just outside the goalmouth
+// ---------------------------------------------------------------------------
+
+/** True when a normalised ball position sits on a goal line next to a post/crossbar. */
+export function isWoodworkPosition(x: number | null | undefined, y: number | null | undefined): boolean {
+  if (typeof x !== "number" || typeof y !== "number" || !Number.isFinite(x) || !Number.isFinite(y)) return false;
+  const nearGoalLine = x < 0.07 || x > 0.93;
+  const offCentre = Math.abs(y - 0.5);
+  return nearGoalLine && offCentre > 0.07 && offCentre < 0.16;
+}
+
+// ---------------------------------------------------------------------------
+// Match momentum — narrative momentum buckets (0-100 per 5 minutes, 50 = level)
+// ---------------------------------------------------------------------------
+
+/** Momentum in [-1, 1] at the given minute (positive = home pressure). */
+export function momentumAt(values: ReadonlyArray<number> | null | undefined, minute: number): number {
+  if (!Array.isArray(values) || values.length === 0 || !Number.isFinite(minute)) return 0;
+  const idx = Math.min(values.length - 1, Math.max(0, Math.floor(minute / 5)));
+  const v = Number(values[idx]);
+  if (!Number.isFinite(v)) return 0;
+  return Math.max(-1, Math.min(1, (v - 50) / 50));
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast director — event-driven camera framing
+// ---------------------------------------------------------------------------
+
+export type DirectorShot = {
+  kind: "kickoff_wide" | "goal_cut" | "set_piece" | "injury_time" | "none";
+  /** Multiplier applied on top of the camera mode's base zoom. */
+  zoomMultiplier: number;
+  /** Optional normalised focus point (0-1) the camera should drift toward. */
+  focus: { x: number; y: number } | null;
+};
+
+/**
+ * Picks a TV-director camera shot from the authoritative frame. Pure and stateless:
+ * `eventAgeMs` is how long the current event has been on screen (supplied by the renderer).
+ */
+export function deriveDirectorShot(input: {
+  eventType?: string | null;
+  phase?: string | null;
+  timeSeconds?: number | null;
+  minute?: number | null;
+  eventAgeMs?: number;
+  ball?: { x: number; y: number } | null;
+  scorer?: { x: number; y: number } | null;
+  leadingSide?: PitchSide | null;
+  homeAttacksRight?: boolean;
+}): DirectorShot {
+  const ev = String(input.eventType || "").toLowerCase();
+  const age = input.eventAgeMs ?? 0;
+  const t = input.timeSeconds ?? null;
+
+  if (ev === "goal" || ev === "penalty_goal") {
+    if (age < 800 && input.scorer) {
+      return { kind: "goal_cut", zoomMultiplier: 1.8, focus: input.scorer };
+    }
+    return { kind: "none", zoomMultiplier: 1, focus: null };
+  }
+  if (ev === "corner" || ev === "free_kick" || ev === "penalty") {
+    const bx = input.ball?.x ?? 0.5;
+    // Frame the box the ball is attacking: both penalty spots stay in shot
+    const boxX = bx >= 0.5 ? 0.86 : 0.14;
+    return { kind: "set_piece", zoomMultiplier: ev === "penalty" ? 1.5 : 1.32, focus: { x: boxX, y: 0.5 } };
+  }
+  if (ev === "kickoff" || (String(input.phase || "").toLowerCase() === "first_half" && t !== null && t < 3)) {
+    if (ev !== "kickoff" || age < 1500) {
+      return { kind: "kickoff_wide", zoomMultiplier: 0.8, focus: { x: 0.5, y: 0.5 } };
+    }
+  }
+  if ((input.minute ?? 0) >= 90 && input.leadingSide) {
+    const homeRight = input.homeAttacksRight !== false;
+    // Drift toward the goal the trailing side is attacking — that is where the tension is
+    const trailingAttacksRight = input.leadingSide === "home" ? !homeRight : homeRight;
+    return { kind: "injury_time", zoomMultiplier: 1.06, focus: { x: trailingAttacksRight ? 0.7 : 0.3, y: 0.5 } };
+  }
+  return { kind: "none", zoomMultiplier: 1, focus: null };
+}
+
+// ---------------------------------------------------------------------------
+// Pass presentation helpers
+// ---------------------------------------------------------------------------
+
+/** Pitch metres a pass advanced the ball toward the passing side's attacking goal (negative = backward). */
+export function progressivePassMeters(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  side: PitchSide,
+  homeAttacksRight = true,
+): number {
+  const attacksRight = side === "home" ? homeAttacksRight : !homeAttacksRight;
+  return (to.x - from.x) * (attacksRight ? 1 : -1) * 105;
+}
+
+/** Predicted receiver: passing side's player nearest the trajectory end point (excluding the passer). */
+export function predictPassReceiver(
+  trajectory: ReadonlyArray<{ x: number; y: number }> | null | undefined,
+  players: ReadonlyArray<PitchPlayer>,
+  passer: PitchPlayer | null | undefined,
+): { player: PitchPlayer; target: { x: number; y: number } } | null {
+  if (!passer || !Array.isArray(trajectory) || trajectory.length < 2) return null;
+  const end = trajectory[trajectory.length - 1];
+  let best: PitchPlayer | null = null;
+  let bestD = Infinity;
+  for (const p of players) {
+    if (p.side !== passer.side || p.playerId === passer.playerId) continue;
+    const d = Math.hypot(p.x - end.x, p.y - end.y);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  if (!best || bestD > 0.15) return null;
+  return { player: best, target: { x: end.x, y: end.y } };
+}
+
+/** Type-coloured pass arc: ground = cyan, through = emerald, long = amber, cross = rose. */
+export function passArcColor(flightKind: string | null | undefined): string {
+  switch (flightKind) {
+    case "through_ball":
+      return "#34d399";
+    case "long_pass":
+      return "#fbbf24";
+    case "cross":
+      return "#fb7185";
+    default:
+      return "#67e8f9";
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Stamina warnings
+// ---------------------------------------------------------------------------
+
+export type StaminaWarning = "critical" | "low" | null;
+
+/** Lineup badge level: < 25% critical, < 50% low. Unknown stamina yields no badge. */
+export function staminaWarning(staminaPct: number | null | undefined): StaminaWarning {
+  if (staminaPct == null || !Number.isFinite(Number(staminaPct))) return null;
+  const v = Number(staminaPct);
+  if (v < 25) return "critical";
+  if (v < 50) return "low";
+  return null;
+}

@@ -795,6 +795,9 @@ export function Pitch2DView({
         showPassingLanes={showPassingLanes}
         showShotMap={showShotMap}
         shotMarkers={shotMarkers}
+        clockMinute={currentRenderData?.clockMinute ?? null}
+        homeScore={currentRenderData?.homeScore ?? homeScore ?? null}
+        awayScore={currentRenderData?.awayScore ?? awayScore ?? null}
         sampleFrame={sampleFrame}
         feedFreshness={feedStatus.status}
       />

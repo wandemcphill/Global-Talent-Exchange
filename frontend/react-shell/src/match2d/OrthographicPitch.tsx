@@ -4,8 +4,13 @@ import * as THREE from "three";
 import * as matchRenderer from "./createMatchRenderer";
 import {
   animationFor,
+  deriveDirectorShot,
   effectFor,
+  isWoodworkPosition,
+  passArcColor,
   playerIdentityKey,
+  predictPassReceiver,
+  progressivePassMeters,
   resolveBallPresentation,
   sceneObjectCount,
   type FeedPresentationStatus,
@@ -86,6 +91,10 @@ export type OrthographicPitchProps = {
   showPassingLanes?: boolean;
   showShotMap?: boolean;
   shotMarkers?: PitchShotMarker[];
+  /** Optional match clock + score so the broadcast director can stage injury-time framing. */
+  clockMinute?: number | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
   feedStatus?: FeedPresentationStatus;
   feedFreshness?: FeedPresentationStatus;
   feedAgeSeconds?: number | null;
@@ -375,6 +384,9 @@ function OrthographicPitchComponent({
   showPassingLanes = false,
   showShotMap = false,
   shotMarkers = [],
+  clockMinute = null,
+  homeScore = null,
+  awayScore = null,
   feedStatus = "LIVE",
   feedFreshness,
   feedAgeSeconds = null,
@@ -408,6 +420,9 @@ function OrthographicPitchComponent({
     showPassingLanes,
     showShotMap,
     shotMarkers,
+    clockMinute,
+    homeScore,
+    awayScore,
     feedStatus: effectiveFeedStatus,
     sampleFrame,
   });
@@ -441,6 +456,9 @@ function OrthographicPitchComponent({
     showPassingLanes,
     showShotMap,
     shotMarkers,
+    clockMinute,
+    homeScore,
+    awayScore,
     feedStatus: effectiveFeedStatus,
     sampleFrame,
   };
@@ -650,6 +668,12 @@ function OrthographicPitchComponent({
     let ballSpinAngle = 0;
     let ballBounceScale = 1;
     let lastBallHeightMeters = 0;
+    // Broadcast director state — tracks how long the current event has been on screen
+    let directorEventKey = "";
+    let directorEventStartMs = 0;
+    // Progressive-pass ring: shown on the receiver briefly after a completed pass
+    let pendingPass: { from: { x: number; y: number }; side: PitchSide; receiverKey: string | null } | null = null;
+    let passGainRing: { key: string; meters: number; startedMs: number } | null = null;
 
     const resize = () => {
       const width = Math.max(host.clientWidth, 320);
@@ -854,8 +878,32 @@ function OrthographicPitchComponent({
 
       // Broadcast director camera tracking & event-aware framing (respecting manual pan/zoom gestures)
       const isManualActive = frameStart < view.manualOverrideUntilMs;
+      const directorKey = `${activeEvent || ""}:${activePrimaryId || ""}`;
+      if (directorKey !== directorEventKey) {
+        directorEventKey = directorKey;
+        directorEventStartMs = frameStart;
+      }
+      const directorScorer = activePrimaryId
+        ? activePlayers.find((p) => p.playerId === activePrimaryId) || null
+        : null;
+      const homeSc = current.homeScore ?? null;
+      const awaySc = current.awayScore ?? null;
+      const director = deriveDirectorShot({
+        eventType: activeEvent,
+        phase: activePhase,
+        timeSeconds: (liveSampled as any)?.timeSeconds ?? null,
+        minute: current.clockMinute ?? null,
+        eventAgeMs: frameStart - directorEventStartMs,
+        ball: ballPoint,
+        scorer: directorScorer,
+        leadingSide:
+          homeSc !== null && awaySc !== null && homeSc !== awaySc ? (homeSc > awaySc ? "home" : "away") : null,
+        homeAttacksRight: activeHomeAttacksRight,
+      });
+      const directorActive = director.kind !== "none" && current.cameraMode !== "2d" && !isManualActive;
       if ((view.follow || current.cameraMode === "zoom" || current.cameraMode === "2.5d") && ballPoint) {
-        const focus = toWorld(ballPoint.x, ballPoint.y);
+        const focusPoint = directorActive && director.focus ? director.focus : ballPoint;
+        const focus = toWorld(focusPoint.x, focusPoint.y);
         const eventStr = String(activeEvent || "").toLowerCase();
         const presetStr = String(activeCameraPreset || "").toLowerCase();
         const isBoxMoment =
@@ -868,7 +916,7 @@ function OrthographicPitchComponent({
           activeDangerZone === "box";
 
         if (!isManualActive) {
-          const targetZoom =
+          const baseZoom =
             current.cameraMode === "zoom"
               ? isBoxMoment
                 ? 1.54
@@ -878,14 +926,25 @@ function OrthographicPitchComponent({
                   ? 1.22
                   : 1.14
                 : view.zoom;
-          view.zoom = view.zoom + (targetZoom - view.zoom) * 0.05;
+          const targetZoom = directorActive ? baseZoom * director.zoomMultiplier : baseZoom;
+          // TV cuts are snappier than the ambient drift
+          const zoomEase = director.kind === "goal_cut" ? 0.18 : 0.05;
+          view.zoom = view.zoom + (targetZoom - view.zoom) * zoomEase;
         }
 
-        const trackStrengthX = current.cameraMode === "zoom" ? 0.46 : view.follow ? 0.32 : 0.22;
-        const trackStrengthY = current.cameraMode === "zoom" ? 0.34 : view.follow ? 0.26 : 0.1;
+        const directorPull = directorActive && director.focus ? 0.85 : 0;
+        const trackStrengthX = Math.max(
+          directorPull,
+          current.cameraMode === "zoom" ? 0.46 : view.follow ? 0.32 : 0.22,
+        );
+        const trackStrengthY = Math.max(
+          directorPull,
+          current.cameraMode === "zoom" ? 0.34 : view.follow ? 0.26 : 0.1,
+        );
         const tiltBiasY = current.cameraMode === "2.5d" ? -1.8 : 0;
-        const nextPanX = camera.position.x + (focus.x * trackStrengthX - camera.position.x) * 0.08;
-        const nextPanY = camera.position.y + (focus.y * trackStrengthY + tiltBiasY - camera.position.y) * 0.08;
+        const panEase = director.kind === "goal_cut" ? 0.2 : 0.08;
+        const nextPanX = camera.position.x + (focus.x * trackStrengthX - camera.position.x) * panEase;
+        const nextPanY = camera.position.y + (focus.y * trackStrengthY + tiltBiasY - camera.position.y) * panEase;
         const clamped = clampCameraPan(nextPanX, nextPanY, view.zoom);
         view.panX = clamped.panX;
         view.panY = clamped.panY;
@@ -989,11 +1048,41 @@ function OrthographicPitchComponent({
       });
       motionTracker.prune(seenKeys);
 
+      // Pass lifecycle tracking → progressive-pass gain ring on the receiver
+      const passEvent = String(activeEvent || "").toLowerCase();
+      const isPassEvent = passEvent === "pass" || passEvent === "through_ball" || passEvent === "cross";
+      const passer =
+        (activePrimaryId && activePlayers.find((p) => p.playerId === activePrimaryId)) || carrierPlayerObj || null;
+      const predictedReceiver =
+        isPassEvent && resolvedBall?.inFlight ? predictPassReceiver(activeTrajectory, activePlayers, passer) : null;
+      if (isPassEvent && resolvedBall?.inFlight && !pendingPass && passer) {
+        const origin = activeTrajectory && activeTrajectory.length > 0 ? activeTrajectory[0] : passer;
+        pendingPass = {
+          from: { x: origin.x, y: origin.y },
+          side: passer.side,
+          receiverKey: predictedReceiver ? playerIdentityKey(predictedReceiver.player) : null,
+        };
+      } else if (pendingPass && !resolvedBall?.inFlight) {
+        const receiver = carrierPlayerObj as PitchPlayer | null;
+        if (receiver && receiver.side === pendingPass.side) {
+          const meters = progressivePassMeters(pendingPass.from, receiver, receiver.side, activeHomeAttacksRight);
+          if (meters >= 3) {
+            passGainRing = { key: playerIdentityKey(receiver), meters, startedMs: frameStart };
+          }
+        }
+        pendingPass = null;
+      }
+      if (passGainRing && frameStart - passGainRing.startedMs > 1400) passGainRing = null;
+      const passGainPlayer = passGainRing
+        ? activePlayers.find((p) => playerIdentityKey(p) === passGainRing!.key) || null
+        : null;
+
       // Update tactical, trajectory & player callout overlay canvas
       const hasCalloutOrTrajectory = Boolean(
         carrierPlayerObj ||
           selectedPlayerObj ||
           activeEvent ||
+          passGainPlayer ||
           (activeTrajectory && activeTrajectory.length > 1 && resolvedBall?.inFlight),
       );
       const anyOverlayActive = Boolean(
@@ -1033,6 +1122,15 @@ function OrthographicPitchComponent({
             shotMarkers: current.shotMarkers || [],
             heatmapBins,
             motionTracker,
+            predictedReceiver,
+            passGain:
+              passGainPlayer && passGainRing
+                ? {
+                    player: passGainPlayer,
+                    meters: passGainRing.meters,
+                    progress: Math.min(1, (frameStart - passGainRing.startedMs) / 1400),
+                  }
+                : null,
           });
           overlayTexture.needsUpdate = true;
         }
@@ -1492,6 +1590,8 @@ function paintTacticalOverlays(
     shotMarkers?: PitchShotMarker[];
     heatmapBins: Float32Array;
     motionTracker: PlayerMotionTracker;
+    predictedReceiver?: { player: PitchPlayer; target: { x: number; y: number } } | null;
+    passGain?: { player: PitchPlayer; meters: number; progress: number } | null;
   },
 ) {
   ctx.clearRect(0, 0, OVERLAY_W, OVERLAY_H);
@@ -1796,15 +1896,8 @@ function paintTacticalOverlays(
   ) {
     ctx.save();
     const isShot = resolvedBall?.flightKind === "shot" || resolvedBall?.flightKind === "in_goal";
-    const isAerial =
-      resolvedBall?.flightKind === "cross" ||
-      resolvedBall?.flightKind === "long_pass" ||
-      resolvedBall?.flightKind === "set_piece";
-    ctx.strokeStyle = isShot
-      ? "rgba(244, 63, 94, 0.88)"
-      : isAerial
-        ? "rgba(250, 204, 21, 0.82)"
-        : "rgba(103, 232, 249, 0.82)";
+    const arcHex = isShot ? "#f43f5e" : passArcColor(resolvedBall?.flightKind);
+    ctx.strokeStyle = hexToRgbaString(arcHex, isShot ? 0.88 : 0.84);
     ctx.lineWidth = isShot ? 2.8 : 2.1;
     ctx.setLineDash(isShot ? [] : [5, 4]);
     ctx.beginPath();
@@ -1815,6 +1908,84 @@ function paintTacticalOverlays(
       ctx.lineTo(pt.x * OVERLAY_W, pt.y * OVERLAY_H - liftOffset);
     }
     ctx.stroke();
+
+    // Moving pass-speed pace dot along the trajectory arc
+    const alpha = Math.max(0, Math.min(1, input.trajectoryAlpha ?? 0.5));
+    const exactIdx = alpha * (ballTrajectory.length - 1);
+    const lo = Math.floor(exactIdx);
+    const hi = Math.min(ballTrajectory.length - 1, lo + 1);
+    const frac = exactIdx - lo;
+    const p0 = ballTrajectory[lo];
+    const p1 = ballTrajectory[hi];
+    const dotX = (p0.x + (p1.x - p0.x) * frac) * OVERLAY_W;
+    const dotLift = ((p0.height ?? 0) + ((p1.height ?? 0) - (p0.height ?? 0)) * frac) * 5.5;
+    const dotY = (p0.y + (p1.y - p0.y) * frac) * OVERLAY_H - dotLift;
+    ctx.setLineDash([]);
+    ctx.fillStyle = arcHex;
+    fillPolyCircle(ctx, dotX, dotY, 4.5, 4.5, 12);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.2;
+    strokePolyCircle(ctx, dotX, dotY, 6.2, 6.2, 12);
+    ctx.restore();
+  }
+
+  // 5A. Pass Receiver Ghost (predicted receive position while pass is in flight)
+  if (input.predictedReceiver) {
+    const { player: recv, target } = input.predictedReceiver;
+    const gx = target.x * OVERLAY_W;
+    const gy = target.y * OVERLAY_H;
+    const rx = recv.x * OVERLAY_W;
+    const ry = recv.y * OVERLAY_H;
+    const ghostColor = recv.side === "home" ? homeColor : awayColor;
+    ctx.save();
+    ctx.strokeStyle = hexToRgbaString(ghostColor, 0.55);
+    ctx.lineWidth = 1.4;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(rx, ry);
+    ctx.lineTo(gx, gy);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = hexToRgbaString(ghostColor, 0.22);
+    fillPolyCircle(ctx, gx, gy, 9, 9, 16);
+    ctx.strokeStyle = hexToRgbaString(ghostColor, 0.82);
+    ctx.lineWidth = 1.6;
+    strokePolyCircle(ctx, gx, gy, 9, 9, 16);
+    if (recv.shirtNumber) {
+      ctx.font = "bold 8.5px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#f8fafc";
+      safeFillText(ctx, `#${recv.shirtNumber}`, gx, gy + 3);
+    }
+    ctx.restore();
+  }
+
+  // 5A-2. Progressive Pass Delta Ring (territory gain flash on receiver after completed pass)
+  if (input.passGain) {
+    const { player: recv, meters, progress } = input.passGain;
+    const rx = recv.x * OVERLAY_W;
+    const ry = recv.y * OVERLAY_H;
+    const fade = Math.max(0, 1 - progress);
+    const radiusX = 14 + progress * 14;
+    const radiusY = 10 + progress * 10;
+    ctx.save();
+    ctx.strokeStyle = `rgba(52, 211, 153, ${(0.88 * fade).toFixed(3)})`;
+    ctx.lineWidth = 2.0;
+    strokePolyCircle(ctx, rx, ry, radiusX, radiusY, 20);
+    const badgeY = Math.max(18, ry - 26 - progress * 6);
+    drawRoundedBannerBox(
+      ctx,
+      rx - 26,
+      badgeY - 7,
+      52,
+      14,
+      `rgba(6, 78, 59, ${(0.9 * fade).toFixed(3)})`,
+      `rgba(52, 211, 153, ${(0.85 * fade).toFixed(3)})`,
+    );
+    ctx.font = "bold 8.5px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = `rgba(209, 250, 229, ${Math.min(1, fade + 0.15).toFixed(3)})`;
+    safeFillText(ctx, `+${Math.round(meters)}m`, rx, badgeY + 3);
     ctx.restore();
   }
 
@@ -2058,25 +2229,21 @@ function paintTacticalOverlays(
     }
 
     // Crossbar / post hit detection — when ball is near goal line and horizontally near post
-    if (ball) {
-      const nearGoalLine = ball.x < 0.07 || ball.x > 0.93;
-      const nearPost = Math.abs(ball.y - 0.5) > 0.07 && Math.abs(ball.y - 0.5) < 0.16;
-      if (nearGoalLine && nearPost && (activeEventLower === "miss" || activeEventLower === "shot")) {
-        const bx2 = ball.x * OVERLAY_W;
-        const by2 = ball.y * OVERLAY_H;
-        ctx.save();
-        ctx.strokeStyle = "rgba(203, 213, 225, 0.92)";
-        ctx.lineWidth = 2.6;
-        strokePolyCircle(ctx, bx2, by2, 10, 7, 8);
-        strokePolyCircle(ctx, bx2, by2, 18, 12, 8);
-        ctx.restore();
-        // "WOODWORK!" callout
-        drawRoundedBannerBox(ctx, bx2 - 36, by2 - 24, 72, 15, "rgba(2,6,23,0.88)", "rgba(203,213,225,0.7)");
-        ctx.font = "bold 8.5px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillStyle = "#e2e8f0";
-        safeFillText(ctx, "WOODWORK!", bx2, by2 - 13);
-      }
+    if (ball && isWoodworkPosition(ball.x, ball.y) && (activeEventLower === "miss" || activeEventLower === "shot")) {
+      const bx2 = ball.x * OVERLAY_W;
+      const by2 = ball.y * OVERLAY_H;
+      ctx.save();
+      ctx.strokeStyle = "rgba(203, 213, 225, 0.92)";
+      ctx.lineWidth = 2.6;
+      strokePolyCircle(ctx, bx2, by2, 10, 7, 8);
+      strokePolyCircle(ctx, bx2, by2, 18, 12, 8);
+      ctx.restore();
+      // "WOODWORK!" callout
+      drawRoundedBannerBox(ctx, bx2 - 36, by2 - 24, 72, 15, "rgba(2,6,23,0.88)", "rgba(203,213,225,0.7)");
+      ctx.font = "bold 8.5px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = "#e2e8f0";
+      safeFillText(ctx, "WOODWORK!", bx2, by2 - 13);
     }
   }
 

@@ -6,6 +6,8 @@
  * Gracefully no-ops in SSR, Jest, or browsers where AudioContext is unavailable or blocked.
  */
 
+import { isWoodworkPosition } from "./matchStateAdapter";
+
 export type MatchSoundCue =
   | "kickoff"
   | "pass"
@@ -19,7 +21,37 @@ export type MatchSoundCue =
   | "corner"
   | "halftime"
   | "fulltime"
-  | "tactical_order";
+  | "tactical_order"
+  | "woodwork"
+  | "clatter";
+
+/**
+ * Pure crowd-bed mixing target. `momentum` is the recent match rhythm in [-1, 1]
+ * (positive = home pressure, negative = away pressure); its magnitude lifts the crowd
+ * independent of ball position so sustained spells of pressure audibly build.
+ */
+export function crowdTargetFor(input: {
+  ballX?: number | null;
+  dangerZone?: string | null;
+  eventType?: string | null;
+  momentum?: number | null;
+}): { gain: number; freq: number } {
+  const bx = typeof input.ballX === "number" && Number.isFinite(input.ballX) ? input.ballX : 0.5;
+  const distFromCenter = Math.min(1, Math.abs(bx - 0.5) * 2);
+  const isBox = input.dangerZone === "box" || distFromCenter > 0.68;
+  const isGoal = String(input.eventType || "").toLowerCase() === "goal";
+  const m =
+    typeof input.momentum === "number" && Number.isFinite(input.momentum)
+      ? Math.min(1, Math.abs(input.momentum))
+      : 0;
+  if (isGoal) return { gain: 0.22, freq: 1150 };
+  const baseGain = isBox ? 0.11 : 0.045 + distFromCenter * 0.045;
+  const baseFreq = isBox ? 820 : 480 + distFromCenter * 240;
+  return {
+    gain: Math.min(0.16, baseGain + m * 0.04),
+    freq: Math.min(1000, baseFreq + m * 160),
+  };
+}
 
 type AudioContextConstructor = typeof AudioContext;
 
@@ -138,21 +170,19 @@ export class MatchAudioEngine {
    */
   updateAtmosphere(input: {
     ballX?: number | null;
+    ballY?: number | null;
     dangerZone?: string | null;
     eventType?: string | null;
     minute?: number;
+    momentum?: number | null;
   }): void {
     if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx || !this.crowdGain || !this.crowdFilter) return;
 
-    const bx = typeof input.ballX === "number" && Number.isFinite(input.ballX) ? input.ballX : 0.5;
-    const distFromCenter = Math.abs(bx - 0.5) * 2; // 0 at midfield, 1 at goal line
-    const isBox = input.dangerZone === "box" || distFromCenter > 0.68;
-    const isGoal = String(input.eventType || "").toLowerCase() === "goal";
-
-    const targetGain = isGoal ? 0.22 : isBox ? 0.11 : 0.045 + distFromCenter * 0.045;
-    const targetFreq = isGoal ? 1150 : isBox ? 820 : 480 + distFromCenter * 240;
+    const target = crowdTargetFor(input);
+    const targetGain = target.gain;
+    const targetFreq = target.freq;
 
     try {
       const now = ctx.currentTime;
@@ -170,7 +200,12 @@ export class MatchAudioEngine {
 
     if (ev === "goal" || ev === "penalty_goal") this.triggerCue("goal");
     else if (ev === "save") this.triggerCue("save");
+    else if (
+      (ev === "shot" || ev === "miss") &&
+      isWoodworkPosition(input.ballX ?? null, input.ballY ?? null)
+    ) this.triggerCue("woodwork");
     else if (ev === "shot" || ev === "miss") this.triggerCue("shot");
+    else if (ev === "tackle") this.triggerCue("clatter");
     else if (ev === "foul") this.triggerCue("foul");
     else if (ev === "yellow_card") this.triggerCue("yellow_card");
     else if (ev === "red_card") this.triggerCue("red_card");
@@ -192,10 +227,20 @@ export class MatchAudioEngine {
     try {
       switch (cue) {
         case "kickoff":
-        case "foul":
         case "yellow_card":
         case "penalty":
           this.playWhistle(ctx, 0.26, 1);
+          break;
+        case "foul":
+          this.playClatter(ctx);
+          this.playWhistle(ctx, 0.26, 1);
+          break;
+        case "clatter":
+          this.playClatter(ctx);
+          break;
+        case "woodwork":
+          this.playKickThud(ctx, 130, 0.14);
+          this.playWoodworkClang(ctx);
           break;
         case "red_card":
         case "halftime":
@@ -286,6 +331,52 @@ export class MatchAudioEngine {
     this.crowdFilter.frequency.setValueAtTime(600, now);
     this.crowdFilter.frequency.linearRampToValueAtTime(1350, now + 0.25);
     this.crowdFilter.frequency.exponentialRampToValueAtTime(520, now + 3.2);
+  }
+
+  /** Metallic post/crossbar ring: inharmonic partials with a fast decay. */
+  private playWoodworkClang(ctx: AudioContext): void {
+    const start = ctx.currentTime + 0.02;
+    const partials = [523, 1347, 2211, 3120];
+    partials.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(freq, start);
+      const peak = 0.06 / (i + 1);
+      const decay = 0.9 - i * 0.18;
+      gain.gain.setValueAtTime(peak, start);
+      gain.gain.exponentialRampToValueAtTime(0.0008, start + decay);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(start);
+      osc.stop(start + decay);
+    });
+  }
+
+  /** Body-contact clatter: short filtered noise burst plus a low thump. */
+  private playClatter(ctx: AudioContext): void {
+    const start = ctx.currentTime;
+    const sampleRate = ctx.sampleRate || 44100;
+    const length = Math.floor(sampleRate * 0.12);
+    const buffer = ctx.createBuffer(1, length, sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < length; i += 1) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / length);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.value = 900;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.12, start);
+    gain.gain.exponentialRampToValueAtTime(0.001, start + 0.12);
+    src.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    src.start(start);
+    src.stop(start + 0.12);
+    this.playKickThud(ctx, 70, 0.1);
   }
 
   private playTouchlineChime(ctx: AudioContext): void {

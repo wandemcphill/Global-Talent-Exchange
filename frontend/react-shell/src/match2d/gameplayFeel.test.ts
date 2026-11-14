@@ -2,9 +2,17 @@ import { RIG_ACTIONS, ATLAS_ROWS, poseFor, presentationAction, cellUv, footSprea
 import {
   animationFor,
   computeLiveXgTotals,
+  deriveDirectorShot,
   deriveDuelOutcomeOverlay,
+  isWoodworkPosition,
+  momentumAt,
+  passArcColor,
+  predictPassReceiver,
+  progressivePassMeters,
+  staminaWarning,
   type PitchPlayer,
 } from "./matchStateAdapter";
+import { crowdTargetFor, MatchAudioEngine } from "./matchAudio";
 
 const player = (over: Partial<PitchPlayer> = {}): PitchPlayer => ({
   playerId: "p1",
@@ -93,5 +101,99 @@ describe("gameplay feel: duel + xG helpers", () => {
     expect(totals.homeShots).toBe(2);
     expect(totals.awayShots).toBe(1);
     expect(computeLiveXgTotals([])).toEqual({ home: 0, away: 0, homeShots: 0, awayShots: 0 });
+  });
+});
+
+describe("gameplay feel: broadcast director camera AI", () => {
+  test("wide establishing shot on kickoff", () => {
+    const shot = deriveDirectorShot({ eventType: "kickoff", eventAgeMs: 400 });
+    expect(shot.kind).toBe("kickoff_wide");
+    expect(shot.zoomMultiplier).toBeCloseTo(0.8);
+    expect(shot.focus).toEqual({ x: 0.5, y: 0.5 });
+  });
+
+  test("split-second scorer zoom cut on goal within 800ms", () => {
+    const scorer = { x: 0.88, y: 0.44 };
+    const early = deriveDirectorShot({ eventType: "goal", eventAgeMs: 350, scorer });
+    expect(early.kind).toBe("goal_cut");
+    expect(early.zoomMultiplier).toBeCloseTo(1.8);
+    expect(early.focus).toEqual(scorer);
+
+    const afterCut = deriveDirectorShot({ eventType: "goal", eventAgeMs: 1100, scorer });
+    expect(afterCut.kind).toBe("none");
+  });
+
+  test("set-piece zoom frames attacking box", () => {
+    const corner = deriveDirectorShot({ eventType: "corner", ball: { x: 0.98, y: 0.05 } });
+    expect(corner.kind).toBe("set_piece");
+    expect(corner.zoomMultiplier).toBeCloseTo(1.32);
+    expect(corner.focus).toEqual({ x: 0.86, y: 0.5 });
+  });
+
+  test("injury time drifts toward trailing side's attacking goal", () => {
+    const shot = deriveDirectorShot({ minute: 92, leadingSide: "home", homeAttacksRight: true });
+    expect(shot.kind).toBe("injury_time");
+    expect(shot.focus).toEqual({ x: 0.3, y: 0.5 });
+  });
+});
+
+describe("gameplay feel: pass presentation & stamina warnings", () => {
+  test("progressivePassMeters measures forward territory gain per side", () => {
+    expect(progressivePassMeters({ x: 0.3, y: 0.5 }, { x: 0.5, y: 0.5 }, "home", true)).toBeCloseTo(21);
+    expect(progressivePassMeters({ x: 0.7, y: 0.5 }, { x: 0.5, y: 0.5 }, "away", true)).toBeCloseTo(21);
+  });
+
+  test("predictPassReceiver identifies teammate nearest trajectory endpoint", () => {
+    const passer = player({ playerId: "p1", side: "home", x: 0.4, y: 0.5 });
+    const targetMate = player({ playerId: "p2", side: "home", x: 0.68, y: 0.42, shirtNumber: 10 });
+    const opp = player({ playerId: "o1", side: "away", x: 0.69, y: 0.42 });
+    const traj = [
+      { x: 0.4, y: 0.5 },
+      { x: 0.7, y: 0.4 },
+    ];
+    const res = predictPassReceiver(traj, [passer, targetMate, opp], passer);
+    expect(res?.player.playerId).toBe("p2");
+    expect(res?.target).toEqual({ x: 0.7, y: 0.4 });
+  });
+
+  test("passArcColor differentiates pass flight types", () => {
+    expect(passArcColor("through_ball")).toBe("#34d399");
+    expect(passArcColor("long_pass")).toBe("#fbbf24");
+    expect(passArcColor("cross")).toBe("#fb7185");
+    expect(passArcColor("ground_pass")).toBe("#67e8f9");
+  });
+
+  test("staminaWarning flags low (<50%) and critical (<25%) players", () => {
+    expect(staminaWarning(82)).toBeNull();
+    expect(staminaWarning(44)).toBe("low");
+    expect(staminaWarning(19)).toBe("critical");
+    expect(staminaWarning(null)).toBeNull();
+  });
+});
+
+describe("gameplay feel: momentum crowd & woodwork/tackle audio", () => {
+  test("isWoodworkPosition detects near-post goal-line coordinates", () => {
+    expect(isWoodworkPosition(0.96, 0.4)).toBe(true);
+    expect(isWoodworkPosition(0.5, 0.4)).toBe(false);
+  });
+
+  test("momentumAt normalizes 5-minute narrative buckets to [-1, 1]", () => {
+    expect(momentumAt([50, 75, 25], 6)).toBeCloseTo(0.5);
+    expect(momentumAt([50, 75, 25], 11)).toBeCloseTo(-0.5);
+  });
+
+  test("crowdTargetFor swells with momentum magnitude", () => {
+    const calm = crowdTargetFor({ ballX: 0.5, momentum: 0 });
+    const surging = crowdTargetFor({ ballX: 0.5, momentum: 0.9 });
+    expect(surging.gain).toBeGreaterThan(calm.gain);
+    expect(surging.freq).toBeGreaterThan(calm.freq);
+  });
+
+  test("MatchAudioEngine safely handles woodwork and clatter cues", () => {
+    const engine = new MatchAudioEngine();
+    engine.setEnabled(true);
+    expect(() => engine.triggerCue("woodwork")).not.toThrow();
+    expect(() => engine.triggerCue("clatter")).not.toThrow();
+    engine.dispose();
   });
 });

@@ -13,6 +13,7 @@ import {
 } from "@/pages/lineupModel";
 import { buildSilhouetteDataUri, posShort, sanitizeRealPlayerImage } from "./PlayerCard";
 import { KitPlayerPortrait } from "./KitPlayerPortrait";
+import { staminaWarning } from "@/match2d/matchStateAdapter";
 
 export interface MatchdaySquadMember {
   player_id: string;
@@ -25,6 +26,7 @@ export interface MatchdaySquadMember {
   is_captain?: boolean;
   is_signed?: boolean;
   is_regen?: boolean;
+  stamina_pct?: number | null;
 }
 
 export interface MatchdayTeamSheet {
@@ -135,6 +137,8 @@ function buildTeamSheetFromRoster(opts: {
     name?: string;
     shirt_number?: number;
     role?: string;
+    stamina_pct?: number | null;
+    staminaPct?: number | null;
   }>;
 }): MatchdayTeamSheet {
   const {
@@ -302,6 +306,23 @@ function buildTeamSheetFromRoster(opts: {
   });
   starters[captainIdx] = { ...starters[captainIdx], is_captain: true };
 
+  // Propagate live pitch stamina onto starters when available
+  if (pitchPlayers && pitchPlayers.length > 0) {
+    starters.forEach((s, idx) => {
+      const match =
+        pitchPlayers.find((pp) => pp.player_id && pp.player_id === s.player_id) ||
+        pitchPlayers.find((pp) => pp.shirt_number && Number(pp.shirt_number) === s.shirt_number) ||
+        pitchPlayers.find(
+          (pp) => pp.name && extractBroadcastSurname(pp.name).toLowerCase() === s.short_name.toLowerCase(),
+        ) ||
+        pitchPlayers[idx];
+      const rawStam = match?.stamina_pct ?? match?.staminaPct ?? null;
+      if (rawStam !== null && rawStam !== undefined && Number.isFinite(Number(rawStam))) {
+        starters[idx] = { ...starters[idx], stamina_pct: Number(rawStam) };
+      }
+    });
+  }
+
   // Build 7-9 Substitutes from savedBenchIds + remaining signed players + academy bench
   const substitutes: MatchdaySquadMember[] = [];
   const benchCandidates: LineupPlayer[] = [];
@@ -392,6 +413,8 @@ export function useClubMatchdaySheet(opts: {
     name?: string;
     shirt_number?: number;
     role?: string;
+    stamina_pct?: number | null;
+    staminaPct?: number | null;
   }>;
 }) {
   const clubId = opts.clubId || "";
@@ -517,25 +540,42 @@ export function TunnelStartingXICard({
 
             {/* 11 Starters Vertical List */}
             <ol className="space-y-1 text-[13px] sm:text-[14px] leading-snug" data-testid="tunnel-starters-list">
-              {sheet.starters.map((player) => (
-                <li
-                  key={player.player_id}
-                  className="group flex items-baseline gap-2.5 rounded px-1 py-0.5 transition-colors hover:bg-white/[0.04]"
-                >
-                  <span className="gx-mono w-5 shrink-0 text-right text-[11px] font-bold text-sky-300/80">
-                    {player.shirt_number}
-                  </span>
-                  <span className="truncate font-semibold tracking-tight text-white">
-                    {player.short_name}
-                    {player.is_captain && (
-                      <span className="ml-1.5 text-[11px] font-black text-sky-300">(C)</span>
+              {sheet.starters.map((player) => {
+                const warn = staminaWarning(player.stamina_pct);
+                return (
+                  <li
+                    key={player.player_id}
+                    className="group flex items-baseline gap-2.5 rounded px-1 py-0.5 transition-colors hover:bg-white/[0.04]"
+                  >
+                    <span className="gx-mono w-5 shrink-0 text-right text-[11px] font-bold text-sky-300/80">
+                      {player.shirt_number}
+                    </span>
+                    <span className="truncate font-semibold tracking-tight text-white">
+                      {player.short_name}
+                      {player.is_captain && (
+                        <span className="ml-1.5 text-[11px] font-black text-sky-300">(C)</span>
+                      )}
+                    </span>
+                    {warn && (
+                      <span
+                        data-testid="stamina-warning-badge"
+                        data-severity={warn}
+                        title={`Low stamina (${Math.round(Number(player.stamina_pct))}%) — consider substitution`}
+                        className={`gx-mono inline-flex items-center gap-0.5 rounded border px-1.5 py-0.2 text-[9.5px] font-black uppercase ${
+                          warn === "critical"
+                            ? "border-rose-400/60 bg-rose-500/20 text-rose-200"
+                            : "border-amber-400/60 bg-amber-500/20 text-amber-200"
+                        }`}
+                      >
+                        ⚡ {Math.round(Number(player.stamina_pct))}%
+                      </span>
                     )}
-                  </span>
-                  <span className="ml-auto hidden sm:inline-block gx-mono text-[10px] text-slate-400/80">
-                    {player.position} · {player.rating}
-                  </span>
-                </li>
-              ))}
+                    <span className="ml-auto hidden sm:inline-block gx-mono text-[10px] text-slate-400/80">
+                      {player.position} · {player.rating}
+                    </span>
+                  </li>
+                );
+              })}
             </ol>
 
             {/* Compact Substitutes Block */}
@@ -702,20 +742,36 @@ export function EditorialLineupPosterCard({
           {/* Center-Right Numbered Uppercase Bold Starting XI Stack */}
           <div className="col-span-7 flex flex-col items-center text-center">
             <ol className="space-y-1 sm:space-y-1.5" data-testid="editorial-starters-list">
-              {sheet.starters.map((player) => (
-                <li
-                  key={player.player_id}
-                  className="flex items-baseline justify-center gap-2 leading-none"
-                >
-                  <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
-                    {String(player.shirt_number).padStart(2, "0")}
-                  </span>
-                  <span className="gx-display text-[15px] sm:text-[18px] font-black uppercase tracking-tight text-white hover:text-[#00E8A8] transition-colors">
-                    {player.short_name}
-                    {player.is_captain ? " (C)" : ""}
-                  </span>
-                </li>
-              ))}
+              {sheet.starters.map((player) => {
+                const warn = staminaWarning(player.stamina_pct);
+                return (
+                  <li
+                    key={player.player_id}
+                    className="flex items-baseline justify-center gap-2 leading-none"
+                  >
+                    <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
+                      {String(player.shirt_number).padStart(2, "0")}
+                    </span>
+                    <span className="gx-display text-[15px] sm:text-[18px] font-black uppercase tracking-tight text-white hover:text-[#00E8A8] transition-colors">
+                      {player.short_name}
+                      {player.is_captain ? " (C)" : ""}
+                    </span>
+                    {warn && (
+                      <span
+                        data-testid="stamina-warning-badge"
+                        data-severity={warn}
+                        className={`gx-mono inline-flex items-center gap-0.5 rounded border px-1.5 py-0.2 text-[9px] font-black uppercase ${
+                          warn === "critical"
+                            ? "border-rose-400/60 bg-rose-500/20 text-rose-200"
+                            : "border-amber-400/60 bg-amber-500/20 text-amber-200"
+                        }`}
+                      >
+                        ⚡ {Math.round(Number(player.stamina_pct))}%
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
             </ol>
 
             {/* Centered Club-Accent Uppercase Substitutes Block */}
@@ -766,8 +822,22 @@ export function MatchdayLineupBroadcast({
   lineupMode?: "strongest" | "rotate";
   formationOverride?: string;
   onFormationChange?: (formation: string) => void;
-  homePitchPlayers?: Array<{ player_id?: string; name?: string; shirt_number?: number; role?: string }>;
-  awayPitchPlayers?: Array<{ player_id?: string; name?: string; shirt_number?: number; role?: string }>;
+  homePitchPlayers?: Array<{
+    player_id?: string;
+    name?: string;
+    shirt_number?: number;
+    role?: string;
+    stamina_pct?: number | null;
+    staminaPct?: number | null;
+  }>;
+  awayPitchPlayers?: Array<{
+    player_id?: string;
+    name?: string;
+    shirt_number?: number;
+    role?: string;
+    stamina_pct?: number | null;
+    staminaPct?: number | null;
+  }>;
   defaultView?: "dual" | "tunnel" | "editorial";
 }) {
   const queryClient = useQueryClient();
