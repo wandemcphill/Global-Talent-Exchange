@@ -1697,7 +1697,7 @@ def test_free_agent_offer_market_hides_competing_salary_amounts(
     assert visibility_state.visible_offer_count == 2
 
 
-def test_contract_offer_quote_generates_auto_conversion_premium(
+def test_contract_offer_quote_requires_fan_coin_without_gtex_auto_conversion(
     lifecycle_service: PlayerLifecycleService,
     lifecycle_session: Session,
 ) -> None:
@@ -1728,11 +1728,15 @@ def test_contract_offer_quote_generates_auto_conversion_premium(
 
     assert quote.required_fancoin == Decimal("3000.0000")
     assert quote.shortfall_fancoin == Decimal("2900.0000")
-    assert quote.gtex_required_for_conversion > quote.direct_gtex_equivalent
-    assert quote.conversion_premium_bps == AUTO_CONVERSION_PREMIUM_BPS
-    assert quote.can_cover_shortfall is True
+    assert quote.gtex_required_for_conversion == Decimal("0.0000")
+    assert quote.direct_gtex_equivalent == Decimal("0.0000")
+    assert quote.conversion_premium_bps == 0
+    assert quote.can_cover_shortfall is False
+    assert quote.premium_note.startswith("Player and staff contract salaries must be funded entirely in Fan Coin")
     assert quote_row is not None
-    assert quote_row.premium_bps == AUTO_CONVERSION_PREMIUM_BPS
+    assert quote_row.premium_bps == 0
+    assert quote_row.metadata_json["salary_funding_currency"] == "FAN_COIN"
+    assert quote_row.metadata_json["gtex_auto_conversion_allowed"] is False
 
 
 def test_regen_free_agent_end_to_end_lifecycle_and_idempotency(
