@@ -1750,13 +1750,9 @@ def record_managerial_change(
         f"Managerial Appointment: {new_name} Named Head Coach of {state.club_name}"
         if action == "appointed"
         else (
-            f"Managerial Departure: {prev_name} Relieved of Duties "
-            f"({severance_fan_coin:,} Fan Coin Severance)"
+            f"Managerial Departure: {prev_name} Relieved of Duties " f"({severance_fan_coin:,} Fan Coin Severance)"
             if severance_fan_coin
-            else (
-                f"Managerial Departure: {prev_name} Relieved of Duties "
-                f"({severance_gtex:,} GTX Severance)"
-            )
+            else (f"Managerial Departure: {prev_name} Relieved of Duties " f"({severance_gtex:,} GTX Severance)")
         )
     )
     summary = (
