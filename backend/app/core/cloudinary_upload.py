@@ -16,7 +16,6 @@ can surface a clear "KYC uploads are not configured" error instead of failing op
 
 from __future__ import annotations
 
-import hashlib
 import os
 import time
 from dataclasses import dataclass
@@ -56,12 +55,11 @@ def cloudinary_configured() -> bool:
     return bool(_cloud_name() and _api_key() and _api_secret())
 
 
+from app.storage.cloudinary import sign_cloudinary_params
+
+
 def _sign(params: dict[str, str], api_secret: str) -> str:
-    # Cloudinary signature: sha1 of "k=v&k=v..." (sorted, excluding file/api_key/etc.) + secret.
-    to_sign = "&".join(f"{key}={params[key]}" for key in sorted(params))
-    # Cloudinary's API requires SHA1 for request signing; it is not used for
-    # password storage or integrity guarantees here.
-    return hashlib.sha1(f"{to_sign}{api_secret}".encode()).hexdigest()  # nosec B324
+    return sign_cloudinary_params(params, api_secret)
 
 
 def upload_kyc_document(

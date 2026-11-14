@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
@@ -9,8 +10,13 @@ import {
   ExternalLink,
   Headphones,
   Info,
+  Pause,
+  Play,
   Shuffle,
+  SkipBack,
   SkipForward,
+  Volume2,
+  VolumeX,
   X,
 } from "lucide-react";
 
@@ -171,16 +177,54 @@ function inferContextFromPath(pathname: string): GtexAudioContextType {
   return "home";
 }
 
+const TRAX_PLAY_STORAGE_KEY = "gtex_trax_is_playing";
+const TRAX_MUTE_STORAGE_KEY = "gtex_trax_is_muted";
+const TRAX_VOLUME_STORAGE_KEY = "gtex_trax_volume";
+
+function formatTrackTime(seconds: number): string {
+  if (!Number.isFinite(seconds) || seconds < 0) return "0:00";
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs < 10 ? "0" : ""}${secs}`;
+}
+
 export function GtexTraxTopBarControl() {
   const { pathname } = useLocation();
-  const [isPlaying] = useState(true);
-  const isMuted = false;
+  const [isPlaying, setIsPlaying] = useState<boolean>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage?.getItem(TRAX_PLAY_STORAGE_KEY) : null;
+      return saved === null ? true : saved === "true";
+    } catch {
+      return true;
+    }
+  });
+  const [isMuted, setIsMuted] = useState<boolean>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage?.getItem(TRAX_MUTE_STORAGE_KEY) : null;
+      return saved === "true";
+    } catch {
+      return false;
+    }
+  });
+  const [volume, setVolume] = useState<number>(() => {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage?.getItem(TRAX_VOLUME_STORAGE_KEY) : null;
+      const parsed = saved !== null ? Number(saved) : 0.85;
+      return Number.isFinite(parsed) && parsed >= 0 && parsed <= 1 ? parsed : 0.85;
+    } catch {
+      return 0.85;
+    }
+  });
   const [modalOpen, setModalOpen] = useState(false);
   const [showCredits, setShowCredits] = useState(false);
   const [showToastChyron, setShowToastChyron] = useState(false);
+  const [currentTimeSeconds, setCurrentTimeSeconds] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(180);
+  const [autoplayBlocked, setAutoplayBlocked] = useState(false);
+  const [isCommentaryActive, setIsCommentaryActive] = useState(false);
+  const [frequencyCapPerSession, setFrequencyCapPerSession] = useState(6);
+  const [failedTrackIds, setFailedTrackIds] = useState<string[]>([]);
 
-  const masterVolume = 1;
-  const musicVolume = 1;
   const [activeContext, setActiveContext] = useState<GtexAudioContextType>("home");
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
 
@@ -193,21 +237,34 @@ export function GtexTraxTopBarControl() {
   const reportedPromotionImpressions = useRef(new Set<string>());
   const promoAudioRef = useRef<HTMLAudioElement | null>(null);
   const qualifiedReportedForPlayRef = useRef<string | null>(null);
+  const sessionPlayCountsRef = useRef<Record<string, number>>({});
+  const lastAutoplayUnlockAtRef = useRef<number>(0);
 
   const audioCtxRef = useRef<AudioContext | null>(null);
   const stepRef = useRef(0);
 
-  // Interleave promoted tracks from GTEX Commercial Music Network into fair rotation
+  // Interleave promoted tracks from GTEX Commercial Music Network into fair rotation,
+  // filtering out unavailable/deleted tracks and tracks that hit their session frequency cap.
   const combinedCatalogue = React.useMemo(() => {
-    if (rotationTracks.length === 0) return GTEX_TRAX_CATALOGUE;
+    const failedSet = new Set(failedTrackIds);
+    const activeRotation = rotationTracks.filter((item) => {
+      if (failedSet.has(item.id)) return false;
+      const key = item.campaignId || item.id;
+      const plays = sessionPlayCountsRef.current[key] || 0;
+      return plays < frequencyCapPerSession;
+    });
+    const activeBed = GTEX_TRAX_CATALOGUE.filter((item) => !failedSet.has(item.id));
+    const fallbackBed = activeBed.length > 0 ? activeBed : GTEX_TRAX_CATALOGUE;
+
+    if (activeRotation.length === 0) return fallbackBed;
     const merged: GtexTraxItem[] = [];
-    const maxLen = Math.max(rotationTracks.length, GTEX_TRAX_CATALOGUE.length);
+    const maxLen = Math.max(activeRotation.length, fallbackBed.length);
     for (let i = 0; i < maxLen; i += 1) {
-      if (i < rotationTracks.length) merged.push(rotationTracks[i]);
-      if (i < GTEX_TRAX_CATALOGUE.length) merged.push(GTEX_TRAX_CATALOGUE[i]);
+      if (i < activeRotation.length) merged.push(activeRotation[i]);
+      if (i < fallbackBed.length) merged.push(fallbackBed[i]);
     }
     return merged;
-  }, [rotationTracks]);
+  }, [rotationTracks, failedTrackIds, frequencyCapPerSession]);
 
   const currentTrack = combinedCatalogue[currentTrackIndex % combinedCatalogue.length] || GTEX_TRAX_CATALOGUE[0];
   const currentTrackPromotion = sponsoredPromotions.find((promotion) =>
@@ -215,11 +272,19 @@ export function GtexTraxTopBarControl() {
     (promotion.target_type === "artist" && (promotion.artist_name || "").toLowerCase() === currentTrack.artist.toLowerCase()) ||
     (promotion.target_type === "playlist" && (promotion.playlist_name || "").toLowerCase() === currentTrack.album.toLowerCase())
   ) || null;
+  const isCurrentSponsored = Boolean(currentTrack.isPromoted || currentTrackPromotion);
 
-  const isMatchdayDucked = activeContext === "matchday";
-  const effectiveGain = isMuted
+  const isMatchdayDucked = activeContext === "matchday" || isCommentaryActive;
+  const effectiveGain = isMuted || isCommentaryActive
     ? 0
-    : masterVolume * musicVolume * (isMatchdayDucked ? 0.2 : 1.0);
+    : Math.max(0, Math.min(1, volume * (activeContext === "matchday" ? 0.2 : 1.0)));
+
+  // Subscribe to Central Audio Session Manager to pause/duck during active match commentary
+  useEffect(() => {
+    return gtexAudio.subscribe((snapshot) => {
+      setIsCommentaryActive(Boolean(snapshot.activeChannels?.includes("commentary")));
+    });
+  }, []);
 
   // Load approved, in-window GTEX TRAX partner promotions & uploaded Music Network rotation tracks.
   useEffect(() => {
@@ -235,6 +300,10 @@ export function GtexTraxTopBarControl() {
     commercialApi.getMusicRotationFeed(20)
       .then((feed) => {
         if (cancelled || !Array.isArray(feed?.tracks)) return;
+        const cap = Number(feed?.rotation_policy?.frequency_cap_per_session);
+        if (Number.isFinite(cap) && cap > 0) {
+          setFrequencyCapPerSession(cap);
+        }
         const mapped: GtexTraxItem[] = feed.tracks.map((t: MusicRotationTrack) => ({
           id: t.track_id,
           title: t.title,
@@ -289,7 +358,7 @@ export function GtexTraxTopBarControl() {
 
   // Coordinate with Central Audio Session Manager (user_music channel priority)
   useEffect(() => {
-    if (isPlaying && !isMuted) {
+    if (isPlaying && !isMuted && !isCommentaryActive) {
       gtexAudio.registerActiveChannelSource("user_music", "gtex_trax_player");
     } else {
       gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
@@ -297,7 +366,7 @@ export function GtexTraxTopBarControl() {
     return () => {
       gtexAudio.unregisterActiveChannelSource("user_music", "gtex_trax_player");
     };
-  }, [isPlaying, isMuted]);
+  }, [isPlaying, isMuted, isCommentaryActive]);
 
   // Show EA FC Trax-style Now Playing Broadcast Chyron when track changes while playing
   useEffect(() => {
@@ -307,66 +376,121 @@ export function GtexTraxTopBarControl() {
     return () => clearTimeout(t);
   }, [currentTrackIndex, isPlaying]);
 
-  // HTML5 Audio playback for uploaded promotional tracks + WebAudio fallback for built-in synth catalogue
+  // Keep volume and mute state synchronized in-place without pausing/restarting active playback
   useEffect(() => {
-    if (currentTrack.audioUrl) {
-      if (!isPlaying || isMuted || effectiveGain <= 0.01) {
-        if (promoAudioRef.current) {
-          promoAudioRef.current.pause();
-        }
-        return undefined;
-      }
-      if (!promoAudioRef.current) {
-        promoAudioRef.current = new Audio();
-        promoAudioRef.current.crossOrigin = "anonymous";
-      }
-      const el = promoAudioRef.current;
-      if (el.src !== currentTrack.audioUrl) {
-        el.src = currentTrack.audioUrl;
-        qualifiedReportedForPlayRef.current = null;
-      }
-      el.volume = Math.max(0, Math.min(1, effectiveGain));
-
-      const onTimeUpdate = () => {
-        if (
-          currentTrack.campaignId &&
-          qualifiedReportedForPlayRef.current !== currentTrack.campaignId &&
-          (el.currentTime >= 30 || (el.duration > 0 && el.currentTime >= el.duration * 0.5))
-        ) {
-          qualifiedReportedForPlayRef.current = currentTrack.campaignId;
-          reportMusicPromotionEvent(currentTrack.campaignId, "qualified_listen");
-        }
-      };
-      const onEnded = () => {
-        if (currentTrack.campaignId) {
-          reportMusicPromotionEvent(currentTrack.campaignId, "completed");
-        }
-        setCurrentTrackIndex((i) => (i + 1) % combinedCatalogue.length);
-      };
-
-      el.addEventListener("timeupdate", onTimeUpdate);
-      el.addEventListener("ended", onEnded);
-      const markStarted = () => {
-        if (currentTrack.campaignId) {
-          reportMusicPromotionEvent(currentTrack.campaignId, "play_started");
-        }
-      };
-      el.play().then(markStarted).catch(() => {
-        const resume = () => {
-          el.play().then(markStarted).catch(() => undefined);
-        };
-        window.addEventListener("pointerdown", resume, { once: true });
-        window.addEventListener("keydown", resume, { once: true });
-      });
-
-      return () => {
-        el.removeEventListener("timeupdate", onTimeUpdate);
-        el.removeEventListener("ended", onEnded);
-        el.pause();
-      };
+    if (promoAudioRef.current) {
+      promoAudioRef.current.volume = Math.max(0, Math.min(1, effectiveGain));
+      promoAudioRef.current.muted = isMuted;
     }
+  }, [effectiveGain, isMuted]);
 
-    if (!isPlaying || isMuted || effectiveGain <= 0.01) return undefined;
+  // HTML5 Audio playback for uploaded promotional tracks and MP3 streams
+  useEffect(() => {
+    if (!currentTrack.audioUrl) return undefined;
+    const isJsDom = typeof navigator !== "undefined" && /jsdom/i.test(navigator.userAgent || "");
+    if (!isPlaying || isCommentaryActive) {
+      if (promoAudioRef.current && !isJsDom) {
+        promoAudioRef.current.pause();
+      }
+      return undefined;
+    }
+    if (!promoAudioRef.current) {
+      promoAudioRef.current = new Audio();
+    }
+    const el = promoAudioRef.current;
+    if (el.src !== currentTrack.audioUrl) {
+      el.src = currentTrack.audioUrl;
+      qualifiedReportedForPlayRef.current = null;
+      setCurrentTimeSeconds(0);
+    }
+    el.volume = Math.max(0, Math.min(1, effectiveGain));
+    el.muted = isMuted;
+
+    const onLoadedMetadata = () => {
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        setDurationSeconds(Math.round(el.duration));
+      }
+    };
+    const onTimeUpdate = () => {
+      setCurrentTimeSeconds(Math.floor(el.currentTime || 0));
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        setDurationSeconds(Math.round(el.duration));
+      }
+      if (
+        currentTrack.campaignId &&
+        qualifiedReportedForPlayRef.current !== currentTrack.campaignId &&
+        (el.currentTime >= 30 || (el.duration > 0 && el.currentTime >= el.duration * 0.5))
+      ) {
+        qualifiedReportedForPlayRef.current = currentTrack.campaignId;
+        reportMusicPromotionEvent(currentTrack.campaignId, "qualified_listen");
+      }
+    };
+    const onEnded = () => {
+      if (currentTrack.campaignId) {
+        reportMusicPromotionEvent(currentTrack.campaignId, "completed");
+        sessionPlayCountsRef.current[currentTrack.campaignId] =
+          (sessionPlayCountsRef.current[currentTrack.campaignId] || 0) + 1;
+      }
+      setCurrentTrackIndex((i) => (i + 1) % Math.max(1, combinedCatalogue.length));
+    };
+    const onError = () => {
+      // Gracefully skip unavailable or broken tracks without double-skipping adjacent items
+      setCurrentTimeSeconds(0);
+      setFailedTrackIds((prev) => (prev.includes(currentTrack.id) ? prev : [...prev, currentTrack.id]));
+    };
+
+    el.addEventListener("loadedmetadata", onLoadedMetadata);
+    el.addEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("ended", onEnded);
+    el.addEventListener("error", onError);
+    const markStarted = () => {
+      setAutoplayBlocked(false);
+      if (currentTrack.campaignId) {
+        reportMusicPromotionEvent(currentTrack.campaignId, "play_started");
+      }
+    };
+    const attemptPlay = (): Promise<void> => {
+      if (isJsDom) {
+        return Promise.resolve();
+      }
+      try {
+        const playResult = el.play();
+        return playResult && typeof playResult.then === "function" ? playResult : Promise.resolve();
+      } catch (err) {
+        return Promise.reject(err);
+      }
+    };
+    let resumeListener: (() => void) | null = null;
+    attemptPlay().then(markStarted).catch(() => {
+      setAutoplayBlocked(true);
+      resumeListener = () => {
+        lastAutoplayUnlockAtRef.current = Date.now();
+        void gtexAudio.unlockAutoplay();
+        attemptPlay().then(markStarted).catch(() => undefined);
+      };
+      window.addEventListener("pointerdown", resumeListener, { once: true });
+      window.addEventListener("keydown", resumeListener, { once: true });
+    });
+
+    return () => {
+      el.removeEventListener("loadedmetadata", onLoadedMetadata);
+      el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("ended", onEnded);
+      el.removeEventListener("error", onError);
+      if (resumeListener) {
+        window.removeEventListener("pointerdown", resumeListener);
+        window.removeEventListener("keydown", resumeListener);
+      }
+      if (!isJsDom) {
+        el.pause();
+      }
+    };
+  }, [isPlaying, isCommentaryActive, currentTrack, combinedCatalogue.length]);
+
+  // WebAudio synth fallback when a track has no audioUrl
+  useEffect(() => {
+    if (currentTrack.audioUrl) return undefined;
+    if (!isPlaying || isMuted || isCommentaryActive) return undefined;
 
     const stepMs = Math.max(180, Math.round((60000 / currentTrack.bpm) / 2));
     const timer = setInterval(() => {
@@ -407,13 +531,100 @@ export function GtexTraxTopBarControl() {
     }, stepMs);
 
     return () => clearInterval(timer);
-  }, [isPlaying, isMuted, effectiveGain, currentTrack, combinedCatalogue.length]);
+  }, [isPlaying, isMuted, isCommentaryActive, currentTrack, effectiveGain]);
+
+  const togglePlayPause = () => {
+    void gtexAudio.unlockAutoplay();
+    const justUnlockedFromAutoplayBlock = Date.now() - lastAutoplayUnlockAtRef.current < 400;
+    if (autoplayBlocked || (justUnlockedFromAutoplayBlock && isPlaying)) {
+      setAutoplayBlocked(false);
+      setIsPlaying(true);
+      try {
+        window.localStorage?.setItem(TRAX_PLAY_STORAGE_KEY, "true");
+      } catch {
+        // ignore storage errors
+      }
+      if (promoAudioRef.current && currentTrack.audioUrl && promoAudioRef.current.paused) {
+        try {
+          const playRes = promoAudioRef.current.play();
+          if (playRes && typeof playRes.catch === "function") {
+            playRes.catch(() => undefined);
+          }
+        } catch {
+          // ignore play errors
+        }
+      }
+      return;
+    }
+    setIsPlaying((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage?.setItem(TRAX_PLAY_STORAGE_KEY, String(next));
+      } catch {
+        // ignore storage errors
+      }
+      return next;
+    });
+  };
+
+  const handleVolumeChange = (nextVolume: number) => {
+    const clamped = Math.max(0, Math.min(1, nextVolume));
+    setVolume(clamped);
+    gtexAudio.setChannelVolume("user_music", clamped);
+    if (clamped > 0 && isMuted) {
+      setIsMuted(false);
+      try {
+        window.localStorage?.setItem(TRAX_MUTE_STORAGE_KEY, "false");
+      } catch {
+        // ignore
+      }
+    }
+    try {
+      window.localStorage?.setItem(TRAX_VOLUME_STORAGE_KEY, String(clamped));
+    } catch {
+      // ignore storage errors
+    }
+  };
+
+  const toggleMute = () => {
+    setIsMuted((prev) => {
+      const next = !prev;
+      try {
+        window.localStorage?.setItem(TRAX_MUTE_STORAGE_KEY, String(next));
+      } catch {
+        // ignore storage errors
+      }
+      if (next && currentTrack.campaignId) {
+        reportMusicPromotionEvent(currentTrack.campaignId, "muted");
+      }
+      return next;
+    });
+  };
+
+  const handleSeek = (nextTimeSeconds: number) => {
+    const clamped = Math.max(0, Math.min(durationSeconds || 180, nextTimeSeconds));
+    setCurrentTimeSeconds(clamped);
+    if (promoAudioRef.current) {
+      try {
+        promoAudioRef.current.currentTime = clamped;
+      } catch {
+        // ignore seek before metadata loaded
+      }
+    }
+  };
+
+  const prevTrack = () => {
+    const len = Math.max(1, combinedCatalogue.length);
+    setCurrentTrackIndex((i) => (i - 1 + len) % len);
+  };
 
   const nextTrack = () => {
     if (isPlaying && currentTrack.campaignId) {
       reportMusicPromotionEvent(currentTrack.campaignId, "skipped");
+      sessionPlayCountsRef.current[currentTrack.campaignId] =
+        (sessionPlayCountsRef.current[currentTrack.campaignId] || 0) + 1;
     }
-    setCurrentTrackIndex((i) => (i + 1) % combinedCatalogue.length);
+    setCurrentTrackIndex((i) => (i + 1) % Math.max(1, combinedCatalogue.length));
   };
 
   const shuffleTrack = () => {
@@ -445,48 +656,27 @@ export function GtexTraxTopBarControl() {
   const hypeTotal = currentTrack.hypeCount + (hypedIds[currentTrack.id] ? 1 : 0);
   const tipTotal = tipsByTrack[currentTrack.id] || 0;
   const clickTotal = clicksByTrack[currentTrack.id] || 0;
+  const isActivelyPlaying = isPlaying && !autoplayBlocked;
 
-  return (
+  const portalsTarget = typeof document !== "undefined" ? document.body : null;
+  const overlays = (
     <>
-      {/* Top-Bar Compact GTEX TRAX Artist Pill */}
-      <div
-        data-testid="gtex-trax-pill"
-        className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/35 bg-slate-950/90 px-2.5 py-1 text-xs shadow-inner"
-      >
-        <button
-          type="button"
-          onClick={() => setModalOpen(true)}
-          className="flex items-center gap-1.5 text-left hover:text-white"
-        >
-          <Disc3
-            size={13}
-            className={`${isPlaying ? "animate-spin text-amber-400" : "text-emerald-400"}`}
-          />
-          <span className="hidden max-w-[145px] truncate text-[11px] font-bold text-slate-200 md:inline">
-            {currentTrack.artist.split(" ")[0]} · {currentTrack.title.split("(")[0]}
-          </span>
-          {currentTrackPromotion && (
-            <span className="rounded bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-slate-950">
-              SPONSORED
-            </span>
-          )}
-        </button>
-
-        <button
-          type="button"
-          onClick={nextTrack}
-          title="Next GTEX TRAX Track"
-          className="text-slate-400 hover:text-white"
-        >
-          <SkipForward size={12} />
-        </button>
-      </div>
-
       {/* EA Sports FC Trax-Style Floating "Now Playing · GTEX TRAX" Broadcast Chyron */}
       {showToastChyron && (
         <div className="fixed bottom-5 right-5 z-40 flex w-80 items-center gap-3 rounded-2xl border border-amber-400/50 bg-slate-950/95 p-3.5 shadow-[0_20px_50px_rgba(0,0,0,0.85)] backdrop-blur-xl">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl border border-amber-400/40 bg-gradient-to-br from-emerald-500/25 to-amber-500/25">
-            <Disc3 size={24} className="animate-spin text-amber-300" />
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-amber-400/40 bg-gradient-to-br from-emerald-500/25 to-amber-500/25">
+            {currentTrack.artworkUrl ? (
+              <img
+                src={currentTrack.artworkUrl}
+                alt={currentTrack.title}
+                className="h-full w-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : (
+              <Disc3 size={24} className="animate-spin text-amber-300" />
+            )}
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-1.5">
@@ -525,7 +715,12 @@ export function GtexTraxTopBarControl() {
 
       {/* Full GTEX TRAX Artist Promotion & Soundtrack OS Studio Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md">
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="gtex-trax-modal"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+        >
           <div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-emerald-500/35 bg-[#080D16] p-6 text-slate-100 shadow-[0_28px_90px_rgba(0,0,0,0.95)]">
             {/* Modal Header */}
             <div className="flex items-center justify-between border-b border-white/10 pb-4">
@@ -552,6 +747,8 @@ export function GtexTraxTopBarControl() {
                 </button>
                 <button
                   onClick={() => setModalOpen(false)}
+                  aria-label="Close GTEX TRAX"
+                  data-testid="gtex-trax-modal-close-btn"
                   className="rounded-lg border border-white/15 bg-white/5 p-1.5 text-slate-400 hover:text-white"
                 >
                   <X size={16} />
@@ -591,17 +788,29 @@ export function GtexTraxTopBarControl() {
                 <div className="rounded-2xl border border-amber-400/35 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/35 p-5 shadow-xl">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="flex items-center gap-4">
-                      <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl border border-amber-400/50 bg-slate-950 shadow-lg">
-                        <Disc3
-                          size={34}
-                          className={isPlaying ? "animate-spin text-amber-400" : "text-emerald-400"}
-                        />
+                      <div className="flex h-16 w-16 shrink-0 items-center justify-center overflow-hidden rounded-2xl border border-amber-400/50 bg-slate-950 shadow-lg">
+                        {currentTrack.artworkUrl ? (
+                          <img
+                            src={currentTrack.artworkUrl}
+                            alt={currentTrack.title}
+                            className="h-full w-full object-cover"
+                            data-testid="gtex-trax-modal-artwork"
+                          />
+                        ) : (
+                          <Disc3
+                            size={34}
+                            className={isPlaying && !isMuted ? "animate-spin text-amber-400" : "text-emerald-400"}
+                          />
+                        )}
                       </div>
                       <div>
                         <div className="flex flex-wrap items-center gap-1.5">
-                          {currentTrackPromotion && (
-                            <span className="rounded bg-amber-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-950">
-                              ★ SPONSORED · {currentTrackPromotion.headline}
+                          {isCurrentSponsored && (
+                            <span
+                              className="rounded bg-amber-400 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-slate-950"
+                              data-testid="gtex-trax-modal-sponsored-badge"
+                            >
+                              ★ SPONSORED · {currentTrackPromotion?.headline || "Promoted on GTEX Music Network"}
                             </span>
                           )}
                           <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[9px] font-bold text-emerald-300">
@@ -623,21 +832,94 @@ export function GtexTraxTopBarControl() {
                     </div>
 
                     {/* Playback Controls */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       <button
+                        type="button"
+                        onClick={prevTrack}
+                        title="Previous track"
+                        data-testid="gtex-trax-modal-prev-btn"
+                        className="rounded-xl border border-white/15 bg-white/5 p-2.5 text-slate-300 hover:text-white"
+                      >
+                        <SkipBack size={16} />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={togglePlayPause}
+                        title={isActivelyPlaying ? "Pause" : "Play"}
+                        data-testid="gtex-trax-modal-play-pause-btn"
+                        className="rounded-xl border border-emerald-400/40 bg-emerald-500/15 p-2.5 text-emerald-300 hover:bg-emerald-500/25"
+                      >
+                        {isActivelyPlaying ? <Pause size={16} /> : <Play size={16} />}
+                      </button>
+                      <button
+                        type="button"
                         onClick={nextTrack}
                         title="Skip to the next track"
+                        data-testid="gtex-trax-modal-skip-btn"
                         className="rounded-xl border border-white/15 bg-white/5 p-2.5 text-slate-300 hover:text-white"
                       >
                         <SkipForward size={16} />
                       </button>
                       <button
+                        type="button"
                         onClick={shuffleTrack}
+                        title="Shuffle"
                         className="rounded-xl border border-white/15 bg-white/5 p-2.5 text-slate-300 hover:text-white"
                       >
                         <Shuffle size={16} />
                       </button>
+                      <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-2.5 py-1.5">
+                        <button
+                          type="button"
+                          onClick={toggleMute}
+                          title={isMuted ? "Unmute" : "Mute"}
+                          data-testid="gtex-trax-modal-mute-btn"
+                          className="text-slate-300 hover:text-white"
+                        >
+                          {isMuted ? <VolumeX size={15} /> : <Volume2 size={15} />}
+                        </button>
+                        <input
+                          type="range"
+                          min={0}
+                          max={1}
+                          step={0.05}
+                          value={isMuted ? 0 : volume}
+                          onChange={(e) => handleVolumeChange(Number(e.target.value))}
+                          aria-label="Music volume"
+                          data-testid="gtex-trax-volume-slider"
+                          className="h-1.5 w-20 cursor-pointer accent-amber-400"
+                        />
+                        <span className="gx-mono w-8 text-right text-[10px] text-slate-300">
+                          {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+                        </span>
+                      </div>
                     </div>
+                  </div>
+
+                  {/* Interactive Seek / Progress Bar */}
+                  <div className="mt-3 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                      <span data-testid="gtex-trax-current-time">{formatTrackTime(currentTimeSeconds)}</span>
+                      <span data-testid="gtex-trax-playback-status">
+                        {isCommentaryActive
+                          ? "Paused for live match commentary"
+                          : autoplayBlocked
+                          ? "Click Play to unlock browser audio"
+                          : isCurrentSponsored
+                          ? "Promoted on GTEX Music Network"
+                          : "GTEX TRAX Rotation"}
+                      </span>
+                      <span data-testid="gtex-trax-duration">{formatTrackTime(durationSeconds)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={0}
+                      max={Math.max(1, durationSeconds)}
+                      value={Math.min(currentTimeSeconds, Math.max(1, durationSeconds))}
+                      onChange={(e) => handleSeek(Number(e.target.value))}
+                      className="h-1.5 w-full cursor-pointer accent-emerald-400"
+                      data-testid="gtex-trax-seek-bar"
+                    />
                   </div>
 
                   <p className="mt-3 text-xs leading-relaxed text-slate-300">{currentTrack.artistBio}</p>
@@ -803,7 +1085,7 @@ export function GtexTraxTopBarControl() {
                   <p className="gx-label mb-2">GTEX TRAX · Artist Roster</p>
                   <div className="space-y-2">
                     {combinedCatalogue.map((item, idx) => {
-                      const active = idx === currentTrackIndex;
+                      const active = idx === currentTrackIndex % combinedCatalogue.length;
                       return (
                         <div
                           key={item.id}
@@ -840,7 +1122,7 @@ export function GtexTraxTopBarControl() {
                                   : "bg-emerald-500/20 text-emerald-300"
                               }`}
                             >
-                              GTEX CATALOGUE
+                              {item.isPromoted ? "SPONSORED" : "GTEX CATALOGUE"}
                             </span>
                           </div>
                         </div>
@@ -851,11 +1133,11 @@ export function GtexTraxTopBarControl() {
 
                 {/* Audio Channel Mixer & Context Switcher */}
                 <div className="rounded-xl border border-white/10 bg-slate-900/60 p-4">
-                  <p className="gx-label mb-3">Playback</p>
+                  <p className="gx-label mb-3">Playback &amp; Rotation Policy</p>
                   <p className="text-xs leading-relaxed text-slate-300">
-                    Music stays on while you use GTEX. There is no play or pause control.
-                    Skip moves to the next track. Volume is your device volume.
-                    On a match page the bed sits under commentary.
+                    Use Play/Pause, Mute, Seek, or Skip at any time. Playback state persists across pages.
+                    Promoted tracks rotate fairly with a session frequency cap ({frequencyCapPerSession} plays/session)
+                    and automatically pause when live match commentary is active.
                   </p>
                 </div>
               </div>
@@ -863,6 +1145,96 @@ export function GtexTraxTopBarControl() {
           </div>
         </div>
       )}
+    </>
+  );
+
+  return (
+    <>
+      <audio ref={promoAudioRef} data-testid="gtex-trax-audio" preload="metadata" className="hidden" />
+      {/* Top-Bar Compact GTEX TRAX Artist Pill */}
+      <div
+        data-testid="gtex-trax-pill"
+        className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-400/35 bg-slate-950/90 px-2.5 py-1 text-xs shadow-inner"
+      >
+        <button
+          type="button"
+          onClick={prevTrack}
+          title="Previous GTEX TRAX Track"
+          data-testid="gtex-trax-prev-btn"
+          className="text-slate-400 hover:text-white"
+        >
+          <SkipBack size={12} />
+        </button>
+
+        <button
+          type="button"
+          onClick={togglePlayPause}
+          title={isActivelyPlaying ? "Pause GTEX TRAX" : "Play GTEX TRAX"}
+          data-testid="gtex-trax-play-pause-btn"
+          className="text-emerald-400 hover:text-white"
+        >
+          {isActivelyPlaying ? <Pause size={12} /> : <Play size={12} />}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setModalOpen(true)}
+          className="flex items-center gap-1.5 text-left hover:text-white"
+          data-testid="gtex-trax-open-modal-btn"
+        >
+          {currentTrack.artworkUrl ? (
+            <img
+              src={currentTrack.artworkUrl}
+              alt={currentTrack.title}
+              className="h-4 w-4 rounded object-cover"
+              data-testid="gtex-trax-pill-artwork"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
+            />
+          ) : (
+            <Disc3
+              size={13}
+              className={`${isActivelyPlaying && !isMuted ? "animate-spin text-amber-400" : "text-emerald-400"}`}
+            />
+          )}
+          <span
+            data-testid="gtex-trax-pill-title"
+            className="hidden max-w-[145px] truncate text-[11px] font-bold text-slate-200 md:inline"
+          >
+            {currentTrack.artist.split(" ")[0]} · {currentTrack.title.split("(")[0]}
+          </span>
+          {isCurrentSponsored && (
+            <span
+              className="rounded bg-amber-400 px-1.5 py-0.5 text-[8px] font-black uppercase text-slate-950"
+              data-testid="gtex-trax-sponsored-badge"
+            >
+              SPONSORED
+            </span>
+          )}
+        </button>
+
+        <button
+          type="button"
+          onClick={toggleMute}
+          title={isMuted ? "Unmute GTEX TRAX" : "Mute GTEX TRAX"}
+          data-testid="gtex-trax-mute-btn"
+          className="text-slate-400 hover:text-white"
+        >
+          {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />}
+        </button>
+
+        <button
+          type="button"
+          onClick={nextTrack}
+          title="Next GTEX TRAX Track"
+          data-testid="gtex-trax-skip-btn"
+          className="text-slate-400 hover:text-white"
+        >
+          <SkipForward size={12} />
+        </button>
+      </div>
+      {portalsTarget ? createPortal(overlays, portalsTarget) : overlays}
     </>
   );
 }

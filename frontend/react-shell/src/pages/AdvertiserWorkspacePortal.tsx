@@ -20,6 +20,7 @@ import {
   Settings,
   ShieldCheck,
   Sparkles,
+  Trash2,
   Upload,
   Users,
   VolumeX,
@@ -33,10 +34,12 @@ import {
   AdvertiserMediaAsset,
   AdvertiserWorkspace,
   CommercialCampaign,
+  CommercialMediaAssetKind,
   CommercialPriceCalculation,
   commercialApi,
   formatNairaMinor,
   resolveCommercialMediaUrl,
+  validateCommercialMediaFile,
 } from "@/lib/commercial/api";
 
 const NAV_ITEMS = [
@@ -98,6 +101,8 @@ export default function AdvertiserWorkspacePortal({
   const [brandPaymentProvider, setBrandPaymentProvider] = useState<"paystack" | "korapay">("paystack");
   const [brandPriceQuote, setBrandPriceQuote] = useState<CommercialPriceCalculation | null>(null);
   const [uploadingAsset, setUploadingAsset] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [submittingWizard, setSubmittingWizard] = useState(false);
 
   // Music Promotion State
@@ -234,25 +239,59 @@ export default function AdvertiserWorkspacePortal({
   }, [musicDurationDays, musicIsSubscription]);
 
   const brandPlacements = useMemo(
-    () => placements.filter((p) => p.division === "brand" && p.is_enabled && p.delivery_surface_ready),
+    () =>
+      placements.filter(
+        (p) =>
+          p.division === "brand" &&
+          p.is_enabled &&
+          p.delivery_surface_ready &&
+          p.placement_key !== "stadium_perimeter",
+      ),
     [placements],
   );
 
   const handleUploadFile = async (
     file: File | undefined,
-    kind: "logo" | "brand_image" | "brand_video" | "music_audio" | "music_artwork",
+    kind: CommercialMediaAssetKind,
     onUploaded: (asset: AdvertiserMediaAsset) => void,
   ) => {
     if (!file) return;
+    setUploadError(null);
+    const clientValidationErr = validateCommercialMediaFile(file, kind);
+    if (clientValidationErr) {
+      setUploadError(clientValidationErr);
+      toast.error(clientValidationErr);
+      return;
+    }
     setUploadingAsset(true);
+    setUploadProgress(0);
     try {
-      const uploaded = await commercialApi.uploadMediaAsset(file, kind);
+      const uploaded = await commercialApi.uploadMediaAsset(file, kind, {
+        onProgress: (pct) => setUploadProgress(pct),
+      });
+      setUploadProgress(100);
       onUploaded(uploaded);
       toast.success(`Uploaded ${uploaded.original_filename} (${uploaded.mime_type})`);
     } catch (err) {
-      toast.error(parseError(err));
+      const msg = parseError(err);
+      setUploadError(msg);
+      toast.error(msg);
     } finally {
       setUploadingAsset(false);
+      setUploadProgress(null);
+    }
+  };
+
+  const handleDeleteUploadedAsset = async (
+    asset: AdvertiserMediaAsset,
+    onDeleted: () => void,
+  ) => {
+    try {
+      await commercialApi.deleteMediaAsset(asset.id);
+      onDeleted();
+      toast.success(`Removed ${asset.original_filename}`);
+    } catch (err) {
+      toast.error(parseError(err));
     }
   };
 
@@ -737,9 +776,23 @@ export default function AdvertiserWorkspacePortal({
                       />
                     </label>
                     {brandLogoAsset && (
-                      <div className="flex items-center gap-2 text-xs text-emerald-300">
-                        <CheckCircle2 className="h-4 w-4" />
+                      <div className="flex items-center gap-3 text-xs text-emerald-300" data-testid="step1-logo-preview">
+                        <img
+                          src={resolveCommercialMediaUrl(brandLogoAsset.preview_url || brandLogoAsset.delivery_url) || undefined}
+                          alt={brandLogoAsset.original_filename}
+                          className="h-9 w-9 rounded-lg border border-white/10 object-contain bg-black"
+                        />
+                        <CheckCircle2 className="h-4 w-4 shrink-0" />
                         <span>{brandLogoAsset.original_filename}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUploadedAsset(brandLogoAsset, () => setBrandLogoAsset(null))}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                          data-testid="step1-delete-logo-btn"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Remove
+                        </button>
                       </div>
                     )}
                   </div>
@@ -927,23 +980,58 @@ export default function AdvertiserWorkspacePortal({
                   </label>
                 </div>
 
+                {uploadingAsset && uploadProgress !== null && (
+                  <div className="rounded-xl border border-emerald-500/30 bg-slate-950 p-3 space-y-1.5" data-testid="upload-progress-bar">
+                    <div className="flex items-center justify-between text-xs text-emerald-300">
+                      <span>Uploading creative to GTEX Commercial CDN...</span>
+                      <span className="font-mono">{uploadProgress}%</span>
+                    </div>
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                      <div
+                        className="h-full bg-emerald-400 transition-all"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {uploadError && (
+                  <div
+                    className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-200"
+                    data-testid="upload-validation-error"
+                  >
+                    {uploadError}
+                  </div>
+                )}
+
                 {brandCreativeAsset && (
                   <div
                     className="mt-4 rounded-2xl border border-emerald-500/30 bg-slate-950 p-4 space-y-3"
                     data-testid="step3-creative-preview"
                   >
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="font-bold text-emerald-300">
                         Verified Creative Preview: {brandCreativeAsset.original_filename}
                       </span>
-                      <span className="font-mono text-slate-400">
-                        {brandCreativeAsset.mime_type} • Silent Verified:{" "}
-                        {brandCreativeAsset.is_silent_verified ? "YES" : "NO"}
-                      </span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-slate-400">
+                          {brandCreativeAsset.mime_type} • Silent Verified:{" "}
+                          {brandCreativeAsset.is_silent_verified ? "YES" : "NO"}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUploadedAsset(brandCreativeAsset, () => setBrandCreativeAsset(null))}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                          data-testid="step3-delete-creative-btn"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Delete / Replace
+                        </button>
+                      </div>
                     </div>
                     {brandCreativeAsset.mime_type.startsWith("video/") ? (
                       <video
-                        src={resolveCommercialMediaUrl(brandCreativeAsset.delivery_url) || undefined}
+                        src={resolveCommercialMediaUrl(brandCreativeAsset.preview_url || brandCreativeAsset.delivery_url) || undefined}
                         muted
                         autoPlay
                         loop
@@ -952,7 +1040,7 @@ export default function AdvertiserWorkspacePortal({
                       />
                     ) : (
                       <img
-                        src={resolveCommercialMediaUrl(brandCreativeAsset.delivery_url) || undefined}
+                        src={resolveCommercialMediaUrl(brandCreativeAsset.preview_url || brandCreativeAsset.delivery_url) || undefined}
                         alt={brandHeadline || "Brand Creative"}
                         className="max-h-64 w-full rounded-xl object-contain bg-black"
                       />
@@ -1201,17 +1289,56 @@ export default function AdvertiserWorkspacePortal({
                     className="rounded-xl border border-amber-500/30 bg-slate-950 p-4 space-y-2"
                     data-testid="music-audio-preview"
                   >
-                    <div className="flex items-center justify-between text-xs">
+                    <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                       <span className="font-bold text-amber-300">
                         Uploaded Audio: {musicAudioAsset.original_filename}
                       </span>
-                      <span className="font-mono text-slate-400">{musicAudioAsset.mime_type}</span>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-slate-400">{musicAudioAsset.mime_type}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteUploadedAsset(musicAudioAsset, () => setMusicAudioAsset(null))}
+                          className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                          data-testid="music-delete-audio-btn"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                          Remove Audio
+                        </button>
+                      </div>
                     </div>
                     <audio
                       controls
-                      src={resolveCommercialMediaUrl(musicAudioAsset.delivery_url) || undefined}
+                      src={resolveCommercialMediaUrl(musicAudioAsset.preview_url || musicAudioAsset.delivery_url) || undefined}
                       className="w-full h-9"
                     />
+                  </div>
+                )}
+
+                {musicArtworkAsset && (
+                  <div
+                    className="flex items-center justify-between rounded-xl border border-white/10 bg-slate-950 p-3 text-xs"
+                    data-testid="music-artwork-preview"
+                  >
+                    <div className="flex items-center gap-3">
+                      <img
+                        src={resolveCommercialMediaUrl(musicArtworkAsset.preview_url || musicArtworkAsset.delivery_url) || undefined}
+                        alt={musicArtworkAsset.original_filename}
+                        className="h-12 w-12 rounded-lg object-cover border border-white/10"
+                      />
+                      <div>
+                        <div className="font-bold text-white">Cover Artwork: {musicArtworkAsset.original_filename}</div>
+                        <div className="text-slate-400 font-mono">{musicArtworkAsset.mime_type}</div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteUploadedAsset(musicArtworkAsset, () => setMusicArtworkAsset(null))}
+                      className="inline-flex items-center gap-1 rounded-lg border border-rose-500/30 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 hover:bg-rose-500/20"
+                      data-testid="music-delete-artwork-btn"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                      Remove
+                    </button>
                   </div>
                 )}
 

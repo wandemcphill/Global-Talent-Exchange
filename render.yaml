@@ -82,9 +82,18 @@ services:
         sync: false
       - key: KORAPAY_WEBHOOK_SECRET
         sync: false
-      # GTEX Commercial Network & Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
+      # GTEX Commercial Network & Durable Cloud Media Storage
+      # Primary commercial media provider is Cloudinary; S3 remains configured for legacy reads & migration.
       - key: GTE_COMMERCIAL_NETWORK_ENABLED
         value: "true"
+      - key: GTE_COMMERCIAL_MEDIA_PROVIDER
+        value: "cloudinary"
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
       - key: GTE_S3_BUCKET
         sync: false
       - key: GTE_S3_REGION

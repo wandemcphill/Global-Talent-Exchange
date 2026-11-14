@@ -11,6 +11,7 @@ import React, {
 import axios from "axios";
 import { ArrowLeft, ArrowRight, ExternalLink, Megaphone, RadioTower } from "lucide-react";
 import { API } from "@/lib/api";
+import { resolveCommercialMediaUrl } from "@/lib/commercial/api";
 
 function reportAdEvent(campaignId: string, eventType: "impression" | "click") {
   const id = typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -39,6 +40,8 @@ export interface GtexAdCampaign {
   destination_url: string;
   logo_url?: string | null;
   creative_url?: string | null;
+  creative_media_type?: string | null;
+  is_silent_creative?: boolean;
   priority: number;
 }
 
@@ -60,6 +63,13 @@ function safeHttpUrl(value?: string | null): string | null {
   }
 }
 
+function safeMediaUrl(value?: string | null): string | null {
+  const resolved = resolveCommercialMediaUrl(value);
+  if (!resolved) return null;
+  if (resolved.startsWith("/")) return resolved;
+  return safeHttpUrl(resolved);
+}
+
 function parseCampaigns(payload: any): GtexAdCampaign[] {
   const outer = payload?.data ?? payload;
   const rows = Array.isArray(outer?.campaigns) ? outer.campaigns : [];
@@ -79,8 +89,10 @@ function parseCampaigns(payload: any): GtexAdCampaign[] {
       description: typeof row.description === "string" ? row.description : "",
       placement: row.placement,
       destination_url: safeHttpUrl(row.destination_url) as string,
-      logo_url: safeHttpUrl(row.logo_url),
-      creative_url: safeHttpUrl(row.creative_url),
+      logo_url: safeMediaUrl(row.logo_url),
+      creative_url: safeMediaUrl(row.creative_url),
+      creative_media_type: typeof row.creative_media_type === "string" ? row.creative_media_type : null,
+      is_silent_creative: row.is_silent_creative !== false,
       priority: Number.isFinite(Number(row.priority)) ? Number(row.priority) : 100,
     }));
 }
@@ -214,7 +226,21 @@ function CampaignCarousel({
           aria-label={active.brand_name + ": " + active.headline + ". Opens advertiser website in a new tab."}
         >
           {active.creative_url && (
-            <img src={active.creative_url} alt="" aria-hidden="true" className="gx-ad-creative-image" loading="lazy"/>
+            (active.creative_media_type && active.creative_media_type.startsWith("video/")) ||
+            /\.(mp4|webm)(\?.*)?$/i.test(active.creative_url) ? (
+              <video
+                src={active.creative_url}
+                muted
+                autoPlay
+                loop
+                playsInline
+                aria-hidden="true"
+                className="gx-ad-creative-image"
+                data-testid="gtex-ad-creative-video"
+              />
+            ) : (
+              <img src={active.creative_url} alt="" aria-hidden="true" className="gx-ad-creative-image" loading="lazy"/>
+            )
           )}
           <div className="gx-ad-active-content">
             <span className="gx-ad-kicker"><RadioTower size={13}/>{isRail ? "GTEX LIVE ADVERTISING" : "SPONSORED PARTNER"}</span>

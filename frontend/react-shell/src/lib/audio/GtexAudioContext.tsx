@@ -27,6 +27,9 @@ export const GtexAudioProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [snapshot, setSnapshot] = useState<AudioSessionSnapshot>(() => gtexAudio.getSnapshot());
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      (window as unknown as { __gtexAudio?: typeof gtexAudio }).__gtexAudio = gtexAudio;
+    }
     return gtexAudio.subscribe(setSnapshot);
   }, []);
 

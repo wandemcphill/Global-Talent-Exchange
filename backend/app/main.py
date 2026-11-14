@@ -149,6 +149,13 @@ def _enforce_strict_live_startup_gate(settings: Settings, *, production_like: bo
     blocked_reasons.extend(name for name in _STRICT_LIVE_FORBIDDEN_ENV_FLAGS if _env_flag_enabled(name))
     if not _env_flag_enabled("GTE_ENABLE_PAYSTACK"):
         blocked_reasons.append("paystack_disabled")
+    if (os.getenv("GTE_COMMERCIAL_MEDIA_PROVIDER") or "").strip():
+        from app.storage import StorageError, validate_commercial_storage_configuration
+
+        try:
+            validate_commercial_storage_configuration()
+        except StorageError as exc:
+            blocked_reasons.append(f"commercial_storage_unconfigured:{exc}")
     if blocked_reasons:
         raise RuntimeError("GTEX strict-live startup gate blocked backend boot: " + ", ".join(sorted(blocked_reasons)))
 

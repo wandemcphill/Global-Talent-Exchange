@@ -213,8 +213,13 @@ class AdvertiserMediaAssetView(BaseModel):
     validation_status: str = "valid"
     storage_provider: str | None = None
     storage_key: str | None = None
-    access_classification: str = "public"
+    cloudinary_public_id: str | None = None
+    cloudinary_resource_type: str | None = None
+    cloudinary_url: str | None = None
+    access_classification: str = "draft"
     delivery_url: str
+    preview_url: str | None = None
+    metadata_json: dict[str, Any] = Field(default_factory=dict)
     created_at: datetime
 
 
@@ -557,7 +562,16 @@ class AdminCampaignModerationRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     action: Literal[
-        "approve", "reject", "request_changes", "pause", "resume", "suspend", "takedown", "archive", "verify_rights"
+        "approve",
+        "reject",
+        "request_changes",
+        "pause",
+        "resume",
+        "suspend",
+        "takedown",
+        "archive",
+        "verify_rights",
+        "revoke_rights",
     ]
     note: str | None = Field(default=None, max_length=1000)
 
