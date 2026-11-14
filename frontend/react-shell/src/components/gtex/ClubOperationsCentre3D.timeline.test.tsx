@@ -910,9 +910,12 @@ describe("ClubOperationsCentre3D Living World Timeline Integration", () => {
 
     const input = container?.querySelector('[data-testid="department-staff-chat-input"]') as HTMLInputElement;
     const send = container?.querySelector('[data-testid="department-staff-chat-send"]') as HTMLButtonElement;
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    setter?.call(input, "Please send the weekly executive operations report.");
-    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "Please send the weekly executive operations report.");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(send.disabled).toBe(false);
     await act(async () => {
       send.click();
       await new Promise((resolve) => setTimeout(resolve, 50));
