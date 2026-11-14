@@ -970,9 +970,7 @@ def club_strength(
         return base + fitness_adj + morale_adj + age_adj
 
     healthy = [
-        p
-        for p in players
-        if int(p.get("injured_days", 0) or 0) <= 0 and str(p.get("id") or "") not in exclusions
+        p for p in players if int(p.get("injured_days", 0) or 0) <= 0 and str(p.get("id") or "") not in exclusions
     ]
     if len(healthy) < 11:
         healthy = [p for p in players if int(p.get("injured_days", 0) or 0) <= 0] or list(players)
@@ -1014,9 +1012,7 @@ def club_strength(
         "manager_mentality": (
             "attacking"
             if int(mgr_profile.get("attacking_vs_defensive", 60)) >= 70
-            else "defensive"
-            if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38
-            else "balanced"
+            else "defensive" if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38 else "balanced"
         ),
         "avg_rating": round(avg_rating, 1),
         "avg_morale": round(avg_morale, 1),

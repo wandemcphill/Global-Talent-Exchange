@@ -19,15 +19,11 @@ from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.world_clock import WorldClockState
 from app.owner_console import (
     autonomous_staff_engine,
-    comms_persistence,
     engine as owner_engine,
     ledger,
     service,
 )
 from app.owner_console.models import (
-    ClubDelegatedDecision,
-    OwnerClubMeeting,
-    OwnerClubRelationship,
     OwnerClubState,
     OwnerRecruitmentAssignment,
     OwnerStaffDecisionRecord,
@@ -273,7 +269,9 @@ def test_scenarios_a_b_c_manager_independence_on_academy_striker_selection() -> 
         assert res_b.status_code == 200
         body_b = res_b.json()
         assert body_b["decision_record"]["decision_outcome"] == "declined"
-        assert "not believe he is ready" in body_b["reply"]["body"].lower() or "develop" in body_b["reply"]["body"].lower()
+        assert (
+            "not believe he is ready" in body_b["reply"]["body"].lower() or "develop" in body_b["reply"]["body"].lower()
+        )
 
         sel_b = client.get(f"/owner/clubs/{state.club_id}/matchday-selection").json()
         assert acad_id not in sel_b["starting_xi_ids"]
@@ -620,7 +618,10 @@ def test_scenario_j_idempotency_and_grounded_fallback_when_ai_provider_unavailab
         )
         assert res1.status_code == 200
         body1 = res1.json()
-        assert body1["decision_record"]["ai_generation_status"] in ("grounded_deterministic", "grounded_template_fallback")
+        assert body1["decision_record"]["ai_generation_status"] in (
+            "grounded_deterministic",
+            "grounded_template_fallback",
+        )
         decision_id_1 = body1["decision_record"]["id"]
 
         # Replay with same idempotency_key -> must return the exact same decision record without duplicating

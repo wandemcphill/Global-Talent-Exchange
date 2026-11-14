@@ -533,7 +533,9 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
     seed_int = _stable_hash_int(f"{manager_data.get('id') or manager_data.get('manager_id') or ''}:{name}:{style}")
     if explicit_archetype in MANAGER_ARCHETYPES:
         base_archetype = MANAGER_ARCHETYPES[explicit_archetype]
-    elif any(k in style for k in ("youth", "academy", "development", "collective")) or manager_data.get("uses_academy_players"):
+    elif any(k in style for k in ("youth", "academy", "development", "collective")) or manager_data.get(
+        "uses_academy_players"
+    ):
         base_archetype = MANAGER_ARCHETYPES["youth_development_visionary"]
     elif any(k in style for k in ("pragmatic", "defensive", "veteran", "experienced", "catenaccio")):
         base_archetype = MANAGER_ARCHETYPES["veteran_pragmatist"]
@@ -810,6 +812,7 @@ def _ensure_academy_striker_prospect(db: Session, club_id: str, *, force: bool =
 # SECTION 9: 9-DIMENSION RELATIONSHIP HEALTH & ARCHIVAL ON REPLACEMENT
 # ---------------------------------------------------------------------------
 
+
 def ensure_staff_relationship(
     db: Session,
     state: OwnerClubState,
@@ -1051,7 +1054,17 @@ def classify_owner_request(
     requested_age = int(age_match.group(1)) if age_match else None
     is_academy_mention = any(
         kw in lower
-        for kw in ("academy", "youth", "youngster", "16-year-old", "17-year-old", "u18", "u19", "prospect", "young player")
+        for kw in (
+            "academy",
+            "youth",
+            "youngster",
+            "16-year-old",
+            "17-year-old",
+            "u18",
+            "u19",
+            "prospect",
+            "young player",
+        )
     )
 
     # If the owner explicitly asks about a 16-year-old or academy player and none exists yet in a minimal test fixture, ensure one exists
@@ -1090,7 +1103,9 @@ def classify_owner_request(
         if squad_players:
             matched_player = sorted(squad_players, key=lambda p: int(p.morale or 75))[0]
 
-    gsi_range_match = re.search(r"(?:gsi|rating|rated)?[^0-9]{0,20}\b(6\d|7\d|8\d|9\d)\s*(?:to|and|-|–)\s*(6\d|7\d|8\d|9\d)\b", lower)
+    gsi_range_match = re.search(
+        r"(?:gsi|rating|rated)?[^0-9]{0,20}\b(6\d|7\d|8\d|9\d)\s*(?:to|and|-|–)\s*(6\d|7\d|8\d|9\d)\b", lower
+    )
     single_gsi_match = re.search(r"\b(?:gsi|rated|rating)\s*(?:of|above|over|around)?\s*(7\d|8\d|9\d)\b", lower)
     if gsi_range_match:
         min_gsi = min(int(gsi_range_match.group(1)), int(gsi_range_match.group(2)))
@@ -1101,24 +1116,27 @@ def classify_owner_request(
     else:
         min_gsi, max_gsi = 80, 85
 
-    expensive_request = any(
-        kw in lower
-        for kw in (
-            "expensive",
-            "marquee",
-            "blockbuster",
-            "record fee",
-            "galáctico",
-            "galactico",
-            "superstar",
-            "at any cost",
-            "big money",
-            "50m",
-            "60m",
-            "80m",
-            "100m",
+    expensive_request = (
+        any(
+            kw in lower
+            for kw in (
+                "expensive",
+                "marquee",
+                "blockbuster",
+                "record fee",
+                "galáctico",
+                "galactico",
+                "superstar",
+                "at any cost",
+                "big money",
+                "50m",
+                "60m",
+                "80m",
+                "100m",
+            )
         )
-    ) or min_gsi >= 88
+        or min_gsi >= 88
+    )
 
     is_challenge = any(
         kw in lower
@@ -1142,7 +1160,10 @@ def classify_owner_request(
     )
 
     intent = "general_consultation"
-    if any(kw in lower for kw in ("do not use", "don't use", "drop ", "bench ", "attitude", "discipline", "leave him out", "suspend")):
+    if any(
+        kw in lower
+        for kw in ("do not use", "don't use", "drop ", "bench ", "attitude", "discipline", "leave him out", "suspend")
+    ):
         intent = "drop_or_discipline_player"
     elif any(
         kw in lower
@@ -1160,16 +1181,65 @@ def classify_owner_request(
         intent = "club_culture_direction"
     elif is_academy_mention and any(
         kw in lower
-        for kw in ("opportunity", "next match", "next fixture", "play", "start", "include", "promote", "minutes", "first-team", "first team", "chance", "debut")
+        for kw in (
+            "opportunity",
+            "next match",
+            "next fixture",
+            "play",
+            "start",
+            "include",
+            "promote",
+            "minutes",
+            "first-team",
+            "first team",
+            "chance",
+            "debut",
+        )
     ):
         intent = "academy_player_opportunity"
-    elif is_challenge and any(kw in lower for kw in ("selection", "lineup", "play", "start", "striker", "youngster", "academy", "fixture", "match", "team")):
-        intent = "challenge_or_override_decision"
-    elif any(kw in lower for kw in ("sign ", "recruit", "transfer", "buy ", "acquire", "shortlist", "left winger", "new striker", "new centre-back")) and (
-        detected_position is not None or "sign" in lower or "recruit" in lower or "transfer" in lower
+    elif is_challenge and any(
+        kw in lower
+        for kw in (
+            "selection",
+            "lineup",
+            "play",
+            "start",
+            "striker",
+            "youngster",
+            "academy",
+            "fixture",
+            "match",
+            "team",
+        )
     ):
+        intent = "challenge_or_override_decision"
+    elif any(
+        kw in lower
+        for kw in (
+            "sign ",
+            "recruit",
+            "transfer",
+            "buy ",
+            "acquire",
+            "shortlist",
+            "left winger",
+            "new striker",
+            "new centre-back",
+        )
+    ) and (detected_position is not None or "sign" in lower or "recruit" in lower or "transfer" in lower):
         intent = "transfer_recruitment_target"
-    elif any(kw in lower for kw in ("spending money", "recruitment department", "wasting money", "overpaying", "wage bill", "transfer budget", "financial discipline")):
+    elif any(
+        kw in lower
+        for kw in (
+            "spending money",
+            "recruitment department",
+            "wasting money",
+            "overpaying",
+            "wage bill",
+            "transfer budget",
+            "financial discipline",
+        )
+    ):
         intent = "recruitment_spending_critique"
     elif any(
         kw in lower
@@ -1188,11 +1258,26 @@ def classify_owner_request(
         )
     ):
         intent = "tactical_style_shift"
-    elif any(kw in lower for kw in ("formation", "4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "back four", "back three")):
+    elif any(
+        kw in lower for kw in ("formation", "4-3-3", "4-4-2", "4-2-3-1", "3-5-2", "5-3-2", "back four", "back three")
+    ):
         intent = "formation_request"
-    elif any(kw in lower for kw in ("clear him", "play through injury", "medical clearance", "rush him back", "painkillers", "injury load", "fitness")):
+    elif any(
+        kw in lower
+        for kw in (
+            "clear him",
+            "play through injury",
+            "medical clearance",
+            "rush him back",
+            "painkillers",
+            "injury load",
+            "fitness",
+        )
+    ):
         intent = "medical_clearance_pressure"
-    elif matched_player is not None and any(kw in lower for kw in ("play", "start", "next match", "next fixture", "opportunity", "lineup", "starting xi")):
+    elif matched_player is not None and any(
+        kw in lower for kw in ("play", "start", "next match", "next fixture", "opportunity", "lineup", "starting xi")
+    ):
         intent = "player_selection_request"
     elif is_challenge:
         intent = "challenge_or_override_decision"
@@ -1217,20 +1302,22 @@ def classify_owner_request(
         "recipient_role": recipient_role,
         "target_player_id": matched_player.id if matched_player else None,
         "target_player_name": matched_player.name if matched_player else None,
-        "target_player": {
-            "id": matched_player.id,
-            "name": matched_player.name,
-            "age": matched_player.age,
-            "position": matched_player.position,
-            "rating": matched_player.rating,
-            "potential": matched_player.potential,
-            "fitness": _player_fitness(matched_player),
-            "injured_days": matched_player.injured_days,
-            "morale": matched_player.morale,
-            "is_academy": _player_is_academy(matched_player),
-        }
-        if matched_player
-        else None,
+        "target_player": (
+            {
+                "id": matched_player.id,
+                "name": matched_player.name,
+                "age": matched_player.age,
+                "position": matched_player.position,
+                "rating": matched_player.rating,
+                "potential": matched_player.potential,
+                "fitness": _player_fitness(matched_player),
+                "injured_days": matched_player.injured_days,
+                "morale": matched_player.morale,
+                "is_academy": _player_is_academy(matched_player),
+            }
+            if matched_player
+            else None
+        ),
         "detected_position": detected_position or "LW",
         "min_gsi": min_gsi,
         "max_gsi": max_gsi,
@@ -1265,9 +1352,13 @@ def evaluate_layer_a_staff_decision(
     interference_count = int(rel_meta.get("interference_count", 0))
     unresolved = list(rel_meta.get("unresolved_disagreements") or [])
 
-    independence = int(personality.get("professional_independence", personality.get("decision_making_independence", 75)))
+    independence = int(
+        personality.get("professional_independence", personality.get("decision_making_independence", 75))
+    )
     interference_tolerance = int(personality.get("tolerance_for_owner_interference", 50))
-    youth_commit = int(personality.get("youth_development_commitment", personality.get("youth_recruitment_preference", 60)))
+    youth_commit = int(
+        personality.get("youth_development_commitment", personality.get("youth_recruitment_preference", 60))
+    )
     trust_youth = int(personality.get("trust_in_young_players", youth_commit))
     promote_academy = int(personality.get("willingness_to_promote_academy", youth_commit))
     veteran_pref = int(personality.get("preference_for_experienced_players", 55))
@@ -1367,7 +1458,11 @@ def evaluate_layer_a_staff_decision(
             reasoning_trace["verdict_reason"] = (
                 f"Despite strong commitment to youth, {p_name} (GSI {p_rating}) is below minimum senior competitive readiness."
             )
-        elif youth_index >= 72 and effective_readiness >= readiness_threshold and not (is_challenge and interference_count >= 3):
+        elif (
+            youth_index >= 72
+            and effective_readiness >= readiness_threshold
+            and not (is_challenge and interference_count >= 3)
+        ):
             outcome = "accepted" if p_rating >= 64 else "partially_accepted"
             assigned_role = "starting_xi" if p_rating >= 64 and youth_index >= 80 else "matchday_squad_bench"
             deltas["trust"] = 3
@@ -1688,7 +1783,9 @@ def evaluate_layer_a_staff_decision(
     relationship.tension = _clamp(relationship.tension + deltas["tension"])
     relationship.loyalty = _clamp(relationship.loyalty + deltas["loyalty"])
 
-    rel_meta["ambition_compatibility"] = _clamp(int(rel_meta.get("ambition_compatibility", 74)) + deltas["ambition_compatibility"])
+    rel_meta["ambition_compatibility"] = _clamp(
+        int(rel_meta.get("ambition_compatibility", 74)) + deltas["ambition_compatibility"]
+    )
     rel_meta["autonomy"] = _clamp(int(rel_meta.get("autonomy", 75)) + deltas["autonomy"])
     rel_meta["confidence"] = _clamp(int(rel_meta.get("confidence", 75)) + deltas["confidence"])
     rel_meta["culture_alignment"] = _clamp(int(rel_meta.get("culture_alignment", 72)) + deltas["culture_alignment"])
@@ -1733,7 +1830,9 @@ def evaluate_layer_a_staff_decision(
             relationship_id=relationship.id,
             club_id=state.club_id,
             world_day=int(state.world_day or 1),
-            reason=f"{staff_name} ({staff_title}) decision '{outcome}' on '{intent}': {reasoning_trace.get('verdict_reason', '')}"[:250],
+            reason=f"{staff_name} ({staff_title}) decision '{outcome}' on '{intent}': {reasoning_trace.get('verdict_reason', '')}"[
+                :250
+            ],
             delta_trust=deltas["trust"],
             delta_respect=deltas["respect"],
             delta_affinity=0,
@@ -2069,10 +2168,16 @@ def execute_inter_staff_recruitment_workflow(
     policy = db.scalar(select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == state.club_id))
     operating_mode = str(policy.mode) if policy else "balanced"
     thresholds = dict((policy.financial_thresholds_json if policy else None) or {})
-    max_auto_spend = float(thresholds.get("max_single_transfer_auto_approve_gtex", thresholds.get("max_auto_spend_gtex", 5000.0)))
+    max_auto_spend = float(
+        thresholds.get("max_single_transfer_auto_approve_gtex", thresholds.get("max_auto_spend_gtex", 5000.0))
+    )
     delegated_decision_id: str | None = None
 
-    if operating_mode in ("gm_led", "full_delegation") and float(recommended["estimated_fee"]) <= max_auto_spend and gm_status != "counterproposal_younger_value":
+    if (
+        operating_mode in ("gm_led", "full_delegation")
+        and float(recommended["estimated_fee"]) <= max_auto_spend
+        and gm_status != "counterproposal_younger_value"
+    ):
         gm_status = "approved_within_authority"
         decision = ClubDelegatedDecision(
             id=str(uuid4()),
@@ -2141,9 +2246,7 @@ def execute_inter_staff_recruitment_workflow(
         f"{gm['name']} reviewed liquid treasury ({treasury:,.0f} GTX) and wage structure ({gm_profile.get('wage_structure_philosophy')}). "
         f"Recommended option: {recommended['player_name']} ({pos}, GSI {recommended['gsi']}) at {recommended['estimated_fee']:,.0f} GTX."
     )
-    scout_notes = (
-        f"{scout['name']} compiled 3 verified {pos} profiles across the {min_gsi}–{max_gsi} GSI window plus a U21 high-resale alternative."
-    )
+    scout_notes = f"{scout['name']} compiled 3 verified {pos} profiles across the {min_gsi}–{max_gsi} GSI window plus a U21 high-resale alternative."
 
     assignment = OwnerRecruitmentAssignment(
         id=str(uuid4()),
@@ -2174,6 +2277,7 @@ def execute_inter_staff_recruitment_workflow(
 # ---------------------------------------------------------------------------
 # SECTION 4: LAYER B — DYNAMIC CONVERSATIONAL INTELLIGENCE (GROUNDED IN LAYER A)
 # ---------------------------------------------------------------------------
+
 
 def generate_layer_b_staff_response(
     *,
@@ -2359,7 +2463,9 @@ def generate_layer_b_staff_response(
                 f"Unless the board injects additional capital or approves player sales, we must defer this target."
             )
         else:
-            names_str = ", ".join(f"{c['player_name']} (GSI {c['gsi']}, {c['estimated_fee']:,.0f} GTX)" for c in shortlist[:3])
+            names_str = ", ".join(
+                f"{c['player_name']} (GSI {c['gsi']}, {c['estimated_fee']:,.0f} GTX)" for c in shortlist[:3]
+            )
             body = (
                 f"{opener} I have coordinated with our Chief Scout and First-Team Manager on the {pos} requirement "
                 f"(GSI {min_gsi}–{max_gsi}). Against our treasury of {trace.get('treasury_balance', 0):,.0f} GTX, we have shortlisted: "
@@ -2467,6 +2573,7 @@ def _try_grounded_external_ai(
 # SECTION 6 & 13: PROACTIVE STAFF-INITIATED CONVERSATIONS & INTER-STAFF ROOM
 # ---------------------------------------------------------------------------
 
+
 def generate_proactive_staff_initiatives(
     db: Session,
     state: OwnerClubState,
@@ -2502,7 +2609,9 @@ def generate_proactive_staff_initiatives(
         return True
 
     lw_players = [p for p in players if str(p.position or "").upper() in ("LW", "LM") and int(p.rating or 0) >= 80]
-    cb_players = [p for p in players if str(p.position or "").upper() in ("CB", "DEFENDER") and int(p.injured_days or 0) == 0]
+    cb_players = [
+        p for p in players if str(p.position or "").upper() in ("CB", "DEFENDER") and int(p.injured_days or 0) == 0
+    ]
 
     if not lw_players and _can_fire("mgr_lw_recruitment_request", min_days=4):
         assignment = execute_inter_staff_recruitment_workflow(
@@ -2672,6 +2781,7 @@ def generate_proactive_staff_initiatives(
 # SECTION 8: INTERACTIVE BOARDROOM NEGOTIATION ENGINE
 # ---------------------------------------------------------------------------
 
+
 def simulate_boardroom_meeting_negotiation(
     db: Session,
     state: OwnerClubState,
@@ -2782,7 +2892,10 @@ def simulate_boardroom_meeting_negotiation(
     ]
 
     disagreements: list[dict[str, Any]] = []
-    if int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65 and int(gm_profile.get("financial_discipline", 75)) >= 70:
+    if (
+        int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65
+        and int(gm_profile.get("financial_discipline", 75)) >= 70
+    ):
         disagreements.append(
             {
                 "axis": "Manager vs General Manager",
@@ -2856,7 +2969,9 @@ def simulate_boardroom_meeting_negotiation(
                 f"Cap recruitment fees at sustainable analytics valuations and mandate a structured bench pathway for {prospect_name}."
             ),
             "effects": {
-                "manager_trust_delta": -4 if int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65 else 3,
+                "manager_trust_delta": (
+                    -4 if int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65 else 3
+                ),
                 "manager_tension_delta": 7 if int(mgr_profile.get("professional_independence", 75)) >= 75 else 2,
                 "gm_trust_delta": 6,
                 "hoyd_trust_delta": 6,
@@ -2895,8 +3010,7 @@ def simulate_boardroom_meeting_negotiation(
         "proposed_resolutions": proposed_resolutions,
         "minutes_summary": "\n".join(minutes_lines),
         "attendees": [
-            {"role": c["speaker_role"], "name": c["speaker_name"], "title": c["speaker_title"]}
-            for c in contributions
+            {"role": c["speaker_role"], "name": c["speaker_name"], "title": c["speaker_title"]} for c in contributions
         ],
     }
 
@@ -2917,12 +3031,16 @@ def resolve_boardroom_meeting_decision(
     resolutions = list(meta.get("proposed_resolutions") or [])
     chosen = next((r for r in resolutions if r.get("resolution_id") == resolution_id), None)
     if chosen is None:
-        chosen = resolutions[0] if resolutions else {
-            "resolution_id": resolution_id or "executive_directive",
-            "title": "Owner Executive Decision",
-            "description": owner_note or "Executive board resolution recorded.",
-            "effects": {"manager_trust_delta": 2, "gm_trust_delta": 2},
-        }
+        chosen = (
+            resolutions[0]
+            if resolutions
+            else {
+                "resolution_id": resolution_id or "executive_directive",
+                "title": "Owner Executive Decision",
+                "description": owner_note or "Executive board resolution recorded.",
+                "effects": {"manager_trust_delta": 2, "gm_trust_delta": 2},
+            }
+        )
 
     effects = dict(chosen.get("effects") or {})
     mgr = identities["first_team_manager"]
@@ -3015,6 +3133,7 @@ def resolve_boardroom_meeting_decision(
 # SECTION 11: MANAGER-DRIVEN MATCHDAY SELECTION AUTHORITY
 # ---------------------------------------------------------------------------
 
+
 def select_manager_matchday_lineup(
     db: Session,
     state: OwnerClubState,
@@ -3031,11 +3150,7 @@ def select_manager_matchday_lineup(
     owner_pref = dict(fac.get("_owner_lineup_preference") or {})
 
     players = list(db.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
-    eligible = [
-        p
-        for p in players
-        if int(p.injured_days or 0) <= 0 and str(p.id) not in exclusions
-    ]
+    eligible = [p for p in players if int(p.injured_days or 0) <= 0 and str(p.id) not in exclusions]
     if len(eligible) < 11:
         eligible = [p for p in players if int(p.injured_days or 0) <= 0] or list(players)
 

@@ -551,7 +551,11 @@ class SyntheticSquadFactory:
         10 outfield). Falls back to 4-3-3 when nothing is known."""
         if not manager_profile:
             return "4-3-3"
-        personality = dict(manager_profile.get("personality_profile") or {}) if isinstance(manager_profile.get("personality_profile"), dict) else {}
+        personality = (
+            dict(manager_profile.get("personality_profile") or {})
+            if isinstance(manager_profile.get("personality_profile"), dict)
+            else {}
+        )
         pref_list = list(manager_profile.get("preferred_formations") or personality.get("preferred_formations") or [])
         pref_single = manager_profile.get("preferred_formation") or personality.get("preferred_formation")
         if pref_single:
