@@ -262,7 +262,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   // Handle start contract negotiation
   const handleOpenNegotiation = (cand: StaffMarketCandidate) => {
     setNegotiatingCandidate(cand);
-    setOfferSalary(cand.expected_salary_gtex);
+    setOfferSalary(cand.expected_salary_fan_coin ?? cand.expected_salary_gtex ?? 600);
     setOfferYears(2);
     setMarqueePremium(false);
     setPitchNote("");
@@ -275,7 +275,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
     offerMutation.mutate({
       profile_id: negotiatingCandidate.profile_id,
       role: negotiatingCandidate.role_key,
-      offered_salary_gtex: offerSalary,
+      offered_salary_fan_coin: offerSalary,
       contract_years: offerYears,
       marquee_wage_premium: marqueePremium,
       pitch_note: pitchNote.trim() || undefined,
@@ -1078,9 +1078,9 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                       {lastOfferResult.reason && (
                         <p className="mt-1 text-[11px] opacity-80">Reason: {lastOfferResult.reason}</p>
                       )}
-                      {lastOfferResult.counter_salary_gtex && (
+                      {(lastOfferResult.counter_salary_fan_coin ?? lastOfferResult.counter_salary_gtex) && (
                         <p className="mt-1 text-[11px] font-mono text-amber-300">
-                          Candidate counter: {coinWithNaira(lastOfferResult.counter_salary_gtex, "FAN")}
+                          Candidate counter: {coinWithNaira(lastOfferResult.counter_salary_fan_coin ?? lastOfferResult.counter_salary_gtex ?? 0, "FAN")}
                         </p>
                       )}
                     </div>
