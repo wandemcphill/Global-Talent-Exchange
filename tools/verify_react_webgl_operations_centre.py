@@ -220,8 +220,7 @@ def run_verification(headless: bool = True) -> int:
                     briefing = daily_operations_hub.build_authoritative_daily_briefing(session, user_id, club_id)
                     return ok(briefing)
                 if path.endswith(f"/owner/clubs/{club_id}"):
-                    state = service.get_state(session, club_id)
-                    return ok(service.club_profile(session, state))
+                    return ok(service.club_detail(session, user_id, club_id))
                 if "/living-world/timeline" in path:
                     from urllib.parse import parse_qs
 
