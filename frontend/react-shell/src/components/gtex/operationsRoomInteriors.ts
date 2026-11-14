@@ -4,6 +4,7 @@ import type { OperationsHubDestination } from "@/lib/ownerBriefing";
 export interface DepartmentInteriorBuild {
   group: THREE.Group;
   pickables: THREE.Object3D[];
+  animatedActors: THREE.Group[];
 }
 
 type Hotspot = OperationsHubDestination["hotspots"][number];
@@ -84,6 +85,66 @@ function addCanvasDisplay(title: string, subtitle: string, accent: string): THRE
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.anisotropy = 4;
   return texture;
+}
+
+function addStaffActor(
+  root: THREE.Group,
+  position: [number, number, number],
+  palette: { jacket: number; shirt: number; tie: number; skin: number; hair: number },
+  phase: number,
+): THREE.Group {
+  const actor = new THREE.Group();
+  actor.name = "department-staff-actor";
+  actor.position.set(...position);
+  actor.userData = { idlePhase: phase, baseY: position[1] };
+
+  const jacket = standardMaterial(palette.jacket, 0.48, 0.12);
+  const shirt = standardMaterial(palette.shirt, 0.82, 0.02);
+  const tie = standardMaterial(palette.tie, 0.42, 0.18);
+  const skin = standardMaterial(palette.skin, 0.88, 0.01);
+  const hair = standardMaterial(palette.hair, 0.92, 0.01);
+  const trousers = standardMaterial(0x172335, 0.72, 0.04);
+  const shoes = standardMaterial(0x080d16, 0.34, 0.16);
+
+  // A clean, stylised club-staff figure built from low-poly forms; no external
+  // character asset or texture dependency is required.
+  addCylinder(actor, 0.29, 0.38, 0.82, [0, 1.22, 0], jacket, 12);
+  addCylinder(actor, 0.12, 0.12, 0.16, [0, 1.72, 0], skin, 12);
+  const head = new THREE.Group();
+  head.position.set(0, 1.96, 0);
+  const face = new THREE.Mesh(new THREE.SphereGeometry(0.19, 12, 10), skin);
+  face.position.y = 0.02;
+  face.castShadow = true;
+  head.add(face);
+  const hairCap = new THREE.Mesh(new THREE.SphereGeometry(0.195, 12, 8), hair);
+  hairCap.scale.set(1.02, 0.58, 1.02);
+  hairCap.position.set(0, 0.13, -0.015);
+  head.add(hairCap);
+  actor.add(head);
+
+  addBox(actor, [0.14, 0.46, 0.035], [0, 1.28, 0.345], shirt);
+  addBox(actor, [0.07, 0.42, 0.045], [0, 1.27, 0.37], tie);
+  const leftArm = new THREE.Group();
+  leftArm.position.set(-0.34, 1.52, 0);
+  addCylinder(leftArm, 0.105, 0.13, 0.56, [0, -0.29, 0], jacket, 10);
+  addCylinder(leftArm, 0.075, 0.085, 0.22, [0, -0.65, 0], skin, 10);
+  actor.add(leftArm);
+  const rightArm = new THREE.Group();
+  rightArm.position.set(0.34, 1.52, 0);
+  addCylinder(rightArm, 0.105, 0.13, 0.56, [0, -0.29, 0], jacket, 10);
+  addCylinder(rightArm, 0.075, 0.085, 0.22, [0, -0.65, 0], skin, 10);
+  actor.add(rightArm);
+
+  [-0.15, 0.15].forEach((x) => {
+    addCylinder(actor, 0.105, 0.13, 0.72, [x, 0.42, 0], trousers, 10);
+    addBox(actor, [0.22, 0.12, 0.38], [x, 0.08, 0.055], shoes);
+  });
+
+  actor.userData.leftArmPivot = leftArm;
+  actor.userData.rightArmPivot = rightArm;
+  actor.userData.headPivot = head;
+  root.add(actor);
+  return actor;
 }
 
 function addDepartmentScreen(
@@ -326,6 +387,7 @@ export function buildDepartmentInterior(destination: OperationsHubDestination): 
   group.name = "department-interior-" + destination.destination_key;
   group.userData = { destinationKey: destination.destination_key, departmentInterior: true };
   const pickables: THREE.Object3D[] = [];
+  const animatedActors: THREE.Group[] = [];
   const accent = destination.accent_color || "#38bdf8";
 
   addRoomShell(group, accent, destination.label, destination.subtitle);
@@ -333,24 +395,42 @@ export function buildDepartmentInterior(destination: OperationsHubDestination): 
   switch (destination.destination_key) {
     case "executive_office":
       addExecutiveBoardroom(group);
+      animatedActors.push(addStaffActor(group, [-4.05, 0, 0.55], {
+        jacket: 0x1e293b, shirt: 0xf8fafc, tie: 0xd6b56d, skin: 0x9a6548, hair: 0x20202a,
+      }, 0.2));
       break;
     case "managers_office":
       addManagerTechnicalRoom(group);
+      animatedActors.push(addStaffActor(group, [4.0, 0, 1.5], {
+        jacket: 0x153c63, shirt: 0xe8f1fa, tie: 0x38bdf8, skin: 0x86583f, hair: 0x161c25,
+      }, 1.1));
       break;
     case "general_managers_office":
       addGeneralManagerSuite(group);
+      animatedActors.push(addStaffActor(group, [-4.0, 0, 1.45], {
+        jacket: 0x3a315a, shirt: 0xf5f3ff, tie: 0xa78bfa, skin: 0x70452f, hair: 0x191820,
+      }, 2.0));
       break;
     case "academy_department":
       addAcademyDevelopmentLab(group);
+      animatedActors.push(addStaffActor(group, [-4.05, 0, 1.5], {
+        jacket: 0x24533f, shirt: 0xf0fdf4, tie: 0xf59e0b, skin: 0x986447, hair: 0x211d18,
+      }, 2.8));
       break;
     case "medical_department":
       addMedicalRehabilitationSuite(group);
+      animatedActors.push(addStaffActor(group, [4.0, 0, 1.45], {
+        jacket: 0x17616a, shirt: 0xf0fdfa, tie: 0xec4899, skin: 0x8d5e45, hair: 0x25212a,
+      }, 3.6));
       break;
     case "finance_commercial_office":
       addFinanceCommercialSuite(group);
+      animatedActors.push(addStaffActor(group, [4.05, 0, 0.8], {
+        jacket: 0x26394c, shirt: 0xf8fafc, tie: 0x22d3ee, skin: 0x9b694c, hair: 0x20242c,
+      }, 4.4));
       break;
   }
 
   (destination.hotspots || []).forEach((hotspot) => addTerminal(group, destination, hotspot, pickables));
-  return { group, pickables };
+  return { group, pickables, animatedActors };
 }
