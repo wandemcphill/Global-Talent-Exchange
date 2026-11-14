@@ -6,9 +6,13 @@ import {
   animationFor,
   effectFor,
   playerIdentityKey,
+  resolveBallPresentation,
   sceneObjectCount,
   type FeedPresentationStatus,
+  type PitchBall,
+  type PitchFrame,
   type PitchPlayer,
+  type PitchSide,
 } from "./matchStateAdapter";
 import {
   ATLAS_COLUMNS,
@@ -33,18 +37,38 @@ export type PitchCameraMode = "2d" | "2.5d" | "zoom";
 
 export type SampledPitchFrame = {
   players: PitchPlayer[];
-  ball: { x: number; y: number } | null;
-  ballTrajectory?: { x: number; y: number }[] | null;
+  ball: PitchBall | null;
+  ballTrajectory?: PitchBall[] | null;
   trajectoryAlpha?: number;
   eventType?: string | null;
+  phase?: string | null;
+  stage?: string | null;
+  cameraPreset?: string | null;
+  possessionSide?: PitchSide | null;
+  dangerZone?: string | null;
+  primaryPlayerId?: string | null;
+  secondaryPlayerId?: string | null;
+  homeAttacksRight?: boolean;
+  clockMinute?: number | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  eventBanner?: string | null;
 };
 
 export type OrthographicPitchProps = {
   players: PitchPlayer[];
-  ball: { x: number; y: number } | null;
-  ballTrajectory?: { x: number; y: number }[] | null;
+  ball: PitchBall | null;
+  ballTrajectory?: PitchBall[] | null;
   trajectoryAlpha?: number;
   eventType?: string | null;
+  phase?: string | null;
+  stage?: string | null;
+  cameraPreset?: string | null;
+  possessionSide?: PitchSide | null;
+  dangerZone?: string | null;
+  primaryPlayerId?: string | null;
+  secondaryPlayerId?: string | null;
+  homeAttacksRight?: boolean;
   homeColor?: string;
   awayColor?: string;
   goalkeeperHome?: string;
@@ -68,12 +92,15 @@ export type OrthographicPitchProps = {
 export const PITCH_W = 105;
 export const PITCH_H = 68;
 const POOL_SIZE = 26;
-const OVERLAY_W = 512;
-const OVERLAY_H = 320;
+const PITCH_TEX_W = 1024;
+const PITCH_TEX_H = 640;
+const OVERLAY_W = 768;
+const OVERLAY_H = 480;
 const GRID_W = 64;
 const GRID_H = 40;
 
 const VERTEX = `
+  precision highp float;
   uniform vec2 uOffset;
   uniform vec2 uRepeat;
   varying vec2 vUv;
@@ -84,7 +111,7 @@ const VERTEX = `
 `;
 
 const FRAGMENT = `
-  precision mediump float;
+  precision highp float;
   uniform sampler2D uBody;
   uniform sampler2D uKit;
   uniform sampler2D uDigits;
@@ -255,12 +282,80 @@ function pointToSegmentDistance(
   return Math.hypot(px - (x0 + t * dx), py - (y0 + t * dy));
 }
 
+function safeFillText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+  if (typeof ctx.fillText === "function") ctx.fillText(text, x, y);
+}
+
+function strokePolyCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  segments = 24,
+) {
+  ctx.beginPath();
+  for (let i = 0; i <= segments; i += 1) {
+    const theta = (i / segments) * Math.PI * 2;
+    const x = cx + Math.cos(theta) * rx;
+    const y = cy + Math.sin(theta) * ry;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.stroke();
+}
+
+function fillPolyCircle(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+  segments = 24,
+) {
+  ctx.beginPath();
+  for (let i = 0; i <= segments; i += 1) {
+    const theta = (i / segments) * Math.PI * 2;
+    const x = cx + Math.cos(theta) * rx;
+    const y = cy + Math.sin(theta) * ry;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  ctx.fill();
+}
+
+function drawRoundedBannerBox(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  fill: string,
+  stroke: string,
+) {
+  ctx.fillStyle = fill;
+  ctx.fillRect(x, y, w, h);
+  ctx.strokeStyle = stroke;
+  ctx.lineWidth = 1.2;
+  ctx.strokeRect(x, y, w, h);
+}
+
 function OrthographicPitchComponent({
   players,
   ball,
   ballTrajectory = null,
   trajectoryAlpha = 1,
   eventType,
+  phase = null,
+  stage = null,
+  cameraPreset = null,
+  possessionSide = null,
+  dangerZone = null,
+  primaryPlayerId = null,
+  secondaryPlayerId = null,
+  homeAttacksRight = true,
   homeColor = "#00e87a",
   awayColor = "#ffb800",
   goalkeeperHome = "#f8fafc",
@@ -288,6 +383,14 @@ function OrthographicPitchComponent({
     ballTrajectory,
     trajectoryAlpha,
     eventType,
+    phase,
+    stage,
+    cameraPreset,
+    possessionSide,
+    dangerZone,
+    primaryPlayerId,
+    secondaryPlayerId,
+    homeAttacksRight,
     homeColor,
     awayColor,
     goalkeeperHome,
@@ -301,7 +404,7 @@ function OrthographicPitchComponent({
     feedStatus: effectiveFeedStatus,
     sampleFrame,
   });
-  const cameraRef = useRef({ zoom: 1, panX: 0, panY: 0, follow: false });
+  const cameraRef = useRef({ zoom: 1, panX: 0, panY: 0, follow: false, manualOverrideUntilMs: 0 });
   const [follow, setFollow] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
 
@@ -311,6 +414,14 @@ function OrthographicPitchComponent({
     ballTrajectory,
     trajectoryAlpha,
     eventType,
+    phase,
+    stage,
+    cameraPreset,
+    possessionSide,
+    dangerZone,
+    primaryPlayerId,
+    secondaryPlayerId,
+    homeAttacksRight,
     homeColor,
     awayColor,
     goalkeeperHome,
@@ -329,14 +440,26 @@ function OrthographicPitchComponent({
   // Apply cameraMode preset changes cleanly while allowing manual zoom/pan adjustments
   useEffect(() => {
     if (cameraMode === "2d") {
-      cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: cameraRef.current.follow };
+      cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: cameraRef.current.follow, manualOverrideUntilMs: 0 };
       setZoomLevel(1);
     } else if (cameraMode === "2.5d") {
-      cameraRef.current = { zoom: 1.12, panX: cameraRef.current.panX * 0.5, panY: -2.2, follow: cameraRef.current.follow };
-      setZoomLevel(1.12);
+      cameraRef.current = {
+        zoom: 1.14,
+        panX: cameraRef.current.panX * 0.5,
+        panY: -2.0,
+        follow: cameraRef.current.follow,
+        manualOverrideUntilMs: 0,
+      };
+      setZoomLevel(1.14);
     } else if (cameraMode === "zoom") {
-      cameraRef.current = { zoom: 1.42, panX: cameraRef.current.panX, panY: cameraRef.current.panY, follow: true };
-      setZoomLevel(1.42);
+      cameraRef.current = {
+        zoom: 1.44,
+        panX: cameraRef.current.panX,
+        panY: cameraRef.current.panY,
+        follow: true,
+        manualOverrideUntilMs: 0,
+      };
+      setZoomLevel(1.44);
     }
   }, [cameraMode]);
 
@@ -359,14 +482,14 @@ function OrthographicPitchComponent({
     const camera = new THREE.OrthographicCamera(-PITCH_W / 2, PITCH_W / 2, PITCH_H / 2, -PITCH_H / 2, 0.1, 50);
     camera.position.set(0, 0, 10);
 
-    const pitchPixels = rasterPitch(OVERLAY_W, OVERLAY_H);
-    const pitchTexture = dataTexture(pitchPixels, OVERLAY_W, OVERLAY_H);
+    const pitchPixels = rasterPitch(PITCH_TEX_W, PITCH_TEX_H);
+    const pitchTexture = dataTexture(pitchPixels, PITCH_TEX_W, PITCH_TEX_H);
     const pitchGeometry = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
     const pitchMaterial = new THREE.MeshBasicMaterial({ map: pitchTexture, side: THREE.DoubleSide });
     const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
     scene.add(pitch);
 
-    // Dynamic tactical & spatial overlay layer (Voronoi, Heatmap, Tactics, Passing Lanes)
+    // Dynamic tactical, trajectory & broadcast callout overlay layer
     const overlayCanvas = document.createElement("canvas");
     overlayCanvas.width = OVERLAY_W;
     overlayCanvas.height = OVERLAY_H;
@@ -394,7 +517,7 @@ function OrthographicPitchComponent({
       side: THREE.DoubleSide,
     });
     const overlayMesh = new THREE.Mesh(overlayGeometry, overlayMaterial);
-    overlayMesh.position.set(0, 0, 0.25);
+    overlayMesh.position.set(0, 0, 0.28);
     overlayMesh.visible = false;
     scene.add(overlayMesh);
 
@@ -406,8 +529,21 @@ function OrthographicPitchComponent({
     digitTexture.magFilter = THREE.NearestFilter;
     digitTexture.minFilter = THREE.NearestFilter;
 
+    // Ground shadow mesh for aerial balls (separates from ballMesh when heightMeters > 0.1)
+    const ballShadowGeometry = new THREE.PlaneGeometry(1.75, 0.85);
+    const ballShadowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x030712,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
+    const ballShadowMesh = new THREE.Mesh(ballShadowGeometry, ballShadowMaterial);
+    ballShadowMesh.visible = false;
+    scene.add(ballShadowMesh);
+
     const ballTexture = dataTexture(rasterBall(), 48, 48);
-    const ballGeometry = new THREE.PlaneGeometry(2.4, 2.4);
+    const ballGeometry = new THREE.PlaneGeometry(2.45, 2.45);
     const ballMaterial = new THREE.MeshBasicMaterial({
       map: ballTexture,
       transparent: true,
@@ -418,7 +554,7 @@ function OrthographicPitchComponent({
     scene.add(ballMesh);
 
     const ringTexture = dataTexture(rasterRing(), 64, 64);
-    const ringGeometry = new THREE.PlaneGeometry(3.4, 3.4);
+    const ringGeometry = new THREE.PlaneGeometry(3.5, 3.5);
     const ringMaterial = new THREE.MeshBasicMaterial({
       map: ringTexture,
       transparent: true,
@@ -429,12 +565,12 @@ function OrthographicPitchComponent({
     ring.visible = false;
     scene.add(ring);
 
-    const carrierRingGeometry = new THREE.PlaneGeometry(2.9, 2.9);
+    const carrierRingGeometry = new THREE.PlaneGeometry(3.0, 3.0);
     const carrierRingMaterial = new THREE.MeshBasicMaterial({
       map: ringTexture,
       color: 0x38bdf8,
       transparent: true,
-      opacity: 0.72,
+      opacity: 0.78,
       depthWrite: false,
       side: THREE.DoubleSide,
     });
@@ -469,7 +605,7 @@ function OrthographicPitchComponent({
     const pool: THREE.Mesh[] = [];
     const assigned = new Map<string, THREE.Mesh>();
     const free: THREE.Mesh[] = [];
-    const sharedGeometry = new THREE.PlaneGeometry(4.8, 4.8);
+    const sharedGeometry = new THREE.PlaneGeometry(4.85, 4.85);
     for (let index = 0; index < POOL_SIZE; index += 1) {
       const material = new THREE.ShaderMaterial({
         transparent: true,
@@ -497,6 +633,7 @@ function OrthographicPitchComponent({
     const motionTracker = new PlayerMotionTracker();
     const seenKeys = new Set<string>();
     const heatmapBins = new Float32Array(GRID_W * GRID_H);
+    let heatmapSeeded = false;
     let lastOverlayPaintMs = -1000;
     let lastOverlaySignature = "";
     let previousBall: { x: number; y: number } | null = null;
@@ -575,6 +712,7 @@ function OrthographicPitchComponent({
       overlayTexture.needsUpdate = true;
       pitchMaterial.needsUpdate = true;
       ballMaterial.needsUpdate = true;
+      ballShadowMaterial.needsUpdate = true;
       ringMaterial.needsUpdate = true;
       carrierRingMaterial.needsUpdate = true;
       overlayMaterial.needsUpdate = true;
@@ -632,12 +770,37 @@ function OrthographicPitchComponent({
       const liveSampled = current.sampleFrame ? current.sampleFrame(frameStart) : null;
       const activePlayers = liveSampled && liveSampled.players.length > 0 ? liveSampled.players : current.players;
       const activeBall = liveSampled ? liveSampled.ball : current.ball;
-      const activeTrajectory = liveSampled ? liveSampled.ballTrajectory ?? current.ballTrajectory : current.ballTrajectory;
+      const activeTrajectory = liveSampled
+        ? liveSampled.ballTrajectory ?? current.ballTrajectory
+        : current.ballTrajectory;
       const activeAlpha = liveSampled?.trajectoryAlpha ?? current.trajectoryAlpha;
       const activeEvent = liveSampled?.eventType ?? current.eventType;
+      const activePhase = liveSampled?.phase ?? current.phase;
+      const activeStage = liveSampled?.stage ?? current.stage;
+      const activeCameraPreset = liveSampled?.cameraPreset ?? current.cameraPreset;
+      const activePossessionSide = liveSampled?.possessionSide ?? current.possessionSide;
+      const activeDangerZone = liveSampled?.dangerZone ?? current.dangerZone;
+      const activePrimaryId = liveSampled?.primaryPlayerId ?? current.primaryPlayerId;
+      const activeSecondaryId = liveSampled?.secondaryPlayerId ?? current.secondaryPlayerId;
+      const activeHomeAttacksRight = liveSampled?.homeAttacksRight ?? current.homeAttacksRight ?? true;
 
-      // Accumulate real player coordinates into the spatial heatmap grid
+      // Accumulate real player coordinates into the spatial heatmap grid (with initial formation seed)
       if (activePlayers.length > 0) {
+        if (!heatmapSeeded) {
+          heatmapSeeded = true;
+          for (const p of activePlayers) {
+            const gx = Math.min(GRID_W - 1, Math.max(0, Math.floor(p.x * GRID_W)));
+            const gy = Math.min(GRID_H - 1, Math.max(0, Math.floor(p.y * GRID_H)));
+            for (let dy = -1; dy <= 1; dy += 1) {
+              for (let dx = -1; dx <= 1; dx += 1) {
+                const nx = Math.min(GRID_W - 1, Math.max(0, gx + dx));
+                const ny = Math.min(GRID_H - 1, Math.max(0, gy + dy));
+                const weight = dx === 0 && dy === 0 ? 1.8 : 0.75;
+                heatmapBins[ny * GRID_W + nx] = Math.min(12, heatmapBins[ny * GRID_W + nx] + weight);
+              }
+            }
+          }
+        }
         for (let i = 0; i < GRID_W * GRID_H; i += 1) {
           heatmapBins[i] *= 0.996;
         }
@@ -648,20 +811,72 @@ function OrthographicPitchComponent({
         }
       }
 
-      const ballPoint =
+      const trajectoryBallPoint =
         activeTrajectory && activeTrajectory.length > 0
           ? sampleTrajectory(activeTrajectory, activeAlpha)
           : activeBall;
 
+      const syntheticFrame: PitchFrame = {
+        timeSeconds: 0,
+        players: activePlayers,
+        ball: activeBall
+          ? {
+              ...activeBall,
+              height: (trajectoryBallPoint as any)?.height ?? activeBall.height,
+            }
+          : (trajectoryBallPoint as PitchBall | null),
+        ballTrajectory: activeTrajectory,
+        eventType: activeEvent,
+        phase: activePhase,
+        stage: activeStage,
+        cameraPreset: activeCameraPreset,
+        possessionSide: activePossessionSide,
+        dangerZone: activeDangerZone,
+        primaryPlayerId: activePrimaryId,
+        secondaryPlayerId: activeSecondaryId,
+        homeAttacksRight: activeHomeAttacksRight,
+      };
+      const resolvedBall = resolveBallPresentation(syntheticFrame, activeAlpha, trajectoryBallPoint);
+      const ballPoint = resolvedBall ? { x: resolvedBall.x, y: resolvedBall.y } : trajectoryBallPoint;
+
+      // Broadcast director camera tracking & event-aware framing (respecting manual pan/zoom gestures)
+      const isManualActive = frameStart < view.manualOverrideUntilMs;
       if ((view.follow || current.cameraMode === "zoom" || current.cameraMode === "2.5d") && ballPoint) {
         const focus = toWorld(ballPoint.x, ballPoint.y);
-        const trackStrengthX = current.cameraMode === "zoom" ? 0.42 : view.follow ? 0.28 : 0.16;
-        const trackStrengthY = current.cameraMode === "zoom" ? 0.32 : view.follow ? 0.25 : 0.08;
+        const eventStr = String(activeEvent || "").toLowerCase();
+        const presetStr = String(activeCameraPreset || "").toLowerCase();
+        const isBoxMoment =
+          eventStr === "goal" ||
+          eventStr === "shot" ||
+          eventStr === "save" ||
+          eventStr === "penalty" ||
+          presetStr === "box_zoom" ||
+          presetStr === "goal_celebration" ||
+          activeDangerZone === "box";
+
+        if (!isManualActive) {
+          const targetZoom =
+            current.cameraMode === "zoom"
+              ? isBoxMoment
+                ? 1.54
+                : 1.44
+              : current.cameraMode === "2.5d"
+                ? isBoxMoment
+                  ? 1.22
+                  : 1.14
+                : view.zoom;
+          view.zoom = view.zoom + (targetZoom - view.zoom) * 0.05;
+        }
+
+        const trackStrengthX = current.cameraMode === "zoom" ? 0.46 : view.follow ? 0.32 : 0.22;
+        const trackStrengthY = current.cameraMode === "zoom" ? 0.34 : view.follow ? 0.26 : 0.1;
+        const tiltBiasY = current.cameraMode === "2.5d" ? -1.8 : 0;
         const nextPanX = camera.position.x + (focus.x * trackStrengthX - camera.position.x) * 0.08;
-        const nextPanY = camera.position.y + (focus.y * trackStrengthY - camera.position.y) * 0.08;
+        const nextPanY = camera.position.y + (focus.y * trackStrengthY + tiltBiasY - camera.position.y) * 0.08;
         const clamped = clampCameraPan(nextPanX, nextPanY, view.zoom);
         view.panX = clamped.panX;
         view.panY = clamped.panY;
+        view.zoom = clamped.zoom;
       } else {
         const clamped = clampCameraPan(view.panX, view.panY, view.zoom);
         view.panX = clamped.panX;
@@ -676,15 +891,35 @@ function OrthographicPitchComponent({
 
       seenKeys.clear();
       let selectedPlayerObj: PitchPlayer | null = null;
-      let carrierPlayerObj: PitchPlayer | null = null;
+      let carrierPlayerObj: PitchPlayer | null = resolvedBall?.carrier ?? null;
+
+      const animContext = {
+        ball: activeBall
+          ? {
+              ...activeBall,
+              x: ballPoint?.x ?? activeBall.x,
+              y: ballPoint?.y ?? activeBall.y,
+              height: resolvedBall?.heightMeters ?? activeBall.height ?? 0,
+            }
+          : ballPoint,
+        possessionSide: activePossessionSide,
+        primaryPlayerId: activePrimaryId,
+        secondaryPlayerId: activeSecondaryId,
+        stage: activeStage,
+        homeAttacksRight: activeHomeAttacksRight,
+      };
 
       activePlayers.forEach((player) => {
         const key = playerIdentityKey(player);
         seenKeys.add(key);
 
+        const isCarrier =
+          Boolean(player.hasBall) ||
+          Boolean(resolvedBall?.carrier && playerIdentityKey(resolvedBall.carrier) === key);
+
         const tracked = motionTracker.update(key, player.x, player.y, frameStart, {
-          baseAction: animationFor(player, activeEvent),
-          hasBall: Boolean(player.hasBall),
+          baseAction: animationFor(player, activeEvent, animContext),
+          hasBall: isCarrier,
           side: player.side,
           velocityHint: player.velocity,
           facingHint: player.facing,
@@ -713,8 +948,10 @@ function OrthographicPitchComponent({
           selectedPlayerObj = player;
           ring.visible = true;
           ring.position.set(point.x, point.y - 1.2, 0.4);
+          const pulse = 1 + Math.sin(frameStart / 190) * 0.06;
+          ring.scale.set(pulse, pulse, 1);
         }
-        if (player.hasBall && !carrierPlayerObj) {
+        if (isCarrier && !carrierPlayerObj) {
           carrierPlayerObj = player;
         }
       });
@@ -739,23 +976,37 @@ function OrthographicPitchComponent({
       });
       motionTracker.prune(seenKeys);
 
-      // Update tactical & spatial overlays when active
+      // Update tactical, trajectory & player callout overlay canvas
+      const hasCalloutOrTrajectory = Boolean(
+        carrierPlayerObj ||
+          selectedPlayerObj ||
+          (activeTrajectory && activeTrajectory.length > 1 && resolvedBall?.inFlight),
+      );
       const anyOverlayActive = Boolean(
-        (current.showVoronoi || current.showHeatmap || current.showTactics || current.showPassingLanes) &&
+        (current.showVoronoi ||
+          current.showHeatmap ||
+          current.showTactics ||
+          current.showPassingLanes ||
+          hasCalloutOrTrajectory) &&
           activePlayers.length > 0,
       );
       overlayMesh.visible = anyOverlayActive;
       const activeOverlayCtx = anyOverlayActive ? getOverlayCtx() : null;
       if (anyOverlayActive && activeOverlayCtx) {
-        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.selectedKey || ""}`;
-        if (sig !== lastOverlaySignature || frameStart - lastOverlayPaintMs >= 65) {
+        const carrierKey = carrierPlayerObj ? playerIdentityKey(carrierPlayerObj) : "";
+        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.selectedKey || ""}:${carrierKey}:${activeEvent || ""}`;
+        if (sig !== lastOverlaySignature || frameStart - lastOverlayPaintMs >= 55) {
           lastOverlaySignature = sig;
           lastOverlayPaintMs = frameStart;
           paintTacticalOverlays(activeOverlayCtx, {
             players: activePlayers,
             ball: ballPoint,
+            resolvedBall,
             ballTrajectory: activeTrajectory,
+            trajectoryAlpha: activeAlpha,
             selectedKey: current.selectedKey || null,
+            carrierPlayer: carrierPlayerObj,
+            selectedPlayer: selectedPlayerObj,
             homeColor: current.homeColor,
             awayColor: current.awayColor,
             showVoronoi: Boolean(current.showVoronoi),
@@ -771,9 +1022,26 @@ function OrthographicPitchComponent({
 
       const cue = effectFor(activeEvent);
       if (ballPoint) {
+        const shadowWorld = toWorld(resolvedBall?.shadowX ?? ballPoint.x, resolvedBall?.shadowY ?? ballPoint.y);
         const point = toWorld(ballPoint.x, ballPoint.y);
-        ballMesh.position.set(point.x, point.y, 2);
+        const elev = resolvedBall?.heightMeters ?? 0;
+        const liftY = Math.min(4.2, elev * 0.92);
+        const scaleBoost = 1 + Math.min(0.32, elev * 0.09);
+
+        if (elev > 0.14) {
+          ballShadowMesh.visible = true;
+          ballShadowMesh.position.set(shadowWorld.x, shadowWorld.y - 0.35, 1.4);
+          const shadowScale = Math.max(0.55, 1 - elev * 0.1);
+          ballShadowMesh.scale.set(shadowScale, shadowScale, 1);
+          ballShadowMaterial.opacity = Math.max(0.18, 0.46 - elev * 0.07);
+        } else {
+          ballShadowMesh.visible = false;
+        }
+
+        ballMesh.position.set(point.x, point.y + liftY, 2.1);
+        ballMesh.scale.set(scaleBoost, scaleBoost, 1);
         ballMesh.visible = true;
+
         const from = previousBall ? toWorld(previousBall.x, previousBall.y) : point;
         effect.visible = cue === "pass" || cue === "shot" || cue === "goal";
         if (effect.visible) {
@@ -790,14 +1058,12 @@ function OrthographicPitchComponent({
         previousBall = ballPoint;
       } else {
         ballMesh.visible = false;
+        ballShadowMesh.visible = false;
         effect.visible = false;
       }
 
       if (cue === "save" || cue === "card" || cue === "substitution") {
-        const focus =
-          selectedPlayerObj ||
-          carrierPlayerObj ||
-          activePlayers[0];
+        const focus = selectedPlayerObj || carrierPlayerObj || activePlayers[0];
         if (focus) {
           const point = toWorld(focus.x, focus.y);
           cueMesh.visible = true;
@@ -845,6 +1111,7 @@ function OrthographicPitchComponent({
           goalkeeperAway: current.goalkeeperAway,
           selectedKey: current.selectedKey || null,
           ballPoint,
+          resolvedBall,
           camera: view,
           overlayCanvas: anyOverlayActive ? overlayCanvas : null,
           motionTracker,
@@ -917,6 +1184,7 @@ function OrthographicPitchComponent({
         );
         cameraRef.current.panX = clamped.panX;
         cameraRef.current.panY = clamped.panY;
+        cameraRef.current.manualOverrideUntilMs = performance.now() + 4500;
       }
     };
 
@@ -982,6 +1250,8 @@ function OrthographicPitchComponent({
       pitchMaterial.dispose();
       overlayGeometry.dispose();
       overlayMaterial.dispose();
+      ballShadowGeometry.dispose();
+      ballShadowMaterial.dispose();
       ballGeometry.dispose();
       ballMaterial.dispose();
       ringGeometry.dispose();
@@ -1037,7 +1307,7 @@ function OrthographicPitchComponent({
             data-testid="pitch-control-fit"
             className="rounded border border-white/15 bg-slate-900/80 px-2.5 py-1 text-slate-200 transition hover:border-emerald-400/50 hover:text-white"
             onClick={() => {
-              cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: false };
+              cameraRef.current = { zoom: 1, panX: 0, panY: 0, follow: false, manualOverrideUntilMs: 0 };
               setFollow(false);
               setZoomLevel(1);
               onCameraModeChange?.("2d");
@@ -1058,6 +1328,7 @@ function OrthographicPitchComponent({
               cameraRef.current.zoom = clamped.zoom;
               cameraRef.current.panX = clamped.panX;
               cameraRef.current.panY = clamped.panY;
+              cameraRef.current.manualOverrideUntilMs = performance.now() + 6000;
               setZoomLevel(clamped.zoom);
             }}
           >
@@ -1076,6 +1347,7 @@ function OrthographicPitchComponent({
               cameraRef.current.zoom = clamped.zoom;
               cameraRef.current.panX = clamped.panX;
               cameraRef.current.panY = clamped.panY;
+              cameraRef.current.manualOverrideUntilMs = performance.now() + 6000;
               setZoomLevel(clamped.zoom);
             }}
           >
@@ -1145,13 +1417,25 @@ function OrthographicPitchComponent({
 
 export const OrthographicPitch = memo(OrthographicPitchComponent);
 
+function shortPlayerName(name: string): string {
+  const trimmed = String(name || "").trim();
+  if (!trimmed) return "";
+  const parts = trimmed.split(/\s+/);
+  if (parts.length === 1) return parts[0].slice(0, 12);
+  return `${parts[0][0]}. ${parts[parts.length - 1]}`.slice(0, 14);
+}
+
 function paintTacticalOverlays(
   ctx: CanvasRenderingContext2D,
   input: {
     players: PitchPlayer[];
     ball: { x: number; y: number } | null;
-    ballTrajectory?: { x: number; y: number }[] | null;
+    resolvedBall?: ReturnType<typeof resolveBallPresentation>;
+    ballTrajectory?: PitchBall[] | null;
+    trajectoryAlpha?: number;
     selectedKey: string | null;
+    carrierPlayer: PitchPlayer | null;
+    selectedPlayer: PitchPlayer | null;
     homeColor: string;
     awayColor: string;
     showVoronoi: boolean;
@@ -1163,17 +1447,19 @@ function paintTacticalOverlays(
   },
 ) {
   ctx.clearRect(0, 0, OVERLAY_W, OVERLAY_H);
-  const { players, ball, ballTrajectory, selectedKey, homeColor, awayColor } = input;
+  const { players, ball, resolvedBall, ballTrajectory, selectedKey, homeColor, awayColor } = input;
   if (!players.length) return;
 
   const cellW = OVERLAY_W / GRID_W;
   const cellH = OVERLAY_H / GRID_H;
 
-  // 1. Voronoi Space Control Overlay (computed from real player positions)
+  // 1. Voronoi Space Control Overlay (computed from real player positions + live territory share)
   if (input.showVoronoi) {
-    const homeFill = hexToRgbaString(homeColor, 0.16);
-    const awayFill = hexToRgbaString(awayColor, 0.16);
+    const homeFill = hexToRgbaString(homeColor, 0.2);
+    const awayFill = hexToRgbaString(awayColor, 0.2);
     const owners = new Uint8Array(GRID_W * GRID_H);
+    let homeCells = 0;
+    let totalCells = 0;
 
     for (let gy = 0; gy < GRID_H; gy += 1) {
       const py = (gy + 0.5) / GRID_H;
@@ -1191,22 +1477,40 @@ function paintTacticalOverlays(
           }
         }
         const isHome = nearestSide === "home";
+        if (isHome) homeCells += 1;
+        totalCells += 1;
         owners[gy * GRID_W + gx] = isHome ? 1 : 2;
         ctx.fillStyle = isHome ? homeFill : awayFill;
-        ctx.fillRect(gx * cellW, gy * cellH, cellW + 0.5, cellH + 0.5);
+        ctx.fillRect(gx * cellW, gy * cellH, cellW + 0.6, cellH + 0.6);
       }
     }
 
-    // Boundary contour between home and away territory
-    ctx.fillStyle = "rgba(248, 250, 252, 0.35)";
+    // Crisp boundary contour between home and away territory
+    ctx.fillStyle = "rgba(248, 250, 252, 0.52)";
     for (let gy = 0; gy < GRID_H - 1; gy += 1) {
       for (let gx = 0; gx < GRID_W - 1; gx += 1) {
         const currentOwner = owners[gy * GRID_W + gx];
         if (currentOwner !== owners[gy * GRID_W + gx + 1] || currentOwner !== owners[(gy + 1) * GRID_W + gx]) {
-          ctx.fillRect(gx * cellW, gy * cellH, 2, 2);
+          ctx.fillRect(gx * cellW, gy * cellH, 2.4, 2.4);
         }
       }
     }
+
+    const homeShare = Math.round((homeCells / Math.max(1, totalCells)) * 100);
+    const awayShare = 100 - homeShare;
+    drawRoundedBannerBox(
+      ctx,
+      OVERLAY_W / 2 - 148,
+      6,
+      296,
+      22,
+      "rgba(2, 6, 23, 0.84)",
+      "rgba(148, 163, 184, 0.45)",
+    );
+    ctx.font = "bold 10px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#f8fafc";
+    safeFillText(ctx, `TERRITORY CONTROL · HOME ${homeShare}% — ${awayShare}% AWAY`, OVERLAY_W / 2, 20);
   }
 
   // 2. Heatmap Overlay (from accumulated real player position samples)
@@ -1214,26 +1518,27 @@ function paintTacticalOverlays(
     for (let gy = 0; gy < GRID_H; gy += 1) {
       for (let gx = 0; gx < GRID_W; gx += 1) {
         const density = input.heatmapBins[gy * GRID_W + gx];
-        if (density <= 0.08) continue;
-        const intensity = Math.min(1, density / 4);
+        if (density <= 0.06) continue;
+        const intensity = Math.min(1, density / 3.4);
         const cx = (gx + 0.5) * cellW;
         const cy = (gy + 0.5) * cellH;
-        const radius = cellW * (1.8 + intensity * 1.4);
+        const radius = cellW * (2.1 + intensity * 1.6);
         if (typeof ctx.createRadialGradient === "function") {
           const grad = ctx.createRadialGradient(cx, cy, 1, cx, cy, radius);
-          grad.addColorStop(0, `rgba(244, 63, 94, ${(0.36 * intensity).toFixed(3)})`);
-          grad.addColorStop(0.55, `rgba(251, 191, 36, ${(0.18 * intensity).toFixed(3)})`);
-          grad.addColorStop(1, "rgba(251, 191, 36, 0)");
+          grad.addColorStop(0, `rgba(239, 68, 68, ${(0.46 * intensity).toFixed(3)})`);
+          grad.addColorStop(0.48, `rgba(245, 158, 11, ${(0.28 * intensity).toFixed(3)})`);
+          grad.addColorStop(0.82, `rgba(16, 185, 129, ${(0.12 * intensity).toFixed(3)})`);
+          grad.addColorStop(1, "rgba(16, 185, 129, 0)");
           ctx.fillStyle = grad;
         } else {
-          ctx.fillStyle = `rgba(244, 63, 94, ${(0.28 * intensity).toFixed(3)})`;
+          ctx.fillStyle = `rgba(239, 68, 68, ${(0.34 * intensity).toFixed(3)})`;
         }
         ctx.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
       }
     }
   }
 
-  // 3. Tactical Overlay: Defensive Line, Compactness Block, Formation Links, and Velocity Vectors
+  // 3. Tactical Overlay: Defensive/Midfield/Attacking Lines, Compactness Block, Pressing Rings & Run Vectors
   if (input.showTactics) {
     (["home", "away"] as const).forEach((side) => {
       const color = side === "home" ? homeColor : awayColor;
@@ -1242,74 +1547,126 @@ function paintTacticalOverlays(
       );
       if (sidePlayers.length === 0) return;
 
-      // Sort along X to identify defensive unit & compactness bounds
+      // Sort along X relative to defended goal to partition Defense / Midfield / Attack lines
       const sortedX = [...sidePlayers].sort((a, b) => (side === "home" ? a.x - b.x : b.x - a.x));
-      const defenders = sortedX.slice(0, Math.min(4, sortedX.length));
-      const defLineX =
-        (defenders.reduce((sum, p) => sum + p.x, 0) / Math.max(1, defenders.length)) * OVERLAY_W;
+      const defCount = Math.min(4, Math.max(3, Math.round(sortedX.length * 0.4)));
+      const midCount = Math.min(4, Math.max(2, Math.round(sortedX.length * 0.35)));
+      const defenders = sortedX.slice(0, defCount);
+      const midfielders = sortedX.slice(defCount, defCount + midCount);
+      const forwards = sortedX.slice(defCount + midCount);
 
-      // Defensive Line
+      const defLineNormX = defenders.reduce((sum, p) => sum + p.x, 0) / Math.max(1, defenders.length);
+      const defLineX = defLineNormX * OVERLAY_W;
+
       ctx.save();
-      ctx.strokeStyle = hexToRgbaString(color, 0.78);
-      ctx.lineWidth = 2;
-      ctx.setLineDash([6, 4]);
+      // Defensive Line + Height Label
+      ctx.strokeStyle = hexToRgbaString(color, 0.85);
+      ctx.lineWidth = 2.2;
+      ctx.setLineDash([7, 5]);
       ctx.beginPath();
-      ctx.moveTo(defLineX, 20);
-      ctx.lineTo(defLineX, OVERLAY_H - 20);
+      ctx.moveTo(defLineX, 24);
+      ctx.lineTo(defLineX, OVERLAY_H - 24);
       ctx.stroke();
+
+      const defMeters = Math.round((side === "home" ? defLineNormX : 1 - defLineNormX) * 105);
+      drawRoundedBannerBox(
+        ctx,
+        Math.min(OVERLAY_W - 88, Math.max(8, defLineX - 42)),
+        side === "home" ? 28 : OVERLAY_H - 48,
+        84,
+        18,
+        "rgba(2, 6, 23, 0.86)",
+        hexToRgbaString(color, 0.75),
+      );
+      ctx.font = "bold 9px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillStyle = color;
+      safeFillText(ctx, 
+        `${side === "home" ? "HOME" : "AWAY"} LINE ${defMeters}m`,
+        Math.min(OVERLAY_W - 46, Math.max(50, defLineX)),
+        side === "home" ? 40 : OVERLAY_H - 36,
+      );
 
       // Team Compactness & Pressing Shape Envelope
       const minX = Math.min(...sidePlayers.map((p) => p.x)) * OVERLAY_W;
       const maxX = Math.max(...sidePlayers.map((p) => p.x)) * OVERLAY_W;
       const minY = Math.min(...sidePlayers.map((p) => p.y)) * OVERLAY_H;
       const maxY = Math.max(...sidePlayers.map((p) => p.y)) * OVERLAY_H;
-      ctx.fillStyle = hexToRgbaString(color, 0.07);
-      ctx.strokeStyle = hexToRgbaString(color, 0.36);
-      ctx.lineWidth = 1.2;
+      ctx.fillStyle = hexToRgbaString(color, 0.08);
+      ctx.strokeStyle = hexToRgbaString(color, 0.42);
+      ctx.lineWidth = 1.4;
       ctx.setLineDash([4, 4]);
       ctx.strokeRect(minX, minY, Math.max(8, maxX - minX), Math.max(8, maxY - minY));
       ctx.fillRect(minX, minY, Math.max(8, maxX - minX), Math.max(8, maxY - minY));
 
-      // Formation unit links between defenders and midfielders
+      // Formation unit links across Defense, Midfield, and Attack lines
       ctx.setLineDash([]);
-      ctx.strokeStyle = hexToRgbaString(color, 0.42);
-      ctx.lineWidth = 1.2;
-      const defSortedByY = [...defenders].sort((a, b) => a.y - b.y);
-      for (let i = 0; i < defSortedByY.length - 1; i += 1) {
-        ctx.beginPath();
-        ctx.moveTo(defSortedByY[i].x * OVERLAY_W, defSortedByY[i].y * OVERLAY_H);
-        ctx.lineTo(defSortedByY[i + 1].x * OVERLAY_W, defSortedByY[i + 1].y * OVERLAY_H);
-        ctx.stroke();
-      }
+      const drawUnitChain = (unit: PitchPlayer[], alpha: number) => {
+        if (unit.length < 2) return;
+        const ordered = [...unit].sort((a, b) => a.y - b.y);
+        ctx.strokeStyle = hexToRgbaString(color, alpha);
+        ctx.lineWidth = 1.8;
+        for (let i = 0; i < ordered.length - 1; i += 1) {
+          ctx.beginPath();
+          ctx.moveTo(ordered[i].x * OVERLAY_W, ordered[i].y * OVERLAY_H);
+          ctx.lineTo(ordered[i + 1].x * OVERLAY_W, ordered[i + 1].y * OVERLAY_H);
+          ctx.stroke();
+        }
+      };
+      drawUnitChain(defenders, 0.58);
+      drawUnitChain(midfielders, 0.48);
+      drawUnitChain(forwards, 0.42);
       ctx.restore();
     });
 
-    // Player movement velocity indicators
+    // Pressing triggers & forward movement run vectors
     for (const p of players) {
       const tracked = input.motionTracker.get(playerIdentityKey(p));
-      if (!tracked || tracked.speed < 0.003) continue;
       const startX = p.x * OVERLAY_W;
       const startY = p.y * OVERLAY_H;
-      const endX = startX + Math.cos(tracked.facing) * Math.min(28, tracked.speed * 520);
-      const endY = startY - Math.sin(tracked.facing) * Math.min(28, tracked.speed * 520);
+      const color = p.side === "home" ? homeColor : awayColor;
+      const stateStr = `${p.state || ""} ${p.animationState || ""}`.toLowerCase();
+
+      if (stateStr.includes("press") || stateStr.includes("tackle")) {
+        ctx.save();
+        ctx.strokeStyle = "rgba(250, 204, 21, 0.85)";
+        ctx.lineWidth = 1.8;
+        strokePolyCircle(ctx, startX, startY, 15, 10, 20);
+        ctx.restore();
+      }
+
+      if (!tracked || tracked.speed < 0.0025) continue;
+      const vecLen = Math.min(34, Math.max(12, tracked.speed * 620));
+      const endX = startX + Math.cos(tracked.facing) * vecLen;
+      const endY = startY - Math.sin(tracked.facing) * vecLen;
       ctx.save();
-      ctx.strokeStyle = p.side === "home" ? homeColor : awayColor;
-      ctx.lineWidth = 1.8;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.0;
       ctx.beginPath();
       ctx.moveTo(startX, startY);
       ctx.lineTo(endX, endY);
       ctx.stroke();
+      // Arrowhead
+      const headAngle = Math.atan2(endY - startY, endX - startX);
+      ctx.beginPath();
+      ctx.moveTo(endX, endY);
+      ctx.lineTo(endX - Math.cos(headAngle - 0.5) * 6, endY - Math.sin(headAngle - 0.5) * 6);
+      ctx.lineTo(endX - Math.cos(headAngle + 0.5) * 6, endY - Math.sin(headAngle + 0.5) * 6);
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
       ctx.restore();
     }
   }
 
-  // 4. Passing Lanes & Supplied Ball Trajectory Overlay
+  // 4. Passing LanesOverlay
   if (input.showPassingLanes) {
     const selectedPlayer = selectedKey
       ? players.find((p) => playerIdentityKey(p) === selectedKey) || null
       : null;
     const carrier =
       selectedPlayer ||
+      input.carrierPlayer ||
       players.find((p) => p.hasBall) ||
       (ball
         ? [...players].sort(
@@ -1323,56 +1680,144 @@ function paintTacticalOverlays(
       );
       const opponents = players.filter((p) => p.side !== carrier.side);
       const laneColor = carrier.side === "home" ? homeColor : awayColor;
+      const attackDir = carrier.side === "home" ? 1 : -1;
 
       const viableTargets = teammates
         .map((mate) => {
           const dist = Math.hypot(mate.x - carrier.x, mate.y - carrier.y);
-          const blocked = opponents.some(
-            (opp) =>
-              pointToSegmentDistance(opp.x, opp.y, carrier.x, carrier.y, mate.x, mate.y) < 0.042,
+          const minClearance = opponents.reduce(
+            (minD, opp) =>
+              Math.min(minD, pointToSegmentDistance(opp.x, opp.y, carrier.x, carrier.y, mate.x, mate.y)),
+            1,
           );
-          return { mate, dist, blocked };
+          const progressiveGain = (mate.x - carrier.x) * attackDir;
+          const score = minClearance * 2.2 + progressiveGain * 1.4 - dist * 0.65;
+          return { mate, dist, blocked: minClearance < 0.038, progressive: progressiveGain > 0.04, score };
         })
-        .filter((item) => item.dist >= 0.05 && item.dist <= 0.48 && !item.blocked)
-        .sort((a, b) => a.dist - b.dist)
+        .filter((item) => item.dist >= 0.045 && item.dist <= 0.52 && !item.blocked)
+        .sort((a, b) => b.score - a.score)
         .slice(0, 4);
 
       ctx.save();
-      ctx.strokeStyle = hexToRgbaString(laneColor, 0.72);
-      ctx.lineWidth = 1.8;
-      ctx.setLineDash([5, 4]);
-      for (const { mate } of viableTargets) {
+      viableTargets.forEach(({ mate, progressive }, idx) => {
+        const cx = carrier.x * OVERLAY_W;
+        const cy = carrier.y * OVERLAY_H;
         const mx = mate.x * OVERLAY_W;
         const my = mate.y * OVERLAY_H;
+        const isPrimaryLane = idx === 0 || progressive;
+
+        ctx.strokeStyle = isPrimaryLane ? hexToRgbaString(laneColor, 0.9) : "rgba(103, 232, 249, 0.68)";
+        ctx.lineWidth = isPrimaryLane ? 2.4 : 1.7;
+        ctx.setLineDash(isPrimaryLane ? [7, 4] : [4, 4]);
         ctx.beginPath();
-        ctx.moveTo(carrier.x * OVERLAY_W, carrier.y * OVERLAY_H);
+        ctx.moveTo(cx, cy);
         ctx.lineTo(mx, my);
         ctx.stroke();
 
+        // Target receiver diamond + shirt number callout
+        ctx.setLineDash([]);
         ctx.beginPath();
-        ctx.moveTo(mx, my - 5);
-        ctx.lineTo(mx + 5, my);
-        ctx.lineTo(mx, my + 5);
-        ctx.lineTo(mx - 5, my);
+        ctx.moveTo(mx, my - 7);
+        ctx.lineTo(mx + 7, my);
+        ctx.lineTo(mx, my + 7);
+        ctx.lineTo(mx - 7, my);
         ctx.closePath();
+        ctx.fillStyle = "rgba(2, 6, 23, 0.85)";
+        ctx.fill();
         ctx.stroke();
-      }
-      ctx.restore();
-    }
 
-    if (ballTrajectory && ballTrajectory.length > 1) {
-      ctx.save();
-      ctx.strokeStyle = "rgba(103, 232, 249, 0.85)";
-      ctx.lineWidth = 2.2;
-      ctx.setLineDash([4, 3]);
-      ctx.beginPath();
-      ctx.moveTo(ballTrajectory[0].x * OVERLAY_W, ballTrajectory[0].y * OVERLAY_H);
-      for (let i = 1; i < ballTrajectory.length; i += 1) {
-        ctx.lineTo(ballTrajectory[i].x * OVERLAY_W, ballTrajectory[i].y * OVERLAY_H);
-      }
-      ctx.stroke();
+        if (mate.shirtNumber) {
+          const badgeText = `#${mate.shirtNumber}`;
+          const badgeY = my + 16;
+          drawRoundedBannerBox(ctx, mx - 13, badgeY - 7, 26, 13, "rgba(2, 6, 23, 0.88)", "rgba(148, 163, 184, 0.45)");
+          ctx.font = "bold 8.5px sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillStyle = "#f8fafc";
+          safeFillText(ctx, badgeText, mx, badgeY + 2.5);
+        }
+      });
       ctx.restore();
     }
+  }
+
+  // 5. Active Ball Flight Trajectory Arc (shown when ball is in flight or Passing Lanes overlay is active)
+  if (
+    ballTrajectory &&
+    ballTrajectory.length > 1 &&
+    (input.showPassingLanes || resolvedBall?.inFlight)
+  ) {
+    ctx.save();
+    const isShot = resolvedBall?.flightKind === "shot" || resolvedBall?.flightKind === "in_goal";
+    const isAerial =
+      resolvedBall?.flightKind === "cross" ||
+      resolvedBall?.flightKind === "long_pass" ||
+      resolvedBall?.flightKind === "set_piece";
+    ctx.strokeStyle = isShot
+      ? "rgba(244, 63, 94, 0.88)"
+      : isAerial
+        ? "rgba(250, 204, 21, 0.82)"
+        : "rgba(103, 232, 249, 0.82)";
+    ctx.lineWidth = isShot ? 2.8 : 2.1;
+    ctx.setLineDash(isShot ? [] : [5, 4]);
+    ctx.beginPath();
+    ctx.moveTo(ballTrajectory[0].x * OVERLAY_W, ballTrajectory[0].y * OVERLAY_H);
+    for (let i = 1; i < ballTrajectory.length; i += 1) {
+      const pt = ballTrajectory[i];
+      const liftOffset = (pt.height ?? 0) * 5.5;
+      ctx.lineTo(pt.x * OVERLAY_W, pt.y * OVERLAY_H - liftOffset);
+    }
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // 6. Broadcast On-Pitch Player Callout Pills (Ball Carrier & Selected Player only — never cluttered)
+  const callouts: { player: PitchPlayer; accent: string; isSelected: boolean }[] = [];
+  if (input.carrierPlayer) {
+    callouts.push({
+      player: input.carrierPlayer,
+      accent: input.carrierPlayer.side === "home" ? homeColor : awayColor,
+      isSelected: false,
+    });
+  }
+  if (
+    input.selectedPlayer &&
+    (!input.carrierPlayer ||
+      playerIdentityKey(input.selectedPlayer) !== playerIdentityKey(input.carrierPlayer))
+  ) {
+    callouts.push({
+      player: input.selectedPlayer,
+      accent: "#38bdf8",
+      isSelected: true,
+    });
+  }
+
+  const placedCallouts: { x: number; y: number; w: number; h: number }[] = [];
+  for (const { player, accent } of callouts) {
+    const label = `${player.shirtNumber ? `#${player.shirtNumber} ` : ""}${shortPlayerName(player.name)}`;
+    if (!label.trim()) continue;
+    const px = player.x * OVERLAY_W;
+    const py = Math.max(24, player.y * OVERLAY_H - 24);
+    const boxW = Math.max(58, Math.min(126, label.length * 6.4 + 14));
+    const boxX = Math.min(OVERLAY_W - boxW - 6, Math.max(6, px - boxW / 2));
+    let boxY = py - 15;
+    for (const prev of placedCallouts) {
+      const overlapsX = boxX < prev.x + prev.w + 4 && boxX + boxW + 4 > prev.x;
+      const overlapsY = Math.abs(boxY - prev.y) < 19;
+      if (overlapsX && overlapsY) {
+        boxY = prev.y > 32 ? prev.y - 20 : prev.y + 20;
+      }
+    }
+    placedCallouts.push({ x: boxX, y: boxY, w: boxW, h: 16 });
+
+    ctx.save();
+    drawRoundedBannerBox(ctx, boxX, boxY, boxW, 16, "rgba(2, 6, 23, 0.86)", hexToRgbaString(accent, 0.85));
+    ctx.fillStyle = accent;
+    ctx.fillRect(boxX, boxY, 3.5, 16);
+    ctx.font = "bold 9.5px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = "#f8fafc";
+    safeFillText(ctx, label, boxX + boxW / 2 + 1.5, boxY + 11.5);
+    ctx.restore();
   }
 }
 
@@ -1388,6 +1833,7 @@ function paintCanvasFallback(
     goalkeeperAway: string;
     selectedKey: string | null;
     ballPoint: { x: number; y: number } | null;
+    resolvedBall?: ReturnType<typeof resolveBallPresentation>;
     camera: { zoom: number; panX: number; panY: number };
     overlayCanvas: HTMLCanvasElement | null;
     motionTracker: PlayerMotionTracker;
@@ -1408,7 +1854,7 @@ function paintCanvasFallback(
   ctx.scale(zoom, zoom);
   ctx.translate(-width / 2, -height / 2);
 
-  const pitchBitmap = getCachedPitchBitmap(OVERLAY_W, OVERLAY_H);
+  const pitchBitmap = getCachedPitchBitmap(PITCH_TEX_W, PITCH_TEX_H);
   if (pitchBitmap) {
     ctx.drawImage(pitchBitmap, 0, 0, width, height);
   } else {
@@ -1452,7 +1898,14 @@ function paintCanvasFallback(
   if (state.ballPoint) {
     const ballBitmap = getCachedBallBitmap();
     if (ballBitmap) {
-      ctx.drawImage(ballBitmap, state.ballPoint.x * width - 9, state.ballPoint.y * height - 9, 18, 18);
+      const elev = state.resolvedBall?.heightMeters ?? 0;
+      const bx = state.ballPoint.x * width;
+      const by = state.ballPoint.y * height;
+      if (elev > 0.14) {
+        ctx.fillStyle = "rgba(3, 7, 18, 0.42)";
+        fillPolyCircle(ctx, bx, by + 3, 7, 3.2, 16);
+      }
+      ctx.drawImage(ballBitmap, bx - 9, by - 9 - elev * 4.5, 18, 18);
     }
   }
 

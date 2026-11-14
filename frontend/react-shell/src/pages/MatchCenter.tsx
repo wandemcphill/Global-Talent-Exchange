@@ -58,6 +58,7 @@ import {
   stepReplayClock,
   suppliedCrest,
 } from "@/match2d/matchStateAdapter";
+import { MatchTimelineScrubber, buildTimelineModel } from "./match-center/MatchTimelineScrubber";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 
 const GIFTS = [
@@ -1488,9 +1489,9 @@ export default function MatchCenter() {
 
   // Pitch Overlay & Camera Perspective Toggles
   const [showHeatmap, setShowHeatmap] = useState(false);
-  const [showTactics, setShowTactics] = useState(true);
-  const [showLanes, setShowLanes] = useState(true);
-  const [showVoronoi, setShowVoronoi] = useState(true);
+  const [showTactics, setShowTactics] = useState(false);
+  const [showLanes, setShowLanes] = useState(false);
+  const [showVoronoi, setShowVoronoi] = useState(false);
   const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom">("2.5d");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
   const [show3DCutIn, setShow3DCutIn] = useState(false);
@@ -1656,9 +1657,8 @@ export default function MatchCenter() {
       activeReplayFrame?.phase ||
       "",
   ).toLowerCase();
-  const isHalftime = Boolean(
-    phaseName.includes("half") || (minute === 45 && phaseName !== "second_half")
-  );
+  // Only the real half-time break counts; "first_half" / "second_half" merely contain the word "half".
+  const isHalftime = /^(half_?time|half_time_break|ht|break)$/.test(phaseName.replace(/[\s-]+/g, "_"));
   const matchAds = useMatchCommercialInventory(id, true);
 
   const shown = useMemo(() => {
@@ -1728,6 +1728,53 @@ export default function MatchCenter() {
     return merged;
   }, [shown, timedRecordedFrames, acceptedLive, spectatorStream.lastFrame, playbackSeconds, minute]);
 
+  const isRecordedReplay = !acceptedLive && !spectatorStream.lastFrame && timedRecordedFrames.length >= 2;
+  const timelineModel = useMemo(() => buildTimelineModel(timedRecordedFrames as any, (viewerData?.events?.length ? viewerData.events : m?.events) || [], replayDurationSeconds), [timedRecordedFrames, viewerData?.events, m?.events, replayDurationSeconds]);
+
+  // Authoritative live stats win; otherwise derive only what shown events can honestly support
+  // (shot attempts and cards). Possession, xG, etc. stay "—" rather than being invented.
+  const liveStats = useMemo(() => {
+    if (acceptedLive?.stats) return acceptedLive.stats;
+    const homeId = String(viewerData?.home_team?.team_id || "");
+    const awayId = String(viewerData?.away_team?.team_id || "");
+    const sideOf = (ev: any): "home" | "away" | null => {
+      const t = String(ev?.team || ev?.side || ev?.team_id || "").toLowerCase();
+      if (t === "home" || (homeId && t === homeId.toLowerCase())) return "home";
+      if (t === "away" || (awayId && t === awayId.toLowerCase())) return "away";
+      return null;
+    };
+    const rows: any[] = Array.isArray(shown) ? (shown as any[]) : [];
+    if (!rows.length) return undefined;
+    const tally = { hs: 0, as: 0, hy: 0, ay: 0, hr: 0, ar: 0, known: 0 };
+    for (const ev of rows) {
+      const type = String(ev?.type || ev?.event_type || "").toLowerCase();
+      const sd = sideOf(ev);
+      if (!sd) continue;
+      if (["shot", "miss", "save", "goal", "penalty_goal"].includes(type)) {
+        tally.known += 1;
+        if (sd === "home") tally.hs += 1;
+        else tally.as += 1;
+      } else if (type === "yellow_card") {
+        tally.known += 1;
+        if (sd === "home") tally.hy += 1;
+        else tally.ay += 1;
+      } else if (type === "red_card") {
+        tally.known += 1;
+        if (sd === "home") tally.hr += 1;
+        else tally.ar += 1;
+      }
+    }
+    if (!tally.known) return undefined;
+    return {
+      home_shots: tally.hs,
+      away_shots: tally.as,
+      home_yellow_cards: tally.hy,
+      away_yellow_cards: tally.ay,
+      home_red_cards: tally.hr,
+      away_red_cards: tally.ar,
+    } as any;
+  }, [acceptedLive?.stats, shown, viewerData?.home_team?.team_id, viewerData?.away_team?.team_id]);
+
   if (isLoading || !m) return <Loading label="Loading match" />;
 
   const fallbackScore = shown
@@ -1776,7 +1823,7 @@ export default function MatchCenter() {
     hasSnapshot: Boolean(acceptedLive?.pitch_players?.length || spectatorStream.lastFrame?.players?.length),
     hasFrames: recordedFrames.length > 0,
   });
-  const liveStats = acceptedLive?.stats;
+
   const managerSide = side === "away" ? acceptedLive?.away : acceptedLive?.home;
 
   const applyPreset = (preset: any) => {
@@ -1860,19 +1907,29 @@ export default function MatchCenter() {
 
               {/* Broadcast Match Period Capsule */}
               <div className="hidden sm:inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-[#080F1C]/70 px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-widest text-slate-300">
-                <span className="size-1.5 rounded-full bg-[#00C991] animate-ping" />
+                <span
+                  className={
+                    done
+                      ? "size-1.5 rounded-full bg-slate-400"
+                      : isScheduled
+                        ? "size-1.5 rounded-full bg-amber-400"
+                        : "size-1.5 rounded-full bg-[#00C991] animate-ping"
+                  }
+                />
                 <span>
                   {done
                     ? "Full Time"
-                    : phaseName === "penalty_shootout"
-                      ? "Penalties"
-                      : phaseName === "extra_time"
-                        ? "Extra Time"
-                        : isHalftime
-                          ? "Halftime"
-                          : minute <= 45
-                            ? "1st Half"
-                            : "2nd Half"}
+                    : isScheduled
+                      ? "Pre-Match"
+                      : phaseName === "penalty_shootout"
+                        ? "Penalties"
+                        : phaseName === "extra_time"
+                          ? "Extra Time"
+                          : isHalftime
+                            ? "Halftime"
+                            : minute <= 45
+                              ? "1st Half"
+                              : "2nd Half"}
                 </span>
               </div>
 
@@ -2256,10 +2313,12 @@ export default function MatchCenter() {
                     activeReplayFrame?.event_type ||
                     null
                   }
-                  homeColor={acceptedLive?.home?.primary_color_hex || "#00e87a"}
-                  awayColor={acceptedLive?.away?.primary_color_hex || "#ffb800"}
-                  goalkeeperHome={acceptedLive?.home?.goalkeeper_color || "#f8fafc"}
-                  goalkeeperAway={acceptedLive?.away?.goalkeeper_color || "#111827"}
+                  homeColor={acceptedLive?.home?.primary_color_hex || viewerData?.home_team?.primary_color || "#00e87a"}
+                  awayColor={acceptedLive?.away?.primary_color_hex || viewerData?.away_team?.primary_color || "#ffb800"}
+                  goalkeeperHome={acceptedLive?.home?.goalkeeper_color || viewerData?.home_team?.goalkeeper_color || "#f8fafc"}
+                  goalkeeperAway={acceptedLive?.away?.goalkeeper_color || viewerData?.away_team?.goalkeeper_color || "#111827"}
+                  homeScore={score.home}
+                  awayScore={score.away}
                   homeName={m.home_name}
                   awayName={m.away_name}
                   homeCrest={acceptedLive?.home?.crest_url}
@@ -2279,6 +2338,7 @@ export default function MatchCenter() {
                   showTactics={showTactics}
                   showPassingLanes={showLanes}
                 />
+                {isRecordedReplay && (<MatchTimelineScrubber model={timelineModel} currentSeconds={playbackSeconds} onSeek={(s) => setPlaybackSeconds(s)} />)}
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     ["Shots", `${metricText(liveStats?.home_shots)} – ${metricText(liveStats?.away_shots)}`],

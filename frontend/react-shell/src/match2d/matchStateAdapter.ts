@@ -10,22 +10,50 @@ export type PitchPlayer = {
   shirtNumber: number;
   name: string;
   role?: string;
+  line?: string;
+  state?: string;
   animationState?: string;
   hasBall?: boolean;
   isGoalkeeper?: boolean;
+  highlighted?: boolean;
+  speedRatio?: number | null;
   staminaPct?: number | null;
+  anchorX?: number | null;
+  anchorY?: number | null;
   velocity?: { x: number; y: number } | null;
   facing?: { x: number; y: number } | null;
 };
 
-export type PitchBall = { x: number; y: number };
+export type PitchBall = {
+  x: number;
+  y: number;
+  height?: number | null;
+  state?: string | null;
+  ownerPlayerId?: string | null;
+  velocity?: { x: number; y: number; z?: number } | null;
+};
 
 export type PitchFrame = {
   timeSeconds: number;
   clockMinute?: number;
   phase?: string | null;
+  stage?: string | null;
+  cameraPreset?: string | null;
   homeScore?: number;
   awayScore?: number;
+  homeAttacksRight?: boolean;
+  possessionSide?: PitchSide | null;
+  possessionPhase?: string | null;
+  transitionState?: string | null;
+  dangerZone?: string | null;
+  pressureIndex?: number | null;
+  compactnessHome?: number | null;
+  compactnessAway?: number | null;
+  eventBanner?: string | null;
+  activeEventId?: string | null;
+  celebrationTeamId?: string | null;
+  primaryPlayerId?: string | null;
+  secondaryPlayerId?: string | null;
   players: PitchPlayer[];
   ball: PitchBall | null;
   eventType?: string | null;
@@ -75,12 +103,19 @@ export function sanitizePitchPlayer(raw: PitchPlayer | null | undefined): PitchP
   if (!playerId) return null;
   const side: PitchSide = raw.side === "away" ? "away" : "home";
   if (!Number.isFinite(raw.x) || !Number.isFinite(raw.y)) return null;
+  const anchorX = raw.anchorX != null && Number.isFinite(raw.anchorX) ? clampUnit(raw.anchorX) : null;
+  const anchorY = raw.anchorY != null && Number.isFinite(raw.anchorY) ? clampUnit(raw.anchorY) : null;
+  const speedRatio =
+    raw.speedRatio != null && Number.isFinite(raw.speedRatio) ? Math.min(1, Math.max(0, raw.speedRatio)) : null;
   return {
     ...raw,
     playerId,
     side,
     x: clampUnit(raw.x),
     y: clampUnit(raw.y),
+    anchorX,
+    anchorY,
+    speedRatio,
     shirtNumber: Number.isFinite(Number(raw.shirtNumber)) ? Math.max(0, Math.floor(Number(raw.shirtNumber))) : 0,
     name: String(raw.name ?? ""),
   };
@@ -103,12 +138,25 @@ function normalizeSample(sample: LiveSample): LiveSample {
   }
   const ball =
     sample.ball && Number.isFinite(sample.ball.x) && Number.isFinite(sample.ball.y)
-      ? { x: clampUnit(sample.ball.x), y: clampUnit(sample.ball.y) }
+      ? {
+          ...sample.ball,
+          x: clampUnit(sample.ball.x),
+          y: clampUnit(sample.ball.y),
+          height:
+            sample.ball.height != null && Number.isFinite(sample.ball.height)
+              ? Math.max(0, sample.ball.height)
+              : null,
+        }
       : null;
   const ballTrajectory = Array.isArray(sample.ballTrajectory)
     ? sample.ballTrajectory
         .filter((pt) => pt && Number.isFinite(pt.x) && Number.isFinite(pt.y))
-        .map((pt) => ({ x: clampUnit(pt.x), y: clampUnit(pt.y) }))
+        .map((pt) => ({
+          ...pt,
+          x: clampUnit(pt.x),
+          y: clampUnit(pt.y),
+          height: pt.height != null && Number.isFinite(pt.height) ? Math.max(0, pt.height) : null,
+        }))
     : null;
   return {
     ...sample,
@@ -491,8 +539,12 @@ export function acceptSnapshot<T extends SnapshotCursor>(previous: T | null, nex
  */
 export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): PitchFrame {
   const t = Math.min(1, Math.max(0, Number.isFinite(alpha) ? alpha : 1));
-  const fromPlayers = Array.isArray(from?.players) ? from.players.map(sanitizePitchPlayer).filter((p): p is PitchPlayer => p !== null) : [];
-  const toPlayers = Array.isArray(to?.players) ? to.players.map(sanitizePitchPlayer).filter((p): p is PitchPlayer => p !== null) : [];
+  const fromPlayers = Array.isArray(from?.players)
+    ? from.players.map(sanitizePitchPlayer).filter((p): p is PitchPlayer => p !== null)
+    : [];
+  const toPlayers = Array.isArray(to?.players)
+    ? to.players.map(sanitizePitchPlayer).filter((p): p is PitchPlayer => p !== null)
+    : [];
 
   const fromByKey = new Map<string, PitchPlayer>();
   for (const player of fromPlayers) {
@@ -502,6 +554,58 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
   for (const player of toPlayers) {
     toByKey.set(playerIdentityKey(player), player);
   }
+
+  const blendPlayerPair = (origin: PitchPlayer, target: PitchPlayer, useOriginIdentity: boolean): PitchPlayer => {
+    const base = useOriginIdentity ? origin : target;
+    const anchorX =
+      origin.anchorX != null && target.anchorX != null
+        ? origin.anchorX + (target.anchorX - origin.anchorX) * t
+        : target.anchorX ?? origin.anchorX ?? null;
+    const anchorY =
+      origin.anchorY != null && target.anchorY != null
+        ? origin.anchorY + (target.anchorY - origin.anchorY) * t
+        : target.anchorY ?? origin.anchorY ?? null;
+    const speedRatio =
+      origin.speedRatio != null && target.speedRatio != null
+        ? origin.speedRatio + (target.speedRatio - origin.speedRatio) * t
+        : target.speedRatio ?? origin.speedRatio ?? null;
+    const staminaPct =
+      origin.staminaPct != null && target.staminaPct != null
+        ? origin.staminaPct + (target.staminaPct - origin.staminaPct) * t
+        : target.staminaPct ?? origin.staminaPct ?? null;
+    const velocity =
+      origin.velocity && target.velocity
+        ? {
+            x: origin.velocity.x + (target.velocity.x - origin.velocity.x) * t,
+            y: origin.velocity.y + (target.velocity.y - origin.velocity.y) * t,
+          }
+        : target.velocity ?? origin.velocity ?? null;
+    const facing =
+      origin.facing && target.facing
+        ? {
+            x: origin.facing.x + (target.facing.x - origin.facing.x) * t,
+            y: origin.facing.y + (target.facing.y - origin.facing.y) * t,
+          }
+        : target.facing ?? origin.facing ?? null;
+
+    return {
+      ...base,
+      x: origin.x + (target.x - origin.x) * t,
+      y: origin.y + (target.y - origin.y) * t,
+      anchorX,
+      anchorY,
+      speedRatio,
+      staminaPct,
+      velocity,
+      facing,
+      hasBall: useOriginIdentity ? Boolean(origin.hasBall) : Boolean(target.hasBall),
+      state: useOriginIdentity ? origin.state || target.state : target.state || origin.state,
+      animationState: useOriginIdentity
+        ? origin.animationState || target.animationState
+        : target.animationState || origin.animationState,
+      highlighted: useOriginIdentity ? Boolean(origin.highlighted) : Boolean(target.highlighted),
+    };
+  };
 
   const atSubstitutionBoundary = t >= 0.5 || fromPlayers.length === 0;
   const players: PitchPlayer[] = [];
@@ -514,13 +618,7 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
       if (!target) {
         players.push({ ...fromPlayer });
       } else {
-        players.push({
-          ...fromPlayer,
-          x: fromPlayer.x + (target.x - fromPlayer.x) * t,
-          y: fromPlayer.y + (target.y - fromPlayer.y) * t,
-          hasBall: Boolean(fromPlayer.hasBall),
-          animationState: fromPlayer.animationState || target.animationState,
-        });
+        players.push(blendPlayerPair(fromPlayer, target, true));
       }
     }
   } else {
@@ -533,29 +631,40 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
       if (!origin) {
         players.push({ ...toPlayer });
       } else {
-        players.push({
-          ...toPlayer,
-          x: origin.x + (toPlayer.x - origin.x) * t,
-          y: origin.y + (toPlayer.y - origin.y) * t,
-        });
+        players.push(blendPlayerPair(origin, toPlayer, false));
       }
     }
   }
 
   const fromBall =
     from?.ball && Number.isFinite(from.ball.x) && Number.isFinite(from.ball.y)
-      ? { x: clampUnit(from.ball.x), y: clampUnit(from.ball.y) }
+      ? {
+          ...from.ball,
+          x: clampUnit(from.ball.x),
+          y: clampUnit(from.ball.y),
+          height: from.ball.height != null && Number.isFinite(from.ball.height) ? Math.max(0, from.ball.height) : null,
+        }
       : null;
   const toBall =
     to?.ball && Number.isFinite(to.ball.x) && Number.isFinite(to.ball.y)
-      ? { x: clampUnit(to.ball.x), y: clampUnit(to.ball.y) }
+      ? {
+          ...to.ball,
+          x: clampUnit(to.ball.x),
+          y: clampUnit(to.ball.y),
+          height: to.ball.height != null && Number.isFinite(to.ball.height) ? Math.max(0, to.ball.height) : null,
+        }
       : null;
 
   const ball =
     fromBall && toBall
       ? {
+          ...(t < 0.5 ? fromBall : toBall),
           x: fromBall.x + (toBall.x - fromBall.x) * t,
           y: fromBall.y + (toBall.y - fromBall.y) * t,
+          height:
+            fromBall.height != null && toBall.height != null
+              ? fromBall.height + (toBall.height - fromBall.height) * t
+              : (t < 0.5 ? fromBall.height : toBall.height) ?? null,
         }
       : toBall || fromBall;
 
@@ -572,45 +681,626 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
     timeSeconds: fromTime + (toTime - fromTime) * t,
     clockMinute,
     phase: t < 0.5 ? from?.phase ?? to?.phase : to?.phase ?? from?.phase,
+    stage: t < 0.5 ? from?.stage ?? to?.stage : to?.stage ?? from?.stage,
+    cameraPreset: t < 0.5 ? from?.cameraPreset ?? to?.cameraPreset : to?.cameraPreset ?? from?.cameraPreset,
     homeScore: t < 0.5 ? from?.homeScore ?? to?.homeScore : to?.homeScore ?? from?.homeScore,
     awayScore: t < 0.5 ? from?.awayScore ?? to?.awayScore : to?.awayScore ?? from?.awayScore,
+    homeAttacksRight:
+      t < 0.5 ? from?.homeAttacksRight ?? to?.homeAttacksRight : to?.homeAttacksRight ?? from?.homeAttacksRight,
+    possessionSide: t < 0.5 ? from?.possessionSide ?? to?.possessionSide : to?.possessionSide ?? from?.possessionSide,
+    possessionPhase:
+      t < 0.5 ? from?.possessionPhase ?? to?.possessionPhase : to?.possessionPhase ?? from?.possessionPhase,
+    transitionState:
+      t < 0.5 ? from?.transitionState ?? to?.transitionState : to?.transitionState ?? from?.transitionState,
+    dangerZone: t < 0.5 ? from?.dangerZone ?? to?.dangerZone : to?.dangerZone ?? from?.dangerZone,
+    pressureIndex:
+      from?.pressureIndex != null && to?.pressureIndex != null
+        ? from.pressureIndex + (to.pressureIndex - from.pressureIndex) * t
+        : (t < 0.5 ? from?.pressureIndex : to?.pressureIndex) ?? null,
+    compactnessHome:
+      from?.compactnessHome != null && to?.compactnessHome != null
+        ? from.compactnessHome + (to.compactnessHome - from.compactnessHome) * t
+        : (t < 0.5 ? from?.compactnessHome : to?.compactnessHome) ?? null,
+    compactnessAway:
+      from?.compactnessAway != null && to?.compactnessAway != null
+        ? from.compactnessAway + (to.compactnessAway - from.compactnessAway) * t
+        : (t < 0.5 ? from?.compactnessAway : to?.compactnessAway) ?? null,
+    eventBanner: t < 0.5 ? from?.eventBanner ?? to?.eventBanner : to?.eventBanner ?? from?.eventBanner,
+    activeEventId: t < 0.5 ? from?.activeEventId ?? to?.activeEventId : to?.activeEventId ?? from?.activeEventId,
+    celebrationTeamId:
+      t < 0.5 ? from?.celebrationTeamId ?? to?.celebrationTeamId : to?.celebrationTeamId ?? from?.celebrationTeamId,
+    primaryPlayerId:
+      t < 0.5 ? from?.primaryPlayerId ?? to?.primaryPlayerId : to?.primaryPlayerId ?? from?.primaryPlayerId,
+    secondaryPlayerId:
+      t < 0.5 ? from?.secondaryPlayerId ?? to?.secondaryPlayerId : to?.secondaryPlayerId ?? from?.secondaryPlayerId,
     players,
     ball,
     eventType: t < 0.5 ? from?.eventType : to?.eventType,
-    ballTrajectory: t < 0.5 ? from?.ballTrajectory || to?.ballTrajectory || null : to?.ballTrajectory || from?.ballTrajectory || null,
+    ballTrajectory:
+      t < 0.5 ? from?.ballTrajectory || to?.ballTrajectory || null : to?.ballTrajectory || from?.ballTrajectory || null,
   };
 }
 
+export type AnimationResolutionContext = {
+  ball?: PitchBall | null;
+  possessionSide?: PitchSide | null;
+  primaryPlayerId?: string | null;
+  secondaryPlayerId?: string | null;
+  celebrationSide?: PitchSide | null;
+  stage?: string | null;
+  homeAttacksRight?: boolean;
+};
+
+function resolveIndividualMovementAction(player: {
+  animationState?: string;
+  state?: string;
+  hasBall?: boolean;
+  role?: string;
+  speedRatio?: number | null;
+  velocity?: { x: number; y: number } | null;
+}): PlayerAction {
+  const combinedState = `${player.animationState || ""} ${player.state || ""}`.toLowerCase();
+  if (combinedState.includes("header")) return "header";
+  if (combinedState.includes("celebrat")) return "celebrate";
+  if (combinedState.includes("save")) return "save";
+  if (combinedState.includes("dive")) return "dive";
+  if (combinedState.includes("shoot") || combinedState.includes("shot")) return "shoot";
+  if (combinedState.includes("pass")) return "pass";
+  if (combinedState.includes("tackle") || combinedState.includes("foul")) return "tackle";
+  if (combinedState.includes("jump") || combinedState.includes("aerial")) return "jump";
+  if (combinedState.includes("turn")) return "turn";
+  if (combinedState.includes("accel")) return "accelerate";
+  if (combinedState.includes("dribble") || player.hasBall) return "dribble";
+  if (combinedState.includes("sprint") || combinedState.includes("attacking") || combinedState.includes("counter")) {
+    return "sprint";
+  }
+  if (combinedState.includes("press")) {
+    return (player.speedRatio ?? 0) > 0.65 ? "sprint" : "jog";
+  }
+  if (combinedState.includes("walk") || combinedState.includes("recover") || combinedState.includes("rest")) {
+    return "walk";
+  }
+  if (
+    combinedState.includes("run") ||
+    combinedState.includes("jog") ||
+    combinedState.includes("move") ||
+    combinedState.includes("support") ||
+    combinedState.includes("track")
+  ) {
+    return "jog";
+  }
+  if (player.velocity) {
+    const vMag = Math.hypot(player.velocity.x, player.velocity.y);
+    if (vMag > 0.08) return "sprint";
+    if (vMag > 0.03) return "jog";
+    if (vMag > 0.008) return "walk";
+  }
+  if (typeof player.speedRatio === "number" && Number.isFinite(player.speedRatio)) {
+    if (player.speedRatio >= 0.72) return "sprint";
+    if (player.speedRatio >= 0.36) return "jog";
+    if (player.speedRatio >= 0.14) return "walk";
+  }
+  return "idle";
+}
+
 export function animationFor(
-  player: { animationState?: string; hasBall?: boolean; role?: string },
+  player: {
+    playerId?: string;
+    side?: PitchSide;
+    x?: number;
+    y?: number;
+    animationState?: string;
+    state?: string;
+    hasBall?: boolean;
+    highlighted?: boolean;
+    role?: string;
+    isGoalkeeper?: boolean;
+    speedRatio?: number | null;
+    velocity?: { x: number; y: number } | null;
+  },
   eventType?: string | null,
+  context?: AnimationResolutionContext,
 ): PlayerAction {
   const event = String(eventType || "").toLowerCase();
-  const state = String(player.animationState || "").toLowerCase();
+  const state = `${player.animationState || ""} ${player.state || ""}`.toLowerCase();
   const keeper =
-    String(player.role || "").toLowerCase().includes("gk") || String(player.role || "").toLowerCase().includes("goal");
-  if (event === "goal" && player.hasBall) return "celebrate";
-  if ((event === "save" || event === "shot") && keeper) return event === "save" ? "save" : "dive";
-  if (event === "goal" || event === "shot" || event === "miss") return keeper ? "dive" : "shoot";
-  if (event === "pass" || event === "attack") return player.hasBall ? "pass" : "jog";
-  if (event === "foul" || event === "tackle") return "tackle";
-  if (event === "substitution") return "idle";
-  if (state.includes("header")) return "header";
-  if (state.includes("sprint")) return "sprint";
-  if (state.includes("walk")) return "walk";
-  if (state.includes("dribble")) return "dribble";
-  if (state.includes("jump")) return "jump";
-  if (state.includes("turn")) return "turn";
-  if (state.includes("accel")) return "accelerate";
-  if (state.includes("run") || state.includes("jog")) return "jog";
-  if (state.includes("shoot")) return "shoot";
-  if (state.includes("pass")) return "pass";
-  if (state.includes("press") || state.includes("tackle")) return "tackle";
-  if (state.includes("save")) return "save";
-  if (state.includes("celebrat")) return "celebrate";
-  if (state.includes("dive")) return "dive";
-  if (player.hasBall) return "dribble";
-  return "idle";
+    Boolean(player.isGoalkeeper) ||
+    String(player.role || "").toLowerCase().includes("gk") ||
+    String(player.role || "").toLowerCase().includes("goal");
+
+  const hasSpatialContext =
+    Boolean(context) ||
+    (typeof player.x === "number" && Number.isFinite(player.x) && typeof player.y === "number" && Number.isFinite(player.y));
+
+  // If called without spatial/frame context (e.g. direct single-player unit test), preserve direct event mapping
+  if (!hasSpatialContext) {
+    if (event === "goal" && player.hasBall) return "celebrate";
+    if ((event === "save" || event === "shot") && keeper) return event === "save" ? "save" : "dive";
+    if (event === "goal" || event === "shot" || event === "miss") return keeper ? "dive" : "shoot";
+    if (event === "pass" || event === "attack") return player.hasBall ? "pass" : "jog";
+    if (event === "foul" || event === "tackle") return "tackle";
+    if (event === "substitution") return "idle";
+    return resolveIndividualMovementAction(player);
+  }
+
+  const ball = context?.ball ?? null;
+  const distToBall =
+    ball && typeof player.x === "number" && typeof player.y === "number"
+      ? Math.hypot(player.x - ball.x, player.y - ball.y)
+      : Number.POSITIVE_INFINITY;
+  const isPrimaryActor =
+    Boolean(player.hasBall) ||
+    Boolean(context?.primaryPlayerId && player.playerId === context.primaryPlayerId) ||
+    Boolean(ball?.ownerPlayerId && player.playerId === ball.ownerPlayerId) ||
+    distToBall <= 0.042;
+  const isSecondaryActor = Boolean(context?.secondaryPlayerId && player.playerId === context.secondaryPlayerId);
+
+  const scoringSide: PitchSide | null =
+    context?.celebrationSide ??
+    context?.possessionSide ??
+    (ball ? (ball.x >= 0.5 ? "home" : "away") : player.side ?? null);
+
+  // Determine whether this goalkeeper is at the active goal end where the shot/save/goal is happening
+  const isDefendingKeeperNearBall =
+    keeper &&
+    (!ball ||
+      distToBall <= 0.28 ||
+      (ball.x < 0.35 && player.side === (context?.homeAttacksRight === false ? "away" : "home")) ||
+      (ball.x > 0.65 && player.side === (context?.homeAttacksRight === false ? "home" : "away")));
+
+  if (event === "goal") {
+    if (player.side && scoringSide && player.side === scoringSide) {
+      if (keeper) return "idle";
+      if (isPrimaryActor || player.highlighted || distToBall <= 0.36) {
+        return "celebrate";
+      }
+      return "jog";
+    }
+    if (isDefendingKeeperNearBall && context?.stage !== "post_event" && context?.stage !== "reset") {
+      return "dive";
+    }
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "save") {
+    if (keeper) {
+      return isDefendingKeeperNearBall ? "save" : "idle";
+    }
+    if (isPrimaryActor) return "shoot";
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "shot" || event === "miss" || event === "penalty") {
+    if (keeper) {
+      return isDefendingKeeperNearBall ? "dive" : "idle";
+    }
+    if (isPrimaryActor) {
+      if (state.includes("header") || (ball?.height && ball.height >= 1.35)) {
+        return "header";
+      }
+      return "shoot";
+    }
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (
+    event === "pass" ||
+    event === "attack" ||
+    event === "through_ball" ||
+    event === "cross" ||
+    event === "corner" ||
+    event === "free_kick" ||
+    event === "goal_kick" ||
+    event === "kickoff"
+  ) {
+    if (isPrimaryActor) {
+      if (state.includes("header")) return "header";
+      return "pass";
+    }
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "header") {
+    if (isPrimaryActor || distToBall <= 0.08) return "header";
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "foul" || event === "tackle" || event === "yellow_card" || event === "red_card") {
+    if (isPrimaryActor || isSecondaryActor || distToBall <= 0.065) {
+      return "tackle";
+    }
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "substitution" || event === "halftime" || event === "fulltime") {
+    return "idle";
+  }
+
+  return resolveIndividualMovementAction(player);
+}
+
+export type BallFlightKind =
+  | "dribble"
+  | "ground_pass"
+  | "through_ball"
+  | "long_pass"
+  | "cross"
+  | "header"
+  | "shot"
+  | "save_rebound"
+  | "set_piece"
+  | "loose_ball"
+  | "in_goal";
+
+export type ResolvedBallPresentation = {
+  x: number;
+  y: number;
+  shadowX: number;
+  shadowY: number;
+  heightMeters: number;
+  flightKind: BallFlightKind;
+  carrier: PitchPlayer | null;
+  inFlight: boolean;
+  speedNorm: number;
+};
+
+/**
+ * Ensures the ball has a coherent physical and visual relationship with the active player and match event:
+ * - Anchors the ball at the ball-carrier's feet (offset slightly in their facing direction) when controlled.
+ * - Releases the ball immediately during passes, crosses, shots, saves, rebounds, set pieces, and loose balls.
+ * - Computes elevation (`heightMeters`) from authoritative `ball.height` or legitimate trajectory span so aerial
+ *   balls separate cleanly from their ground shadow.
+ */
+export function resolveBallPresentation(
+  frame: PitchFrame | null | undefined,
+  trajectoryAlpha = 1,
+  sampledBall?: { x: number; y: number } | null,
+): ResolvedBallPresentation | null {
+  if (!frame || (!frame.ball && !sampledBall)) return null;
+  const rawBall = sampledBall || frame.ball!;
+  const event = String(frame.eventType || "").toLowerCase();
+  const ballState = String(frame.ball?.state || "").toLowerCase();
+  const traj = frame.ballTrajectory && frame.ballTrajectory.length >= 2 ? frame.ballTrajectory : null;
+  const alpha = Math.min(1, Math.max(0, Number.isFinite(trajectoryAlpha) ? trajectoryAlpha : 1));
+
+  const carrier =
+    frame.players.find((p) => p.hasBall) ||
+    (frame.ball?.ownerPlayerId ? frame.players.find((p) => p.playerId === frame.ball?.ownerPlayerId) : null) ||
+    null;
+
+  const trajStart = traj ? traj[0] : null;
+  const trajEnd = traj ? traj[traj.length - 1] : null;
+  const trajSpan = trajStart && trajEnd ? Math.hypot(trajEnd.x - trajStart.x, trajEnd.y - trajStart.y) : 0;
+
+  let flightKind: BallFlightKind = "loose_ball";
+  if (event === "goal" || ballState === "in_goal") {
+    flightKind = "in_goal";
+  } else if (event === "save" || ballState === "saved" || ballState === "rebound") {
+    flightKind = "save_rebound";
+  } else if (event === "shot" || event === "miss" || ballState === "shot" || ballState === "shooting") {
+    flightKind = "shot";
+  } else if (event === "header" || ballState === "header") {
+    flightKind = "header";
+  } else if (
+    event === "corner" ||
+    event === "free_kick" ||
+    event === "penalty" ||
+    event === "goal_kick" ||
+    event === "kickoff" ||
+    ballState === "set_piece" ||
+    ballState === "placed"
+  ) {
+    flightKind = "set_piece";
+  } else if (
+    event === "cross" ||
+    ballState === "crossed" ||
+    (trajStart && trajEnd && Math.abs(trajStart.y - 0.5) > 0.26 && Math.abs(trajEnd.y - 0.5) < 0.22 && (trajEnd.x < 0.22 || trajEnd.x > 0.78))
+  ) {
+    flightKind = "cross";
+  } else if (event === "through_ball") {
+    flightKind = "through_ball";
+  } else if (traj && alpha < 0.96 && trajSpan > 0.025) {
+    flightKind = trajSpan > 0.24 ? "long_pass" : "ground_pass";
+  } else if (event === "pass" || ballState === "passing") {
+    flightKind = trajSpan > 0.24 ? "long_pass" : "ground_pass";
+  } else if (carrier) {
+    flightKind = "dribble";
+  }
+
+  const inFlight =
+    flightKind === "ground_pass" ||
+    flightKind === "through_ball" ||
+    flightKind === "long_pass" ||
+    flightKind === "cross" ||
+    flightKind === "header" ||
+    flightKind === "shot" ||
+    flightKind === "save_rebound" ||
+    (flightKind === "set_piece" && Boolean(traj && alpha > 0.04 && alpha < 0.96));
+
+  let x = clampUnit(rawBall.x);
+  let y = clampUnit(rawBall.y);
+
+  // When a player is actively dribbling/controlling the ball (and it isn't mid-flight on a pass/shot),
+  // keep the ball cleanly at the carrier's feet in their facing direction.
+  if (carrier && !inFlight && flightKind === "dribble") {
+    const distFromCarrier = Math.hypot(x - carrier.x, y - carrier.y);
+    if (distFromCarrier < 0.065) {
+      const defaultDirX = carrier.side === "home" ? (frame.homeAttacksRight === false ? -1 : 1) : frame.homeAttacksRight === false ? 1 : -1;
+      const fx = carrier.facing?.x ?? carrier.velocity?.x ?? defaultDirX;
+      const fy = carrier.facing?.y ?? carrier.velocity?.y ?? 0;
+      const fLen = Math.hypot(fx, fy) || 1;
+      const footX = clampUnit(carrier.x + (fx / fLen) * 0.011);
+      const footY = clampUnit(carrier.y + (fy / fLen) * 0.008);
+      x = footX * 0.72 + x * 0.28;
+      y = footY * 0.72 + y * 0.28;
+    }
+  }
+
+  let heightMeters =
+    frame.ball?.height != null && Number.isFinite(frame.ball.height) ? Math.max(0, frame.ball.height) : 0;
+
+  if (heightMeters <= 0.05 && inFlight) {
+    const arc = Math.max(0, 4 * alpha * (1 - alpha));
+    if (flightKind === "cross") {
+      heightMeters = arc * 2.4;
+    } else if (flightKind === "long_pass") {
+      heightMeters = arc * 1.8;
+    } else if (flightKind === "set_piece") {
+      heightMeters = arc * (event === "penalty" ? 0.9 : 2.1);
+    } else if (flightKind === "shot") {
+      heightMeters = Math.sin(Math.min(1, alpha) * Math.PI * 0.85) * 1.35;
+    } else if (flightKind === "header") {
+      heightMeters = 1.6 * (1 - alpha * 0.65);
+    } else if (flightKind === "save_rebound") {
+      heightMeters = Math.abs(Math.sin(alpha * Math.PI * 2)) * 0.85;
+    }
+  }
+
+  const vel = frame.ball?.velocity;
+  const speedNorm = vel
+    ? Math.min(1, Math.hypot(vel.x, vel.y) / 28)
+    : inFlight
+      ? Math.min(1, Math.max(0.25, trajSpan * 2.6))
+      : carrier
+        ? Math.min(0.6, carrier.speedRatio ?? 0.32)
+        : 0.1;
+
+  return {
+    x,
+    y,
+    shadowX: x,
+    shadowY: y,
+    heightMeters,
+    flightKind,
+    carrier: inFlight ? null : carrier,
+    inFlight,
+    speedNorm,
+  };
+}
+
+export type BroadcastBannerTone = "goal" | "chance" | "card_yellow" | "card_red" | "set_piece" | "phase" | "tactical";
+
+export type BroadcastBannerState = {
+  kind: string;
+  tone: BroadcastBannerTone;
+  badge: string;
+  headline: string;
+  subline: string;
+  minuteLabel: string;
+  teamSide: PitchSide | null;
+  scoreline: string | null;
+};
+
+/**
+ * Derives a television-style broadcast lower-third/banner state from authoritative frame & event data.
+ * Never fabricates goals, cards, or outcomes not present in the authoritative frame.
+ */
+export function deriveBroadcastBanner(
+  frame: PitchFrame | null | undefined,
+  options?: {
+    homeName?: string;
+    awayName?: string;
+    activeEventSummary?: string | null;
+    activeEventPlayerName?: string | null;
+    activeEventTeamSide?: PitchSide | null;
+  },
+): BroadcastBannerState | null {
+  if (!frame) return null;
+  const homeName = options?.homeName || "Home";
+  const awayName = options?.awayName || "Away";
+  const event = String(frame.eventType || "").toLowerCase();
+  const phase = String(frame.phase || "").toLowerCase();
+  const minute = Number.isFinite(frame.clockMinute)
+    ? Math.max(0, Math.round(frame.clockMinute as number))
+    : Math.max(0, Math.floor((frame.timeSeconds || 0) / 60));
+  const minuteLabel = `${minute}'`;
+  const scoreline =
+    frame.homeScore != null && frame.awayScore != null ? `${frame.homeScore} - ${frame.awayScore}` : null;
+
+  const primaryPlayer =
+    (frame.primaryPlayerId ? frame.players.find((p) => p.playerId === frame.primaryPlayerId) : null) ||
+    frame.players.find((p) => p.hasBall) ||
+    frame.players.find((p) => p.highlighted) ||
+    null;
+  const teamSide: PitchSide | null =
+    options?.activeEventTeamSide || primaryPlayer?.side || frame.possessionSide || null;
+  const teamName = teamSide === "away" ? awayName : teamSide === "home" ? homeName : null;
+  const playerLabel =
+    options?.activeEventPlayerName ||
+    (primaryPlayer
+      ? `${primaryPlayer.shirtNumber ? `#${primaryPlayer.shirtNumber} ` : ""}${primaryPlayer.name}`
+      : null);
+
+  if (event === "goal") {
+    return {
+      kind: "goal",
+      tone: "goal",
+      badge: "GOAL!",
+      headline: playerLabel ? `${playerLabel}${teamName ? ` · ${teamName}` : ""}` : frame.eventBanner || `${teamName || "Match"} Goal`,
+      subline: options?.activeEventSummary || frame.eventBanner || "Clinical finish into the back of the net",
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "penalty") {
+    return {
+      kind: "penalty",
+      tone: "chance",
+      badge: "PENALTY",
+      headline: frame.eventBanner || (teamName ? `Penalty to ${teamName}` : "Spot Kick Awarded"),
+      subline: options?.activeEventSummary || (playerLabel ? `${playerLabel} steps up to the spot` : "High-pressure moment from 12 yards"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "save") {
+    const primaryIsKeeper = Boolean(
+      primaryPlayer &&
+        (primaryPlayer.isGoalkeeper || String(primaryPlayer.role || "").toLowerCase().includes("gk")),
+    );
+    const keeper = primaryIsKeeper
+      ? primaryPlayer
+      : frame.players.find(
+          (p) =>
+            (p.isGoalkeeper || String(p.role || "").toLowerCase().includes("gk")) &&
+            (!teamSide || p.side !== teamSide),
+        ) || primaryPlayer;
+    const keeperLabel = keeper ? `${keeper.shirtNumber ? `#${keeper.shirtNumber} ` : ""}${keeper.name}` : playerLabel;
+    return {
+      kind: "save",
+      tone: "chance",
+      badge: "GREAT SAVE",
+      headline: keeperLabel || frame.eventBanner || "Goalkeeper Intervention",
+      subline: options?.activeEventSummary || "Strong hands to deny the effort on goal",
+      minuteLabel,
+      teamSide: keeper?.side || teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "shot" || event === "miss") {
+    return {
+      kind: event,
+      tone: "chance",
+      badge: event === "shot" ? "SHOT ON TARGET" : "CLOSE EFFORT",
+      headline: playerLabel ? `${playerLabel}${teamName ? ` · ${teamName}` : ""}` : frame.eventBanner || "Goal Attempt",
+      subline: options?.activeEventSummary || (event === "shot" ? "Testing the goalkeeper from range" : "Effort flashes just past the woodwork"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "red_card" || event === "yellow_card") {
+    const isRed = event === "red_card";
+    return {
+      kind: event,
+      tone: isRed ? "card_red" : "card_yellow",
+      badge: isRed ? "RED CARD" : "YELLOW CARD",
+      headline: playerLabel ? `${playerLabel}${teamName ? ` · ${teamName}` : ""}` : frame.eventBanner || "Disciplinary Action",
+      subline: options?.activeEventSummary || (isRed ? "Dismissed by the referee" : "Caution issued by the referee"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "foul") {
+    return {
+      kind: "foul",
+      tone: "set_piece",
+      badge: "FOUL",
+      headline: frame.eventBanner || (teamName ? `Free Kick · ${teamName}` : "Play Stopped for a Foul"),
+      subline: options?.activeEventSummary || (playerLabel ? `Infringement involving ${playerLabel}` : "Referee blows for a free kick"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "substitution") {
+    return {
+      kind: "substitution",
+      tone: "tactical",
+      badge: "SUBSTITUTION",
+      headline: frame.eventBanner || (teamName ? `Tactical Change · ${teamName}` : "Tactical Substitution"),
+      subline: options?.activeEventSummary || (playerLabel ? `${playerLabel} enters the pitch` : "Fresh legs introduced from the touchline"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "corner" || event === "free_kick") {
+    return {
+      kind: event,
+      tone: "set_piece",
+      badge: event === "corner" ? "CORNER KICK" : "FREE KICK",
+      headline: frame.eventBanner || (teamName ? `Set Piece · ${teamName}` : "Attacking Set Piece"),
+      subline: options?.activeEventSummary || "Players pack the penalty area for the delivery",
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "kickoff" || (minute <= 1 && (frame.timeSeconds || 0) <= 4 && phase === "first_half")) {
+    return {
+      kind: "kickoff",
+      tone: "phase",
+      badge: "KICK-OFF",
+      headline: `${homeName} vs ${awayName}`,
+      subline: frame.eventBanner || options?.activeEventSummary || "We are underway on the broadcast pitch",
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  if (event === "halftime" || phase === "halftime" || phase === "half_time") {
+    return {
+      kind: "halftime",
+      tone: "phase",
+      badge: "HALF-TIME",
+      headline: `${homeName} ${frame.homeScore ?? 0} - ${frame.awayScore ?? 0} ${awayName}`,
+      subline: frame.eventBanner || options?.activeEventSummary || "End of the first 45 minutes",
+      minuteLabel: "HT",
+      teamSide: null,
+      scoreline,
+    };
+  }
+
+  if (event === "fulltime" || phase === "fulltime" || phase === "full_time" || phase === "completed") {
+    return {
+      kind: "fulltime",
+      tone: "phase",
+      badge: "FULL-TIME",
+      headline: `${homeName} ${frame.homeScore ?? 0} - ${frame.awayScore ?? 0} ${awayName}`,
+      subline: frame.eventBanner || options?.activeEventSummary || "Final whistle confirms the result",
+      minuteLabel: "FT",
+      teamSide: null,
+      scoreline,
+    };
+  }
+
+  if (frame.eventBanner) {
+    return {
+      kind: event || "banner",
+      tone: frame.dangerZone === "box" ? "chance" : "tactical",
+      badge: frame.dangerZone === "box" ? "BOX DANGER" : "MATCH EVENT",
+      headline: frame.eventBanner,
+      subline: options?.activeEventSummary || (teamName ? `${teamName} in possession` : "Live broadcast update"),
+      minuteLabel,
+      teamSide,
+      scoreline,
+    };
+  }
+
+  return null;
 }
 
 export function metricText(value: unknown): string {
@@ -627,10 +1317,10 @@ export function suppliedCrest(url: unknown): string | null {
 export function effectFor(eventType?: string | null): string | null {
   const event = String(eventType || "").toLowerCase();
   if (event === "goal") return "goal";
-  if (event === "shot" || event === "miss") return "shot";
-  if (event === "pass" || event === "attack") return "pass";
+  if (event === "shot" || event === "miss" || event === "penalty") return "shot";
+  if (event === "pass" || event === "attack" || event === "through_ball" || event === "cross") return "pass";
   if (event === "save") return "save";
-  if (event === "yellow_card" || event === "red_card") return "card";
+  if (event === "yellow_card" || event === "red_card" || event === "foul") return "card";
   if (event === "substitution") return "substitution";
   return null;
 }

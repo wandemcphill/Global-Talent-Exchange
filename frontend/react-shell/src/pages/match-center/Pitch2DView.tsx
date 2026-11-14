@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { OrthographicPitch, type PitchCameraMode } from "@/match2d/OrthographicPitch";
+import { OrthographicPitch, type PitchCameraMode, type SampledPitchFrame } from "@/match2d/OrthographicPitch";
 import {
+  deriveBroadcastBanner,
   interpolate,
   LiveRenderBuffer,
   metricText,
@@ -36,6 +37,11 @@ type RawPlayer = {
   state?: string;
   speed_mps?: number;
   stamina_pct?: number | null;
+  velocity?: { x?: number; y?: number } | null;
+  facing?: { x?: number; y?: number } | null;
+  anchor_position?: { x?: number; y?: number } | null;
+  speed_ratio?: number | null;
+  highlighted?: boolean;
 };
 type RawFrame = {
   frame_id?: string;
@@ -58,6 +64,16 @@ type MatchEventRow = {
   player_id?: string;
   primary_player_id?: string;
   minute?: number;
+  clock_minute?: number;
+  time_seconds?: number;
+  text?: string;
+  description?: string;
+  summary?: string;
+  banner_text?: string;
+  team?: string;
+  side?: string;
+  player_name?: string;
+  primary_player_name?: string;
 };
 
 export type Pitch2DViewProps = {
@@ -81,6 +97,8 @@ export type Pitch2DViewProps = {
   } | null;
   events?: MatchEventRow[] | null;
   activeEventType?: string | null;
+  homeScore?: number | null;
+  awayScore?: number | null;
   homeColor?: string;
   awayColor?: string;
   goalkeeperHome?: string;
@@ -116,22 +134,80 @@ function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
   };
 }
 
-function toPitchPlayer(raw: RawPlayer): PitchPlayer {
+type Vec = { x?: number; y?: number } | null | undefined;
+function vec(raw: Vec): { x: number; y: number } | null {
+  if (!raw || !Number.isFinite(Number(raw.x)) || !Number.isFinite(Number(raw.y))) return null;
+  return { x: Number(raw.x), y: Number(raw.y) };
+}
+
+function toPitchPlayer(raw: RawPlayer, ownerPlayerId?: string | null): PitchPlayer {
   const point = unitPoint(raw?.x ?? raw?.position?.x, raw?.y ?? raw?.position?.y);
   const sideName = String(raw?.side || "").toLowerCase();
   const side = raw?.is_home === false || sideName === "away" ? "away" : "home";
   const role = String(raw?.role || raw?.line || "");
+  const playerId = String(raw?.player_id || raw?.id || `${side}-${raw?.shirt_number || role}`);
+  const anchor = raw?.anchor_position ? unitPoint(raw.anchor_position.x, raw.anchor_position.y) : null;
+  const speedRatio = Number(raw?.speed_ratio);
   return {
-    playerId: String(raw?.player_id || raw?.id || `${side}-${raw?.shirt_number || role}`),
+    playerId,
     side,
     x: point.x,
     y: point.y,
     shirtNumber: Number(raw?.shirt_number || 0),
     name: String(raw?.name || raw?.label || ""),
     role,
+    line: raw?.line ? String(raw.line) : undefined,
+    state: raw?.state ? String(raw.state) : undefined,
     animationState: String(raw?.animation_state || raw?.state || ""),
-    hasBall: Boolean(raw?.has_ball || raw?.has_possession),
+    hasBall: Boolean(raw?.has_ball || raw?.has_possession || (ownerPlayerId && ownerPlayerId === playerId)),
     isGoalkeeper: /gk|goal/i.test(role),
+    highlighted: Boolean(raw?.highlighted),
+    speedRatio: Number.isFinite(speedRatio) ? speedRatio : null,
+    staminaPct: raw?.stamina_pct ?? null,
+    anchorX: anchor ? anchor.x : null,
+    anchorY: anchor ? anchor.y : null,
+    velocity: vec(raw?.velocity),
+    facing: vec(raw?.facing),
+  };
+}
+
+function toPitchBall(
+  raw: (RawPoint & { height?: number; state?: string; owner_player_id?: string | null; velocity?: { x?: number; y?: number; z?: number } }) | null | undefined,
+) {
+  if (!raw) return null;
+  const p = unitPoint(raw.position?.x ?? raw.x, raw.position?.y ?? raw.y);
+  const h = Number((raw as any).height ?? (raw as any).z ?? (raw.position as any)?.z);
+  return {
+    x: p.x,
+    y: p.y,
+    height: Number.isFinite(h) ? h : null,
+    state: raw.state ?? null,
+    ownerPlayerId: raw.owner_player_id ?? null,
+    velocity: vec(raw.velocity),
+  };
+}
+
+function frameMeta(raw: Record<string, unknown> | null | undefined) {
+  const r = (raw || {}) as Record<string, any>;
+  const side = (v: unknown) => (v === "home" || v === "away" ? (v as "home" | "away") : null);
+  const n = (v: unknown) => (Number.isFinite(Number(v)) && v !== null && v !== "" ? Number(v) : null);
+  return {
+    phase: r.phase ?? null,
+    stage: r.stage ?? null,
+    cameraPreset: r.camera_preset ?? null,
+    possessionSide: side(r.possession_side),
+    possessionPhase: r.possession_phase ?? null,
+    transitionState: r.transition_state ?? null,
+    dangerZone: r.danger_zone ?? null,
+    pressureIndex: n(r.pressure_index),
+    eventBanner: r.event_banner ?? null,
+    activeEventId: r.active_event_id ?? r.active_event?.event_id ?? null,
+    celebrationTeamId: r.celebration_team_id ?? null,
+    primaryPlayerId: r.active_event?.primary_player_id ?? r.primary_player_id ?? null,
+    secondaryPlayerId: r.active_event?.secondary_player_id ?? r.secondary_player_id ?? null,
+    homeAttacksRight: typeof r.home_attacks_right === "boolean" ? r.home_attacks_right : undefined,
+    homeScore: n(r.home_score) ?? undefined,
+    awayScore: n(r.away_score) ?? undefined,
   };
 }
 
@@ -141,18 +217,23 @@ function toPitchFrame(raw: RawFrame): PitchFrame {
     : Array.isArray(raw.pitch_players)
       ? raw.pitch_players
       : [];
-  const players = rawPlayers.map(toPitchPlayer);
-  const ballPoint = raw.ball
-    ? unitPoint(raw.ball.position?.x ?? raw.ball.x, raw.ball.position?.y ?? raw.ball.y)
-    : null;
+  const ballRaw = raw.ball as any;
+  const ownerId = ballRaw?.owner_player_id ? String(ballRaw.owner_player_id) : null;
+  const players = rawPlayers.map((p) => toPitchPlayer(p, ownerId));
+  const ballPoint = toPitchBall(ballRaw);
   const path = raw.ball?.trajectory;
   const ballTrajectory =
     Array.isArray(path) && path.length > 1
-      ? path.map((point) => unitPoint(point.position?.x ?? point.x, point.position?.y ?? point.y))
+      ? path.map((point) => {
+          const pt = unitPoint(point.position?.x ?? point.x, point.position?.y ?? point.y);
+          const hz = Number((point as any).height ?? (point as any).z ?? (point.position as any)?.z);
+          return Number.isFinite(hz) ? { ...pt, height: hz } : pt;
+        })
       : null;
   const eventType =
     String(raw.event_type || raw.active_event?.type || raw.active_event?.event_type || "") || null;
   return {
+    ...frameMeta(raw as Record<string, unknown>),
     timeSeconds: Number(raw.time_seconds ?? raw.timeSeconds ?? 0),
     clockMinute: raw.clock_minute ?? raw.clockMinute,
     players,
@@ -179,6 +260,28 @@ function recordFor(events: MatchEventRow[], playerId: string) {
   return { goals, yellow, red, substituted };
 }
 
+function renderOf(f: PitchFrame, alpha: number, fallbackEvent: string | null): SampledPitchFrame {
+  return {
+    players: f.players,
+    ball: f.ball,
+    ballTrajectory: f.ballTrajectory || null,
+    trajectoryAlpha: alpha,
+    eventType: f.eventType || fallbackEvent || null,
+    phase: f.phase ?? null,
+    stage: f.stage ?? null,
+    cameraPreset: f.cameraPreset ?? null,
+    possessionSide: f.possessionSide ?? null,
+    dangerZone: f.dangerZone ?? null,
+    primaryPlayerId: f.primaryPlayerId ?? null,
+    secondaryPlayerId: f.secondaryPlayerId ?? null,
+    homeAttacksRight: f.homeAttacksRight,
+    clockMinute: f.clockMinute ?? null,
+    homeScore: f.homeScore ?? null,
+    awayScore: f.awayScore ?? null,
+    eventBanner: f.eventBanner ?? null,
+  };
+}
+
 function CrestMark({ url, name }: { url: string | null; name: string }) {
   const crest = suppliedCrest(url);
   if (crest) return <img src={crest} alt="" className="h-7 w-7 object-contain" />;
@@ -200,17 +303,19 @@ function buildLiveSample(
     source: "snapshot" | "stream";
     eventType: string | null;
     path?: RawPoint[] | null;
+    meta?: Record<string, unknown> | null;
   },
 ): LivePitchSample {
-  const players = rows.map(toPitchPlayer);
-  const ball = sampleBall
-    ? unitPoint(sampleBall.position?.x ?? sampleBall.x, sampleBall.position?.y ?? sampleBall.y)
-    : null;
+  const ballRaw = sampleBall as any;
+  const ownerId = ballRaw?.owner_player_id ? String(ballRaw.owner_player_id) : null;
+  const players = rows.map((p) => toPitchPlayer(p, ownerId));
+  const ball = toPitchBall(ballRaw);
   const ballTrajectory =
     Array.isArray(options.path) && options.path.length > 1
       ? options.path.map((item) => unitPoint(item.position?.x ?? item.x, item.position?.y ?? item.y))
       : null;
   return {
+    ...frameMeta(options.meta),
     timeSeconds: Number.isFinite(sampleTime) ? Math.max(0, sampleTime) : 0,
     snapshotVersion: options.snapshotVersion,
     frameId: options.frameId,
@@ -249,6 +354,8 @@ export function Pitch2DView({
   socketFrame,
   events,
   activeEventType = null,
+  homeScore = null,
+  awayScore = null,
   homeColor = "#00e87a",
   awayColor = "#ffb800",
   goalkeeperHome = "#f8fafc",
@@ -273,13 +380,7 @@ export function Pitch2DView({
   showPassingLanes = false,
 }: Pitch2DViewProps) {
   const bufferRef = useRef(new LiveRenderBuffer());
-  const lastGoodRef = useRef<{
-    players: PitchPlayer[];
-    ball: { x: number; y: number } | null;
-    ballTrajectory: { x: number; y: number }[] | null;
-    eventType: string | null;
-    trajectoryAlpha: number;
-  } | null>(null);
+  const lastGoodRef = useRef<SampledPitchFrame | null>(null);
   const lastReconnectRef = useRef(reconnectToken);
   const pendingReconnectReplaceRef = useRef(false);
   const lastStreamKeyRef = useRef<string>("");
@@ -349,6 +450,7 @@ export function Pitch2DView({
       source: "stream",
       eventType,
       path: socketFrame.ball?.trajectory,
+      meta: socketFrame as unknown as Record<string, unknown>,
     });
     const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
     if (pendingReconnectReplaceRef.current) {
@@ -418,25 +520,13 @@ export function Pitch2DView({
     if (source === "unavailable" || timedRecorded.length === 0) return null;
     if (timedRecorded.length === 1) {
       const only = timedRecorded[0];
-      return {
-        players: only.players,
-        ball: only.ball,
-        ballTrajectory: only.ballTrajectory || null,
-        eventType: only.eventType || activeEventType || null,
-        trajectoryAlpha: 1,
-      };
+      return renderOf(only, 1, activeEventType);
     }
     const pair = seekTime(timedRecorded, timeSeconds);
     if (!pair.left) return null;
     const right = pair.right || pair.left;
     const blended = interpolate(pair.left, right, pair.t);
-    return {
-      players: blended.players,
-      ball: blended.ball,
-      ballTrajectory: blended.ballTrajectory || null,
-      eventType: blended.eventType || activeEventType || null,
-      trajectoryAlpha: pair.t,
-    };
+    return renderOf(blended, pair.t, activeEventType);
   }, [source, timedRecorded, timeSeconds, activeEventType]);
 
   // Pure synchronous prop fallback for first render before effects commit.
@@ -455,15 +545,10 @@ export function Pitch2DView({
             activeEventType ||
             null,
           path: socketFrame.ball?.trajectory,
+      meta: socketFrame as unknown as Record<string, unknown>,
         },
       );
-      return {
-        players: sample.players,
-        ball: sample.ball,
-        ballTrajectory: sample.ballTrajectory || null,
-        eventType: sample.eventType || null,
-        trajectoryAlpha: 1,
-      };
+      return renderOf(sample, 1, activeEventType);
     }
     if (snapshotPlayers?.length) {
       const sample = buildLiveSample(snapshotPlayers, snapshotBall, timeSeconds, {
@@ -475,13 +560,7 @@ export function Pitch2DView({
           events?.[events.length - 1]?.event_type ||
           null,
       });
-      return {
-        players: sample.players,
-        ball: sample.ball,
-        ballTrajectory: sample.ballTrajectory || null,
-        eventType: sample.eventType || null,
-        trajectoryAlpha: 1,
-      };
+      return renderOf(sample, 1, activeEventType);
     }
     return null;
   }, [socketRows, socketFrame, snapshotPlayers, snapshotBall, snapshotVersion, timeSeconds, activeEventType, events]);
@@ -490,13 +569,7 @@ export function Pitch2DView({
     void liveRevision;
     const buffered = bufferRef.current.next;
     if (buffered?.players?.length) {
-      return {
-        players: buffered.players,
-        ball: buffered.ball,
-        ballTrajectory: buffered.ballTrajectory || null,
-        eventType: buffered.eventType || activeEventType || null,
-        trajectoryAlpha: 1,
-      };
+      return renderOf(buffered, 1, activeEventType);
     }
     if (immediateLiveFallback?.players?.length) {
       return immediateLiveFallback;
@@ -537,13 +610,7 @@ export function Pitch2DView({
         speed: state.playbackSpeed,
       });
       if (sampled.frame?.players?.length) {
-        return {
-          players: sampled.frame.players,
-          ball: sampled.frame.ball,
-          ballTrajectory: sampled.frame.ballTrajectory || null,
-          trajectoryAlpha: sampled.trajectoryAlpha,
-          eventType: sampled.frame.eventType || state.activeEventType || null,
-        };
+        return renderOf(sampled.frame, sampled.trajectoryAlpha, state.activeEventType);
       }
     }
     if (state.recordedSample?.players?.length) {
@@ -561,6 +628,42 @@ export function Pitch2DView({
   const shownEvent = currentRenderData?.eventType || null;
   const trajectoryAlpha = currentRenderData?.trajectoryAlpha ?? 1;
   const unavailable = source === "unavailable" && !shown.length;
+  const banner = useMemo(() => {
+    if (!currentRenderData) return null;
+    const activeSummary = (() => {
+      if (!Array.isArray(events) || events.length === 0) return null;
+      const targetEv = String(currentRenderData.eventType || activeEventType || "").toLowerCase();
+      for (let i = events.length - 1; i >= 0; i -= 1) {
+        const ev = events[i];
+        if (!ev) continue;
+        const evType = String(ev.type || ev.event_type || "").toLowerCase();
+        const evSec = typeof ev.time_seconds === "number" ? ev.time_seconds : null;
+        if (evSec !== null && Math.abs(evSec - timeSeconds) <= 4) {
+          return ev.banner_text || ev.summary || ev.description || ev.text || null;
+        }
+        if (targetEv && evType === targetEv) {
+          return ev.banner_text || ev.summary || ev.description || ev.text || null;
+        }
+      }
+      return null;
+    })();
+    return deriveBroadcastBanner(
+      {
+        timeSeconds,
+        clockMinute: currentRenderData.clockMinute ?? undefined,
+        homeScore: currentRenderData.homeScore ?? homeScore ?? undefined,
+        awayScore: currentRenderData.awayScore ?? awayScore ?? undefined,
+        eventBanner: currentRenderData.eventBanner,
+        players: currentRenderData.players,
+        ball: currentRenderData.ball,
+        eventType: currentRenderData.eventType,
+        phase: currentRenderData.phase ?? matchPhase,
+        primaryPlayerId: currentRenderData.primaryPlayerId,
+        possessionSide: currentRenderData.possessionSide,
+      },
+      { homeName, awayName, activeEventSummary: activeSummary },
+    );
+  }, [currentRenderData, events, activeEventType, timeSeconds, homeScore, awayScore, matchPhase, homeName, awayName]);
 
   const feedStatus = useMemo(() => {
     void freshnessTick;
@@ -573,7 +676,7 @@ export function Pitch2DView({
     }
     const isHttpSnapshotOnly = !socketRows?.length && Boolean(snapshotPlayers?.length);
     const effectiveConnectionStatus =
-      isHttpSnapshotOnly && (connectionStatus === "reconnecting" || connectionStatus === "error" || connectionStatus === "idle" || connectionStatus === "disconnected")
+      (isHttpSnapshotOnly || hasRecordedOnly) && (connectionStatus === "reconnecting" || connectionStatus === "error" || connectionStatus === "idle" || connectionStatus === "disconnected")
         ? "connected"
         : hasLiveFrame && connectionStatus === "idle"
           ? "connected"
@@ -585,6 +688,7 @@ export function Pitch2DView({
       lastFrameReceivedAtMs: bufferRef.current.lastReceivedAtMs,
       nowMs,
       hasRenderableFrame: shown.length > 0,
+      isRecordedReplay: hasRecordedOnly,
     });
   }, [freshnessTick, liveRevision, socketFrame?.phase, matchPhase, hasLiveFrame, timedRecorded.length, unavailable, connectionStatus, shown.length, socketRows?.length, snapshotPlayers?.length]);
 
@@ -652,6 +756,14 @@ export function Pitch2DView({
         ballTrajectory={trajectory}
         trajectoryAlpha={trajectoryAlpha}
         eventType={shownEvent}
+        phase={currentRenderData?.phase}
+        stage={currentRenderData?.stage}
+        cameraPreset={currentRenderData?.cameraPreset}
+        possessionSide={currentRenderData?.possessionSide}
+        dangerZone={currentRenderData?.dangerZone}
+        primaryPlayerId={currentRenderData?.primaryPlayerId}
+        secondaryPlayerId={currentRenderData?.secondaryPlayerId}
+        homeAttacksRight={currentRenderData?.homeAttacksRight}
         homeColor={homeColor}
         awayColor={awayColor}
         goalkeeperHome={goalkeeperHome}
@@ -669,6 +781,36 @@ export function Pitch2DView({
         sampleFrame={sampleFrame}
         feedFreshness={feedStatus.status}
       />
+      {banner ? (
+        <div
+          data-testid="pitch-broadcast-banner"
+          data-banner-kind={banner.kind}
+          data-banner-tone={banner.tone}
+          className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-xs ${
+            banner.tone === "goal"
+              ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100"
+              : banner.tone === "card_red"
+                ? "border-rose-400/60 bg-rose-500/15 text-rose-100"
+                : banner.tone === "card_yellow"
+                  ? "border-yellow-400/60 bg-yellow-500/15 text-yellow-100"
+                  : banner.tone === "chance"
+                    ? "border-cyan-400/50 bg-cyan-500/10 text-cyan-100"
+                    : "border-white/15 bg-slate-950/80 text-slate-200"
+          }`}
+        >
+          <div className="flex min-w-0 items-center gap-2">
+            <span className="shrink-0 whitespace-nowrap rounded bg-black/40 px-2 py-0.5 font-black uppercase tracking-widest">{banner.badge}</span>
+            <span className="truncate font-black">{banner.headline}</span>
+            {banner.subline && banner.subline !== banner.headline ? (
+              <span className="hidden truncate text-slate-300 md:inline">{banner.subline}</span>
+            ) : null}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono font-bold">
+            {banner.scoreline ? <span>{banner.scoreline}</span> : null}
+            <span>{banner.minuteLabel}</span>
+          </div>
+        </div>
+      ) : null}
       {selected && record ? (
         <div
           data-testid="selected-player-card"

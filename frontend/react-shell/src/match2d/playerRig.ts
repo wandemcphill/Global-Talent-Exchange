@@ -278,6 +278,15 @@ function normalizeAngle(angle: number): number {
   return wrapped;
 }
 
+function hashCompositeKey(key: string): number {
+  let hash = 2166136261;
+  for (let i = 0; i < key.length; i += 1) {
+    hash ^= key.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return Math.abs(hash >>> 0);
+}
+
 /**
  * Tracks per-player velocity, facing direction, and animation state across network updates.
  * Velocity is derived from elapsed time between meaningful position changes so higher-frequency
@@ -307,16 +316,22 @@ export class PlayerMotionTracker {
     },
   ): TrackedPlayerMotion {
     const existing = this.states.get(compositeKey);
+    const keyHash = hashCompositeKey(compositeKey);
+    const phaseOffset = ((keyHash % 97) / 97) * ATLAS_FRAMES;
+    const cadenceVariance = 1 + (((keyHash % 17) - 8) * 0.014);
+
     if (!existing) {
       const defaultFacing =
         context.facingHint && Math.hypot(context.facingHint.x, context.facingHint.y) > 0.01
           ? Math.atan2(-context.facingHint.y, context.facingHint.x)
-          : context.side === "away"
-            ? Math.PI
-            : 0;
+          : context.velocityHint && Math.hypot(context.velocityHint.x, context.velocityHint.y) > 0.05
+            ? Math.atan2(-context.velocityHint.y, context.velocityHint.x)
+            : context.side === "away"
+              ? Math.PI
+              : 0;
       const hintSpeed =
         context.velocityHint && Math.hypot(context.velocityHint.x, context.velocityHint.y) > 0.001
-          ? Math.min(0.08, Math.hypot(context.velocityHint.x, context.velocityHint.y) * 0.015)
+          ? Math.min(0.08, Math.hypot(context.velocityHint.x, context.velocityHint.y) * 0.0065)
           : 0;
       const initialAction = presentationAction(context.baseAction, {
         facingDelta: 0,
@@ -325,6 +340,7 @@ export class PlayerMotionTracker {
         hasBall: context.hasBall,
       });
       const direction = ((Math.round((defaultFacing / (Math.PI * 2)) * ATLAS_DIRECTIONS) % ATLAS_DIRECTIONS) + ATLAS_DIRECTIONS) % ATLAS_DIRECTIONS;
+      const initialGait = (nowMs / 160 + phaseOffset) % ATLAS_FRAMES;
       const created: TrackedPlayerMotion = {
         sampleX: x,
         sampleY: y,
@@ -340,8 +356,8 @@ export class PlayerMotionTracker {
         direction,
         action: initialAction,
         actionChangedAtMs: nowMs,
-        gaitPhase: 0,
-        frame: Math.floor(nowMs / 120) % ATLAS_FRAMES,
+        gaitPhase: initialGait,
+        frame: Math.floor(initialGait) % ATLAS_FRAMES,
       };
       this.states.set(compositeKey, created);
       return created;
@@ -427,7 +443,7 @@ export class PlayerMotionTracker {
       ((Math.round((existing.facing / (Math.PI * 2)) * ATLAS_DIRECTIONS) % ATLAS_DIRECTIONS) + ATLAS_DIRECTIONS) %
       ATLAS_DIRECTIONS;
 
-    const cycleHz =
+    const baseCycleHz =
       existing.action === "sprint" || existing.action === "accelerate"
         ? 9.5
         : existing.action === "jog" || existing.action === "dribble"
@@ -435,6 +451,7 @@ export class PlayerMotionTracker {
           : existing.action === "walk" || existing.action === "turn"
             ? 5.2
             : 3.5;
+    const cycleHz = baseCycleHz * cadenceVariance;
     existing.gaitPhase = (existing.gaitPhase + Math.max(0.008, dtFrameSec) * cycleHz) % ATLAS_FRAMES;
     existing.frame = Math.floor(existing.gaitPhase) % ATLAS_FRAMES;
 
@@ -831,46 +848,70 @@ export function rasterPitch(width = 512, height = 320): Uint8Array {
   if (existing) return existing;
 
   const data = new Uint8Array(width * height * 4);
+  const sx = width / 512;
+  const sy = height / 320;
+  const sMin = Math.min(sx, sy);
   const centerX = width / 2;
   const centerY = height / 2;
-  const leftLine = 28;
-  const rightLine = width - 28;
-  const topLine = 18;
-  const bottomLine = height - 18;
+  const leftLine = Math.round(28 * sx);
+  const rightLine = width - Math.round(28 * sx);
+  const topLine = Math.round(18 * sy);
+  const bottomLine = height - Math.round(18 * sy);
+  const pitchW = rightLine - leftLine;
+  const pitchH = bottomLine - topLine;
+  const stripeCount = 18;
+  const stripeWidth = pitchW / stripeCount;
 
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
       const inPlay = x >= leftLine && x <= rightLine && y >= topLine && y <= bottomLine;
-      const vStripe = Math.floor(x / (width / 16)) % 2;
-      const hBand = Math.floor(y / (height / 10)) % 2;
       const dx = (x - centerX) / width;
       const dy = (y - centerY) / height;
-      const vignette = Math.min(1, (dx * dx * 2.4 + dy * dy * 2.6));
-      const worn = Math.exp(-(dx * dx * 10 + dy * dy * 7));
-      const boxWear =
-        x < width * 0.22 || x > width * 0.78 ? Math.exp(-((((y - centerY) / height) ** 2) * 8)) * 0.28 : 0;
+      const vignette = Math.min(1, dx * dx * 2.1 + dy * dy * 2.3);
+      const floodlight = Math.max(0, 1 - (dx * dx * 1.6 + dy * dy * 1.8));
 
       if (!inPlay) {
-        // Dark stadium perimeter surround
-        const r = Math.max(8, Math.round(12 - vignette * 4));
-        const g = Math.max(24, Math.round(46 - vignette * 12));
-        const b = Math.max(16, Math.round(28 - vignette * 8));
-        setPixel(data, width, x, y, r, g, b, 255);
+        // Stadium perimeter surround + subtle LED hoarding border near touchline
+        const distX = x < leftLine ? leftLine - x : x > rightLine ? x - rightLine : 0;
+        const distY = y < topLine ? topLine - y : y > bottomLine ? y - bottomLine : 0;
+        const borderDist = Math.hypot(distX / sx, distY / sy);
+        if (borderDist >= 4.5 && borderDist <= 6.2) {
+          // Broadcast perimeter hoarding trim
+          setPixel(data, width, x, y, 22, 65, 52, 255);
+        } else {
+          const r = Math.max(7, Math.round(12 - vignette * 4));
+          const g = Math.max(22, Math.round(44 - vignette * 12));
+          const b = Math.max(15, Math.round(27 - vignette * 8));
+          setPixel(data, width, x, y, r, g, b, 255);
+        }
       } else {
-        const turfCut = (vStripe ? 14 : 0) + (hBand ? 4 : 0);
-        const red = Math.round(16 + worn * 8 + (vStripe ? 3 : 0));
-        const green = Math.round(96 + turfCut - worn * 12 - boxWear * 16 - vignette * 10);
-        const blue = Math.round(48 + (vStripe ? 4 : 0) - worn * 6 - vignette * 6);
+        const relX = x - leftLine;
+        const relY = y - topLine;
+        const vStripe = Math.floor(relX / stripeWidth) % 2;
+        const hBand = Math.floor(relY / (pitchH / 12)) % 2;
+        const microBlade = ((x * 13 + y * 7) & 3) * 0.65;
+        const worn = Math.exp(-(dx * dx * 12 + dy * dy * 8));
+        const boxWear =
+          relX < pitchW * 0.16 || relX > pitchW * 0.84
+            ? Math.exp(-((((y - centerY) / height) ** 2) * 9)) * 0.24
+            : 0;
+
+        const turfCut = (vStripe ? 16 : 0) + (hBand ? 3 : 0);
+        const lightBoost = floodlight * 7;
+        const red = Math.round(15 + worn * 7 + (vStripe ? 4 : 0) + lightBoost * 0.35 + microBlade);
+        const green = Math.round(98 + turfCut + lightBoost - worn * 10 - boxWear * 14 - vignette * 9 + microBlade);
+        const blue = Math.round(46 + (vStripe ? 5 : 0) + lightBoost * 0.3 - worn * 5 - vignette * 6);
         setPixel(data, width, x, y, red, green, blue, 255);
       }
     }
   }
 
-  const lineColor: [number, number, number, number] = [240, 248, 242, 238];
-  const subLineColor: [number, number, number, number] = [240, 248, 242, 70];
+  const lineColor: [number, number, number, number] = [244, 250, 246, 244];
+  const subLineColor: [number, number, number, number] = [244, 250, 246, 95];
+  const techLineColor: [number, number, number, number] = [226, 238, 230, 120];
   const line = (x0: number, y0: number, x1: number, y1: number) => {
-    stroke(data, width, height, x0, y0, x1, y1, lineColor);
-    stroke(data, width, height, x0, y0 + 0.6, x1, y1 + 0.6, subLineColor);
+    strokeThick(data, width, height, x0, y0, x1, y1, 1.35 * sMin, lineColor);
+    stroke(data, width, height, x0, y0 + 0.7 * sy, x1, y1 + 0.7 * sy, subLineColor);
   };
 
   // Outer touchlines & goal lines
@@ -878,51 +919,108 @@ export function rasterPitch(width = 512, height = 320): Uint8Array {
   line(leftLine, bottomLine, rightLine, bottomLine);
   line(leftLine, topLine, leftLine, bottomLine);
   line(rightLine, topLine, rightLine, bottomLine);
+
+  // Managerial technical areas along bottom touchline
+  const techY0 = bottomLine + 2 * sy;
+  const techY1 = Math.min(height - 2, bottomLine + 10 * sy);
+  const homeTechX0 = centerX - 68 * sx;
+  const homeTechX1 = centerX - 18 * sx;
+  const awayTechX0 = centerX + 18 * sx;
+  const awayTechX1 = centerX + 68 * sx;
+  stroke(data, width, height, homeTechX0, techY0, homeTechX0, techY1, techLineColor);
+  stroke(data, width, height, homeTechX1, techY0, homeTechX1, techY1, techLineColor);
+  stroke(data, width, height, homeTechX0, techY1, homeTechX1, techY1, techLineColor);
+  stroke(data, width, height, awayTechX0, techY0, awayTechX0, techY1, techLineColor);
+  stroke(data, width, height, awayTechX1, techY0, awayTechX1, techY1, techLineColor);
+  stroke(data, width, height, awayTechX0, techY1, awayTechX1, techY1, techLineColor);
+
   // Halfway line & center circle + spot
   line(centerX, topLine, centerX, bottomLine);
-  strokeCircle(data, width, height, centerX, centerY, 42);
-  fillSpot(data, width, height, centerX, centerY, 2.6, lineColor);
+  strokeCircle(data, width, height, centerX, centerY, 42 * sMin, 1.3 * sMin);
+  fillSpot(data, width, height, centerX, centerY, 2.8 * sMin, lineColor);
 
-  // Penalty boxes & 6-yard goal areas
-  strokeBox(data, width, height, leftLine, centerY - 62, 78, 124);
-  strokeBox(data, width, height, rightLine - 78, centerY - 62, 78, 124);
-  strokeBox(data, width, height, leftLine, centerY - 28, 32, 56);
-  strokeBox(data, width, height, rightLine - 32, centerY - 28, 32, 56);
+  // 18-yard penalty boxes & 6-yard goal areas (FIFA proportional)
+  const penW = 78 * sx;
+  const penH = 128 * sy;
+  const sixW = 28 * sx;
+  const sixH = 60 * sy;
+  strokeBox(data, width, height, leftLine, centerY - penH / 2, penW, penH, 1.3 * sMin);
+  strokeBox(data, width, height, rightLine - penW, centerY - penH / 2, penW, penH, 1.3 * sMin);
+  strokeBox(data, width, height, leftLine, centerY - sixH / 2, sixW, sixH, 1.25 * sMin);
+  strokeBox(data, width, height, rightLine - sixW, centerY - sixH / 2, sixW, sixH, 1.25 * sMin);
 
-  // Penalty spots & penalty arcs ("D")
-  const homeSpotX = leftLine + 52;
-  const awaySpotX = rightLine - 52;
-  fillSpot(data, width, height, homeSpotX, centerY, 2.2, lineColor);
-  fillSpot(data, width, height, awaySpotX, centerY, 2.2, lineColor);
-  strokeArc(data, width, height, homeSpotX, centerY, 36, -0.92, 0.92, lineColor);
-  strokeArc(data, width, height, awaySpotX, centerY, 36, Math.PI - 0.92, Math.PI + 0.92, lineColor);
+  // Penalty spots & penalty arcs ("D" outside the 18-yard box)
+  const homeSpotX = leftLine + 54 * sx;
+  const awaySpotX = rightLine - 54 * sx;
+  fillSpot(data, width, height, homeSpotX, centerY, 2.4 * sMin, lineColor);
+  fillSpot(data, width, height, awaySpotX, centerY, 2.4 * sMin, lineColor);
+  strokeArc(data, width, height, homeSpotX, centerY, 36 * sMin, -0.88, 0.88, lineColor, 1.25 * sMin);
+  strokeArc(data, width, height, awaySpotX, centerY, 36 * sMin, Math.PI - 0.88, Math.PI + 0.88, lineColor, 1.25 * sMin);
 
-  // Corner arcs
-  strokeArc(data, width, height, leftLine, topLine, 8, 0, Math.PI / 2, lineColor);
-  strokeArc(data, width, height, leftLine, bottomLine, 8, -Math.PI / 2, 0, lineColor);
-  strokeArc(data, width, height, rightLine, topLine, 8, Math.PI / 2, Math.PI, lineColor);
-  strokeArc(data, width, height, rightLine, bottomLine, 8, Math.PI, (Math.PI * 3) / 2, lineColor);
+  // Corner arcs & corner flag markers
+  const cornerR = 8.5 * sMin;
+  strokeArc(data, width, height, leftLine, topLine, cornerR, 0, Math.PI / 2, lineColor, 1.2 * sMin);
+  strokeArc(data, width, height, leftLine, bottomLine, cornerR, -Math.PI / 2, 0, lineColor, 1.2 * sMin);
+  strokeArc(data, width, height, rightLine, topLine, cornerR, Math.PI / 2, Math.PI, lineColor, 1.2 * sMin);
+  strokeArc(data, width, height, rightLine, bottomLine, cornerR, Math.PI, (Math.PI * 3) / 2, lineColor, 1.2 * sMin);
+  fillSpot(data, width, height, leftLine, topLine, 1.8 * sMin, [250, 204, 21, 255]);
+  fillSpot(data, width, height, leftLine, bottomLine, 1.8 * sMin, [250, 204, 21, 255]);
+  fillSpot(data, width, height, rightLine, topLine, 1.8 * sMin, [250, 204, 21, 255]);
+  fillSpot(data, width, height, rightLine, bottomLine, 1.8 * sMin, [250, 204, 21, 255]);
 
-  // Goals
-  drawGoal(data, width, height, 8, centerY, 1);
-  drawGoal(data, width, height, width - 8, centerY, -1);
+  // Goals with 3D depth & hexagonal netting
+  drawGoal(data, width, height, Math.round(8 * sx), centerY, 1, sx, sy);
+  drawGoal(data, width, height, width - Math.round(8 * sx), centerY, -1, sx, sy);
 
   cachedPitchPixels.set(key, data);
   return data;
 }
 
-function drawGoal(data: Uint8Array, width: number, height: number, goalX: number, centerY: number, direction: number) {
-  const post = direction > 0 ? goalX : goalX - 20;
-  for (let y = centerY - 24; y <= centerY + 24; y += 3) {
-    stroke(data, width, height, post, y, post + 20, y, [216, 232, 224, 145]);
+function drawGoal(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  goalX: number,
+  centerY: number,
+  direction: number,
+  sx = 1,
+  sy = 1,
+) {
+  const depth = Math.round(20 * sx);
+  const halfSpan = Math.round(24 * sy);
+  const post = direction > 0 ? goalX : goalX - depth;
+  const sMin = Math.min(sx, sy);
+
+  // Interior goal shadow on turf
+  for (let y = Math.floor(centerY - halfSpan); y <= Math.ceil(centerY + halfSpan); y += 1) {
+    for (let x = Math.floor(post); x <= Math.ceil(post + depth); x += 1) {
+      if (x >= 0 && x < width && y >= 0 && y < height) {
+        const idx = (y * width + x) * 4;
+        data[idx] = Math.round(data[idx] * 0.72);
+        data[idx + 1] = Math.round(data[idx + 1] * 0.72);
+        data[idx + 2] = Math.round(data[idx + 2] * 0.72);
+      }
+    }
   }
-  for (let x = 0; x <= 20; x += 3) {
-    stroke(data, width, height, post + x, centerY - 24, post + x, centerY + 24, [216, 232, 224, 145]);
+
+  // Goal mesh netting (horizontal + vertical + diagonal weave)
+  const stepY = Math.max(2, Math.round(3 * sy));
+  const stepX = Math.max(2, Math.round(3 * sx));
+  for (let y = centerY - halfSpan; y <= centerY + halfSpan; y += stepY) {
+    stroke(data, width, height, post, y, post + depth, y, [218, 234, 226, 150]);
   }
-  stroke(data, width, height, post, centerY - 25, post, centerY + 25, [248, 250, 252, 255]);
-  stroke(data, width, height, post + 20, centerY - 25, post + 20, centerY + 25, [248, 250, 252, 255]);
-  stroke(data, width, height, post, centerY - 25, post + 20, centerY - 25, [248, 250, 252, 255]);
-  stroke(data, width, height, post, centerY + 25, post + 20, centerY + 25, [248, 250, 252, 255]);
+  for (let x = 0; x <= depth; x += stepX) {
+    stroke(data, width, height, post + x, centerY - halfSpan, post + x, centerY + halfSpan, [218, 234, 226, 150]);
+  }
+  // Net support stanchions
+  strokeThick(data, width, height, post, centerY - halfSpan - sy, post, centerY + halfSpan + sy, 1.35 * sMin, [248, 250, 252, 255]);
+  strokeThick(data, width, height, post + depth, centerY - halfSpan - sy, post + depth, centerY + halfSpan + sy, 1.45 * sMin, [248, 250, 252, 255]);
+  strokeThick(data, width, height, post, centerY - halfSpan - sy, post + depth, centerY - halfSpan - sy, 1.4 * sMin, [248, 250, 252, 255]);
+  strokeThick(data, width, height, post, centerY + halfSpan + sy, post + depth, centerY + halfSpan + sy, 1.4 * sMin, [248, 250, 252, 255]);
+  // Goalposts highlight
+  const mouthX = direction > 0 ? post + depth : post;
+  fillSpot(data, width, height, mouthX, centerY - halfSpan - sy, 2.2 * sMin, [255, 255, 255, 255]);
+  fillSpot(data, width, height, mouthX, centerY + halfSpan + sy, 2.2 * sMin, [255, 255, 255, 255]);
 }
 
 export function rasterBall(): Uint8Array {
@@ -931,21 +1029,39 @@ export function rasterBall(): Uint8Array {
   const data = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y += 1) {
     for (let x = 0; x < size; x += 1) {
-      const shadow = ((x - 24) / 14) ** 2 + ((y - 39) / 4.2) ** 2;
-      if (shadow <= 1) setPixel(data, size, x, y, 0, 0, 0, 95);
+      const shadow = ((x - 24) / 13.5) ** 2 + ((y - 39) / 4.2) ** 2;
+      if (shadow <= 1) {
+        const shadowAlpha = Math.round((1 - shadow * 0.65) * 115);
+        setPixel(data, size, x, y, 0, 0, 0, shadowAlpha);
+      }
       const dx = x - 24;
       const dy = y - 20;
       const distance = Math.hypot(dx, dy);
-      if (distance > 12) continue;
-      if (distance > 10.6) {
-        setPixel(data, size, x, y, 15, 23, 42, 255);
+      if (distance > 12.6) continue;
+      if (distance > 10.8) {
+        // High-contrast broadcast outline around match ball
+        setPixel(data, size, x, y, 10, 18, 34, 255);
         continue;
       }
-      const light = Math.max(0, 1 - Math.hypot(dx + 4, dy + 4) / 16);
-      const shade = 204 + light * 51;
-      const panel = Math.abs(Math.sin(Math.atan2(dy, dx) * 3)) < 0.18 || Math.abs(dy) < 1.2;
-      const value = panel ? shade * 0.38 : shade;
-      setPixel(data, size, x, y, value, value, value, 255);
+      const light = Math.max(0, 1 - Math.hypot(dx + 4.2, dy + 4.2) / 16);
+      const shade = 212 + light * 43;
+      const angle = Math.atan2(dy, dx);
+      const centerPentagon = distance < 3.6;
+      const seamSpoke = distance >= 3.2 && distance <= 9.6 && Math.abs(Math.sin(angle * 2.5)) < 0.16;
+      const outerPentagon = distance > 7.8 && Math.cos(angle * 5) > 0.62;
+      if (centerPentagon || outerPentagon) {
+        setPixel(data, size, x, y, 22, 32, 52, 255);
+      } else if (seamSpoke) {
+        setPixel(data, size, x, y, Math.round(shade * 0.52), Math.round(shade * 0.56), Math.round(shade * 0.65), 255);
+      } else {
+        // Crisp white leather with subtle gold-orange championship accent
+        const accent = Math.abs(distance - 6.2) < 0.9 && Math.sin(angle * 3) > 0.55;
+        if (accent) {
+          setPixel(data, size, x, y, 245, 158, 11, 255);
+        } else {
+          setPixel(data, size, x, y, Math.round(shade), Math.round(shade), Math.round(Math.min(255, shade + 3)), 255);
+        }
+      }
     }
   }
   cachedBallPixels = data;
@@ -962,9 +1078,9 @@ export function rasterRing(): Uint8Array {
       const dy = y - 32;
       const distance = Math.hypot(dx, dy);
       if (distance > 22 && distance < 28) {
-        setPixel(data, size, x, y, 255, 255, 255, 225);
-      } else if (distance >= 18 && distance <= 20) {
-        setPixel(data, size, x, y, 0, 232, 122, 175);
+        setPixel(data, size, x, y, 255, 255, 255, 232);
+      } else if (distance >= 17.5 && distance <= 20.5) {
+        setPixel(data, size, x, y, 0, 232, 122, 195);
       }
     }
   }
@@ -1020,18 +1136,64 @@ function stroke(
   }
 }
 
-function strokeBox(data: Uint8Array, width: number, height: number, x: number, y: number, w: number, h: number) {
-  stroke(data, width, height, x, y, x + w, y, [240, 248, 242, 238]);
-  stroke(data, width, height, x, y + h, x + w, y + h, [240, 248, 242, 238]);
-  stroke(data, width, height, x, y, x, y + h, [240, 248, 242, 238]);
-  stroke(data, width, height, x + w, y, x + w, y + h, [240, 248, 242, 238]);
+function strokeThick(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  thickness: number,
+  color: [number, number, number, number],
+) {
+  const radius = Math.max(0.5, thickness * 0.5);
+  const steps = Math.max(1, Math.ceil(Math.hypot(x1 - x0, y1 - y0) * 1.5));
+  for (let step = 0; step <= steps; step += 1) {
+    const t = step / steps;
+    fillSpot(data, width, height, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, radius, color);
+  }
 }
 
-function strokeCircle(data: Uint8Array, width: number, height: number, cx: number, cy: number, radius: number) {
-  const steps = 120;
+function strokeBox(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  thickness = 1.2,
+) {
+  const lineColor: [number, number, number, number] = [244, 250, 246, 244];
+  strokeThick(data, width, height, x, y, x + w, y, thickness, lineColor);
+  strokeThick(data, width, height, x, y + h, x + w, y + h, thickness, lineColor);
+  strokeThick(data, width, height, x, y, x, y + h, thickness, lineColor);
+  strokeThick(data, width, height, x + w, y, x + w, y + h, thickness, lineColor);
+}
+
+function strokeCircle(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  cx: number,
+  cy: number,
+  radius: number,
+  thickness = 1.2,
+) {
+  const steps = Math.max(160, Math.ceil(radius * 6));
+  const color: [number, number, number, number] = [244, 250, 246, 244];
   for (let step = 0; step <= steps; step += 1) {
     const angle = (step / steps) * Math.PI * 2;
-    setPixel(data, width, cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, 240, 248, 242, 238);
+    fillSpot(
+      data,
+      width,
+      height,
+      cx + Math.cos(angle) * radius,
+      cy + Math.sin(angle) * radius,
+      Math.max(0.5, thickness * 0.45),
+      color,
+    );
   }
 }
 
@@ -1045,23 +1207,48 @@ function strokeArc(
   startAngle: number,
   endAngle: number,
   color: [number, number, number, number],
+  thickness = 1.2,
 ) {
-  const steps = 64;
+  const steps = Math.max(96, Math.ceil(radius * 4));
   for (let step = 0; step <= steps; step += 1) {
     const angle = startAngle + ((endAngle - startAngle) * step) / steps;
-    setPixel(data, width, cx + Math.cos(angle) * radius, cy + Math.sin(angle) * radius, color[0], color[1], color[2], color[3]);
+    fillSpot(
+      data,
+      width,
+      height,
+      cx + Math.cos(angle) * radius,
+      cy + Math.sin(angle) * radius,
+      Math.max(0.5, thickness * 0.45),
+      color,
+    );
   }
 }
 
-export function sampleTrajectory(points: { x: number; y: number }[], alpha: number): { x: number; y: number } | null {
+export function sampleTrajectory(
+  points: { x: number; y: number; height?: number | null }[],
+  alpha: number,
+): { x: number; y: number; height?: number | null } | null {
   if (!points.length) return null;
   if (points.length === 1) return points[0];
   const t = Math.min(1, Math.max(0, alpha));
   const scaled = t * (points.length - 1);
   const index = Math.min(points.length - 2, Math.floor(scaled));
   const rest = scaled - index;
+  const p0 = points[index];
+  const p1 = points[index + 1];
+  const h0 = typeof p0.height === "number" && Number.isFinite(p0.height) ? p0.height : null;
+  const h1 = typeof p1.height === "number" && Number.isFinite(p1.height) ? p1.height : null;
+  const height =
+    h0 !== null && h1 !== null
+      ? h0 + (h1 - h0) * rest
+      : h0 !== null
+        ? h0 * (1 - rest)
+        : h1 !== null
+          ? h1 * rest
+          : null;
   return {
-    x: points[index].x + (points[index + 1].x - points[index].x) * rest,
-    y: points[index].y + (points[index + 1].y - points[index].y) * rest,
+    x: p0.x + (p1.x - p0.x) * rest,
+    y: p0.y + (p1.y - p0.y) * rest,
+    ...(height !== null ? { height } : {}),
   };
 }
