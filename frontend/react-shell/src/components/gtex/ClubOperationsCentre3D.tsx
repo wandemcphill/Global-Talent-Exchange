@@ -855,11 +855,10 @@ export function ClubOperationsCentre3D({
     setBusyAction(`promote:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/players/${encodeURIComponent(playerId)}/squad-status`,
-        { status: "first_team" }
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/promote`
       );
       await invalidateAll();
-      toast.success(`Promoted ${playerName} to First-Team senior squad.`);
+      toast.success(`Promoted ${playerName} into the senior squad.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -871,15 +870,10 @@ export function ClubOperationsCentre3D({
     setBusyAction(`contract:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/players/${encodeURIComponent(playerId)}/contract`,
-        {
-          wage_gtex: Math.max(50, Math.round(wage * 1.25)),
-          years: 4,
-          promise_role: "prospect",
-        }
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/contract`
       );
       await invalidateAll();
-      toast.success(`Signed ${playerName} to improved long-term contract.`);
+      toast.success(`Improved ${playerName}'s academy contract for 1,000 GTEX.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -2034,7 +2028,7 @@ export function ClubOperationsCentre3D({
                           >
                             Extend
                           </button>
-                          {p.squad_status !== "first_team" && (
+                          {!["first_team", "senior"].includes(String(p.squad_status || "")) && (
                             <button
                               type="button"
                               disabled={Boolean(busyAction)}
