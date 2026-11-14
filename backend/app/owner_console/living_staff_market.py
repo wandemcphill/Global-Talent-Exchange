@@ -521,7 +521,7 @@ def evaluate_staff_contract_offer(
             "reason": "insufficient_wage",
             "message": f"Offer rejected. The proposed salary of {salary_offer_fan_coin:,} Fan Coin is substantially below {name}'s market expectation of {expected_salary:,} Fan Coin.",
             "counter_salary_fan_coin": expected_salary,
-                "counter_salary_gtex": expected_salary,
+            "counter_salary_gtex": expected_salary,
         }
     elif wage_ratio < 0.95:
         # Close enough for a counter-offer
@@ -618,15 +618,14 @@ def hire_staff_from_market(
             "counter_salary_fan_coin": evaluation.get("counter_salary_fan_coin"),
             "required_salary_fan_coin": evaluation.get("required_salary_fan_coin"),
             "counter_salary_gtex": evaluation.get("counter_salary_fan_coin") or evaluation.get("counter_salary_gtex"),
-            "required_salary_gtex": evaluation.get("required_salary_fan_coin") or evaluation.get("required_salary_gtex"),
+            "required_salary_gtex": evaluation.get("required_salary_fan_coin")
+            or evaluation.get("required_salary_gtex"),
             "cinematic_event": None,
         }
 
     # Total upfront contract fee or annual budget
     total_contract_fee_fan_coin = (
-        salary_fan_coin * years
-        if years != 3
-        else max(salary_fan_coin, int(expected_salary_fan_coin * 1.5))
+        salary_fan_coin * years if years != 3 else max(salary_fan_coin, int(expected_salary_fan_coin * 1.5))
     )
     if marquee_wage_premium:
         total_contract_fee_fan_coin = int(total_contract_fee_fan_coin * 1.4)
