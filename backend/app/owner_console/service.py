@@ -2836,10 +2836,7 @@ def hire_executive_staff(
     # Every staff contract is priced and settled in Fan Coin. Legacy GTEX
     # signing-fee fields are intentionally ignored for contract pricing.
     annual_salary_fan_coin = int(
-        candidate.get("salary_fan_coin")
-        or candidate.get("salary_fancoin")
-        or candidate.get("salary")
-        or 2000
+        candidate.get("salary_fan_coin") or candidate.get("salary_fancoin") or candidate.get("salary") or 2000
     )
     signing_fee_fan_coin = annual_salary_fan_coin * years
     if marquee_wage_premium:
@@ -3079,7 +3076,11 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 entity_type="staff",
                 entity_id=str(current.get("id") or role),
                 entity_name=str(current.get("name", "Executive")),
-                established_facts={"role": role, "severance_paid_fan_coin": int(compensation_fan_coin), "currency": ledger.FAN},
+                established_facts={
+                    "role": role,
+                    "severance_paid_fan_coin": int(compensation_fan_coin),
+                    "currency": ledger.FAN,
+                },
                 is_major_milestone=False,
                 idempotency_key=f"history:exec_fire:{club_id}:{role}:d{state.world_day}",
             )
