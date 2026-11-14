@@ -248,6 +248,47 @@ export function ClubOperationsCentre3D({
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
+  const focusHotspotAction = (action: string, destinationKey: string, hotspotId: string) => {
+    setActiveDestKey(destinationKey);
+    setActiveHotspotId(hotspotId);
+
+    if (action === "inspect_timeline") {
+      setShowTimelineDrawer(true);
+      return;
+    }
+
+    const selectors: Record<string, string[]> = {
+      inspect_briefing: ['[data-testid="room-panel-executive-office"]'],
+      inspect_decisions: ['[data-testid="room-panel-executive-office"]'],
+      set_mentality: ['[data-testid="set-mentality-balanced"]'],
+      pledge_win_bonus: ['[data-testid="room-pledge-win-bonus-btn"]'],
+      configure_delegation: ['[data-testid="set-delegation-balanced"]'],
+      inspect_campus: ['[data-testid="campus-construction-projects"]', '[data-testid="room-panel-general-managers-office"]'],
+      commission_intake: ['[data-testid="commission-academy-intake-btn"]'],
+      manage_regens: ['[data-testid="academy-regen-pipeline"]', '[data-testid="room-panel-academy-department"]'],
+      run_conditioning: ['[data-testid="medical-rehabilitation-ward"]', '[data-testid="room-panel-medical-department"]'],
+      inspect_workloads: ['[data-testid="medical-workload-watchlist"]', '[data-testid="room-panel-medical-department"]'],
+      inspect_ledger: ['[data-testid="finance-ledger-stream"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      sign_sponsor: ['[data-testid^="sign-sponsor-"]', '[data-testid="finance-sponsor-offers"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      inspect_matchday_econ: ['[data-testid="finance-matchday-economics"]', '[data-testid="room-panel-finance-commercial-office"]'],
+    };
+    const targets = action.startsWith("chat_")
+      ? ['[data-testid="department-staff-chat-input"]']
+      : selectors[action] || [];
+    const panelSelector = `[data-testid="department-inspector-${destinationKey}"]`;
+
+    window.requestAnimationFrame(() => {
+      let target: HTMLElement | null = null;
+      for (const selector of targets) {
+        target = document.querySelector<HTMLElement>(selector);
+        if (target) break;
+      }
+      target = target || document.querySelector<HTMLElement>(panelSelector);
+      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      if (action.startsWith("chat_")) target?.focus();
+    });
+  };
+
   const activeDirectiveDepartment =
     DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
   const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
@@ -539,7 +580,11 @@ export function ClubOperationsCentre3D({
           setCameraMode("room");
           setActiveDestKey(destKey);
           if (obj.userData.hotspotId) {
-            setActiveHotspotId(String(obj.userData.hotspotId));
+            focusHotspotAction(
+              String(obj.userData.hotspotAction || ""),
+              destKey,
+              String(obj.userData.hotspotId),
+            );
           }
         }
       }
@@ -1893,7 +1938,7 @@ export function ClubOperationsCentre3D({
 
                 {/* Active 3D Campus Construction Projects */}
                 {(rpt.club_operations?.active_construction_projects || []).length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                  <div data-testid="campus-construction-projects" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       Active Campus Construction Projects
                     </p>
@@ -1959,7 +2004,7 @@ export function ClubOperationsCentre3D({
                     : `Commission New Youth Intake (${fmt(rpt.intake_recommendations?.intake_cost_gtex ?? 400)} GTEX)`}
                 </button>
 
-                <div className="space-y-2">
+                <div className="space-y-2" data-testid="academy-regen-pipeline">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Prospective Academy & Regen Pipeline ({(rpt.prospective_youth_players || []).length})
                   </p>
@@ -2032,7 +2077,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Active Rehabilitation Dossiers */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                <div data-testid="medical-rehabilitation-ward" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
                     <Activity size={12} />
                     <span>Active Rehabilitation Ward ({(rpt.injured_players || []).length})</span>
@@ -2065,7 +2110,7 @@ export function ClubOperationsCentre3D({
 
                 {/* Players Requiring Special Attention */}
                 {(rpt.players_requiring_special_attention || []).length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                  <div data-testid="medical-workload-watchlist" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       Workload & Conditioning Watchlist
                     </p>
@@ -2089,7 +2134,7 @@ export function ClubOperationsCentre3D({
             {/* 6. FINANCE & COMMERCIAL OFFICE VIEW */}
             {activeDestination.destination_key === "finance_commercial_office" && (
               <div className="space-y-3.5" data-testid="room-panel-finance-commercial-office">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div data-testid="finance-matchday-economics" className="grid grid-cols-2 gap-2.5">
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Treasury Balance</p>
                     <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">
@@ -2118,7 +2163,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Signable Sponsor Offers */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                <div data-testid="finance-sponsor-offers" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
                     <Award size={12} />
                     <span>Commercial Sponsorship Desk</span>
@@ -2151,7 +2196,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Recent Authoritative Ledger Entries */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-testid="finance-ledger-stream">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Authoritative Ledger Stream
                   </p>
