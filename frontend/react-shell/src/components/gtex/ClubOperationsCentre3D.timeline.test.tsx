@@ -884,6 +884,84 @@ describe("ClubOperationsCentre3D Living World Timeline Integration", () => {
     expect(resolvedUrl).toBe("/owner/clubs/club-tl-1/living-world/events/ev-actionable-1/resolve");
     expect(resolvedBody).toEqual({ action: "endorse_tactics" });
   });
+  test("sends department quick messages into the durable owner communications thread", async () => {
+    let postedUrl = "";
+    let postedBody: any = null;
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) return Promise.resolve({ data: mockHub });
+      return Promise.resolve({ data: {} });
+    });
+    jest.spyOn(api, "post").mockImplementation((url: string, body: any) => {
+      postedUrl = url;
+      postedBody = body;
+      return Promise.resolve({ data: { status: "sent" } });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const input = container?.querySelector('[data-testid="department-staff-chat-input"]') as HTMLInputElement;
+    const send = container?.querySelector('[data-testid="department-staff-chat-send"]') as HTMLButtonElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, "Please send the weekly executive operations report.");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await act(async () => {
+      send.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(postedUrl).toBe("/owner/clubs/club-tl-1/communications/messages");
+    expect(postedBody).toMatchObject({
+      thread_id: "staff:general_manager",
+      message: "Please send the weekly executive operations report.",
+      sender_role: "owner",
+      request_reply: true,
+    });
+  });
+
+  test("routes the General Manager office directive selector to executive objectives", async () => {
+    const gmHub = {
+      ...mockHub,
+      destinations: [{
+        ...mockDestination,
+        destination_key: "general_managers_office",
+        label: "General Manager's Office",
+      }],
+    };
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) return Promise.resolve({ data: gmHub });
+      return Promise.resolve({ data: {} });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const openButton = container?.querySelector('[data-testid="open-dispatch-directive-button"]') as HTMLButtonElement;
+    await act(async () => {
+      openButton.click();
+    });
+    const objectiveSelect = container?.querySelector(
+      '[data-testid="directive-objective-select"]',
+    ) as HTMLSelectElement;
+    expect(objectiveSelect.querySelector('option[value="appoint_executive_staff"]')).not.toBeNull();
+    expect(objectiveSelect.querySelector('option[value="expand_scouting_watchlist"]')).toBeNull();
+  });
 });
 
 describe("Club Operations Centre department interior blueprints", () => {
