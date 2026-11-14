@@ -999,6 +999,10 @@ describe("Club Operations Centre department interior blueprints", () => {
       expect(built.pickables).toHaveLength(3);
       expect(built.pickables.every((item) => item.userData.destinationKey === destinationKey)).toBe(true);
       expect(built.pickables[0].userData.hotspotAction).toBe(action);
+      expect(built.animatedActors).toHaveLength(1);
+      expect(built.animatedActors[0].name).toBe("department-staff-actor");
+      expect(built.animatedActors[0].userData.leftArmPivot).toBeDefined();
+      expect(built.animatedActors[0].userData.headPivot).toBeDefined();
     },
   );
   test("shows a retryable error state when the operations hub request fails", async () => {
