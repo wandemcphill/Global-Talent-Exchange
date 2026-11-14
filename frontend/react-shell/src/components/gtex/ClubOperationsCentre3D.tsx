@@ -232,6 +232,8 @@ export function ClubOperationsCentre3D({
             destination.glb_model,
             destination.position_3d.join(","),
             destination.accent_color,
+            destination.label,
+            destination.subtitle,
             (destination.hotspots || [])
               .map((hotspot) => [hotspot.id, hotspot.action, hotspot.label, hotspot.offset.join(",")].join("~"))
               .join(";"),
@@ -494,7 +496,7 @@ export function ClubOperationsCentre3D({
           });
           const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
           fallbackMesh.name = `fallback-wireframe-${dest.destination_key}`;
-          fallbackMesh.position.set(0, 1.4, -1.5);
+          fallbackMesh.position.set(7.0, 1.2, -0.8);
           fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
           fallbackMesh.castShadow = true;
           fallbackMesh.receiveShadow = true;
@@ -958,6 +960,7 @@ export function ClubOperationsCentre3D({
   if (!hub || !activeDestination) return null;
 
   const rpt = activeDestination.report || {};
+  const activeHotspot = activeDestination.hotspots.find((hotspot) => hotspot.id === activeHotspotId);
   const openDeptDecisions = activeDestination.open_decisions || [];
   const allOpenDeptDecisions = hub.actionable_decisions?.department_decisions || [];
   const dilemma = hub.daily_briefing?.boardroom_dilemma;
@@ -1320,7 +1323,8 @@ export function ClubOperationsCentre3D({
                   {activeDestination.label}
                 </span>
                 <span className="gx-mono text-[11px] text-slate-400">
-                  Station: {activeDestination.hotspots.find((h) => h.id === activeHotspotId)?.label || "Overview"}
+                  Station: {activeHotspot?.label || "Overview"}
+                  {activeHotspot ? ` · ${activeHotspot.action.replace(/_/g, " ")}` : ""}
                 </span>
               </div>
               <h3 className="mt-1 text-lg font-black text-white">{rpt.title || activeDestination.subtitle}</h3>
