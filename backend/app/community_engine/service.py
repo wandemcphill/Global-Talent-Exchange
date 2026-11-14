@@ -201,6 +201,8 @@ class CommunityEngineService:
             thread_key=f"pm-{actor.id[:6]}-{uuid4().hex[:12]}",
             created_by_user_id=actor.id,
             subject=subject,
+            is_group=len(participant_ids) > 1,
+            last_message_seq=1,
             metadata_json=metadata_json,
         )
         self.session.add(thread)
@@ -210,6 +212,7 @@ class CommunityEngineService:
             self.session.add(PrivateMessageParticipant(thread_id=thread.id, user_id=user_id))
         message = PrivateMessage(
             thread_id=thread.id,
+            seq=1,
             sender_user_id=actor.id,
             body=initial_message,
             metadata_json={"kind": "initial", **metadata_json},
@@ -217,6 +220,20 @@ class CommunityEngineService:
         self.session.add(message)
         thread.last_message_at = datetime.now(UTC)
         self.session.flush()
+        try:
+            from app.realtime.service import RealtimeDispatch, get_global_realtime_hub
+
+            hub = get_global_realtime_hub()
+            if hub is not None:
+                hub.publish_direct_sync(
+                    RealtimeDispatch(
+                        type="pm_thread_created",
+                        topics=tuple(f"user:{uid}" for uid in participant_ids),
+                        data={"thread_id": thread.id, "subject": thread.subject, "sender_user_id": actor.id},
+                    )
+                )
+        except Exception:
+            pass
         return thread
 
     def list_private_threads(self, *, actor: User) -> list[PrivateMessageThread]:
@@ -225,6 +242,7 @@ class CommunityEngineService:
             .join(PrivateMessageParticipant, PrivateMessageParticipant.thread_id == PrivateMessageThread.id)
             .where(
                 PrivateMessageParticipant.user_id == actor.id,
+                PrivateMessageParticipant.left_at.is_(None),
                 PrivateMessageThread.status != PrivateMessageThreadStatus.ARCHIVED,
             )
             .order_by(PrivateMessageThread.last_message_at.desc().nullslast(), PrivateMessageThread.created_at.desc())
@@ -292,10 +310,40 @@ class CommunityEngineService:
         for participant in participants:
             if participant.user_id != actor.id and self._is_blocked_between(actor.id, participant.user_id):
                 raise CommunityEngineError("A participant has blocked this conversation.")
-        message = PrivateMessage(thread_id=thread.id, sender_user_id=actor.id, body=body, metadata_json=metadata_json)
+        next_seq = int(getattr(thread, "last_message_seq", 0) or 0) + 1
+        message = PrivateMessage(
+            thread_id=thread.id,
+            seq=next_seq,
+            sender_user_id=actor.id,
+            body=body,
+            metadata_json=metadata_json,
+        )
         self.session.add(message)
+        thread.last_message_seq = next_seq
         thread.last_message_at = datetime.now(UTC)
         self.session.flush()
+        try:
+            from app.realtime.service import RealtimeDispatch, get_global_realtime_hub
+
+            hub = get_global_realtime_hub()
+            if hub is not None:
+                msg_data = {
+                    "id": message.id,
+                    "thread_id": thread.id,
+                    "seq": next_seq,
+                    "sender_user_id": actor.id,
+                    "body": body,
+                    "created_at": message.created_at.isoformat() if message.created_at else None,
+                }
+                hub.publish_direct_sync(
+                    RealtimeDispatch(
+                        type="pm_message",
+                        topics=(f"pm:{thread.id}", *[f"user:{p.user_id}" for p in participants if p.user_id != actor.id]),
+                        data=msg_data,
+                    )
+                )
+        except Exception:
+            pass
         return message
 
     def block_user(self, *, actor: User, target_user_id: str, reason: str | None = None) -> CommunityUserBlock:

@@ -126,6 +126,8 @@ class PrivateMessageThreadView(BaseModel):
     created_by_user_id: str
     status: PrivateMessageThreadStatus
     subject: str
+    is_group: bool = False
+    last_message_seq: int = 0
     last_message_at: datetime | None
     metadata_json: dict[str, object]
     created_at: datetime

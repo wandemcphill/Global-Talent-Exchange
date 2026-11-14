@@ -4,7 +4,7 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -528,6 +528,114 @@ class ClubDelegatedDecisionAuditLog(UUIDPrimaryKeyMixin, Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class OwnerClubConversation(UUIDPrimaryKeyMixin, Base):
+    """Durable normalized conversation thread for private Owner Inbox communications."""
+
+    __tablename__ = "owner_club_conversations"
+    __table_args__ = (
+        UniqueConstraint("club_id", "thread_key", name="uq_owner_club_conversations_club_thread_key"),
+        Index("ix_owner_club_conversations_club_channel", "club_id", "channel_type"),
+    )
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    channel_type: Mapped[str] = mapped_column(String(24), nullable=False, default="direct", server_default="direct")
+    thread_key: Mapped[str] = mapped_column(String(120), nullable=False)
+    participant_type: Mapped[str] = mapped_column(String(24), nullable=False, default="staff", server_default="staff")
+    participant_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    participant_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    participant_role: Mapped[str] = mapped_column(String(80), nullable=False)
+    subject: Mapped[str | None] = mapped_column(String(180), nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_message_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerClubMessage(UUIDPrimaryKeyMixin, Base):
+    """Durable normalized message record inside an Owner Inbox conversation or room."""
+
+    __tablename__ = "owner_club_messages"
+    __table_args__ = (
+        Index("ix_owner_club_messages_conv_seq", "conversation_id", "seq"),
+        Index("ix_owner_club_messages_club_read", "club_id", "is_read"),
+    )
+
+    conversation_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("owner_club_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    sender_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    sender_type: Mapped[str] = mapped_column(String(24), nullable=False, default="staff", server_default="staff")
+    sender_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    sender_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    sender_role: Mapped[str] = mapped_column(String(80), nullable=False)
+    topic: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False, default="staff_reply", server_default="staff_reply")
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="normal", server_default="normal")
+    linked_entity_type: Mapped[str | None] = mapped_column(String(48), nullable=True)
+    linked_entity_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    linked_event_key: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    action_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    is_read: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerClubMeeting(UUIDPrimaryKeyMixin, Base):
+    """Durable scheduled or completed club boardroom/staff/squad meeting."""
+
+    __tablename__ = "owner_club_meetings"
+    __table_args__ = (
+        Index("ix_owner_club_meetings_club_created", "club_id", "created_at"),
+    )
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    agenda: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    meeting_type: Mapped[str] = mapped_column(String(32), nullable=False, default="boardroom", server_default="boardroom")
+    world_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="scheduled", server_default="scheduled")
+    attendees_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    minutes_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+    decisions_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    created_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerClubAnnouncement(UUIDPrimaryKeyMixin, Base):
+    """Durable internal or official club announcement issued by an authorized club owner."""
+
+    __tablename__ = "owner_club_announcements"
+    __table_args__ = (
+        Index("ix_owner_club_announcements_club_created", "club_id", "created_at"),
+    )
+
+    club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    title: Mapped[str] = mapped_column(String(180), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    audience: Mapped[str] = mapped_column(String(32), nullable=False, default="all_club", server_default="all_club")
+    priority: Mapped[str] = mapped_column(String(16), nullable=False, default="normal", server_default="normal")
+    published_world_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    published_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 OWNER_CONSOLE_TABLES = (
     ClubDelegationPolicy.__table__,
     ClubDelegatedDecision.__table__,
@@ -552,4 +660,8 @@ OWNER_CONSOLE_TABLES = (
     OwnerClubRelationship.__table__,
     OwnerClubRelationshipHistory.__table__,
     OwnerClubDirective.__table__,
+    OwnerClubConversation.__table__,
+    OwnerClubMessage.__table__,
+    OwnerClubMeeting.__table__,
+    OwnerClubAnnouncement.__table__,
 )

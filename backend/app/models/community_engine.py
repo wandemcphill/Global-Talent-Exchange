@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from enum import Enum
 
-from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum as SqlEnum, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
@@ -106,6 +106,8 @@ class PrivateMessageThread(Base, UUIDPrimaryKeyMixin, TimestampMixin):
         default=PrivateMessageThreadStatus.ACTIVE,
     )
     subject: Mapped[str] = mapped_column(String(180), nullable=False, default="")
+    is_group: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    last_message_seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     last_message_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
@@ -121,16 +123,20 @@ class PrivateMessageParticipant(Base, UUIDPrimaryKeyMixin):
     is_muted: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     last_read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    left_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
 class PrivateMessage(Base, UUIDPrimaryKeyMixin):
     __tablename__ = "private_messages"
+    __table_args__ = (Index("ix_private_messages_thread_seq", "thread_id", "seq"),)
 
     thread_id: Mapped[str] = mapped_column(
         ForeignKey("private_message_threads.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    seq: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     sender_user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    reply_to_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     body: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[MessageVisibility] = mapped_column(
         SqlEnum(MessageVisibility, name="communitymessagevisibility"),
@@ -138,6 +144,7 @@ class PrivateMessage(Base, UUIDPrimaryKeyMixin):
         default=MessageVisibility.PUBLIC,
         server_default=MessageVisibility.PUBLIC.name,
     )
+    mentions_json: Mapped[list[dict[str, object]]] = mapped_column(JSON, nullable=False, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 

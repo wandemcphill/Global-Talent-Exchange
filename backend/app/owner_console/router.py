@@ -2041,6 +2041,8 @@ class ClubThreadMessageRequest(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     sender_role: Literal["owner", "manager"] = "owner"
     topic: str = "general"
+    priority: str = "normal"
+    request_reply: bool = True
 
 
 class ClubMeetingScheduleRequest(BaseModel):
@@ -2056,6 +2058,7 @@ class ClubAnnouncementPublishRequest(BaseModel):
     body: str = Field(min_length=1, max_length=4000)
     audience: str = "all_club"
     publish_to_newsroom: bool = False
+    also_post_to_community: bool = False
 
 
 class NewsroomEditorialStatusRequest(BaseModel):
@@ -2063,15 +2066,98 @@ class NewsroomEditorialStatusRequest(BaseModel):
     editorial_note: str = ""
 
 
+@router.get("/communications/summary")
+def get_all_clubs_communications_summary(
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(session, comms_persistence.list_all_clubs_communications_summary, session, user_id=user.id)
+
+
 @router.get("/clubs/{club_id}/communications")
 def get_club_communications_hub(
     club_id: str,
+    search: str | None = Query(default=None),
+    include_archived: bool = Query(default=False),
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     from app.owner_console import prestige_campus_comms
 
-    return _run(session, prestige_campus_comms.get_club_communications, session, user.id, club_id)
+    return _run(
+        session,
+        prestige_campus_comms.get_club_communications,
+        session,
+        user.id,
+        club_id,
+        search=search,
+        include_archived=include_archived,
+    )
+
+
+@router.get("/clubs/{club_id}/communications/threads/{conversation_id}/messages")
+def get_club_thread_messages_page(
+    club_id: str,
+    conversation_id: str,
+    before_seq: int | None = Query(default=None, ge=1),
+    limit: int = Query(default=30, ge=1, le=100),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(
+        session,
+        comms_persistence.get_thread_messages_page,
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        conversation_id=conversation_id,
+        before_seq=before_seq,
+        limit=limit,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/threads/{conversation_id}/read")
+def mark_club_thread_read(
+    club_id: str,
+    conversation_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(
+        session,
+        comms_persistence.mark_conversation_read,
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        conversation_id=conversation_id,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/threads/{conversation_id}/archive")
+def archive_club_thread(
+    club_id: str,
+    conversation_id: str,
+    archived: bool = Query(default=True),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(
+        session,
+        comms_persistence.archive_conversation,
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        conversation_id=conversation_id,
+        archived=archived,
+    )
 
 
 @router.post("/clubs/{club_id}/communications/messages")
@@ -2093,6 +2179,8 @@ def post_club_thread_message(
         message=payload.message,
         sender_role=payload.sender_role,
         topic=payload.topic,
+        priority=payload.priority,
+        request_reply=payload.request_reply,
     )
 
 
@@ -2138,6 +2226,7 @@ def post_club_announcement(
         body=payload.body,
         audience=payload.audience,
         publish_to_newsroom=payload.publish_to_newsroom,
+        also_post_to_community=payload.also_post_to_community,
     )
 
 

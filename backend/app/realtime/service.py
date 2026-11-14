@@ -87,8 +87,13 @@ class RealtimeHub:
         self._delivered_messages = 0
         self._connections: dict[str, _RealtimeConnection] = {}
         self._loop: asyncio.AbstractEventLoop | None = None
+        self._session_factory: Any | None = None
         self._sync_lock = RLock()
         self._connection_lock = asyncio.Lock()
+
+    def bind_session_factory(self, session_factory: Any) -> None:
+        if session_factory is not None:
+            self._session_factory = session_factory
 
     def bind_loop(self, loop: asyncio.AbstractEventLoop) -> None:
         self._loop = loop
@@ -239,8 +244,78 @@ class RealtimeHub:
             if topic.startswith("wallet:"):
                 logger.warning("realtime.topic.denied topic=%s reason=wallet_scope", topic)
                 continue
+            if topic == "user" and user_id is not None:
+                resolved.append(f"user:{user_id}")
+                continue
+            if topic.startswith("user:"):
+                if user_id is not None and topic == f"user:{user_id}":
+                    resolved.append(topic)
+                else:
+                    logger.warning("realtime.topic.denied topic=%s reason=user_scope", topic)
+                continue
+            if topic.startswith("pm:") or topic.startswith("owner_comms:club:"):
+                if user_id is not None and self._authorize_scoped_topic(topic, user_id=user_id):
+                    resolved.append(topic)
+                else:
+                    logger.warning("realtime.topic.denied topic=%s reason=unauthorized_scope", topic)
+                continue
             resolved.append(topic)
         return tuple(dict.fromkeys(resolved))
+
+    def _authorize_scoped_topic(self, topic: str, *, user_id: str) -> bool:
+        try:
+            from sqlalchemy import select
+            from app.db import get_session_factory
+
+            session_factory = self._session_factory or get_session_factory()
+            with session_factory() as session:
+                if topic.startswith("pm:"):
+                    thread_id = topic.split("pm:", maxsplit=1)[1].strip()
+                    if not thread_id:
+                        return False
+                    from app.models.community_engine import PrivateMessageParticipant
+
+                    part = session.scalar(
+                        select(PrivateMessageParticipant).where(
+                            PrivateMessageParticipant.thread_id == thread_id,
+                            PrivateMessageParticipant.user_id == user_id,
+                            PrivateMessageParticipant.left_at.is_(None),
+                        )
+                    )
+                    return part is not None
+                if topic.startswith("owner_comms:club:"):
+                    club_id = topic.split("owner_comms:club:", maxsplit=1)[1].strip()
+                    if not club_id:
+                        return False
+                    from app.models.club_profile import ClubProfile
+                    from app.owner_console.models import OwnerClubState
+
+                    state = session.scalar(
+                        select(OwnerClubState).where(
+                            OwnerClubState.club_id == club_id,
+                            OwnerClubState.owner_user_id == user_id,
+                        )
+                    )
+                    if state is not None:
+                        return True
+                    club = session.get(ClubProfile, club_id)
+                    return club is not None and club.owner_user_id == user_id
+        except Exception:
+            return False
+        return False
+
+    def publish_direct_sync(self, *dispatches: RealtimeDispatch) -> None:
+        if not dispatches:
+            return
+        with self._sync_lock:
+            self.total_events += len(dispatches)
+            self.last_event_name = dispatches[-1].type
+            self.last_event_at = datetime.now(timezone.utc)
+        loop = self._loop
+        if loop is None or loop.is_closed():
+            return
+        future = asyncio.run_coroutine_threadsafe(self._broadcast(list(dispatches)), loop)
+        future.add_done_callback(self._log_dispatch_failure)
 
     async def _broadcast(self, dispatches: list[RealtimeDispatch]) -> None:
         async with self._connection_lock:

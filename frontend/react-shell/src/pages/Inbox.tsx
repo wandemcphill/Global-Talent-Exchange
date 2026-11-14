@@ -1,11 +1,12 @@
-import React, { useState } from "react";
-import { useSearchParams, Link } from "react-router-dom";
+import React, { useMemo, useState } from "react";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { Empty, Loading, PageHeader } from "@/components/gtex/ui";
 import { api } from "@/lib/api";
 import { useActiveClub, useClubCommunications, useRefreshOwner } from "@/lib/owner";
+import { useRealtimeTopics } from "@/lib/realtime";
 import {
   Inbox,
   Clock,
@@ -24,6 +25,7 @@ import {
   Sparkles,
   UserCheck,
   Compass,
+  Wifi,
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -56,7 +58,7 @@ export default function InboxPage() {
   const initialUnreadOnly = searchParams.get("unread_only") === "true";
   const initialTab = (searchParams.get("tab") as CommsDestination) || "inbox";
 
-  const [destination, setDestination] = useState<CommsDestination>(
+  const [destinationState, setDestination] = useState<CommsDestination>(
     initialCategory === "archive" ? "archive" : initialTab
   );
   const [status, setStatus] = useState(initialStatus);
@@ -67,12 +69,24 @@ export default function InboxPage() {
   const [selectedClubId, setSelectedClubId] = useState<string>(
     queryClubId || (active?.club_id ? active.club_id : "all")
   );
-  const effectiveClubId = selectedClubId !== "all" ? selectedClubId : active?.club_id;
+  // "All Clubs" is an explicit scope: never silently fall back to the active club for private comms.
+  const effectiveClubId = selectedClubId !== "all" ? selectedClubId : undefined;
+  const commsOnly = ["direct", "staff_room", "squad_room", "meetings", "announcements", "decisions"].includes(
+    destinationState
+  );
+  const needsClub = !effectiveClubId && commsOnly;
+  const destination: CommsDestination = needsClub ? ("scope" as CommsDestination) : destinationState;
   const refresh = useRefreshOwner();
+
+  const { data: summary } = useQuery({
+    queryKey: ["owner-comms-summary", clubs.length],
+    enabled: clubs.length > 1,
+    queryFn: async () => (await api.get("/owner/communications/summary")).data,
+  });
 
   // Direct conversations & rooms state
   const [activeThreadId, setActiveThreadId] = useState<string>("staff:first_team_manager");
-  const [senderRole, setSenderRole] = useState<"owner" | "manager">("owner");
+  const senderRole = "owner" as const; // Sender identity is verified by the server; the client cannot impersonate staff.
   const [draftMessage, setDraftMessage] = useState<string>("");
   const [roomDraft, setRoomDraft] = useState<string>("");
   const [busyAction, setBusyAction] = useState<boolean>(false);
@@ -85,8 +99,15 @@ export default function InboxPage() {
   // Announcement composer state
   const [annTitle, setAnnTitle] = useState<string>("");
   const [annBody, setAnnBody] = useState<string>("");
+  const navigate = useNavigate();
   const [annAudience, setAnnAudience] = useState<string>("all_club");
   const [annToNewsroom, setAnnToNewsroom] = useState<boolean>(true);
+  const [annToCommunity, setAnnToCommunity] = useState<boolean>(false);
+  const [peopleFilter, setPeopleFilter] = useState<string>("");
+  const [commsSearch, setCommsSearch] = useState<string>("");
+  const [includeArchived, setIncludeArchived] = useState<boolean>(false);
+  const [olderByThread, setOlderByThread] = useState<Record<string, { messages: any[]; hasMore: boolean; nextBeforeSeq: number | null }>>({});
+  const [loadingOlder, setLoadingOlder] = useState<boolean>(false);
 
   const isArchiveCategory = selectedCategory === "archive" || destination === "archive";
   const effectiveStatus = isArchiveCategory ? "archived" : status;
@@ -111,7 +132,22 @@ export default function InboxPage() {
     },
   });
 
-  const { data: commsData, refetch: refetchComms } = useClubCommunications(effectiveClubId);
+  const { data: commsData, refetch: refetchComms } = useClubCommunications(effectiveClubId, {
+    search: commsSearch.trim() || undefined,
+    includeArchived,
+  });
+
+  const { connected: commsLive } = useRealtimeTopics(
+    effectiveClubId ? [`owner_comms:club:${effectiveClubId}`] : [],
+    () => {
+      refetchComms();
+      refresh();
+    },
+    () => {
+      refetchComms();
+    },
+    Boolean(effectiveClubId)
+  );
 
   const items: any[] = data?.items || [];
   const counts = data?.counts || {};
@@ -124,9 +160,108 @@ export default function InboxPage() {
   const meetingsList: any[] = commsData?.meetings || [];
   const announcementsList: any[] = commsData?.announcements || [];
   const dilemma = commsData?.requests_decisions?.boardroom_dilemma || null;
+  const searchResults: any[] = commsData?.search_results || [];
 
   const currentThread =
-    directThreads.find((t) => t.thread_id === activeThreadId) || directThreads[0] || null;
+    directThreads.find((t) => t.thread_id === activeThreadId || t.thread_key === activeThreadId) ||
+    directThreads[0] ||
+    null;
+
+  const currentThreadMessages = useMemo(() => {
+    if (!currentThread) return [];
+    const older = olderByThread[currentThread.thread_id]?.messages || [];
+    const byId = new Map<string, any>();
+    [...older, ...(currentThread.messages || [])].forEach((m: any) => byId.set(m.id, m));
+    return Array.from(byId.values()).sort((a, b) => (a.seq || 0) - (b.seq || 0));
+  }, [currentThread, olderByThread]);
+
+  const currentHasMore = currentThread
+    ? olderByThread[currentThread.thread_id]?.hasMore ?? Boolean(currentThread.has_more)
+    : false;
+  const currentNextBefore = currentThread
+    ? olderByThread[currentThread.thread_id]?.nextBeforeSeq ?? currentThread.next_before_seq ?? null
+    : null;
+
+  const filteredStaffContacts = useMemo(() => {
+    const q = peopleFilter.trim().toLowerCase();
+    if (!q) return staffContacts;
+    return staffContacts.filter((sc) =>
+      `${sc.name || ""} ${sc.title || ""} ${sc.department || ""}`.toLowerCase().includes(q)
+    );
+  }, [staffContacts, peopleFilter]);
+
+  const filteredPlayerContacts = useMemo(() => {
+    const q = peopleFilter.trim().toLowerCase();
+    if (!q) return playerContacts;
+    return playerContacts.filter((pc) =>
+      `${pc.name || ""} ${pc.position || ""} ${pc.squad_status || ""}`.toLowerCase().includes(q)
+    );
+  }, [playerContacts, peopleFilter]);
+
+  const handleLoadOlderThreadMessages = async () => {
+    if (!effectiveClubId || !currentThread || !currentNextBefore || loadingOlder) return;
+    setLoadingOlder(true);
+    try {
+      const { data: page } = await api.get(
+        `/owner/clubs/${effectiveClubId}/communications/threads/${currentThread.thread_id}/messages`,
+        { params: { before_seq: currentNextBefore, limit: 30 } }
+      );
+      setOlderByThread((prev) => {
+        const existing = prev[currentThread.thread_id]?.messages || [];
+        const byId = new Map<string, any>();
+        [...(page.messages || []), ...existing].forEach((m: any) => byId.set(m.id, m));
+        return {
+          ...prev,
+          [currentThread.thread_id]: {
+            messages: Array.from(byId.values()),
+            hasMore: Boolean(page.has_more),
+            nextBeforeSeq: page.next_before_seq ?? null,
+          },
+        };
+      });
+    } catch {
+      toast.error("Unable to load older thread messages");
+    } finally {
+      setLoadingOlder(false);
+    }
+  };
+
+  const handleMarkThreadRead = async () => {
+    if (!effectiveClubId || !currentThread) return;
+    try {
+      await api.post(`/owner/clubs/${effectiveClubId}/communications/threads/${currentThread.thread_id}/read`);
+      refetchComms();
+      refresh();
+    } catch {
+      toast.error("Failed to mark thread read");
+    }
+  };
+
+  const handleArchiveThread = async () => {
+    if (!effectiveClubId || !currentThread) return;
+    const nextArchived = !currentThread.archived_at;
+    try {
+      await api.post(
+        `/owner/clubs/${effectiveClubId}/communications/threads/${currentThread.thread_id}/archive`,
+        undefined,
+        { params: { archived: nextArchived } }
+      );
+      toast.success(nextArchived ? "Conversation archived" : "Conversation restored");
+      refetchComms();
+      refresh();
+    } catch {
+      toast.error("Failed to update archive state");
+    }
+  };
+
+  const handleThreadActionPayload = (payload: any) => {
+    if (!payload) return;
+    if (payload.action_type === "open_tab" && payload.tab) {
+      setDestination(payload.tab as CommsDestination);
+    } else if (payload.action_type === "open_route" && payload.route) {
+      navigate(payload.route);
+    }
+  };
 
   const handleSendDirectMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -141,7 +276,7 @@ export default function InboxPage() {
         topic: "general",
       });
       setDraftMessage("");
-      toast.success(`Reply received from ${res.data?.reply_message?.sender_name || "Contact"}`);
+      toast.success(`Message delivered${res.data?.reply_message?.sender_name ? ` · reply from ${res.data.reply_message.sender_name}` : ""}`);
       refetchComms();
       refresh();
     } catch (err: any) {
@@ -161,11 +296,7 @@ export default function InboxPage() {
         sender_role: senderRole,
       });
       setRoomDraft("");
-      toast.success(
-        roomKey === "room:squad"
-          ? "Address delivered to Squad Room (+2 Squad Morale)!"
-          : "Directive posted to Executive Staff Room!"
-      );
+      toast.success(roomKey === "room:squad" ? "Address delivered to the Squad Room" : "Directive posted to the Staff Room");
       refetchComms();
       refresh();
     } catch (err: any) {
@@ -188,7 +319,7 @@ export default function InboxPage() {
       });
       setMeetingTitle("");
       setMeetingAgenda("");
-      toast.success("Club meeting convened and minutes ratified (+5 Manager Mood, +3 Squad Morale)!");
+      toast.success("Club meeting convened and minutes recorded");
       refetchComms();
       refresh();
     } catch (err: any) {
@@ -208,6 +339,7 @@ export default function InboxPage() {
         body: annBody.trim(),
         audience: annAudience,
         publish_to_newsroom: annToNewsroom,
+        also_post_to_community: annToCommunity,
       });
       setAnnTitle("");
       setAnnBody("");
@@ -321,11 +453,94 @@ export default function InboxPage() {
         }
       />
 
+      {/* Scope banner: private club comms are always scoped to exactly one club */}
+      <div data-testid="inbox-scope-banner" className="rounded-xl border border-white/10 bg-slate-900/80 px-4 py-2 text-xs text-slate-300 flex flex-wrap items-center justify-between gap-2">
+        <span>
+          {effectiveClubId
+            ? `Scope: ${clubs.find((c: any) => c.club_id === effectiveClubId)?.club_name || "Selected club"} — private to this club's owner.`
+            : "Scope: All My Clubs — the Inbox and decisions below span every club you own. Pick a single club for staff, squad, meetings and announcements."}
+        </span>
+        {effectiveClubId && (
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2" />
+              <input
+                type="search"
+                value={commsSearch}
+                onChange={(e) => setCommsSearch(e.target.value)}
+                placeholder="Search club messages..."
+                aria-label="Search club communications"
+                className="rounded-lg bg-slate-950 border border-white/15 pl-8 pr-3 py-1 text-xs text-white placeholder:text-slate-500"
+              />
+            </div>
+            <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeArchived}
+                onChange={(e) => setIncludeArchived(e.target.checked)}
+              />
+              Show archived threads
+            </label>
+          </div>
+        )}
+      </div>
+      {effectiveClubId && commsSearch.trim() && (
+        <div data-testid="comms-search-results" className="rounded-xl border border-emerald-500/30 bg-slate-900/90 p-3 space-y-2">
+          <div className="text-xs font-bold text-emerald-300">
+            Search matches for &ldquo;{commsSearch.trim()}&rdquo; ({searchResults.length})
+          </div>
+          {searchResults.length === 0 ? (
+            <p className="text-xs text-slate-400">No club messages matched that query.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {searchResults.slice(0, 6).map((m: any) => (
+                <button
+                  key={m.id}
+                  type="button"
+                  onClick={() => {
+                    if (m.conversation_id) {
+                      setActiveThreadId(m.conversation_id);
+                      setDestination("direct");
+                    }
+                  }}
+                  className="rounded-lg border border-white/10 bg-slate-950 p-2 text-left text-xs hover:border-emerald-400"
+                >
+                  <div className="font-bold text-white truncate">
+                    {m.sender_name} · {m.sender_role}
+                  </div>
+                  <div className="text-slate-300 line-clamp-2 mt-0.5">{m.body}</div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+      {needsClub && (
+        <div data-testid="inbox-pick-club" className="rounded-2xl border border-amber-500/30 bg-slate-900 p-5 space-y-3">
+          <p className="text-sm font-bold text-white">Choose a club to open its private communications</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(summary?.clubs || clubs.map((c: any) => ({ club_id: c.club_id, club_name: c.club_name }))).map((c: any) => (
+              <button
+                key={c.club_id}
+                type="button"
+                onClick={() => setSelectedClubId(c.club_id)}
+                className="rounded-xl border border-white/10 bg-slate-950 p-3 text-left hover:border-emerald-400"
+              >
+                <span className="block text-sm font-bold text-white">{c.club_name}</span>
+                <span className="text-xs text-slate-400">
+                  {c.unread_inbox ?? 0} unread inbox · {c.unread_comms ?? 0} unread messages · {c.pending_decisions ?? 0} decisions
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* 8-Destination Club Communications Navigation Bar */}
       <div className="flex flex-wrap gap-2 p-2 rounded-2xl bg-slate-950/90 border border-white/10">
         {DESTINATIONS.map((d) => {
           const Icon = d.icon;
-          const isCurrent = destination === d.id;
+          const isCurrent = destinationState === d.id;
           return (
             <button
               key={d.id}
@@ -436,17 +651,32 @@ export default function InboxPage() {
           {/* Left Directory of Staff & Players */}
           <div className="lg:col-span-4 rounded-2xl border border-white/10 bg-slate-900/90 p-4 space-y-4 max-h-[640px] overflow-y-auto">
             <div>
+              <input
+                type="search"
+                value={peopleFilter}
+                onChange={(e) => setPeopleFilter(e.target.value)}
+                placeholder="Filter staff or squad..."
+                aria-label="Filter club contacts"
+                className="w-full rounded-xl bg-slate-950 border border-white/15 px-3 py-1.5 text-xs text-white mb-3"
+              />
               <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400 mb-2">
                 Executive & Coaching Staff
               </div>
               <div className="space-y-1.5">
-                {staffContacts.map((sc) => {
-                  const isSel = activeThreadId === sc.contact_id;
+                {filteredStaffContacts.map((sc) => {
+                  const matchedThread = directThreads.find(
+                    (t) => t.thread_id === sc.thread_id || t.thread_key === sc.contact_id
+                  );
+                  const unread = Number(matchedThread?.unread_count || 0);
+                  const isSel =
+                    activeThreadId === sc.contact_id ||
+                    (sc.thread_id && activeThreadId === sc.thread_id) ||
+                    currentThread?.thread_key === sc.contact_id;
                   return (
                     <button
                       key={sc.contact_id}
                       type="button"
-                      onClick={() => setActiveThreadId(sc.contact_id)}
+                      onClick={() => setActiveThreadId(sc.thread_id || sc.contact_id)}
                       className={`w-full p-2.5 rounded-xl border text-left flex items-center gap-3 transition ${
                         isSel
                           ? "border-emerald-400 bg-emerald-500/15"
@@ -462,7 +692,13 @@ export default function InboxPage() {
                         <div className="text-xs font-bold text-white truncate">{sc.name}</div>
                         <div className="text-[11px] text-slate-400 truncate">{sc.title}</div>
                       </div>
-                      <span className="text-[10px] font-bold text-emerald-300">{sc.mood}%</span>
+                      {unread > 0 ? (
+                        <span className="px-1.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black">
+                          {unread}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-bold text-emerald-300">{sc.mood}%</span>
+                      )}
                     </button>
                   );
                 })}
@@ -471,16 +707,22 @@ export default function InboxPage() {
 
             <div>
               <div className="text-[11px] font-black uppercase tracking-wider text-amber-400 mb-2">
-                Squad Players & Academy Regens ({playerContacts.length})
+                Squad Players & Academy Regens ({filteredPlayerContacts.length})
               </div>
               <div className="space-y-1.5">
-                {playerContacts.map((pc) => {
-                  const isSel = activeThreadId === pc.contact_id;
+                {filteredPlayerContacts.map((pc) => {
+                  const matchedThread = directThreads.find(
+                    (t) => t.thread_id === pc.thread_id || t.thread_key === pc.contact_id
+                  );
+                  const isSel =
+                    activeThreadId === pc.contact_id ||
+                    (pc.thread_id && activeThreadId === pc.thread_id) ||
+                    currentThread?.thread_key === pc.contact_id;
                   return (
                     <button
                       key={pc.contact_id}
                       type="button"
-                      onClick={() => setActiveThreadId(pc.contact_id)}
+                      onClick={() => setActiveThreadId(pc.thread_id || pc.contact_id)}
                       className={`w-full p-2.5 rounded-xl border text-left flex items-center gap-3 transition ${
                         isSel
                           ? "border-amber-400 bg-amber-500/15"
@@ -528,37 +770,54 @@ export default function InboxPage() {
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 text-xs">
-                <span className="text-slate-400">Speaking as:</span>
-                <button
-                  type="button"
-                  onClick={() => setSenderRole("owner")}
-                  className={`px-2.5 py-1 rounded-lg font-bold ${
-                    senderRole === "owner" ? "bg-amber-400 text-slate-950" : "bg-white/5 text-slate-300"
-                  }`}
-                >
-                  Club Owner
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSenderRole("manager")}
-                  className={`px-2.5 py-1 rounded-lg font-bold ${
-                    senderRole === "manager" ? "bg-emerald-400 text-slate-950" : "bg-white/5 text-slate-300"
-                  }`}
-                >
-                  First-Team Manager
-                </button>
+              <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="verified-sender">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${commsLive ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-white/10 text-slate-400"}`}>
+                  <Wifi className="w-3 h-3" /> {commsLive ? "Live" : "Synced"}
+                </span>
+                {currentThread?.thread_id && (currentThread?.unread_count || 0) > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleMarkThreadRead}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-white/15 bg-slate-950 text-slate-200 hover:border-emerald-400"
+                  >
+                    <CheckCheck className="w-3.5 h-3.5 text-emerald-400" /> Mark read
+                  </button>
+                )}
+                {currentThread?.thread_id && (
+                  <button
+                    type="button"
+                    onClick={handleArchiveThread}
+                    className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-white/15 bg-slate-950 text-slate-200 hover:border-amber-400"
+                  >
+                    <Archive className="w-3.5 h-3.5 text-amber-400" /> {currentThread.archived_at ? "Restore" : "Archive"}
+                  </button>
+                )}
+                <span className="px-2.5 py-1 rounded-lg font-bold bg-amber-400 text-slate-950">
+                  {commsData?.owner_authority?.verified_name || "Club Owner"} · Club Owner (verified)
+                </span>
               </div>
             </div>
 
             <div className="flex-1 p-4 space-y-3 overflow-y-auto">
-              {(currentThread?.messages || []).length === 0 ? (
+              {currentHasMore && (
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    disabled={loadingOlder}
+                    onClick={handleLoadOlderThreadMessages}
+                    className="px-3 py-1 rounded-lg border border-white/15 bg-slate-950 text-xs text-slate-300 hover:border-emerald-400 disabled:opacity-50"
+                  >
+                    {loadingOlder ? "Loading..." : "Load older messages"}
+                  </button>
+                </div>
+              )}
+              {currentThreadMessages.length === 0 ? (
                 <div className="text-center text-xs text-slate-400 py-12">
                   Start a direct conversation below. All messages persist to the club communication log and generate
                   grounded replies based on real club state.
                 </div>
               ) : (
-                (currentThread?.messages || []).map((m: any) => {
+                currentThreadMessages.map((m: any) => {
                   const isMe = m.sender_type === "owner" || m.sender_type === "manager";
                   return (
                     <div
@@ -576,6 +835,17 @@ export default function InboxPage() {
                         }`}
                       >
                         {m.body}
+                        {!isMe && m.action_payload?.label && (
+                          <div className="mt-2 pt-2 border-t border-white/10">
+                            <button
+                              type="button"
+                              onClick={() => handleThreadActionPayload(m.action_payload)}
+                              className="px-2.5 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-bold text-[11px] hover:bg-emerald-500/30"
+                            >
+                              {m.action_payload.label}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -616,7 +886,7 @@ export default function InboxPage() {
               <p className="text-xs text-slate-400">
                 {destination === "staff_room"
                   ? "Cross-departmental alignment between the Owner, General Manager, First-Team Manager, HOYD, Chief Scout, and Medical Director."
-                  : "Live dressing-room pulse, captain updates, and direct leadership addresses that boost squad morale."}
+                  : "Live dressing-room pulse, captain updates, and direct leadership addresses."}
               </p>
             </div>
           </div>
@@ -711,7 +981,7 @@ export default function InboxPage() {
               disabled={busyAction || !meetingTitle.trim()}
               className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 text-xs font-black"
             >
-              Convene Meeting Now (+5 Manager Mood, +3 Squad Morale)
+              Convene Meeting Now
             </button>
           </form>
 
@@ -832,6 +1102,14 @@ export default function InboxPage() {
                 onChange={(e) => setAnnToNewsroom(e.target.checked)}
               />
               Also syndicate as a verified public dispatch in the GTEX Newsroom
+            </label>
+            <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={annToCommunity}
+                onChange={(e) => setAnnToCommunity(e.target.checked)}
+              />
+              Also share public club announcement in GTEX Community
             </label>
             <button
               type="submit"

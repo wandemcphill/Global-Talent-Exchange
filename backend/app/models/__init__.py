@@ -363,6 +363,16 @@ from app.models.community_engine import (
     PrivateMessageThreadStatus,
     LiveThreadStatus,
 )
+from app.models.community_social import (
+    CommunityBookmark,
+    CommunityChannel,
+    CommunityChannelMessage,
+    CommunityCompetitionApplication,
+    CommunityPollVote,
+    CommunityPost,
+    CommunityPostComment,
+    CommunityUserMute,
+)
 from app.models.discovery_engine import FeaturedRail, SavedSearch
 from app.models.dispute import Dispute, DisputeMessage, DisputeStatus
 from app.models.economy_config import GiftCatalogItem, ServicePricingRule

@@ -25,6 +25,7 @@ import CreatorAccess from "@/pages/CreatorAccess";
 import CoinTraders from "@/pages/CoinTraders";
 import Finance from "@/pages/Finance";
 import InboxPage from "@/pages/Inbox";
+import CommunityPage from "@/pages/Community";
 const Admin = React.lazy(() => import("@/pages/Admin"));
 const AdminAdvertising = React.lazy(() => import("@/pages/AdminAdvertising"));
 const CommercialPublicPortal = React.lazy(() => import("@/pages/CommercialPublicPortal"));
@@ -190,6 +191,8 @@ export default function App() {
                 <Route path="trophies" element={<ClubStory />} />
                 <Route path="dynasty" element={<ClubStory />} />
                 <Route path="player-cards" element={<Navigate to="/app/market" replace />} />
+                <Route path="players" element={<Navigate to="/app/market" replace />} />
+                <Route path="transfers" element={<Navigate to="/app/transfer-hub" replace />} />
                 <Route path="club-sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
                 <Route path="clubs/sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
                 <Route path="national" element={<NationalTeam />} />
@@ -199,6 +202,7 @@ export default function App() {
                 <Route path="advertising" element={<LegacyAdvertisingRedirect />} />
                 <Route path="coin-traders" element={<CoinTraders />} />
                 <Route path="inbox" element={<InboxPage />} />
+                <Route path="community" element={<CommunityPage />} />
                 <Route path="admin" element={<Admin />} />
                 <Route path="admin/advertising" element={<AdminAdvertising initialSection="campaigns" />} />
                 <Route path="admin/advertising/accounts" element={<AdminAdvertising initialSection="accounts" />} />

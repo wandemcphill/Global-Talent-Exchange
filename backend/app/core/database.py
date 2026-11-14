@@ -50,6 +50,7 @@ MODEL_MODULES = (
     "app.team_dynamics.models",
     "app.talent.models",
     "app.value_engine.read_models",
+    "app.owner_console.models",
 )
 DEFAULT_DATABASE_CONNECT_TIMEOUT_SECONDS = 10
 DEFAULT_DATABASE_INIT_RETRIES = 3

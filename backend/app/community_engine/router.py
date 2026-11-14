@@ -18,6 +18,7 @@ from app.community_engine.schemas import (
     PrivateMessageView,
 )
 from app.community_engine.service import CommunityEngineError, CommunityEngineService
+from app.community_engine.social_feed_router import social_feed_router
 from app.schemas.creator_fan_engagement import (
     CreatorClubFollowCreateRequest,
     CreatorClubFollowView,
@@ -45,6 +46,7 @@ from app.services.creator_fan_engagement_service import (
 )
 
 router = APIRouter(prefix='/community', tags=['community'])
+router.include_router(social_feed_router)
 
 
 def get_service(session: Session = Depends(get_session)) -> CommunityEngineService:
@@ -84,7 +86,9 @@ def list_watchlist(current_user: User = Depends(get_current_user), service: Comm
 def add_watchlist(payload: CompetitionWatchlistCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> CompetitionWatchlistView:
     try:
         item = service.add_watchlist(actor=current_user, **payload.model_dump())
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
     return CompetitionWatchlistView.model_validate(item)
 
@@ -93,7 +97,9 @@ def add_watchlist(payload: CompetitionWatchlistCreate, current_user: User = Depe
 def remove_watchlist(competition_key: str, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> None:
     try:
         service.remove_watchlist(actor=current_user, competition_key=competition_key)
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
 
 
@@ -106,7 +112,9 @@ def list_live_threads(competition_key: str | None = None, service: CommunityEngi
 def create_live_thread(payload: LiveThreadCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> LiveThreadView:
     try:
         thread = service.create_live_thread(actor=current_user, **payload.model_dump())
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
     return LiveThreadView.model_validate(thread)
 
@@ -133,7 +141,9 @@ def list_live_thread_messages(thread_id: str, service: CommunityEngineService = 
 def post_live_thread_message(thread_id: str, payload: LiveThreadMessageCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> LiveThreadMessageView:
     try:
         item = service.post_live_thread_message(actor=current_user, thread_id=thread_id, **payload.model_dump())
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
     return LiveThreadMessageView.model_validate(item)
 
@@ -154,7 +164,9 @@ def create_private_thread(payload: PrivateMessageThreadCreate, current_user: Use
     try:
         thread = service.create_private_thread(actor=current_user, **payload.model_dump())
         participants = service.list_private_thread_participants(thread_id=thread.id)
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
     return PrivateMessageThreadView.model_validate(thread).model_copy(update={'participants': participants})
 
@@ -182,7 +194,9 @@ def list_private_messages(thread_id: str, current_user: User = Depends(get_curre
 def post_private_message(thread_id: str, payload: PrivateMessageCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> PrivateMessageView:
     try:
         message = service.post_private_message(actor=current_user, thread_id=thread_id, **payload.model_dump())
+        service.session.commit()
     except CommunityEngineError as exc:
+        service.session.rollback()
         _raise(exc)
     return PrivateMessageView.model_validate(message)
 

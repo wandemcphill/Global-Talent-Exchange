@@ -15,6 +15,7 @@ import {
   Inbox,
   LogOut,
   Megaphone,
+  MessagesSquare,
   Newspaper,
   Search,
   Shield,
@@ -35,6 +36,7 @@ import { nairaText, setMoneyRates, useMoneyRates } from "@/lib/money";
 import { Loading } from "@/components/gtex/ui";
 import { GlobalLiveTicker } from "@/components/gtex/GlobalLiveTicker";
 import { CommandPaletteModal } from "@/components/gtex/ApexWidgets";
+import { NotificationBell } from "@/components/gtex/NotificationBell";
 import { GtexTraxTopBarControl } from "@/components/gtex/GtexTraxPlayer";
 import { GtexSponsoredMusicCard } from "@/lib/audio";
 import { formatWorldDate, formatWorldTime, useWorldClock } from "@/lib/worldClock";
@@ -71,6 +73,7 @@ const NAV = [
   { to: "/app/build-a-son", label: "Build-a-Son Scion", icon: Award, id: "build-a-son", category: "TALENT & SCOUTING" },
 
   // 6. COMMUNITY & MEDIA
+  { to: "/app/community", label: "GTEX Community", icon: MessagesSquare, id: "community", category: "COMMUNITY & MEDIA" },
   { to: "/app/newsroom", label: "Football Newsroom", icon: Newspaper, id: "newsroom", category: "COMMUNITY & MEDIA" },
 
   // 7. WALLET & ECONOMY
@@ -219,9 +222,10 @@ export default function AppShell() {
     !isDedicatedAccount &&
     clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/settings/appearance", "/app/appearance"];
+  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/community", "/app/settings/appearance", "/app/appearance"];
   const creatorAllowed = [
     "/app/creator-access",
+    "/app/community",
     "/app/newsroom",
     "/app/transfer-hub",
     "/app/regen-world",
@@ -259,6 +263,7 @@ export default function AppShell() {
     "/app/regen-world",
     "/app/awards",
     "/app/newsroom",
+    "/app/community",
     "/app/competitions",
     "/app/jackpot",
     "/app/creator-access",
@@ -295,6 +300,7 @@ export default function AppShell() {
           "competitions",
           "national",
           "newsroom",
+          "community",
           "finance",
           "creator-access",
           "coin-traders",
@@ -304,11 +310,12 @@ export default function AppShell() {
       );
 
   const visibleNav = isTraderAccount
-    ? NAV.filter((item) => ["coin-traders", "finance", "appearance-studio"].includes(item.id))
+    ? NAV.filter((item) => ["coin-traders", "finance", "community", "appearance-studio"].includes(item.id))
     : isCreatorAccount
     ? NAV.filter((item) =>
         [
           "creator-access",
+          "community",
           "newsroom",
           "transfers",
           "regen-world",
@@ -478,18 +485,10 @@ export default function AppShell() {
             <GtexTraxTopBarControl />
 
             {/* Notification Access */}
-            <NavLink
-              to="/app/inbox"
-              className="relative hidden sm:flex size-8 items-center justify-center rounded-xl border border-[#25354B] bg-[#14243A] text-slate-300 transition hover:text-white hover:border-[#00C991]/40"
-              title="Boardroom Inbox"
-            >
-              <Bell size={14} />
-              {(data?.inbox_open_count ?? 0) > 0 && (
-                <span className="absolute -top-1 -right-1 flex size-4 items-center justify-center rounded-full bg-[#E5B63F] text-[9px] font-black text-slate-950">
-                  {data?.inbox_open_count}
-                </span>
-              )}
-            </NavLink>
+            <NotificationBell
+              ownerUnreadCount={data?.inbox_open_count ?? 0}
+              hasActiveClub={hasActiveClub}
+            />
 
             {/* GTEX Coin Treasury Balance */}
             {hasActiveClub ? (

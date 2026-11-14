@@ -124,6 +124,9 @@ async def _run_realtime_stream(
     send_initial_ack: bool = True,
 ) -> None:
     hub = websocket.scope["app"].state.realtime
+    session_factory = getattr(websocket.scope["app"].state, "session_factory", None)
+    if session_factory is not None and hasattr(hub, "bind_session_factory"):
+        hub.bind_session_factory(session_factory)
     client_id = await hub.connect(websocket, user_id=user_id, topics=topics)
     try:
         active_topics = await hub.subscribe(client_id, topics=())
@@ -192,7 +195,14 @@ def _requested_topics(websocket: WebSocket) -> tuple[str, ...]:
 
 
 def _requires_authenticated_scope(topics: tuple[str, ...]) -> bool:
-    return any(topic == "wallet" or topic.startswith("wallet:") for topic in topics)
+    return any(
+        topic in {"wallet", "user"}
+        or topic.startswith("wallet:")
+        or topic.startswith("user:")
+        or topic.startswith("pm:")
+        or topic.startswith("owner_comms:")
+        for topic in topics
+    )
 
 
 def _resolve_websocket_user_id(websocket: WebSocket) -> tuple[str | None, bool]:

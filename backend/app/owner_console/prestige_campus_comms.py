@@ -1857,6 +1857,25 @@ def get_club_communications(
     session: Session,
     user_id: str,
     club_id: str,
+    *,
+    search: str | None = None,
+    include_archived: bool = False,
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return comms_persistence.get_club_communications_durable(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        search=search,
+        include_archived=include_archived,
+    )
+
+
+def _legacy_get_club_communications_unused(
+    session: Session,
+    user_id: str,
+    club_id: str,
 ) -> dict[str, Any]:
     from app.owner_console import service, storytelling
 
@@ -2007,6 +2026,34 @@ def get_club_communications(
 
 
 def send_thread_message(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    thread_id: str,
+    message: str,
+    sender_role: str = "owner",
+    topic: str = "general",
+    priority: str = "normal",
+    request_reply: bool = True,
+) -> dict[str, Any]:
+    """Sends a durable message using server-validated owner authority."""
+    _ = sender_role  # Client sender_role is intentionally ignored for identity integrity
+    from app.owner_console import comms_persistence
+
+    return comms_persistence.send_club_message_durable(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        thread_id=thread_id,
+        message=message,
+        topic=topic,
+        priority=priority,
+        request_reply=request_reply,
+    )
+
+
+def _legacy_send_thread_message_unused(
     session: Session,
     user_id: str,
     club_id: str,
@@ -2316,6 +2363,31 @@ def schedule_club_meeting(
     agenda: str = "",
     convene_now: bool = True,
 ) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return comms_persistence.schedule_club_meeting_durable(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        title=title,
+        meeting_type=meeting_type,
+        participants=participants,
+        agenda=agenda,
+        convene_now=convene_now,
+    )
+
+
+def _legacy_schedule_club_meeting_unused(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    title: str,
+    meeting_type: str = "boardroom",
+    participants: list[str] | None = None,
+    agenda: str = "",
+    convene_now: bool = True,
+) -> dict[str, Any]:
     """Schedules or immediately convenes a structured club meeting with grounded minutes and anti-farming caps."""
     state = require_state(session, club_id, user_id)
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
@@ -2428,6 +2500,31 @@ def schedule_club_meeting(
 
 
 def publish_club_announcement(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    title: str,
+    body: str,
+    audience: str = "all_club",
+    publish_to_newsroom: bool = False,
+    also_post_to_community: bool = False,
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return comms_persistence.publish_club_announcement_durable(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        title=title,
+        body=body,
+        audience=audience,
+        publish_to_newsroom=publish_to_newsroom,
+        also_post_to_community=also_post_to_community,
+    )
+
+
+def _legacy_publish_club_announcement_unused(
     session: Session,
     user_id: str,
     club_id: str,

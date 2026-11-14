@@ -99,10 +99,23 @@ export function useClubCampus(clubId?: string) {
   });
 }
 
-export function useClubCommunications(clubId?: string) {
+export function useClubCommunications(
+  clubId?: string,
+  opts?: { search?: string; includeArchived?: boolean }
+) {
+  const search = opts?.search || undefined;
+  const includeArchived = opts?.includeArchived || undefined;
   return useQuery({
-    queryKey: ["communications", clubId],
-    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/communications`)).data,
+    queryKey: ["communications", clubId, search || "", Boolean(includeArchived)],
+    queryFn: async () =>
+      (
+        await api.get(
+          `/owner/clubs/${clubId}/communications`,
+          search || includeArchived
+            ? { params: { search, include_archived: includeArchived } }
+            : undefined
+        )
+      ).data,
     enabled: !!clubId,
   });
 }
