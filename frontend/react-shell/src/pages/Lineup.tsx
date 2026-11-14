@@ -102,8 +102,17 @@ export default function Lineup() {
     setSaving(true);
     try {
       const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload)).data;
+      void Promise.resolve(
+        api.post?.("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
+          preferred_formation: formation,
+          preferred_player_ids: payload.starter_player_ids,
+          note: "Owner non-binding lineup preference submitted from Squad Lineup Preference page",
+        }),
+      ).catch(() => {
+        // Ignore if endpoint unavailable in mock test
+      });
       queryClient.setQueryData(["lineup-plan", clubId], normalizeLineupPlan(saved));
-      toast.success("Lineup saved.");
+      toast.success("Non-binding owner lineup preference saved and forwarded to First-Team Manager.");
     } catch (error) {
       toast.error(errMsg(error));
     } finally {
@@ -146,15 +155,30 @@ export default function Lineup() {
   return (
     <div className="space-y-6" data-testid="lineup-page">
       <PageHeader
-        eyebrow="Tactics & roster"
-        title="Lineup & Tactics"
-        sub={(club?.club_name || "Your club") + " · choose a formation, assign starters, manage the bench, and save to the match engine."}
+        eyebrow="Owner Pre-Match Preference · First-Team Manager Authoritative"
+        title="Lineup & Tactics (Owner Preference)"
+        sub={(club?.club_name || "Your club") + " · express a non-binding starting XI & formation preference for your First-Team Manager to evaluate ahead of matchday."}
         action={
           <Link to="/app/squad" className="gx-btn gx-btn-ghost inline-flex items-center" data-testid="lineup-back-to-squad">
             <ArrowLeft className="mr-2 h-4 w-4" /> Squad room
           </Link>
         }
       />
+      <div
+        data-testid="lineup-non-binding-preference-banner"
+        className="rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"
+      >
+        <p className="font-black uppercase tracking-wider text-amber-300">
+          Authoritative Matchday Selection Belongs to the First-Team Manager
+        </p>
+        <p className="mt-1 leading-relaxed text-slate-200">
+          In GTEX, the Club Owner governs the club and watches the match broadcast. Any formation or starting XI saved
+          on this page is recorded strictly as a <b>non-binding owner preference</b>. Your First-Team Manager evaluates
+          your preference against his own tactical philosophy, youth/veteran commitment, player fitness, and professional
+          independence. To negotiate selection opportunities directly (e.g., requesting minutes for a 16-year-old
+          academy striker), message your First-Team Manager in the <Link to="/app/inbox" className="underline text-emerald-300">Owner Inbox</Link>.
+        </p>
+      </div>
       <Panel title="Formation & starting XI" eyebrow="Match plan" testid="lineup-editor-panel" className="lg:col-span-12">
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div className="space-y-4">

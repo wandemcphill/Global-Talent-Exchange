@@ -15,11 +15,48 @@ export interface LivingWorldRelationship {
   alignment?: number;
   influence?: number;
   loyalty?: number;
+  ambition_compatibility?: number;
+  autonomy?: number;
+  confidence?: number;
+  culture_alignment?: number;
+  interference_count?: number;
+  ultimatum_active?: boolean;
+  resignation_notice_served?: boolean;
   status: string;
   status_label: string;
   metadata?: Record<string, any>;
   created_at?: string | null;
   updated_at?: string | null;
+}
+
+export type AutonomousStaffDecisionOutcome =
+  | "accepted"
+  | "partially_accepted"
+  | "declined"
+  | "counterproposal"
+  | "conditional_acceptance"
+  | "needs_meeting"
+  | "deferred"
+  | "formal_disagreement"
+  | "ultimatum"
+  | "resignation_notice";
+
+export interface AutonomousStaffDecisionRecord {
+  id: string;
+  club_id: string;
+  thread_id: string;
+  staff_role: string;
+  staff_id: string;
+  staff_name: string;
+  request_intent: string;
+  decision_outcome: AutonomousStaffDecisionOutcome;
+  ai_generation_status: string;
+  reasoning_trace: Record<string, any>;
+  relationship_deltas: Record<string, number>;
+  relationship_snapshot: Record<string, any>;
+  state_effects: Record<string, any>;
+  idempotency_key?: string | null;
+  created_at?: string | null;
 }
 
 export interface LivingWorldEvent {

@@ -2036,6 +2036,7 @@ def send_thread_message(
     topic: str = "general",
     priority: str = "normal",
     request_reply: bool = True,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     """Sends a durable message using server-validated owner authority."""
     _ = sender_role  # Client sender_role is intentionally ignored for identity integrity
@@ -2050,6 +2051,7 @@ def send_thread_message(
         topic=topic,
         priority=priority,
         request_reply=request_reply,
+        idempotency_key=idempotency_key,
     )
 
 

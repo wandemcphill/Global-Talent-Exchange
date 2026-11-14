@@ -9,6 +9,7 @@ from sqlalchemy import (
     Boolean,
     Date,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -646,6 +647,68 @@ class OwnerClubAnnouncement(UUIDPrimaryKeyMixin, Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
 
 
+class OwnerStaffDecisionRecord(UUIDPrimaryKeyMixin, Base):
+    """Durable, auditable Layer A authoritative staff decision record for owner-to-staff and staff-initiated interactions."""
+
+    __tablename__ = "owner_staff_decision_records"
+    __table_args__ = (
+        Index("ix_owner_staff_decisions_club_created", "club_id", "created_at"),
+        Index("ix_owner_staff_decisions_club_staff", "club_id", "staff_id"),
+    )
+
+    club_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    conversation_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    request_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    response_message_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    staff_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    staff_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    staff_role: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    request_intent: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    request_text: Mapped[str] = mapped_column(Text, nullable=False)
+    decision_outcome: Mapped[str] = mapped_column(String(48), nullable=False, index=True)
+    idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    target_player_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    target_player_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    structured_inputs_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    reasoning_trace_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    relationship_deltas_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    state_effects_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    ai_generation_status: Mapped[str] = mapped_column(
+        String(48), nullable=False, default="grounded_deterministic", server_default="grounded_deterministic"
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
+class OwnerRecruitmentAssignment(UUIDPrimaryKeyMixin, Base):
+    """Durable inter-staff recruitment workflow assignment linking Manager requirements, GM evaluation, and Chief Scout targets."""
+
+    __tablename__ = "owner_recruitment_assignments"
+    __table_args__ = (
+        Index("ix_owner_recruitment_assignments_club_status", "club_id", "gm_evaluation_status"),
+    )
+
+    club_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    initiated_by_role: Mapped[str] = mapped_column(String(64), nullable=False, default="first_team_manager")
+    initiated_by_name: Mapped[str] = mapped_column(String(160), nullable=False)
+    target_position: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    min_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=80, server_default="80")
+    max_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=85, server_default="85")
+    tactical_profile: Mapped[str] = mapped_column(String(128), nullable=False, default="balanced", server_default="balanced")
+    max_fee: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    max_weekly_wage: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    gm_evaluation_status: Mapped[str] = mapped_column(
+        String(48), nullable=False, default="evaluating", server_default="evaluating"
+    )
+    gm_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    scout_notes: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    candidate_shortlist_json: Mapped[list[Any]] = mapped_column(JSON, nullable=False, default=list)
+    recommended_candidate_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    delegated_decision_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utcnow)
+
+
 OWNER_CONSOLE_TABLES = (
     ClubDelegationPolicy.__table__,
     ClubDelegatedDecision.__table__,
@@ -674,4 +737,6 @@ OWNER_CONSOLE_TABLES = (
     OwnerClubMessage.__table__,
     OwnerClubMeeting.__table__,
     OwnerClubAnnouncement.__table__,
+    OwnerStaffDecisionRecord.__table__,
+    OwnerRecruitmentAssignment.__table__,
 )

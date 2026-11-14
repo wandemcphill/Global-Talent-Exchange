@@ -335,20 +335,13 @@ function OwnerView({ view }: any) {
   );
 }
 
-// Tactical HUD & Advisor Panel
+// Touchline & Dugout Broadcast Monitor (Read-Only for Club Owner — Section 11 & 12)
 function TacticalHUD({
   formation,
-  setFormation,
   press,
-  setPress,
   line,
-  setLine,
   tempo,
-  setTempo,
   risk,
-  setRisk,
-  onApplyPreset,
-  matchId,
   minute,
   homeScore,
   awayScore,
@@ -357,16 +350,16 @@ function TacticalHUD({
   starters = [],
 }: {
   formation: string;
-  setFormation: (f: string) => void;
+  setFormation?: (f: string) => void;
   press: number;
-  setPress: (v: number) => void;
+  setPress?: (v: number) => void;
   line: number;
-  setLine: (v: number) => void;
+  setLine?: (v: number) => void;
   tempo: number;
-  setTempo: (v: number) => void;
+  setTempo?: (v: number) => void;
   risk: number;
-  setRisk: (v: number) => void;
-  onApplyPreset: (p: any) => void;
+  setRisk?: (v: number) => void;
+  onApplyPreset?: (p: any) => void;
   matchId: string;
   minute: number;
   homeScore: number;
@@ -375,73 +368,78 @@ function TacticalHUD({
   bench?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
   starters?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
 }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [advisorApplied, setAdvisorApplied] = useState(false);
-  const [outPlayerId, setOutPlayerId] = useState("");
-  const [inPlayerId, setInPlayerId] = useState("");
   const myScore = side === "away" ? awayScore : homeScore;
   const theirScore = side === "away" ? homeScore : awayScore;
 
-  // Compute Assistant Manager Coach Karl's dynamic live advice
-  const advisor = useMemo(() => {
+  // Autonomous Dugout Technical Area Telemetry (First-Team Manager + Assistant Coaches)
+  const dugoutTelemetry = useMemo(() => {
     if (minute >= 75 && myScore > theirScore) {
       return {
         situation: `Lead Protection (${myScore}-${theirScore} · ${minute}')`,
-        recommendation: "Opponent is overloading wide channels. Drop into Low Block 5-3-2 with counter outlet.",
-        buttonText: "APPLY LOW BLOCK LOCKDOWN",
-        preset: TACTICAL_PRESETS.find((p) => p.name === "LOW BLOCK"),
+        managerNote:
+          "First-Team Manager and Defensive Organisation Coach are compacting the block and managing late-game rest-defence spacing autonomously.",
+        activeApproach: "COMPACT MID-LOW BLOCK · GAME MANAGEMENT",
         color: "text-blue-400",
       };
     } else if (minute >= 60 && myScore < theirScore) {
       return {
-        situation: `Goal Deficit (${myScore}-${theirScore} · ${minute}')`,
-        recommendation: "Need an equalizer. Shift into Gegenpress 4-2-4 with aggressive pressing line.",
-        buttonText: "APPLY GEGENPRESS OVERLOAD",
-        preset: TACTICAL_PRESETS.find((p) => p.name === "GEGENPRESS"),
+        situation: `Chasing Equaliser (${myScore}-${theirScore} · ${minute}')`,
+        managerNote:
+          "First-Team Manager and Attacking Development Coach have pushed the full-backs higher and increased counter-pressing intensity from the touchline.",
+        activeApproach: "HIGH-PRESS OVERLOAD · FRONT-FOOT TRANSITION",
         color: "text-rose-400",
       };
     } else if (myScore < theirScore) {
       return {
         situation: `Trailing (${myScore}-${theirScore} · ${minute}')`,
-        recommendation: "Opponent high line leaves space in behind. Quick Counter 3-4-3 will catch them.",
-        buttonText: "APPLY COUNTER ATTACK",
-        preset: TACTICAL_PRESETS.find((p) => p.name === "COUNTER"),
+        managerNote:
+          "Tactical Analysis Coach flagged space behind the opponent's line; First-Team Manager is directing vertical half-space progressions.",
+        activeApproach: "VERTICAL TRANSITION · HALF-SPACE RUNS",
         color: "text-amber-400",
       };
     } else {
       return {
         situation: `Tactical Parity (${myScore}-${theirScore} · ${minute}')`,
-        recommendation: "Midfield contest is balanced. Tiki-Taka 4-3-3 will retain possession and control rhythm.",
-        buttonText: "APPLY POSSESSION CONTROL",
-        preset: TACTICAL_PRESETS.find((p) => p.name === "TIKI-TAKA"),
+        managerNote:
+          "First-Team Manager is maintaining positional structure from the technical area while monitoring player biometric load for second-half substitutions.",
+        activeApproach: "POSITIONAL CONTROL · AUTONOMOUS DUGOUT",
         color: "text-emerald-400",
       };
     }
   }, [minute, myScore, theirScore]);
 
-  const dispatchInstruction = async () => {
-    setSubmitting(true);
-    try {
-      await api.post(`/matches/${matchId}/tactics`, {
-        press_intensity: press,
-        defensive_line: line,
-        tempo: tempo,
-        risk_level: risk,
-        formation: formation,
-        side,
-      });
-      toast.success(`Tactical order dispatched: ${formation} · Press ${press}% · Line ${line}%`);
-    } catch (err: any) {
-      const msg = err?.response?.data?.detail || err?.message || "Tactical adjustment rejected";
-      toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
   return (
-    <Panel eyebrow="Live Tactical Center" title="Tactics & Assistant Manager" testid="tactics-panel">
-      {/* Assistant Manager Advice Banner */}
+    <Panel eyebrow="Touchline & Dugout Telemetry" title="Autonomous Manager Matchday Monitor" testid="tactics-panel">
+      {/* Non-Negotiable Club Owner Governance Banner */}
+      <div
+        data-testid="manager-matchday-authority-banner"
+        className="mb-4 rounded-md border border-amber-400/35 bg-amber-500/10 p-3 text-xs text-amber-100"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-1.5 font-black uppercase tracking-wider text-amber-300">
+            <Shield size={13} /> Club Owner Broadcast Mode · Touchline Authority Belongs to First-Team Manager
+          </span>
+          <span className="rounded border border-amber-400/40 bg-black/30 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-200">
+            READ-ONLY DUGOUT TELEMETRY
+          </span>
+        </div>
+        <p className="mt-1.5 text-[11px] leading-relaxed text-slate-200">
+          As Club Owner, you govern from the Directors&apos; Box and watch the live match broadcast. Starting XI selection,
+          formation adjustments, pressing intensity, tempo, and in-match substitutions are executed autonomously by your
+          appointed First-Team Manager and specialist Assistant Coaches.
+        </p>
+        <div className="mt-2.5 flex flex-wrap items-center gap-2">
+          <Link
+            to="/app/inbox"
+            data-testid="discuss-with-manager-inbox-link"
+            className="inline-flex items-center gap-1.5 rounded border border-emerald-400/50 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200 hover:bg-emerald-500/30"
+          >
+            Discuss Sporting Direction in Owner Inbox <ChevronRight size={12} />
+          </Link>
+        </div>
+      </div>
+
+      {/* Autonomous Coaching Staff Live Assessment */}
       <div className="mb-5 rounded-md border border-white/10 bg-slate-900/90 p-3.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -449,219 +447,71 @@ function TacticalHUD({
               <Zap size={12} />
             </span>
             <span className="text-[10px] font-black uppercase tracking-wider text-slate-300">
-              COACH KARL · ASSISTANT MANAGER ADVICE
+              TECHNICAL AREA · MANAGER & SPECIALIST COACHES
             </span>
           </div>
-          <span className={`text-[10px] font-bold ${advisor.color}`}>{advisor.situation}</span>
+          <span className={`text-[10px] font-bold ${dugoutTelemetry.color}`}>{dugoutTelemetry.situation}</span>
         </div>
-        <p className="mt-2 text-xs leading-relaxed text-slate-300">{advisor.recommendation}</p>
-        <button
-          disabled={submitting}
-          onClick={async () => {
-            const preset = advisor.preset;
-            if (!preset) return;
-            onApplyPreset(preset);
-            const mentality = String(preset.mentality || "balanced").trim().toLowerCase().replace(/\s+/g, "_");
-            const accepted =
-              mentality === "counter" ? "attacking" : mentality === "ultra_attacking" ? "attacking" : mentality;
-            setSubmitting(true);
-            try {
-              await api.post(`/matches/${matchId}/tactics`, {
-                press_intensity: preset.press,
-                defensive_line: preset.line,
-                tempo: preset.tempo,
-                risk_level: preset.risk,
-                formation: preset.formation,
-                mentality: accepted,
-                side,
-              });
-              setAdvisorApplied(true);
-              toast.success("Coach Karl's order was accepted by the match.");
-            } catch (err: any) {
-              const msg = err?.response?.data?.detail || err?.message || "Tactical adjustment rejected";
-              toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
-            } finally {
-              setSubmitting(false);
-            }
-          }}
-          className={`mt-3 flex w-full items-center justify-center gap-1.5 rounded-sm py-2 text-xs font-black uppercase tracking-wider transition-colors ${
-            advisorApplied
-              ? "border border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-              : "bg-emerald-500 text-slate-950 hover:bg-emerald-400"
-          }`}
-        >
-          {advisorApplied ? (
-            <>
-              <CheckCircle2 size={13} /> ADVICE APPLIED TO BOARD
-            </>
-          ) : (
-            <>
-              <Sparkles size={13} /> {advisor.buttonText}
-            </>
-          )}
-        </button>
-      </div>
-
-      {/* 5 Tactical Style Presets */}
-      <p className="gx-label mb-2">Tactical Style Presets</p>
-      <div className="mb-5 grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {TACTICAL_PRESETS.map((p) => (
-          <button
-            key={p.name}
-            onClick={() => {
-              onApplyPreset(p);
-              toast.info(`Preset selected: ${p.name}`);
-            }}
-            className="flex flex-col rounded-sm border border-white/10 bg-white/[0.02] p-2.5 text-left transition-all hover:border-emerald-500/40 hover:bg-white/[0.05]"
-          >
-            <span className="text-xs font-black tracking-wide text-white">{p.name}</span>
-            <span className="text-[10px] text-slate-400">{p.tagline}</span>
-            <span className="gx-mono mt-1 text-[9px] font-bold text-emerald-400">{p.formation}</span>
-          </button>
-        ))}
-      </div>
-
-      {/* Formation Selector */}
-      <div className="mb-4">
-        <label className="gx-label">Base Formation</label>
-        <select
-          value={formation}
-          onChange={(e) => setFormation(e.target.value)}
-          className="gx-input w-full font-mono font-bold text-emerald-300"
-        >
-          <option value="4-3-3">4-3-3 (Attack / Positional)</option>
-          <option value="4-2-4">4-2-4 (High Press Overload)</option>
-          <option value="5-3-2">5-3-2 (Defensive Stability)</option>
-          <option value="3-4-3">3-4-3 (Wide Wing-Backs)</option>
-        </select>
-      </div>
-
-      {/* Tactical Sliders */}
-      <div className="space-y-4">
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Pressing Intensity</span>
-            <span className="gx-mono font-bold text-emerald-400">{press}%</span>
-          </div>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            value={press}
-            onChange={(e) => setPress(Number(e.target.value))}
-            className="w-full accent-emerald-500"
-          />
-        </div>
-
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Defensive Line Height</span>
-            <span className="gx-mono font-bold text-cyan-400">{line}%</span>
-          </div>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            value={line}
-            onChange={(e) => setLine(Number(e.target.value))}
-            className="w-full accent-cyan-500"
-          />
-        </div>
-
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Passing Tempo</span>
-            <span className="gx-mono font-bold text-amber-400">{tempo}%</span>
-          </div>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            value={tempo}
-            onChange={(e) => setTempo(Number(e.target.value))}
-            className="w-full accent-amber-500"
-          />
-        </div>
-
-        <div>
-          <div className="flex justify-between text-xs">
-            <span className="text-slate-400">Risk & Creativity</span>
-            <span className="gx-mono font-bold text-rose-400">{risk}%</span>
-          </div>
-          <input
-            type="range"
-            min="10"
-            max="100"
-            value={risk}
-            onChange={(e) => setRisk(Number(e.target.value))}
-            className="w-full accent-rose-500"
-          />
+        <p className="mt-2 text-xs leading-relaxed text-slate-300">{dugoutTelemetry.managerNote}</p>
+        <div className="mt-3 flex items-center justify-between rounded-sm border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
+          <span>Active Dugout State: {dugoutTelemetry.activeApproach}</span>
+          <span className="gx-mono text-white">{formation}</span>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-2 sm:grid-cols-2">
-        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Player off
-          <select
-            value={outPlayerId}
-            onChange={(event) => setOutPlayerId(event.target.value)}
-            className="gx-input mt-1 w-full"
-          >
-            <option value="">Select starter</option>
-            {starters.map((player) => (
-              <option key={player.player_id} value={player.player_id}>
-                {player.shirt_number} {player.name}
-              </option>
+      {/* Read-Only Manager Tactical Parameters */}
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="rounded-sm border border-white/10 bg-white/[0.02] p-2.5">
+          <span className="block text-[10px] text-slate-400">Manager Formation</span>
+          <span className="gx-mono text-sm font-black text-emerald-300">{formation}</span>
+        </div>
+        <div className="rounded-sm border border-white/10 bg-white/[0.02] p-2.5">
+          <span className="block text-[10px] text-slate-400">Pressing Trigger</span>
+          <span className="gx-mono text-sm font-black text-cyan-300">{press}%</span>
+        </div>
+        <div className="rounded-sm border border-white/10 bg-white/[0.02] p-2.5">
+          <span className="block text-[10px] text-slate-400">Defensive Line</span>
+          <span className="gx-mono text-sm font-black text-amber-300">{line}%</span>
+        </div>
+        <div className="rounded-sm border border-white/10 bg-white/[0.02] p-2.5">
+          <span className="block text-[10px] text-slate-400">Tempo / Verticality</span>
+          <span className="gx-mono text-sm font-black text-rose-300">{tempo}% · {risk}%</span>
+        </div>
+      </div>
+
+      {/* Read-Only Matchday Squad & Substitutes Available to Manager */}
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <div className="rounded-sm border border-white/10 bg-slate-950/60 p-3">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            On-Pitch XI ({starters.length})
+          </span>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {starters.slice(0, 11).map((player) => (
+              <span
+                key={player.player_id || player.name}
+                className="rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-200"
+              >
+                #{player.shirt_number} {player.name}
+              </span>
             ))}
-          </select>
-        </label>
-        <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-          Player on
-          <select
-            value={inPlayerId}
-            onChange={(event) => setInPlayerId(event.target.value)}
-            className="gx-input mt-1 w-full"
-          >
-            <option value="">Select bench</option>
+          </div>
+        </div>
+        <div className="rounded-sm border border-white/10 bg-slate-950/60 p-3">
+          <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400">
+            Manager&apos;s Substitutes Bench ({bench.length})
+          </span>
+          <div className="mt-2 flex flex-wrap gap-1.5">
             {bench.map((player) => (
-              <option key={player.player_id} value={player.player_id}>
-                {player.shirt_number} {player.name}
-              </option>
+              <span
+                key={player.player_id || player.name}
+                className="rounded border border-white/10 bg-white/5 px-2 py-0.5 text-[10px] text-slate-300"
+              >
+                #{player.shirt_number} {player.name}
+              </span>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       </div>
-      <button
-        type="button"
-        disabled={submitting || !outPlayerId || !inPlayerId}
-        onClick={async () => {
-          setSubmitting(true);
-          try {
-            await api.post(`/matches/${matchId}/tactics`, {
-              side,
-              substitutions: [{ out_player_id: outPlayerId, in_player_id: inPlayerId }],
-            });
-            toast.success("Substitution sent to the match.");
-          } catch (err: any) {
-            const msg = err?.response?.data?.detail || err?.message || "Substitution rejected";
-            toast.error(typeof msg === "string" ? msg : JSON.stringify(msg));
-          } finally {
-            setSubmitting(false);
-          }
-        }}
-        className="mt-3 w-full rounded-sm border border-white/15 py-2 text-xs font-black uppercase tracking-wider text-slate-200 disabled:opacity-40"
-      >
-        Send substitution
-      </button>
-
-      {/* Dispatch Button */}
-      <button
-        onClick={dispatchInstruction}
-        disabled={submitting}
-        className="mt-6 flex w-full items-center justify-center gap-2 rounded-sm bg-emerald-500 py-2.5 text-xs font-black tracking-wider text-slate-950 transition-colors hover:bg-emerald-400 disabled:opacity-50"
-      >
-        <Sliders size={14} /> {submitting ? "TRANSMITTING..." : "DISPATCH INSTRUCTION TO DUGOUT"}
-      </button>
     </Panel>
   );
 }
@@ -2577,21 +2427,12 @@ export default function MatchCenter() {
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
-                      <button
-                        type="button"
-                        data-testid="apply-touchline-nudge-btn"
-                        onClick={() => {
-                          const preset = TACTICAL_PRESETS.find((p) => p.name === activeTouchlineNudge.presetName);
-                          if (preset) {
-                            applyPreset(preset);
-                          }
-                          setDismissedNudgeId(activeTouchlineNudge.id);
-                          toast.success(`Touchline adjustment applied: ${activeTouchlineNudge.actionLabel}`);
-                        }}
-                        className="rounded border border-emerald-400/60 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200 transition hover:bg-emerald-500 hover:text-slate-950"
+                      <span
+                        data-testid="autonomous-dugout-badge"
+                        className="rounded border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200"
                       >
-                        {activeTouchlineNudge.actionLabel}
-                      </button>
+                        Managed by First-Team Manager
+                      </span>
                       <button
                         type="button"
                         data-testid="dismiss-touchline-nudge-btn"

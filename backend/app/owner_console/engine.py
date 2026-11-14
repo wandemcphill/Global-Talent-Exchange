@@ -865,7 +865,7 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     injured_days = max(0, int(player.get("injured_days", 0) or 0))
     minutes_factor = clamp(player["minutes"] / 540, 0, 1)
     morale_factor = 0.6 + player["morale"] / 125
-    env = p["environment_sensitivity"] / 20
+    env = p.get("environment_sensitivity", 12) / 20
     facility_term = ctx["training"] / 5
     campus_train_pct = float(ctx.get("campus_training_efficiency_pct", 0))
     campus_dev_pct = float(ctx.get("campus_regen_dev_speed_pct", 0))
@@ -879,7 +879,7 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     }
     if campus_boost_term > 0:
         drivers["campus_infrastructure"] = round(0.22 * campus_boost_term * (0.7 + env * 0.5), 3)
-    responsiveness = p["growth_responsiveness"] / 12 * (0.7 + p["professionalism"] / 40)
+    responsiveness = p.get("growth_responsiveness", 12) / 12 * (0.7 + p.get("professionalism", 14) / 40)
     raw_gain = sum(drivers.values()) * responsiveness * morale_factor * 1.6
     if injured_days >= 7:
         rehab_growth_multiplier = 0.15
@@ -904,14 +904,14 @@ def regen_growth(player: dict[str, Any], ctx: dict[str, Any]) -> dict[str, Any]:
     else:
         p["growth_buffer"] = round(buffer - int(buffer), 3)
     pressure = p.get("transfer_pressure", 10)
-    pressure += (p["ambition"] - 10) * 0.8 * (1 - minutes_factor)
-    if ctx["prestige"] < p["ambition"] * 3:
+    pressure += (p.get("ambition", 14) - 10) * 0.8 * (1 - minutes_factor)
+    if ctx["prestige"] < p.get("ambition", 14) * 3:
         pressure += 2
-    if ctx["training"] <= 1 and p["environment_sensitivity"] >= 14:
+    if ctx["training"] <= 1 and p.get("environment_sensitivity", 12) >= 14:
         pressure += 3
     if campus_train_pct >= 25:
         pressure -= 1.5
-    pressure -= p["loyalty"] * 0.25
+    pressure -= p.get("loyalty", 12) * 0.25
     p["transfer_pressure"] = int(clamp(pressure, 0, 100))
     top_driver = max(drivers, key=drivers.get)
     weakest = min(drivers, key=drivers.get)
@@ -940,9 +940,57 @@ def club_strength(
     *,
     campus_effects: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    fit = sorted((p for p in players if p["injured_days"] <= 0), key=lambda p: p["rating"], reverse=True)[:11]
+    from app.owner_console.autonomous_staff_engine import derive_manager_personality
+
+    mgr_profile = derive_manager_personality(manager or {})
+    commitments = dict((facilities or {}).get("_manager_matchday_commitments") or {})
+    rejections = dict((facilities or {}).get("_manager_matchday_rejections") or {})
+    exclusions = dict((facilities or {}).get("_manager_disciplinary_exclusions") or {})
+
+    youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
+    veteran_pref = int(mgr_profile.get("preference_for_experienced_players", 55))
+
+    def _manager_selection_score(p: dict[str, Any]) -> float:
+        pid = str(p.get("id") or "")
+        base = float(p.get("rating", 65))
+        fitness_adj = (float(p.get("fitness", 90)) - 80.0) * 0.15
+        morale_adj = (float(p.get("morale", 75)) - 70.0) * 0.08
+        age = int(p.get("age", 24) or 24)
+        age_adj = 0.0
+        if age <= 19 or p.get("is_academy"):
+            age_adj += ((youth_commit - 50) / 50.0) * 6.5
+            age_adj -= ((veteran_pref - 50) / 50.0) * 6.0
+        elif age >= 27:
+            age_adj += ((veteran_pref - 50) / 50.0) * 4.5
+        comm = commitments.get(pid)
+        if comm and comm.get("matchday_role") == "starting_xi":
+            age_adj += 30.0
+        elif pid in rejections:
+            age_adj -= 25.0
+        return base + fitness_adj + morale_adj + age_adj
+
+    healthy = [
+        p
+        for p in players
+        if int(p.get("injured_days", 0) or 0) <= 0 and str(p.get("id") or "") not in exclusions
+    ]
+    if len(healthy) < 11:
+        healthy = [p for p in players if int(p.get("injured_days", 0) or 0) <= 0] or list(players)
+
+    fit = sorted(healthy, key=_manager_selection_score, reverse=True)[:11]
     if not fit:
-        return {"strength": 40.0, "xi": [], "avg_rating": 40, "avg_morale": 50, "avg_fitness": 75.0}
+        return {"strength": 40.0, "xi": [], "bench": [], "avg_rating": 40, "avg_morale": 50, "avg_fitness": 75.0}
+    starter_ids = {p["id"] for p in fit}
+    remaining = [p for p in sorted(healthy, key=_manager_selection_score, reverse=True) if p["id"] not in starter_ids]
+    bench: list[dict[str, Any]] = []
+    for p in remaining:
+        comm = commitments.get(str(p.get("id") or ""))
+        if comm and comm.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"):
+            bench.append(p)
+    for p in remaining:
+        if p not in bench and len(bench) < 7:
+            bench.append(p)
+
     avg_rating = sum(p["rating"] for p in fit) / len(fit)
     avg_morale = sum(p["morale"] for p in fit) / len(fit)
     avg_fitness = sum(float(p.get("fitness", 95)) for p in fit) / len(fit)
@@ -961,6 +1009,15 @@ def club_strength(
     return {
         "strength": round(strength, 2),
         "xi": [p["id"] for p in fit],
+        "bench": [p["id"] for p in bench],
+        "formation": (mgr_profile.get("preferred_formations") or ["4-3-3"])[0],
+        "manager_mentality": (
+            "attacking"
+            if int(mgr_profile.get("attacking_vs_defensive", 60)) >= 70
+            else "defensive"
+            if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38
+            else "balanced"
+        ),
         "avg_rating": round(avg_rating, 1),
         "avg_morale": round(avg_morale, 1),
         "avg_fitness": round(avg_fitness, 1),

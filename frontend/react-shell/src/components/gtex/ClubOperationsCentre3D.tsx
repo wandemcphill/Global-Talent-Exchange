@@ -1363,6 +1363,35 @@ export function ClubOperationsCentre3D({
                     </div>
                   </div>
                 </div>
+                <div className="grid grid-cols-4 gap-1.5 pt-1 text-[9px] text-slate-300 border-t border-white/5">
+                  <div className="rounded bg-white/5 px-1.5 py-1">
+                    <span className="block text-slate-500">Alignment</span>
+                    <b className="gx-mono text-emerald-300">
+                      {activeDestination.relationship.alignment ?? activeDestination.relationship.metadata?.alignment ?? 70}%
+                    </b>
+                  </div>
+                  <div className="rounded bg-white/5 px-1.5 py-1">
+                    <span className="block text-slate-500">Autonomy</span>
+                    <b className="gx-mono text-sky-300">
+                      {activeDestination.relationship.autonomy ?? activeDestination.relationship.metadata?.autonomy ?? 78}%
+                    </b>
+                  </div>
+                  <div className="rounded bg-white/5 px-1.5 py-1">
+                    <span className="block text-slate-500">Loyalty</span>
+                    <b className="gx-mono text-purple-300">
+                      {activeDestination.relationship.loyalty ?? activeDestination.relationship.metadata?.loyalty ?? 72}%
+                    </b>
+                  </div>
+                  <div className="rounded bg-white/5 px-1.5 py-1">
+                    <span className="block text-slate-500">Culture Fit</span>
+                    <b className="gx-mono text-amber-300">
+                      {activeDestination.relationship.culture_alignment ??
+                        activeDestination.relationship.metadata?.culture_alignment ??
+                        72}
+                      %
+                    </b>
+                  </div>
+                </div>
               </div>
             )}
 

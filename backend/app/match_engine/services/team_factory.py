@@ -278,29 +278,99 @@ class SyntheticSquadFactory:
         self,
         players: list[Player],
         formation: str = "4-3-3",
+        *,
+        manager_profile: dict[str, object] | None = None,
+        non_binding_plan: ClubMatchPlan | None = None,
     ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]]]:
         remaining = list(players)
         starters: list[tuple[Player, PlayerRole]] = []
         for role in self._starter_roles(formation):
-            candidate = self._select_best_candidate(remaining, role)
+            candidate = self._select_best_candidate(
+                remaining,
+                role,
+                manager_profile=manager_profile,
+                non_binding_plan=non_binding_plan,
+            )
             if candidate is None:
                 raise PlayerLifecycleValidationError("Managed squad cannot satisfy formation role requirements")
             starters.append((candidate, role))
             remaining.remove(candidate)
         bench = [
             (player, self._resolve_player_role(player))
-            for player in sorted(remaining, key=self._managed_player_sort_key, reverse=True)[:7]
+            for player in sorted(
+                remaining,
+                key=lambda p: self._manager_adjusted_sort_key(
+                    p, manager_profile=manager_profile, non_binding_plan=non_binding_plan, is_bench=True
+                ),
+                reverse=True,
+            )[:7]
         ]
         return starters, bench
 
-    def _select_best_candidate(self, players: list[Player], required_role: PlayerRole) -> Player | None:
+    def _manager_adjusted_sort_key(
+        self,
+        player: Player,
+        *,
+        manager_profile: dict[str, object] | None = None,
+        non_binding_plan: ClubMatchPlan | None = None,
+        is_bench: bool = False,
+    ) -> tuple[float, int, str]:
+        base_overall, potential, full_name = self._managed_player_sort_key(player)
+        score = float(base_overall)
+        profile = dict(manager_profile or {})
+        personality = dict(profile.get("personality_profile") or profile)
+
+        youth_commit = int(personality.get("youth_development_commitment", 60) or 60)
+        veteran_pref = int(personality.get("preference_for_experienced_players", 55) or 55)
+        interference_tol = int(personality.get("tolerance_for_owner_interference", 45) or 45)
+        independence = int(personality.get("professional_independence", 75) or 75)
+
+        accepted_ids = {str(pid) for pid in (profile.get("accepted_player_ids") or [])}
+        bench_accepted_ids = {str(pid) for pid in (profile.get("bench_accepted_player_ids") or [])}
+        rejected_ids = {str(pid) for pid in (profile.get("rejected_player_ids") or [])}
+
+        pid = str(player.id)
+        if pid in rejected_ids:
+            score -= 25.0
+        elif pid in accepted_ids and not is_bench:
+            score += 25.0
+        elif pid in bench_accepted_ids and is_bench:
+            score += 20.0
+        elif non_binding_plan is not None:
+            # Owner-saved ClubMatchPlan is strictly a non-binding preference evaluated by the manager
+            pref_starters = {str(x) for x in (non_binding_plan.starter_player_ids_json or [])}
+            pref_bench = {str(x) for x in (non_binding_plan.bench_player_ids_json or [])}
+            if pid in pref_starters and not is_bench:
+                if independence < 70 and interference_tol >= 65:
+                    score += 2.0
+            elif pid in pref_bench and is_bench:
+                if independence < 75 and interference_tol >= 55:
+                    score += 1.5
+
+        # Factor youth vs experienced preference when player age or potential gap is known
+        if (potential - base_overall) >= 12:
+            score += ((youth_commit - 50) / 50.0) * 3.5
+            score -= ((veteran_pref - 50) / 50.0) * 3.5
+
+        return (round(score, 3), potential, full_name)
+
+    def _select_best_candidate(
+        self,
+        players: list[Player],
+        required_role: PlayerRole,
+        *,
+        manager_profile: dict[str, object] | None = None,
+        non_binding_plan: ClubMatchPlan | None = None,
+    ) -> Player | None:
         if not players:
             return None
         ranked = sorted(
             players,
             key=lambda player: (
                 self._role_fit_score(player, required_role),
-                *self._managed_player_sort_key(player),
+                *self._manager_adjusted_sort_key(
+                    player, manager_profile=manager_profile, non_binding_plan=non_binding_plan
+                ),
             ),
             reverse=True,
         )
@@ -320,27 +390,35 @@ class SyntheticSquadFactory:
         *,
         lineup_mode: str = "strongest",
     ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str]:
-        """Resolve starters/bench/formation with layered, always-safe fallback:
-        owner-saved exact XI -> owner-saved formation -> coach formation -> 4-3-3
-        -> AI Coach auto-draft (best available XI, out-of-position if needed)."""
+        """Resolve starters/bench/formation under the First-Team Manager's sporting authority:
+        coach formation -> manager-evaluated squad selection (evaluating any owner ClubMatchPlan
+        strictly as a non-binding preference) -> 4-3-3 -> AI Coach auto-draft fallback."""
         plan = self._saved_match_plan(session, team_id)
-        eligible_by_id = {player.id: player for player in eligible}
-
-        exact = self._starters_from_plan(plan, eligible_by_id)
-        if exact is not None:
-            return self._apply_lineup_mode(exact, lineup_mode)
 
         candidates: list[str] = []
+        coach_formation = self._formation_for_profile(manager_profile)
+        if coach_formation:
+            candidates.append(coach_formation)
         plan_formation = self._plan_formation(plan)
-        if plan_formation is not None:
-            candidates.append(plan_formation)
-        candidates.append(self._formation_for_profile(manager_profile))
+        if plan_formation is not None and plan_formation not in candidates:
+            # Non-binding owner formation preference is only considered if manager has high tactical flexibility
+            flex = int((manager_profile or {}).get("tactical_flexibility", 55) or 55)
+            tol = int((manager_profile or {}).get("tolerance_for_owner_interference", 45) or 45)
+            if flex >= 78 and tol >= 70:
+                candidates.insert(0, plan_formation)
+            else:
+                candidates.append(plan_formation)
         if "4-3-3" not in candidates:
             candidates.append("4-3-3")
 
         for formation in candidates:
             try:
-                starters, bench = self._select_managed_squad(eligible, formation)
+                starters, bench = self._select_managed_squad(
+                    eligible,
+                    formation,
+                    manager_profile=manager_profile,
+                    non_binding_plan=plan,
+                )
                 return self._apply_lineup_mode((starters, bench, formation), lineup_mode)
             except PlayerLifecycleValidationError:
                 continue
@@ -469,10 +547,23 @@ class SyntheticSquadFactory:
 
     @staticmethod
     def _formation_for_profile(manager_profile: dict[str, object] | None) -> str:
-        """Map the employed coach's mentality/tactics to a formation (all sum to
+        """Map the employed coach's preferred_formations/mentality/tactics to a formation (all sum to
         10 outfield). Falls back to 4-3-3 when nothing is known."""
         if not manager_profile:
             return "4-3-3"
+        personality = dict(manager_profile.get("personality_profile") or {}) if isinstance(manager_profile.get("personality_profile"), dict) else {}
+        pref_list = list(manager_profile.get("preferred_formations") or personality.get("preferred_formations") or [])
+        pref_single = manager_profile.get("preferred_formation") or personality.get("preferred_formation")
+        if pref_single:
+            pref_list.insert(0, pref_single)
+        for cand in pref_list:
+            text = str(cand or "").strip()
+            try:
+                lines = [int(p) for p in text.split("-")]
+                if len(lines) >= 2 and all(line > 0 for line in lines) and sum(lines) == 10:
+                    return text
+            except ValueError:
+                continue
         mentality = str(manager_profile.get("mentality", "")).strip().lower()
         tactics = {str(tactic).strip().lower() for tactic in (manager_profile.get("tactics") or [])}
         mapping = {

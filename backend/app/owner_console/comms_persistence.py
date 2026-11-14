@@ -11,7 +11,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.club_profile import ClubProfile
 from app.models.user import User
-from app.owner_console import engine, ledger
+from app.owner_console import autonomous_staff_engine, engine, ledger
 from app.owner_console.models import (
     OwnerClubAnnouncement,
     OwnerClubConversation,
@@ -19,8 +19,10 @@ from app.owner_console.models import (
     OwnerClubMessage,
     OwnerClubState,
     OwnerInboxItem,
+    OwnerRecruitmentAssignment,
     OwnerScoutingWatchlist,
     OwnerSquadPlayer,
+    OwnerStaffDecisionRecord,
 )
 from app.owner_console.service import OwnerError, require_state
 
@@ -72,8 +74,71 @@ STAFF_DIRECTORY: tuple[dict[str, str], ...] = (
     },
 )
 
+ASSISTANT_COACH_DIRECTORY: tuple[dict[str, str], ...] = (
+    {
+        "id": "staff:assistant_attacking",
+        "role_key": "assistant_coach",
+        "specialist_role": "attacking_development",
+        "name": "Marco Bellini",
+        "role": "Assistant Coach (Attacking Development)",
+        "department": "First-Team Coaching",
+        "portrait_url": "/console/img/prestige/10_vip_matchday_lounge.png",
+        "route": "/app/squad",
+    },
+    {
+        "id": "staff:assistant_defensive",
+        "role_key": "assistant_coach",
+        "specialist_role": "defensive_organisation",
+        "name": "Tomasz Kowalski",
+        "role": "Assistant Coach (Defensive Organisation)",
+        "department": "First-Team Coaching",
+        "portrait_url": "/console/img/prestige/10_vip_matchday_lounge.png",
+        "route": "/app/squad",
+    },
+    {
+        "id": "staff:assistant_goalkeeping",
+        "role_key": "assistant_coach",
+        "specialist_role": "goalkeeping",
+        "name": "Javier Navarro",
+        "role": "Goalkeeping Coach",
+        "department": "First-Team Coaching",
+        "portrait_url": "/console/img/prestige/10_vip_matchday_lounge.png",
+        "route": "/app/squad",
+    },
+    {
+        "id": "staff:assistant_fitness",
+        "role_key": "assistant_coach",
+        "specialist_role": "fitness",
+        "name": "Sofia Bergström",
+        "role": "Head of Fitness & Conditioning",
+        "department": "Sports Science & Conditioning",
+        "portrait_url": "/console/img/prestige/11_stadium_expansion_construction.png",
+        "route": "/app/squad",
+    },
+    {
+        "id": "staff:assistant_tactical",
+        "role_key": "assistant_coach",
+        "specialist_role": "tactical_analysis",
+        "name": "Jonas Richter",
+        "role": "Lead Tactical Analyst",
+        "department": "First-Team Technical",
+        "portrait_url": "/console/img/prestige/10_vip_matchday_lounge.png",
+        "route": "/app/squad",
+    },
+    {
+        "id": "staff:assistant_development",
+        "role_key": "assistant_coach",
+        "specialist_role": "player_development",
+        "name": "Adama Diallo",
+        "role": "Individual Player Development Coach",
+        "department": "Academy & Pathway",
+        "portrait_url": "/console/img/prestige/12_elite_academy_complex.png",
+        "route": "/app/academy",
+    },
+)
+
 STAFF_ALIASES: dict[str, dict[str, str]] = {}
-for _member in STAFF_DIRECTORY:
+for _member in (*STAFF_DIRECTORY, *ASSISTANT_COACH_DIRECTORY):
     for _k in (
         _member["id"].lower(),
         _member["role_key"].lower(),
@@ -82,11 +147,23 @@ for _member in STAFF_DIRECTORY:
         _member["id"].replace("staff:", "").replace("_", " ").lower(),
     ):
         STAFF_ALIASES[_k] = _member
+    if "specialist_role" in _member:
+        STAFF_ALIASES[_member["specialist_role"].lower()] = _member
+        STAFF_ALIASES[f"staff:{_member['specialist_role'].lower()}"] = _member
 STAFF_ALIASES["staff:gm"] = STAFF_DIRECTORY[1]
+STAFF_ALIASES["gm"] = STAFF_DIRECTORY[1]
 STAFF_ALIASES["staff:manager"] = STAFF_DIRECTORY[0]
+STAFF_ALIASES["manager"] = STAFF_DIRECTORY[0]
+STAFF_ALIASES["head_coach"] = STAFF_DIRECTORY[0]
 STAFF_ALIASES["staff:hoyd"] = STAFF_DIRECTORY[2]
+STAFF_ALIASES["hoyd"] = STAFF_DIRECTORY[2]
 STAFF_ALIASES["staff:scout"] = STAFF_DIRECTORY[3]
+STAFF_ALIASES["scout"] = STAFF_DIRECTORY[3]
 STAFF_ALIASES["staff:medical"] = STAFF_DIRECTORY[4]
+STAFF_ALIASES["medical"] = STAFF_DIRECTORY[4]
+STAFF_ALIASES["staff:assistant_coach"] = ASSISTANT_COACH_DIRECTORY[0]
+STAFF_ALIASES["assistant_coach"] = ASSISTANT_COACH_DIRECTORY[0]
+STAFF_ALIASES["assistant coach"] = ASSISTANT_COACH_DIRECTORY[0]
 
 
 def _treasury_gtex(session: Session, club_id: str) -> float:
@@ -682,8 +759,14 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
     sync_living_club_communications(session, state)
 
 
-def sync_living_club_communications(session: Session, state: OwnerClubState) -> list[OwnerClubMessage]:
+def sync_living_club_communications(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    user_id: str | None = None,
+) -> list[OwnerClubMessage]:
     """Generate idempotent event-driven inbound staff & player messages grounded in real club state."""
+    _ = user_id
     created: list[OwnerClubMessage] = []
     squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     regens = [p for p in squad if p.is_regen]
@@ -1096,6 +1179,9 @@ def _meeting_dict(mtg: OwnerClubMeeting) -> dict[str, Any]:
         "outcome_summary": mtg.minutes_summary,
         "minutes": minutes_items,
         "minutes_summary": mtg.minutes_summary,
+        "contributions": list(meta.get("contributions") or []),
+        "disagreements": list(meta.get("disagreements") or []),
+        "proposed_resolutions": list(meta.get("proposed_resolutions") or []),
         "decisions": list(mtg.decisions_json or []),
         "morale_boost_applied": bool(meta.get("morale_boost_applied")),
         "created_at": mtg.created_at.isoformat() if mtg.created_at else None,
@@ -1118,6 +1204,59 @@ def _announcement_dict(ann: OwnerClubAnnouncement) -> dict[str, Any]:
     }
 
 
+def _resolve_staff_identity_for_conversation(
+    session: Session,
+    state: OwnerClubState,
+    conv: OwnerClubConversation,
+) -> tuple[str, str, str, str, dict[str, Any], OwnerClubRelationship]:
+    """Resolve `(role_key, staff_id, staff_name, staff_title, personality_profile, relationship)`
+    for any appointed staff member or assistant coach.
+    """
+    identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+    p_id = str(conv.participant_id or conv.thread_key or "staff:first_team_manager").lower()
+    staff_meta = STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
+    role_key = staff_meta["role_key"]
+
+    if role_key == "first_team_manager":
+        mgr = identities["first_team_manager"]
+        staff_id = str(mgr.get("id") or mgr.get("manager_id") or "mgr")
+        staff_name = str(mgr.get("name") or conv.participant_name or "First-Team Manager")
+        staff_title = "First-Team Manager"
+        personality = dict(mgr.get("personality_profile") or autonomous_staff_engine.derive_manager_personality(mgr))
+    elif role_key == "general_manager":
+        gm = identities["general_manager"]
+        staff_id = str(gm.get("id") or gm.get("staff_id") or "gm")
+        staff_name = str(gm.get("name") or conv.participant_name or "General Manager")
+        staff_title = "General Manager"
+        personality = dict(gm.get("personality_profile") or autonomous_staff_engine.derive_gm_personality(gm))
+    elif role_key in ("head_of_youth_development", "chief_scout", "medical_director"):
+        dept = identities[role_key]
+        staff_id = str(dept.get("id") or dept.get("staff_id") or role_key)
+        staff_name = str(dept.get("name") or conv.participant_name or staff_meta["name"])
+        staff_title = str(dept.get("title") or staff_meta["role"])
+        personality = dict(dept.get("personality_profile") or {})
+    else:
+        spec = staff_meta.get("specialist_role", "attacking_development")
+        assistants = list(identities.get("assistant_coaches") or [])
+        ac = next((a for a in assistants if a.get("specialist_role") == spec), assistants[0] if assistants else {})
+        role_key = f"assistant_coach_{spec}"
+        staff_id = str(ac.get("id") or f"ac_{spec}")
+        staff_name = str(ac.get("name") or staff_meta["name"])
+        staff_title = str(ac.get("title") or staff_meta["role"])
+        personality = dict(ac.get("personality_profile") or {})
+
+    rel = autonomous_staff_engine.ensure_staff_relationship(
+        session,
+        state,
+        role_key=role_key,
+        staff_id=staff_id,
+        staff_name=staff_name,
+        staff_title=staff_title,
+        personality_profile=personality,
+    )
+    return role_key, staff_id, staff_name, staff_title, personality, rel
+
+
 def get_club_communications_durable(
     session: Session,
     *,
@@ -1129,7 +1268,9 @@ def get_club_communications_durable(
     from app.owner_console import service, storytelling
 
     state = require_state(session, club_id, user_id)
+    identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
     ensure_club_conversations_seeded(session, state)
+    sync_living_club_communications(session, state, user_id=user_id)
 
     squad_players = list(
         session.scalars(
@@ -1149,27 +1290,55 @@ def get_club_communications_durable(
     )
     conv_by_key = {c.thread_key: c for c in convs_all}
 
+    relationship_health: dict[str, Any] = {}
     staff_contacts: list[dict[str, Any]] = []
-    for member in STAFF_DIRECTORY:
+    for member in (*STAFF_DIRECTORY, *ASSISTANT_COACH_DIRECTORY):
         rk = member["role_key"]
-        resolved_name = (
-            mgr.get("name", member["name"])
-            if rk == "first_team_manager"
-            else (exec_staff.get(rk) or {}).get("name", member["name"])
+        spec = member.get("specialist_role")
+        if rk == "first_team_manager":
+            staff_obj = identities["first_team_manager"]
+            resolved_name = str(staff_obj.get("name") or member["name"])
+            personality = dict(staff_obj.get("personality_profile") or {})
+            rel_key = "first_team_manager"
+        elif rk in ("general_manager", "head_of_youth_development", "chief_scout", "medical_director"):
+            staff_obj = identities[rk]
+            resolved_name = str(staff_obj.get("name") or member["name"])
+            personality = dict(staff_obj.get("personality_profile") or {})
+            rel_key = rk
+        else:
+            assistants = list(identities.get("assistant_coaches") or [])
+            staff_obj = next((a for a in assistants if a.get("specialist_role") == spec), {})
+            resolved_name = str(staff_obj.get("name") or member["name"])
+            personality = dict(staff_obj.get("personality_profile") or {})
+            rel_key = f"assistant_coach_{spec}"
+
+        rel = autonomous_staff_engine.ensure_staff_relationship(
+            session,
+            state,
+            role_key=rel_key,
+            staff_id=str(staff_obj.get("id") or staff_obj.get("manager_id") or member["id"]),
+            staff_name=resolved_name,
+            staff_title=member["role"],
+            personality_profile=personality,
         )
+        rel_serialized = autonomous_staff_engine.serialize_relationship_health(rel)
+        relationship_health[rel_key] = rel_serialized
+
         conv = conv_by_key.get(member["id"])
         staff_contacts.append(
             {
                 "contact_id": member["id"],
-                "role_key": rk,
+                "role_key": rel_key,
                 "name": resolved_name,
                 "title": member["role"],
                 "department": member["department"],
                 "mood": int((mgr if rk == "first_team_manager" else exec_staff.get(rk) or {}).get("mood", 78)),
-                "loyalty": int((mgr if rk == "first_team_manager" else exec_staff.get(rk) or {}).get("loyalty", 14)),
+                "loyalty": int(rel_serialized.get("loyalty", 70)),
                 "portrait_url": member["portrait_url"],
                 "route": member["route"],
                 "thread_id": conv.id if conv else None,
+                "personality_profile": personality,
+                "relationship_health": rel_serialized,
             }
         )
 
@@ -1245,6 +1414,64 @@ def get_club_communications_durable(
         ).all()
     ]
 
+    decision_rows = list(
+        session.scalars(
+            select(OwnerStaffDecisionRecord)
+            .where(OwnerStaffDecisionRecord.club_id == club_id)
+            .order_by(OwnerStaffDecisionRecord.created_at.desc())
+            .limit(40)
+        ).all()
+    )
+    decision_records = [
+        {
+            "id": d.id,
+            "staff_id": d.staff_id,
+            "staff_name": d.staff_name,
+            "staff_role": d.staff_role,
+            "request_intent": d.request_intent,
+            "request_text": d.request_text,
+            "decision_outcome": d.decision_outcome,
+            "target_player_id": d.target_player_id,
+            "target_player_name": d.target_player_name,
+            "reasoning_trace": d.reasoning_trace_json,
+            "relationship_deltas": d.relationship_deltas_json,
+            "state_effects": d.state_effects_json,
+            "ai_generation_status": d.ai_generation_status,
+            "created_at": d.created_at.isoformat() if d.created_at else None,
+        }
+        for d in decision_rows
+    ]
+
+    recruitment_rows = list(
+        session.scalars(
+            select(OwnerRecruitmentAssignment)
+            .where(OwnerRecruitmentAssignment.club_id == club_id)
+            .order_by(OwnerRecruitmentAssignment.created_at.desc())
+            .limit(20)
+        ).all()
+    )
+    recruitment_assignments = [
+        {
+            "id": r.id,
+            "initiated_by_role": r.initiated_by_role,
+            "initiated_by_name": r.initiated_by_name,
+            "target_position": r.target_position,
+            "min_gsi": r.min_gsi,
+            "max_gsi": r.max_gsi,
+            "tactical_profile": r.tactical_profile,
+            "max_fee": r.max_fee,
+            "max_weekly_wage": r.max_weekly_wage,
+            "gm_evaluation_status": r.gm_evaluation_status,
+            "gm_notes": r.gm_notes,
+            "scout_notes": r.scout_notes,
+            "candidate_shortlist": r.candidate_shortlist_json,
+            "recommended_candidate": r.recommended_candidate_json,
+            "delegated_decision_id": r.delegated_decision_id,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        }
+        for r in recruitment_rows
+    ]
+
     inbox_rows = list(
         session.scalars(
             select(OwnerInboxItem)
@@ -1304,6 +1531,7 @@ def get_club_communications_durable(
             "verified_role": "Club Owner",
             "verified_name": verified_name,
             "can_speak_as_staff": False,
+            "can_coach_matchday": False,
         },
         "permissions": {
             "actor_role": "club_owner",
@@ -1312,6 +1540,8 @@ def get_club_communications_durable(
             "can_approve_budget_decisions": True,
             "can_publish_announcements": True,
             "can_schedule_meetings": True,
+            "can_control_matchday_tactics": False,
+            "can_control_live_substitutions": False,
         },
         "counts": {
             "inbox_unread": unread_inbox,
@@ -1326,6 +1556,11 @@ def get_club_communications_durable(
         "threads": direct_threads,
         "staff_contacts": staff_contacts,
         "player_contacts": player_contacts,
+        "staff_personalities": identities,
+        "relationship_health": relationship_health,
+        "decision_records": decision_records,
+        "recruitment_assignments": recruitment_assignments,
+        "club_culture": identities.get("club_culture"),
         "staff_room": list(reversed(staff_room_meta["messages"])),
         "squad_room": list(reversed(squad_room_meta["messages"])),
         "staff_room_meta": staff_room_meta,
@@ -1334,6 +1569,7 @@ def get_club_communications_durable(
         "requests_decisions": {
             "inbox_decisions": open_decisions,
             "boardroom_dilemma": dilemma,
+            "recruitment_assignments": recruitment_assignments,
         },
         "announcements": announcements,
         "archive": archived_items,
@@ -1414,12 +1650,47 @@ def send_club_message_durable(
     topic: str = "general",
     priority: str = "normal",
     request_reply: bool = True,
+    idempotency_key: str | None = None,
 ) -> dict[str, Any]:
     state = require_state(session, club_id, user_id)
+    autonomous_staff_engine.ensure_club_staff_identities(session, state)
     ensure_club_conversations_seeded(session, state)
     clean_body = (message or "").strip()
     if not clean_body:
         raise OwnerError("empty_message", 400, "Message body cannot be empty.")
+
+    if idempotency_key:
+        existing_decision = session.scalar(
+            select(OwnerStaffDecisionRecord).where(
+                OwnerStaffDecisionRecord.club_id == club_id,
+                OwnerStaffDecisionRecord.idempotency_key == idempotency_key,
+            )
+        )
+        if existing_decision is not None and existing_decision.conversation_id:
+            existing_conv = session.get(OwnerClubConversation, existing_decision.conversation_id)
+            req_msg = session.get(OwnerClubMessage, existing_decision.request_message_id) if existing_decision.request_message_id else None
+            rep_msg = session.get(OwnerClubMessage, existing_decision.response_message_id) if existing_decision.response_message_id else None
+            if existing_conv is not None:
+                return {
+                    "status": "sent",
+                    "idempotent_replay": True,
+                    "thread_id": existing_conv.id,
+                    "thread": _thread_dict(session, existing_conv),
+                    "channel_type": existing_conv.channel_type,
+                    "message": _message_dict(req_msg) if req_msg else None,
+                    "user_message": _message_dict(req_msg) if req_msg else None,
+                    "reply": _message_dict(rep_msg) if rep_msg else None,
+                    "reply_message": _message_dict(rep_msg) if rep_msg else None,
+                    "decision_record": {
+                        "id": existing_decision.id,
+                        "decision_outcome": existing_decision.decision_outcome,
+                        "request_intent": existing_decision.request_intent,
+                        "reasoning_trace": existing_decision.reasoning_trace_json,
+                        "relationship_deltas": existing_decision.relationship_deltas_json,
+                        "state_effects": existing_decision.state_effects_json,
+                    },
+                    "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
+                }
 
     user = session.get(User, user_id)
     verified_owner_name = (user.display_name or user.full_name or user.username) if user else "Club Owner"
@@ -1519,7 +1790,6 @@ def send_club_message_durable(
             state.facilities_json = facs
             flag_modified(state, "facilities_json")
 
-    # Server-enforced verified owner sender identity (client sender_role cannot spoof staff/players)
     owner_msg = _append_message(
         session,
         conv=conv,
@@ -1536,7 +1806,9 @@ def send_club_message_durable(
     )
 
     reply_msg: OwnerClubMessage | None = None
-    if conv.channel_type == "direct" and request_reply:
+    decision_record_payload: dict[str, Any] | None = None
+
+    if conv.channel_type == "direct" and conv.participant_type == "player" and request_reply:
         reply_text, action_payload = _contextual_npc_reply(
             session, state=state, conv=conv, owner_body=clean_body, topic=topic
         )
@@ -1545,42 +1817,21 @@ def send_club_message_durable(
                 session,
                 conv=conv,
                 sender_user_id=None,
-                sender_type=conv.participant_type,
+                sender_type="player",
                 sender_id=conv.participant_id,
                 sender_name=conv.participant_name,
                 sender_role=conv.participant_role,
                 topic=(topic or "").strip() or conv.subject,
                 body=reply_text,
-                source="player_reply" if conv.participant_type == "player" else "staff_reply",
-                linked_entity_type="player" if conv.participant_type == "player" else "club",
-                linked_entity_id=conv.participant_id if conv.participant_type == "player" else club_id,
+                source="player_reply",
+                linked_entity_type="player",
+                linked_entity_id=conv.participant_id,
                 action_payload=action_payload,
                 is_read=True,
             )
-    elif conv.channel_type == "staff_room" and request_reply and ("?" in clean_body or "@" in clean_body):
-        reply_text, action_payload = _contextual_npc_reply(
-            session, state=state, conv=conv, owner_body=clean_body, topic=topic
-        )
-        if reply_text:
-            reply_msg = _append_message(
-                session,
-                conv=conv,
-                sender_user_id=None,
-                sender_type="staff",
-                sender_id="staff:first_team_manager",
-                sender_name="First-Team Head Coach",
-                sender_role="First-Team Manager",
-                topic=(topic or "").strip() or "Staff Response",
-                body=reply_text,
-                source="staff_reply",
-                action_payload=action_payload,
-                is_read=True,
-            )
-
-    if conv.channel_type == "direct":
         from app.owner_console import living_club_world
 
-        if conv.participant_type == "player" and conv.participant_id:
+        if conv.participant_id:
             living_club_world.apply_relationship_delta(
                 session,
                 club_id,
@@ -1596,22 +1847,163 @@ def send_club_message_durable(
                 reason=f"Direct conversation on {topic or 'club affairs'}",
                 world_day=world_day,
             )
-        elif conv.participant_type == "staff":
-            staff_key = str(conv.participant_id or "general_manager").replace("staff:", "")
-            living_club_world.apply_relationship_delta(
+
+    elif (conv.channel_type == "direct" and conv.participant_type == "staff" and request_reply) or (
+        conv.channel_type == "staff_room" and request_reply
+    ):
+        role_key, staff_id, staff_name, staff_title, personality, rel = _resolve_staff_identity_for_conversation(
+            session, state, conv
+        )
+        if conv.participant_type == "staff" and conv.participant_name != staff_name:
+            conv.participant_name = staff_name
+
+        prior_owner_msgs = int(
+            session.scalar(
+                select(func.count(OwnerClubMessage.id)).where(
+                    OwnerClubMessage.conversation_id == conv.id,
+                    OwnerClubMessage.sender_type == "owner",
+                )
+            )
+            or 1
+        )
+        squad_players = list(
+            session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+        )
+
+        # Layer A: Authoritative Staff Decision Engine
+        intent_data = autonomous_staff_engine.classify_owner_request(
+            clean_body,
+            role_key,
+            squad_players,
+            db=session,
+            club_id=club_id,
+        )
+        layer_a = autonomous_staff_engine.evaluate_layer_a_staff_decision(
+            session,
+            state,
+            role_key=role_key,
+            staff_id=staff_id,
+            staff_name=staff_name,
+            staff_title=staff_title,
+            personality=personality,
+            relationship=rel,
+            intent_data=intent_data,
+            conversation_turn_count=prior_owner_msgs,
+        )
+
+        # Layer B: Grounded Conversational Intelligence
+        reply_text, ai_status = autonomous_staff_engine.generate_layer_b_staff_response(
+            state=state,
+            staff_name=staff_name,
+            staff_title=staff_title,
+            role_key=role_key,
+            personality=personality,
+            intent_data=intent_data,
+            layer_a_result=layer_a,
+            conversation_turn_count=prior_owner_msgs,
+        )
+
+        action_payload = {
+            "decision_outcome": layer_a["decision_outcome"],
+            "intent": layer_a["intent"],
+            "reasoning_trace": layer_a["reasoning_trace"],
+            "relationship_deltas": layer_a["relationship_deltas"],
+            "relationship_snapshot": layer_a["relationship_snapshot"],
+            "state_effects": layer_a["state_effects"],
+            "ai_generation_status": ai_status,
+            "staff_archetype": personality.get("archetype_label") or personality.get("archetype_key"),
+        }
+
+        reply_msg = _append_message(
+            session,
+            conv=conv,
+            sender_user_id=None,
+            sender_type="staff",
+            sender_id=conv.participant_id or f"staff:{role_key}",
+            sender_name=staff_name,
+            sender_role=staff_title,
+            topic=(topic or "").strip() or conv.subject or "Staff Response",
+            body=reply_text,
+            source="staff_reply",
+            linked_entity_type="club",
+            linked_entity_id=club_id,
+            action_payload=action_payload,
+            metadata={"layer_a_outcome": layer_a["decision_outcome"], "ai_generation_status": ai_status},
+            is_read=True,
+        )
+
+        decision_row = OwnerStaffDecisionRecord(
+            id=_deterministic_id("osdr", f"{club_id}:{owner_msg.id}:{reply_msg.id}"),
+            club_id=club_id,
+            conversation_id=conv.id,
+            request_message_id=owner_msg.id,
+            response_message_id=reply_msg.id,
+            staff_id=staff_id,
+            staff_name=staff_name,
+            staff_role=role_key,
+            request_intent=layer_a["intent"],
+            request_text=clean_body,
+            decision_outcome=layer_a["decision_outcome"],
+            idempotency_key=idempotency_key,
+            target_player_id=intent_data.get("target_player_id"),
+            target_player_name=intent_data.get("target_player_name"),
+            structured_inputs_json={
+                "intent_data": intent_data,
+                "personality_snapshot": personality,
+                "conversation_turn_count": prior_owner_msgs,
+            },
+            reasoning_trace_json=layer_a["reasoning_trace"],
+            relationship_deltas_json=layer_a["relationship_deltas"],
+            state_effects_json=layer_a["state_effects"],
+            ai_generation_status=ai_status,
+        )
+        session.add(decision_row)
+        session.flush()
+        decision_record_payload = {
+            "id": decision_row.id,
+            "decision_outcome": decision_row.decision_outcome,
+            "request_intent": decision_row.request_intent,
+            "reasoning_trace": decision_row.reasoning_trace_json,
+            "relationship_deltas": decision_row.relationship_deltas_json,
+            "relationship_snapshot": layer_a["relationship_snapshot"],
+            "state_effects": decision_row.state_effects_json,
+            "ai_generation_status": decision_row.ai_generation_status,
+        }
+
+        # If recruitment workflow was triggered, post inter-staff coordination into the Staff Technical Room
+        if "recruitment_workflow" in layer_a["state_effects"]:
+            identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+            gm_info = identities["general_manager"]
+            scout_info = identities["chief_scout"]
+            rec_cand = dict(layer_a["state_effects"].get("recommended_candidate") or {})
+            staff_room_conv = _get_or_create_conversation(
                 session,
-                club_id,
-                "owner",
-                "owner",
-                "Club Owner",
-                "staff",
-                staff_key,
-                conv.participant_name,
-                delta_trust=2,
-                delta_respect=2,
-                delta_tension=-1,
-                reason=f"Direct staff consultation on {topic or 'club operations'}",
-                world_day=world_day,
+                club_id=club_id,
+                owner_user_id=state.owner_user_id,
+                channel_type="staff_room",
+                thread_key="room:staff",
+                participant_type="room",
+                participant_id="room:staff",
+                participant_name="Staff Technical Room",
+                participant_role="Executive & Technical Staff",
+            )
+            _append_message(
+                session,
+                conv=staff_room_conv,
+                sender_user_id=None,
+                sender_type="staff",
+                sender_id="staff:chief_scout",
+                sender_name=str(scout_info["name"]),
+                sender_role="Chief Scout",
+                topic="Recruitment Shortlist Delivered",
+                body=(
+                    f"Delivered verified {intent_data.get('detected_position', 'LW')} shortlist "
+                    f"(GSI {intent_data.get('min_gsi', 80)}–{intent_data.get('max_gsi', 85)}) to {gm_info['name']}. "
+                    f"Lead profile: {rec_cand.get('player_name', 'Target')} (GSI {rec_cand.get('gsi', 82)}, est. fee {rec_cand.get('estimated_fee', 0):,.0f} GTX)."
+                ),
+                source="staff_event",
+                action_payload={"type": "scout_shortlist_update", "recommended_candidate": rec_cand},
+                is_read=False,
             )
 
     session.flush()
@@ -1623,6 +2015,7 @@ def send_club_message_durable(
             "channel_type": conv.channel_type,
             "message": _message_dict(owner_msg),
             "reply": _message_dict(reply_msg) if reply_msg else None,
+            "decision_record": decision_record_payload,
         },
     )
     thread_payload = _thread_dict(session, conv)
@@ -1635,6 +2028,7 @@ def send_club_message_durable(
         "user_message": _message_dict(owner_msg),
         "reply": _message_dict(reply_msg) if reply_msg else None,
         "reply_message": _message_dict(reply_msg) if reply_msg else None,
+        "decision_record": decision_record_payload,
         "morale_boost_applied": morale_boost_applied,
         "morale_delta": morale_delta,
         "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
@@ -1658,36 +2052,43 @@ def schedule_club_meeting_durable(
     if len(clean_title) < 2:
         raise OwnerError("invalid_meeting", 400, "Meeting title is required.")
 
+    negotiation = autonomous_staff_engine.simulate_boardroom_meeting_negotiation(
+        session,
+        state,
+        title=clean_title,
+        agenda=agenda,
+        meeting_type=meeting_type,
+        requested_attendees=participants,
+    )
+
     facs = dict(state.facilities_json or {})
-    exec_staff = dict(facs.get("_executive_staff") or {})
-    gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
-    mgr_name = (state.manager_json or {}).get("name", "First-Team Head Coach")
-    hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name", "Femi Ogunleye")
     boost_log = dict(facs.get("_comms_boost_log") or {})
     world_day = int(state.world_day or 1)
-
     roster = list(participants or []) or [
         "Club Owner",
-        gm_name,
-        mgr_name,
-        hoyd_name,
+        *[c["speaker_name"] for c in negotiation["contributions"]],
     ]
     squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
-    avg_morale = round(sum(int(p.morale or 50) for p in squad) / len(squad), 1) if squad else 70
-    treasury = int(_treasury_gtex(session, club_id))
 
     morale_applied = False
-    minutes_list: list[dict[str, str]] = []
-    outcome_summary = (
-        f"Scheduled '{clean_title}' for World Day {world_day} at {state.club_name} " f"with {', '.join(roster)}."
-    )
+    minutes_list: list[dict[str, str]] = [
+        {
+            "speaker": c["speaker_name"],
+            "role": c["speaker_title"],
+            "stance": c.get("stance", ""),
+            "summary": c["statement"],
+        }
+        for c in negotiation["contributions"]
+    ]
+    outcome_summary = negotiation["minutes_summary"]
+
     if convene_now:
         boost_key = f"day:{world_day}:meeting"
         if not boost_log.get(boost_key):
             for p in squad:
                 p.morale = int(engine.clamp(int(p.morale or 50) + 3, 0, 100))
             mgr = dict(state.manager_json or {})
-            mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 72)) + 5, 0, 100))
+            mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 72)) + 3, 0, 100))
             state.manager_json = mgr
             flag_modified(state, "manager_json")
             boost_log[boost_key] = True
@@ -1695,27 +2096,7 @@ def schedule_club_meeting_durable(
             state.facilities_json = facs
             flag_modified(state, "facilities_json")
             morale_applied = True
-        minutes_list = [
-            {
-                "speaker": gm_name,
-                "role": "General Manager",
-                "summary": f"Reviewed {state.club_name} treasury ({treasury} GTX) and operational alignment.",
-            },
-            {
-                "speaker": mgr_name,
-                "role": "First-Team Manager",
-                "summary": f"Confirmed tactical readiness across {len(squad)} registered players (avg morale {avg_morale}/100).",
-            },
-            {
-                "speaker": hoyd_name,
-                "role": "Head of Youth Development",
-                "summary": f"Reported on {sum(1 for p in squad if p.is_regen)} academy regen prospects on campus.",
-            },
-        ]
-        outcome_summary = (
-            f"Meeting convened on World Day {world_day} at {state.club_name} ({treasury} GTX treasury). "
-            f"Action items ratified across {len(roster)} participants. Agenda: {agenda.strip() or 'Operational alignment'}."
-        )
+
         session.add(
             OwnerInboxItem(
                 user_id=user_id,
@@ -1725,33 +2106,60 @@ def schedule_club_meeting_durable(
                 priority="normal",
                 sender="Boardroom Secretariat",
                 title=f"Meeting Minutes: {clean_title}",
-                what=outcome_summary,
-                why=agenda.strip() or "Executive boardroom alignment.",
-                payload_json={"participants": roster, "minutes": minutes_list, "morale_boost_applied": morale_applied},
-                is_decision=False,
-                is_read=True,
-                status="resolved",
-                resolution="convened",
+                what=outcome_summary[:400],
+                why=agenda.strip() or "Executive boardroom negotiation and multi-perspective review.",
+                payload_json={
+                    "participants": roster,
+                    "minutes": minutes_list,
+                    "contributions": negotiation["contributions"],
+                    "disagreements": negotiation["disagreements"],
+                    "proposed_resolutions": negotiation["proposed_resolutions"],
+                    "morale_boost_applied": morale_applied,
+                },
+                is_decision=True,
+                is_read=False,
+                status="open",
+                resolution=None,
             )
         )
+
+    allowed_meeting_types = {
+        "boardroom",
+        "tactical",
+        "medical",
+        "academy",
+        "squad",
+        "emergency",
+        "manager_performance_review",
+        "playing_philosophy_discussion",
+        "academy_development_strategy",
+        "recruitment_budget_meeting",
+        "transfer_target_review",
+        "manager_owner_disagreement",
+        "squad_depth_discussion",
+        "contract_and_wage_review",
+        "club_culture_discussion",
+    }
 
     meeting = OwnerClubMeeting(
         club_id=club_id,
         owner_user_id=state.owner_user_id,
         title=clean_title,
         agenda=(agenda or "").strip(),
-        meeting_type=(
-            meeting_type
-            if meeting_type in {"boardroom", "tactical", "medical", "academy", "squad", "emergency"}
-            else "boardroom"
-        ),
+        meeting_type=meeting_type if meeting_type in allowed_meeting_types else "boardroom",
         world_day=world_day,
-        status="completed" if convene_now else "scheduled",
+        status="negotiating" if convene_now else "scheduled",
         attendees_json=roster,
         minutes_summary=outcome_summary,
         decisions_json=[],
         created_by_user_id=user_id,
-        metadata_json={"minutes": minutes_list, "morale_boost_applied": morale_applied},
+        metadata_json={
+            "minutes": minutes_list,
+            "contributions": negotiation["contributions"],
+            "disagreements": negotiation["disagreements"],
+            "proposed_resolutions": negotiation["proposed_resolutions"],
+            "morale_boost_applied": morale_applied,
+        },
     )
     session.add(meeting)
     session.flush()
@@ -1780,6 +2188,11 @@ def schedule_club_meeting_durable(
         source="owner",
         linked_entity_type="meeting",
         linked_entity_id=meeting.id,
+        action_payload={
+            "meeting_id": meeting.id,
+            "disagreements": negotiation["disagreements"],
+            "proposed_resolutions": negotiation["proposed_resolutions"],
+        },
         is_read=True,
     )
     session.flush()
@@ -1788,6 +2201,91 @@ def schedule_club_meeting_durable(
         "status": "scheduled" if not convene_now else "completed",
         "meeting": _meeting_dict(meeting),
         "morale_boost_applied": morale_applied,
+        "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
+    }
+
+
+def resolve_club_meeting_durable(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    meeting_id: str,
+    resolution_id: str,
+    owner_note: str = "",
+) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    meeting = session.get(OwnerClubMeeting, meeting_id)
+    if meeting is None or meeting.club_id != state.club_id:
+        raise OwnerError("meeting_not_found", 404, "Boardroom meeting not found.")
+    outcome = autonomous_staff_engine.resolve_boardroom_meeting_decision(
+        session,
+        state,
+        meeting,
+        resolution_id=resolution_id,
+        owner_note=owner_note,
+    )
+    session.flush()
+    return {
+        **outcome,
+        "meeting": _meeting_dict(meeting),
+        "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
+    }
+
+
+def trigger_proactive_staff_communications_durable(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    trigger_reason: str = "world_tick",
+) -> dict[str, Any]:
+    state = require_state(session, club_id, user_id)
+    ensure_club_conversations_seeded(session, state)
+    initiatives = autonomous_staff_engine.generate_proactive_staff_initiatives(
+        session,
+        state,
+        owner_user_id=user_id,
+        trigger_reason=trigger_reason,
+    )
+    delivered: list[dict[str, Any]] = []
+    for item in initiatives:
+        role_key = str(item["sender_role"])
+        thread_key = f"staff:{role_key}" if not role_key.startswith("assistant") else "staff:assistant_defensive"
+        conv = _get_or_create_conversation(
+            session,
+            club_id=club_id,
+            owner_user_id=state.owner_user_id,
+            channel_type="direct",
+            thread_key=thread_key,
+            participant_type="staff",
+            participant_id=thread_key,
+            participant_name=str(item["sender_name"]),
+            participant_role=str(item["sender_title"]),
+            subject=f"Direct with {item['sender_name']}",
+        )
+        msg = _append_message(
+            session,
+            conv=conv,
+            sender_user_id=None,
+            sender_type="staff",
+            sender_id=thread_key,
+            sender_name=str(item["sender_name"]),
+            sender_role=str(item["sender_title"]),
+            topic=str(item["topic"]),
+            body=str(item["body"]),
+            source="staff_proactive",
+            priority=str(item.get("priority") or "normal"),
+            linked_event_key=str(item["event_key"]),
+            action_payload=dict(item.get("action_payload") or {}),
+            is_read=False,
+        )
+        delivered.append(_message_dict(msg))
+    session.flush()
+    return {
+        "club_id": club_id,
+        "proactive_messages_delivered": len(delivered),
+        "messages": delivered,
         "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),
     }
 
@@ -2030,7 +2528,9 @@ __all__ = [
     "list_all_clubs_communications_summary",
     "mark_conversation_read",
     "publish_club_announcement_durable",
+    "resolve_club_meeting_durable",
     "schedule_club_meeting_durable",
     "send_club_message_durable",
     "sync_living_club_communications",
+    "trigger_proactive_staff_communications_durable",
 ]

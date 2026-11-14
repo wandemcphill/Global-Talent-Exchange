@@ -893,12 +893,23 @@ export function MatchdayLineupBroadcast({
         signedBenchIds,
         myTarget.roster.map((p) => p.player_id),
       );
+      try {
+        await api.post(`/owner/clubs/${encodeURIComponent(editableClubId)}/lineup-preference`, {
+          preferred_formation: myTarget.sheet.formation,
+          preferred_player_ids: signedStarterIds,
+          note: "Owner non-binding pre-match preference submitted from Broadcast Team Sheet",
+        });
+      } catch {
+        // Ignore if offline or mock environment
+      }
       const saved = (
         await api.put(`/clubs/${encodeURIComponent(editableClubId)}/lineup`, payload)
       ).data;
       queryClient.setQueryData(["lineup-plan", editableClubId], normalizeLineupPlan(saved));
       setUseSmartSuggestion(false);
-      toast.success(`Matchday Starting XI (${myTarget.sheet.formation}) locked in for ${myTarget.sheet.clubName}!`);
+      toast.success(
+        `Non-binding owner preference (${myTarget.sheet.formation}) forwarded to the First-Team Manager for ${myTarget.sheet.clubName}.`,
+      );
     } catch (err) {
       toast.error(errMsg(err));
     } finally {
@@ -916,7 +927,7 @@ export function MatchdayLineupBroadcast({
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/25 bg-slate-950/75 px-4 py-3">
         <div className="flex flex-wrap items-center gap-2.5">
           <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">
-            <Sparkles size={11} /> AI Matchday XI Suggestion
+            <Sparkles size={11} /> First-Team Manager Authoritative XI
           </span>
           <span className="text-xs text-slate-300">
             <b className="text-white">{myTarget.sheet.clubName}</b> ·{" "}
@@ -955,7 +966,7 @@ export function MatchdayLineupBroadcast({
             className="inline-flex items-center gap-1 rounded border border-sky-400/35 bg-sky-500/10 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-sky-300 hover:bg-sky-500/20"
           >
             <RefreshCw size={11} />
-            {useSmartSuggestion ? "Suggested Best XI" : "Saved Club XI"}
+            {useSmartSuggestion ? "Manager Best XI" : "Owner Preference XI"}
           </button>
 
           {canPersistToClub && (
@@ -967,7 +978,7 @@ export function MatchdayLineupBroadcast({
               className="inline-flex items-center gap-1 rounded border border-emerald-400/50 bg-emerald-500/20 px-2.5 py-1 text-[10px] font-black uppercase tracking-wider text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
             >
               <Check size={11} />
-              {savingSuggested ? "Locking XI…" : "Lock In XI"}
+              {savingSuggested ? "Sending Preference…" : "Submit Owner Preference"}
             </button>
           )}
 
@@ -976,7 +987,7 @@ export function MatchdayLineupBroadcast({
               to={`/app/lineup?club_id=${encodeURIComponent(editableClubId)}`}
               className="inline-flex items-center gap-1 rounded border border-white/15 bg-white/5 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-200 hover:border-white/30"
             >
-              <Shield size={11} /> Edit Squad XI →
+              <Shield size={11} /> Pre-Match Preference →
             </Link>
           )}
 

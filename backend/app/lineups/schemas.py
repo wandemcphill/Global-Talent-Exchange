@@ -8,6 +8,11 @@ class ClubMatchPlanView(BaseModel):
     formation: str
     starter_player_ids: list[str] = Field(default_factory=list)
     bench_player_ids: list[str] = Field(default_factory=list)
+    is_non_binding_preference: bool = True
+    authority_model: str = "first_team_manager_authoritative"
+    manager_note: str = (
+        "Saved as a non-binding owner preference. The First-Team Manager determines the final matchday XI and formation."
+    )
 
 
 class SaveMatchPlanRequest(BaseModel):

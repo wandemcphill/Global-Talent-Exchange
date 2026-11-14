@@ -1172,6 +1172,8 @@ def _add_regen(
 
 
 def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict[str, Any] | None) -> OwnerClubState:
+    from app.owner_console import autonomous_staff_engine, living_club_world
+
     state = require_state(session, club_id, user_id)
     profile = engine.manager_profile(snapshot or engine.DEFAULT_MANAGER)
     if (
@@ -1180,7 +1182,19 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
         and state.manager_json.get("manager_id") != profile["manager_id"]
     ):
         raise OwnerError("fire_current_manager_first", 409)
+    mgr_personality = autonomous_staff_engine.derive_manager_personality(profile)
+    profile["personality_profile"] = mgr_personality
     state.manager_json = profile
+    autonomous_staff_engine.ensure_staff_relationship(
+        session,
+        state,
+        role_key="first_team_manager",
+        staff_id=str(profile.get("manager_id") or profile.get("id") or "mgr"),
+        staff_name=str(profile.get("name") or profile.get("display_name") or "First-Team Manager"),
+        staff_title="First-Team Manager",
+        personality_profile=mgr_personality,
+    )
+    living_club_world.reconcile_staff_relationships(session, state)
     if state.stage == "manager":
         state.stage = "competition"
     elif state.stage == "squad":
@@ -1999,7 +2013,30 @@ def tick_club(
     snapshot_value(session, state)
     session.flush()
 
-    from app.owner_console import living_club_world
+    from app.owner_console import autonomous_staff_engine, comms_persistence, living_club_world
+
+    # Evolve long-term club culture transition gradually over world ticks
+    fac_tick = dict(state.facilities_json or {})
+    culture_tick = dict(fac_tick.get("_club_culture") or {})
+    if culture_tick.get("target_identity") and int(culture_tick.get("transition_progress_pct", 100)) < 100:
+        new_prog = min(100, int(culture_tick.get("transition_progress_pct", 25)) + 15)
+        culture_tick["transition_progress_pct"] = new_prog
+        if new_prog >= 100:
+            culture_tick["primary_identity"] = culture_tick["target_identity"]
+        fac_tick["_club_culture"] = culture_tick
+        state.facilities_json = fac_tick
+        flag_modified(state, "facilities_json")
+
+    try:
+        autonomous_staff_engine.ensure_club_staff_identities(session, state)
+        comms_persistence.trigger_proactive_staff_communications_durable(
+            session,
+            user_id=state.owner_user_id,
+            club_id=state.club_id,
+            trigger_reason="world_tick",
+        )
+    except Exception:
+        logger.debug("proactive staff communications bypassed during tick", exc_info=True)
 
     living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
 
@@ -2701,6 +2738,8 @@ def hire_executive_staff(
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
 
+    from app.owner_console import autonomous_staff_engine, living_club_world
+
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
 
@@ -2716,13 +2755,38 @@ def hire_executive_staff(
         "salary_currency": pay_currency,
         "upfront_paid": True,
     }
+    if target_role == "first_team_manager":
+        staff_personality = autonomous_staff_engine.derive_manager_personality(appointed_record)
+    elif target_role == "general_manager":
+        staff_personality = autonomous_staff_engine.derive_gm_personality(appointed_record)
+    else:
+        default_cat = autonomous_staff_engine.FICTIONAL_STAFF_CATALOG.get(target_role, [{}])[0]
+        staff_personality = dict(
+            appointed_record.get("personality_profile")
+            or default_cat.get("personality_profile")
+            or {"professional_independence": 75, "loyalty": 72, "ambition": 75}
+        )
+    appointed_record["personality_profile"] = staff_personality
     exec_staff[target_role] = appointed_record
     facs["_executive_staff"] = exec_staff
     state.facilities_json = facs
 
     if target_role == "first_team_manager":
-        state.manager_json = engine.manager_profile(appointed_record)
+        mgr_prof = engine.manager_profile(appointed_record)
+        mgr_prof["personality_profile"] = staff_personality
+        state.manager_json = mgr_prof
         _morale_shift(session, club_id, 3)
+
+    autonomous_staff_engine.ensure_staff_relationship(
+        session,
+        state,
+        role_key=target_role,
+        staff_id=str(appointed_record.get("id") or appointed_record.get("staff_id") or staff_id),
+        staff_name=str(appointed_record.get("name") or "Club Staff"),
+        staff_title=str(appointed_record.get("role_label") or target_role),
+        personality_profile=staff_personality,
+    )
+    living_club_world.reconcile_staff_relationships(session, state)
 
     try:
         from app.models.club_growth import ClubStaffProfile

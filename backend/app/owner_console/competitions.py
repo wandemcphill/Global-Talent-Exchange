@@ -789,14 +789,26 @@ def _side(
     value = round(strength["strength"] + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
     xi = [p for p in players if p["id"] in strength["xi"]]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
+
+    mgr_json = (state.manager_json if state else None) or {}
+    mgr_personality = dict(mgr_json.get("personality_profile") or {})
+    mgr_independence = int(mgr_personality.get("professional_independence", 75))
+    mgr_tolerance = int(mgr_personality.get("tolerance_for_owner_interference", 45))
+    authoritative_mentality = strength.get("manager_mentality") or (state.mentality if state else "balanced")
+    if mentality and mgr_independence < 70 and mgr_tolerance >= 60:
+        authoritative_mentality = mentality
+
     return {
         "name": entry.club_name,
         "strength": value,
-        "mentality": mentality or (state.mentality if state else "balanced"),
+        "mentality": authoritative_mentality,
+        "owner_requested_mentality": mentality,
+        "formation": strength.get("formation", "4-3-3"),
         "scorers": scorers,
         "manager": state.manager_json if state else None,
         "state": state,
         "xi": strength["xi"],
+        "bench": strength.get("bench", []),
         "avg_morale": strength["avg_morale"],
         "avg_fitness": strength.get("avg_fitness", 95.0),
         "campus_effects": campus_effects,

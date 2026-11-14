@@ -542,14 +542,81 @@ def delete_watchlist(
     return _run(session, storytelling.remove_from_watchlist, session, user.id, club_id, item_id)
 
 
+class OwnerLineupPreferenceRequest(BaseModel):
+    preferred_formation: str | None = Field(default=None, max_length=32)
+    preferred_player_ids: list[str] = Field(default_factory=list)
+    note: str = Field(default="", max_length=600)
+
+
 @router.put("/clubs/{club_id}/mentality")
 def set_mentality(
     club_id: str, body: MentalityRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
+    from app.owner_console import autonomous_staff_engine
+
     def go():
         state = service.require_state(session, club_id, user.id)
         state.mentality = body.mentality
-        return {"mentality": state.mentality}
+        identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+        mgr_prof = dict((identities.get("first_team_manager") or {}).get("personality_profile") or {})
+        mgr_indep = int(mgr_prof.get("professional_independence", 75))
+        mgr_tol = int(mgr_prof.get("tolerance_for_owner_interference", 45))
+        atk = int(mgr_prof.get("attacking_vs_defensive", 55))
+        mgr_mentality = "attacking" if atk >= 65 else ("defensive" if atk <= 40 else "balanced")
+        effective_mentality = body.mentality if (mgr_indep < 55 and mgr_tol >= 65) else mgr_mentality
+        return {
+            "mentality": state.mentality,
+            "effective_matchday_mentality": effective_mentality,
+            "authority_model": "first_team_manager_authoritative",
+            "is_non_binding_preference": True,
+        }
+
+    return _run(session, go)
+
+
+@router.get("/clubs/{club_id}/matchday-selection")
+def get_manager_matchday_selection(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    from app.owner_console import autonomous_staff_engine
+
+    def go():
+        state = service.require_state(session, club_id, user.id)
+        return autonomous_staff_engine.select_manager_matchday_lineup(session, state)
+
+    return _run(session, go)
+
+
+@router.post("/clubs/{club_id}/lineup-preference")
+def save_owner_lineup_preference(
+    club_id: str,
+    body: OwnerLineupPreferenceRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console import autonomous_staff_engine
+
+    def go():
+        state = service.require_state(session, club_id, user.id)
+        fac = dict(state.facilities_json or {})
+        fac["_owner_lineup_preference"] = {
+            "preferred_formation": body.preferred_formation,
+            "preferred_player_ids": list(body.preferred_player_ids),
+            "note": body.note,
+            "submitted_at": datetime.now(timezone.utc).isoformat(),
+            "is_non_binding_preference": True,
+        }
+        state.facilities_json = fac
+        flag_modified(state, "facilities_json")
+        selection = autonomous_staff_engine.select_manager_matchday_lineup(session, state)
+        return {
+            "status": "preference_recorded",
+            "authority_model": "first_team_manager_authoritative",
+            "is_non_binding_preference": True,
+            "owner_preference": fac["_owner_lineup_preference"],
+            "manager_selection": selection,
+        }
 
     return _run(session, go)
 
@@ -2043,6 +2110,7 @@ class ClubThreadMessageRequest(BaseModel):
     topic: str = "general"
     priority: str = "normal"
     request_reply: bool = True
+    idempotency_key: str | None = Field(default=None, max_length=160)
 
 
 class ClubMeetingScheduleRequest(BaseModel):
@@ -2051,6 +2119,11 @@ class ClubMeetingScheduleRequest(BaseModel):
     participants: list[str] | None = None
     agenda: str = ""
     convene_now: bool = True
+
+
+class ClubMeetingResolveRequest(BaseModel):
+    resolution_id: str = Field(min_length=1, max_length=160)
+    owner_note: str = Field(default="", max_length=1000)
 
 
 class ClubAnnouncementPublishRequest(BaseModel):
@@ -2181,6 +2254,7 @@ def post_club_thread_message(
         topic=payload.topic,
         priority=payload.priority,
         request_reply=payload.request_reply,
+        idempotency_key=payload.idempotency_key,
     )
 
 
@@ -2204,6 +2278,46 @@ def post_club_meeting(
         participants=payload.participants,
         agenda=payload.agenda,
         convene_now=payload.convene_now,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/meetings/{meeting_id}/resolve")
+def post_resolve_club_meeting(
+    club_id: str,
+    meeting_id: str,
+    payload: ClubMeetingResolveRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(
+        session,
+        comms_persistence.resolve_club_meeting_durable,
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        meeting_id=meeting_id,
+        resolution_id=payload.resolution_id,
+        owner_note=payload.owner_note,
+    )
+
+
+@router.post("/clubs/{club_id}/communications/proactive-sync")
+def post_proactive_staff_communications_sync(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import comms_persistence
+
+    return _run(
+        session,
+        comms_persistence.trigger_proactive_staff_communications_durable,
+        session,
+        user_id=user.id,
+        club_id=club_id,
+        trigger_reason="manual_sync",
     )
 
 

@@ -160,12 +160,22 @@ export default function InboxPage() {
   const meetingsList: any[] = commsData?.meetings || [];
   const announcementsList: any[] = commsData?.announcements || [];
   const dilemma = commsData?.requests_decisions?.boardroom_dilemma || null;
+  const recruitmentAssignments: any[] = commsData?.recruitment_assignments || [];
+  const clubCulture: any = commsData?.club_culture || null;
   const searchResults: any[] = commsData?.search_results || [];
 
   const currentThread =
     directThreads.find((t) => t.thread_id === activeThreadId || t.thread_key === activeThreadId) ||
     directThreads[0] ||
     null;
+
+  const activeStaffContact = useMemo(() => {
+    const key = currentThread?.thread_key || activeThreadId;
+    return (
+      staffContacts.find((sc) => sc.contact_id === key || sc.thread_id === activeThreadId) ||
+      null
+    );
+  }, [staffContacts, currentThread, activeThreadId]);
 
   const currentThreadMessages = useMemo(() => {
     if (!currentThread) return [];
@@ -369,6 +379,44 @@ export default function InboxPage() {
       refresh();
     } catch (err: any) {
       toast.error(err?.response?.data?.detail?.detail || "Decision failed");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleResolveMeeting = async (meetingId: string, resolutionId: string) => {
+    if (!effectiveClubId || busyAction) return;
+    setBusyAction(true);
+    try {
+      const res = await api.post(`/owner/clubs/${effectiveClubId}/communications/meetings/${meetingId}/resolve`, {
+        resolution_id: resolutionId,
+        owner_note: "Executive ratification from Boardroom Negotiation.",
+      });
+      toast.success(res.data?.resolution_applied?.summary || "Boardroom meeting resolution ratified!");
+      refetchComms();
+      refresh();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail?.detail || "Failed to resolve meeting");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleTriggerProactiveSync = async () => {
+    if (!effectiveClubId || busyAction) return;
+    setBusyAction(true);
+    try {
+      const res = await api.post(`/owner/clubs/${effectiveClubId}/communications/proactive-sync`);
+      const count = Number(res.data?.proactive_messages_delivered || 0);
+      toast.success(
+        count > 0
+          ? `${count} proactive staff update(s) delivered to your threads`
+          : "All department heads are up to date for this World Day"
+      );
+      refetchComms();
+      refresh();
+    } catch {
+      toast.error("Unable to sync proactive staff communications");
     } finally {
       setBusyAction(false);
     }
@@ -750,7 +798,7 @@ export default function InboxPage() {
           </div>
 
           {/* Right Active Conversation Thread */}
-          <div className="lg:col-span-8 rounded-2xl border border-white/10 bg-slate-900/95 flex flex-col h-[640px]">
+          <div className="lg:col-span-8 rounded-2xl border border-white/10 bg-slate-900/95 flex flex-col min-h-[640px]">
             <div className="p-4 border-b border-white/10 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 {currentThread?.portrait_url && (
@@ -771,6 +819,14 @@ export default function InboxPage() {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 text-xs" data-testid="verified-sender">
+                <button
+                  type="button"
+                  disabled={busyAction}
+                  onClick={handleTriggerProactiveSync}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 font-bold hover:bg-emerald-500/20"
+                >
+                  <Sparkles className="w-3.5 h-3.5" /> Sync Proactive Staff
+                </button>
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-bold border ${commsLive ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-white/10 text-slate-400"}`}>
                   <Wifi className="w-3 h-3" /> {commsLive ? "Live" : "Synced"}
                 </span>
@@ -798,7 +854,76 @@ export default function InboxPage() {
               </div>
             </div>
 
-            <div className="flex-1 p-4 space-y-3 overflow-y-auto">
+            {/* Autonomous Staff Persistent Personality & 9-Dimension Relationship Telemetry */}
+            {activeStaffContact?.personality_profile && activeStaffContact?.relationship_health && (
+              <div
+                data-testid="staff-personality-relationship-banner"
+                className="px-4 py-3 bg-slate-950/90 border-b border-white/10 space-y-2"
+              >
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-black">
+                      {activeStaffContact.personality_profile.archetype_label ||
+                        activeStaffContact.personality_profile.preferred_tactical_philosophy ||
+                        activeStaffContact.personality_profile.recruitment_philosophy ||
+                        activeStaffContact.personality_profile.specialist_focus ||
+                        "Autonomous Professional"}
+                    </span>
+                    {activeStaffContact.personality_profile.preferred_formations && (
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-slate-300">
+                        Formations: {(activeStaffContact.personality_profile.preferred_formations || []).join(" / ")}
+                      </span>
+                    )}
+                    {typeof activeStaffContact.personality_profile.youth_development_commitment === "number" && (
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-slate-300">
+                        Youth Commitment: {activeStaffContact.personality_profile.youth_development_commitment}
+                      </span>
+                    )}
+                    {typeof activeStaffContact.personality_profile.professional_independence === "number" && (
+                      <span className="px-2 py-0.5 rounded bg-slate-900 border border-white/10 text-slate-300">
+                        Independence: {activeStaffContact.personality_profile.professional_independence}
+                      </span>
+                    )}
+                  </div>
+                  <span
+                    className={`px-2 py-0.5 rounded font-black uppercase text-[10px] ${
+                      activeStaffContact.relationship_health.ultimatum_active ||
+                      activeStaffContact.relationship_health.resignation_notice_served
+                        ? "bg-red-500/20 text-red-300 border border-red-500/40"
+                        : activeStaffContact.relationship_health.tension >= 50
+                        ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                        : "bg-emerald-500/15 text-emerald-300 border border-emerald-500/30"
+                    }`}
+                  >
+                    Relationship: {activeStaffContact.relationship_health.status || "aligned"}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-3 sm:grid-cols-9 gap-1.5 text-[10px]">
+                  {[
+                    ["Trust", activeStaffContact.relationship_health.trust],
+                    ["Respect", activeStaffContact.relationship_health.respect],
+                    ["Alignment", activeStaffContact.relationship_health.alignment],
+                    ["Tension", activeStaffContact.relationship_health.tension],
+                    ["Loyalty", activeStaffContact.relationship_health.loyalty],
+                    ["Ambition", activeStaffContact.relationship_health.ambition_compatibility],
+                    ["Autonomy", activeStaffContact.relationship_health.autonomy],
+                    ["Confidence", activeStaffContact.relationship_health.confidence],
+                    ["Culture", activeStaffContact.relationship_health.culture_alignment],
+                  ].map(([label, val]) => (
+                    <div
+                      key={String(label)}
+                      className="rounded-lg bg-slate-900/90 border border-white/5 px-2 py-1 text-center"
+                    >
+                      <div className="text-slate-400 truncate">{label}</div>
+                      <div className="font-black text-white">{val ?? 70}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex-1 p-4 space-y-3 overflow-y-auto max-h-[420px]">
               {currentHasMore && (
                 <div className="flex justify-center">
                   <button
@@ -819,13 +944,34 @@ export default function InboxPage() {
               ) : (
                 currentThreadMessages.map((m: any) => {
                   const isMe = m.sender_type === "owner" || m.sender_type === "manager";
+                  const decisionOutcome = m.action_payload?.decision_outcome;
+                  const recCandidate = m.action_payload?.state_effects?.recommended_candidate;
                   return (
                     <div
                       key={m.id}
                       className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}
                     >
-                      <div className="text-[10px] text-slate-400 mb-1 px-1">
-                        {m.sender_name} · {m.sender_role} · Day {m.world_day || 1}
+                      <div className="text-[10px] text-slate-400 mb-1 px-1 flex items-center gap-2">
+                        <span>
+                          {m.sender_name} · {m.sender_role} · Day {m.world_day || 1}
+                        </span>
+                        {!isMe && decisionOutcome && (
+                          <span
+                            data-testid="layer-a-decision-badge"
+                            className={`px-1.5 py-0.5 rounded font-black uppercase text-[9px] border ${
+                              decisionOutcome === "accepted"
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
+                                : decisionOutcome === "declined" ||
+                                  decisionOutcome === "formal_disagreement" ||
+                                  decisionOutcome === "ultimatum" ||
+                                  decisionOutcome === "resignation_notice"
+                                ? "bg-red-500/20 text-red-300 border-red-500/40"
+                                : "bg-amber-500/20 text-amber-300 border-amber-500/40"
+                            }`}
+                          >
+                            Decision: {String(decisionOutcome).replace(/_/g, " ")}
+                          </span>
+                        )}
                       </div>
                       <div
                         className={`max-w-xl rounded-2xl px-4 py-3 text-xs leading-relaxed ${
@@ -835,6 +981,18 @@ export default function InboxPage() {
                         }`}
                       >
                         {m.body}
+                        {!isMe && recCandidate && (
+                          <div className="mt-2.5 p-2.5 rounded-xl bg-slate-900 border border-emerald-500/30 space-y-1 text-[11px]">
+                            <div className="font-black text-emerald-300">
+                              Shortlisted Target: {recCandidate.player_name} ({recCandidate.position} · Age{" "}
+                              {recCandidate.age} · GSI {recCandidate.gsi})
+                            </div>
+                            <div className="text-slate-300">
+                              Est. Fee: {Number(recCandidate.estimated_fee || 0).toLocaleString()} GTX · Weekly Wage:{" "}
+                              {Number(recCandidate.weekly_wage || 0).toLocaleString()} GTX
+                            </div>
+                          </div>
+                        )}
                         {!isMe && m.action_payload?.label && (
                           <div className="mt-2 pt-2 border-t border-white/10">
                             <button
@@ -853,7 +1011,25 @@ export default function InboxPage() {
               )}
             </div>
 
-            <form onSubmit={handleSendDirectMessage} className="p-4 border-t border-white/10 flex gap-2">
+            <div className="px-4 pt-2 border-t border-white/10 flex flex-wrap gap-1.5">
+              {[
+                "I want to see our 16-year-old academy striker in the next match.",
+                "I think we are becoming too defensive. I want the club to play more attacking football.",
+                "I want us to sign a left winger with a GSI between 80 and 85.",
+                "I want our academy players to receive more first-team opportunities.",
+              ].map((suggestion) => (
+                <button
+                  key={suggestion}
+                  type="button"
+                  onClick={() => setDraftMessage(suggestion)}
+                  className="px-2.5 py-1 rounded-lg bg-slate-950 border border-white/10 text-[10px] text-slate-300 hover:border-emerald-400 hover:text-white transition"
+                >
+                  {suggestion.slice(0, 48)}…
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={handleSendDirectMessage} className="p-4 flex gap-2">
               <input
                 type="text"
                 value={draftMessage}
@@ -933,12 +1109,12 @@ export default function InboxPage() {
         </div>
       )}
 
-      {/* DESTINATION 5: MEETINGS */}
+      {/* DESTINATION 5: MEETINGS (Meaningful Boardroom Negotiation System) */}
       {destination === "meetings" && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <form
             onSubmit={handleConveneMeeting}
-            className="lg:col-span-5 rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4"
+            className="lg:col-span-5 rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-4 h-fit"
           >
             <h3 className="text-base font-black text-white flex items-center gap-2">
               <Calendar className="w-4 h-4 text-amber-400" /> Convene Club Meeting
@@ -949,7 +1125,7 @@ export default function InboxPage() {
                 type="text"
                 value={meetingTitle}
                 onChange={(e) => setMeetingTitle(e.target.value)}
-                placeholder="e.g., Q2 Transfer Budget & Stadium Expansion Alignment"
+                placeholder="e.g., Q2 Transfer Budget & Academy Pathway Alignment"
                 className="w-full rounded-xl bg-slate-950 border border-white/15 px-3 py-2 text-xs text-white"
               />
             </div>
@@ -961,9 +1137,15 @@ export default function InboxPage() {
                 className="w-full rounded-xl bg-slate-950 border border-white/15 px-3 py-2 text-xs text-white"
               >
                 <option value="boardroom">Boardroom Executive Alignment</option>
-                <option value="tactical">Manager & Coaching Tactical Review</option>
-                <option value="academy_pathway">Academy Regen Promotion Summit</option>
-                <option value="squad_leadership">Players & Captain Leadership Council</option>
+                <option value="manager_performance_review">Manager Performance Review</option>
+                <option value="playing_philosophy_discussion">Playing Philosophy Discussion</option>
+                <option value="academy_development_strategy">Academy Development Strategy</option>
+                <option value="recruitment_budget_meeting">Recruitment Budget Meeting</option>
+                <option value="transfer_target_review">Transfer Target Review</option>
+                <option value="manager_owner_disagreement">Manager–Owner Disagreement Summit</option>
+                <option value="squad_depth_discussion">Squad Depth Discussion</option>
+                <option value="contract_and_wage_review">Contract & Wage Structure Review</option>
+                <option value="club_culture_discussion">Long-Term Club Culture Discussion</option>
               </select>
             </div>
             <div>
@@ -972,7 +1154,7 @@ export default function InboxPage() {
                 rows={3}
                 value={meetingAgenda}
                 onChange={(e) => setMeetingAgenda(e.target.value)}
-                placeholder="Outline key decisions and targets..."
+                placeholder="Outline key decisions, philosophy tensions, or recruitment targets..."
                 className="w-full rounded-xl bg-slate-950 border border-white/15 p-3 text-xs text-white"
               />
             </div>
@@ -985,24 +1167,106 @@ export default function InboxPage() {
             </button>
           </form>
 
-          <div className="lg:col-span-7 space-y-3">
-            {meetingsList.map((m: any) => (
-              <div key={m.meeting_id} className="p-4 rounded-2xl bg-slate-900 border border-white/10 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold uppercase text-amber-400">{m.meeting_type}</span>
-                  <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[11px] font-bold">
-                    {m.status} · Day {m.scheduled_world_day}
-                  </span>
-                </div>
-                <div className="text-base font-bold text-white">{m.title}</div>
-                <p className="text-xs text-slate-300">{m.agenda}</p>
-                {m.outcome_summary && (
-                  <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
-                    {m.outcome_summary}
+          <div className="lg:col-span-7 space-y-4">
+            {meetingsList.map((m: any) => {
+              const meetingKey = m.id || m.meeting_id;
+              return (
+                <div key={meetingKey} className="p-5 rounded-2xl bg-slate-900 border border-white/10 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase text-amber-400">
+                      {String(m.meeting_type || "boardroom").replace(/_/g, " ")}
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[11px] font-bold">
+                      {m.status} · Day {m.world_day || m.scheduled_world_day || 1}
+                    </span>
                   </div>
-                )}
-              </div>
-            ))}
+                  <div className="text-base font-bold text-white">{m.title}</div>
+                  {m.agenda && <p className="text-xs text-slate-300">{m.agenda}</p>}
+
+                  {/* Individual Staff Contributions */}
+                  {Array.isArray(m.contributions) && m.contributions.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-slate-400">
+                        Boardroom Participant Statements
+                      </div>
+                      {m.contributions.map((c: any, idx: number) => (
+                        <div key={idx} className="p-3 rounded-xl bg-slate-950 border border-white/10 space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span className="font-bold text-emerald-300">
+                              {c.speaker_name} · {c.speaker_title}
+                            </span>
+                            {c.stance && (
+                              <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 text-[10px]">
+                                {c.stance}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-xs text-slate-200 leading-relaxed">{c.statement}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Inter-Staff Disagreements */}
+                  {Array.isArray(m.disagreements) && m.disagreements.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="text-[11px] font-black uppercase tracking-wider text-amber-400">
+                        Active Inter-Staff Tensions
+                      </div>
+                      {m.disagreements.map((d: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-1"
+                        >
+                          <div className="font-black text-amber-300">
+                            {d.axis} · Severity: {d.severity}
+                          </div>
+                          <div>{d.summary}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Interactive Boardroom Resolutions */}
+                  {Array.isArray(m.proposed_resolutions) &&
+                    m.proposed_resolutions.length > 0 &&
+                    m.status !== "completed" && (
+                      <div className="space-y-2 pt-2">
+                        <div className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
+                          Ratify Executive Resolution
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                          {m.proposed_resolutions.map((resOpt: any) => (
+                            <div
+                              key={resOpt.resolution_id}
+                              className="p-3 rounded-xl bg-slate-950 border border-white/10 flex flex-col justify-between gap-2"
+                            >
+                              <div>
+                                <div className="text-xs font-bold text-white">{resOpt.label}</div>
+                                <p className="text-[11px] text-slate-400 mt-1">{resOpt.summary}</p>
+                              </div>
+                              <button
+                                type="button"
+                                disabled={busyAction}
+                                onClick={() => handleResolveMeeting(meetingKey, resOpt.resolution_id)}
+                                className="w-full py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 text-[11px] font-black"
+                              >
+                                Ratify Option
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {m.outcome_summary && (
+                    <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-300">
+                      {m.outcome_summary}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1010,6 +1274,67 @@ export default function InboxPage() {
       {/* DESTINATION 6: REQUESTS & DECISIONS */}
       {destination === "decisions" && (
         <div className="space-y-6">
+          {/* Long-Term Club Culture & Identity */}
+          {clubCulture && (
+            <div className="rounded-2xl border border-emerald-500/30 bg-slate-900 p-5 space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-[11px] font-black uppercase tracking-wider text-emerald-400">
+                    Long-Term Club Culture & Identity
+                  </span>
+                  <h3 className="text-base font-black text-white mt-0.5">
+                    Primary Identity: {String(clubCulture.primary_identity || "positional_play").replace(/_/g, " ")}
+                    {clubCulture.target_identity
+                      ? ` → Transitioning to ${String(clubCulture.target_identity).replace(/_/g, " ")} (${
+                          clubCulture.transition_progress_pct ?? 25
+                        }%)`
+                      : ""}
+                  </h3>
+                </div>
+              </div>
+              {clubCulture.dimensions && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  {Object.entries(clubCulture.dimensions).map(([dimKey, dimVal]: [string, any]) => (
+                    <div key={dimKey} className="p-2.5 rounded-xl bg-slate-950 border border-white/10">
+                      <div className="text-[11px] text-slate-400 capitalize">{dimKey.replace(/_/g, " ")}</div>
+                      <div className="text-sm font-black text-white mt-0.5">{dimVal}/100</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* GM & Chief Scout Recruitment Assignments */}
+          {recruitmentAssignments.length > 0 && (
+            <div className="rounded-2xl border border-white/10 bg-slate-900 p-5 space-y-3">
+              <div className="text-xs font-black uppercase tracking-wider text-amber-400">
+                Active GM & Chief Scout Recruitment Shortlists ({recruitmentAssignments.length})
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {recruitmentAssignments.map((ra: any) => (
+                  <div key={ra.id} className="p-4 rounded-xl bg-slate-950 border border-white/10 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-black text-white">
+                        Target: {ra.target_position} (GSI {ra.min_gsi}–{ra.max_gsi})
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-bold">
+                        {ra.gm_evaluation_status}
+                      </span>
+                    </div>
+                    {ra.recommended_candidate && (
+                      <div className="text-emerald-300 font-semibold">
+                        Lead Candidate: {ra.recommended_candidate.player_name} · Age {ra.recommended_candidate.age} ·
+                        GSI {ra.recommended_candidate.gsi} ({Number(ra.recommended_candidate.estimated_fee || 0).toLocaleString()} GTX)
+                      </div>
+                    )}
+                    {ra.gm_notes && <p className="text-slate-400">{ra.gm_notes}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {dilemma && (
             <div className="rounded-2xl border border-amber-400/40 bg-slate-900 p-6 space-y-4">
               <div className="flex items-center justify-between">
