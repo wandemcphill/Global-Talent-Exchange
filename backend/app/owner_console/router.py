@@ -2694,6 +2694,8 @@ def get_living_world_delegated_decisions_view(
 class StaffOfferSubmitRequest(BaseModel):
     profile_id: str = Field(min_length=1, max_length=100)
     role: str | None = Field(default=None, max_length=64)
+    offered_salary_fan_coin: int | None = Field(default=None, ge=100, le=50000)
+    # Backward-compatible alias; the value has always been charged in Fan Coin.
     offered_salary_gtex: int | None = Field(default=None, ge=100, le=50000)
     contract_years: int = Field(default=3, ge=1, le=5)
     marquee_wage_premium: bool = Field(default=False)
@@ -2789,7 +2791,11 @@ def post_living_world_staff_offer(
             club_id,
             profile_id=payload.profile_id,
             role=payload.role,
-            offered_salary_gtex=payload.offered_salary_gtex,
+            offered_salary_fan_coin=(
+                payload.offered_salary_fan_coin
+                if payload.offered_salary_fan_coin is not None
+                else payload.offered_salary_gtex
+            ),
             contract_years=payload.contract_years,
             marquee_wage_premium=payload.marquee_wage_premium,
             pitch_note=payload.pitch_note,
