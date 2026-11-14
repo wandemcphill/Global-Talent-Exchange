@@ -178,7 +178,7 @@ function addTerminal(
   const base = addBox(root, [0.88, 0.92, 0.68], [x, 0.56, z], bodyMat);
   const top = addBox(root, [1.08, 0.08, 0.78], [x, 1.06, z], standardMaterial(0x0b1422, 0.28, 0.56));
   const stem = addBox(root, [0.12, 0.34, 0.12], [x, 1.27, z - 0.22], standardMaterial(0x64748b, 0.3, 0.72));
-  const screenTexture = addCanvasDisplay(hotspot.label, "Interactive department station", accent);
+  const screenTexture = addCanvasDisplay(hotspot.label, "Action: " + hotspot.action.replace(/_/g, " "), accent);
   const screen = new THREE.Mesh(
     new THREE.PlaneGeometry(0.92, 0.52),
     new THREE.MeshBasicMaterial({ map: screenTexture, side: THREE.DoubleSide }),
