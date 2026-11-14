@@ -363,6 +363,26 @@ jest.mock("@/lib/owner", () => ({
   useActiveClub: () => ({ active: { club_id: "club-lagos-1", club_name: "Lagos Athletic FC" } }),
   useClub: () => ({ data: { state: { club_name: "Lagos Athletic FC", prestige: 64 } } }),
   useClubStory: () => ({ data: mockStoryData, isLoading: false }),
+  useClubInstitutionalPulse: () => ({
+    data: {
+      club_id: "club-lagos-1",
+      world_day: 14,
+      reputation_dimensions: {
+        overall_reputation: 68,
+        supporter_sentiment: 72,
+        owner_credibility: 78,
+        leadership_pressure: 18,
+      },
+      supporters: {
+        overall_sentiment: 72,
+        active_protest_stage: "none",
+        matchday_atmosphere_rating: 78,
+      },
+      media_standing: mockMediaEcosystem.media_standing,
+      unified_timeline: [],
+    },
+    isLoading: false,
+  }),
   useNewsroom: () => ({
     data: {
       articles: [],

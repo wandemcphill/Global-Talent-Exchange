@@ -179,6 +179,26 @@ export function useClubHistory(clubId?: string, category = "all", limit = 80) {
   });
 }
 
+export function useClubInstitutionalPulse(clubId?: string) {
+  return useQuery({
+    queryKey: ["institutional-pulse", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/institutional-pulse`)).data,
+    enabled: !!clubId,
+  });
+}
+
+export async function executeRecruitmentSigning(
+  clubId: string,
+  assignmentId: string,
+  chosenCandidateId?: string
+) {
+  return (
+    await api.post(`/owner/clubs/${clubId}/recruitment/${assignmentId}/execute`, {
+      ...(chosenCandidateId ? { chosen_candidate_id: chosenCandidateId } : {}),
+    })
+  ).data;
+}
+
 export function useRefreshOwner() {
   const qc = useQueryClient();
   return () => {
@@ -199,6 +219,7 @@ export function useRefreshOwner() {
     qc.invalidateQueries({ queryKey: ["supporters"] });
     qc.invalidateQueries({ queryKey: ["club-media"] });
     qc.invalidateQueries({ queryKey: ["club-history"] });
+    qc.invalidateQueries({ queryKey: ["institutional-pulse"] });
   };
 }
 

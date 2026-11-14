@@ -970,23 +970,31 @@ def club_strength(
         return base + fitness_adj + morale_adj + age_adj
 
     healthy = [
-        p
-        for p in players
-        if int(p.get("injured_days", 0) or 0) <= 0 and str(p.get("id") or "") not in exclusions
+        p for p in players if int(p.get("injured_days", 0) or 0) <= 0 and str(p.get("id") or "") not in exclusions
     ]
     if len(healthy) < 11:
         healthy = [p for p in players if int(p.get("injured_days", 0) or 0) <= 0] or list(players)
 
     fit = sorted(healthy, key=_manager_selection_score, reverse=True)[:11]
     if not fit:
-        return {"strength": 40.0, "xi": [], "bench": [], "avg_rating": 40, "avg_morale": 50, "avg_fitness": 75.0}
+        return {
+            "strength": 40.0,
+            "xi": [],
+            "bench": [],
+            "promised_sub_ids": [],
+            "avg_rating": 40,
+            "avg_morale": 50,
+            "avg_fitness": 75.0,
+        }
     starter_ids = {p["id"] for p in fit}
     remaining = [p for p in sorted(healthy, key=_manager_selection_score, reverse=True) if p["id"] not in starter_ids]
     bench: list[dict[str, Any]] = []
+    promised_sub_ids: list[str] = []
     for p in remaining:
         comm = commitments.get(str(p.get("id") or ""))
         if comm and comm.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"):
             bench.append(p)
+            promised_sub_ids.append(p["id"])
     for p in remaining:
         if p not in bench and len(bench) < 7:
             bench.append(p)
@@ -1010,13 +1018,12 @@ def club_strength(
         "strength": round(strength, 2),
         "xi": [p["id"] for p in fit],
         "bench": [p["id"] for p in bench],
+        "promised_sub_ids": promised_sub_ids,
         "formation": (mgr_profile.get("preferred_formations") or ["4-3-3"])[0],
         "manager_mentality": (
             "attacking"
             if int(mgr_profile.get("attacking_vs_defensive", 60)) >= 70
-            else "defensive"
-            if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38
-            else "balanced"
+            else "defensive" if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38 else "balanced"
         ),
         "avg_rating": round(avg_rating, 1),
         "avg_morale": round(avg_morale, 1),

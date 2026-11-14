@@ -3378,3 +3378,46 @@ def get_club_institutional_history_view(
 
     return _run(session, _op)
 
+
+@router.get("/clubs/{club_id}/institutional-pulse")
+def get_club_institutional_pulse_view(
+    club_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import living_institution
+
+    def _op() -> dict[str, Any]:
+        state = service.get_state(session, club_id)
+        if state is None:
+            raise service.OwnerError("club_not_found", 404)
+        return living_institution.get_unified_club_pulse(session, state)
+
+    return _run(session, _op)
+
+
+@router.post("/clubs/{club_id}/recruitment/{assignment_id}/execute")
+def post_execute_recruitment_signing(
+    club_id: str,
+    assignment_id: str,
+    payload: dict[str, Any] | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import autonomous_staff_engine
+
+    def _op() -> dict[str, Any]:
+        state = service.require_state(session, club_id, user.id)
+        chosen_candidate_id = (payload or {}).get("chosen_candidate_id") if isinstance(payload, dict) else None
+        try:
+            return autonomous_staff_engine.execute_authorized_recruitment_signing(
+                session,
+                state,
+                assignment_id=assignment_id,
+                user_id=user.id,
+                chosen_candidate_id=chosen_candidate_id,
+            )
+        except ValueError as exc:
+            raise service.OwnerError(str(exc), 404) from exc
+
+    return _run(session, _op)

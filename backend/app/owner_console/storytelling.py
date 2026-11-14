@@ -2095,6 +2095,8 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                 }
             )
 
+    unified_pulse = living_institution.get_unified_club_pulse(session, state)
+
     return {
         "club": {
             "club_id": state.club_id,
@@ -2113,6 +2115,9 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
         "is_owner": is_owner,
         "privacy_redacted": not can_private,
         "timeline": timeline,
+        "unified_timeline": unified_pulse.get("unified_timeline", []),
+        "reputation_dimensions": unified_pulse.get("reputation_dimensions", {}),
+        "institutional_pulse": unified_pulse,
         "unresolved_issues": unresolved_issues,
         "relationships": relationships,
         "scouting_watchlist": scouting_watchlist,

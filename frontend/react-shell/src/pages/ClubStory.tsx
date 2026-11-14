@@ -221,6 +221,9 @@ export function ClubStory() {
   const supSegments: any[] = supportersData.segments || [];
   const supAtmosphere = supportersData.matchday_atmosphere || {};
   const supReactions: any[] = supportersData.recent_reactions || [];
+  const institutionalPulse = data.institutional_pulse || null;
+  const reputationDims = data.reputation_dimensions || institutionalPulse?.reputation_dimensions || null;
+  const unifiedTimeline: any[] = data.unified_timeline || institutionalPulse?.unified_timeline || [];
 
   const archiveData = data.institutional_archive || {};
   const seasonArchive: any[] = archiveData.season_archive || [];
@@ -454,6 +457,75 @@ export function ClubStory() {
       {/* TAB CONTENT: TIMELINE */}
       {activeTab === "timeline" && (
         <div className="space-y-4" data-testid="timeline-tab-content">
+          {(reputationDims || unifiedTimeline.length > 0) && (
+            <div
+              className="rounded-xl border border-emerald-500/25 bg-slate-900/80 p-4 space-y-3"
+              data-testid="unified-club-timeline-panel"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-emerald-400">
+                    Unified Living Club Pulse · Canonical Event Correlation
+                  </div>
+                  <div className="text-xs text-slate-300">
+                    Every canonical decision, matchday reaction, press dispatch, and historical entry share one authoritative clock.
+                  </div>
+                </div>
+                {reputationDims && (
+                  <div className="flex flex-wrap gap-2 text-[11px]">
+                    <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-emerald-300 font-bold">
+                      Club Rep {reputationDims.overall_reputation_prestige}/100
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-cyan-300 font-bold">
+                      Academy Identity {reputationDims.academy_and_youth_identity}/100
+                    </span>
+                    <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-amber-300 font-bold">
+                      Stability {reputationDims.institutional_stability}/100
+                    </span>
+                  </div>
+                )}
+              </div>
+              {unifiedTimeline.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                  {unifiedTimeline.slice(0, 4).map((ut: any) => (
+                    <div
+                      key={ut.id}
+                      className="rounded-lg bg-slate-950/75 border border-slate-800 p-3 space-y-1 text-xs"
+                    >
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-bold uppercase text-amber-400">
+                          World Day {ut.world_day} · {String(ut.source_subsystem || ut.category || "club").replace(/_/g, " ")}
+                        </span>
+                        <span className="px-1.5 py-0.5 rounded bg-slate-900 text-slate-300 border border-slate-800">
+                          {(ut.projections || []).length} linked effects
+                        </span>
+                      </div>
+                      <div className="font-semibold text-white truncate">{ut.title}</div>
+                      <div className="flex flex-wrap gap-1 pt-0.5">
+                        {ut.linked_supporter_event && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px]">
+                            Supporters ({ut.linked_supporter_event.overall_sentiment_delta >= 0 ? "+" : ""}
+                            {ut.linked_supporter_event.overall_sentiment_delta})
+                          </span>
+                        )}
+                        {(ut.linked_media_stories || []).length > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 text-[10px]">
+                            Media ({ut.linked_media_stories.length})
+                          </span>
+                        )}
+                        {ut.linked_history_entry && (
+                          <span className="px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-300 text-[10px]">
+                            Archive
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-lg font-bold text-white">Chronological Club Events & Institutional Ledger</h2>

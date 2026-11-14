@@ -1214,6 +1214,7 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     from app.owner_console import autonomous_staff_engine, living_club_world
 
     state = require_state(session, club_id, user_id)
+    prev_mgr = dict(state.manager_json or {})
     profile = engine.manager_profile(snapshot or engine.DEFAULT_MANAGER)
     if (
         state.manager_json
@@ -1224,6 +1225,18 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
     mgr_personality = autonomous_staff_engine.derive_manager_personality(profile)
     profile["personality_profile"] = mgr_personality
     state.manager_json = profile
+    try:
+        from app.owner_console import comms_persistence
+
+        comms_persistence.rotate_staff_conversation_on_change(
+            session,
+            state,
+            role_key="first_team_manager",
+            previous_staff_name=prev_mgr.get("name"),
+            new_staff_name=profile.get("name"),
+        )
+    except Exception:
+        logger.debug("rotate_staff_conversation_on_change skipped during appoint_manager", exc_info=True)
     autonomous_staff_engine.ensure_staff_relationship(
         session,
         state,
@@ -1346,7 +1359,7 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
     _morale_shift(session, club_id, -6)
 
     try:
-        from app.owner_console import living_institution
+        from app.owner_console import living_institution, comms_persistence
 
         living_institution.record_managerial_change(
             session,
@@ -1356,6 +1369,13 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
             previous_manager=current,
             reason="dismissed_by_owner",
             severance_gtex=compensation,
+        )
+        comms_persistence.rotate_staff_conversation_on_change(
+            session,
+            state,
+            role_key="first_team_manager",
+            previous_staff_name=current.get("name"),
+            new_staff_name=default_mgr.get("name"),
         )
     except Exception as mgr_err:
         logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
@@ -2139,6 +2159,17 @@ def tick_club(
         state.facilities_json = fac_tick
         flag_modified(state, "facilities_json")
 
+    # Stage 2: Internal living world events & staff relationship reconciliation
+    living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
+
+    # Stage 3: Institutional ecosystem tick (supporters, media, rumours & 9-dimension reputation reconciliation)
+    try:
+        institutional_tick = living_institution.process_world_day_institutional_tick(session, state)
+    except Exception as inst_err:
+        logger.warning("process_world_day_institutional_tick failed: %s", inst_err)
+        institutional_tick = {}
+
+    # Stage 4: Staff autonomy & proactive communications evaluated AFTER world + supporter + media reconciliation
     try:
         autonomous_staff_engine.ensure_club_staff_identities(session, state)
         comms_persistence.trigger_proactive_staff_communications_durable(
@@ -2150,13 +2181,6 @@ def tick_club(
     except Exception:
         logger.debug("proactive staff communications bypassed during tick", exc_info=True)
 
-    living_world_summary = living_club_world.process_world_day_events(session, state, campus_effects)
-    try:
-        institutional_tick = living_institution.process_world_day_institutional_tick(session, state)
-    except Exception as inst_err:
-        logger.warning("process_world_day_institutional_tick failed: %s", inst_err)
-        institutional_tick = {}
-
     return {
         "world_day": state.world_day,
         "new_items": len(items),
@@ -2164,6 +2188,7 @@ def tick_club(
         "campus_effects": campus_effects,
         "living_world": living_world_summary,
         "institutional_ecosystem": institutional_tick,
+        "reputation_dimensions": institutional_tick.get("reputation_dimensions"),
         "medical_recovery": {
             "healed_players_count": healed_players_count,
             "daily_injury_heal_days": daily_injury_heal_days,
@@ -2508,12 +2533,15 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     facilities = state.facilities_json or {}
     supporters_overview = living_institution.get_supporters_overview(session, state)
     media_overview = living_institution.get_media_ecosystem_overview(session, state, limit=12)
+    institutional_pulse = living_institution.get_unified_club_pulse(session, state)
     return {
         **club_card(session, state),
         "manager_profile": state.manager_json,
         "supporters_summary": supporters_overview.get("profile"),
         "matchday_atmosphere": supporters_overview.get("matchday_atmosphere"),
         "media_standing": media_overview.get("media_standing"),
+        "institutional_pulse": institutional_pulse,
+        "reputation_dimensions": institutional_pulse.get("reputation_dimensions"),
         "facilities": {
             k: {
                 "level": int(facilities.get(k, 1)),
@@ -2885,6 +2913,8 @@ def hire_executive_staff(
 
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
+    prev_exec_holder = dict(exec_staff.get(target_role) or {})
+    prev_mgr_holder = dict(state.manager_json or {})
 
     appointed_record = {
         **candidate,
@@ -2920,44 +2950,46 @@ def hire_executive_staff(
         state.manager_json = mgr_prof
         _morale_shift(session, club_id, 3)
         try:
-            from app.owner_console import living_institution
+            from app.owner_console import living_institution, comms_persistence
 
             living_institution.record_managerial_change(
                 session,
                 state,
                 action="appointed",
                 new_manager=state.manager_json,
+                previous_manager=prev_mgr_holder if prev_mgr_holder.get("name") else None,
                 reason="staff_market_appointment",
+            )
+            comms_persistence.rotate_staff_conversation_on_change(
+                session,
+                state,
+                role_key="first_team_manager",
+                previous_staff_name=prev_mgr_holder.get("name"),
+                new_staff_name=state.manager_json.get("name"),
             )
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff hire failed: %s", mgr_err)
     else:
         try:
-            from app.owner_console import living_institution
+            from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_history_entry(
+            living_institution.record_executive_staff_change(
                 session,
-                club_id=club_id,
-                season_number=living_institution._season_number_for_state(state),
-                world_day=int(state.world_day or 1),
-                category="executive_appointment",
-                event_type=f"appointed_{target_role}",
-                title=f"Executive Appointment: {candidate.get('name', 'Executive')} Named {target_role.replace('_', ' ').title()}",
-                narrative_summary=(
-                    f"{state.club_name} appointed {candidate.get('name', 'Executive')} as {target_role.replace('_', ' ').title()} "
-                    f"on a {years}-year contract."
-                ),
-                entity_type="staff",
-                entity_id=str(staff_id),
-                entity_name=str(candidate.get("name", "Executive")),
-                established_facts={
-                    "role": target_role,
-                    "staff_name": str(candidate.get("name", "Executive")),
-                    "contract_years": years,
-                    "signing_fee": int(signing_fee),
-                },
-                is_major_milestone=True,
-                idempotency_key=f"history:exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}",
+                state,
+                action="hired",
+                staff_role=target_role,
+                staff_id=str(staff_id),
+                staff_name=str(candidate.get("name", "Executive")),
+                fee_gtex=int(signing_fee),
+                reason="executive_market_appointment",
+                idempotency_key=f"exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}",
+            )
+            comms_persistence.rotate_staff_conversation_on_change(
+                session,
+                state,
+                role_key=target_role,
+                previous_staff_name=prev_exec_holder.get("name"),
+                new_staff_name=str(candidate.get("name", "Executive")),
             )
         except Exception as exec_err:
             logger.warning("executive appointment history hook failed: %s", exec_err)
@@ -3042,7 +3074,7 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
         state.manager_json = default_mgr
         _morale_shift(session, club_id, -4)
         try:
-            from app.owner_console import living_institution
+            from app.owner_console import living_institution, comms_persistence
 
             living_institution.record_managerial_change(
                 session,
@@ -3053,30 +3085,36 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 reason="dismissed_by_owner",
                 severance_gtex=compensation,
             )
+            comms_persistence.rotate_staff_conversation_on_change(
+                session,
+                state,
+                role_key="first_team_manager",
+                previous_staff_name=current.get("name"),
+                new_staff_name=default_mgr.get("name"),
+            )
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff fire failed: %s", mgr_err)
     else:
         try:
-            from app.owner_console import living_institution
+            from app.owner_console import living_institution, comms_persistence
 
-            living_institution.record_history_entry(
+            living_institution.record_executive_staff_change(
                 session,
-                club_id=club_id,
-                season_number=living_institution._season_number_for_state(state),
-                world_day=int(state.world_day or 1),
-                category="executive_appointment",
-                event_type=f"dismissed_{role}",
-                title=f"Executive Departure: {current.get('name', 'Executive')} Relieved of {role.replace('_', ' ').title()} Duties",
-                narrative_summary=(
-                    f"{current.get('name', 'Executive')} departed {state.club_name} ({role.replace('_', ' ')}) "
-                    f"with {compensation:,} GTX severance."
-                ),
-                entity_type="staff",
-                entity_id=str(current.get("id") or role),
-                entity_name=str(current.get("name", "Executive")),
-                established_facts={"role": role, "severance_paid": int(compensation)},
-                is_major_milestone=False,
-                idempotency_key=f"history:exec_fire:{club_id}:{role}:d{state.world_day}",
+                state,
+                action="dismissed",
+                staff_role=role,
+                staff_id=str(current.get("id") or role),
+                staff_name=str(current.get("name", "Executive")),
+                fee_gtex=int(compensation),
+                reason="dismissed_by_owner",
+                idempotency_key=f"exec_fire:{club_id}:{role}:d{state.world_day}",
+            )
+            comms_persistence.rotate_staff_conversation_on_change(
+                session,
+                state,
+                role_key=role,
+                previous_staff_name=current.get("name"),
+                new_staff_name=None,
             )
         except Exception as exec_err:
             logger.warning("executive dismissal history hook failed: %s", exec_err)
@@ -3310,7 +3348,7 @@ def conduct_press_conference(
     if fans_delta:
         state.fans = max(100, state.fans + fans_delta)
 
-    from app.owner_console import storytelling
+    from app.owner_console import living_institution, storytelling
 
     broadcast = storytelling.record_verified_broadcast_event(
         session,
@@ -3321,6 +3359,72 @@ def conduct_press_conference(
         item_model=statement[:80] if statement else None,
         verified_price_gtex=Decimal("0"),
     )
+
+    try:
+        world_day = int(state.world_day or 1)
+        pc_key = f"press:{club_id}:{tone}:d{world_day}"
+        pc_ev = living_institution.emit_canonical_club_event(
+            session,
+            state,
+            category="media",
+            event_type="press_conference",
+            source_subsystem="owner_console",
+            title=f"{state.club_name} Owner Press Conference ({tone.replace('_', ' ').title()})",
+            description=statement or f"Club owner addressed the press in a {tone.replace('_', ' ')} tone.",
+            idempotency_key=f"canon:{pc_key}",
+            visibility_classification=living_institution.VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+            severity="notable",
+            source_type="press_conference",
+            source_id=broadcast.id if broadcast else pc_key,
+            payload={"tone": tone, "statement": statement, "prestige_delta": prestige_delta},
+        )
+        sup_drivers = {
+            "praise_squad": {"owner_conduct": 4.0, "club_identity": 3.0},
+            "demand_more": {"results": 2.0, "owner_conduct": 1.0},
+            "defend_coach": {"club_identity": 4.0, "owner_conduct": 3.0},
+            "flex_ambition": {"owner_conduct": 4.0, "star_signings": 3.0},
+        }.get(tone, {"owner_conduct": 2.0})
+        living_institution.apply_supporter_reaction(
+            session,
+            state,
+            event_type="press_conference_reaction",
+            trigger_source_type="press_conference",
+            trigger_source_id=pc_ev.id,
+            headline=f"Supporters React to Owner's {tone.replace('_', ' ').title()} Press Address",
+            summary=statement or f"Owner delivered a {tone.replace('_', ' ')} address to media and supporters.",
+            driver_Impacts=sup_drivers,
+            idempotency_key=f"supporter:{pc_key}",
+            visibility_classification=living_institution.VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+            has_public_signal=True,
+            is_official_disclosure=True,
+            canonical_event_id=pc_ev.id,
+        )
+        living_institution.publish_media_story(
+            session,
+            state,
+            outlet_key="gtex_national_wire",
+            story_type="press_conference",
+            classification="verified_event",
+            headline=f"Owner Address at {state.club_name}: '{statement[:90]}'" if statement else f"Owner Speaks Publicly at {state.club_name}",
+            subheadline=f"Verified press briefing · Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
+            body=(
+                f"During a formal press briefing on World Day {world_day}, the {state.club_name} owner adopted a "
+                f"{tone.replace('_', ' ')} tone" + (f": \"{statement}\"" if statement else ".")
+            ),
+            source_type="press_conference",
+            source_id=pc_ev.id,
+            established_facts={"tone": tone, "world_day": world_day},
+            idempotency_key=f"media:{pc_key}",
+            reputation_delta=prestige_delta,
+            supporter_sentiment_delta=2,
+            visibility_classification=living_institution.VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+            has_public_signal=True,
+            is_official_disclosure=True,
+            canonical_event_id=pc_ev.id,
+        )
+        living_institution.reconcile_club_reputation_and_identity(session, state)
+    except Exception as pc_err:
+        logger.warning("press conference living_institution hook failed: %s", pc_err)
 
     return {
         "club_id": club_id,

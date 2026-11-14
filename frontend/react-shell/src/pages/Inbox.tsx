@@ -1329,6 +1329,49 @@ export default function InboxPage() {
                       </div>
                     )}
                     {ra.gm_notes && <p className="text-slate-400">{ra.gm_notes}</p>}
+                    <div className="pt-2 flex items-center justify-between gap-2 border-t border-white/5">
+                      <span className="text-[10px] text-slate-500 uppercase font-bold">
+                        Status: {String(ra.status || "open").replace(/_/g, " ")}
+                      </span>
+                      {ra.status === "completed" ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-black">
+                          Signed &amp; Recorded
+                        </span>
+                      ) : ra.status !== "rejected_by_owner" ? (
+                        <button
+                          type="button"
+                          disabled={busyAction}
+                          onClick={async () => {
+                            if (!effectiveClubId) return;
+                            setBusyAction(true);
+                            try {
+                              const resExec = await api.post(
+                                `/owner/clubs/${effectiveClubId}/recruitment/${ra.id}/execute`,
+                                {}
+                              );
+                              if (resExec.data?.executed) {
+                                toast.success(
+                                  `Signed ${resExec.data.player_name} (${Number(resExec.data.fee_gtex || 0).toLocaleString()} GTX)`
+                                );
+                              } else {
+                                toast.error(
+                                  `Signing halted: ${resExec.data?.reason || "unable to execute"}`
+                                );
+                              }
+                              refetchComms();
+                              refresh();
+                            } catch (err: any) {
+                              toast.error(err?.response?.data?.detail?.detail || "Signing execution failed");
+                            } finally {
+                              setBusyAction(false);
+                            }
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 text-slate-950 text-[10px] font-black"
+                        >
+                          Execute Authorised Signing
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
                 ))}
               </div>

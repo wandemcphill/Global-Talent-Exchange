@@ -17,6 +17,7 @@ from app.owner_console.models import (
     OwnerClubConversation,
     OwnerClubMeeting,
     OwnerClubMessage,
+    OwnerClubRelationship,
     OwnerClubState,
     OwnerInboxItem,
     OwnerRecruitmentAssignment,
@@ -548,6 +549,43 @@ def _staff_seed_message(
     )
 
 
+def rotate_staff_conversation_on_change(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    role_key: str,
+    previous_staff_name: str | None = None,
+    new_staff_name: str | None = None,
+) -> None:
+    """Archive and rotate the active direct thread for a staff role when staff changes so new hires start fresh."""
+    clean_role = str(role_key or "").strip().lower()
+    if clean_role == "head_coach":
+        clean_role = "first_team_manager"
+    thread_key = f"staff:{clean_role}"
+    existing_convs = list(
+        session.scalars(
+            select(OwnerClubConversation).where(
+                OwnerClubConversation.club_id == state.club_id,
+                OwnerClubConversation.thread_key == thread_key,
+            )
+        ).all()
+    )
+    now = datetime.now(timezone.utc)
+    for conv in existing_convs:
+        if new_staff_name and conv.participant_name == new_staff_name:
+            continue
+        meta = dict(conv.metadata_json or {})
+        meta["archived_for_staff_rotation"] = True
+        meta["archived_previous_name"] = previous_staff_name or conv.participant_name
+        meta["replaced_by_name"] = new_staff_name
+        meta["archived_at"] = now.isoformat()
+        conv.metadata_json = meta
+        flag_modified(conv, "metadata_json")
+        conv.thread_key = f"{thread_key}:arch:{secrets.token_hex(4)}"[:120]
+        conv.archived_at = now
+    session.flush()
+
+
 def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) -> None:
     backfill_legacy_club_communications(session, state)
 
@@ -601,7 +639,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
                 topic=topic,
                 body=body,
                 source="staff_event",
-                linked_event_key=f"seed:direct:{member['id']}:{state.club_id}",
+                linked_event_key=f"seed:direct:{member['id']}:{state.club_id}:{conv.id[:8]}",
                 action_payload=action_payload,
                 is_read=False,
             )
@@ -1214,7 +1252,9 @@ def _resolve_staff_identity_for_conversation(
     """
     identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
     p_id = str(conv.participant_id or conv.thread_key or "staff:first_team_manager").lower()
-    staff_meta = STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
+    staff_meta = (
+        STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
+    )
     role_key = staff_meta["role_key"]
 
     if role_key == "first_team_manager":
@@ -1288,7 +1328,7 @@ def get_club_communications_durable(
             .order_by(OwnerClubConversation.last_message_at.desc().nullslast())
         ).all()
     )
-    conv_by_key = {c.thread_key: c for c in convs_all}
+    conv_by_key = {c.thread_key: c for c in convs_all if c.archived_at is None}
 
     relationship_health: dict[str, Any] = {}
     staff_contacts: list[dict[str, Any]] = []
@@ -1668,8 +1708,16 @@ def send_club_message_durable(
         )
         if existing_decision is not None and existing_decision.conversation_id:
             existing_conv = session.get(OwnerClubConversation, existing_decision.conversation_id)
-            req_msg = session.get(OwnerClubMessage, existing_decision.request_message_id) if existing_decision.request_message_id else None
-            rep_msg = session.get(OwnerClubMessage, existing_decision.response_message_id) if existing_decision.response_message_id else None
+            req_msg = (
+                session.get(OwnerClubMessage, existing_decision.request_message_id)
+                if existing_decision.request_message_id
+                else None
+            )
+            rep_msg = (
+                session.get(OwnerClubMessage, existing_decision.response_message_id)
+                if existing_decision.response_message_id
+                else None
+            )
             if existing_conv is not None:
                 return {
                     "status": "sent",
@@ -1866,9 +1914,7 @@ def send_club_message_durable(
             )
             or 1
         )
-        squad_players = list(
-            session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
-        )
+        squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
 
         # Layer A: Authoritative Staff Decision Engine
         intent_data = autonomous_staff_engine.classify_owner_request(

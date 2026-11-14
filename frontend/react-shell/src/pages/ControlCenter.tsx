@@ -35,7 +35,15 @@ import {
   X,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmt, label, useActiveClub, useClub, useControlCenter, useRefreshOwner } from "@/lib/owner";
+import {
+  fmt,
+  label,
+  useActiveClub,
+  useClub,
+  useClubInstitutionalPulse,
+  useControlCenter,
+  useRefreshOwner,
+} from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
@@ -118,6 +126,7 @@ export function ControlCenter() {
   const { data, isLoading, isError } = useControlCenter();
   const { active: activeClub } = useActiveClub();
   const { data: clubDetail } = useClub(activeClub?.club_id);
+  const { data: institutionalPulse } = useClubInstitutionalPulse(activeClub?.club_id);
   const refresh = useRefreshOwner();
   const navigate = useNavigate();
 
@@ -489,7 +498,23 @@ export function ControlCenter() {
             Club History, Tenures & Records
           </h3>
           <p className="text-xs text-slate-400">
-            Explore season archive, managerial tenures, transfer ledger, academy graduates & rivalries →
+            Unified rep:{" "}
+            <b className="text-amber-300">
+              {institutionalPulse?.reputation_dimensions?.overall_reputation_prestige ??
+                clubDetail?.reputation_dimensions?.overall_reputation_prestige ??
+                activeClubProfile.prestige ??
+                50}
+              /100
+            </b>{" "}
+            · Correlated chains:{" "}
+            <b className="text-white">
+              {(institutionalPulse?.unified_timeline || []).length}
+            </b>{" "}
+            {(institutionalPulse?.staff_and_governance?.supporter_driven_agenda || []).length > 0 && (
+              <span className="text-rose-300 font-semibold">
+                · {institutionalPulse.staff_and_governance.supporter_driven_agenda.length} board alert
+              </span>
+            )}
           </p>
         </Link>
       </section>

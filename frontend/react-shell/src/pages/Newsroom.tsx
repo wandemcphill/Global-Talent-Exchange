@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
-import { useActiveClub, useNewsroom, useRefreshOwner } from "@/lib/owner";
+import { useActiveClub, useClubInstitutionalPulse, useNewsroom, useRefreshOwner } from "@/lib/owner";
 import { publicAssetPath } from "@/lib/publicPath";
 import {
   Building,
@@ -56,6 +56,7 @@ export function Newsroom() {
 
   // Club Media Ecosystem state (journalists, rumours vs verified facts, standing, responses)
   const [clubMedia, setClubMedia] = useState<any | null>(null);
+  const { data: institutionalPulse } = useClubInstitutionalPulse(clubId);
   const [responseSpeaker, setResponseSpeaker] = useState<"owner" | "first_team_manager">("owner");
   const [responseStance, setResponseStance] = useState<string>("measured");
   const [responseText, setResponseText] = useState<string>(
@@ -296,6 +297,26 @@ export function Newsroom() {
               </div>
             </div>
           </div>
+
+          {institutionalPulse?.supporters && (
+            <div className="rounded-xl border border-white/10 bg-slate-950/60 px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <span className="text-slate-300">
+                Terrace Mood:{" "}
+                <b className="text-emerald-300">{institutionalPulse.supporters.overall_sentiment}/100</b> · Protest:{" "}
+                <b className="text-amber-300">
+                  {String(institutionalPulse.supporters.active_protest_stage || "none").replace(/_/g, " ")}
+                </b>
+              </span>
+              {institutionalPulse.reputation_dimensions && (
+                <span className="text-slate-400">
+                  Institutional Stability:{" "}
+                  <b className="text-white">{institutionalPulse.reputation_dimensions.institutional_stability}/100</b> ·
+                  Public Trust:{" "}
+                  <b className="text-cyan-300">{institutionalPulse.reputation_dimensions.public_trust_and_governance}/100</b>
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Accredited Media Outlets & Journalists */}
           {mediaOutlets.length > 0 && (

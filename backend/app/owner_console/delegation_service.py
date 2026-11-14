@@ -962,17 +962,73 @@ def resolve_delegated_decision(
         raise DelegationError("Action must be 'approve', 'reject', or 'override'.", 400)
 
     now = utcnow()
+    from app.owner_console import autonomous_staff_engine
+    from app.owner_console.models import OwnerClubState, OwnerRecruitmentAssignment
+
+    execution_result: dict[str, Any] | None = None
     if action == "approve":
         decision.status = "approved"
-        decision.outcome_text = f"Authorized by club owner on {now.strftime('%Y-%m-%d %H:%M UTC')}. Pending execution by authoritative domain service."
+        is_recruitment = (
+            decision.domain == "recruitment"
+            or decision.activity_key == "player_recruitment"
+            or str(decision.activity_key or "").startswith("recruitment_")
+        )
+        if is_recruitment:
+            state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club_id))
+            if state is not None:
+                try:
+                    execution_result = autonomous_staff_engine.execute_authorized_recruitment_signing(
+                        session,
+                        state,
+                        decision_id=decision.id,
+                        user_id=owner_user_id,
+                    )
+                except ValueError:
+                    execution_result = None
+            if execution_result and execution_result.get("executed"):
+                decision.outcome_text = (
+                    f"Authorized by club owner and signed {execution_result.get('player_name')} "
+                    f"({execution_result.get('fee_gtex', 0):,.0f} GTX)."
+                )
+            elif execution_result and not execution_result.get("executed"):
+                decision.outcome_text = (
+                    f"Approved by club owner, but execution halted ({execution_result.get('reason', 'blocked')})."
+                )
+            else:
+                decision.outcome_text = (
+                    f"Authorized by club owner on {now.strftime('%Y-%m-%d %H:%M UTC')}. "
+                    f"Pending execution by authoritative domain service."
+                )
+        else:
+            decision.outcome_text = f"Authorized by club owner on {now.strftime('%Y-%m-%d %H:%M UTC')}. Pending execution by authoritative domain service."
     elif action == "reject":
         decision.status = "rejected"
+        decision.execution_status = "rejected"
         decision.outcome_text = f"Proposal rejected by club owner: {decision_note or 'Owner declined authorization.'}"
+        linked_assign = session.scalar(
+            select(OwnerRecruitmentAssignment).where(
+                OwnerRecruitmentAssignment.delegated_decision_id == decision.id,
+                OwnerRecruitmentAssignment.club_id == club_id,
+            )
+        )
+        if linked_assign is not None:
+            linked_assign.status = "rejected_by_owner"
+            linked_assign.gm_evaluation_status = "rejected_by_owner"
+            linked_assign.updated_at = now
     else:
         decision.status = "overridden"
         decision.outcome_text = (
             f"Proposal overridden by club owner: {decision_note or 'Owner substituted executive direction.'}"
         )
+        linked_assign = session.scalar(
+            select(OwnerRecruitmentAssignment).where(
+                OwnerRecruitmentAssignment.delegated_decision_id == decision.id,
+                OwnerRecruitmentAssignment.club_id == club_id,
+            )
+        )
+        if linked_assign is not None and action == "override":
+            linked_assign.gm_evaluation_status = "overridden_by_owner"
+            linked_assign.updated_at = now
 
     decision.decided_by_user_id = owner_user_id
     decision.decision_note = decision_note

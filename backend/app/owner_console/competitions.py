@@ -807,6 +807,8 @@ def _side(
         "state": state,
         "xi": strength["xi"],
         "bench": strength.get("bench", []),
+        "promised_sub_ids": list(strength.get("promised_sub_ids") or []),
+        "substitutes_used": list(strength.get("promised_sub_ids") or [])[:3],
         "avg_morale": strength["avg_morale"],
         "avg_fitness": strength.get("avg_fitness", 95.0),
         "campus_effects": campus_effects,
@@ -857,6 +859,12 @@ def _post_match_club(
 
     injury_assessments: list[dict[str, Any]] = []
     match_injuries: list[dict[str, Any]] = []
+    sub_used_ids = {
+        str(pid)
+        for pid in (side.get("substitutes_used") or [])
+        if str(pid) not in {str(x) for x in (side.get("xi") or [])}
+    }
+    subs_fulfilled_ids: list[str] = []
     for p in squad(session, state.club_id):
         pers = dict(p.personality_json or {})
         cur_fitness = int(pers.get("fitness", 95))
@@ -906,6 +914,14 @@ def _post_match_club(
                     }
                 )
                 notes.append(f"Injury: {p.name} ({p.injured_days}d)")
+        elif str(p.id) in sub_used_ids and pre_existing_injured_days <= 0:
+            p.minutes += 25
+            p.morale = int(engine.clamp(p.morale + result * 3 + 2, 0, 100))
+            new_fitness = int(engine.clamp(cur_fitness - max(2, effective_fatigue // 3), 25, 100))
+            pers["fitness"] = new_fitness
+            pers["last_sub_match_id"] = match.id
+            subs_fulfilled_ids.append(str(p.id))
+            notes.append(f"Substitute bow: {p.name} (+25m)")
         elif pre_existing_injured_days > 0:
             # Preserve existing injury state without overwriting or re-rolling
             p.injured_days = pre_existing_injured_days
@@ -915,6 +931,19 @@ def _post_match_club(
             pers["fitness"] = int(engine.clamp(cur_fitness + 4, 25, 100))
         p.personality_json = pers
         flag_modified(p, "personality_json")
+
+    if subs_fulfilled_ids:
+        fac_comm = dict(state.facilities_json or {})
+        commitments = dict(fac_comm.get("_manager_matchday_commitments") or {})
+        for sid in subs_fulfilled_ids:
+            if sid in commitments:
+                c = dict(commitments[sid])
+                c["appearances_fulfilled"] = int(c.get("appearances_fulfilled") or 0) + 1
+                c["last_fulfilled_match_id"] = match.id
+                commitments[sid] = c
+        fac_comm["_manager_matchday_commitments"] = commitments
+        state.facilities_json = fac_comm
+        flag_modified(state, "facilities_json")
 
     state.fans = max(200, state.fans + result * 60 + gf * 15)
     state.prestige = int(engine.clamp(state.prestige + result, 0, 100))

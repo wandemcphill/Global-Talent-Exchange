@@ -10,7 +10,7 @@ from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import flag_modified
 
-from app.owner_console import engine, ledger
+from app.owner_console import ledger
 from app.owner_console.institutional_models import (
     OwnerClubAcademyGraduate,
     OwnerClubHistoryEntry,
@@ -25,18 +25,140 @@ from app.owner_console.institutional_models import (
     OwnerSupporterSegment,
 )
 from app.owner_console.models import (
-    OwnerBroadcastEvent,
+    ClubDelegatedDecision,
+    OwnerClubEvent,
+    OwnerClubMeeting,
+    OwnerClubRelationship,
     OwnerClubState,
     OwnerCompetition,
     OwnerCompetitionEntry,
     OwnerInboxItem,
     OwnerMatch,
     OwnerNewsroomArticle,
+    OwnerRecruitmentAssignment,
     OwnerScoutingWatchlist,
     OwnerSquadPlayer,
+    OwnerStaffDecisionRecord,
 )
 
 logger = logging.getLogger(__name__)
+
+# Event Visibility & Confidentiality Classifications
+VISIBILITY_PRIVATE_INTERNAL = "private_internal"
+VISIBILITY_RESTRICTED_EXECUTIVE = "restricted_executive"
+VISIBILITY_PUBLIC_OBSERVABLE = "public_observable"
+VISIBILITY_OFFICIAL_ANNOUNCEMENT = "official_announcement"
+
+PUBLIC_VISIBILITY_CLASSIFICATIONS = {
+    VISIBILITY_PUBLIC_OBSERVABLE,
+    VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+}
+
+
+def is_visibility_publicly_disclosable(
+    visibility_classification: str = VISIBILITY_PUBLIC_OBSERVABLE,
+    *,
+    has_public_signal: bool = False,
+    is_official_disclosure: bool = False,
+) -> bool:
+    """Only publicly observable outcomes, official disclosures, or backed public signals may enter external feeds."""
+    if visibility_classification in PUBLIC_VISIBILITY_CLASSIFICATIONS:
+        return True
+    return bool(has_public_signal or is_official_disclosure)
+
+
+def emit_canonical_club_event(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    category: str,
+    event_type: str,
+    source_subsystem: str,
+    title: str,
+    description: str,
+    idempotency_key: str,
+    visibility_classification: str = VISIBILITY_PUBLIC_OBSERVABLE,
+    severity: str = "routine",
+    status: str = "recorded",
+    source_type: str | None = None,
+    source_id: str | None = None,
+    participants: list[Any] | None = None,
+    correlation_id: str | None = None,
+    causation_event_id: str | None = None,
+    payload: dict[str, Any] | None = None,
+    actions: list[Any] | None = None,
+) -> OwnerClubEvent:
+    """Persist one authoritative canonical OwnerClubEvent with correlation, visibility, and projection tracking."""
+    clean_idem = idempotency_key[:120]
+    existing = session.scalar(select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == clean_idem))
+    if existing is not None:
+        return existing
+
+    corr_id = correlation_id or f"corr:{event_type}:{uuid4().hex[:12]}"
+    consequences = {
+        "canonical": True,
+        "source_subsystem": source_subsystem,
+        "visibility_classification": visibility_classification,
+        "correlation_id": corr_id,
+        "causation_event_id": causation_event_id,
+        "processing_status": "processed",
+        "projections_applied": [],
+        **dict(payload or {}),
+    }
+    ev = OwnerClubEvent(
+        club_id=state.club_id,
+        category=str(category)[:32],
+        event_type=str(event_type)[:64],
+        severity=str(severity)[:16],
+        status=str(status)[:24],
+        source_type=str(source_type or source_subsystem)[:32],
+        source_id=str(source_id)[:64] if source_id is not None else None,
+        title=str(title)[:200],
+        description=str(description),
+        participants_json=list(participants or []),
+        world_day=int(getattr(state, "world_day", 1) or 1),
+        consequences_json=consequences,
+        idempotency_key=clean_idem,
+        actions_json=list(actions or []),
+    )
+    session.add(ev)
+    session.flush()
+    return ev
+
+
+def record_canonical_projection(
+    session: Session,
+    *,
+    canonical_event_id: str | None,
+    subsystem: str,
+    record_type: str,
+    record_id: str,
+    summary: str | None = None,
+) -> None:
+    """Attach a downstream projection reference to its canonical OwnerClubEvent without creating duplicates."""
+    if not canonical_event_id:
+        return
+    ev = session.scalar(select(OwnerClubEvent).where(OwnerClubEvent.id == canonical_event_id))
+    if ev is None:
+        return
+    consequences = dict(ev.consequences_json or {})
+    projections = list(consequences.get("projections_applied") or [])
+    sig = (subsystem, record_type, str(record_id))
+    for item in projections:
+        if (item.get("subsystem"), item.get("record_type"), str(item.get("record_id"))) == sig:
+            return
+    projections.append(
+        {
+            "subsystem": subsystem,
+            "record_type": record_type,
+            "record_id": str(record_id),
+            **({"summary": summary[:160]} if summary else {}),
+        }
+    )
+    consequences["projections_applied"] = projections
+    ev.consequences_json = consequences
+    flag_modified(ev, "consequences_json")
+    session.flush()
 
 
 def _now() -> datetime:
@@ -284,10 +406,7 @@ DEFAULT_MEDIA_OUTLETS: tuple[dict[str, Any], ...] = (
 
 def ensure_media_outlets(session: Session) -> dict[str, OwnerMediaOutlet]:
     """Ensure the canonical set of media outlets and journalists exist."""
-    existing = {
-        row.outlet_key: row
-        for row in session.scalars(select(OwnerMediaOutlet)).all()
-    }
+    existing = {row.outlet_key: row for row in session.scalars(select(OwnerMediaOutlet)).all()}
     for spec in DEFAULT_MEDIA_OUTLETS:
         if spec["outlet_key"] not in existing:
             outlet = OwnerMediaOutlet(
@@ -318,9 +437,7 @@ def ensure_club_institutional_ecosystem(
     """Idempotently initialize or reconcile supporter profile, segments, media outlets, and founding history."""
     ensure_media_outlets(session)
 
-    profile = session.scalar(
-        select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == state.club_id)
-    )
+    profile = session.scalar(select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == state.club_id))
     total_fans = max(200, int(state.fans or 1200))
     world_day = int(state.world_day or 1)
 
@@ -512,6 +629,7 @@ def ensure_active_manager_tenure(
         session.scalars(
             select(OwnerClubManagerialTenure).where(
                 OwnerClubManagerialTenure.club_id == state.club_id,
+                OwnerClubManagerialTenure.role == "first_team_manager",
                 OwnerClubManagerialTenure.status == "active",
             )
         ).all()
@@ -587,9 +705,7 @@ def _recompute_profile_aggregates(
         or (profile.consecutive_disappointments >= 5 and profile.overall_sentiment <= 35)
     ):
         profile.active_protest_stage = "organised_boycott"
-        profile.active_campaign_headline = (
-            "Supporter Coalition Calls for Matchday Walkout & Boardroom Accountability"
-        )
+        profile.active_campaign_headline = "Supporter Coalition Calls for Matchday Walkout & Boardroom Accountability"
     elif (
         org_sent <= 32
         or profile.overall_sentiment <= 34
@@ -658,12 +774,31 @@ def apply_supporter_reaction(
     credibility_delta: int = 0,
     contradiction_detected: bool = False,
     contradiction_reason: str | None = None,
-) -> OwnerSupporterEvent:
+    visibility_classification: str = VISIBILITY_PUBLIC_OBSERVABLE,
+    has_public_signal: bool = True,
+    is_official_disclosure: bool = False,
+    canonical_event_id: str | None = None,
+    correlation_id: str | None = None,
+) -> OwnerSupporterEvent | None:
     """Apply a differentiated reaction across all 6 supporter segments with scar-tissue memory."""
-    existing = session.scalar(
-        select(OwnerSupporterEvent).where(OwnerSupporterEvent.idempotency_key == idempotency_key)
-    )
+    if not is_visibility_publicly_disclosable(
+        visibility_classification,
+        has_public_signal=has_public_signal,
+        is_official_disclosure=is_official_disclosure,
+    ):
+        return None
+
+    existing = session.scalar(select(OwnerSupporterEvent).where(OwnerSupporterEvent.idempotency_key == idempotency_key))
     if existing is not None:
+        if canonical_event_id:
+            record_canonical_projection(
+                session,
+                canonical_event_id=canonical_event_id,
+                subsystem="supporters",
+                record_type="OwnerSupporterEvent",
+                record_id=existing.id,
+                summary=existing.headline,
+            )
         return existing
 
     profile, segments = ensure_club_institutional_ecosystem(session, state)
@@ -775,6 +910,15 @@ def apply_supporter_reaction(
     )
     session.add(sup_event)
     session.flush()
+    if canonical_event_id:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_event_id,
+            subsystem="supporters",
+            record_type="OwnerSupporterEvent",
+            record_id=sup_event.id,
+            summary=sup_event.headline,
+        )
     return sup_event
 
 
@@ -832,7 +976,9 @@ def compute_matchday_atmosphere(
         visible_reactions.append("Organised supporter groups hold up protest banners in the 18th minute.")
     elif rivalry_intensity >= 55:
         dominant_mood = "ferocious_derby_cauldron"
-        stadium_ambience = f"Electric Derby Cauldron vs {opponent_name or (rivalry.rival_club_name if rivalry else 'Rivals')}"
+        stadium_ambience = (
+            f"Electric Derby Cauldron vs {opponent_name or (rivalry.rival_club_name if rivalry else 'Rivals')}"
+        )
         banners.append(f"PRIDE OF {state.club_name.upper()} — NEVER YIELD THIS DERBY")
         chants.append(f"Stand up for {state.club_name} — Derby Day Roar!")
         visible_reactions.append("Full-stand tifo display and flares welcome the players onto the pitch.")
@@ -901,13 +1047,32 @@ def publish_media_story(
     leadership_pressure_delta: int = 0,
     also_mirror_to_newsroom: bool = True,
     enforce_grounding: bool = False,
-) -> OwnerMediaStory:
+    visibility_classification: str = VISIBILITY_PUBLIC_OBSERVABLE,
+    has_public_signal: bool = True,
+    is_official_disclosure: bool = False,
+    canonical_event_id: str | None = None,
+    correlation_id: str | None = None,
+) -> OwnerMediaStory | None:
     """Publish a persistent, grounded media story with verified/rumour/opinion classification and consequences."""
+    if not is_visibility_publicly_disclosable(
+        visibility_classification,
+        has_public_signal=has_public_signal,
+        is_official_disclosure=is_official_disclosure,
+    ):
+        return None
+
     idem = idempotency_key or f"media:{state.club_id}:{story_type}:{uuid4().hex[:10]}"
-    existing = session.scalar(
-        select(OwnerMediaStory).where(OwnerMediaStory.idempotency_key == idem)
-    )
+    existing = session.scalar(select(OwnerMediaStory).where(OwnerMediaStory.idempotency_key == idem))
     if existing is not None:
+        if canonical_event_id:
+            record_canonical_projection(
+                session,
+                canonical_event_id=canonical_event_id,
+                subsystem="media",
+                record_type="OwnerMediaStory",
+                record_id=existing.id,
+                summary=existing.headline,
+            )
         return existing
 
     outlets = ensure_media_outlets(session)
@@ -924,6 +1089,11 @@ def publish_media_story(
     facts.setdefault("world_day", int(state.world_day or 1))
     facts["classification"] = clean_classification
     facts["is_confirmed_fact"] = is_confirmed_fact
+    facts["visibility_classification"] = visibility_classification
+    if canonical_event_id:
+        facts["canonical_event_id"] = canonical_event_id
+    if correlation_id:
+        facts["correlation_id"] = correlation_id
 
     from app.owner_console import storytelling
 
@@ -991,7 +1161,9 @@ def publish_media_story(
                     source_event_id=story.id,
                     category=story_type,
                     headline=headline[:200],
-                    subheadline=f"{outlet.outlet_name} · {outlet.journalist_name} ({clean_classification.replace('_', ' ').title()})"[:240],
+                    subheadline=f"{outlet.outlet_name} · {outlet.journalist_name} ({clean_classification.replace('_', ' ').title()})"[
+                        :240
+                    ],
                     editorial_narration=body,
                     established_facts_json=facts,
                     grounding_report_json=grounding_report,
@@ -1000,6 +1172,16 @@ def publish_media_story(
                 )
             )
             session.flush()
+
+    if canonical_event_id:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_event_id,
+            subsystem="media",
+            record_type="OwnerMediaStory",
+            record_id=story.id,
+            summary=story.headline,
+        )
 
     return story
 
@@ -1026,9 +1208,7 @@ def record_match_institutional_impact(
 
     idem_prefix = f"match:{match.id}:club:{state.club_id}"
     existing_hist = session.scalar(
-        select(OwnerClubHistoryEntry).where(
-            OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result"
-        )
+        select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result")
     )
     if existing_hist is not None:
         return {"already_recorded": True}
@@ -1040,6 +1220,35 @@ def record_match_institutional_impact(
     opp_name = str(match.away_name if is_home else match.home_name)
     margin = gf - ga
     result_str = "win" if gf > ga else "draw" if gf == ga else "loss"
+    corr_id = f"corr:match:{match.id}:club:{state.club_id}"
+    canonical_ev = emit_canonical_club_event(
+        session,
+        state,
+        category="matchday",
+        event_type="match_completed",
+        source_subsystem="competitions",
+        title=f"{comp.name} Round {match.round_number}: {state.club_name} {gf}-{ga} {opp_name}",
+        description=(
+            f"Completed {comp.name} Round {match.round_number} ({gf}-{ga} {result_str}) against {opp_name} on World Day {world_day}."
+        ),
+        idempotency_key=f"canon:{idem_prefix}",
+        visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+        severity="notable" if abs(margin) >= 3 else "routine",
+        source_type="match",
+        source_id=match.id,
+        correlation_id=corr_id,
+        payload={
+            "match_id": match.id,
+            "competition_id": comp.id,
+            "competition_name": comp.name,
+            "round_number": int(match.round_number),
+            "opponent_club_id": opp_id,
+            "opponent_name": opp_name,
+            "goals_for": gf,
+            "goals_against": ga,
+            "result": result_str,
+        },
+    )
 
     # 1. Update Historic Rivalry
     rivalry = session.scalar(
@@ -1160,21 +1369,20 @@ def record_match_institutional_impact(
         f"({tenure.wins}W-{tenure.draws}D-{tenure.losses}L, {win_pct}% win rate, {tenure.trophies_won} trophies)."
     )
 
-    # 3. Detect Academy Graduate First-Team Debuts & Appearances/Goals
-    xi_ids = set(side.get("xi") or [])
+    # 3. Detect Academy Graduate First-Team Debuts & Appearances/Goals (including used substitutes)
+    xi_ids = {str(pid) for pid in (side.get("xi") or [])}
+    sub_used_ids = {str(pid) for pid in (side.get("substitutes_used") or [])}
+    played_ids = xi_ids | sub_used_ids
     debutants: list[OwnerClubAcademyGraduate] = []
+    youth_featured_ids: list[str] = []
     match_events = list(match.events_json or [])
     team_tag = "home" if is_home else "away"
     goal_texts = [
-        str(ev.get("text") or "")
-        for ev in match_events
-        if ev.get("type") == "goal" and ev.get("team") == team_tag
+        str(ev.get("text") or "") for ev in match_events if ev.get("type") == "goal" and ev.get("team") == team_tag
     ]
 
-    for sq_player in session.scalars(
-        select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)
-    ).all():
-        if sq_player.id not in xi_ids:
+    for sq_player in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all():
+        if str(sq_player.id) not in played_ids:
             continue
         pers = dict(sq_player.personality_json or {})
         appearances = int(pers.get("club_appearances", 0)) + 1
@@ -1185,7 +1393,11 @@ def record_match_institutional_impact(
         sq_player.personality_json = pers
         flag_modified(sq_player, "personality_json")
 
-        if sq_player.is_regen or pers.get("academy_graduate"):
+        is_academy = bool(sq_player.is_regen or pers.get("academy_graduate") or pers.get("is_academy"))
+        if is_academy or int(sq_player.age or 24) <= 20:
+            youth_featured_ids.append(str(sq_player.id))
+
+        if is_academy:
             grad = session.scalar(
                 select(OwnerClubAcademyGraduate).where(
                     OwnerClubAcademyGraduate.club_id == state.club_id,
@@ -1214,16 +1426,19 @@ def record_match_institutional_impact(
             grad.first_team_appearances = int(grad.first_team_appearances or 0) + 1
             grad.first_team_goals = int(grad.first_team_goals or 0) + scored_in_match
             grad.current_rating = int(sq_player.rating)
+            sub_debut = str(sq_player.id) in sub_used_ids and str(sq_player.id) not in xi_ids
             if grad.debut_match_id is None:
                 grad.debut_match_id = match.id
                 grad.debut_world_day = world_day
                 grad.debut_opponent_name = opp_name
                 grad.status = "first_team_debutant"
                 grad.narrative_note = (
-                    f"Made senior first-team debut vs {opp_name} on World Day {world_day} ({gf}-{ga})."
+                    f"Came off the bench for senior debut vs {opp_name} on World Day {world_day} ({gf}-{ga})."
+                    if sub_debut
+                    else f"Made senior first-team debut vs {opp_name} on World Day {world_day} ({gf}-{ga})."
                 )
                 debutants.append(grad)
-                record_history_entry(
+                deb_hist = record_history_entry(
                     session,
                     club_id=state.club_id,
                     season_number=season_num,
@@ -1233,7 +1448,7 @@ def record_match_institutional_impact(
                     title=f"Academy Debut: {sq_player.name} Makes First-Team Bow vs {opp_name}",
                     narrative_summary=(
                         f"Homegrown academy graduate {sq_player.name} ({sq_player.position}, {sq_player.rating} OVR) "
-                        f"made their senior debut for {state.club_name} against {opp_name} in {comp.name}."
+                        f"made their senior {'substitute ' if sub_debut else ''}debut for {state.club_name} against {opp_name} in {comp.name}."
                     ),
                     entity_type="player",
                     entity_id=sq_player.id,
@@ -1244,9 +1459,20 @@ def record_match_institutional_impact(
                         "rating": int(sq_player.rating),
                         "opponent_name": opp_name,
                         "match_id": match.id,
+                        "came_off_bench": sub_debut,
+                        "canonical_event_id": canonical_ev.id,
+                        "correlation_id": corr_id,
                     },
                     is_major_milestone=True,
                     idempotency_key=f"history:academy_debut:{state.club_id}:{sq_player.id}",
+                )
+                record_canonical_projection(
+                    session,
+                    canonical_event_id=canonical_ev.id,
+                    subsystem="academy",
+                    record_type="OwnerClubHistoryEntry",
+                    record_id=deb_hist.id,
+                    summary=deb_hist.title,
                 )
             elif grad.first_team_appearances >= 5:
                 grad.status = "club_regular"
@@ -1269,7 +1495,7 @@ def record_match_institutional_impact(
         title = f"{comp.name} Round {match.round_number}: {state.club_name} {gf}-{ga} {opp_name}"
         is_mile = False
 
-    record_history_entry(
+    hist_match = record_history_entry(
         session,
         club_id=state.club_id,
         season_number=season_num,
@@ -1291,9 +1517,19 @@ def record_match_institutional_impact(
             "opponent_name": opp_name,
             "competition_name": comp.name,
             "round_number": int(match.round_number),
+            "canonical_event_id": canonical_ev.id,
+            "correlation_id": corr_id,
         },
         is_major_milestone=is_mile,
         idempotency_key=f"{idem_prefix}:result",
+    )
+    record_canonical_projection(
+        session,
+        canonical_event_id=canonical_ev.id,
+        subsystem="club_history",
+        record_type="OwnerClubHistoryEntry",
+        record_id=hist_match.id,
+        summary=hist_match.title,
     )
 
     # 5. Apply Supporter Sentiment Reaction to the Match
@@ -1319,7 +1555,9 @@ def record_match_institutional_impact(
         if debutants:
             drivers["youth_academy"] = 5.0
         sup_headline = f"Mixed Terrace Verdict After {gf}-{ga} Draw With {opp_name}"
-        sup_summary = f"Supporters debated a hard-fought {gf}-{ga} draw against {opp_name} in Round {match.round_number}."
+        sup_summary = (
+            f"Supporters debated a hard-fought {gf}-{ga} draw against {opp_name} in Round {match.round_number}."
+        )
     else:
         loss_sev = (-7.0 - min(8.0, abs(margin) * 2.5)) * rivalry_factor
         drivers = {
@@ -1346,6 +1584,10 @@ def record_match_institutional_impact(
         idempotency_key=f"{idem_prefix}:supporter_reaction",
         is_disappointment=(gf < ga),
         is_victory_relief=(gf > ga),
+        visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+        has_public_signal=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
 
     # Update manager confidence on profile
@@ -1374,8 +1616,13 @@ def record_match_institutional_impact(
     match.narrative_json = narrative
     flag_modified(match, "narrative_json")
 
+    sup_delta_val = int(sup_event.overall_sentiment_delta) if sup_event is not None else 0
     # 7. Publish Grounded Media Coverage (Match Report + Conditional Streak/Protest/Debut Stories)
-    rep_delta = 2 if (gf > ga and margin >= 2) else 1 if gf > ga else -2 if (gf < ga and abs(margin) >= 2) else -1 if gf < ga else 0
+    rep_delta = (
+        2
+        if (gf > ga and margin >= 2)
+        else 1 if gf > ga else -2 if (gf < ga and abs(margin) >= 2) else -1 if gf < ga else 0
+    )
     publish_media_story(
         session,
         state,
@@ -1388,7 +1635,7 @@ def record_match_institutional_impact(
             f"In Round {match.round_number} of {comp.name}, {state.club_name} finished {gf}-{ga} against {opp_name}. "
             f"Manager {tenure.manager_name} has now overseen {tenure.matches_managed} matches ({tenure.wins} wins, "
             f"{tenure.draws} draws, {tenure.losses} losses). Overall supporter sentiment stands at {profile.overall_sentiment} "
-            f"following a {sup_event.overall_sentiment_delta:+d} shift."
+            f"following a {sup_delta_val:+d} shift."
         ),
         source_type="match",
         source_id=match.id,
@@ -1403,13 +1650,17 @@ def record_match_institutional_impact(
             "manager_draws": int(tenure.draws),
             "manager_losses": int(tenure.losses),
             "supporter_sentiment": int(profile.overall_sentiment),
-            "sentiment_delta": abs(int(sup_event.overall_sentiment_delta)),
+            "sentiment_delta": abs(sup_delta_val),
         },
         idempotency_key=f"{idem_prefix}:media_match_report",
         reputation_delta=rep_delta,
-        supporter_sentiment_delta=int(sup_event.overall_sentiment_delta),
+        supporter_sentiment_delta=sup_delta_val,
         commercial_attractiveness_delta=2 if gf > ga else -1 if gf < ga else 0,
         leadership_pressure_delta=4 if gf < ga else -2 if gf > ga else 0,
+        visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+        has_public_signal=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
 
     # Conditional Editorial Scrutiny on Repeated Poor Results
@@ -1441,6 +1692,10 @@ def record_match_institutional_impact(
             reputation_delta=-1,
             leadership_pressure_delta=6,
             also_mirror_to_newsroom=True,
+            visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+            has_public_signal=True,
+            canonical_event_id=canonical_ev.id,
+            correlation_id=corr_id,
         )
 
     # Conditional Academy Debut Spotlight
@@ -1469,14 +1724,86 @@ def record_match_institutional_impact(
             idempotency_key=f"{idem_prefix}:media_debut:{deb.player_id}",
             reputation_delta=1,
             supporter_sentiment_delta=3,
+            visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+            has_public_signal=True,
+            canonical_event_id=canonical_ev.id,
+            correlation_id=corr_id,
         )
 
+    # Delayed public consequence of manager rejecting youth pathway: only surfaces AFTER an official match
+    # completes with zero homegrown/U21 appearances on the pitch, citing observable team-sheet evidence only.
+    fac = dict(state.facilities_json or {})
+    rejection_streak = int(fac.get("_manager_youth_rejection_streak") or 0)
+    surfaced_streak = int(fac.get("_manager_youth_last_surfaced_streak") or 0)
+    if youth_featured_ids or debutants:
+        if rejection_streak > 0 or surfaced_streak > 0:
+            fac["_manager_youth_rejection_streak"] = 0
+            fac["_manager_youth_last_surfaced_streak"] = 0
+            state.facilities_json = fac
+            flag_modified(state, "facilities_json")
+    elif rejection_streak > surfaced_streak:
+        fac["_manager_youth_last_surfaced_streak"] = rejection_streak
+        state.facilities_json = fac
+        flag_modified(state, "facilities_json")
+        apply_supporter_reaction(
+            session,
+            state,
+            event_type="youth_pathway_neglect",
+            trigger_source_type="match_lineup",
+            trigger_source_id=match.id,
+            headline=f"Supporters Question Absence of Homegrown Youth vs {opp_name}",
+            summary=(
+                f"Following Round {match.round_number} against {opp_name}, supporters noted zero academy or "
+                f"under-21 prospects took the field, softening youth-pathway confidence."
+            ),
+            driver_Impacts={"youth_academy": -9.0, "club_identity": -4.0},
+            idempotency_key=f"{idem_prefix}:supporter_youth_neglect",
+            is_disappointment=True,
+            visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+            has_public_signal=True,
+            canonical_event_id=canonical_ev.id,
+            correlation_id=corr_id,
+        )
+        publish_media_story(
+            session,
+            state,
+            outlet_key="tactical_youth_observer",
+            story_type="academy_development",
+            classification="opinion",
+            headline=f"Youth Pathway Debate: Zero Homegrown Minutes for {state.club_name} Against {opp_name}",
+            subheadline=f"Observable team-sheet scrutiny · Round {match.round_number} featured no academy prospects",
+            body=(
+                f"{state.club_name} completed Round {match.round_number} against {opp_name} without handing minutes to an "
+                f"academy graduate or under-21 prospect in the playing XI or used substitutes, prompting supporter commentary "
+                f"on youth integration."
+            ),
+            source_type="match_lineup",
+            source_id=match.id,
+            established_facts={
+                "match_id": match.id,
+                "round_number": int(match.round_number),
+                "opponent_name": opp_name,
+                "youth_appearances": 0,
+            },
+            idempotency_key=f"{idem_prefix}:media_youth_neglect",
+            reputation_delta=0,
+            supporter_sentiment_delta=-3,
+            leadership_pressure_delta=3,
+            visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
+            has_public_signal=True,
+            canonical_event_id=canonical_ev.id,
+            correlation_id=corr_id,
+        )
+
+    reconcile_club_reputation_and_identity(session, state, profile=profile, segments=segments)
     session.flush()
     return {
+        "canonical_event_id": canonical_ev.id,
         "supporter_sentiment": profile.overall_sentiment,
         "atmosphere": atmosphere,
         "rivalry_tier": rivalry.rivalry_tier,
         "debutants": [d.player_name for d in debutants],
+        "youth_featured_count": len(youth_featured_ids),
     }
 
 
@@ -1590,7 +1917,11 @@ def record_season_completion_archive(
         archives.append(archive)
 
         # Record in permanent club history ledger
-        hist_cat = "trophy_award" if trophy_won else "promotion_relegation" if promo_status in ("promoted", "relegated") else "competition_participation"
+        hist_cat = (
+            "trophy_award"
+            if trophy_won
+            else "promotion_relegation" if promo_status in ("promoted", "relegated") else "competition_participation"
+        )
         record_history_entry(
             session,
             club_id=state.club_id,
@@ -1707,50 +2038,118 @@ def record_managerial_change(
     reason: str = "boardroom_decision",
     severance_gtex: int = 0,
     idempotency_key: str | None = None,
-) -> None:
-    """Record managerial appointment or dismissal across tenures, history ledger, supporters, and media."""
+    source_subsystem: str = "living_institution",
+    causation_event_id: str | None = None,
+) -> OwnerClubEvent:
+    """Record managerial appointment, dismissal, or resignation as ONE canonical event with connected projections."""
     ensure_club_institutional_ecosystem(session, state)
     world_day = int(state.world_day or 1)
     season_num = _season_number_for_state(state)
     prev_name = str((previous_manager or {}).get("name") or "Previous Manager")
     new_name = str((new_manager or {}).get("name") or "Caretaker Manager")
     idem = idempotency_key or f"mgr_change:{state.club_id}:{action}:{prev_name}:{new_name}:d{world_day}"
+    corr_id = f"corr:{idem[:80]}"
 
-    # Close any active tenure for previous manager
+    # 1. Close active First-Team Manager tenures (keep executive staff roles intact) and capture record for scaling
     active_tenures = list(
         session.scalars(
             select(OwnerClubManagerialTenure).where(
                 OwnerClubManagerialTenure.club_id == state.club_id,
+                OwnerClubManagerialTenure.role == "first_team_manager",
                 OwnerClubManagerialTenure.status == "active",
             )
         ).all()
     )
+    prev_matches = 0
+    prev_wins = 0
+    prev_trophies = 0
+    closed_tenure_ids: list[str] = []
     for row in active_tenures:
-        if action == "dismissed" or (new_manager and row.manager_name != new_name):
+        if action in ("dismissed", "resigned") or (new_manager and row.manager_name != new_name):
+            prev_matches = max(prev_matches, int(row.matches_managed or 0))
+            prev_wins = max(prev_wins, int(row.wins or 0))
+            prev_trophies = max(prev_trophies, int(row.trophies_won or 0))
             row.status = "departed"
             row.departed_world_day = world_day
             row.departure_reason = reason
             row.severance_paid_gtex = Decimal(str(severance_gtex))
             row.tenure_summary = (
-                f"{row.manager_name} departed on World Day {world_day} ({reason}) after {row.matches_managed} matches "
+                f"{row.manager_name} {action} on World Day {world_day} ({reason}) after {row.matches_managed} matches "
                 f"({row.wins}W-{row.draws}D-{row.losses}L, {row.trophies_won} trophies)."
             )
+            closed_tenure_ids.append(row.id)
 
+    new_tenure_id: str | None = None
     if new_manager and new_manager.get("name"):
-        ensure_active_manager_tenure(session, state, new_manager)
+        new_tenure = ensure_active_manager_tenure(session, state, new_manager)
+        if new_manager.get("is_caretaker") or "caretaker" in str(new_name).lower():
+            new_tenure.tenure_summary = (
+                f"Caretaker spell began on World Day {world_day} following departure of {prev_name}."
+            )
+        new_tenure_id = new_tenure.id
 
-    title = (
-        f"Managerial Appointment: {new_name} Named Head Coach of {state.club_name}"
-        if action == "appointed"
-        else f"Managerial Departure: {prev_name} Relieved of Duties ({ severance_gtex } GTX Severance)"
-    )
-    summary = (
-        f"Owner appointed {new_name} ({(new_manager or {}).get('style', 'balanced')} philosophy) on World Day {world_day}."
-        if action == "appointed"
-        else f"{prev_name} departed {state.club_name} on World Day {world_day} ({reason}); {new_name} installed."
-    )
+    if action == "appointed":
+        title = f"Managerial Appointment: {new_name} Named Head Coach of {state.club_name}"
+        summary = f"Owner appointed {new_name} ({(new_manager or {}).get('style', 'balanced')} philosophy) on World Day {world_day}."
+    elif action == "resigned":
+        title = f"Managerial Resignation: {prev_name} Steps Down at {state.club_name}"
+        summary = (
+            f"{prev_name} resigned from {state.club_name} on World Day {world_day} ({reason}); "
+            f"{new_name} assumed caretaker charge."
+        )
+    else:
+        title = f"Managerial Departure: {prev_name} Relieved of Duties ({severance_gtex} GTX Severance)"
+        summary = f"{prev_name} departed {state.club_name} on World Day {world_day} ({reason}); {new_name} installed."
 
-    record_history_entry(
+    canonical_ev = emit_canonical_club_event(
+        session,
+        state,
+        category="staff" if action == "resigned" else "governance",
+        event_type=f"manager_{action}",
+        source_subsystem=source_subsystem,
+        title=title,
+        description=summary,
+        idempotency_key=f"canon:{idem}",
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        severity="major",
+        source_type="manager_change",
+        source_id=str((new_manager or previous_manager or {}).get("id") or new_name),
+        participants=[
+            {"role": "previous_manager", "name": prev_name},
+            {"role": "incoming_manager", "name": new_name},
+        ],
+        correlation_id=corr_id,
+        causation_event_id=causation_event_id,
+        payload={
+            "action": action,
+            "reason": reason,
+            "previous_manager": prev_name,
+            "new_manager": new_name,
+            "severance_gtex": int(severance_gtex),
+            "previous_tenure_matches": prev_matches,
+            "previous_tenure_wins": prev_wins,
+        },
+    )
+    for c_id in closed_tenure_ids:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_ev.id,
+            subsystem="club_history",
+            record_type="OwnerClubManagerialTenure",
+            record_id=c_id,
+            summary=f"Closed tenure for {prev_name}",
+        )
+    if new_tenure_id:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_ev.id,
+            subsystem="club_history",
+            record_type="OwnerClubManagerialTenure",
+            record_id=new_tenure_id,
+            summary=f"Opened tenure for {new_name}",
+        )
+
+    hist_entry = record_history_entry(
         session,
         club_id=state.club_id,
         season_number=season_num,
@@ -1763,14 +2162,47 @@ def record_managerial_change(
         entity_id=str((new_manager or previous_manager or {}).get("id") or new_name),
         entity_name=new_name if action == "appointed" else prev_name,
         established_facts={
+            "action": action,
+            "reason": reason,
             "previous_manager": prev_name,
             "new_manager": new_name,
             "world_day": world_day,
             "severance_gtex": int(severance_gtex),
+            "canonical_event_id": canonical_ev.id,
+            "correlation_id": corr_id,
         },
         is_major_milestone=True,
         idempotency_key=f"history:{idem}",
     )
+    record_canonical_projection(
+        session,
+        canonical_event_id=canonical_ev.id,
+        subsystem="club_history",
+        record_type="OwnerClubHistoryEntry",
+        record_id=hist_entry.id,
+        summary=hist_entry.title,
+    )
+
+    # Scale supporter sentiment proportionally to tenure record without forcing instant organised_boycott
+    if action == "appointed":
+        drivers = {"results": 4.0, "club_identity": 5.0, "owner_conduct": 4.0}
+        sup_cred_delta = 2
+    elif action == "resigned":
+        win_rate = (prev_wins / prev_matches) if prev_matches > 0 else 0.5
+        if prev_matches >= 4 and (win_rate >= 0.55 or prev_trophies >= 1):
+            # Well-performing/trophy-winning manager quitting hurts sharply, yet stays proportional
+            drivers = {"results": -4.0, "club_identity": -5.5, "owner_conduct": -7.5}
+            sup_cred_delta = -5
+        elif prev_matches >= 4 and win_rate < 0.35:
+            # Struggling manager resigning brings concern over instability rather than deep grief
+            drivers = {"results": -1.5, "club_identity": -3.0, "owner_conduct": -4.5}
+            sup_cred_delta = -2
+        else:
+            drivers = {"results": -2.0, "club_identity": -4.0, "owner_conduct": -5.5}
+            sup_cred_delta = -3
+    else:
+        drivers = {"results": -2.0, "club_identity": -4.0, "owner_conduct": -3.0}
+        sup_cred_delta = -2
 
     apply_supporter_reaction(
         session,
@@ -1780,12 +2212,15 @@ def record_managerial_change(
         trigger_source_id=new_name,
         headline=title,
         summary=summary,
-        driver_Impacts=(
-            {"results": 4.0, "club_identity": 5.0, "owner_conduct": 4.0}
-            if action == "appointed"
-            else {"results": -2.0, "club_identity": -4.0, "owner_conduct": -3.0}
-        ),
+        driver_Impacts=drivers,
         idempotency_key=f"supporter:{idem}",
+        is_disappointment=(action in ("dismissed", "resigned")),
+        credibility_delta=sup_cred_delta,
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
 
     publish_media_story(
@@ -1796,19 +2231,225 @@ def record_managerial_change(
         classification="verified_event",
         headline=title,
         subheadline=f"Official dugout transition at {state.club_name} on World Day {world_day}",
-        body=(
-            f"On World Day {world_day}, {state.club_name} confirmed a dugout transition: {summary}"
-        ),
+        body=(f"On World Day {world_day}, {state.club_name} confirmed a dugout transition: {summary}"),
         source_type="manager_change",
         source_id=idem,
         established_facts={
+            "action": action,
             "world_day": world_day,
+            "previous_manager": prev_name,
+            "new_manager": new_name,
             "severance_gtex": int(severance_gtex),
         },
         idempotency_key=f"media:{idem}",
-        reputation_delta=1 if action == "appointed" else -1,
-        leadership_pressure_delta=-2 if action == "appointed" else 3,
+        reputation_delta=1 if action == "appointed" else -2 if action == "resigned" else -1,
+        leadership_pressure_delta=-2 if action == "appointed" else 4 if action == "resigned" else 3,
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
+    reconcile_club_reputation_and_identity(session, state)
+    return canonical_ev
+
+
+def record_executive_staff_change(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    action: str,
+    staff_role: str,
+    staff_id: str,
+    staff_name: str,
+    fee_gtex: int = 0,
+    reason: str = "boardroom_staff_change",
+    idempotency_key: str | None = None,
+) -> OwnerClubEvent:
+    """Record senior non-manager executive hire or dismissal across tenures, canonical events, history, and media."""
+    ensure_club_institutional_ecosystem(session, state)
+    world_day = int(state.world_day or 1)
+    season_num = _season_number_for_state(state)
+    clean_role = str(staff_role or "executive").strip().lower()
+    idem = idempotency_key or f"exec_change:{state.club_id}:{clean_role}:{action}:{staff_name}:d{world_day}"
+    corr_id = f"corr:{idem[:80]}"
+
+    active_rows = list(
+        session.scalars(
+            select(OwnerClubManagerialTenure).where(
+                OwnerClubManagerialTenure.club_id == state.club_id,
+                OwnerClubManagerialTenure.role == clean_role,
+                OwnerClubManagerialTenure.status == "active",
+            )
+        ).all()
+    )
+    closed_names: list[str] = []
+    closed_ids: list[str] = []
+    for row in active_rows:
+        if action == "dismissed" or row.manager_name != staff_name:
+            row.status = "departed"
+            row.departed_world_day = world_day
+            row.departure_reason = reason
+            row.severance_paid_gtex = Decimal(str(fee_gtex if action == "dismissed" else 0))
+            row.tenure_summary = f"{row.manager_name} departed {clean_role} post on World Day {world_day} ({reason})."
+            closed_names.append(row.manager_name)
+            closed_ids.append(row.id)
+
+    opened_id: str | None = None
+    if action == "hired":
+        existing_same = next((r for r in active_rows if r.manager_name == staff_name and r.status == "active"), None)
+        if existing_same is None:
+            new_row = OwnerClubManagerialTenure(
+                club_id=state.club_id,
+                manager_id=str(staff_id or staff_name),
+                manager_name=staff_name,
+                role=clean_role,
+                tactical_style=clean_role,
+                appointed_world_day=world_day,
+                status="active",
+                matches_managed=0,
+                wins=0,
+                draws=0,
+                losses=0,
+                goals_for=0,
+                goals_against=0,
+                trophies_won=0,
+                honors_json=[],
+                tenure_summary=f"Appointed {clean_role.replace('_', ' ').title()} of {state.club_name} on World Day {world_day}.",
+            )
+            session.add(new_row)
+            session.flush()
+            opened_id = new_row.id
+
+    role_label = clean_role.replace("_", " ").title()
+    if action == "hired":
+        title = f"Executive Appointment: {staff_name} Named {role_label} of {state.club_name}"
+        summary = f"{state.club_name} appointed {staff_name} as {role_label} on World Day {world_day}."
+    else:
+        title = f"Executive Departure: {staff_name} Exits {role_label} Role at {state.club_name}"
+        summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason})."
+
+    canonical_ev = emit_canonical_club_event(
+        session,
+        state,
+        category="staff",
+        event_type=f"executive_{action}",
+        source_subsystem="owner_console",
+        title=title,
+        description=summary,
+        idempotency_key=f"canon:{idem}",
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        severity="notable",
+        source_type="executive_staff",
+        source_id=str(staff_id or staff_name),
+        correlation_id=corr_id,
+        payload={
+            "action": action,
+            "role": clean_role,
+            "staff_id": staff_id,
+            "staff_name": staff_name,
+            "replaced_staff": closed_names,
+            "fee_gtex": int(fee_gtex),
+        },
+    )
+    for cid in closed_ids:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_ev.id,
+            subsystem="club_history",
+            record_type="OwnerClubManagerialTenure",
+            record_id=cid,
+        )
+    if opened_id:
+        record_canonical_projection(
+            session,
+            canonical_event_id=canonical_ev.id,
+            subsystem="club_history",
+            record_type="OwnerClubManagerialTenure",
+            record_id=opened_id,
+        )
+
+    hist = record_history_entry(
+        session,
+        club_id=state.club_id,
+        season_number=season_num,
+        world_day=world_day,
+        category="staff_change",
+        event_type=f"executive_{action}",
+        title=title,
+        narrative_summary=summary,
+        entity_type="executive_staff",
+        entity_id=str(staff_id or staff_name),
+        entity_name=staff_name,
+        established_facts={
+            "action": action,
+            "staff_role": clean_role,
+            "staff_name": staff_name,
+            "world_day": world_day,
+            "canonical_event_id": canonical_ev.id,
+            "correlation_id": corr_id,
+        },
+        is_major_milestone=False,
+        idempotency_key=f"history:{idem}",
+    )
+    record_canonical_projection(
+        session,
+        canonical_event_id=canonical_ev.id,
+        subsystem="club_history",
+        record_type="OwnerClubHistoryEntry",
+        record_id=hist.id,
+        summary=hist.title,
+    )
+
+    apply_supporter_reaction(
+        session,
+        state,
+        event_type="executive_staff_reaction",
+        trigger_source_type="executive_staff",
+        trigger_source_id=staff_name,
+        headline=title,
+        summary=summary,
+        driver_Impacts=(
+            {"club_identity": 3.5, "owner_conduct": 3.0}
+            if action == "hired"
+            else {"club_identity": -2.5, "owner_conduct": -2.5}
+        ),
+        idempotency_key=f"supporter:{idem}",
+        is_disappointment=(action == "dismissed"),
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
+    )
+    publish_media_story(
+        session,
+        state,
+        outlet_key="boardroom_investigative",
+        story_type="leadership_change",
+        classification="verified_event",
+        headline=title,
+        subheadline=f"Boardroom update · {role_label} transition on World Day {world_day}",
+        body=summary,
+        source_type="executive_staff",
+        source_id=str(staff_id or staff_name),
+        established_facts={
+            "action": action,
+            "role": clean_role,
+            "staff_name": staff_name,
+            "world_day": world_day,
+        },
+        idempotency_key=f"media:{idem}",
+        reputation_delta=1 if action == "hired" else -1,
+        leadership_pressure_delta=-1 if action == "hired" else 2,
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
+    )
+    reconcile_club_reputation_and_identity(session, state)
+    return canonical_ev
 
 
 def record_transfer_movement(
@@ -1835,9 +2476,7 @@ def record_transfer_movement(
     wage_dec = Decimal(str(wage_gtex or 0))
     idem = idempotency_key or f"transfer:{state.club_id}:{direction}:{player_id}:d{world_day}"
 
-    existing = session.scalar(
-        select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == idem)
-    )
+    existing = session.scalar(select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == idem))
     if existing is not None:
         return existing
 
@@ -1889,7 +2528,48 @@ def record_transfer_movement(
     session.add(rec)
     session.flush()
 
-    record_history_entry(
+    corr_id = f"corr:{idem[:80]}"
+    canonical_ev = emit_canonical_club_event(
+        session,
+        state,
+        category="recruitment",
+        event_type=f"transfer_{direction}",
+        source_subsystem="recruitment",
+        title=(
+            f"{'Record Signing' if is_rec_signing else 'New Signing'}: {player_name} Joins {state.club_name}"
+            if direction == "arrival"
+            else f"{'Record Sale' if is_rec_sale else 'Player Departure'}: {player_name} Joins {counterparty_club_name}"
+        ),
+        description=note,
+        idempotency_key=f"canon:{idem}",
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        severity="major" if (is_rec_signing or is_rec_sale or int(overall_rating) >= 75) else "notable",
+        source_type="transfer",
+        source_id=rec.id,
+        correlation_id=corr_id,
+        payload={
+            "direction": direction,
+            "transfer_type": transfer_type,
+            "player_id": str(player_id),
+            "player_name": player_name,
+            "position": position,
+            "age": int(age),
+            "overall_rating": int(overall_rating),
+            "fee_gtex": int(fee_dec),
+            "wage_gtex": int(wage_dec),
+            "counterparty_club_name": counterparty_club_name,
+        },
+    )
+    record_canonical_projection(
+        session,
+        canonical_event_id=canonical_ev.id,
+        subsystem="club_history",
+        record_type="OwnerClubTransferRecord",
+        record_id=rec.id,
+        summary=note,
+    )
+
+    hist_tr = record_history_entry(
         session,
         club_id=state.club_id,
         season_number=season_num,
@@ -1919,9 +2599,19 @@ def record_transfer_movement(
             "overall_rating": int(overall_rating),
             "fee_gtex": int(fee_dec),
             "counterparty_club_name": counterparty_club_name,
+            "canonical_event_id": canonical_ev.id,
+            "correlation_id": corr_id,
         },
         is_major_milestone=is_rec_signing or is_rec_sale or int(overall_rating) >= 78,
         idempotency_key=f"history:{idem}",
+    )
+    record_canonical_projection(
+        session,
+        canonical_event_id=canonical_ev.id,
+        subsystem="club_history",
+        record_type="OwnerClubHistoryEntry",
+        record_id=hist_tr.id,
+        summary=hist_tr.title,
     )
 
     # Differentiated supporter reaction: international & younger fans love marquee arrivals; local/lifelong care if key stars are sold
@@ -1952,6 +2642,11 @@ def record_transfer_movement(
         summary=note,
         driver_Impacts=drivers,
         idempotency_key=f"supporter:{idem}",
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
 
     publish_media_story(
@@ -1981,7 +2676,13 @@ def record_transfer_movement(
         idempotency_key=f"media:{idem}",
         reputation_delta=2 if (direction == "arrival" and overall_rating >= 75) else 1 if direction == "arrival" else 0,
         commercial_attractiveness_delta=3 if direction == "arrival" else -1,
+        visibility_classification=VISIBILITY_OFFICIAL_ANNOUNCEMENT,
+        has_public_signal=True,
+        is_official_disclosure=True,
+        canonical_event_id=canonical_ev.id,
+        correlation_id=corr_id,
     )
+    reconcile_club_reputation_and_identity(session, state)
 
     return rec
 
@@ -1999,9 +2700,7 @@ def record_academy_promotion_milestone(
     season_num = _season_number_for_state(state)
     idem = f"academy_grad:{state.club_id}:{squad_player.id}"
 
-    grad = session.scalar(
-        select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.idempotency_key == idem)
-    )
+    grad = session.scalar(select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.idempotency_key == idem))
     if grad is None:
         grad = OwnerClubAcademyGraduate(
             club_id=state.club_id,
@@ -2197,22 +2896,17 @@ def engage_supporters(
     elif action_type == "public_statement":
         msg_lower = clean_msg.lower()
         # Check for contradictions between statement claims and actual club behavior
-        if (
-            any(w in msg_lower for w in ("affordable", "accessible", "working-class", "fair ticket", "community access"))
-            and profile.ticket_price_tier in ("premium", "exploitative")
-        ):
+        if any(
+            w in msg_lower for w in ("affordable", "accessible", "working-class", "fair ticket", "community access")
+        ) and profile.ticket_price_tier in ("premium", "exploitative"):
             contradiction_detected = True
-            contradiction_reason = (
-                f"Statement promised affordable supporter access while club ticket pricing is set to '{profile.ticket_price_tier}'."
-            )
+            contradiction_reason = f"Statement promised affordable supporter access while club ticket pricing is set to '{profile.ticket_price_tier}'."
         elif (
             any(w in msg_lower for w in ("dominant", "unbeaten", "crisis is over", "flawless form"))
             and profile.consecutive_disappointments >= 2
         ):
             contradiction_detected = True
-            contradiction_reason = (
-                f"Statement claimed strong on-pitch momentum despite {profile.consecutive_disappointments} consecutive disappointments."
-            )
+            contradiction_reason = f"Statement claimed strong on-pitch momentum despite {profile.consecutive_disappointments} consecutive disappointments."
         elif stance == "dismissive" or any(w in msg_lower for w in ("ignore", "stop complaining", "quiet")):
             contradiction_detected = True
             contradiction_reason = "Dismissive posture toward supporter concerns alienated organised groups."
@@ -2231,10 +2925,12 @@ def engage_supporters(
     elif action_type == "supporter_meeting":
         if profile.ticket_price_tier == "exploitative" and stance != "concessional":
             contradiction_detected = True
-            contradiction_reason = "Owner convened a supporter meeting but refused to address exploitative ticket pricing."
+            contradiction_reason = (
+                "Owner convened a supporter meeting but refused to address exploitative ticket pricing."
+            )
             drivers = {"owner_conduct": -8.0, "ticket_pricing": -10.0}
             credibility_delta = -8
-            headline = f"Tense Supporter Town Hall Ends in Stalemate Over Pricing"
+            headline = "Tense Supporter Town Hall Ends in Stalemate Over Pricing"
             summary = contradiction_reason
         else:
             drivers = {"owner_conduct": 9.0, "club_identity": 8.0, "ticket_pricing": 4.0}
@@ -2297,7 +2993,8 @@ def engage_supporters(
         summary=summary,
         driver_Impacts=drivers,
         idempotency_key=f"supporter:engage:{state.club_id}:{action_type}:{event_token}",
-        is_disappointment=contradiction_detected or (action_type == "ticketing_decision" and profile.ticket_price_tier in ("premium", "exploitative")),
+        is_disappointment=contradiction_detected
+        or (action_type == "ticketing_decision" and profile.ticket_price_tier in ("premium", "exploitative")),
         credibility_delta=credibility_delta,
         contradiction_detected=contradiction_detected,
         contradiction_reason=contradiction_reason,
@@ -2347,7 +3044,9 @@ def engage_supporters(
         established_facts={
             "overall_sentiment": int(profile.overall_sentiment),
             "owner_credibility_score": int(profile.owner_credibility_score),
-            "community_investment_gtex": int(community_investment_gtex or 250) if action_type == "community_initiative" else 0,
+            "community_investment_gtex": (
+                int(community_investment_gtex or 250) if action_type == "community_initiative" else 0
+            ),
         },
         idempotency_key=f"media:engage:{state.club_id}:{event_token}",
         reputation_delta=-2 if contradiction_detected else 1,
@@ -2392,15 +3091,16 @@ def respond_to_media_story(
     # Domain governance: Owner handles ownership/business/institutional stories; sporting press belongs to football staff
     sporting_story_types = {"match_report", "player_story", "academy_development"}
     role_mismatch_penalty = False
-    if speaker_role == "owner" and story.story_type in sporting_story_types and response_stance == "tactical_interference":
+    if (
+        speaker_role == "owner"
+        and story.story_type in sporting_story_types
+        and response_stance == "tactical_interference"
+    ):
         role_mismatch_penalty = True
 
     contradiction = False
     contradiction_note = None
-    if (
-        story.classification == "verified_event"
-        and response_stance == "deny_facts"
-    ):
+    if story.classification == "verified_event" and response_stance == "deny_facts":
         contradiction = True
         contradiction_note = "Attempted to deny a verified ledger/match event."
 
@@ -2514,9 +3214,7 @@ def process_world_day_institutional_tick(
 
     # 1. If the club has high-priority watchlist targets, occasionally generate a clearly labeled transfer rumour
     watchlist_items = list(
-        session.scalars(
-            select(OwnerScoutingWatchlist).where(OwnerScoutingWatchlist.club_id == state.club_id)
-        ).all()
+        session.scalars(select(OwnerScoutingWatchlist).where(OwnerScoutingWatchlist.club_id == state.club_id)).all()
     )
     rumours_generated = 0
     if watchlist_items and (world_day % 3 == 0):
@@ -2568,12 +3266,19 @@ def process_world_day_institutional_tick(
         segments=segments,
     )
     flag_modified(profile, "atmosphere_profile_json")
+    reputation_dimensions = reconcile_club_reputation_and_identity(
+        session,
+        state,
+        profile=profile,
+        segments=segments,
+    )
     session.flush()
     return {
         "world_day": world_day,
         "supporter_sentiment": profile.overall_sentiment,
         "active_protest_stage": profile.active_protest_stage,
         "rumours_generated": rumours_generated,
+        "reputation_dimensions": reputation_dimensions,
     }
 
 
@@ -2708,9 +3413,7 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
                 "status_label": seg.status_label,
                 "primary_expectation": (seg.expectations_json or {}).get("core_demand", "Competitive progress"),
                 "recent_reaction": (
-                    (seg.recent_memory_json or [{}])[0].get("headline")
-                    if seg.recent_memory_json
-                    else seg.status_label
+                    (seg.recent_memory_json or [{}])[0].get("headline") if seg.recent_memory_json else seg.status_label
                 ),
                 "priorities": dict(seg.priorities_json or {}),
                 "expectations": dict(seg.expectations_json or {}),
@@ -2765,11 +3468,11 @@ def get_media_ecosystem_overview(
     rep_tier = (
         "Global Powerhouse"
         if rep_score >= 80
-        else "Continental Contender"
-        if rep_score >= 60
-        else "Established Institution"
-        if rep_score >= 35
-        else "Emerging Challenger"
+        else (
+            "Continental Contender"
+            if rep_score >= 60
+            else "Established Institution" if rep_score >= 35 else "Emerging Challenger"
+        )
     )
     standing_obj = {
         "public_reputation": rep_score,
@@ -2837,7 +3540,12 @@ def compute_club_records_and_chapters(
         goals = int(pers.get("club_goals", 0))
         if apps > most_apps:
             most_apps = apps
-            most_apps_player = {"player_id": sp.id, "player_name": sp.name, "position": sp.position, "appearances": apps}
+            most_apps_player = {
+                "player_id": sp.id,
+                "player_name": sp.name,
+                "position": sp.position,
+                "appearances": apps,
+            }
         if goals > top_goals:
             top_goals = goals
             top_goal_player = {"player_id": sp.id, "player_name": sp.name, "position": sp.position, "goals": goals}
@@ -2898,7 +3606,9 @@ def compute_club_records_and_chapters(
     departures = [t for t in transfers if t.direction in ("departure", "out")]
     rec_signing = max(arrivals, key=lambda t: Decimal(str(t.fee_gtex or 0)), default=None)
     rec_sale = max(departures, key=lambda t: Decimal(str(t.fee_gtex or 0)), default=None)
-    best_season = min(season_archives, key=lambda s: (int(s.division_level or 4), int(s.final_position or 99)), default=None)
+    best_season = min(
+        season_archives, key=lambda s: (int(s.division_level or 4), int(s.final_position or 99)), default=None
+    )
 
     club_records = {
         "most_appearances": most_apps_player,
@@ -2956,7 +3666,9 @@ def compute_club_records_and_chapters(
         }
     ]
 
-    first_promo_or_title = next((s for s in reversed(season_archives) if s.trophy_won or s.promotion_status == "promoted"), None)
+    first_promo_or_title = next(
+        (s for s in reversed(season_archives) if s.trophy_won or s.promotion_status == "promoted"), None
+    )
     if first_promo_or_title:
         chapters.append(
             {
@@ -2986,7 +3698,8 @@ def compute_club_records_and_chapters(
                     if best_mgr.trophies_won > 0
                     else f"The Dugout Tenure of {best_mgr.manager_name}"
                 ),
-                "era_label": f"World Day {best_mgr.appointed_world_day}" + (f"–{best_mgr.departed_world_day}" if best_mgr.departed_world_day else "–Present"),
+                "era_label": f"World Day {best_mgr.appointed_world_day}"
+                + (f"–{best_mgr.departed_world_day}" if best_mgr.departed_world_day else "–Present"),
                 "narrative": best_mgr.tenure_summary,
                 "grounded_facts": {
                     "manager_name": best_mgr.manager_name,
@@ -2997,7 +3710,9 @@ def compute_club_records_and_chapters(
             }
         )
 
-    star_grad = max(academy_graduates, key=lambda g: (g.first_team_goals, g.first_team_appearances, g.current_rating), default=None)
+    star_grad = max(
+        academy_graduates, key=lambda g: (g.first_team_goals, g.first_team_appearances, g.current_rating), default=None
+    )
     if star_grad:
         chapters.append(
             {
@@ -3086,7 +3801,9 @@ def get_institutional_history_archive(
         session.scalars(
             select(OwnerClubAcademyGraduate)
             .where(OwnerClubAcademyGraduate.club_id == state.club_id)
-            .order_by(desc(OwnerClubAcademyGraduate.first_team_appearances), desc(OwnerClubAcademyGraduate.current_rating))
+            .order_by(
+                desc(OwnerClubAcademyGraduate.first_team_appearances), desc(OwnerClubAcademyGraduate.current_rating)
+            )
         ).all()
     )
     rivalries = list(
@@ -3282,4 +3999,422 @@ def get_institutional_history_archive(
         "club_records": club_records,
         "historical_chapters": narrative_chapters,
         "narrative_chapters": narrative_chapters,
+        "reputation_dimensions": reconcile_club_reputation_and_identity(session, state),
+        "unified_timeline": build_unified_club_timeline(session, state, limit=30),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Unified Shared Reputation, Club Identity, Timeline & Institutional Pulse
+# ---------------------------------------------------------------------------
+
+
+def reconcile_club_reputation_and_identity(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    profile: OwnerSupporterProfile | None = None,
+    segments: list[OwnerSupporterSegment] | None = None,
+) -> dict[str, Any]:
+    """Reconcile the 9 shared club reputation & identity dimensions across staff, supporters, media, and history."""
+    if profile is None or segments is None:
+        profile, segments = ensure_club_institutional_ecosystem(session, state)
+
+    fac = dict(state.facilities_json or {})
+    culture = dict(fac.get("_club_culture") or {})
+    rels = list(
+        session.scalars(select(OwnerClubRelationship).where(OwnerClubRelationship.club_id == state.club_id)).all()
+    )
+    mgr_rel = next(
+        (r for r in rels if r.participant_b_id == "first_team_manager" or "manager" in str(r.pairing_key)),
+        None,
+    )
+    hoyd_rel = next(
+        (r for r in rels if r.participant_b_id == "head_of_youth" or "youth" in str(r.pairing_key)),
+        None,
+    )
+    active_mgr_tenure = session.scalar(
+        select(OwnerClubManagerialTenure).where(
+            OwnerClubManagerialTenure.club_id == state.club_id,
+            OwnerClubManagerialTenure.role == "first_team_manager",
+            OwnerClubManagerialTenure.status == "active",
+        )
+    )
+    all_mgr_tenures = list(
+        session.scalars(
+            select(OwnerClubManagerialTenure).where(
+                OwnerClubManagerialTenure.club_id == state.club_id,
+                OwnerClubManagerialTenure.role == "first_team_manager",
+            )
+        ).all()
+    )
+    graduates = list(
+        session.scalars(select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.club_id == state.club_id)).all()
+    )
+    stories = list(
+        session.scalars(
+            select(OwnerMediaStory)
+            .where(OwnerMediaStory.club_id == state.club_id)
+            .order_by(desc(OwnerMediaStory.created_at))
+            .limit(12)
+        ).all()
+    )
+
+    prestige = int(state.prestige or 10)
+    supporter_sent = int(profile.overall_sentiment or 65)
+    owner_cred = int(profile.owner_credibility_score or 70)
+    mgr_conf = int(profile.confidence_in_manager or 68)
+    rel_mgr_score = int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else mgr_conf
+    mgr_trust_standing = _clamp((mgr_conf * 0.55) + (rel_mgr_score * 0.45))
+
+    youth_reliance = int(culture.get("youth_reliance", 55))
+    debut_count = sum(1 for g in graduates if g.debut_match_id is not None)
+    rejection_streak = int(fac.get("_manager_youth_rejection_streak") or 0)
+    hoyd_align = int(hoyd_rel.alignment) if hoyd_rel is not None else 60
+    academy_identity = _clamp(
+        (youth_reliance * 0.50)
+        + (hoyd_align * 0.30)
+        + min(20, len(graduates) * 4 + debut_count * 6)
+        - min(16, rejection_streak * 5)
+    )
+
+    win_rate_pct = (
+        int(round((active_mgr_tenure.wins / active_mgr_tenure.matches_managed) * 100))
+        if active_mgr_tenure and active_mgr_tenure.matches_managed > 0
+        else 50
+    )
+    ambition_culture = int(culture.get("ambition", 60))
+    sporting_ambition = _clamp((prestige * 0.45) + (ambition_culture * 0.35) + (win_rate_pct * 0.20))
+
+    attacking_bias = int(culture.get("attacking_bias", 55))
+    mgr_style = str((state.manager_json or {}).get("style") or "balanced")
+    tactical_score = _clamp(
+        (attacking_bias * 0.60)
+        + (
+            (72 if mgr_style in ("high_press", "attacking", "possession") else 62 if mgr_style == "balanced" else 56)
+            * 0.40
+        )
+    )
+
+    commercial_bonus = sum(int(st.commercial_attractiveness_delta or 0) for st in stories[:8])
+    commercial_attractiveness = _clamp(
+        (prestige * 0.42)
+        + (supporter_sent * 0.33)
+        + (int(profile.matchday_enthusiasm or 65) * 0.25)
+        + max(-12, min(15, commercial_bonus))
+    )
+
+    protest_penalty = {
+        "none": 0,
+        "grumbling": 6,
+        "petition": 13,
+        "banner_protest": 22,
+        "organised_boycott": 34,
+    }.get(profile.active_protest_stage, 0)
+    turnover_penalty = max(0, (len(all_mgr_tenures) - 1) * 6)
+    avg_tension = int(round(sum(int(r.tension) for r in rels) / len(rels))) if rels else 22
+    institutional_stability = _clamp(88 - protest_penalty - min(24, turnover_penalty) - max(0, avg_tension - 30) * 0.5)
+
+    pressure_net = sum(int(st.leadership_pressure_delta or 0) for st in stories[:6])
+    public_trust_governance = _clamp(
+        (owner_cred * 0.50)
+        + (int(profile.confidence_in_owner or 68) * 0.35)
+        + (int(culture.get("professionalism", 60)) * 0.15)
+        - max(0, min(18, pressure_net))
+    )
+
+    overall_reputation = _clamp(
+        (prestige * 0.35)
+        + (commercial_attractiveness * 0.20)
+        + (public_trust_governance * 0.20)
+        + (institutional_stability * 0.15)
+        + (sporting_ambition * 0.10)
+    )
+
+    dimensions = {
+        "overall_reputation_prestige": overall_reputation,
+        "club_prestige": prestige,
+        "supporter_sentiment": supporter_sent,
+        "owner_credibility": owner_cred,
+        "manager_trust_and_standing": mgr_trust_standing,
+        "academy_and_youth_identity": academy_identity,
+        "sporting_ambition_and_competitive_prestige": sporting_ambition,
+        "tactical_identity": tactical_score,
+        "tactical_style": mgr_style,
+        "commercial_attractiveness": commercial_attractiveness,
+        "institutional_stability": institutional_stability,
+        "public_trust_and_governance": public_trust_governance,
+        "supporter_culture_label": profile.supporter_culture_label,
+        "protest_stage": profile.active_protest_stage,
+        "world_day": int(state.world_day or 1),
+    }
+
+    exp = dict(profile.expectations_json or {})
+    exp["reputation_dimensions"] = dimensions
+    profile.expectations_json = exp
+    flag_modified(profile, "expectations_json")
+
+    fac["_reconciled_reputation"] = dimensions
+    state.facilities_json = fac
+    flag_modified(state, "facilities_json")
+    return dimensions
+
+
+def build_unified_club_timeline(
+    session: Session,
+    state: OwnerClubState,
+    *,
+    limit: int = 30,
+    include_internal: bool = True,
+) -> list[dict[str, Any]]:
+    """Build a correlated timeline uniting canonical OwnerClubEvents with their linked projections across subsystems."""
+    events = list(
+        session.scalars(
+            select(OwnerClubEvent)
+            .where(OwnerClubEvent.club_id == state.club_id)
+            .order_by(desc(OwnerClubEvent.world_day), desc(OwnerClubEvent.created_at))
+            .limit(max(1, limit * 2))
+        ).all()
+    )
+    supporter_by_id = {
+        row.id: row
+        for row in session.scalars(
+            select(OwnerSupporterEvent).where(OwnerSupporterEvent.club_id == state.club_id)
+        ).all()
+    }
+    media_by_id = {
+        row.id: row
+        for row in session.scalars(select(OwnerMediaStory).where(OwnerMediaStory.club_id == state.club_id)).all()
+    }
+    history_by_id = {
+        row.id: row
+        for row in session.scalars(
+            select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.club_id == state.club_id)
+        ).all()
+    }
+    staff_dec_by_id = {
+        row.id: row
+        for row in session.scalars(
+            select(OwnerStaffDecisionRecord).where(OwnerStaffDecisionRecord.club_id == state.club_id)
+        ).all()
+    }
+
+    timeline: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for ev in events:
+        cons = dict(ev.consequences_json or {})
+        vis = str(cons.get("visibility_classification") or VISIBILITY_PUBLIC_OBSERVABLE)
+        if not include_internal and vis not in PUBLIC_VISIBILITY_CLASSIFICATIONS:
+            continue
+        if ev.id in seen_ids:
+            continue
+        seen_ids.add(ev.id)
+
+        projections = list(cons.get("projections_applied") or [])
+        linked_supporter = None
+        linked_media: list[dict[str, Any]] = []
+        linked_history = None
+        linked_decision = None
+        for proj in projections:
+            rtype = proj.get("record_type")
+            rid = str(proj.get("record_id") or "")
+            if rtype == "OwnerSupporterEvent" and rid in supporter_by_id:
+                se = supporter_by_id[rid]
+                linked_supporter = {
+                    "id": se.id,
+                    "headline": se.headline,
+                    "overall_sentiment_delta": se.overall_sentiment_delta,
+                }
+            elif rtype == "OwnerMediaStory" and rid in media_by_id:
+                ms = media_by_id[rid]
+                linked_media.append(
+                    {
+                        "id": ms.id,
+                        "outlet_name": ms.outlet_name,
+                        "classification": ms.classification,
+                        "headline": ms.headline,
+                    }
+                )
+            elif rtype == "OwnerClubHistoryEntry" and rid in history_by_id:
+                he = history_by_id[rid]
+                linked_history = {
+                    "id": he.id,
+                    "category": he.category,
+                    "title": he.title,
+                    "is_major_milestone": bool(he.is_major_milestone),
+                }
+            elif rtype == "OwnerStaffDecisionRecord" and rid in staff_dec_by_id:
+                sd = staff_dec_by_id[rid]
+                linked_decision = {
+                    "id": sd.id,
+                    "staff_role": sd.staff_role,
+                    "staff_name": sd.staff_name,
+                    "decision_status": sd.decision_status,
+                }
+
+        timeline.append(
+            {
+                "id": ev.id,
+                "canonical_event_id": ev.id,
+                "correlation_id": cons.get("correlation_id"),
+                "world_day": int(ev.world_day),
+                "category": ev.category,
+                "event_type": ev.event_type,
+                "source_subsystem": cons.get("source_subsystem") or ev.source_type,
+                "visibility_classification": vis,
+                "severity": ev.severity,
+                "title": ev.title,
+                "summary": ev.description,
+                "projections": projections,
+                "linked_supporter_event": linked_supporter,
+                "linked_media_stories": linked_media,
+                "linked_history_entry": linked_history,
+                "linked_staff_decision": linked_decision,
+                "created_at": ev.created_at.isoformat() if ev.created_at else None,
+            }
+        )
+        if len(timeline) >= limit:
+            break
+
+    return timeline
+
+
+def get_unified_club_pulse(session: Session, state: OwnerClubState) -> dict[str, Any]:
+    """Return a single unified pulse view tying together staff, supporters, media, recruitment, academy, and reputation."""
+    profile, segments = ensure_club_institutional_ecosystem(session, state)
+    reputation = reconcile_club_reputation_and_identity(
+        session,
+        state,
+        profile=profile,
+        segments=segments,
+    )
+    active_mgr_tenure = session.scalar(
+        select(OwnerClubManagerialTenure).where(
+            OwnerClubManagerialTenure.club_id == state.club_id,
+            OwnerClubManagerialTenure.role == "first_team_manager",
+            OwnerClubManagerialTenure.status == "active",
+        )
+    )
+    stories = list(
+        session.scalars(
+            select(OwnerMediaStory)
+            .where(OwnerMediaStory.club_id == state.club_id)
+            .order_by(desc(OwnerMediaStory.world_day), desc(OwnerMediaStory.created_at))
+            .limit(20)
+        ).all()
+    )
+    unresolved_decisions = list(
+        session.scalars(
+            select(ClubDelegatedDecision).where(
+                ClubDelegatedDecision.club_id == state.club_id,
+                ClubDelegatedDecision.status.in_(("pending_approval", "escalated")),
+            )
+        ).all()
+    )
+    open_recruitments = list(
+        session.scalars(
+            select(OwnerRecruitmentAssignment).where(
+                OwnerRecruitmentAssignment.club_id == state.club_id,
+                OwnerRecruitmentAssignment.gm_evaluation_status.notin_(
+                    ("completed", "signed_to_first_team", "rejected_by_owner", "failed_insufficient_funds")
+                ),
+            )
+        ).all()
+    )
+    graduates = list(
+        session.scalars(select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.club_id == state.club_id)).all()
+    )
+    transfers = list(
+        session.scalars(select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.club_id == state.club_id)).all()
+    )
+    proactive_alerts = session.scalars(
+        select(OwnerInboxItem)
+        .where(
+            OwnerInboxItem.club_id == state.club_id,
+            OwnerInboxItem.status == "unread",
+        )
+        .order_by(desc(OwnerInboxItem.created_at))
+        .limit(8)
+    ).all()
+    meetings = list(
+        session.scalars(
+            select(OwnerClubMeeting)
+            .where(OwnerClubMeeting.club_id == state.club_id)
+            .order_by(desc(OwnerClubMeeting.created_at))
+            .limit(5)
+        ).all()
+    )
+
+    supporter_driven_agenda = []
+    if profile.active_protest_stage in ("petition", "banner_protest", "organised_boycott"):
+        supporter_driven_agenda.append(
+            {
+                "agenda_key": "supporter_confidence_and_pricing_review",
+                "title": f"Address Terrace Protest Stage: {profile.active_protest_stage.replace('_', ' ').title()}",
+                "severity": "critical" if profile.active_protest_stage == "organised_boycott" else "high",
+                "ticket_price_tier": profile.ticket_price_tier,
+                "overall_sentiment": int(profile.overall_sentiment),
+            }
+        )
+    if profile.ticket_price_tier in ("premium", "exploitative") and profile.overall_sentiment < 58:
+        supporter_driven_agenda.append(
+            {
+                "agenda_key": "ticketing_fairness_review",
+                "title": f"Ticketing Pressure Under {profile.ticket_price_tier.title()} Pricing Tier",
+                "severity": "medium",
+                "ticket_price_tier": profile.ticket_price_tier,
+            }
+        )
+
+    return {
+        "club_id": state.club_id,
+        "club_name": state.club_name,
+        "world_day": int(state.world_day or 1),
+        "reputation_dimensions": reputation,
+        "supporters": {
+            "overall_sentiment": int(profile.overall_sentiment),
+            "confidence_in_owner": int(profile.confidence_in_owner),
+            "confidence_in_manager": int(profile.confidence_in_manager),
+            "owner_credibility_score": int(profile.owner_credibility_score),
+            "accumulated_frustration": int(profile.accumulated_frustration),
+            "active_protest_stage": profile.active_protest_stage,
+            "active_campaign_headline": profile.active_campaign_headline,
+            "ticket_price_tier": profile.ticket_price_tier,
+            "attendance_modifier_pct": int(profile.attendance_modifier_pct),
+            "culture_label": profile.supporter_culture_label,
+        },
+        "media": {
+            "total_stories": len(stories),
+            "verified_count": sum(1 for s in stories if s.classification in ("verified_event", "reported_information")),
+            "rumour_count": sum(1 for s in stories if s.classification == "rumour"),
+            "opinion_count": sum(1 for s in stories if s.classification == "opinion"),
+            "latest_headline": stories[0].headline if stories else None,
+            "leadership_pressure_sum": sum(int(s.leadership_pressure_delta or 0) for s in stories[:6]),
+        },
+        "staff_and_governance": {
+            "manager_name": str((state.manager_json or {}).get("name") or "Caretaker Manager"),
+            "active_manager_tenure": (
+                {
+                    "manager_name": active_mgr_tenure.manager_name,
+                    "matches_managed": active_mgr_tenure.matches_managed,
+                    "wins": active_mgr_tenure.wins,
+                    "draws": active_mgr_tenure.draws,
+                    "losses": active_mgr_tenure.losses,
+                    "appointed_world_day": active_mgr_tenure.appointed_world_day,
+                }
+                if active_mgr_tenure
+                else None
+            ),
+            "unresolved_decisions_count": len(unresolved_decisions),
+            "open_recruitments_count": len(open_recruitments),
+            "unread_proactive_alerts_count": len(proactive_alerts),
+            "recent_meetings_count": len(meetings),
+            "supporter_driven_agenda": supporter_driven_agenda,
+        },
+        "institution_counts": {
+            "transfers_recorded": len(transfers),
+            "academy_graduates": len(graduates),
+            "academy_debutants": sum(1 for g in graduates if g.debut_match_id is not None),
+        },
+        "unified_timeline": build_unified_club_timeline(session, state, limit=25),
     }

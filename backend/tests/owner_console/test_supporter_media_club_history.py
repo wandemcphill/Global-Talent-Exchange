@@ -11,14 +11,13 @@ from app.admin_engine.service import AdminEngineService
 from app.club_legacy.operations import seed_catalogue
 from app.models.admin_rules import AdminFeatureFlag
 from app.models.user import User
-from app.owner_console import competitions as comps, ledger, living_institution, service
+from app.owner_console import competitions as comps, ledger, living_institution
 from app.owner_console.institutional_models import (
     OwnerSupporterEvent,
     OwnerSupporterProfile,
 )
 from app.owner_console.models import (
     OwnerClubState,
-    OwnerCompetition,
     OwnerCompetitionEntry,
     OwnerMatch,
 )
@@ -97,8 +96,7 @@ def test_supporter_segments_differentiated_reactions_and_sentiment_memory(
         "organised_groups",
     }
     assert (
-        segments["loyal_lifelong"]["primary_expectation"]
-        != segments["international_followers"]["primary_expectation"]
+        segments["loyal_lifelong"]["primary_expectation"] != segments["international_followers"]["primary_expectation"]
     )
     assert segments["loyal_lifelong"]["loyalty"] > segments["international_followers"]["loyalty"]
 
@@ -202,9 +200,7 @@ def test_supporter_segments_differentiated_reactions_and_sentiment_memory(
         )
         session.commit()
 
-        prof_after_win = session.scalar(
-            select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == club_id)
-        )
+        prof_after_win = session.scalar(select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == club_id))
         assert prof_after_win is not None
         assert prof_after_win.overall_sentiment > sentiment_before_win
         assert prof_after_win.overall_sentiment < 75, (
@@ -464,9 +460,7 @@ def test_permanent_institutional_history_tenures_transfers_graduates_and_rivalri
         )
 
         entries = list(
-            session.scalars(
-                select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.competition_id == comp.id)
-            ).all()
+            session.scalars(select(OwnerCompetitionEntry).where(OwnerCompetitionEntry.competition_id == comp.id)).all()
         )
         for e in entries:
             if e.club_id == club_id:
