@@ -115,7 +115,9 @@ const DIRECTIVE_DEPARTMENT_BY_DESTINATION: Record<string, string> = {
   medical_department: "medical",
   academy_department: "academy",
   finance_commercial_office: "finance",
-  general_managers_office: "scouting",
+  // The General Manager owns cross-department execution and campus operations,
+  // not the Chief Scout's recruitment-only directive queue.
+  general_managers_office: "executive",
   executive_office: "executive",
 };
 
@@ -976,17 +978,26 @@ export function ClubOperationsCentre3D({
   };
 
   const handleSendStaffChat = async (roleKey: string) => {
-    if (!staffMessageText.trim()) return;
+    const message = staffMessageText.trim();
+    if (!message || sendingChat) return;
     setSendingChat(true);
     try {
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/staff/chat`, {
-        role: roleKey,
-        message: staffMessageText.trim(),
+      // Use the same durable communications thread as the Club Inbox.
+      // The legacy /staff/chat endpoint writes to the older story-chat flow.
+      const threadId = roleKey.startsWith("staff:") ? roleKey : `staff:${roleKey}`;
+      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
+        thread_id: threadId,
+        message,
+        sender_role: "owner",
         topic: activeHotspotId || "operations",
+        priority: "normal",
+        request_reply: true,
       });
       setStaffMessageText("");
       await invalidateAll();
-      toast.success("Executive directive logged with department lead.");
+      queryClient.invalidateQueries({ queryKey: ["communications", clubId] });
+      queryClient.invalidateQueries({ queryKey: ["owner-comms-summary"] });
+      toast.success("Message delivered to the department's durable communications thread.");
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
