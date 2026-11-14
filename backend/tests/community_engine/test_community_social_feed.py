@@ -157,7 +157,9 @@ def test_poll_requires_valid_options_and_one_vote_per_user(client: TestClient) -
     option_id = poll["poll"]["options"][0]["id"]
     voted = client.post(f"/community/posts/{poll['id']}/vote", json={"option_id": option_id}).json()
     assert voted["poll"]["total_votes"] == 1
-    revote = client.post(f"/community/posts/{poll['id']}/vote", json={"option_id": poll["poll"]["options"][1]["id"]}).json()
+    revote = client.post(
+        f"/community/posts/{poll['id']}/vote", json={"option_id": poll["poll"]["options"][1]["id"]}
+    ).json()
     assert revote["poll"]["total_votes"] == 1
     assert client.post(f"/community/posts/{poll['id']}/vote", json={"option_id": "nope"}).status_code == 400
 

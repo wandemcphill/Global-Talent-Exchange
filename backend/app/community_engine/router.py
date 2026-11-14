@@ -45,7 +45,7 @@ from app.services.creator_fan_engagement_service import (
     CreatorFanEngagementService,
 )
 
-router = APIRouter(prefix='/community', tags=['community'])
+router = APIRouter(prefix="/community", tags=["community"])
 router.include_router(social_feed_router)
 
 
@@ -72,18 +72,26 @@ def _raise_fan(exc: CreatorFanEngagementError) -> None:
     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=reason) from exc
 
 
-@router.get('/digest', response_model=CommunityDigestView)
-def get_digest(current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> CommunityDigestView:
+@router.get("/digest", response_model=CommunityDigestView)
+def get_digest(
+    current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)
+) -> CommunityDigestView:
     return CommunityDigestView.model_validate(service.digest(actor=current_user))
 
 
-@router.get('/watchlist', response_model=list[CompetitionWatchlistView])
-def list_watchlist(current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> list[CompetitionWatchlistView]:
+@router.get("/watchlist", response_model=list[CompetitionWatchlistView])
+def list_watchlist(
+    current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)
+) -> list[CompetitionWatchlistView]:
     return [CompetitionWatchlistView.model_validate(item) for item in service.list_watchlist(actor=current_user)]
 
 
-@router.post('/watchlist', response_model=CompetitionWatchlistView, status_code=status.HTTP_201_CREATED)
-def add_watchlist(payload: CompetitionWatchlistCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> CompetitionWatchlistView:
+@router.post("/watchlist", response_model=CompetitionWatchlistView, status_code=status.HTTP_201_CREATED)
+def add_watchlist(
+    payload: CompetitionWatchlistCreate,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> CompetitionWatchlistView:
     try:
         item = service.add_watchlist(actor=current_user, **payload.model_dump())
         service.session.commit()
@@ -93,8 +101,12 @@ def add_watchlist(payload: CompetitionWatchlistCreate, current_user: User = Depe
     return CompetitionWatchlistView.model_validate(item)
 
 
-@router.delete('/watchlist/{competition_key}', status_code=status.HTTP_204_NO_CONTENT)
-def remove_watchlist(competition_key: str, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> None:
+@router.delete("/watchlist/{competition_key}", status_code=status.HTTP_204_NO_CONTENT)
+def remove_watchlist(
+    competition_key: str,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> None:
     try:
         service.remove_watchlist(actor=current_user, competition_key=competition_key)
         service.session.commit()
@@ -103,13 +115,19 @@ def remove_watchlist(competition_key: str, current_user: User = Depends(get_curr
         _raise(exc)
 
 
-@router.get('/live-threads', response_model=list[LiveThreadView])
-def list_live_threads(competition_key: str | None = None, service: CommunityEngineService = Depends(get_service)) -> list[LiveThreadView]:
+@router.get("/live-threads", response_model=list[LiveThreadView])
+def list_live_threads(
+    competition_key: str | None = None, service: CommunityEngineService = Depends(get_service)
+) -> list[LiveThreadView]:
     return [LiveThreadView.model_validate(item) for item in service.list_live_threads(competition_key=competition_key)]
 
 
-@router.post('/live-threads', response_model=LiveThreadView, status_code=status.HTTP_201_CREATED)
-def create_live_thread(payload: LiveThreadCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> LiveThreadView:
+@router.post("/live-threads", response_model=LiveThreadView, status_code=status.HTTP_201_CREATED)
+def create_live_thread(
+    payload: LiveThreadCreate,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> LiveThreadView:
     try:
         thread = service.create_live_thread(actor=current_user, **payload.model_dump())
         service.session.commit()
@@ -119,7 +137,7 @@ def create_live_thread(payload: LiveThreadCreate, current_user: User = Depends(g
     return LiveThreadView.model_validate(thread)
 
 
-@router.get('/live-threads/{thread_id}', response_model=LiveThreadView)
+@router.get("/live-threads/{thread_id}", response_model=LiveThreadView)
 def get_live_thread(thread_id: str, service: CommunityEngineService = Depends(get_service)) -> LiveThreadView:
     try:
         thread = service.get_live_thread(thread_id=thread_id)
@@ -128,8 +146,10 @@ def get_live_thread(thread_id: str, service: CommunityEngineService = Depends(ge
     return LiveThreadView.model_validate(thread)
 
 
-@router.get('/live-threads/{thread_id}/messages', response_model=list[LiveThreadMessageView])
-def list_live_thread_messages(thread_id: str, service: CommunityEngineService = Depends(get_service)) -> list[LiveThreadMessageView]:
+@router.get("/live-threads/{thread_id}/messages", response_model=list[LiveThreadMessageView])
+def list_live_thread_messages(
+    thread_id: str, service: CommunityEngineService = Depends(get_service)
+) -> list[LiveThreadMessageView]:
     try:
         items = service.list_live_thread_messages(thread_id=thread_id)
     except CommunityEngineError as exc:
@@ -137,8 +157,15 @@ def list_live_thread_messages(thread_id: str, service: CommunityEngineService = 
     return [LiveThreadMessageView.model_validate(item) for item in items]
 
 
-@router.post('/live-threads/{thread_id}/messages', response_model=LiveThreadMessageView, status_code=status.HTTP_201_CREATED)
-def post_live_thread_message(thread_id: str, payload: LiveThreadMessageCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> LiveThreadMessageView:
+@router.post(
+    "/live-threads/{thread_id}/messages", response_model=LiveThreadMessageView, status_code=status.HTTP_201_CREATED
+)
+def post_live_thread_message(
+    thread_id: str,
+    payload: LiveThreadMessageCreate,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> LiveThreadMessageView:
     try:
         item = service.post_live_thread_message(actor=current_user, thread_id=thread_id, **payload.model_dump())
         service.session.commit()
@@ -148,19 +175,25 @@ def post_live_thread_message(thread_id: str, payload: LiveThreadMessageCreate, c
     return LiveThreadMessageView.model_validate(item)
 
 
-@router.get('/private-messages/threads', response_model=list[PrivateMessageThreadView])
-def list_private_threads(current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> list[PrivateMessageThreadView]:
+@router.get("/private-messages/threads", response_model=list[PrivateMessageThreadView])
+def list_private_threads(
+    current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)
+) -> list[PrivateMessageThreadView]:
     threads = service.list_private_threads(actor=current_user)
     output: list[PrivateMessageThreadView] = []
     for thread in threads:
         participants = service.list_private_thread_participants(thread_id=thread.id)
-        payload = PrivateMessageThreadView.model_validate(thread).model_copy(update={'participants': participants})
+        payload = PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
         output.append(payload)
     return output
 
 
-@router.post('/private-messages/threads', response_model=PrivateMessageThreadView, status_code=status.HTTP_201_CREATED)
-def create_private_thread(payload: PrivateMessageThreadCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> PrivateMessageThreadView:
+@router.post("/private-messages/threads", response_model=PrivateMessageThreadView, status_code=status.HTTP_201_CREATED)
+def create_private_thread(
+    payload: PrivateMessageThreadCreate,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> PrivateMessageThreadView:
     try:
         thread = service.create_private_thread(actor=current_user, **payload.model_dump())
         participants = service.list_private_thread_participants(thread_id=thread.id)
@@ -168,21 +201,29 @@ def create_private_thread(payload: PrivateMessageThreadCreate, current_user: Use
     except CommunityEngineError as exc:
         service.session.rollback()
         _raise(exc)
-    return PrivateMessageThreadView.model_validate(thread).model_copy(update={'participants': participants})
+    return PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
 
 
-@router.get('/private-messages/threads/{thread_id}', response_model=PrivateMessageThreadView)
-def get_private_thread(thread_id: str, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> PrivateMessageThreadView:
+@router.get("/private-messages/threads/{thread_id}", response_model=PrivateMessageThreadView)
+def get_private_thread(
+    thread_id: str,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> PrivateMessageThreadView:
     try:
         thread = service.get_private_thread(actor=current_user, thread_id=thread_id)
         participants = service.list_private_thread_participants(thread_id=thread.id)
     except CommunityEngineError as exc:
         _raise(exc)
-    return PrivateMessageThreadView.model_validate(thread).model_copy(update={'participants': participants})
+    return PrivateMessageThreadView.model_validate(thread).model_copy(update={"participants": participants})
 
 
-@router.get('/private-messages/threads/{thread_id}/messages', response_model=list[PrivateMessageView])
-def list_private_messages(thread_id: str, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> list[PrivateMessageView]:
+@router.get("/private-messages/threads/{thread_id}/messages", response_model=list[PrivateMessageView])
+def list_private_messages(
+    thread_id: str,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> list[PrivateMessageView]:
     try:
         messages = service.list_private_messages(actor=current_user, thread_id=thread_id)
     except CommunityEngineError as exc:
@@ -190,8 +231,17 @@ def list_private_messages(thread_id: str, current_user: User = Depends(get_curre
     return [PrivateMessageView.model_validate(item) for item in messages]
 
 
-@router.post('/private-messages/threads/{thread_id}/messages', response_model=PrivateMessageView, status_code=status.HTTP_201_CREATED)
-def post_private_message(thread_id: str, payload: PrivateMessageCreate, current_user: User = Depends(get_current_user), service: CommunityEngineService = Depends(get_service)) -> PrivateMessageView:
+@router.post(
+    "/private-messages/threads/{thread_id}/messages",
+    response_model=PrivateMessageView,
+    status_code=status.HTTP_201_CREATED,
+)
+def post_private_message(
+    thread_id: str,
+    payload: PrivateMessageCreate,
+    current_user: User = Depends(get_current_user),
+    service: CommunityEngineService = Depends(get_service),
+) -> PrivateMessageView:
     try:
         message = service.post_private_message(actor=current_user, thread_id=thread_id, **payload.model_dump())
         service.session.commit()
@@ -201,7 +251,7 @@ def post_private_message(thread_id: str, payload: PrivateMessageCreate, current_
     return PrivateMessageView.model_validate(message)
 
 
-@router.get('/creator-matches/{match_id}/chat-room', response_model=CreatorMatchChatRoomView)
+@router.get("/creator-matches/{match_id}/chat-room", response_model=CreatorMatchChatRoomView)
 def get_creator_match_chat_room(
     match_id: str,
     current_user: User = Depends(get_current_user),
@@ -214,7 +264,7 @@ def get_creator_match_chat_room(
     return CreatorMatchChatRoomView.model_validate(payload)
 
 
-@router.get('/creator-matches/{match_id}/chat-room/messages', response_model=list[CreatorMatchChatMessageView])
+@router.get("/creator-matches/{match_id}/chat-room/messages", response_model=list[CreatorMatchChatMessageView])
 def list_creator_match_chat_messages(
     match_id: str,
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
@@ -226,7 +276,11 @@ def list_creator_match_chat_messages(
     return [CreatorMatchChatMessageView.model_validate(item) for item in items]
 
 
-@router.post('/creator-matches/{match_id}/chat-room/messages', response_model=CreatorMatchChatMessageView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/creator-matches/{match_id}/chat-room/messages",
+    response_model=CreatorMatchChatMessageView,
+    status_code=status.HTTP_201_CREATED,
+)
 def post_creator_match_chat_message(
     match_id: str,
     payload: CreatorMatchChatMessageCreateRequest,
@@ -242,7 +296,7 @@ def post_creator_match_chat_message(
     return CreatorMatchChatMessageView.model_validate(item)
 
 
-@router.get('/creator-matches/{match_id}/tactical-advice', response_model=list[CreatorTacticalAdviceView])
+@router.get("/creator-matches/{match_id}/tactical-advice", response_model=list[CreatorTacticalAdviceView])
 def list_creator_match_tactical_advice(
     match_id: str,
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
@@ -255,14 +309,18 @@ def list_creator_match_tactical_advice(
         CreatorTacticalAdviceView.model_validate(
             {
                 **item.__dict__,
-                'authority': 'advisory_only',
+                "authority": "advisory_only",
             }
         )
         for item in items
     ]
 
 
-@router.post('/creator-matches/{match_id}/tactical-advice', response_model=CreatorTacticalAdviceView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/creator-matches/{match_id}/tactical-advice",
+    response_model=CreatorTacticalAdviceView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_creator_match_tactical_advice(
     match_id: str,
     payload: CreatorTacticalAdviceCreateRequest,
@@ -275,10 +333,10 @@ def create_creator_match_tactical_advice(
     except CreatorFanEngagementError as exc:
         service.session.rollback()
         _raise_fan(exc)
-    return CreatorTacticalAdviceView.model_validate({**item.__dict__, 'authority': 'advisory_only'})
+    return CreatorTacticalAdviceView.model_validate({**item.__dict__, "authority": "advisory_only"})
 
 
-@router.get('/creator-matches/{match_id}/fan-wall', response_model=CreatorFanWallView)
+@router.get("/creator-matches/{match_id}/fan-wall", response_model=CreatorFanWallView)
 def get_creator_match_fan_wall(
     match_id: str,
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
@@ -290,7 +348,7 @@ def get_creator_match_fan_wall(
     return CreatorFanWallView.model_validate(payload)
 
 
-@router.get('/creator-matches/{match_id}/rivalry-signals', response_model=list[CreatorRivalrySignalView])
+@router.get("/creator-matches/{match_id}/rivalry-signals", response_model=list[CreatorRivalrySignalView])
 def list_creator_match_rivalry_signals(
     match_id: str,
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
@@ -304,7 +362,7 @@ def list_creator_match_rivalry_signals(
     return [CreatorRivalrySignalView.model_validate(item) for item in items]
 
 
-@router.get('/creator-clubs/{club_id}/fan-state', response_model=CreatorFanStateView)
+@router.get("/creator-clubs/{club_id}/fan-state", response_model=CreatorFanStateView)
 def get_creator_fan_state(
     club_id: str,
     match_id: str | None = None,
@@ -318,7 +376,9 @@ def get_creator_fan_state(
     return CreatorFanStateView.model_validate(payload)
 
 
-@router.post('/creator-clubs/{club_id}/follow', response_model=CreatorClubFollowView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/creator-clubs/{club_id}/follow", response_model=CreatorClubFollowView, status_code=status.HTTP_201_CREATED
+)
 def follow_creator_club(
     club_id: str,
     payload: CreatorClubFollowCreateRequest,
@@ -334,7 +394,7 @@ def follow_creator_club(
     return CreatorClubFollowView.model_validate(follow)
 
 
-@router.delete('/creator-clubs/{club_id}/follow', status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/creator-clubs/{club_id}/follow", status_code=status.HTTP_204_NO_CONTENT)
 def unfollow_creator_club(
     club_id: str,
     current_user: User = Depends(get_current_user),
@@ -348,7 +408,7 @@ def unfollow_creator_club(
         _raise_fan(exc)
 
 
-@router.get('/creator-clubs/{club_id}/fan-groups', response_model=list[CreatorFanGroupView])
+@router.get("/creator-clubs/{club_id}/fan-groups", response_model=list[CreatorFanGroupView])
 def list_creator_fan_groups(
     club_id: str,
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
@@ -360,7 +420,9 @@ def list_creator_fan_groups(
     return [CreatorFanGroupView.model_validate(item) for item in items]
 
 
-@router.post('/creator-clubs/{club_id}/fan-groups', response_model=CreatorFanGroupView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/creator-clubs/{club_id}/fan-groups", response_model=CreatorFanGroupView, status_code=status.HTTP_201_CREATED
+)
 def create_creator_fan_group(
     club_id: str,
     payload: CreatorFanGroupCreateRequest,
@@ -376,7 +438,9 @@ def create_creator_fan_group(
     return CreatorFanGroupView.model_validate(item)
 
 
-@router.post('/fan-groups/{group_id}/join', response_model=CreatorFanGroupMembershipView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/fan-groups/{group_id}/join", response_model=CreatorFanGroupMembershipView, status_code=status.HTTP_201_CREATED
+)
 def join_creator_fan_group(
     group_id: str,
     payload: CreatorFanGroupJoinRequest,
@@ -392,7 +456,7 @@ def join_creator_fan_group(
     return CreatorFanGroupMembershipView.model_validate(membership)
 
 
-@router.get('/creator-clubs/{club_id}/fan-competitions', response_model=list[CreatorFanCompetitionView])
+@router.get("/creator-clubs/{club_id}/fan-competitions", response_model=list[CreatorFanCompetitionView])
 def list_creator_fan_competitions(
     club_id: str,
     match_id: str | None = None,
@@ -405,7 +469,11 @@ def list_creator_fan_competitions(
     return [CreatorFanCompetitionView.model_validate(item) for item in items]
 
 
-@router.post('/creator-clubs/{club_id}/fan-competitions', response_model=CreatorFanCompetitionView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/creator-clubs/{club_id}/fan-competitions",
+    response_model=CreatorFanCompetitionView,
+    status_code=status.HTTP_201_CREATED,
+)
 def create_creator_fan_competition(
     club_id: str,
     payload: CreatorFanCompetitionCreateRequest,
@@ -421,7 +489,11 @@ def create_creator_fan_competition(
     return CreatorFanCompetitionView.model_validate(item)
 
 
-@router.post('/fan-competitions/{fan_competition_id}/join', response_model=CreatorFanCompetitionEntryView, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/fan-competitions/{fan_competition_id}/join",
+    response_model=CreatorFanCompetitionEntryView,
+    status_code=status.HTTP_201_CREATED,
+)
 def join_creator_fan_competition(
     fan_competition_id: str,
     payload: CreatorFanCompetitionJoinRequest,
@@ -429,7 +501,9 @@ def join_creator_fan_competition(
     service: CreatorFanEngagementService = Depends(get_creator_fan_service),
 ) -> CreatorFanCompetitionEntryView:
     try:
-        entry = service.join_fan_competition(actor=current_user, fan_competition_id=fan_competition_id, **payload.model_dump())
+        entry = service.join_fan_competition(
+            actor=current_user, fan_competition_id=fan_competition_id, **payload.model_dump()
+        )
         service.session.commit()
     except CreatorFanEngagementError as exc:
         service.session.rollback()

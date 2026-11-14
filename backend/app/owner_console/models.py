@@ -4,7 +4,21 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import JSON, Boolean, Date, DateTime, ForeignKey, Index, Integer, Numeric, String, Text, UniqueConstraint, func, text
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+    text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, UUIDPrimaryKeyMixin, utcnow
@@ -117,9 +131,7 @@ class OwnerDepositIntent(UUIDPrimaryKeyMixin, Base):
     """One Paystack (or sibling) checkout. (provider, reference) is the credit lock."""
 
     __tablename__ = "owner_deposit_intents"
-    __table_args__ = (
-        UniqueConstraint("provider", "reference", name="uq_owner_deposit_intents_provider_reference"),
-    )
+    __table_args__ = (UniqueConstraint("provider", "reference", name="uq_owner_deposit_intents_provider_reference"),)
 
     provider: Mapped[str] = mapped_column(String(32), nullable=False)
     reference: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -594,15 +606,15 @@ class OwnerClubMeeting(UUIDPrimaryKeyMixin, Base):
     """Durable scheduled or completed club boardroom/staff/squad meeting."""
 
     __tablename__ = "owner_club_meetings"
-    __table_args__ = (
-        Index("ix_owner_club_meetings_club_created", "club_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_owner_club_meetings_club_created", "club_id", "created_at"),)
 
     club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(180), nullable=False)
     agenda: Mapped[str] = mapped_column(Text, nullable=False, default="")
-    meeting_type: Mapped[str] = mapped_column(String(32), nullable=False, default="boardroom", server_default="boardroom")
+    meeting_type: Mapped[str] = mapped_column(
+        String(32), nullable=False, default="boardroom", server_default="boardroom"
+    )
     world_day: Mapped[int | None] = mapped_column(Integer, nullable=True)
     scheduled_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="scheduled", server_default="scheduled")
@@ -619,9 +631,7 @@ class OwnerClubAnnouncement(UUIDPrimaryKeyMixin, Base):
     """Durable internal or official club announcement issued by an authorized club owner."""
 
     __tablename__ = "owner_club_announcements"
-    __table_args__ = (
-        Index("ix_owner_club_announcements_club_created", "club_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_owner_club_announcements_club_created", "club_id", "created_at"),)
 
     club_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     owner_user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)

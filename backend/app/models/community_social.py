@@ -119,9 +119,7 @@ class CommunityPost(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class CommunityPostComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "community_post_comments"
-    __table_args__ = (
-        Index("ix_community_post_comments_post_created", "post_id", "created_at"),
-    )
+    __table_args__ = (Index("ix_community_post_comments_post_created", "post_id", "created_at"),)
 
     post_id: Mapped[str] = mapped_column(
         String(36),
@@ -149,9 +147,7 @@ class CommunityPostComment(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class CommunityBookmark(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "community_bookmarks"
-    __table_args__ = (
-        UniqueConstraint("user_id", "post_id", name="uq_community_bookmarks_user_post"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "post_id", name="uq_community_bookmarks_user_post"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),
@@ -169,9 +165,7 @@ class CommunityBookmark(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
 
 class CommunityPollVote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "community_poll_votes"
-    __table_args__ = (
-        UniqueConstraint("post_id", "user_id", name="uq_community_poll_votes_post_user"),
-    )
+    __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_community_poll_votes_post_user"),)
 
     post_id: Mapped[str] = mapped_column(
         String(36),
@@ -190,9 +184,7 @@ class CommunityPollVote(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
 class CommunityUserMute(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "community_user_mutes"
-    __table_args__ = (
-        UniqueConstraint("user_id", "muted_user_id", name="uq_community_user_mutes_pair"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "muted_user_id", name="uq_community_user_mutes_pair"),)
 
     user_id: Mapped[str] = mapped_column(
         String(36),

@@ -201,9 +201,7 @@ def _append_message(
 
     max_seq = int(
         session.scalar(
-            select(func.coalesce(func.max(OwnerClubMessage.seq), 0)).where(
-                OwnerClubMessage.conversation_id == conv.id
-            )
+            select(func.coalesce(func.max(OwnerClubMessage.seq), 0)).where(OwnerClubMessage.conversation_id == conv.id)
         )
         or 0
     )
@@ -370,8 +368,10 @@ def backfill_legacy_club_communications(session: Session, state: OwnerClubState)
         if session.get(OwnerClubMeeting, det_id) is None:
             raw_minutes = raw_mtg.get("minutes")
             minutes_list = list(raw_minutes) if isinstance(raw_minutes, list) else []
-            raw_summary = raw_mtg.get("outcome_summary") or raw_mtg.get("minutes_summary") or (
-                raw_minutes if isinstance(raw_minutes, str) else ""
+            raw_summary = (
+                raw_mtg.get("outcome_summary")
+                or raw_mtg.get("minutes_summary")
+                or (raw_minutes if isinstance(raw_minutes, str) else "")
             )
             session.add(
                 OwnerClubMeeting(
@@ -414,7 +414,9 @@ def backfill_legacy_club_communications(session: Session, state: OwnerClubState)
                     body=str(raw_ann.get("body") or ""),
                     audience=str(raw_ann.get("audience") or "all_club"),
                     priority=str(raw_ann.get("priority") or "normal"),
-                    published_world_day=raw_ann.get("world_day") or raw_ann.get("published_world_day") or state.world_day,
+                    published_world_day=raw_ann.get("world_day")
+                    or raw_ann.get("published_world_day")
+                    or state.world_day,
                     published_by_user_id=state.owner_user_id,
                     metadata_json={"legacy_id": legacy_id, "migrated_from_json": True},
                     created_at=_parse_iso_dt(raw_ann.get("created_at")),
@@ -720,7 +722,9 @@ def sync_living_club_communications(session: Session, state: OwnerClubState) -> 
             participant_role="Medical Director",
             subject="Medical & Injury Availability",
         )
-        ev_key = f"living:medical:{state.club_id}:day:{int(state.world_day or 1)}:{lead.id}:{int(lead.injured_days or 0)}"
+        ev_key = (
+            f"living:medical:{state.club_id}:day:{int(state.world_day or 1)}:{lead.id}:{int(lead.injured_days or 0)}"
+        )
         created.append(
             _append_message(
                 session,
@@ -737,7 +741,12 @@ def sync_living_club_communications(session: Session, state: OwnerClubState) -> 
                 linked_entity_type="player",
                 linked_entity_id=lead.id,
                 linked_event_key=ev_key,
-                action_payload={"action_type": "open_route", "route": "/app/squad", "label": "Review Injured Players", "player_id": lead.id},
+                action_payload={
+                    "action_type": "open_route",
+                    "route": "/app/squad",
+                    "label": "Review Injured Players",
+                    "player_id": lead.id,
+                },
             )
         )
 
@@ -772,7 +781,12 @@ def sync_living_club_communications(session: Session, state: OwnerClubState) -> 
                 linked_entity_type="player",
                 linked_entity_id=top_regen.id,
                 linked_event_key=ev_key,
-                action_payload={"action_type": "open_route", "route": "/app/academy", "label": "Inspect Academy", "player_id": top_regen.id},
+                action_payload={
+                    "action_type": "open_route",
+                    "route": "/app/academy",
+                    "label": "Inspect Academy",
+                    "player_id": top_regen.id,
+                },
             )
         )
 
@@ -806,7 +820,11 @@ def sync_living_club_communications(session: Session, state: OwnerClubState) -> 
                 linked_entity_type="scouting",
                 linked_entity_id=state.club_id,
                 linked_event_key=ev_key,
-                action_payload={"action_type": "open_route", "route": "/app/transfer-hub", "label": "Open Transfer Hub"},
+                action_payload={
+                    "action_type": "open_route",
+                    "route": "/app/transfer-hub",
+                    "label": "Open Transfer Hub",
+                },
             )
         )
 
@@ -875,7 +893,12 @@ def sync_living_club_communications(session: Session, state: OwnerClubState) -> 
                 linked_entity_type="player",
                 linked_entity_id=player.id,
                 linked_event_key=ev_key,
-                action_payload={"action_type": "open_route", "route": "/app/lineup", "label": "Check Matchday Lineup", "player_id": player.id},
+                action_payload={
+                    "action_type": "open_route",
+                    "route": "/app/lineup",
+                    "label": "Check Matchday Lineup",
+                    "player_id": player.id,
+                },
             )
         )
     return created
@@ -901,7 +924,9 @@ def _contextual_npc_reply(
     if len(recent) >= 2:
         last_npc = next((m for m in recent if m.sender_type != "owner"), None)
         if last_npc is not None:
-            last_dt = last_npc.created_at if last_npc.created_at.tzinfo else last_npc.created_at.replace(tzinfo=timezone.utc)
+            last_dt = (
+                last_npc.created_at if last_npc.created_at.tzinfo else last_npc.created_at.replace(tzinfo=timezone.utc)
+            )
             if (now - last_dt) < timedelta(seconds=20) and len(owner_body.strip()) < 24:
                 return None, {}
 
@@ -919,12 +944,22 @@ def _contextual_npc_reply(
             if any(w in lower_body for w in ("start", "lineup", "minutes", "play", "pitch", "training")):
                 return (
                     f"Appreciate the clarity at {state.club_name}, Boss. Sitting at {player.morale}/100 morale, Fitness {fit_val}%, and OVR {player.rating}, I'm ready at {player.position} when called on.",
-                    {"action_type": "open_route", "route": "/app/lineup", "label": "Adjust Lineup", "player_id": player.id},
+                    {
+                        "action_type": "open_route",
+                        "route": "/app/lineup",
+                        "label": "Adjust Lineup",
+                        "player_id": player.id,
+                    },
                 )
             if any(w in lower_body for w in ("rest", "recover", "injury", "medical", "fitness")):
                 return (
                     f"Understood for {state.club_name}. Injury counter shows {player.injured_days}d remaining (Fitness {fit_val}%, OVR {player.rating}); I'll stick closely to the rehab plan.",
-                    {"action_type": "open_route", "route": "/app/squad", "label": "Check Fitness", "player_id": player.id},
+                    {
+                        "action_type": "open_route",
+                        "route": "/app/squad",
+                        "label": "Check Fitness",
+                        "player_id": player.id,
+                    },
                 )
             return (
                 f"Message received on '{topic or 'first-team standards'}' at {state.club_name}. My Fitness is {fit_val}% and rating stands at OVR {player.rating} ahead of World Day {int(state.world_day or 1)}.",
@@ -1000,7 +1035,9 @@ def _message_dict(msg: OwnerClubMessage) -> dict[str, Any]:
     }
 
 
-def _thread_dict(session: Session, conv: OwnerClubConversation, *, limit: int = 40, before_seq: int | None = None) -> dict[str, Any]:
+def _thread_dict(
+    session: Session, conv: OwnerClubConversation, *, limit: int = 40, before_seq: int | None = None
+) -> dict[str, Any]:
     q = select(OwnerClubMessage).where(OwnerClubMessage.conversation_id == conv.id)
     if before_seq is not None:
         q = q.where(OwnerClubMessage.seq < before_seq)
@@ -1016,7 +1053,9 @@ def _thread_dict(session: Session, conv: OwnerClubConversation, *, limit: int = 
         )
         or 0
     )
-    staff_meta = STAFF_ALIASES.get((conv.participant_id or "").lower()) or STAFF_ALIASES.get(conv.participant_role.lower())
+    staff_meta = STAFF_ALIASES.get((conv.participant_id or "").lower()) or STAFF_ALIASES.get(
+        conv.participant_role.lower()
+    )
     return {
         "thread_id": conv.id,
         "thread_key": conv.thread_key,
@@ -1468,7 +1507,9 @@ def send_club_message_durable(
     elif conv.channel_type == "squad_room":
         boost_key = f"day:{world_day}:squad_room"
         if is_substantive and not boost_log.get(boost_key):
-            squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+            squad_players = list(
+                session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+            )
             for p in squad_players:
                 p.morale = int(engine.clamp(int(p.morale or 50) + 2, 0, 100))
             morale_delta = 2 if squad_players else 0
@@ -1638,8 +1679,7 @@ def schedule_club_meeting_durable(
     morale_applied = False
     minutes_list: list[dict[str, str]] = []
     outcome_summary = (
-        f"Scheduled '{clean_title}' for World Day {world_day} at {state.club_name} "
-        f"with {', '.join(roster)}."
+        f"Scheduled '{clean_title}' for World Day {world_day} at {state.club_name} " f"with {', '.join(roster)}."
     )
     if convene_now:
         boost_key = f"day:{world_day}:meeting"
@@ -1700,7 +1740,11 @@ def schedule_club_meeting_durable(
         owner_user_id=state.owner_user_id,
         title=clean_title,
         agenda=(agenda or "").strip(),
-        meeting_type=meeting_type if meeting_type in {"boardroom", "tactical", "medical", "academy", "squad", "emergency"} else "boardroom",
+        meeting_type=(
+            meeting_type
+            if meeting_type in {"boardroom", "tactical", "medical", "academy", "squad", "emergency"}
+            else "boardroom"
+        ),
         world_day=world_day,
         status="completed" if convene_now else "scheduled",
         attendees_json=roster,
@@ -1780,7 +1824,10 @@ def publish_club_announcement_durable(
         priority="normal",
         published_world_day=world_day,
         published_by_user_id=user_id,
-        metadata_json={"publish_to_newsroom": bool(publish_to_newsroom), "also_post_to_community": bool(also_post_to_community)},
+        metadata_json={
+            "publish_to_newsroom": bool(publish_to_newsroom),
+            "also_post_to_community": bool(also_post_to_community),
+        },
     )
     session.add(ann)
     session.flush()
@@ -1913,7 +1960,9 @@ def publish_club_announcement_durable(
 def list_all_clubs_communications_summary(session: Session, *, user_id: str) -> dict[str, Any]:
     states = list(
         session.scalars(
-            select(OwnerClubState).where(OwnerClubState.owner_user_id == user_id).order_by(OwnerClubState.club_name.asc())
+            select(OwnerClubState)
+            .where(OwnerClubState.owner_user_id == user_id)
+            .order_by(OwnerClubState.club_name.asc())
         ).all()
     )
     clubs_summary: list[dict[str, Any]] = []

@@ -110,41 +110,44 @@ class MatchSimulationService:
             highlight_bundle=highlight_bundle,
         )
         replay_log = self.replay_builder.build(result)
-        universe_bundle = self.football_universe_builder.build(request=request, replay_payload=MatchReplayPayloadView(
-            match_id=result.match_id,
-            seed=result.seed,
-            win_probability_home=summary.win_probability_home,
-            win_probability_draw=summary.win_probability_draw,
-            win_probability_away=summary.win_probability_away,
-            expected_goals_home=summary.expected_goals_home,
-            expected_goals_away=summary.expected_goals_away,
-            key_highlights=summary.key_highlights,
-            highlight_package=summary.highlight_package,
-            highlight_profile=summary.highlight_profile,
-            highlight_runtime_seconds=summary.highlight_runtime_seconds,
-            highlight_access=summary.highlight_access,
-            key_moments=highlight_bundle.key_moments,
-            atmosphere_profile=summary.atmosphere_profile,
-            atmosphere_summary=summary.atmosphere_summary,
-            home_crowd_intensity=summary.home_crowd_intensity,
-            away_crowd_intensity=summary.away_crowd_intensity,
-            manager_influence_notes=summary.manager_influence_notes,
-            injury_report=summary.injury_report,
-            halftime_analytics=halftime_analytics,
-            spectator_package=spectator_package,
-            scene_assembly=scene_contract,
-            broadcast_presentation=broadcast_presentation,
-            replay_download=replay_download,
-            sync_contract=sync_contract,
-            tactical_change_log=tactical_log,
-            substitution_log=substitution_log,
-            critical_snapshots=critical_snapshots,
-            visual_identity=self._build_visual_identity(result),
-            status=result.status,
-            summary=summary,
-            timeline=timeline,
-            replay_log=replay_log,
-        ))
+        universe_bundle = self.football_universe_builder.build(
+            request=request,
+            replay_payload=MatchReplayPayloadView(
+                match_id=result.match_id,
+                seed=result.seed,
+                win_probability_home=summary.win_probability_home,
+                win_probability_draw=summary.win_probability_draw,
+                win_probability_away=summary.win_probability_away,
+                expected_goals_home=summary.expected_goals_home,
+                expected_goals_away=summary.expected_goals_away,
+                key_highlights=summary.key_highlights,
+                highlight_package=summary.highlight_package,
+                highlight_profile=summary.highlight_profile,
+                highlight_runtime_seconds=summary.highlight_runtime_seconds,
+                highlight_access=summary.highlight_access,
+                key_moments=highlight_bundle.key_moments,
+                atmosphere_profile=summary.atmosphere_profile,
+                atmosphere_summary=summary.atmosphere_summary,
+                home_crowd_intensity=summary.home_crowd_intensity,
+                away_crowd_intensity=summary.away_crowd_intensity,
+                manager_influence_notes=summary.manager_influence_notes,
+                injury_report=summary.injury_report,
+                halftime_analytics=halftime_analytics,
+                spectator_package=spectator_package,
+                scene_assembly=scene_contract,
+                broadcast_presentation=broadcast_presentation,
+                replay_download=replay_download,
+                sync_contract=sync_contract,
+                tactical_change_log=tactical_log,
+                substitution_log=substitution_log,
+                critical_snapshots=critical_snapshots,
+                visual_identity=self._build_visual_identity(result),
+                status=result.status,
+                summary=summary,
+                timeline=timeline,
+                replay_log=replay_log,
+            ),
+        )
         visual_identity = self._build_visual_identity(result)
         render_sync = self.render_sync_builder.build(
             MatchReplayPayloadView(
@@ -309,8 +312,12 @@ class MatchSimulationService:
             upset_probability=result.upset_probability,
             upset_reason_codes=list(result.upset_reason_codes),
             home_advantage_note=result.home_advantage_note,
-            manager_influence_score_home=round(result.home_stats.tactical_swings + (result.home_strength.coach_quality / 20.0), 2),
-            manager_influence_score_away=round(result.away_stats.tactical_swings + (result.away_strength.coach_quality / 20.0), 2),
+            manager_influence_score_home=round(
+                result.home_stats.tactical_swings + (result.home_strength.coach_quality / 20.0), 2
+            ),
+            manager_influence_score_away=round(
+                result.away_stats.tactical_swings + (result.away_strength.coach_quality / 20.0), 2
+            ),
             tactical_battle_summary=result.tactical_battle_summary,
             form_motivation_summary=result.form_motivation_summary,
             momentum_swings=list(result.momentum_swings),
@@ -364,7 +371,9 @@ class MatchSimulationService:
                     xg=round(player.xg, 2),
                     xg_faced=round(player.xg_faced, 2),
                     rating=rating_lookup[player.player_id].rating if player.player_id in rating_lookup else None,
-                    rating_summary=rating_lookup[player.player_id].summary if player.player_id in rating_lookup else None,
+                    rating_summary=(
+                        rating_lookup[player.player_id].summary if player.player_id in rating_lookup else None
+                    ),
                 )
                 for player in result.player_stats
                 if player.started or player.is_notable()
@@ -443,9 +452,8 @@ class MatchSimulationService:
 
     def _probability_triplet(self, result: SimulationResult) -> tuple[int, int, int]:
         home_edge = (
-            (result.home_strength.overall + result.home_strength.depth * 0.12 + result.home_strength.fitness * 0.08)
-            - (result.away_strength.overall + result.away_strength.depth * 0.12 + result.away_strength.fitness * 0.08)
-        )
+            result.home_strength.overall + result.home_strength.depth * 0.12 + result.home_strength.fitness * 0.08
+        ) - (result.away_strength.overall + result.away_strength.depth * 0.12 + result.away_strength.fitness * 0.08)
         draw_bias = 19 if abs(home_edge) <= 2.5 else 16 if abs(home_edge) <= 6 else 13
         home = max(14, min(76, int(round(44 + (home_edge * 0.78)))))
         away = max(12, min(72, int(round(37 - (home_edge * 0.72)))))
@@ -498,7 +506,7 @@ class MatchSimulationService:
                 MatchEventType.MISSED_BIG_CHANCE,
             }:
                 minute = f"{event.minute}+{event.added_time}" if event.added_time else str(event.minute)
-                actor = event.primary_player_name or event.team_name or 'Match event'
+                actor = event.primary_player_name or event.team_name or "Match event"
                 family = event.metadata.get("chance_family")
                 suffix = f" - {family}" if isinstance(family, str) else ""
                 notable.append(f"{minute}' {actor}: {event.event_type.value.replace('_', ' ')}{suffix}")
@@ -524,8 +532,12 @@ class MatchSimulationService:
             }:
                 continue
             start_second = min(cursor, max(0, result.seed % 5 + event.minute * 2))
-            duration = 24 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE} else 16
-            title_actor = event.primary_player_name or event.team_name or 'Key moment'
+            duration = (
+                24
+                if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE}
+                else 16
+            )
+            title_actor = event.primary_player_name or event.team_name or "Key moment"
             family = event.metadata.get("chance_family")
             suffix = f" - {family}" if isinstance(family, str) else ""
             clips.append(
@@ -533,7 +545,12 @@ class MatchSimulationService:
                     title=f"{title_actor} - {event.event_type.value.replace('_', ' ')}{suffix}",
                     start_second=start_second,
                     end_second=start_second + duration,
-                    importance=5 if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE} else 4,
+                    importance=(
+                        5
+                        if event.event_type
+                        in {MatchEventType.GOAL, MatchEventType.PENALTY_GOAL, MatchEventType.DOUBLE_SAVE}
+                        else 4
+                    ),
                     event_type=event.event_type,
                     team_name=event.team_name,
                 )
@@ -544,7 +561,7 @@ class MatchSimulationService:
         if not clips:
             clips.append(
                 MatchHighlightClipView(
-                    title='Match story package',
+                    title="Match story package",
                     start_second=0,
                     end_second=min(180, max(90, result.home_score + result.away_score + 120)),
                     importance=3,
@@ -562,10 +579,14 @@ class MatchSimulationService:
             reports.append(
                 MatchInjuryReportView(
                     minute=event.minute,
-                    team_name=event.team_name or 'Unknown team',
-                    player_name=event.primary_player_name or 'Unknown player',
-                    severity='high' if event.minute < 35 else 'medium' if event.minute < 70 else 'monitor',
-                    tactical_impact='Forced shape change and bench response.' if event.minute < 70 else 'Late disruption to the closing phase.',
+                    team_name=event.team_name or "Unknown team",
+                    player_name=event.primary_player_name or "Unknown player",
+                    severity="high" if event.minute < 35 else "medium" if event.minute < 70 else "monitor",
+                    tactical_impact=(
+                        "Forced shape change and bench response."
+                        if event.minute < 70
+                        else "Late disruption to the closing phase."
+                    ),
                 )
             )
         return reports[:4]
@@ -658,4 +679,3 @@ class MatchSimulationService:
             away_team=map_team(result.visual_identity.away_team),
             clash_resolved=result.visual_identity.clash_resolved,
         )
-

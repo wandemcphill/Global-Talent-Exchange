@@ -51,7 +51,13 @@ import {
 } from "@/components/advertising/GtexMatchBroadcastAds";
 import type { PublicBrandAd } from "@/lib/commercial/api";
 import { CinematicGiftingEngine, type CinematicGiftEvent } from "@/lib/3d/gifting/CinematicGiftingEngine";
-import { metricText, pitchSource, suppliedCrest } from "@/match2d/matchStateAdapter";
+import {
+  metricText,
+  pitchSource,
+  seekTime,
+  stepReplayClock,
+  suppliedCrest,
+} from "@/match2d/matchStateAdapter";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 
 const GIFTS = [
@@ -128,181 +134,6 @@ const TACTICAL_PRESETS = [
     mentality: "Balanced",
     color: "#10B981",
   },
-];
-
-// Formation Spatial Templates for 22-Player Autonomous 2D Engine Fallback
-const FORMATION_TEMPLATES: Record<
-  string,
-  Array<{ num: number; role: string; name: string; bx: number; by: number }>
-> = {
-  "4-3-3": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 2, role: "RB", name: "HAKIMI", bx: 0.24, by: 0.82 },
-    { num: 4, role: "CB", name: "DIAS", bx: 0.2, by: 0.62 },
-    { num: 5, role: "CB", name: "SALIBA", bx: 0.2, by: 0.38 },
-    { num: 3, role: "LB", name: "MENDES", bx: 0.24, by: 0.18 },
-    { num: 6, role: "DM", name: "RODRI", bx: 0.37, by: 0.5 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.46, by: 0.68 },
-    { num: 10, role: "AM", name: "BELLINGHAM", bx: 0.48, by: 0.32 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.67, by: 0.8 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.67, by: 0.2 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.5 },
-  ],
-  "4-2-4": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 2, role: "RB", name: "HAKIMI", bx: 0.26, by: 0.84 },
-    { num: 4, role: "CB", name: "DIAS", bx: 0.22, by: 0.62 },
-    { num: 5, role: "CB", name: "SALIBA", bx: 0.22, by: 0.38 },
-    { num: 3, role: "LB", name: "MENDES", bx: 0.26, by: 0.16 },
-    { num: 6, role: "CM", name: "RODRI", bx: 0.44, by: 0.62 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.44, by: 0.38 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.7, by: 0.84 },
-    { num: 10, role: "SS", name: "BELLINGHAM", bx: 0.68, by: 0.6 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.4 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.7, by: 0.16 },
-  ],
-  "5-3-2": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.06, by: 0.5 },
-    { num: 2, role: "RWB", name: "HAKIMI", bx: 0.26, by: 0.85 },
-    { num: 4, role: "RCB", name: "DIAS", bx: 0.17, by: 0.68 },
-    { num: 5, role: "CCB", name: "SALIBA", bx: 0.15, by: 0.5 },
-    { num: 6, role: "LCB", name: "BASTONI", bx: 0.17, by: 0.32 },
-    { num: 3, role: "LWB", name: "MENDES", bx: 0.26, by: 0.15 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.4, by: 0.68 },
-    { num: 10, role: "DM", name: "RODRI", bx: 0.36, by: 0.5 },
-    { num: 7, role: "CM", name: "CAMAVINGA", bx: 0.4, by: 0.32 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.66, by: 0.6 },
-    { num: 11, role: "ST", name: "VINICIUS", bx: 0.66, by: 0.4 },
-  ],
-  "3-4-3": [
-    { num: 1, role: "GK", name: "COSTA", bx: 0.07, by: 0.5 },
-    { num: 4, role: "RCB", name: "DIAS", bx: 0.2, by: 0.7 },
-    { num: 5, role: "CCB", name: "SALIBA", bx: 0.18, by: 0.5 },
-    { num: 3, role: "LCB", name: "BASTONI", bx: 0.2, by: 0.3 },
-    { num: 2, role: "RM", name: "HAKIMI", bx: 0.45, by: 0.85 },
-    { num: 6, role: "CM", name: "RODRI", bx: 0.42, by: 0.6 },
-    { num: 8, role: "CM", name: "VALVERDE", bx: 0.42, by: 0.4 },
-    { num: 10, role: "LM", name: "MENDES", bx: 0.45, by: 0.15 },
-    { num: 7, role: "RW", name: "SAKA", bx: 0.69, by: 0.76 },
-    { num: 9, role: "ST", name: "OSIMHEN", bx: 0.74, by: 0.5 },
-    { num: 11, role: "LW", name: "VINICIUS", bx: 0.69, by: 0.24 },
-  ],
-};
-
-function frameClock(frame: any): number {
-  return Number(frame?.time_seconds ?? frame?.timeSeconds ?? 0);
-}
-
-function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
-  const x = Number(rawX ?? 50);
-  const y = Number(rawY ?? 50);
-  return { x: x > 1.5 ? x / 100 : x, y: y > 1.5 ? y / 100 : y };
-}
-
-function smoothUnit(value: number): number {
-  const t = Math.min(1, Math.max(0, value));
-  return t * t * (3 - 2 * t);
-}
-
-function playbackPair(frames: any[], time: number): { left: any; right: any; t: number } {
-  let left = frames[0];
-  let right = frames[frames.length - 1];
-  for (let index = 0; index < frames.length - 1; index += 1) {
-    if (time <= frameClock(frames[index + 1])) {
-      left = frames[index];
-      right = frames[index + 1];
-      break;
-    }
-  }
-  const span = frameClock(right) - frameClock(left);
-  const raw = span <= 0.001 ? 1 : (time - frameClock(left)) / span;
-  const t = span > 4.5 ? (raw < 0.5 ? 0 : 1) : smoothUnit(raw);
-  return { left, right, t };
-}
-
-function playerKey(player: any): string {
-  return String(player?.player_id ?? player?.id ?? player?.shirt_number ?? "");
-}
-
-type PitchDot = {
-  x: number;
-  y: number;
-  num: number;
-  role: string;
-  hasBall: boolean;
-  name: string;
-  stamina: number;
-  speedKmh: string;
-  vx: number;
-  vy: number;
-  playerId?: string;
-  idx?: number;
-  duty?: "press" | "run";
-};
-
-function markDuties(
-  home: PitchDot[],
-  away: PitchDot[],
-  ball: { x: number; y: number },
-  carrier: PitchDot | undefined,
-  carrierIsHome: boolean
-) {
-  const mates = carrierIsHome ? home : away;
-  const foes = carrierIsHome ? away : home;
-  const sign = carrierIsHome ? 1 : -1;
-  const presser = [...foes]
-    .filter((player) => !/^GK/i.test(player.role))
-    .sort((left, right) => Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
-  if (presser) presser.duty = "press";
-  const runner = [...mates]
-    .filter((player) => player !== carrier && (player.x - (carrier?.x ?? ball.x)) * sign > 0.015)
-    .sort((left, right) => (right.x - left.x) * sign || Math.hypot(left.x - ball.x, left.y - ball.y) - Math.hypot(right.x - ball.x, right.y - ball.y))[0];
-  if (runner) runner.duty = "run";
-}
-
-function interpolatedSquad(leftPlayers: any[], rightPlayers: any[], t: number, home: boolean): PitchDot[] {
-  const rightById = new Map(rightPlayers.map((player) => [playerKey(player), player]));
-  return leftPlayers
-    .filter((player) => {
-      const side = String(player?.side ?? "").toLowerCase();
-      if (side) return home ? side === "home" : side === "away";
-      return home ? Boolean(player?.is_home) : !player?.is_home;
-    })
-    .map((player, idx) => {
-      const next = rightById.get(playerKey(player)) || player;
-      const from = unitPoint(player?.position?.x ?? player?.x, player?.position?.y ?? player?.y);
-      const to = unitPoint(next?.position?.x ?? next?.x, next?.position?.y ?? next?.y);
-      const shirt = Number(player?.shirt_number ?? player?.num ?? idx + 1);
-      const label = String(player?.label ?? player?.name ?? `P${shirt}`);
-      const nearer = t < 0.5 ? player : next;
-      return {
-        x: from.x + (to.x - from.x) * t,
-        y: from.y + (to.y - from.y) * t,
-        num: shirt,
-        role: String(player?.role ?? "CM"),
-        hasBall: Boolean(nearer?.has_possession ?? nearer?.has_ball),
-        name: (label.split(" ").pop() || "PRO").toUpperCase(),
-        stamina: Number(player?.stamina_pct ?? nearer?.stamina_pct ?? 80),
-        speedKmh: (18 + Math.min(16, Math.hypot(to.x - from.x, to.y - from.y) * 80)).toFixed(1),
-        vx: (to.x - from.x) * 18,
-        vy: (to.y - from.y) * 18,
-        playerId: playerKey(player),
-      };
-    });
-}
-
-const AWAY_NAMES = [
-  "MAIGNAN",
-  "FRIMPONG",
-  "ARAUJO",
-  "VAN DIJK",
-  "HERNANDEZ",
-  "TCHOUAMENI",
-  "PEDRI",
-  "MUSIALA",
-  "YAMAL",
-  "LEAO",
-  "LAUTARO",
 ];
 
 function GiftRail({ match, clubId, onGiftSent }: any) {

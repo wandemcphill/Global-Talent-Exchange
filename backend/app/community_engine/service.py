@@ -338,7 +338,10 @@ class CommunityEngineService:
                 hub.publish_direct_sync(
                     RealtimeDispatch(
                         type="pm_message",
-                        topics=(f"pm:{thread.id}", *[f"user:{p.user_id}" for p in participants if p.user_id != actor.id]),
+                        topics=(
+                            f"pm:{thread.id}",
+                            *[f"user:{p.user_id}" for p in participants if p.user_id != actor.id],
+                        ),
                         data=msg_data,
                     )
                 )

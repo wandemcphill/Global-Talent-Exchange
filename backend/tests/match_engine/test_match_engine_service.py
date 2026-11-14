@@ -48,8 +48,14 @@ def test_replay_payload_contains_valid_key_moments_and_standard_duration() -> No
     assert payload.timeline.events[0].event_type is MatchEventType.KICKOFF
     assert payload.timeline.events[-1].event_type is MatchEventType.FULLTIME
     assert any(event.event_type is MatchEventType.HALFTIME for event in payload.timeline.events)
-    assert MATCH_PRESENTATION_MIN_MINUTES * 60 <= payload.timeline.presentation_duration_seconds <= MATCH_PRESENTATION_MAX_MINUTES * 60
-    assert [event.sequence for event in payload.timeline.events] == sorted(event.sequence for event in payload.timeline.events)
+    assert (
+        MATCH_PRESENTATION_MIN_MINUTES * 60
+        <= payload.timeline.presentation_duration_seconds
+        <= MATCH_PRESENTATION_MAX_MINUTES * 60
+    )
+    assert [event.sequence for event in payload.timeline.events] == sorted(
+        event.sequence for event in payload.timeline.events
+    )
     assert [event.presentation_second for event in payload.timeline.events] == sorted(
         event.presentation_second for event in payload.timeline.events
     )
@@ -114,7 +120,9 @@ def test_crowd_state_flows_into_summary_and_later_events() -> None:
     home_goal = next(
         event
         for event in payload.timeline.events
-        if event.event_type is MatchEventType.GOAL and event.team_id == payload.summary.home_stats.team_id and event.minute <= 80
+        if event.event_type is MatchEventType.GOAL
+        and event.team_id == payload.summary.home_stats.team_id
+        and event.minute <= 80
     )
     later_events = [event for event in payload.timeline.events if event.sequence > home_goal.sequence]
 
@@ -142,9 +150,13 @@ def test_cup_draws_go_straight_to_penalties_without_extra_time() -> None:
     )
 
     regular_events = [
-        event for event in payload.timeline.events if event.event_type not in {MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_MISS}
+        event
+        for event in payload.timeline.events
+        if event.event_type not in {MatchEventType.PENALTY_GOAL, MatchEventType.PENALTY_MISS}
     ]
-    fulltime_index = next(index for index, event in enumerate(payload.timeline.events) if event.event_type is MatchEventType.FULLTIME)
+    fulltime_index = next(
+        index for index, event in enumerate(payload.timeline.events) if event.event_type is MatchEventType.FULLTIME
+    )
 
     assert payload.summary.shootout is not None
     assert payload.summary.home_penalty_score != payload.summary.away_penalty_score
@@ -176,12 +188,15 @@ def test_red_card_switches_team_into_fallback_shape() -> None:
         service,
         lambda seed: build_request(seed=seed, home_team=disciplined_home, away_team=volatile_away),
         lambda payload: any(
-            event.event_type is MatchEventType.RED_CARD and event.team_id == volatile_away.team_id for event in payload.timeline.events
+            event.event_type is MatchEventType.RED_CARD and event.team_id == volatile_away.team_id
+            for event in payload.timeline.events
         ),
     )
 
     red_event = next(
-        event for event in payload.timeline.events if event.event_type is MatchEventType.RED_CARD and event.team_id == volatile_away.team_id
+        event
+        for event in payload.timeline.events
+        if event.event_type is MatchEventType.RED_CARD and event.team_id == volatile_away.team_id
     )
     assert red_event.metadata["fallback_formation"] == "4-4-1"
     assert payload.summary.away_stats.current_formation == "4-4-1"
@@ -210,7 +225,9 @@ def test_injury_auto_substitution_reacts_in_same_window() -> None:
     )
 
     injury_event = next(
-        event for event in payload.timeline.events if event.event_type is MatchEventType.INJURY and event.team_id == fragile_away.team_id
+        event
+        for event in payload.timeline.events
+        if event.event_type is MatchEventType.INJURY and event.team_id == fragile_away.team_id
     )
     substitution_event = next(
         event
@@ -320,7 +337,9 @@ def test_visual_identity_payload_includes_kits_and_players() -> None:
         badge_primary_color="#112233",
         badge_secondary_color="#ffffff",
         badge_accent_color="#ffcc00",
-        home_kit=MatchKitIdentityInput(primary_color="#112233", secondary_color="#ffffff", accent_color="#ffcc00", front_text="NCI"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#112233", secondary_color="#ffffff", accent_color="#ffcc00", front_text="NCI"
+        ),
         away_kit=MatchKitIdentityInput(
             kit_type="away",
             primary_color="#f1f5f9",
@@ -345,7 +364,9 @@ def test_visual_identity_payload_includes_kits_and_players() -> None:
         badge_primary_color="#1f2937",
         badge_secondary_color="#e2e8f0",
         badge_accent_color="#38bdf8",
-        home_kit=MatchKitIdentityInput(primary_color="#1f2937", secondary_color="#e2e8f0", accent_color="#38bdf8", front_text="STW"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#1f2937", secondary_color="#e2e8f0", accent_color="#38bdf8", front_text="STW"
+        ),
         away_kit=MatchKitIdentityInput(
             kit_type="away",
             primary_color="#f8fafc",
@@ -379,7 +400,9 @@ def test_kit_clash_resolves_to_alternate() -> None:
     home_identity = MatchTeamIdentityInput(
         club_name="Clash FC",
         short_club_code="CLH",
-        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#444444", accent_color="#888888", front_text="CLH"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#111111", secondary_color="#444444", accent_color="#888888", front_text="CLH"
+        ),
         away_kit=MatchKitIdentityInput(
             kit_type="away",
             primary_color="#f7fafc",
@@ -391,7 +414,9 @@ def test_kit_clash_resolves_to_alternate() -> None:
     away_identity = MatchTeamIdentityInput(
         club_name="Clash Away",
         short_club_code="CLA",
-        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#333333", accent_color="#f97316", front_text="CLA"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#111111", secondary_color="#333333", accent_color="#f97316", front_text="CLA"
+        ),
         away_kit=MatchKitIdentityInput(
             kit_type="away",
             primary_color="#f7fafc",
@@ -539,7 +564,9 @@ def test_replay_payload_includes_broadcast_fan_identity_and_media_layers() -> No
         }
     )
 
-    payload = service.build_replay_payload(build_request(seed=21, match_id="broadcast-package", home_team=home_team, away_team=away_team))
+    payload = service.build_replay_payload(
+        build_request(seed=21, match_id="broadcast-package", home_team=home_team, away_team=away_team)
+    )
 
     assert payload.broadcast_session is not None
     assert {commentator.role for commentator in payload.broadcast_session.commentators} == {"play_by_play", "analyst"}
@@ -613,14 +640,30 @@ def test_third_kit_resolves_clash() -> None:
     home_identity = MatchTeamIdentityInput(
         club_name="Primary Clash",
         short_club_code="PCL",
-        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#333333", accent_color="#444444", front_text="PCL"),
-        away_kit=MatchKitIdentityInput(kit_type="away", primary_color="#111111", secondary_color="#333333", accent_color="#444444", front_text="PCL"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#111111", secondary_color="#333333", accent_color="#444444", front_text="PCL"
+        ),
+        away_kit=MatchKitIdentityInput(
+            kit_type="away",
+            primary_color="#111111",
+            secondary_color="#333333",
+            accent_color="#444444",
+            front_text="PCL",
+        ),
     )
     away_identity = MatchTeamIdentityInput(
         club_name="Alt Clash",
         short_club_code="ACL",
-        home_kit=MatchKitIdentityInput(primary_color="#111111", secondary_color="#333333", accent_color="#555555", front_text="ACL"),
-        away_kit=MatchKitIdentityInput(kit_type="away", primary_color="#111111", secondary_color="#333333", accent_color="#666666", front_text="ACL"),
+        home_kit=MatchKitIdentityInput(
+            primary_color="#111111", secondary_color="#333333", accent_color="#555555", front_text="ACL"
+        ),
+        away_kit=MatchKitIdentityInput(
+            kit_type="away",
+            primary_color="#111111",
+            secondary_color="#333333",
+            accent_color="#666666",
+            front_text="ACL",
+        ),
         third_kit=MatchKitIdentityInput(
             kit_type="third",
             primary_color="#f7fafc",

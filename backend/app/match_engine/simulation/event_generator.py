@@ -29,7 +29,6 @@ from app.match_engine.simulation.models import (
     PlayerVisualIdentity,
     SimulationResult,
     TacticalPlan,
-    TacticalStyle,
     TeamMatchStats,
     TeamRuntimeState,
     TeamVisualIdentity,
@@ -355,7 +354,9 @@ class MatchEventGenerator:
             )
         fork_tail(90)
         level_at_full_time = home_state.stats.goals == away_state.stats.goals
-        play_extra_time = bool(getattr(request.competition, "extra_time", False)) and requires_winner and level_at_full_time
+        play_extra_time = (
+            bool(getattr(request.competition, "extra_time", False)) and requires_winner and level_at_full_time
+        )
         record(
             self._make_event(
                 match_id=request.match_id,

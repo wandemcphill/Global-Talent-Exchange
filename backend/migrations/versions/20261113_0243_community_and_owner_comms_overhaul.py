@@ -89,7 +89,9 @@ def upgrade() -> None:
             if "reply_to_message_id" not in pm_cols:
                 batch_op.add_column(sa.Column("reply_to_message_id", sa.String(length=36), nullable=True))
             if "mentions_json" not in pm_cols:
-                batch_op.add_column(sa.Column("mentions_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'")))
+                batch_op.add_column(
+                    sa.Column("mentions_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'"))
+                )
         inspector = sa.inspect(bind)
         if "ix_private_messages_thread_seq" not in _index_names(inspector, "private_messages"):
             op.create_index("ix_private_messages_thread_seq", "private_messages", ["thread_id", "seq"], unique=False)

@@ -20,11 +20,9 @@ from app.models.club_trophy import ClubTrophy
 from app.models.community_engine import (
     CommunityReaction,
     CommunityUserBlock,
-    MessageVisibility,
     PrivateMessage,
     PrivateMessageParticipant,
     PrivateMessageThread,
-    PrivateMessageThreadStatus,
 )
 from app.models.community_social import (
     CommunityBookmark,
@@ -194,9 +192,7 @@ def _blocked_and_muted_ids(session: Session, actor: User | None) -> tuple[set[st
         ).all()
     )
     muted = set(
-        session.scalars(
-            select(CommunityUserMute.muted_user_id).where(CommunityUserMute.user_id == actor.id)
-        ).all()
+        session.scalars(select(CommunityUserMute.muted_user_id).where(CommunityUserMute.user_id == actor.id)).all()
     )
     return blocked_out | blocked_in, muted
 
@@ -205,9 +201,7 @@ def _resolve_mentions(session: Session, body: str) -> list[dict[str, Any]]:
     usernames = list(dict.fromkeys(match.group(1) for match in _MENTION_RE.finditer(body)))[:10]
     if not usernames:
         return []
-    users = list(
-        session.scalars(select(User).where(User.username.in_(usernames), User.is_active.is_(True))).all()
-    )
+    users = list(session.scalars(select(User).where(User.username.in_(usernames), User.is_active.is_(True))).all())
     return [
         {
             "type": "user",
@@ -282,7 +276,9 @@ def _check_channel_rate_limit(session: Session, actor: User, channel_id: str, bo
             raise CommunitySocialError("Duplicate message sent too quickly.", status_code=429)
 
 
-def _reaction_summary(session: Session, *, entity_type: str, entity_ids: list[str], actor_id: str | None) -> tuple[dict[str, dict[str, int]], dict[str, list[str]]]:
+def _reaction_summary(
+    session: Session, *, entity_type: str, entity_ids: list[str], actor_id: str | None
+) -> tuple[dict[str, dict[str, int]], dict[str, list[str]]]:
     if not entity_ids:
         return {}, {}
     rows = list(
@@ -308,9 +304,7 @@ class CommunitySocialService:
     session: Session
 
     def ensure_default_channels(self) -> list[CommunityChannel]:
-        existing = {
-            ch.slug: ch for ch in self.session.scalars(select(CommunityChannel)).all()
-        }
+        existing = {ch.slug: ch for ch in self.session.scalars(select(CommunityChannel)).all()}
         created_any = False
         for item in CANONICAL_CHANNELS:
             if item["slug"] in existing:
@@ -432,7 +426,9 @@ class CommunitySocialService:
         else:
             if before_seq is not None:
                 q = q.where(CommunityChannelMessage.seq < before_seq)
-            rows_desc = list(self.session.scalars(q.order_by(CommunityChannelMessage.seq.desc()).limit(limit + 1)).all())
+            rows_desc = list(
+                self.session.scalars(q.order_by(CommunityChannelMessage.seq.desc()).limit(limit + 1)).all()
+            )
             has_more = len(rows_desc) > limit
             rows = list(reversed(rows_desc[:limit]))
 
@@ -448,7 +444,9 @@ class CommunitySocialService:
                 .limit(5)
             ).all()
         )
-        hydrated = self._hydrate_channel_messages(rows + [p for p in pinned_rows if p.id not in {r.id for r in rows}], actor)
+        hydrated = self._hydrate_channel_messages(
+            rows + [p for p in pinned_rows if p.id not in {r.id for r in rows}], actor
+        )
         by_id = {item["id"]: item for item in hydrated}
         return {
             "channel": {
@@ -494,17 +492,20 @@ class CommunitySocialService:
             if parent is None or parent.channel_id != ch.id:
                 raise CommunitySocialError("Reply target message not found in this channel.", status_code=404)
 
-        next_seq = max(
-            int(ch.last_message_seq or 0),
-            int(
-                self.session.scalar(
-                    select(func.coalesce(func.max(CommunityChannelMessage.seq), 0)).where(
-                        CommunityChannelMessage.channel_id == ch.id
+        next_seq = (
+            max(
+                int(ch.last_message_seq or 0),
+                int(
+                    self.session.scalar(
+                        select(func.coalesce(func.max(CommunityChannelMessage.seq), 0)).where(
+                            CommunityChannelMessage.channel_id == ch.id
+                        )
                     )
-                )
-                or 0
-            ),
-        ) + 1
+                    or 0
+                ),
+            )
+            + 1
+        )
         mentions = _resolve_mentions(self.session, clean_body)
         now = datetime.now(timezone.utc)
         msg = CommunityChannelMessage(
@@ -553,16 +554,21 @@ class CommunitySocialService:
         self.session.flush()
         return self._hydrate_channel_messages([msg], actor)[0]
 
-    def _hydrate_channel_messages(self, rows: list[CommunityChannelMessage], actor: User | None) -> list[dict[str, Any]]:
+    def _hydrate_channel_messages(
+        self, rows: list[CommunityChannelMessage], actor: User | None
+    ) -> list[dict[str, Any]]:
         if not rows:
             return []
         user_ids = list({r.sender_user_id for r in rows})
-        users = {
-            u.id: u for u in self.session.scalars(select(User).where(User.id.in_(user_ids))).all()
-        }
+        users = {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(user_ids))).all()}
         reply_ids = list({r.reply_to_message_id for r in rows if r.reply_to_message_id})
         replies = (
-            {m.id: m for m in self.session.scalars(select(CommunityChannelMessage).where(CommunityChannelMessage.id.in_(reply_ids))).all()}
+            {
+                m.id: m
+                for m in self.session.scalars(
+                    select(CommunityChannelMessage).where(CommunityChannelMessage.id.in_(reply_ids))
+                ).all()
+            }
             if reply_ids
             else {}
         )
@@ -640,7 +646,9 @@ class CommunitySocialService:
             if club is None:
                 raise CommunitySocialError("Referenced club was not found.", status_code=404)
             if p_type == "club_announcement" and club.owner_user_id != actor.id and not _is_admin(actor):
-                raise CommunitySocialError("Only the club owner can publish an official club announcement.", status_code=403)
+                raise CommunitySocialError(
+                    "Only the club owner can publish an official club announcement.", status_code=403
+                )
 
         if player_id:
             player = self.session.get(Player, player_id)
@@ -667,11 +675,7 @@ class CommunitySocialService:
                 raise CommunitySocialError("Polls require between 2 and 6 options.")
             structured_poll = [{"id": f"opt_{idx + 1}", "label": opt[:100]} for idx, opt in enumerate(opts)]
 
-        clean_tags = [
-            _SLUG_RE.sub("-", t.strip().lower()).strip("-")[:32]
-            for t in (tags or [])
-            if t and t.strip()
-        ][:8]
+        clean_tags = [_SLUG_RE.sub("-", t.strip().lower()).strip("-")[:32] for t in (tags or []) if t and t.strip()][:8]
         mentions = _resolve_mentions(self.session, clean_body)
         post = CommunityPost(
             author_user_id=actor.id,
@@ -851,9 +855,7 @@ class CommunitySocialService:
             saved = True
         self.session.flush()
         total = int(
-            self.session.scalar(
-                select(func.count(CommunityBookmark.id)).where(CommunityBookmark.post_id == post.id)
-            )
+            self.session.scalar(select(func.count(CommunityBookmark.id)).where(CommunityBookmark.post_id == post.id))
             or 0
         )
         post.bookmark_count = total
@@ -894,9 +896,7 @@ class CommunitySocialService:
         rows = list(self.session.scalars(q.order_by(CommunityPostComment.created_at.asc())).all())
         user_ids = list({r.author_user_id for r in rows})
         users = (
-            {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(user_ids))).all()}
-            if user_ids
-            else {}
+            {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(user_ids))).all()} if user_ids else {}
         )
         return [
             {
@@ -1027,7 +1027,9 @@ class CommunitySocialService:
             comp_participant_counts = {
                 str(k): int(v)
                 for k, v in self.session.execute(
-                    select(UserHostedCompetitionParticipant.competition_id, func.count(UserHostedCompetitionParticipant.id))
+                    select(
+                        UserHostedCompetitionParticipant.competition_id, func.count(UserHostedCompetitionParticipant.id)
+                    )
                     .where(UserHostedCompetitionParticipant.competition_id.in_(list(hosted_comps)))
                     .group_by(UserHostedCompetitionParticipant.competition_id)
                 ).all()
@@ -1182,24 +1184,42 @@ class CommunitySocialService:
             )
             comp_ids = [c.id for c in hosted]
             host_ids = list({c.host_user_id for c in hosted})
-            hosts = {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(host_ids))).all()} if host_ids else {}
-            p_counts = dict(
-                self.session.execute(
-                    select(UserHostedCompetitionParticipant.competition_id, func.count(UserHostedCompetitionParticipant.id))
-                    .where(UserHostedCompetitionParticipant.competition_id.in_(comp_ids))
-                    .group_by(UserHostedCompetitionParticipant.competition_id)
-                ).all()
-            ) if comp_ids else {}
-            app_counts = dict(
-                self.session.execute(
-                    select(CommunityCompetitionApplication.competition_id, func.count(CommunityCompetitionApplication.id))
-                    .where(
-                        CommunityCompetitionApplication.competition_id.in_(comp_ids),
-                        CommunityCompetitionApplication.status == "pending",
-                    )
-                    .group_by(CommunityCompetitionApplication.competition_id)
-                ).all()
-            ) if comp_ids else {}
+            hosts = (
+                {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(host_ids))).all()}
+                if host_ids
+                else {}
+            )
+            p_counts = (
+                dict(
+                    self.session.execute(
+                        select(
+                            UserHostedCompetitionParticipant.competition_id,
+                            func.count(UserHostedCompetitionParticipant.id),
+                        )
+                        .where(UserHostedCompetitionParticipant.competition_id.in_(comp_ids))
+                        .group_by(UserHostedCompetitionParticipant.competition_id)
+                    ).all()
+                )
+                if comp_ids
+                else {}
+            )
+            app_counts = (
+                dict(
+                    self.session.execute(
+                        select(
+                            CommunityCompetitionApplication.competition_id,
+                            func.count(CommunityCompetitionApplication.id),
+                        )
+                        .where(
+                            CommunityCompetitionApplication.competition_id.in_(comp_ids),
+                            CommunityCompetitionApplication.status == "pending",
+                        )
+                        .group_by(CommunityCompetitionApplication.competition_id)
+                    ).all()
+                )
+                if comp_ids
+                else {}
+            )
 
             joined_ids: set[str] = set()
             viewer_apps: dict[str, CommunityCompetitionApplication] = {}
@@ -1297,7 +1317,12 @@ class CommunitySocialService:
                         "max_participants": int(oc.max_clubs or 8),
                         "slots_remaining": max(0, int(oc.max_clubs or 8) - cur),
                         "pending_applications_count": 0,
-                        "organizer": {"id": "gtex-system", "username": "gtex", "display_name": "GTEX Official", "is_admin": True},
+                        "organizer": {
+                            "id": "gtex-system",
+                            "username": "gtex",
+                            "display_name": "GTEX Official",
+                            "is_admin": True,
+                        },
                         "is_organizer": False,
                         "viewer_joined": False,
                         "viewer_application_status": None,
@@ -1428,7 +1453,11 @@ class CommunitySocialService:
         u_ids = list({a.applicant_user_id for a in apps})
         users = {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(u_ids))).all()} if u_ids else {}
         c_ids = [a.club_id for a in apps if a.club_id]
-        clubs = {c.id: c for c in self.session.scalars(select(ClubProfile).where(ClubProfile.id.in_(c_ids))).all()} if c_ids else {}
+        clubs = (
+            {c.id: c for c in self.session.scalars(select(ClubProfile).where(ClubProfile.id.in_(c_ids))).all()}
+            if c_ids
+            else {}
+        )
         return [
             {
                 "id": a.id,
@@ -1518,7 +1547,9 @@ class CommunitySocialService:
 
     # ---------------- PEOPLE, CLUBS & PUBLIC PLAYER DISCOVERY ----------------
 
-    def search_users_directory(self, *, actor: User | None, query: str | None = None, limit: int = 30) -> list[dict[str, Any]]:
+    def search_users_directory(
+        self, *, actor: User | None, query: str | None = None, limit: int = 30
+    ) -> list[dict[str, Any]]:
         blocked_ids, muted_ids = _blocked_and_muted_ids(self.session, actor)
         q = select(User).where(User.is_active.is_(True))
         if actor is not None:
@@ -1568,7 +1599,9 @@ class CommunitySocialService:
             for u in users
         ]
 
-    def list_clubs_showcase(self, *, actor: User | None, query: str | None = None, limit: int = 30) -> list[dict[str, Any]]:
+    def list_clubs_showcase(
+        self, *, actor: User | None, query: str | None = None, limit: int = 30
+    ) -> list[dict[str, Any]]:
         q = select(ClubProfile).where(
             ClubProfile.visibility == "public",
             ClubProfile.lifecycle_status == ClubLifecycleStatus.ACTIVE,
@@ -1586,7 +1619,11 @@ class CommunitySocialService:
         clubs = list(self.session.scalars(q.order_by(ClubProfile.created_at.desc()).limit(limit)).all())
         club_ids = [c.id for c in clubs]
         owner_ids = list({c.owner_user_id for c in clubs})
-        owners = {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(owner_ids))).all()} if owner_ids else {}
+        owners = (
+            {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(owner_ids))).all()}
+            if owner_ids
+            else {}
+        )
         followers = (
             {
                 str(k): int(v)
@@ -1613,7 +1650,10 @@ class CommunitySocialService:
             else {}
         )
         stadiums = (
-            {s.club_id: s.name for s in self.session.scalars(select(ClubStadium).where(ClubStadium.club_id.in_(club_ids))).all()}
+            {
+                s.club_id: s.name
+                for s in self.session.scalars(select(ClubStadium).where(ClubStadium.club_id.in_(club_ids))).all()
+            }
             if club_ids
             else {}
         )
@@ -1675,7 +1715,9 @@ class CommunitySocialService:
                     Player.normalized_position.ilike(term),
                 )
             )
-        rows = self.session.execute(q.order_by(Player.governed_gsi.desc().nullslast(), Player.created_at.desc()).limit(limit)).all()
+        rows = self.session.execute(
+            q.order_by(Player.governed_gsi.desc().nullslast(), Player.created_at.desc()).limit(limit)
+        ).all()
         country_ids = list({pl.country_id for pl, _ in rows if pl.country_id})
         countries = (
             {c.id: c.name for c in self.session.scalars(select(Country).where(Country.id.in_(country_ids))).all()}
@@ -1729,12 +1771,20 @@ class CommunitySocialService:
         else:
             if before_seq is not None:
                 q = q.where(PrivateMessage.seq < before_seq)
-            rows_desc = list(self.session.scalars(q.order_by(PrivateMessage.seq.desc(), PrivateMessage.created_at.desc()).limit(limit + 1)).all())
+            rows_desc = list(
+                self.session.scalars(
+                    q.order_by(PrivateMessage.seq.desc(), PrivateMessage.created_at.desc()).limit(limit + 1)
+                ).all()
+            )
             has_more = len(rows_desc) > limit
             rows = list(reversed(rows_desc[:limit]))
 
         sender_ids = list({m.sender_user_id for m in rows})
-        senders = {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(sender_ids))).all()} if sender_ids else {}
+        senders = (
+            {u.id: u for u in self.session.scalars(select(User).where(User.id.in_(sender_ids))).all()}
+            if sender_ids
+            else {}
+        )
         return {
             "thread_id": thread.id,
             "subject": thread.subject,
@@ -1807,7 +1857,9 @@ class CommunitySocialService:
             self.session.flush()
         return {"blocked_user_id": target_user_id, "blocked": False}
 
-    def toggle_mute_user(self, *, actor: User, target_user_id: str, muted: bool = True, reason: str | None = None) -> dict[str, Any]:
+    def toggle_mute_user(
+        self, *, actor: User, target_user_id: str, muted: bool = True, reason: str | None = None
+    ) -> dict[str, Any]:
         if target_user_id == actor.id:
             raise CommunitySocialError("You cannot mute yourself.")
         existing = self.session.scalar(
@@ -1843,15 +1895,18 @@ class CommunitySocialService:
         )
         if existing is not None:
             raise CommunitySocialError("You already submitted an open report for this item.")
-        count = int(
-            self.session.scalar(
-                select(func.count(ModerationReport.id)).where(
-                    ModerationReport.target_type == target_type,
-                    ModerationReport.target_id == target_id,
+        count = (
+            int(
+                self.session.scalar(
+                    select(func.count(ModerationReport.id)).where(
+                        ModerationReport.target_type == target_type,
+                        ModerationReport.target_id == target_id,
+                    )
                 )
+                or 0
             )
-            or 0
-        ) + 1
+            + 1
+        )
         report = ModerationReport(
             reporter_user_id=actor.id,
             subject_user_id=subject_user_id,
@@ -1912,9 +1967,7 @@ class CommunitySocialService:
             report = self.session.get(ModerationReport, report_id)
             if report is not None:
                 report.status = (
-                    ModerationReportStatus.DISMISSED
-                    if clean_action == "dismiss"
-                    else ModerationReportStatus.ACTIONED
+                    ModerationReportStatus.DISMISSED if clean_action == "dismiss" else ModerationReportStatus.ACTIONED
                 )
                 report.resolution_action = (
                     ModerationResolutionAction.CONTENT_REMOVED

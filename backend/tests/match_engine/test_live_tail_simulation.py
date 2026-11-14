@@ -45,9 +45,13 @@ def test_tail_resimulation_keeps_the_prefix_and_changes_the_rest() -> None:
     assert _identity(baseline.events, 60) == _identity(attacking.events, 60)
     assert _identity(baseline.events, 60) == _identity(defensive.events, 60)
     assert [
-        (event.event_type, event.minute, event.home_score, event.away_score) for event in attacking.events if event.minute >= 60
+        (event.event_type, event.minute, event.home_score, event.away_score)
+        for event in attacking.events
+        if event.minute >= 60
     ] != [
-        (event.event_type, event.minute, event.home_score, event.away_score) for event in defensive.events if event.minute >= 60
+        (event.event_type, event.minute, event.home_score, event.away_score)
+        for event in defensive.events
+        if event.minute >= 60
     ]
 
 

@@ -600,7 +600,11 @@ class LiveMatchHub:
 
             with self.session_factory() as session:
                 comp_match = session.get(CompetitionMatch, match_id)
-                saved = None if comp_match is None or not comp_match.metadata_json else comp_match.metadata_json.get("simulation_request")
+                saved = (
+                    None
+                    if comp_match is None or not comp_match.metadata_json
+                    else comp_match.metadata_json.get("simulation_request")
+                )
                 if isinstance(saved, dict):
                     if runtime is not None:
                         runtime.simulation_request = saved
@@ -814,8 +818,7 @@ class LiveMatchHub:
             current_sub_count = int(current.get("substitution_count", 0))
 
             shape_changed = any(
-                value is not None
-                for value in (formation, mentality, press_intensity, tempo, defensive_line)
+                value is not None for value in (formation, mentality, press_intensity, tempo, defensive_line)
             )
             if shape_changed and active_minute is not None and self._load_simulation_request(match_id) is None:
                 raise LiveMatchError(
@@ -901,8 +904,7 @@ class LiveMatchHub:
                 tempo=current.get("tempo"),
                 defensive_line=current.get("defensive_line"),
                 changed=any(
-                    value is not None
-                    for value in (formation, mentality, press_intensity, tempo, defensive_line)
+                    value is not None for value in (formation, mentality, press_intensity, tempo, defensive_line)
                 ),
             )
 

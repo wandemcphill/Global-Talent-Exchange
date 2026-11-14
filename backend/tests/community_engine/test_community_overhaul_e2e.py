@@ -27,7 +27,6 @@ from app.core.database import build_alembic_config, load_model_modules
 from app.ingestion.models import Country, LiquidityBand, Player, SupplyTier
 from app.models.base import Base
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
-from app.models.club_social import SocialFollow
 from app.models.hosted_competition import (
     CompetitionTemplate,
     HostedCompetitionFundingMode,
@@ -35,7 +34,6 @@ from app.models.hosted_competition import (
     UserHostedCompetition,
     UserHostedCompetitionParticipant,
 )
-from app.models.notification_record import NotificationRecord
 from app.models.regen import RegenProfile
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.notifications.router import router as notifications_router
@@ -327,7 +325,9 @@ def test_clubs_players_competitions_application_workflow_and_privacy() -> None:
         # Applicant cannot view or review organizer queue
         assert client.get("/community/competitions/comp-app-1/applications").status_code == 403
         assert (
-            client.post(f"/community/competitions/applications/{app_id}/review", json={"decision": "accept"}).status_code
+            client.post(
+                f"/community/competitions/applications/{app_id}/review", json={"decision": "accept"}
+            ).status_code
             == 403
         )
 
