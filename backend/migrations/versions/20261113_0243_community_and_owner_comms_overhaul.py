@@ -93,8 +93,16 @@ def upgrade() -> None:
                     sa.Column("mentions_json", sa.JSON(), nullable=False, server_default=sa.text("'[]'"))
                 )
         inspector = sa.inspect(bind)
-        if "ix_private_messages_thread_seq" not in _index_names(inspector, "private_messages"):
+        existing_pm_indexes = _index_names(inspector, "private_messages")
+        if "ix_private_messages_thread_seq" not in existing_pm_indexes:
             op.create_index("ix_private_messages_thread_seq", "private_messages", ["thread_id", "seq"], unique=False)
+        if "ix_private_messages_reply_to_message_id" not in existing_pm_indexes:
+            op.create_index(
+                "ix_private_messages_reply_to_message_id",
+                "private_messages",
+                ["reply_to_message_id"],
+                unique=False,
+            )
 
     # Idempotent data backfill inside ORM session
     session = Session(bind=bind)
@@ -164,7 +172,10 @@ def downgrade() -> None:
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
-    if "ix_private_messages_thread_seq" in _index_names(inspector, "private_messages"):
+    existing_pm_indexes = _index_names(inspector, "private_messages")
+    if "ix_private_messages_reply_to_message_id" in existing_pm_indexes:
+        op.drop_index("ix_private_messages_reply_to_message_id", table_name="private_messages")
+    if "ix_private_messages_thread_seq" in existing_pm_indexes:
         op.drop_index("ix_private_messages_thread_seq", table_name="private_messages")
 
     pm_cols = _column_names(inspector, "private_messages")
