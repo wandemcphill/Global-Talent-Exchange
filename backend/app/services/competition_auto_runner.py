@@ -438,10 +438,11 @@ class CompetitionAutoRunner:
         if not player_stats:
             return
         try:
-            PlayerMatchPerformanceRecorder(self.session).record_match(
-                match=match,
-                player_stats=player_stats,
-            )
+            with self.session.begin_nested():
+                PlayerMatchPerformanceRecorder(self.session).record_match(
+                    match=match,
+                    player_stats=player_stats,
+                )
         except SQLAlchemyError:
             logger.exception(
                 "Failed to record player performances for match %s in competition %s",

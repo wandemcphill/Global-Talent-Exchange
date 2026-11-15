@@ -45,14 +45,18 @@ class CanonicalInstitutionalCompetition:
     format: str
 
 
+def _has_player_stats(value: Any) -> bool:
+    return isinstance(value, list) and any(isinstance(row, dict) for row in value)
+
+
 def _replay_summary(match: CompetitionMatch) -> dict[str, Any]:
     metadata = dict(match.metadata_json or {})
     summary = metadata.get("simulation_summary")
-    if isinstance(summary, dict) and isinstance(summary.get("player_stats"), list):
+    if isinstance(summary, dict) and _has_player_stats(summary.get("player_stats")):
         return summary
     replay = metadata.get("replay_payload")
     replay_summary = replay.get("summary") if isinstance(replay, dict) else None
-    if isinstance(replay_summary, dict) and isinstance(replay_summary.get("player_stats"), list):
+    if isinstance(replay_summary, dict) and _has_player_stats(replay_summary.get("player_stats")):
         return dict(replay_summary)
     return dict(summary) if isinstance(summary, dict) else {}
 
@@ -361,7 +365,7 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
 
     summary = _replay_summary(match)
     raw_stats = summary.get("player_stats")
-    if not isinstance(raw_stats, list) or not raw_stats:
+    if not _has_player_stats(raw_stats):
         # Persist one independently retryable source event per participating
         # Living Club before deferring. This prevents a missing replay summary
         # from falling out of the bounded recent-match backfill window.
