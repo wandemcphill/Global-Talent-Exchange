@@ -849,3 +849,30 @@ def test_didit_adapter_fails_closed_without_live_credentials(monkeypatch) -> Non
             user_id="user-missing-configuration",
             reference="gtex-kyc-missing-config",
         )
+
+
+def test_trader_signup_schema_rejects_placeholder_security_hashes() -> None:
+    from app.auth.schemas import TraderSignupRequest
+
+    base = {
+        "full_name": "Sample Trader",
+        "trading_alias": "SampleDesk",
+        "email": "sample-trader@example.com",
+        "password": "test-password-value",
+        "phone_number": "+2348012345678",
+        "country": "Nigeria",
+        "preferred_currency": "NGN",
+        "trading_experience": "beginner",
+        "totp_secret": "ABCDEFGHIJKLMNOPQRSTUVWX234567",
+        "totp_code": "123456",
+        "recovery_phrase_hash": "pbkdf2-sha256$210000$recovery$" + ("a" * 32) + "$" + ("b" * 64),
+        "security_pin_hash": "pbkdf2-sha256$210000$pin$" + ("c" * 32) + "$" + ("d" * 64),
+    }
+    parsed = TraderSignupRequest(**base)
+    assert parsed.recovery_phrase_hash.startswith("pbkdf2-sha256$210000$recovery$")
+    assert parsed.security_pin_hash.startswith("pbkdf2-sha256$210000$pin$")
+
+    with pytest.raises(ValidationError):
+        TraderSignupRequest(**{**base, "recovery_phrase_hash": "placeholder-recovery-value"})
+    with pytest.raises(ValidationError):
+        TraderSignupRequest(**{**base, "security_pin_hash": "pbkdf2-sha256$210000$recovery$" + ("a" * 32) + "$" + ("b" * 64)})
