@@ -117,7 +117,9 @@ def test_spectator_gateway_tracks_presence_and_match_events() -> None:
                 )
             )
             score_event = _receive_until_type(first, "score_update")
+            second_score_event = _receive_until_type(second, "score_update")
             assert score_event["score_update"]["score"] == "2-1"
+            assert second_score_event == score_event
 
         updated_presence = client.get("/matches/match-1/spectators")
         assert updated_presence.status_code == 200

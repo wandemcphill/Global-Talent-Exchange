@@ -168,10 +168,16 @@ def test_live_runtime_cannot_resimulate_against_an_unreconciled_competition_resu
     try:
         _insert_match(session_factory, status="in_progress")
         hub = LiveMatchHub(session_factory=session_factory)
+        viewer_state = object()
+        event_batches = [["existing-event-batch"]]
+        published_events = []
         runtime = SimpleNamespace(
             live=True,
             completed_at=None,
             last_snapshot=SimpleNamespace(status="live"),
+            viewer_state=viewer_state,
+            event_batches=event_batches,
+            published_events=published_events,
         )
         hub._matches["canonical-match-1"] = runtime
 
@@ -186,6 +192,9 @@ def test_live_runtime_cannot_resimulate_against_an_unreconciled_competition_resu
 
         assert hub._tactics == {}
         assert hub._matches["canonical-match-1"] is runtime
+        assert runtime.viewer_state is viewer_state
+        assert runtime.event_batches == [["existing-event-batch"]]
+        assert runtime.published_events == []
         with session_factory() as session:
             match = session.get(CompetitionMatch, "canonical-match-1")
             assert match is not None
