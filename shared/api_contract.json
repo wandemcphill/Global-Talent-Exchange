@@ -5314,13 +5314,15 @@
       }
     },
     "creator": {
-      "delete_api_v2_creator_league_tiers_tier_id": {
+      "delete_api_v2_competitions_creator_league_tiers_tier_id": {
         "method": "DELETE",
-        "canonical_path": "/api/v2/creator-league/tiers/{tier_id}",
+        "canonical_path": "/api/v2/competitions/creator-league/tiers/{tier_id}",
         "aliases": [
+          "/api/competitions/creator-league/tiers/{tier_id}",
           "/api/creator-league/tiers/{tier_id}",
+          "/api/v1/competitions/creator-league/tiers/{tier_id}",
           "/api/v1/creator-league/tiers/{tier_id}",
-          "/api/v2/creator-league/tiers/{tier_id}",
+          "/api/v2/competitions/creator-league/tiers/{tier_id}",
           "/creator-league/tiers/{tier_id}"
         ],
         "handler": "delete_creator_league_tier",
@@ -5407,6 +5409,96 @@
         "handler": "get_campaign_performance",
         "source_file": "backend/app/creator_marketplace/router.py",
         "response_model": "CampaignPerformanceView"
+      },
+      "get_api_v2_competitions_creator_league": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league",
+        "aliases": [
+          "/api/competitions/creator-league",
+          "/api/creator-league",
+          "/api/v1/competitions/creator-league",
+          "/api/v1/creator-league",
+          "/api/v2/competitions/creator-league",
+          "/creator-league"
+        ],
+        "handler": "get_creator_league_overview",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueConfigView"
+      },
+      "get_api_v2_competitions_creator_league_financial_report": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league/financial-report",
+        "aliases": [
+          "/api/competitions/creator-league/financial-report",
+          "/api/creator-league/financial-report",
+          "/api/v1/competitions/creator-league/financial-report",
+          "/api/v1/creator-league/financial-report",
+          "/api/v2/competitions/creator-league/financial-report",
+          "/creator-league/financial-report"
+        ],
+        "handler": "get_creator_league_financial_report",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueFinancialReportView"
+      },
+      "get_api_v2_competitions_creator_league_financial_settlements": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league/financial-settlements",
+        "aliases": [
+          "/api/competitions/creator-league/financial-settlements",
+          "/api/creator-league/financial-settlements",
+          "/api/v1/competitions/creator-league/financial-settlements",
+          "/api/v1/creator-league/financial-settlements",
+          "/api/v2/competitions/creator-league/financial-settlements",
+          "/creator-league/financial-settlements"
+        ],
+        "handler": "list_creator_league_financial_settlements",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "tuple[CreatorLeagueSettlementView"
+      },
+      "get_api_v2_competitions_creator_league_live_priority": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league/live-priority",
+        "aliases": [
+          "/api/competitions/creator-league/live-priority",
+          "/api/creator-league/live-priority",
+          "/api/v1/competitions/creator-league/live-priority",
+          "/api/v1/creator-league/live-priority",
+          "/api/v2/competitions/creator-league/live-priority",
+          "/creator-league/live-priority"
+        ],
+        "handler": "get_creator_league_live_priority",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueLivePriorityView"
+      },
+      "get_api_v2_competitions_creator_league_season_tiers_season_tier_id_standings": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+        "aliases": [
+          "/api/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+          "/api/creator-league/season-tiers/{season_tier_id}/standings",
+          "/api/v1/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+          "/api/v1/creator-league/season-tiers/{season_tier_id}/standings",
+          "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+          "/creator-league/season-tiers/{season_tier_id}/standings"
+        ],
+        "handler": "get_creator_league_standings",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "tuple[CreatorLeagueStandingView"
+      },
+      "get_api_v2_competitions_creator_league_seasons_season_id": {
+        "method": "GET",
+        "canonical_path": "/api/v2/competitions/creator-league/seasons/{season_id}",
+        "aliases": [
+          "/api/competitions/creator-league/seasons/{season_id}",
+          "/api/creator-league/seasons/{season_id}",
+          "/api/v1/competitions/creator-league/seasons/{season_id}",
+          "/api/v1/creator-league/seasons/{season_id}",
+          "/api/v2/competitions/creator-league/seasons/{season_id}",
+          "/creator-league/seasons/{season_id}"
+        ],
+        "handler": "get_creator_league_season",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueSeasonView"
       },
       "get_api_v2_creator_application": {
         "method": "GET",
@@ -5531,84 +5623,6 @@
         "source_file": "backend/app/creator/router.py",
         "response_model": "CreatorClubShareHoldingView | None"
       },
-      "get_api_v2_creator_league": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league",
-        "aliases": [
-          "/api/creator-league",
-          "/api/v1/creator-league",
-          "/api/v2/creator-league",
-          "/creator-league"
-        ],
-        "handler": "get_creator_league_overview",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueConfigView"
-      },
-      "get_api_v2_creator_league_financial_report": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league/financial-report",
-        "aliases": [
-          "/api/creator-league/financial-report",
-          "/api/v1/creator-league/financial-report",
-          "/api/v2/creator-league/financial-report",
-          "/creator-league/financial-report"
-        ],
-        "handler": "get_creator_league_financial_report",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueFinancialReportView"
-      },
-      "get_api_v2_creator_league_financial_settlements": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league/financial-settlements",
-        "aliases": [
-          "/api/creator-league/financial-settlements",
-          "/api/v1/creator-league/financial-settlements",
-          "/api/v2/creator-league/financial-settlements",
-          "/creator-league/financial-settlements"
-        ],
-        "handler": "list_creator_league_financial_settlements",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "tuple[CreatorLeagueSettlementView"
-      },
-      "get_api_v2_creator_league_live_priority": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league/live-priority",
-        "aliases": [
-          "/api/creator-league/live-priority",
-          "/api/v1/creator-league/live-priority",
-          "/api/v2/creator-league/live-priority",
-          "/creator-league/live-priority"
-        ],
-        "handler": "get_creator_league_live_priority",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueLivePriorityView"
-      },
-      "get_api_v2_creator_league_season_tiers_season_tier_id_standings": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league/season-tiers/{season_tier_id}/standings",
-        "aliases": [
-          "/api/creator-league/season-tiers/{season_tier_id}/standings",
-          "/api/v1/creator-league/season-tiers/{season_tier_id}/standings",
-          "/api/v2/creator-league/season-tiers/{season_tier_id}/standings",
-          "/creator-league/season-tiers/{season_tier_id}/standings"
-        ],
-        "handler": "get_creator_league_standings",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "tuple[CreatorLeagueStandingView"
-      },
-      "get_api_v2_creator_league_seasons_season_id": {
-        "method": "GET",
-        "canonical_path": "/api/v2/creator-league/seasons/{season_id}",
-        "aliases": [
-          "/api/creator-league/seasons/{season_id}",
-          "/api/v1/creator-league/seasons/{season_id}",
-          "/api/v2/creator-league/seasons/{season_id}",
-          "/creator-league/seasons/{season_id}"
-        ],
-        "handler": "get_creator_league_season",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueSeasonView"
-      },
       "get_api_v2_creators_marketplace": {
         "method": "GET",
         "canonical_path": "/api/v2/creators/marketplace",
@@ -5635,6 +5649,36 @@
         "source_file": "backend/app/creator_marketplace/router.py",
         "response_model": "CreatorReputationView"
       },
+      "patch_api_v2_competitions_creator_league_config": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/competitions/creator-league/config",
+        "aliases": [
+          "/api/competitions/creator-league/config",
+          "/api/creator-league/config",
+          "/api/v1/competitions/creator-league/config",
+          "/api/v1/creator-league/config",
+          "/api/v2/competitions/creator-league/config",
+          "/creator-league/config"
+        ],
+        "handler": "update_creator_league_config",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueConfigView"
+      },
+      "patch_api_v2_competitions_creator_league_tiers_tier_id": {
+        "method": "PATCH",
+        "canonical_path": "/api/v2/competitions/creator-league/tiers/{tier_id}",
+        "aliases": [
+          "/api/competitions/creator-league/tiers/{tier_id}",
+          "/api/creator-league/tiers/{tier_id}",
+          "/api/v1/competitions/creator-league/tiers/{tier_id}",
+          "/api/v1/creator-league/tiers/{tier_id}",
+          "/api/v2/competitions/creator-league/tiers/{tier_id}",
+          "/creator-league/tiers/{tier_id}"
+        ],
+        "handler": "update_creator_league_tier",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueConfigView"
+      },
       "patch_api_v2_creator_campaigns_campaign_id": {
         "method": "PATCH",
         "canonical_path": "/api/v2/creator-campaigns/{campaign_id}",
@@ -5647,32 +5691,6 @@
         "handler": "update_campaign",
         "source_file": "backend/app/creator_campaign_engine/router.py",
         "response_model": "CreatorCampaignView"
-      },
-      "patch_api_v2_creator_league_config": {
-        "method": "PATCH",
-        "canonical_path": "/api/v2/creator-league/config",
-        "aliases": [
-          "/api/creator-league/config",
-          "/api/v1/creator-league/config",
-          "/api/v2/creator-league/config",
-          "/creator-league/config"
-        ],
-        "handler": "update_creator_league_config",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueConfigView"
-      },
-      "patch_api_v2_creator_league_tiers_tier_id": {
-        "method": "PATCH",
-        "canonical_path": "/api/v2/creator-league/tiers/{tier_id}",
-        "aliases": [
-          "/api/creator-league/tiers/{tier_id}",
-          "/api/v1/creator-league/tiers/{tier_id}",
-          "/api/v2/creator-league/tiers/{tier_id}",
-          "/creator-league/tiers/{tier_id}"
-        ],
-        "handler": "update_creator_league_tier",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueConfigView"
       },
       "post_api_v2_admin_creator_applications_application_id_approve": {
         "method": "POST",
@@ -5768,6 +5786,81 @@
         "handler": "apply_to_campaign",
         "source_file": "backend/app/creator_marketplace/router.py",
         "response_model": "CreatorOfferView"
+      },
+      "post_api_v2_competitions_creator_league_financial_settlements_settlement_id_approve": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+        "aliases": [
+          "/api/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+          "/api/creator-league/financial-settlements/{settlement_id}/approve",
+          "/api/v1/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+          "/api/v1/creator-league/financial-settlements/{settlement_id}/approve",
+          "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+          "/creator-league/financial-settlements/{settlement_id}/approve"
+        ],
+        "handler": "approve_creator_league_financial_settlement",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueSettlementView"
+      },
+      "post_api_v2_competitions_creator_league_reset": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/creator-league/reset",
+        "aliases": [
+          "/api/competitions/creator-league/reset",
+          "/api/creator-league/reset",
+          "/api/v1/competitions/creator-league/reset",
+          "/api/v1/creator-league/reset",
+          "/api/v2/competitions/creator-league/reset",
+          "/creator-league/reset"
+        ],
+        "handler": "reset_creator_league_structure",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueConfigView"
+      },
+      "post_api_v2_competitions_creator_league_seasons": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/creator-league/seasons",
+        "aliases": [
+          "/api/competitions/creator-league/seasons",
+          "/api/creator-league/seasons",
+          "/api/v1/competitions/creator-league/seasons",
+          "/api/v1/creator-league/seasons",
+          "/api/v2/competitions/creator-league/seasons",
+          "/creator-league/seasons"
+        ],
+        "handler": "create_creator_league_season",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueSeasonView"
+      },
+      "post_api_v2_competitions_creator_league_seasons_season_id_pause": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+        "aliases": [
+          "/api/competitions/creator-league/seasons/{season_id}/pause",
+          "/api/creator-league/seasons/{season_id}/pause",
+          "/api/v1/competitions/creator-league/seasons/{season_id}/pause",
+          "/api/v1/creator-league/seasons/{season_id}/pause",
+          "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+          "/creator-league/seasons/{season_id}/pause"
+        ],
+        "handler": "pause_creator_league_season",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueSeasonView"
+      },
+      "post_api_v2_competitions_creator_league_tiers": {
+        "method": "POST",
+        "canonical_path": "/api/v2/competitions/creator-league/tiers",
+        "aliases": [
+          "/api/competitions/creator-league/tiers",
+          "/api/creator-league/tiers",
+          "/api/v1/competitions/creator-league/tiers",
+          "/api/v1/creator-league/tiers",
+          "/api/v2/competitions/creator-league/tiers",
+          "/creator-league/tiers"
+        ],
+        "handler": "add_creator_league_tier",
+        "source_file": "backend/app/competitions/creator_league_router.py",
+        "response_model": "CreatorLeagueConfigView"
       },
       "post_api_v2_creator_apply": {
         "method": "POST",
@@ -5906,71 +5999,6 @@
         "handler": "purchase_creator_club_fan_shares",
         "source_file": "backend/app/creator/router.py",
         "response_model": "CreatorClubSharePurchaseView"
-      },
-      "post_api_v2_creator_league_financial_settlements_settlement_id_approve": {
-        "method": "POST",
-        "canonical_path": "/api/v2/creator-league/financial-settlements/{settlement_id}/approve",
-        "aliases": [
-          "/api/creator-league/financial-settlements/{settlement_id}/approve",
-          "/api/v1/creator-league/financial-settlements/{settlement_id}/approve",
-          "/api/v2/creator-league/financial-settlements/{settlement_id}/approve",
-          "/creator-league/financial-settlements/{settlement_id}/approve"
-        ],
-        "handler": "approve_creator_league_financial_settlement",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueSettlementView"
-      },
-      "post_api_v2_creator_league_reset": {
-        "method": "POST",
-        "canonical_path": "/api/v2/creator-league/reset",
-        "aliases": [
-          "/api/creator-league/reset",
-          "/api/v1/creator-league/reset",
-          "/api/v2/creator-league/reset",
-          "/creator-league/reset"
-        ],
-        "handler": "reset_creator_league_structure",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueConfigView"
-      },
-      "post_api_v2_creator_league_seasons": {
-        "method": "POST",
-        "canonical_path": "/api/v2/creator-league/seasons",
-        "aliases": [
-          "/api/creator-league/seasons",
-          "/api/v1/creator-league/seasons",
-          "/api/v2/creator-league/seasons",
-          "/creator-league/seasons"
-        ],
-        "handler": "create_creator_league_season",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueSeasonView"
-      },
-      "post_api_v2_creator_league_seasons_season_id_pause": {
-        "method": "POST",
-        "canonical_path": "/api/v2/creator-league/seasons/{season_id}/pause",
-        "aliases": [
-          "/api/creator-league/seasons/{season_id}/pause",
-          "/api/v1/creator-league/seasons/{season_id}/pause",
-          "/api/v2/creator-league/seasons/{season_id}/pause",
-          "/creator-league/seasons/{season_id}/pause"
-        ],
-        "handler": "pause_creator_league_season",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueSeasonView"
-      },
-      "post_api_v2_creator_league_tiers": {
-        "method": "POST",
-        "canonical_path": "/api/v2/creator-league/tiers",
-        "aliases": [
-          "/api/creator-league/tiers",
-          "/api/v1/creator-league/tiers",
-          "/api/v2/creator-league/tiers",
-          "/creator-league/tiers"
-        ],
-        "handler": "add_creator_league_tier",
-        "source_file": "backend/app/competitions/creator_league_router.py",
-        "response_model": "CreatorLeagueConfigView"
       },
       "post_api_v2_creator_verify_email": {
         "method": "POST",
@@ -23388,6 +23416,19 @@
     "/api/v2/competitions/admin/{code}": "patch_api_v2_competitions_admin_code",
     "/api/v2/competitions/admin/{code}/orchestrate": "get_api_v2_competitions_admin_code_orchestrate",
     "/api/v2/competitions/create": "post_api_v2_competitions_create",
+    "/api/v2/competitions/creator-league": "get_api_v2_competitions_creator_league",
+    "/api/v2/competitions/creator-league/config": "patch_api_v2_competitions_creator_league_config",
+    "/api/v2/competitions/creator-league/financial-report": "get_api_v2_competitions_creator_league_financial_report",
+    "/api/v2/competitions/creator-league/financial-settlements": "get_api_v2_competitions_creator_league_financial_settlements",
+    "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve": "post_api_v2_competitions_creator_league_financial_settlements_settlement_id_approve",
+    "/api/v2/competitions/creator-league/live-priority": "get_api_v2_competitions_creator_league_live_priority",
+    "/api/v2/competitions/creator-league/reset": "post_api_v2_competitions_creator_league_reset",
+    "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings": "get_api_v2_competitions_creator_league_season_tiers_season_tier_id_standings",
+    "/api/v2/competitions/creator-league/seasons": "post_api_v2_competitions_creator_league_seasons",
+    "/api/v2/competitions/creator-league/seasons/{season_id}": "get_api_v2_competitions_creator_league_seasons_season_id",
+    "/api/v2/competitions/creator-league/seasons/{season_id}/pause": "post_api_v2_competitions_creator_league_seasons_season_id_pause",
+    "/api/v2/competitions/creator-league/tiers": "post_api_v2_competitions_creator_league_tiers",
+    "/api/v2/competitions/creator-league/tiers/{tier_id}": "patch_api_v2_competitions_creator_league_tiers_tier_id",
     "/api/v2/competitions/join": "post_api_v2_competitions_join",
     "/api/v2/competitions/leaderboard/clubs": "get_api_v2_competitions_leaderboard_clubs",
     "/api/v2/competitions/players/{subject_id}/progression": "get_api_v2_competitions_players_subject_id_progression",
@@ -23443,19 +23484,6 @@
     "/api/v2/creator-campaigns/{campaign_id}/metrics": "get_api_v2_creator_campaigns_campaign_id_metrics",
     "/api/v2/creator-campaigns/{campaign_id}/snapshot": "post_api_v2_creator_campaigns_campaign_id_snapshot",
     "/api/v2/creator-campaigns/{campaign_id}/snapshots": "get_api_v2_creator_campaigns_campaign_id_snapshots",
-    "/api/v2/creator-league": "get_api_v2_creator_league",
-    "/api/v2/creator-league/config": "patch_api_v2_creator_league_config",
-    "/api/v2/creator-league/financial-report": "get_api_v2_creator_league_financial_report",
-    "/api/v2/creator-league/financial-settlements": "get_api_v2_creator_league_financial_settlements",
-    "/api/v2/creator-league/financial-settlements/{settlement_id}/approve": "post_api_v2_creator_league_financial_settlements_settlement_id_approve",
-    "/api/v2/creator-league/live-priority": "get_api_v2_creator_league_live_priority",
-    "/api/v2/creator-league/reset": "post_api_v2_creator_league_reset",
-    "/api/v2/creator-league/season-tiers/{season_tier_id}/standings": "get_api_v2_creator_league_season_tiers_season_tier_id_standings",
-    "/api/v2/creator-league/seasons": "post_api_v2_creator_league_seasons",
-    "/api/v2/creator-league/seasons/{season_id}": "get_api_v2_creator_league_seasons_season_id",
-    "/api/v2/creator-league/seasons/{season_id}/pause": "post_api_v2_creator_league_seasons_season_id_pause",
-    "/api/v2/creator-league/tiers": "post_api_v2_creator_league_tiers",
-    "/api/v2/creator-league/tiers/{tier_id}": "patch_api_v2_creator_league_tiers_tier_id",
     "/api/v2/creator/application": "get_api_v2_creator_application",
     "/api/v2/creator/apply": "post_api_v2_creator_apply",
     "/api/v2/creator/cards": "get_api_v2_creator_cards",
@@ -25215,6 +25243,19 @@
     "/api/competitions/admin/{code}": "/api/v2/competitions/admin/{code}",
     "/api/competitions/admin/{code}/orchestrate": "/api/v2/competitions/admin/{code}/orchestrate",
     "/api/competitions/create": "/api/v2/competitions/create",
+    "/api/competitions/creator-league": "/api/v2/competitions/creator-league",
+    "/api/competitions/creator-league/config": "/api/v2/competitions/creator-league/config",
+    "/api/competitions/creator-league/financial-report": "/api/v2/competitions/creator-league/financial-report",
+    "/api/competitions/creator-league/financial-settlements": "/api/v2/competitions/creator-league/financial-settlements",
+    "/api/competitions/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+    "/api/competitions/creator-league/live-priority": "/api/v2/competitions/creator-league/live-priority",
+    "/api/competitions/creator-league/reset": "/api/v2/competitions/creator-league/reset",
+    "/api/competitions/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+    "/api/competitions/creator-league/seasons": "/api/v2/competitions/creator-league/seasons",
+    "/api/competitions/creator-league/seasons/{season_id}": "/api/v2/competitions/creator-league/seasons/{season_id}",
+    "/api/competitions/creator-league/seasons/{season_id}/pause": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+    "/api/competitions/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
+    "/api/competitions/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/api/competitions/join": "/api/v2/competitions/join",
     "/api/competitions/leaderboard/clubs": "/api/v2/competitions/leaderboard/clubs",
     "/api/competitions/players/{subject_id}/progression": "/api/v2/competitions/players/{subject_id}/progression",
@@ -25270,19 +25311,19 @@
     "/api/creator-campaigns/{campaign_id}/metrics": "/api/v2/creator-campaigns/{campaign_id}/metrics",
     "/api/creator-campaigns/{campaign_id}/snapshot": "/api/v2/creator-campaigns/{campaign_id}/snapshot",
     "/api/creator-campaigns/{campaign_id}/snapshots": "/api/v2/creator-campaigns/{campaign_id}/snapshots",
-    "/api/creator-league": "/api/v2/creator-league",
-    "/api/creator-league/config": "/api/v2/creator-league/config",
-    "/api/creator-league/financial-report": "/api/v2/creator-league/financial-report",
-    "/api/creator-league/financial-settlements": "/api/v2/creator-league/financial-settlements",
-    "/api/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/creator-league/financial-settlements/{settlement_id}/approve",
-    "/api/creator-league/live-priority": "/api/v2/creator-league/live-priority",
-    "/api/creator-league/reset": "/api/v2/creator-league/reset",
-    "/api/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/creator-league/season-tiers/{season_tier_id}/standings",
-    "/api/creator-league/seasons": "/api/v2/creator-league/seasons",
-    "/api/creator-league/seasons/{season_id}": "/api/v2/creator-league/seasons/{season_id}",
-    "/api/creator-league/seasons/{season_id}/pause": "/api/v2/creator-league/seasons/{season_id}/pause",
-    "/api/creator-league/tiers": "/api/v2/creator-league/tiers",
-    "/api/creator-league/tiers/{tier_id}": "/api/v2/creator-league/tiers/{tier_id}",
+    "/api/creator-league": "/api/v2/competitions/creator-league",
+    "/api/creator-league/config": "/api/v2/competitions/creator-league/config",
+    "/api/creator-league/financial-report": "/api/v2/competitions/creator-league/financial-report",
+    "/api/creator-league/financial-settlements": "/api/v2/competitions/creator-league/financial-settlements",
+    "/api/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+    "/api/creator-league/live-priority": "/api/v2/competitions/creator-league/live-priority",
+    "/api/creator-league/reset": "/api/v2/competitions/creator-league/reset",
+    "/api/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+    "/api/creator-league/seasons": "/api/v2/competitions/creator-league/seasons",
+    "/api/creator-league/seasons/{season_id}": "/api/v2/competitions/creator-league/seasons/{season_id}",
+    "/api/creator-league/seasons/{season_id}/pause": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+    "/api/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
+    "/api/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/api/creator/application": "/api/v2/creator/application",
     "/api/creator/apply": "/api/v2/creator/apply",
     "/api/creator/cards": "/api/v2/creator/cards",
@@ -26670,6 +26711,19 @@
     "/api/v1/competitions/admin/{code}": "/api/v2/competitions/admin/{code}",
     "/api/v1/competitions/admin/{code}/orchestrate": "/api/v2/competitions/admin/{code}/orchestrate",
     "/api/v1/competitions/create": "/api/v2/competitions/create",
+    "/api/v1/competitions/creator-league": "/api/v2/competitions/creator-league",
+    "/api/v1/competitions/creator-league/config": "/api/v2/competitions/creator-league/config",
+    "/api/v1/competitions/creator-league/financial-report": "/api/v2/competitions/creator-league/financial-report",
+    "/api/v1/competitions/creator-league/financial-settlements": "/api/v2/competitions/creator-league/financial-settlements",
+    "/api/v1/competitions/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+    "/api/v1/competitions/creator-league/live-priority": "/api/v2/competitions/creator-league/live-priority",
+    "/api/v1/competitions/creator-league/reset": "/api/v2/competitions/creator-league/reset",
+    "/api/v1/competitions/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+    "/api/v1/competitions/creator-league/seasons": "/api/v2/competitions/creator-league/seasons",
+    "/api/v1/competitions/creator-league/seasons/{season_id}": "/api/v2/competitions/creator-league/seasons/{season_id}",
+    "/api/v1/competitions/creator-league/seasons/{season_id}/pause": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+    "/api/v1/competitions/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
+    "/api/v1/competitions/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/api/v1/competitions/join": "/api/v2/competitions/join",
     "/api/v1/competitions/leaderboard/clubs": "/api/v2/competitions/leaderboard/clubs",
     "/api/v1/competitions/players/{subject_id}/progression": "/api/v2/competitions/players/{subject_id}/progression",
@@ -26725,19 +26779,19 @@
     "/api/v1/creator-campaigns/{campaign_id}/metrics": "/api/v2/creator-campaigns/{campaign_id}/metrics",
     "/api/v1/creator-campaigns/{campaign_id}/snapshot": "/api/v2/creator-campaigns/{campaign_id}/snapshot",
     "/api/v1/creator-campaigns/{campaign_id}/snapshots": "/api/v2/creator-campaigns/{campaign_id}/snapshots",
-    "/api/v1/creator-league": "/api/v2/creator-league",
-    "/api/v1/creator-league/config": "/api/v2/creator-league/config",
-    "/api/v1/creator-league/financial-report": "/api/v2/creator-league/financial-report",
-    "/api/v1/creator-league/financial-settlements": "/api/v2/creator-league/financial-settlements",
-    "/api/v1/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/creator-league/financial-settlements/{settlement_id}/approve",
-    "/api/v1/creator-league/live-priority": "/api/v2/creator-league/live-priority",
-    "/api/v1/creator-league/reset": "/api/v2/creator-league/reset",
-    "/api/v1/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/creator-league/season-tiers/{season_tier_id}/standings",
-    "/api/v1/creator-league/seasons": "/api/v2/creator-league/seasons",
-    "/api/v1/creator-league/seasons/{season_id}": "/api/v2/creator-league/seasons/{season_id}",
-    "/api/v1/creator-league/seasons/{season_id}/pause": "/api/v2/creator-league/seasons/{season_id}/pause",
-    "/api/v1/creator-league/tiers": "/api/v2/creator-league/tiers",
-    "/api/v1/creator-league/tiers/{tier_id}": "/api/v2/creator-league/tiers/{tier_id}",
+    "/api/v1/creator-league": "/api/v2/competitions/creator-league",
+    "/api/v1/creator-league/config": "/api/v2/competitions/creator-league/config",
+    "/api/v1/creator-league/financial-report": "/api/v2/competitions/creator-league/financial-report",
+    "/api/v1/creator-league/financial-settlements": "/api/v2/competitions/creator-league/financial-settlements",
+    "/api/v1/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+    "/api/v1/creator-league/live-priority": "/api/v2/competitions/creator-league/live-priority",
+    "/api/v1/creator-league/reset": "/api/v2/competitions/creator-league/reset",
+    "/api/v1/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+    "/api/v1/creator-league/seasons": "/api/v2/competitions/creator-league/seasons",
+    "/api/v1/creator-league/seasons/{season_id}": "/api/v2/competitions/creator-league/seasons/{season_id}",
+    "/api/v1/creator-league/seasons/{season_id}/pause": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+    "/api/v1/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
+    "/api/v1/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/api/v1/creator/application": "/api/v2/creator/application",
     "/api/v1/creator/apply": "/api/v2/creator/apply",
     "/api/v1/creator/cards": "/api/v2/creator/cards",
@@ -28231,19 +28285,19 @@
     "/creator-campaigns/{campaign_id}/metrics": "/api/v2/creator-campaigns/{campaign_id}/metrics",
     "/creator-campaigns/{campaign_id}/snapshot": "/api/v2/creator-campaigns/{campaign_id}/snapshot",
     "/creator-campaigns/{campaign_id}/snapshots": "/api/v2/creator-campaigns/{campaign_id}/snapshots",
-    "/creator-league": "/api/v2/creator-league",
-    "/creator-league/config": "/api/v2/creator-league/config",
-    "/creator-league/financial-report": "/api/v2/creator-league/financial-report",
-    "/creator-league/financial-settlements": "/api/v2/creator-league/financial-settlements",
-    "/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/creator-league/financial-settlements/{settlement_id}/approve",
-    "/creator-league/live-priority": "/api/v2/creator-league/live-priority",
-    "/creator-league/reset": "/api/v2/creator-league/reset",
-    "/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/creator-league/season-tiers/{season_tier_id}/standings",
-    "/creator-league/seasons": "/api/v2/creator-league/seasons",
-    "/creator-league/seasons/{season_id}": "/api/v2/creator-league/seasons/{season_id}",
-    "/creator-league/seasons/{season_id}/pause": "/api/v2/creator-league/seasons/{season_id}/pause",
-    "/creator-league/tiers": "/api/v2/creator-league/tiers",
-    "/creator-league/tiers/{tier_id}": "/api/v2/creator-league/tiers/{tier_id}",
+    "/creator-league": "/api/v2/competitions/creator-league",
+    "/creator-league/config": "/api/v2/competitions/creator-league/config",
+    "/creator-league/financial-report": "/api/v2/competitions/creator-league/financial-report",
+    "/creator-league/financial-settlements": "/api/v2/competitions/creator-league/financial-settlements",
+    "/creator-league/financial-settlements/{settlement_id}/approve": "/api/v2/competitions/creator-league/financial-settlements/{settlement_id}/approve",
+    "/creator-league/live-priority": "/api/v2/competitions/creator-league/live-priority",
+    "/creator-league/reset": "/api/v2/competitions/creator-league/reset",
+    "/creator-league/season-tiers/{season_tier_id}/standings": "/api/v2/competitions/creator-league/season-tiers/{season_tier_id}/standings",
+    "/creator-league/seasons": "/api/v2/competitions/creator-league/seasons",
+    "/creator-league/seasons/{season_id}": "/api/v2/competitions/creator-league/seasons/{season_id}",
+    "/creator-league/seasons/{season_id}/pause": "/api/v2/competitions/creator-league/seasons/{season_id}/pause",
+    "/creator-league/tiers": "/api/v2/competitions/creator-league/tiers",
+    "/creator-league/tiers/{tier_id}": "/api/v2/competitions/creator-league/tiers/{tier_id}",
     "/creator/application": "/api/v2/creator/application",
     "/creator/apply": "/api/v2/creator/apply",
     "/creator/cards": "/api/v2/creator/cards",
