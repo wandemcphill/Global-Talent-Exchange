@@ -737,6 +737,33 @@ class GteExchangeApiClient {
     );
   }
 
+  /// Refreshes server-side live-presence for the active authenticated app session.
+  ///
+  /// This uses the public heartbeat endpoint with authentication required on this
+  /// client call. It does not create a page-view event.
+  Future<void> sendPublicTrafficHeartbeat({
+    required String visitorId,
+  }) async {
+    if (config.mode == GteBackendMode.fixture) return;
+    final GteApiRepository resolvedRepository = repository;
+    if (resolvedRepository is! GteModeAwareApiRepository) {
+      throw const GteApiException(
+        type: GteApiErrorType.unavailable,
+        message: 'Live presence requires the backend-connected repository.',
+      );
+    }
+    await resolvedRepository.requestJson(
+      'POST',
+      '/api/public/traffic/heartbeat',
+      body: <String, Object?>{
+        'visitor_id': visitorId,
+        'path': '/app',
+        'page_view': false,
+      },
+      requiresAuth: true,
+    );
+  }
+
   Future<GteMarketCandles> fetchCandles(
     String playerId, {
     String interval = '1h',
