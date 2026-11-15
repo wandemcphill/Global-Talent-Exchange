@@ -14,7 +14,7 @@ export const PublicTrafficStatsStrip: React.FC<PublicTrafficStatsStripProps> = (
     {
       label: "Visitors today",
       value: numberLabel(pulse?.visitorsToday),
-      detail: "Unique visitors across GTEX",
+      detail: "Unique browsers visiting GTEX",
       Icon: Eye,
       tone: "text-[#36E38A]",
     },
