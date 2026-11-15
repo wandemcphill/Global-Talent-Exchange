@@ -2176,28 +2176,39 @@ def converse_with_staff(
 ) -> dict[str, Any]:
     import secrets
     from app.owner_console import engine, ledger
+    from app.owner_console.service import OwnerError
 
     state = require_state(session, club_id, user_id)
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
 
-    # Resolve staff persona
-    target_staff = exec_staff.get(role)
-    if not target_staff:
-        if role in ("first_team_manager", "manager"):
-            target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
-        else:
-            cand = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
-            target_staff = (
-                dict(cand)
-                if cand
-                else {
-                    "name": role.replace("_", " ").title(),
-                    "role": role,
-                    "style": "Pragmatic Professional",
-                    "mood": 75,
-                }
+    norm_role = str(role or "").strip().lower()
+    if norm_role in ("owner", "club_owner", "chairman"):
+        raise OwnerError(
+            "owner_self_thread_unsupported",
+            400,
+            "The Club Owner cannot open an NPC staff dialogue pretending to be the Owner.",
+        )
+
+    # Resolve appointed staff persona (never manufacture NPCs for vacant seats)
+    if norm_role in ("first_team_manager", "manager"):
+        mgr = dict(state.manager_json or {})
+        if not mgr or mgr.get("is_vacant") or not str(mgr.get("name") or "").strip():
+            raise OwnerError(
+                "staff_role_vacant",
+                409,
+                "First-Team Manager seat is currently vacant. Appoint a manager before direct dialogue.",
             )
+        target_staff = mgr
+    else:
+        raw_staff = exec_staff.get(norm_role)
+        if not raw_staff or not isinstance(raw_staff, dict) or raw_staff.get("is_vacant") or not str(raw_staff.get("name") or "").strip():
+            raise OwnerError(
+                "staff_role_vacant",
+                409,
+                f"{norm_role.replace('_', ' ').title()} is currently vacant. Appoint staff before initiating direct dialogue.",
+            )
+        target_staff = dict(raw_staff)
 
     staff_name = target_staff.get("name", "Staff Member")
     cash_bal = float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX))

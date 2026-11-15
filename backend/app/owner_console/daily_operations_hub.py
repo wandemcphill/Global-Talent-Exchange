@@ -60,7 +60,13 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
 
     # General Manager
     gm_raw = exec_staff.get("general_manager")
-    gm_appointed = bool(gm_raw and isinstance(gm_raw, dict) and gm_raw.get("name"))
+    gm_appointed = bool(
+        gm_raw
+        and isinstance(gm_raw, dict)
+        and str(gm_raw.get("name") or "").strip()
+        and not gm_raw.get("is_vacant")
+        and "vacant" not in str(gm_raw.get("name") or "").lower()
+    )
     if gm_appointed:
         gm = dict(gm_raw)
         gm_name = str(gm.get("name") or "General Manager")
@@ -75,20 +81,26 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         gm_trait = str(gm.get("signature_trait") or gm.get("special_trait") or "Clause Architect")
     else:
         gm = {}
-        gm_name = "Vacant (Provisional Operations Lead)"
+        gm_name = "General Manager (Vacant)"
         gm_label = "General Manager (Vacant)"
         gm_status = "vacant"
         gm_negotiation = 10
         gm_discipline = 10
         gm_salary = 0
-        gm_mood = 70
-        gm_loyalty = 10
-        gm_agenda = "Maintain baseline administrative routines until a permanent General Manager is appointed"
-        gm_trait = "Provisional Caretaker"
+        gm_mood = None
+        gm_loyalty = 0
+        gm_agenda = "Appoint a General Manager to lead commercial administration and club operations."
+        gm_trait = "Position Vacant"
 
     # Head of Youth Development
     hoyd_raw = exec_staff.get("head_of_youth_development")
-    hoyd_appointed = bool(hoyd_raw and isinstance(hoyd_raw, dict) and hoyd_raw.get("name"))
+    hoyd_appointed = bool(
+        hoyd_raw
+        and isinstance(hoyd_raw, dict)
+        and str(hoyd_raw.get("name") or "").strip()
+        and not hoyd_raw.get("is_vacant")
+        and "vacant" not in str(hoyd_raw.get("name") or "").lower()
+    )
     if hoyd_appointed:
         hoyd = dict(hoyd_raw)
         hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
@@ -102,19 +114,25 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         hoyd_trait = str(hoyd.get("signature_trait") or hoyd.get("special_trait") or "Bloodline Whisperer")
     else:
         hoyd = {}
-        hoyd_name = "Vacant (Provisional Academy Coordinator)"
+        hoyd_name = "Head of Youth Development (Vacant)"
         hoyd_label = "Head of Youth Development (Vacant)"
         hoyd_status = "vacant"
         hoyd_youth = 10
         hoyd_salary = 0
-        hoyd_mood = 70
-        hoyd_loyalty = 10
-        hoyd_agenda = "Coordinate basic youth drills until a dedicated Head of Youth Development is appointed"
-        hoyd_trait = "Provisional Caretaker"
+        hoyd_mood = None
+        hoyd_loyalty = 0
+        hoyd_agenda = "Appoint a Head of Youth Development to coordinate academy intake and regen progression."
+        hoyd_trait = "Position Vacant"
 
     # Medical Director
     med_raw = exec_staff.get("medical_director")
-    med_appointed = bool(med_raw and isinstance(med_raw, dict) and med_raw.get("name"))
+    med_appointed = bool(
+        med_raw
+        and isinstance(med_raw, dict)
+        and str(med_raw.get("name") or "").strip()
+        and not med_raw.get("is_vacant")
+        and "vacant" not in str(med_raw.get("name") or "").lower()
+    )
     if med_appointed:
         med = dict(med_raw)
         med_name = str(med.get("name") or "Medical Director")
@@ -128,19 +146,25 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         med_trait = str(med.get("signature_trait") or med.get("special_trait") or "Strict Recovery Veto")
     else:
         med = {}
-        med_name = "Vacant (Provisional Medical Caretaker)"
+        med_name = "Medical Director (Vacant)"
         med_label = "Medical Director (Vacant)"
         med_status = "vacant"
         med_expertise = 10
         med_salary = 0
-        med_mood = 70
-        med_loyalty = 10
-        med_agenda = "Interim triage & basic athlete first-aid until a Medical Director is appointed"
-        med_trait = "Provisional Caretaker"
+        med_mood = None
+        med_loyalty = 0
+        med_agenda = "Appoint a Medical Director to manage rehabilitation and sports-science conditioning."
+        med_trait = "Position Vacant"
 
     # Chief Scout
     scout_raw = exec_staff.get("chief_scout")
-    scout_appointed = bool(scout_raw and isinstance(scout_raw, dict) and scout_raw.get("name"))
+    scout_appointed = bool(
+        scout_raw
+        and isinstance(scout_raw, dict)
+        and str(scout_raw.get("name") or "").strip()
+        and not scout_raw.get("is_vacant")
+        and "vacant" not in str(scout_raw.get("name") or "").lower()
+    )
     if scout_appointed:
         scout = dict(scout_raw)
         scout_name = str(scout.get("name") or "Chief Scout")
@@ -154,33 +178,78 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         scout_trait = str(scout.get("signature_trait") or scout.get("special_trait") or "Underground Agent Network")
     else:
         scout = {}
-        scout_name = "Vacant (Regional Scout Pool)"
+        scout_name = "Chief Scout (Vacant)"
         scout_label = "Chief Scout (Vacant)"
         scout_status = "vacant"
         scout_reach = 10
         scout_salary = 0
-        scout_mood = 70
-        scout_loyalty = 10
-        scout_agenda = "Monitor local domestic fixture lists until a Chief Scout is appointed"
-        scout_trait = "Provisional Caretaker"
+        scout_mood = None
+        scout_loyalty = 0
+        scout_agenda = "Appoint a Chief Scout to run dedicated talent identification assignments."
+        scout_trait = "Position Vacant"
 
-    mgr_name = str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager")
+    # Finance & Commercial Director
+    fin_raw = exec_staff.get("finance_commercial_director")
+    fin_appointed = bool(
+        fin_raw
+        and isinstance(fin_raw, dict)
+        and str(fin_raw.get("name") or "").strip()
+        and not fin_raw.get("is_vacant")
+        and "vacant" not in str(fin_raw.get("name") or "").lower()
+    )
+    if fin_appointed:
+        fin = dict(fin_raw)
+        fin_name = str(fin.get("name") or "Finance & Commercial Director")
+        fin_label = "Finance & Commercial Director"
+        fin_status = "appointed"
+        fin_discipline = _safe_int(fin.get("financial_discipline"), 15)
+        fin_negotiation = _safe_int(fin.get("negotiation"), 14)
+        fin_salary = _safe_int(fin.get("salary_gtex", fin.get("salary", 320)), 320)
+        fin_mood = _safe_int(fin.get("mood"), 79)
+        fin_loyalty = _safe_int(fin.get("loyalty"), 14)
+        fin_agenda = str(fin.get("personal_agenda") or "Enforce treasury solvency, sponsorship yield & matchday ROI")
+        fin_trait = str(fin.get("signature_trait") or fin.get("special_trait") or "Treasury Auditor")
+    else:
+        fin = {}
+        fin_name = "Finance & Commercial Director (Vacant)"
+        fin_label = "Finance & Commercial Director (Vacant)"
+        fin_status = "vacant"
+        fin_discipline = 10
+        fin_negotiation = 10
+        fin_salary = 0
+        fin_mood = None
+        fin_loyalty = 0
+        fin_agenda = "Authoritative ledger and treasury metrics remain live; commercial director seat is vacant."
+        fin_trait = "Position Vacant"
+
+    mgr_raw_name = str(mgr.get("name") or mgr.get("display_name") or "").strip()
+    mgr_appointed = bool(mgr and not mgr.get("is_vacant") and mgr_raw_name and "vacant" not in mgr_raw_name.lower())
+    mgr_name = mgr_raw_name if mgr_appointed else "First-Team Manager (Vacant)"
 
     return {
         "first_team_manager": {
             "role_key": "first_team_manager",
-            "role_label": "First-Team Manager",
+            "role_label": "First-Team Manager" if mgr_appointed else "First-Team Manager (Vacant)",
             "name": mgr_name,
-            "status": "appointed",
-            "is_appointed": True,
-            "mood": _safe_int(mgr.get("mood"), 75),
-            "loyalty": _safe_int(mgr.get("loyalty"), 12),
-            "temperament": str(mgr.get("temperament") or "ambitious"),
-            "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession"),
-            "youth_development": _safe_int(mgr.get("youth_development"), 12),
-            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500),
-            "personal_agenda": str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity"),
-            "signature_trait": str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand"),
+            "status": "appointed" if mgr_appointed else "vacant",
+            "is_appointed": mgr_appointed,
+            "is_vacant": not mgr_appointed,
+            "mood": _safe_int(mgr.get("mood"), 75) if mgr_appointed else None,
+            "loyalty": _safe_int(mgr.get("loyalty"), 12) if mgr_appointed else 0,
+            "temperament": str(mgr.get("temperament") or "ambitious") if mgr_appointed else "vacant",
+            "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession") if mgr_appointed else "Vacant",
+            "youth_development": _safe_int(mgr.get("youth_development"), 12) if mgr_appointed else 10,
+            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500) if mgr_appointed else 0,
+            "personal_agenda": (
+                str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity")
+                if mgr_appointed
+                else "Appoint a First-Team Manager to take full matchday tactical command."
+            ),
+            "signature_trait": (
+                str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand")
+                if mgr_appointed
+                else "Position Vacant"
+            ),
             "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr_name),
         },
         "general_manager": {
@@ -189,6 +258,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": gm_name,
             "status": gm_status,
             "is_appointed": gm_appointed,
+            "is_vacant": not gm_appointed,
             "mood": gm_mood,
             "loyalty": gm_loyalty,
             "negotiation": gm_negotiation,
@@ -204,6 +274,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": hoyd_name,
             "status": hoyd_status,
             "is_appointed": hoyd_appointed,
+            "is_vacant": not hoyd_appointed,
             "mood": hoyd_mood,
             "loyalty": hoyd_loyalty,
             "youth_development": hoyd_youth,
@@ -218,6 +289,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": med_name,
             "status": med_status,
             "is_appointed": med_appointed,
+            "is_vacant": not med_appointed,
             "mood": med_mood,
             "loyalty": med_loyalty,
             "medical_expertise": med_expertise,
@@ -232,6 +304,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": scout_name,
             "status": scout_status,
             "is_appointed": scout_appointed,
+            "is_vacant": not scout_appointed,
             "mood": scout_mood,
             "loyalty": scout_loyalty,
             "scouting_reach": scout_reach,
@@ -239,6 +312,22 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "personal_agenda": scout_agenda,
             "signature_trait": scout_trait,
             "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_scout", scout_name),
+        },
+        "finance_commercial_director": {
+            "role_key": "finance_commercial_director",
+            "role_label": fin_label,
+            "name": fin_name,
+            "status": fin_status,
+            "is_appointed": fin_appointed,
+            "is_vacant": not fin_appointed,
+            "mood": fin_mood,
+            "loyalty": fin_loyalty,
+            "financial_discipline": fin_discipline,
+            "negotiation": fin_negotiation,
+            "salary_gtex": fin_salary,
+            "personal_agenda": fin_agenda,
+            "signature_trait": fin_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_finance", fin_name),
         },
     }
 
@@ -522,6 +611,7 @@ def _build_or_sync_daily_operational_decisions(
     injured_count = sum(1 for p in squad_players if _safe_int(p.injured_days, 0) > 0)
     low_fit_count = sum(1 for p in squad_players if _safe_int((p.personality_json or {}).get("fitness", 95), 95) < 90)
     protocol_cost = 800
+    already_run_today = _safe_int(facs.get("_last_medical_protocol_day"), 0) == world_day
     decisions.append(
         {
             "decision_id": f"op_med_protocol_d{world_day}",
@@ -544,20 +634,21 @@ def _build_or_sync_daily_operational_decisions(
             ),
             "cost_gtex": protocol_cost,
             "priority": "high" if injured_count > 0 or low_fit_count >= 3 else "normal",
-            "status": "open",
+            "status": "approved" if already_run_today else "open",
             "actions": [
                 {"key": "approve", "label": f"Authorize {protocol_cost:,} GTX Protocol", "style": "primary"},
                 {"key": "reject", "label": "Standard Recovery Only", "style": "ghost"},
             ],
             "payload": {"cost_gtex": protocol_cost},
             "created_at": now_iso,
-            "resolved_at": None,
-            "resolution": None,
-            "outcome": None,
+            "resolved_at": now_iso if already_run_today else None,
+            "resolution": "approved" if already_run_today else None,
+            "outcome": "Executed via Medical Department Hydro & Cryo station today." if already_run_today else None,
         }
     )
 
     # 5. Finance & Commercial Office Recommendation: Sign Unlocked Commercial Sponsor Offer
+    fin_dir = staff["finance_commercial_director"]
     unlocked_offers = [o for o in (sponsor_info.get("offers") or []) if not o.get("locked")]
     active_deals_count = len([d for d in (sponsor_info.get("active_deals") or []) if d.get("status") == "active"])
     if unlocked_offers and active_deals_count < 4:
@@ -569,13 +660,13 @@ def _build_or_sync_daily_operational_decisions(
                 "source_type": "department_recommendation",
                 "department": "finance_commercial_office",
                 "department_label": "Finance & Commercial Office",
-                "proposer_role": "general_manager",
-                "proposer_name": gm["name"],
-                "proposer_portrait_url": gm["portrait_url"],
+                "proposer_role": "finance_commercial_director",
+                "proposer_name": fin_dir["name"],
+                "proposer_portrait_url": fin_dir["portrait_url"],
                 "operation_key": "sign_sponsor_offer",
                 "title": f"Ratify Commercial Partnership: {best_offer['sponsor_name']} ({best_offer['slot']})",
                 "what": (
-                    f"{gm['name']} has finalized terms with {best_offer['sponsor_name']} for the {best_offer['slot']} package: "
+                    f"{fin_dir['name']} has finalized terms with {best_offer['sponsor_name']} for the {best_offer['slot']} package: "
                     f"+{best_offer['upfront_signing_bonus_gtex']:,} GTX immediate signing bonus and "
                     f"{best_offer['per_match_gross_gtex']:,} GTX/match over {best_offer.get('matches_duration', 10)} matches."
                 ),
@@ -1211,6 +1302,7 @@ def build_authoritative_daily_briefing(
             )
 
     med_recommendations = [d for d in dept_decisions if d.get("department") == "medical_department"]
+    last_protocol_world_day = _safe_int(facs.get("_last_medical_protocol_day"), 0)
 
     medical_directors_report = {
         "section_key": "medical_directors_report",
@@ -1227,6 +1319,9 @@ def build_authoritative_daily_briefing(
             "active_rehab_count": len(injured_dossiers),
             "daily_injury_heal_days": daily_injury_heal_days,
             "campus_rehab_daily_bonus_days": rehab_campus_bonus,
+            "last_protocol_world_day": last_protocol_world_day or None,
+            "protocol_executed_today": last_protocol_world_day == world_day,
+            "protocol_cost_gtex": 800,
         },
         "medical_facility_performance": {
             "medical_facility_level": medical_facility_level,
@@ -1277,8 +1372,8 @@ def build_authoritative_daily_briefing(
     financial_commercial_report = {
         "section_key": "financial_commercial_report",
         "role": "Finance & Commercial Directorate",
-        "sender": staff["general_manager"]["name"],
-        "staff_profile": staff["general_manager"],
+        "sender": staff["finance_commercial_director"]["name"],
+        "staff_profile": staff["finance_commercial_director"],
         "title": "Treasury Balance, Ledger Cashflow, Sponsorships & Matchday Economics",
         "summary": (
             f"Club treasury holds {cash_bal:,} GTX ({distributable_gtex:,} GTX distributable) with "
@@ -1423,7 +1518,7 @@ def build_authoritative_daily_briefing(
             {
                 "section_key": "financial_commercial_report",
                 "role": "Finance & Commercial",
-                "sender": staff["general_manager"]["name"],
+                "sender": staff["finance_commercial_director"]["name"],
                 "title": financial_commercial_report["title"],
                 "summary": financial_commercial_report["summary"],
             },
@@ -1699,6 +1794,50 @@ def get_club_operations_hub(
         "decision_history": combined_history[:25],
     }
 
+    from app.models.user import User
+    from app.owner_console import autonomous_staff_engine, living_club_world
+    from app.owner_console.models import OwnerClubConversation, OwnerClubDirective, OwnerClubEvent, OwnerClubMessage
+
+    owner_user = session.get(User, user_id)
+    owner_display_name = (
+        (owner_user.display_name or owner_user.full_name or owner_user.username) if owner_user else "Club Owner"
+    )
+    mentality_decision = autonomous_staff_engine.evaluate_manager_mentality_authority(
+        session,
+        state,
+        requested_mentality=state.mentality,
+    )
+
+    staff_room_conv = session.scalar(
+        select(OwnerClubConversation).where(
+            OwnerClubConversation.club_id == club_id,
+            OwnerClubConversation.thread_key == "room:staff",
+            OwnerClubConversation.archived_at.is_(None),
+        )
+    )
+    staff_room_recent_messages: list[dict[str, Any]] = []
+    if staff_room_conv is not None:
+        rm_rows = list(
+            session.scalars(
+                select(OwnerClubMessage)
+                .where(OwnerClubMessage.conversation_id == staff_room_conv.id)
+                .order_by(OwnerClubMessage.created_at.desc())
+                .limit(6)
+            ).all()
+        )
+        rm_rows.reverse()
+        staff_room_recent_messages = [
+            {
+                "id": m.id,
+                "role": m.sender_role or "room:staff",
+                "sender": m.sender_name,
+                "message": m.body,
+                "topic": m.topic or "executive",
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in rm_rows
+        ]
+
     # Build the 6 Interactive 3D Operational Destinations
     chat_history = list(facs.get("_staff_chat_history") or [])
 
@@ -1710,7 +1849,9 @@ def get_club_operations_hub(
             "title": "Executive Office",
             "short_label": "Executive",
             "subtitle": "Owner's Daily Briefing, Strategic Decisions & Club Command",
-            "lead_role_key": "general_manager",
+            "lead_role_key": "owner",
+            "communication_thread_id": "room:staff",
+            "communication_channel_mode": "office_wide",
             "wing_label": "Central Penthouses · Floor 4",
             "glb_model": "/models/campus/club_hq.glb",
             "model_glb_url": "/models/campus/club_hq.glb",
@@ -1721,13 +1862,16 @@ def get_club_operations_hub(
             "camera_target": [0, 2.5, 0],
             "camera_preset": {"position": [0, 13, 21], "target": [0, 2.5, 0], "fov": 42},
             "staff_lead": {
-                "role_key": "general_manager",
-                "role_label": "Chairman & Majority Owner",
-                "name": "Office of the Club Owner",
+                "role_key": "owner",
+                "role_label": "Club Owner",
+                "name": owner_display_name,
+                "status": "owner",
+                "is_appointed": True,
+                "is_owner_workspace": True,
                 "style": "Strategic Governance",
-                "mood": 92,
-                "loyalty": 20,
-                "specialty": "Club Strategy & Treasury Oversight",
+                "mood": 100,
+                "loyalty": 100,
+                "specialty": "Club Strategy, Approvals & Board Governance",
                 "portrait_url": storytelling.resolve_club_crest_url(session, club_id, state.club_name),
             },
             "alert_count": len(open_decisions_list),
@@ -1738,7 +1882,7 @@ def get_club_operations_hub(
                 {
                     "id": "exec_desk",
                     "hotspot_id": "exec_desk",
-                    "label": "Chairman's Briefing Desk",
+                    "label": "Owner's Command Briefing Desk",
                     "action": "inspect_briefing",
                     "offset": [0, 1.2, 0.5],
                 },
@@ -1765,7 +1909,11 @@ def get_club_operations_hub(
             "open_decisions_count": len(
                 [d for d in open_decisions_list if d.get("department") in ("executive_office", "boardroom")]
             ),
-            "recent_messages": [m for m in chat_history if m.get("role") in ("general_manager", "owner")][-6:],
+            "recent_messages": (
+                staff_room_recent_messages
+                if staff_room_recent_messages
+                else [m for m in chat_history if m.get("role") in ("owner", "room:staff")][-6:]
+            ),
         },
         {
             "destination_key": "managers_office",
@@ -1775,6 +1923,8 @@ def get_club_operations_hub(
             "short_label": "Manager",
             "subtitle": "First-Team Squad, Tactical Mentality & Matchday Preparation",
             "lead_role_key": "first_team_manager",
+            "communication_thread_id": "staff:first_team_manager",
+            "communication_channel_mode": "direct" if staff["first_team_manager"]["is_appointed"] else "vacant",
             "wing_label": "West Sporting Wing · Floor 2",
             "glb_model": "/models/campus/stadium_main.glb",
             "model_glb_url": "/models/campus/stadium_main.glb",
@@ -1785,8 +1935,9 @@ def get_club_operations_hub(
             "camera_target": [-14, 2, 4],
             "camera_preset": {"position": [-19, 10, 18], "target": [-14, 2, 4], "fov": 40},
             "staff_lead": staff["first_team_manager"],
+            "tactical_authority": mentality_decision,
             "alert_count": len([d for d in open_decisions_list if d.get("department") == "managers_office"]),
-            "status_badge": f"Mentality: {str(state.mentality or 'balanced').title()}",
+            "status_badge": f"Matchday: {str(mentality_decision['effective_mentality']).title()}",
             "hotspots": [
                 {
                     "id": "tactical_pitch_table",
@@ -1824,6 +1975,8 @@ def get_club_operations_hub(
             "short_label": "General Mgr",
             "subtitle": "Club Administration, Delegation Policy & Campus Masterplan",
             "lead_role_key": "general_manager",
+            "communication_thread_id": "staff:general_manager",
+            "communication_channel_mode": "direct" if staff["general_manager"]["is_appointed"] else "vacant",
             "wing_label": "East Executive Wing · Floor 3",
             "glb_model": "/models/campus/vip_skybox_concourse.glb",
             "model_glb_url": "/models/campus/vip_skybox_concourse.glb",
@@ -1875,6 +2028,10 @@ def get_club_operations_hub(
             "short_label": "Academy",
             "subtitle": "Youth Development Pipeline, Regen Progression & Scouting Intake",
             "lead_role_key": "head_of_youth_development",
+            "communication_thread_id": "staff:head_of_youth_development",
+            "communication_channel_mode": (
+                "direct" if staff["head_of_youth_development"]["is_appointed"] else "vacant"
+            ),
             "wing_label": "North Youth Precinct · Floor 1",
             "glb_model": "/models/campus/elite_academy_complex.glb",
             "model_glb_url": "/models/campus/elite_academy_complex.glb",
@@ -1926,6 +2083,8 @@ def get_club_operations_hub(
             "short_label": "Medical",
             "subtitle": "Injury Rehabilitation, Hydrotherapy & Workload Telemetry",
             "lead_role_key": "medical_director",
+            "communication_thread_id": "staff:medical_director",
+            "communication_channel_mode": "direct" if staff["medical_director"]["is_appointed"] else "vacant",
             "wing_label": "South Sports-Science Lab · Floor 1",
             "glb_model": "/models/campus/recovery_hydro_hub.glb",
             "model_glb_url": "/models/campus/recovery_hydro_hub.glb",
@@ -1981,17 +2140,21 @@ def get_club_operations_hub(
             "title": "Finance & Commercial Office",
             "short_label": "Finance",
             "subtitle": "Club Treasury, Authoritative Ledger, Sponsorships & Matchday Revenue",
-            "lead_role_key": "general_manager",
+            "lead_role_key": "finance_commercial_director",
+            "communication_thread_id": "staff:finance_commercial_director",
+            "communication_channel_mode": (
+                "direct" if staff["finance_commercial_director"]["is_appointed"] else "vacant"
+            ),
             "wing_label": "East Treasury Vault · Floor 3",
-            "glb_model": "/models/campus/club_hq.glb",
-            "model_glb_url": "/models/campus/club_hq.glb",
-            "exterior_glb": "/models/campus/club_hq.glb",
+            "glb_model": "/models/campus/vip_hospitality.glb",
+            "model_glb_url": "/models/campus/vip_hospitality.glb",
+            "exterior_glb": "/models/campus/vip_hospitality.glb",
             "accent_color": "#22d3ee",
             "position_3d": [0, 0, -18],
             "camera_position": [0, 11, -12],
             "camera_target": [0, 2, -18],
             "camera_preset": {"position": [0, 11, -12], "target": [0, 2, -18], "fov": 40},
-            "staff_lead": staff["general_manager"],
+            "staff_lead": staff["finance_commercial_director"],
             "alert_count": len([d for d in open_decisions_list if d.get("department") == "finance_commercial_office"]),
             "status_badge": f"{briefing['metrics']['cash_gtex']:,} GTX",
             "hotspots": [
@@ -2023,12 +2186,9 @@ def get_club_operations_hub(
             "open_decisions_count": len(
                 [d for d in open_decisions_list if d.get("department") == "finance_commercial_office"]
             ),
-            "recent_messages": [m for m in chat_history if m.get("role") == "general_manager"][-6:],
+            "recent_messages": [m for m in chat_history if m.get("role") == "finance_commercial_director"][-6:],
         },
     ]
-
-    from app.owner_console import living_club_world
-    from app.owner_console.models import OwnerClubEvent, OwnerClubDirective
 
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
     living_club_world.ensure_default_relationships(session, state, squad_players)
@@ -2077,9 +2237,9 @@ def get_club_operations_hub(
         "managers_office": "first_team_manager",
         "medical_department": "medical_director",
         "academy_department": "head_of_youth_development",
-        "finance_commercial_office": "general_manager",
-        "general_managers_office": "chief_scout",
-        "executive_office": "general_manager",
+        "finance_commercial_office": "finance_commercial_director",
+        "general_managers_office": "general_manager",
+        "executive_office": "club_president",
     }
 
     department_activity = {}
@@ -2119,12 +2279,19 @@ def get_club_operations_hub(
         "club": {
             "club_id": state.club_id,
             "club_name": state.club_name,
+            "owner_name": owner_display_name,
             "crest_url": storytelling.resolve_club_crest_url(session, club_id, state.club_name),
             "prestige": state.prestige,
             "prestige_tier": engine.prestige_tier_label(state.prestige),
             "world_day": world_day,
             "world_date": state.last_world_tick_date.isoformat() if state.last_world_tick_date else None,
-            "mentality": state.mentality,
+            "mentality": mentality_decision["effective_mentality"],
+            "owner_requested_mentality": mentality_decision["owner_requested_mentality"],
+            "manager_preferred_mentality": mentality_decision["manager_preferred_mentality"],
+            "effective_matchday_mentality": mentality_decision["effective_mentality"],
+            "manager_decision_status": mentality_decision["decision_status"],
+            "manager_decision_reasoning": mentality_decision["reasoning"],
+            "manager_tactical_authority": mentality_decision,
             "stage": state.stage,
             "fans": state.fans,
         },
@@ -2291,15 +2458,31 @@ def execute_owner_operational_decision(
                     f"Manager mood +{res['manager_mood_boost']}."
                 )
             elif op_key == "align_tactical_mentality":
+                from app.owner_console import autonomous_staff_engine
+
                 new_mentality = str(payload.get("mentality") or "attacking")
                 state.mentality = new_mentality
+                decision = autonomous_staff_engine.evaluate_manager_mentality_authority(
+                    session,
+                    state,
+                    requested_mentality=new_mentality,
+                )
                 mgr = dict(state.manager_json or {})
-                mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) + 4, 0, 100))
-                state.manager_json = mgr
-                flag_modified(state, "manager_json")
-                for p in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all():
-                    p.morale = int(engine.clamp(p.morale + 2, 0, 100))
-                outcome_text = f"Adopted '{new_mentality}' tactical match plan (+4 Manager Mood, +2 Squad Morale)."
+                if decision["implemented_as_requested"]:
+                    mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) + 4, 0, 100))
+                    state.manager_json = mgr
+                    flag_modified(state, "manager_json")
+                    for p in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all():
+                        p.morale = int(engine.clamp(p.morale + 2, 0, 100))
+                    outcome_text = (
+                        f"Manager implemented '{decision['effective_mentality']}' tactical match plan. "
+                        f"{decision['reasoning']}"
+                    )
+                else:
+                    outcome_text = (
+                        f"Owner preference '{new_mentality}' recorded; Manager set effective matchday mentality to "
+                        f"'{decision['effective_mentality']}'. {decision['reasoning']}"
+                    )
             elif op_key == "advance_campus_stage":
                 inst_id = str(payload.get("instance_id") or "")
                 res = prestige_campus_comms.start_campus_construction(
@@ -2334,52 +2517,19 @@ def execute_owner_operational_decision(
                 names = ", ".join(f"{r.name} ({r.position}, OVR {r.rating}/POT {r.potential})" for r in regens)
                 outcome_text = f"Commissioned Academy Intake: inducted {len(regens)} new prospect(s) ({names})."
             elif op_key == "medical_conditioning_protocol":
-                cost = _safe_int(payload.get("cost_gtex"), 800)
-                club_acct = ledger.club_account(club_id)
-                bal = ledger.balance(session, club_acct, ledger.GTEX)
-                if bal < cost:
-                    raise OwnerError(
-                        "insufficient_club_cash",
-                        400,
-                        f"Club balance ({bal} GTX) is insufficient for {cost} GTX medical conditioning protocol.",
-                    )
-                leg = ledger.record(
+                med_result = _apply_medical_recovery_protocol(
                     session,
-                    event_type="medical_conditioning_protocol",
-                    source=club_acct,
-                    destination=ledger.WORLD_CLUBS,
-                    currency=ledger.GTEX,
-                    gross=cost,
-                    club_id=club_id,
                     user_id=user_id,
-                    related_type="medical_protocol",
+                    club_id=club_id,
+                    state=state,
+                    facs=facs,
+                    world_day=world_day,
+                    cost=_safe_int(payload.get("cost_gtex"), 800),
                     related_id=decision_id,
-                    memo=f"Sports-science hydro & cryo recovery protocol (World Day {world_day})",
+                    now_iso=now_iso,
                 )
-                ledger_event_id = leg.id
-                squad_rows = list(
-                    session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
-                )
-                rehab_accelerated = 0
-                for p in squad_rows:
-                    pers = dict(p.personality_json or {})
-                    cur_fit = _safe_int(pers.get("fitness", 95), 95)
-                    pers["fitness"] = int(engine.clamp(cur_fit + 6, 0, 100))
-                    p.personality_json = pers
-                    flag_modified(p, "personality_json")
-                    if _safe_int(p.injured_days, 0) > 0:
-                        p.injured_days = max(0, int(p.injured_days) - 1)
-                        rehab_accelerated += 1
-                exec_staff = dict(facs.get("_executive_staff") or {})
-                if "medical_director" in exec_staff and isinstance(exec_staff["medical_director"], dict):
-                    med_st = dict(exec_staff["medical_director"])
-                    med_st["mood"] = int(engine.clamp(_safe_int(med_st.get("mood"), 84) + 6, 0, 100))
-                    exec_staff["medical_director"] = med_st
-                    facs["_executive_staff"] = exec_staff
-                outcome_text = (
-                    f"Executed Hydro & Cryo Conditioning Protocol ({cost:,} GTX): +6% squad fitness restored "
-                    f"and {rehab_accelerated} injured player(s) accelerated by 1 rehab day."
-                )
+                ledger_event_id = med_result["ledger_event_id"]
+                outcome_text = med_result["outcome"]
             elif op_key == "sign_sponsor_offer":
                 offer_id = str(payload.get("offer_id") or "")
                 res = service.sign_sponsor_offer(session, user_id, club_id, offer_id)
@@ -2538,3 +2688,185 @@ def execute_owner_operational_decision(
         }
 
     raise OwnerError("decision_not_found", 404, f"Operational decision '{decision_id}' not found for club '{club_id}'.")
+
+
+def _apply_medical_recovery_protocol(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    state: OwnerClubState,
+    facs: dict[str, Any],
+    world_day: int,
+    cost: int,
+    related_id: str,
+    now_iso: str,
+) -> dict[str, Any]:
+    """Shared authoritative executor for Hydro & Cryo Conditioning Protocols."""
+    if _safe_int(facs.get("_last_medical_protocol_day"), 0) == world_day:
+        raise OwnerError(
+            "medical_protocol_already_run",
+            409,
+            f"Hydro & Cryo conditioning protocol has already been completed on World Day {world_day}.",
+        )
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < cost:
+        raise OwnerError(
+            "insufficient_club_cash",
+            400,
+            f"Club balance ({bal} GTX) is insufficient for {cost} GTX medical conditioning protocol.",
+        )
+
+    leg = ledger.record(
+        session,
+        event_type="medical_conditioning_protocol",
+        source=club_acct,
+        destination=ledger.WORLD_CLUBS,
+        currency=ledger.GTEX,
+        gross=cost,
+        club_id=club_id,
+        user_id=user_id,
+        related_type="medical_protocol",
+        related_id=related_id,
+        memo=f"Sports-science hydro & cryo recovery protocol (World Day {world_day})",
+    )
+    squad_rows = list(
+        session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+    )
+    rehab_accelerated = 0
+    for p in squad_rows:
+        pers = dict(p.personality_json or {})
+        cur_fit = _safe_int(pers.get("fitness", 95), 95)
+        pers["fitness"] = int(engine.clamp(cur_fit + 6, 0, 100))
+        p.personality_json = pers
+        flag_modified(p, "personality_json")
+        if _safe_int(p.injured_days, 0) > 0:
+            p.injured_days = max(0, int(p.injured_days) - 1)
+            rehab_accelerated += 1
+
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    appointed_med = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else None
+    if appointed_med:
+        med_st = dict(appointed_med)
+        med_st["mood"] = int(engine.clamp(_safe_int(med_st.get("mood"), 84) + 6, 0, 100))
+        exec_staff["medical_director"] = med_st
+        facs["_executive_staff"] = exec_staff
+
+    facs["_last_medical_protocol_day"] = world_day
+    facs["_last_medical_protocol_at"] = now_iso
+    outcome_text = (
+        f"Executed Hydro & Cryo Conditioning Protocol ({cost:,} GTX): +6% squad fitness restored "
+        f"and {rehab_accelerated} injured player(s) accelerated by 1 rehab day."
+    )
+    return {
+        "ledger_event_id": leg.id,
+        "cost_gtex": cost,
+        "world_day": world_day,
+        "squad_updated": len(squad_rows),
+        "rehab_accelerated": rehab_accelerated,
+        "medical_director_appointed": bool(appointed_med),
+        "medical_director_name": str(appointed_med.get("name")) if appointed_med else None,
+        "outcome": outcome_text,
+    }
+
+
+def run_medical_recovery_protocol(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    cost_gtex: int = 800,
+    note: str = "",
+) -> dict[str, Any]:
+    """Execute the daily Hydro & Cryo medical recovery protocol directly from Medical Department."""
+    from app.owner_console import living_club_world
+
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    world_day = int(state.world_day or 1)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    protocol_id = f"med_protocol_d{world_day}_{secrets.token_hex(3)}"
+
+    med_res = _apply_medical_recovery_protocol(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        state=state,
+        facs=facs,
+        world_day=world_day,
+        cost=int(cost_gtex or 800),
+        related_id=protocol_id,
+        now_iso=now_iso,
+    )
+
+    if med_res["medical_director_appointed"] and med_res["medical_director_name"]:
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "medical_director",
+            med_res["medical_director_name"],
+            delta_trust=5,
+            delta_respect=4,
+            delta_tension=-4,
+            reason=f"Authorized Hydro & Cryo recovery protocol (World Day {world_day})",
+            source_event_id=protocol_id,
+            world_day=world_day,
+        )
+
+    # Synchronize any open op_med_protocol_d{world_day} operational recommendation
+    dept_store = dict(facs.get("_daily_operational_decisions") or {})
+    dept_items = list(dept_store.get("items") or [])
+    daily_dec_id = f"op_med_protocol_d{world_day}"
+    for item in dept_items:
+        if item.get("decision_id") == daily_dec_id and item.get("status") == "open":
+            item["status"] = "approved"
+            item["resolution"] = "approved"
+            item["outcome"] = med_res["outcome"]
+            item["resolved_at"] = now_iso
+            item["ledger_event_id"] = med_res["ledger_event_id"]
+            if note:
+                item["decision_note"] = note
+    if dept_items:
+        facs["_daily_operational_decisions"] = {
+            "world_day": world_day,
+            "club_id": club_id,
+            "items": dept_items,
+        }
+
+    hist = list(facs.get("_operational_decision_history") or [])
+    hist.insert(
+        0,
+        {
+            "decision_id": protocol_id,
+            "world_day": world_day,
+            "source_type": "medical_station",
+            "department": "medical_department",
+            "department_label": "Medical Department",
+            "proposer_name": med_res["medical_director_name"] or "Club Owner",
+            "title": f"Hydro & Cryo Recovery Protocol ({med_res['cost_gtex']:,} GTX)",
+            "status": "approved",
+            "resolution": "executed",
+            "outcome": med_res["outcome"],
+            "ledger_event_id": med_res["ledger_event_id"],
+            "note": note,
+            "resolved_at": now_iso,
+        },
+    )
+    facs["_operational_decision_history"] = hist[:50]
+
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    session.flush()
+
+    hub = get_club_operations_hub(session, user_id, club_id, force_refresh=True)
+    return {
+        "status": "executed",
+        **med_res,
+        "operations_hub": hub,
+    }

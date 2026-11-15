@@ -138,8 +138,18 @@ ASSISTANT_COACH_DIRECTORY: tuple[dict[str, str], ...] = (
     },
 )
 
+_FINANCE_COMMERCIAL_META: dict[str, str] = {
+    "id": "staff:finance_commercial_director",
+    "role_key": "finance_commercial_director",
+    "name": "Finance & Commercial Director",
+    "role": "Finance & Commercial Director",
+    "department": "Finance & Commercial",
+    "portrait_url": "/console/img/prestige/09_owner_office_executive.png",
+    "route": "/app/finance",
+}
+
 STAFF_ALIASES: dict[str, dict[str, str]] = {}
-for _member in (*STAFF_DIRECTORY, *ASSISTANT_COACH_DIRECTORY):
+for _member in (*STAFF_DIRECTORY, *ASSISTANT_COACH_DIRECTORY, _FINANCE_COMMERCIAL_META):
     for _k in (
         _member["id"].lower(),
         _member["role_key"].lower(),
@@ -162,6 +172,8 @@ STAFF_ALIASES["staff:scout"] = STAFF_DIRECTORY[3]
 STAFF_ALIASES["scout"] = STAFF_DIRECTORY[3]
 STAFF_ALIASES["staff:medical"] = STAFF_DIRECTORY[4]
 STAFF_ALIASES["medical"] = STAFF_DIRECTORY[4]
+STAFF_ALIASES["staff:finance"] = _FINANCE_COMMERCIAL_META
+STAFF_ALIASES["finance"] = _FINANCE_COMMERCIAL_META
 STAFF_ALIASES["staff:assistant_coach"] = ASSISTANT_COACH_DIRECTORY[0]
 STAFF_ALIASES["assistant_coach"] = ASSISTANT_COACH_DIRECTORY[0]
 STAFF_ALIASES["assistant coach"] = ASSISTANT_COACH_DIRECTORY[0]
@@ -602,16 +614,27 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
     for member in STAFF_DIRECTORY:
         rk = member["role_key"]
         raw_exec = exec_staff.get(rk)
-        if isinstance(raw_exec, dict) and raw_exec.get("is_vacant"):
-            continue
         identity_entry = dict(identities.get(rk) or {})
-        if identity_entry.get("is_vacant"):
-            continue
-        resolved_name = (
-            mgr.get("name") or identity_entry.get("name") or member["name"]
-            if rk == "first_team_manager"
-            else (raw_exec or {}).get("name") or identity_entry.get("name") or member["name"]
-        )
+        is_vacant = bool(identity_entry.get("is_vacant") or (isinstance(raw_exec, dict) and raw_exec.get("is_vacant")))
+        # Do not recreate a thread if the occupant was dismissed and rotated off into archive while still vacant
+        if is_vacant:
+            was_rotated = session.scalar(
+                select(OwnerClubConversation.id).where(
+                    OwnerClubConversation.club_id == state.club_id,
+                    OwnerClubConversation.thread_key.like(f"{member['id']}:arch:%"),
+                )
+            )
+            if was_rotated:
+                continue
+            resolved_name = f"{member['role']} (Vacant)"
+            sender_display = f"{member['role']} Desk (Position Vacant)"
+        else:
+            resolved_name = (
+                mgr.get("name") or identity_entry.get("name") or member["name"]
+                if rk == "first_team_manager"
+                else (raw_exec or {}).get("name") or identity_entry.get("name") or member["name"]
+            )
+            sender_display = resolved_name
         conv = _get_or_create_conversation(
             session,
             club_id=state.club_id,
@@ -624,7 +647,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
             participant_role=member["role"],
             subject=f"{member['department']} · {resolved_name}",
         )
-        if conv.last_message_seq == 0:
+        if conv.last_message_seq == 0 and not is_vacant:
             topic, body, action_payload = _staff_seed_message(
                 role_key=rk,
                 club_name=state.club_name,
@@ -641,7 +664,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
                 sender_user_id=None,
                 sender_type="staff",
                 sender_id=member["id"],
-                sender_name=resolved_name,
+                sender_name=sender_display,
                 sender_role=member["role"],
                 topic=topic,
                 body=body,
@@ -661,7 +684,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         participant_id="room:staff",
         participant_name="Staff Technical Room",
         participant_role="Executive & Technical Staff",
-        subject="Technical, Medical, Academy & Recruitment Briefing",
+        subject="Office-Wide Operations, Technical & Departmental Channel",
     )
     squad_conv = _get_or_create_conversation(
         session,
@@ -675,41 +698,53 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         participant_role="First-Team & Academy Squad",
         subject="Squad Morale, Matchday Preparation & Dressing Room",
     )
+    gm_identity = dict(identities.get("general_manager") or {})
+    gm_is_vacant = bool(gm_identity.get("is_vacant"))
+    gm_name = (
+        str((exec_staff.get("general_manager") or {}).get("name") or gm_identity.get("name") or "General Manager")
+        if not gm_is_vacant
+        else "General Manager (Vacant)"
+    )
+    mgr_identity = dict(identities.get("first_team_manager") or {})
+    mgr_is_vacant = bool(mgr_identity.get("is_vacant"))
+    mgr_name = (
+        str(mgr.get("name") or mgr_identity.get("name") or "First-Team Manager")
+        if not mgr_is_vacant
+        else "First-Team Manager (Vacant)"
+    )
     if staff_conv.last_message_seq == 0:
-        gm_name = (exec_staff.get("general_manager") or {}).get("name") or (
-            identities.get("general_manager") or {}
-        ).get("name", "Dayo Adeleke")
-        mgr_name = mgr.get("name", "First-Team Head Coach")
-        _append_message(
-            session,
-            conv=staff_conv,
-            sender_user_id=None,
-            sender_type="staff",
-            sender_id="staff:general_manager",
-            sender_name=gm_name,
-            sender_role="General Manager",
-            topic="Boardroom Alignment",
-            body=f"Staff technical desk is live for {state.club_name}. Treasury stands at {treasury} GTX on World Day {world_day}.",
-            source="staff_event",
-            linked_event_key=f"seed:staff_room:1:{state.club_id}",
-            action_payload={"action_type": "open_route", "route": "/app/finance", "label": "Open Finance"},
-            is_read=False,
-        )
-        _append_message(
-            session,
-            conv=staff_conv,
-            sender_user_id=None,
-            sender_type="staff",
-            sender_id="staff:first_team_manager",
-            sender_name=mgr_name,
-            sender_role="First-Team Manager",
-            topic="Tactical Readiness",
-            body=f"Technical staff confirms {len(squad)} players on pitch schedule ({regen_count} academy prospects tracked).",
-            source="staff_event",
-            linked_event_key=f"seed:staff_room:2:{state.club_id}",
-            action_payload={"action_type": "open_route", "route": "/app/lineup", "label": "Check Lineup"},
-            is_read=False,
-        )
+        if not gm_is_vacant:
+            _append_message(
+                session,
+                conv=staff_conv,
+                sender_user_id=None,
+                sender_type="staff",
+                sender_id="staff:general_manager",
+                sender_name=gm_name,
+                sender_role="General Manager",
+                topic="Boardroom Alignment",
+                body=f"Staff technical desk is live for {state.club_name}. Treasury stands at {treasury} GTX on World Day {world_day}.",
+                source="staff_event",
+                linked_event_key=f"seed:staff_room:1:{state.club_id}",
+                action_payload={"action_type": "open_route", "route": "/app/finance", "label": "Open Finance"},
+                is_read=False,
+            )
+        if not mgr_is_vacant:
+            _append_message(
+                session,
+                conv=staff_conv,
+                sender_user_id=None,
+                sender_type="staff",
+                sender_id="staff:first_team_manager",
+                sender_name=mgr_name,
+                sender_role="First-Team Manager",
+                topic="Tactical Readiness",
+                body=f"Technical staff confirms {len(squad)} players on pitch schedule ({regen_count} academy prospects tracked).",
+                source="staff_event",
+                linked_event_key=f"seed:staff_room:2:{state.club_id}",
+                action_payload={"action_type": "open_route", "route": "/app/lineup", "label": "Check Lineup"},
+                is_read=False,
+            )
     if squad_conv.last_message_seq == 0:
         captain_name = squad[0].name if squad else "First-Team Captain"
         _append_message(
@@ -747,30 +782,61 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         session.scalar(select(func.count(OwnerClubMeeting.id)).where(OwnerClubMeeting.club_id == state.club_id)) or 0
     )
     if existing_mtg_count == 0:
-        gm_name = (exec_staff.get("general_manager") or {}).get("name") or (
-            identities.get("general_manager") or {}
-        ).get("name", "Dayo Adeleke")
-        mgr_name = mgr.get("name", "First-Team Head Coach")
-        hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name") or (
-            identities.get("head_of_youth_development") or {}
-        ).get("name", "Femi Ogunleye")
-        seed_minutes = [
-            {
-                "speaker": gm_name,
-                "role": "General Manager",
-                "summary": f"Validated {state.club_name} treasury ({treasury} GTX) and operational targets.",
-            },
-            {
-                "speaker": mgr_name,
-                "role": "First-Team Manager",
-                "summary": f"Outlined tactical rotation across {len(squad)} squad players.",
-            },
-            {
-                "speaker": hoyd_name,
-                "role": "Head of Youth Development",
-                "summary": f"Reviewed progression pathways for {regen_count} academy prospects.",
-            },
-        ]
+        gm_info = dict(identities.get("general_manager") or {})
+        gm_exec = exec_staff.get("general_manager") if isinstance(exec_staff.get("general_manager"), dict) else None
+        gm_vacant = bool(gm_info.get("is_vacant") or (gm_exec and gm_exec.get("is_vacant")))
+        gm_name = str((gm_exec or {}).get("name") or gm_info.get("name") or "").strip()
+
+        mgr_info = dict(identities.get("first_team_manager") or {})
+        mgr_vacant = bool(mgr_info.get("is_vacant"))
+        mgr_name = str(mgr_info.get("name") or mgr.get("name") or "First-Team Manager").strip()
+
+        hoyd_info = dict(identities.get("head_of_youth_development") or {})
+        hoyd_exec = (
+            exec_staff.get("head_of_youth_development")
+            if isinstance(exec_staff.get("head_of_youth_development"), dict)
+            else None
+        )
+        hoyd_vacant = bool(hoyd_info.get("is_vacant") or (hoyd_exec and hoyd_exec.get("is_vacant")))
+        hoyd_name = str((hoyd_exec or {}).get("name") or hoyd_info.get("name") or "").strip()
+
+        attendees = ["Club Owner"]
+        seed_minutes: list[dict[str, str]] = []
+        if not gm_vacant and gm_name:
+            attendees.append(gm_name)
+            seed_minutes.append(
+                {
+                    "speaker": gm_name,
+                    "role": "General Manager",
+                    "summary": f"Validated {state.club_name} treasury ({treasury} GTX) and operational targets.",
+                }
+            )
+        if not mgr_vacant and mgr_name:
+            attendees.append(mgr_name)
+            seed_minutes.append(
+                {
+                    "speaker": mgr_name,
+                    "role": "First-Team Manager",
+                    "summary": f"Outlined tactical rotation across {len(squad)} squad players.",
+                }
+            )
+        if not hoyd_vacant and hoyd_name:
+            attendees.append(hoyd_name)
+            seed_minutes.append(
+                {
+                    "speaker": hoyd_name,
+                    "role": "Head of Youth Development",
+                    "summary": f"Reviewed progression pathways for {regen_count} academy prospects.",
+                }
+            )
+        if not seed_minutes:
+            seed_minutes.append(
+                {
+                    "speaker": "Club Owner",
+                    "role": "Executive Command",
+                    "summary": f"Logged baseline {state.club_name} operations check ({treasury} GTX treasury, {len(squad)} squad players).",
+                }
+            )
         session.add(
             OwnerClubMeeting(
                 id=_deterministic_id("mtg_seed", f"{state.club_id}:1"),
@@ -781,7 +847,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
                 meeting_type="boardroom",
                 world_day=world_day,
                 status="completed",
-                attendees_json=["Club Owner", gm_name, mgr_name, hoyd_name],
+                attendees_json=attendees,
                 minutes_summary=f"Completed executive briefing at {state.club_name} ({treasury} GTX treasury, {len(squad)} players).",
                 decisions_json=[],
                 created_by_user_id=state.owner_user_id,
@@ -848,7 +914,11 @@ def sync_living_club_communications(
     med_info = dict(identities.get("medical_director") or {})
     med_exec = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else None
     med_vacant = bool(med_info.get("is_vacant") or (med_exec and med_exec.get("is_vacant")))
-    med_name = str((med_exec or {}).get("name") or med_info.get("name") or "Dr. Amara Okafor")
+    med_name = (
+        str((med_exec or {}).get("name") or med_info.get("name") or "Medical Director")
+        if not med_vacant
+        else "Medical Director (Vacant)"
+    )
 
     hoyd_info = dict(identities.get("head_of_youth_development") or {})
     hoyd_exec = (
@@ -857,58 +927,80 @@ def sync_living_club_communications(
         else None
     )
     hoyd_vacant = bool(hoyd_info.get("is_vacant") or (hoyd_exec and hoyd_exec.get("is_vacant")))
-    hoyd_name = str((hoyd_exec or {}).get("name") or hoyd_info.get("name") or "Femi Ogunleye")
+    hoyd_name = (
+        str((hoyd_exec or {}).get("name") or hoyd_info.get("name") or "Head of Youth Development")
+        if not hoyd_vacant
+        else "Head of Youth Development (Vacant)"
+    )
 
     scout_info = dict(identities.get("chief_scout") or {})
     scout_exec = exec_staff.get("chief_scout") if isinstance(exec_staff.get("chief_scout"), dict) else None
     scout_vacant = bool(scout_info.get("is_vacant") or (scout_exec and scout_exec.get("is_vacant")))
-    scout_name = str((scout_exec or {}).get("name") or scout_info.get("name") or "Kelechi Nwosu")
+    scout_name = (
+        str((scout_exec or {}).get("name") or scout_info.get("name") or "Chief Scout")
+        if not scout_vacant
+        else "Chief Scout (Vacant)"
+    )
 
     gm_info = dict(identities.get("general_manager") or {})
     gm_exec = exec_staff.get("general_manager") if isinstance(exec_staff.get("general_manager"), dict) else None
     gm_vacant = bool(gm_info.get("is_vacant") or (gm_exec and gm_exec.get("is_vacant")))
-    gm_name = str((gm_exec or {}).get("name") or gm_info.get("name") or "Dayo Adeleke")
+    gm_name = (
+        str((gm_exec or {}).get("name") or gm_info.get("name") or "General Manager")
+        if not gm_vacant
+        else "General Manager (Vacant)"
+    )
 
-    if injured and not med_vacant:
-        lead = injured[0]
-        names = ", ".join(f"{p.name} ({p.injured_days}d)" for p in injured[:3])
-        conv = _get_or_create_conversation(
-            session,
-            club_id=state.club_id,
-            owner_user_id=state.owner_user_id,
-            channel_type="direct",
-            thread_key="staff:medical_director",
-            participant_type="staff",
-            participant_id="staff:medical_director",
-            participant_name=med_name,
-            participant_role="Medical Director",
-            subject=f"Medical & Injury Availability · {med_name}",
-        )
-        ev_key = f"living:medical:{state.club_id}:{conv.id[:8]}:{lead.id}:w{week_bucket}"
-        created.append(
-            _append_message(
-                session,
-                conv=conv,
-                sender_user_id=None,
-                sender_type="staff",
-                sender_id="staff:medical_director",
-                sender_name=med_name,
-                sender_role="Medical Director",
-                topic="Injury Assessment",
-                body=f"Medical bulletin: {len(injured)} squad player(s) injured — {names}. Recommend load management before next selection.",
-                source="staff_event",
-                priority="high",
-                linked_entity_type="player",
-                linked_entity_id=lead.id,
-                linked_event_key=ev_key,
-                action_payload={
-                    "action_type": "open_route",
-                    "route": "/app/squad",
-                    "label": "Review Injured Players",
-                    "player_id": lead.id,
-                },
+    if injured:
+        existing_med_conv = session.scalar(
+            select(OwnerClubConversation).where(
+                OwnerClubConversation.club_id == state.club_id,
+                OwnerClubConversation.thread_key == "staff:medical_director",
             )
         )
+        med_thread_archived = bool(existing_med_conv is not None and existing_med_conv.archived_at is not None)
+        if not med_vacant or not med_thread_archived:
+            lead = injured[0]
+            names = ", ".join(f"{p.name} ({p.injured_days}d)" for p in injured[:3])
+            sender_label = med_name if not med_vacant else "Medical Department Desk (Director Vacant)"
+            sender_role_label = "Medical Director" if not med_vacant else "Medical Department Desk"
+            conv = _get_or_create_conversation(
+                session,
+                club_id=state.club_id,
+                owner_user_id=state.owner_user_id,
+                channel_type="direct",
+                thread_key="staff:medical_director",
+                participant_type="staff",
+                participant_id="staff:medical_director",
+                participant_name=med_name,
+                participant_role=sender_role_label,
+                subject=f"Medical & Injury Availability · {med_name}",
+            )
+            ev_key = f"living:medical:{state.club_id}:{conv.id[:8]}:{lead.id}:w{week_bucket}"
+            created.append(
+                _append_message(
+                    session,
+                    conv=conv,
+                    sender_user_id=None,
+                    sender_type="staff",
+                    sender_id="staff:medical_director",
+                    sender_name=sender_label,
+                    sender_role=sender_role_label,
+                    topic="Injury Assessment",
+                    body=f"Medical bulletin: {len(injured)} squad player(s) injured — {names}. Recommend load management before next selection.",
+                    source="staff_event",
+                    priority="high",
+                    linked_entity_type="player",
+                    linked_entity_id=lead.id,
+                    linked_event_key=ev_key,
+                    action_payload={
+                        "action_type": "open_route",
+                        "route": "/app/squad",
+                        "label": "Review Injured Players",
+                        "player_id": lead.id,
+                    },
+                )
+            )
 
     if regens and not hoyd_vacant:
         top_regen = max(regens, key=lambda item: int(item.potential or item.rating or 0))
@@ -1285,35 +1377,85 @@ def _resolve_staff_identity_for_conversation(
     session: Session,
     state: OwnerClubState,
     conv: OwnerClubConversation,
-) -> tuple[str, str, str, str, dict[str, Any], OwnerClubRelationship]:
+) -> tuple[str, str, str, str, dict[str, Any], OwnerClubRelationship | None]:
     """Resolve `(role_key, staff_id, staff_name, staff_title, personality_profile, relationship)`
-    for any appointed staff member or assistant coach.
+    for any appointed staff member or assistant coach. Vacant seats and empty staff rooms never
+    fabricate NPC identities or relationships.
     """
     identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
-    p_id = str(conv.participant_id or conv.thread_key or "staff:first_team_manager").lower()
-    staff_meta = (
-        STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").lower()) or STAFF_DIRECTORY[0]
-    )
-    role_key = staff_meta["role_key"]
+    p_id = str(conv.participant_id or conv.thread_key or "").strip().lower()
 
-    if role_key == "first_team_manager":
-        mgr = identities["first_team_manager"]
-        staff_id = str(mgr.get("id") or mgr.get("manager_id") or "mgr")
-        staff_name = str(mgr.get("name") or conv.participant_name or "First-Team Manager")
-        staff_title = "First-Team Manager"
-        personality = dict(mgr.get("personality_profile") or autonomous_staff_engine.derive_manager_personality(mgr))
-    elif role_key == "general_manager":
-        gm = identities["general_manager"]
-        staff_id = str(gm.get("id") or gm.get("staff_id") or "gm")
-        staff_name = str(gm.get("name") or conv.participant_name or "General Manager")
-        staff_title = "General Manager"
-        personality = dict(gm.get("personality_profile") or autonomous_staff_engine.derive_gm_personality(gm))
-    elif role_key in ("head_of_youth_development", "chief_scout", "medical_director"):
-        dept = identities[role_key]
-        staff_id = str(dept.get("id") or dept.get("staff_id") or role_key)
-        staff_name = str(dept.get("name") or conv.participant_name or staff_meta["name"])
+    if conv.channel_type == "staff_room" or p_id == "room:staff":
+        # Route office-wide queries to the most senior actually-appointed staff member (never Owner).
+        for candidate_role in (
+            "general_manager",
+            "first_team_manager",
+            "head_of_youth_development",
+            "medical_director",
+            "chief_scout",
+            "finance_commercial_director",
+        ):
+            dept = dict(identities.get(candidate_role) or {})
+            if not dept or dept.get("is_vacant") or not dept.get("id") or not str(dept.get("name") or "").strip():
+                continue
+            staff_id = str(dept.get("id") or dept.get("manager_id") or candidate_role)
+            staff_name = str(dept["name"])
+            staff_title = str(dept.get("title") or candidate_role.replace("_", " ").title())
+            personality = dict(
+                dept.get("personality_profile")
+                or (
+                    autonomous_staff_engine.derive_manager_personality(dept)
+                    if candidate_role == "first_team_manager"
+                    else (
+                        autonomous_staff_engine.derive_gm_personality(dept)
+                        if candidate_role == "general_manager"
+                        else {}
+                    )
+                )
+            )
+            rel = autonomous_staff_engine.ensure_staff_relationship(
+                session,
+                state,
+                role_key=candidate_role,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                staff_title=staff_title,
+                personality_profile=personality,
+            )
+            return candidate_role, staff_id, staff_name, staff_title, personality, rel
+        return "vacant", "", "Executive Staff Room (No Senior Staff Appointed)", "Vacant Staff Desk", {}, None
+
+    staff_meta = STAFF_ALIASES.get(p_id) or STAFF_ALIASES.get((conv.participant_role or "").strip().lower())
+    if staff_meta is None:
+        raise OwnerError("communication_thread_not_found", 404, f"Unknown communication recipient '{p_id}'.")
+
+    role_key = staff_meta["role_key"]
+    if role_key in (
+        "first_team_manager",
+        "general_manager",
+        "head_of_youth_development",
+        "chief_scout",
+        "medical_director",
+        "finance_commercial_director",
+    ):
+        dept = dict(identities.get(role_key) or {})
         staff_title = str(dept.get("title") or staff_meta["role"])
-        personality = dict(dept.get("personality_profile") or {})
+        if not dept or dept.get("is_vacant") or not dept.get("id") or not str(dept.get("name") or "").strip():
+            return role_key, "", f"{staff_title} (Vacant)", staff_title, {}, None
+        staff_id = str(dept.get("id") or dept.get("manager_id") or role_key)
+        staff_name = str(dept.get("name") or staff_title)
+        personality = dict(
+            dept.get("personality_profile")
+            or (
+                autonomous_staff_engine.derive_manager_personality(dept)
+                if role_key == "first_team_manager"
+                else (
+                    autonomous_staff_engine.derive_gm_personality(dept)
+                    if role_key == "general_manager"
+                    else {}
+                )
+            )
+        )
     else:
         spec = staff_meta.get("specialist_role", "attacking_development")
         assistants = list(identities.get("assistant_coaches") or [])
@@ -1371,25 +1513,61 @@ def get_club_communications_durable(
 
     relationship_health: dict[str, Any] = {}
     staff_contacts: list[dict[str, Any]] = []
-    for member in (*STAFF_DIRECTORY, *ASSISTANT_COACH_DIRECTORY):
+    for member in (*STAFF_DIRECTORY, _FINANCE_COMMERCIAL_META, *ASSISTANT_COACH_DIRECTORY):
         rk = member["role_key"]
         spec = member.get("specialist_role")
-        if rk == "first_team_manager":
-            staff_obj = identities["first_team_manager"]
-            resolved_name = str(staff_obj.get("name") or member["name"])
-            personality = dict(staff_obj.get("personality_profile") or {})
-            rel_key = "first_team_manager"
-        elif rk in ("general_manager", "head_of_youth_development", "chief_scout", "medical_director"):
-            staff_obj = identities[rk]
-            resolved_name = str(staff_obj.get("name") or member["name"])
-            personality = dict(staff_obj.get("personality_profile") or {})
+        if rk in (
+            "first_team_manager",
+            "general_manager",
+            "head_of_youth_development",
+            "chief_scout",
+            "medical_director",
+            "finance_commercial_director",
+        ):
+            staff_obj = dict(identities.get(rk) or {})
+            is_vacant = bool(staff_obj.get("is_vacant") or not staff_obj.get("id") or not staff_obj.get("name"))
+            resolved_name = f"{member['role']} (Vacant)" if is_vacant else str(staff_obj.get("name"))
+            personality = {} if is_vacant else dict(staff_obj.get("personality_profile") or {})
             rel_key = rk
         else:
             assistants = list(identities.get("assistant_coaches") or [])
             staff_obj = next((a for a in assistants if a.get("specialist_role") == spec), {})
+            is_vacant = False
             resolved_name = str(staff_obj.get("name") or member["name"])
             personality = dict(staff_obj.get("personality_profile") or {})
             rel_key = f"assistant_coach_{spec}"
+
+        if is_vacant:
+            rel_serialized = {
+                "status": "vacant",
+                "trust": 0,
+                "respect": 0,
+                "loyalty": 0,
+                "affinity": 0,
+                "tension": 0,
+                "alignment": 0,
+                "overall_health": 0,
+            }
+            conv = conv_by_key.get(member["id"])
+            staff_contacts.append(
+                {
+                    "contact_id": member["id"],
+                    "role_key": rel_key,
+                    "name": resolved_name,
+                    "title": f"{member['role']} (Vacant)",
+                    "department": member["department"],
+                    "is_vacant": True,
+                    "is_appointed": False,
+                    "mood": None,
+                    "loyalty": 0,
+                    "portrait_url": member["portrait_url"],
+                    "route": member["route"],
+                    "thread_id": conv.id if conv else None,
+                    "personality_profile": {},
+                    "relationship_health": rel_serialized,
+                }
+            )
+            continue
 
         rel = autonomous_staff_engine.ensure_staff_relationship(
             session,
@@ -1411,6 +1589,8 @@ def get_club_communications_durable(
                 "name": resolved_name,
                 "title": member["role"],
                 "department": member["department"],
+                "is_vacant": False,
+                "is_appointed": True,
                 "mood": int((mgr if rk == "first_team_manager" else exec_staff.get(rk) or {}).get("mood", 78)),
                 "loyalty": int(rel_serialized.get("loyalty", 70)),
                 "portrait_url": member["portrait_url"],
@@ -1827,7 +2007,32 @@ def send_club_message_durable(
             subject=f"Direct with {player.name}",
         )
     else:
-        staff_meta = STAFF_ALIASES.get(thread_id.strip().lower(), STAFF_DIRECTORY[0])
+        normalized_thread = thread_id.strip().lower()
+        if normalized_thread in ("owner", "staff:owner", "club_owner", "chairman"):
+            raise OwnerError(
+                "owner_self_thread_unsupported",
+                400,
+                "Club Owner cannot message a simulated NPC copy of themselves. Use room:staff for office-wide staff messages.",
+            )
+        staff_meta = STAFF_ALIASES.get(normalized_thread)
+        if staff_meta is None:
+            raise OwnerError("communication_thread_not_found", 404, f"Unknown communication thread '{thread_id}'.")
+        identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+        role_key = staff_meta["role_key"]
+        staff_info = dict(identities.get(role_key) or {}) if role_key in identities else {}
+        if staff_info and not staff_info.get("is_vacant") and str(staff_info.get("name") or "").strip():
+            participant_display_name = str(staff_info["name"])
+        elif role_key in (
+            "first_team_manager",
+            "general_manager",
+            "head_of_youth_development",
+            "chief_scout",
+            "medical_director",
+            "finance_commercial_director",
+        ):
+            participant_display_name = f"{staff_meta['role']} (Vacant)"
+        else:
+            participant_display_name = staff_meta["name"]
         conv = _get_or_create_conversation(
             session,
             club_id=club_id,
@@ -1836,9 +2041,9 @@ def send_club_message_durable(
             thread_key=staff_meta["id"],
             participant_type="staff",
             participant_id=staff_meta["id"],
-            participant_name=staff_meta["name"],
+            participant_name=participant_display_name,
             participant_role=staff_meta["role"],
-            subject=f"Direct with {staff_meta['name']}",
+            subject=f"Direct with {participant_display_name}",
         )
 
     conv.archived_at = None
@@ -1894,6 +2099,7 @@ def send_club_message_durable(
 
     reply_msg: OwnerClubMessage | None = None
     decision_record_payload: dict[str, Any] | None = None
+    role_vacant = False
 
     if conv.channel_type == "direct" and conv.participant_type == "player" and request_reply:
         reply_text, action_payload = _contextual_npc_reply(
@@ -1944,152 +2150,176 @@ def send_club_message_durable(
         if conv.participant_type == "staff" and conv.participant_name != staff_name:
             conv.participant_name = staff_name
 
-        prior_owner_msgs = int(
-            session.scalar(
-                select(func.count(OwnerClubMessage.id)).where(
-                    OwnerClubMessage.conversation_id == conv.id,
-                    OwnerClubMessage.sender_type == "owner",
+        if rel is None or not staff_id:
+            role_vacant = True
+        else:
+            prior_owner_msgs = int(
+                session.scalar(
+                    select(func.count(OwnerClubMessage.id)).where(
+                        OwnerClubMessage.conversation_id == conv.id,
+                        OwnerClubMessage.sender_type == "owner",
+                    )
                 )
+                or 1
             )
-            or 1
-        )
-        squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+            squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
 
-        # Layer A: Authoritative Staff Decision Engine
-        intent_data = autonomous_staff_engine.classify_owner_request(
-            clean_body,
-            role_key,
-            squad_players,
-            db=session,
-            club_id=club_id,
-        )
-        layer_a = autonomous_staff_engine.evaluate_layer_a_staff_decision(
-            session,
-            state,
-            role_key=role_key,
-            staff_id=staff_id,
-            staff_name=staff_name,
-            staff_title=staff_title,
-            personality=personality,
-            relationship=rel,
-            intent_data=intent_data,
-            conversation_turn_count=prior_owner_msgs,
-        )
-
-        # Layer B: Grounded Conversational Intelligence
-        reply_text, ai_status = autonomous_staff_engine.generate_layer_b_staff_response(
-            state=state,
-            staff_name=staff_name,
-            staff_title=staff_title,
-            role_key=role_key,
-            personality=personality,
-            intent_data=intent_data,
-            layer_a_result=layer_a,
-            conversation_turn_count=prior_owner_msgs,
-        )
-
-        action_payload = {
-            "decision_outcome": layer_a["decision_outcome"],
-            "intent": layer_a["intent"],
-            "reasoning_trace": layer_a["reasoning_trace"],
-            "relationship_deltas": layer_a["relationship_deltas"],
-            "relationship_snapshot": layer_a["relationship_snapshot"],
-            "state_effects": layer_a["state_effects"],
-            "ai_generation_status": ai_status,
-            "staff_archetype": personality.get("archetype_label") or personality.get("archetype_key"),
-        }
-
-        reply_msg = _append_message(
-            session,
-            conv=conv,
-            sender_user_id=None,
-            sender_type="staff",
-            sender_id=conv.participant_id or f"staff:{role_key}",
-            sender_name=staff_name,
-            sender_role=staff_title,
-            topic=(topic or "").strip() or conv.subject or "Staff Response",
-            body=reply_text,
-            source="staff_reply",
-            linked_entity_type="club",
-            linked_entity_id=club_id,
-            action_payload=action_payload,
-            metadata={"layer_a_outcome": layer_a["decision_outcome"], "ai_generation_status": ai_status},
-            is_read=True,
-        )
-
-        decision_row = OwnerStaffDecisionRecord(
-            id=_deterministic_id("osdr", f"{club_id}:{owner_msg.id}:{reply_msg.id}"),
-            club_id=club_id,
-            conversation_id=conv.id,
-            request_message_id=owner_msg.id,
-            response_message_id=reply_msg.id,
-            staff_id=staff_id,
-            staff_name=staff_name,
-            staff_role=role_key,
-            request_intent=layer_a["intent"],
-            request_text=clean_body,
-            decision_outcome=layer_a["decision_outcome"],
-            idempotency_key=idempotency_key,
-            target_player_id=intent_data.get("target_player_id"),
-            target_player_name=intent_data.get("target_player_name"),
-            structured_inputs_json={
-                "intent_data": intent_data,
-                "personality_snapshot": personality,
-                "conversation_turn_count": prior_owner_msgs,
-            },
-            reasoning_trace_json=layer_a["reasoning_trace"],
-            relationship_deltas_json=layer_a["relationship_deltas"],
-            state_effects_json=layer_a["state_effects"],
-            ai_generation_status=ai_status,
-        )
-        session.add(decision_row)
-        session.flush()
-        decision_record_payload = {
-            "id": decision_row.id,
-            "decision_outcome": decision_row.decision_outcome,
-            "request_intent": decision_row.request_intent,
-            "reasoning_trace": decision_row.reasoning_trace_json,
-            "relationship_deltas": decision_row.relationship_deltas_json,
-            "relationship_snapshot": layer_a["relationship_snapshot"],
-            "state_effects": decision_row.state_effects_json,
-            "ai_generation_status": decision_row.ai_generation_status,
-        }
-
-        # If recruitment workflow was triggered, post inter-staff coordination into the Staff Technical Room
-        if "recruitment_workflow" in layer_a["state_effects"]:
-            identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
-            gm_info = identities["general_manager"]
-            scout_info = identities["chief_scout"]
-            rec_cand = dict(layer_a["state_effects"].get("recommended_candidate") or {})
-            staff_room_conv = _get_or_create_conversation(
-                session,
+            # Layer A: Authoritative Staff Decision Engine
+            intent_data = autonomous_staff_engine.classify_owner_request(
+                clean_body,
+                role_key,
+                squad_players,
+                db=session,
                 club_id=club_id,
-                owner_user_id=state.owner_user_id,
-                channel_type="staff_room",
-                thread_key="room:staff",
-                participant_type="room",
-                participant_id="room:staff",
-                participant_name="Staff Technical Room",
-                participant_role="Executive & Technical Staff",
             )
-            _append_message(
+            layer_a = autonomous_staff_engine.evaluate_layer_a_staff_decision(
                 session,
-                conv=staff_room_conv,
+                state,
+                role_key=role_key,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                staff_title=staff_title,
+                personality=personality,
+                relationship=rel,
+                intent_data=intent_data,
+                conversation_turn_count=prior_owner_msgs,
+            )
+
+            # Layer B: Grounded Conversational Intelligence
+            reply_text, ai_status = autonomous_staff_engine.generate_layer_b_staff_response(
+                state=state,
+                staff_name=staff_name,
+                staff_title=staff_title,
+                role_key=role_key,
+                personality=personality,
+                intent_data=intent_data,
+                layer_a_result=layer_a,
+                conversation_turn_count=prior_owner_msgs,
+            )
+
+            action_payload = {
+                "decision_outcome": layer_a["decision_outcome"],
+                "intent": layer_a["intent"],
+                "reasoning_trace": layer_a["reasoning_trace"],
+                "relationship_deltas": layer_a["relationship_deltas"],
+                "relationship_snapshot": layer_a["relationship_snapshot"],
+                "state_effects": layer_a["state_effects"],
+                "ai_generation_status": ai_status,
+                "staff_archetype": personality.get("archetype_label") or personality.get("archetype_key"),
+            }
+
+            reply_msg = _append_message(
+                session,
+                conv=conv,
                 sender_user_id=None,
                 sender_type="staff",
-                sender_id="staff:chief_scout",
-                sender_name=str(scout_info["name"]),
-                sender_role="Chief Scout",
-                topic="Recruitment Shortlist Delivered",
-                body=(
-                    f"Delivered verified {intent_data.get('detected_position', 'LW')} shortlist "
-                    f"(GSI {intent_data.get('min_gsi', 80)}–{intent_data.get('max_gsi', 85)}) to {gm_info['name']}. "
-                    f"Lead profile: {rec_cand.get('player_name', 'Target')} (GSI {rec_cand.get('gsi', 82)}, est. fee {rec_cand.get('estimated_fee', 0):,.0f} GTX)."
-                ),
-                source="staff_event",
-                action_payload={"type": "scout_shortlist_update", "recommended_candidate": rec_cand},
-                is_read=False,
+                sender_id=f"staff:{role_key}" if conv.channel_type == "staff_room" else (conv.participant_id or f"staff:{role_key}"),
+                sender_name=staff_name,
+                sender_role=staff_title,
+                topic=(topic or "").strip() or conv.subject or "Staff Response",
+                body=reply_text,
+                source="staff_reply",
+                linked_entity_type="club",
+                linked_entity_id=club_id,
+                action_payload=action_payload,
+                metadata={"layer_a_outcome": layer_a["decision_outcome"], "ai_generation_status": ai_status},
+                is_read=True,
             )
+
+            decision_row = OwnerStaffDecisionRecord(
+                id=_deterministic_id("osdr", f"{club_id}:{owner_msg.id}:{reply_msg.id}"),
+                club_id=club_id,
+                conversation_id=conv.id,
+                request_message_id=owner_msg.id,
+                response_message_id=reply_msg.id,
+                staff_id=staff_id,
+                staff_name=staff_name,
+                staff_role=role_key,
+                request_intent=layer_a["intent"],
+                request_text=clean_body,
+                decision_outcome=layer_a["decision_outcome"],
+                idempotency_key=idempotency_key,
+                target_player_id=intent_data.get("target_player_id"),
+                target_player_name=intent_data.get("target_player_name"),
+                structured_inputs_json={
+                    "intent_data": intent_data,
+                    "personality_snapshot": personality,
+                    "conversation_turn_count": prior_owner_msgs,
+                },
+                reasoning_trace_json=layer_a["reasoning_trace"],
+                relationship_deltas_json=layer_a["relationship_deltas"],
+                state_effects_json=layer_a["state_effects"],
+                ai_generation_status=ai_status,
+            )
+            session.add(decision_row)
+            session.flush()
+            decision_record_payload = {
+                "id": decision_row.id,
+                "decision_outcome": decision_row.decision_outcome,
+                "request_intent": decision_row.request_intent,
+                "reasoning_trace": decision_row.reasoning_trace_json,
+                "relationship_deltas": decision_row.relationship_deltas_json,
+                "relationship_snapshot": layer_a["relationship_snapshot"],
+                "state_effects": decision_row.state_effects_json,
+                "ai_generation_status": decision_row.ai_generation_status,
+            }
+
+            # If recruitment workflow was triggered, post inter-staff coordination into the Staff Room
+            if "recruitment_workflow" in layer_a["state_effects"]:
+                identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
+                gm_info = identities["general_manager"]
+                scout_info = identities["chief_scout"]
+                rec_cand = dict(layer_a["state_effects"].get("recommended_candidate") or {})
+                gm_label = (
+                    str(gm_info["name"])
+                    if not gm_info.get("is_vacant") and str(gm_info.get("name") or "").strip()
+                    else "club executive desk"
+                )
+                staff_room_conv = _get_or_create_conversation(
+                    session,
+                    club_id=club_id,
+                    owner_user_id=state.owner_user_id,
+                    channel_type="staff_room",
+                    thread_key="room:staff",
+                    participant_type="room",
+                    participant_id="room:staff",
+                    participant_name="Staff Technical Room",
+                    participant_role="Executive & Technical Staff",
+                )
+                if not scout_info.get("is_vacant") and str(scout_info.get("name") or "").strip():
+                    coord_sender_id = "staff:chief_scout"
+                    coord_sender_name = str(scout_info["name"])
+                    coord_sender_role = "Chief Scout"
+                    coord_topic = "Recruitment Shortlist Delivered"
+                    coord_body = (
+                        f"Delivered verified {intent_data.get('detected_position', 'LW')} shortlist "
+                        f"(GSI {intent_data.get('min_gsi', 80)}–{intent_data.get('max_gsi', 85)}) to {gm_label}. "
+                        f"Lead profile: {rec_cand.get('player_name', 'Target')} (GSI {rec_cand.get('gsi', 82)}, est. fee {rec_cand.get('estimated_fee', 0):,.0f} GTX)."
+                    )
+                else:
+                    coord_sender_id = conv.participant_id or f"staff:{role_key}"
+                    coord_sender_name = staff_name
+                    coord_sender_role = staff_title
+                    coord_topic = "Recruitment Shortlist Queued"
+                    coord_body = (
+                        f"Logged provisional {intent_data.get('detected_position', 'LW')} shortlist "
+                        f"(GSI {intent_data.get('min_gsi', 80)}–{intent_data.get('max_gsi', 85)}) while Chief Scout seat is vacant. "
+                        f"Lead profile: {rec_cand.get('player_name', 'Target')} (GSI {rec_cand.get('gsi', 82)}, est. fee {rec_cand.get('estimated_fee', 0):,.0f} GTX)."
+                    )
+                _append_message(
+                    session,
+                    conv=staff_room_conv,
+                    sender_user_id=None,
+                    sender_type="staff",
+                    sender_id=coord_sender_id,
+                    sender_name=coord_sender_name,
+                    sender_role=coord_sender_role,
+                    topic=coord_topic,
+                    body=coord_body,
+                    source="staff_event",
+                    action_payload={"type": "scout_shortlist_update", "recommended_candidate": rec_cand},
+                    is_read=False,
+                )
 
     session.flush()
     _publish_owner_comms_realtime(
@@ -2114,6 +2344,7 @@ def send_club_message_durable(
         "reply": _message_dict(reply_msg) if reply_msg else None,
         "reply_message": _message_dict(reply_msg) if reply_msg else None,
         "decision_record": decision_record_payload,
+        "role_vacant": role_vacant,
         "morale_boost_applied": morale_boost_applied,
         "morale_delta": morale_delta,
         "communications": get_club_communications_durable(session, user_id=user_id, club_id=club_id),

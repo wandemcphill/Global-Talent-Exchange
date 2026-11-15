@@ -54,7 +54,7 @@ EXPECTED_GLBS = {
     "general_managers_office": "/models/campus/vip_skybox_concourse.glb",
     "academy_department": "/models/campus/elite_academy_complex.glb",
     "medical_department": "/models/campus/recovery_hydro_hub.glb",
-    "finance_commercial_office": "/models/campus/club_hq.glb",
+    "finance_commercial_office": "/models/campus/vip_hospitality.glb",
 }
 
 
@@ -387,6 +387,32 @@ def run_verification(headless: bool = True) -> int:
             return 1
         print("[PASS] No asset warning banner present during complete 6/6 load.")
 
+        # Audit Stage 3 room screens, Stage 4 staff actors, and Stage 5 telemetry in WebGL scene
+        scene_audit = page.evaluate(
+            """() => {
+                const ops = window.__GTEX_OPERATIONS_3D__;
+                if (!ops) return null;
+                const telemetry = typeof ops.getTelemetry === 'function' ? ops.getTelemetry() : null;
+                return {
+                    roomScreens: Array.isArray(ops.roomScreens) ? ops.roomScreens.length : 0,
+                    roomActors: Array.isArray(ops.roomActors) ? ops.roomActors.length : 0,
+                    telemetry,
+                };
+            }"""
+        )
+        print(f"  [SCENE AUDIT] Live headquarters objects: {scene_audit}")
+        assert scene_audit is not None, "Missing __GTEX_OPERATIONS_3D__ debug handle."
+        assert scene_audit["roomScreens"] >= 6, f"Expected >= 6 room screens, got {scene_audit['roomScreens']}"
+        assert scene_audit["roomActors"] >= 1, f"Expected >= 1 room staff actor, got {scene_audit['roomActors']}"
+        assert scene_audit["telemetry"] and scene_audit["telemetry"].get("loadedGlbs") == 6
+        page.wait_for_selector('[data-testid="webgl-perf-telemetry"]', timeout=10000)
+        print("[PASS] Stage 3 screens, Stage 4 staff actors, and Stage 5 FPS telemetry verified in live Chromium.")
+
+        # Verify Stage 2 department tab navigation switches operational destination cleanly
+        page.locator('[data-testid="destination-tab-managers_office"]').click()
+        page.wait_for_timeout(150)
+        print("[PASS] Destination navigation tab clicked (managers_office).")
+
         # -------------------------------------------------------------
         # TEST 3: 2D Floorplan Fallback Switch & Navigation
         # -------------------------------------------------------------
@@ -601,9 +627,71 @@ def run_verification(headless: bool = True) -> int:
                 fallback_mesh_info["userData"].get("isFallbackWireframe") is True
             ), "Fallback mesh missing isFallbackWireframe"
             print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
+
+            # Verify bounded GLB retry control advances retry count from 0/2 -> 1/2
+            retry_btn = page_fail.locator('[data-testid="retry-failed-glb-btn"]')
+            assert retry_btn.is_visible(), "Expected retry-failed-glb-btn inside glb-asset-warning"
+            retry_btn.click()
+            page_fail.wait_for_function(
+                """() => {
+                    const btn = document.querySelector('[data-testid="retry-failed-glb-btn"]');
+                    return Boolean(btn && (btn.textContent || "").includes("1/2"));
+                }""",
+                timeout=10000,
+            )
+            print("[PASS] Bounded GLB retry control incremented retry count (0/2 -> 1/2).")
         finally:
             context_fail.close()
             print("[INFO] Closed the isolated GLB-failure browser context.")
+
+        # -------------------------------------------------------------
+        # TEST 5: Mobile Responsive Viewport (390x844)
+        # -------------------------------------------------------------
+        print("\n--- Test 5: Mobile Responsive Viewport (390x844) ---")
+        context_mobile = browser.new_context(
+            viewport={"width": 390, "height": 844},
+            device_scale_factor=2,
+            is_mobile=True,
+            has_touch=True,
+        )
+        try:
+            page_mobile = context_mobile.new_page()
+            page_mobile.on("pageerror", lambda err: page_errors.append(f"[page_mobile] {err}"))
+            page_mobile.route("**/api/**", handle_api)
+            page_mobile.route("http://localhost:8000/**", handle_api)
+            page_mobile.route("http://127.0.0.1:8000/**", handle_api)
+
+            page_mobile.goto(f"{console_url}/", wait_until="domcontentloaded")
+            page_mobile.evaluate(f"""() => {{
+                    localStorage.setItem('gtex_access', 'live-phase2-3-owner-token');
+                    localStorage.setItem('gtex_active_club', '{club_id}');
+                }}""")
+            page_mobile.goto(f"{console_url}/app", wait_until="domcontentloaded")
+            page_mobile.wait_for_selector('[data-testid="living-club-management-centre"]', timeout=30000)
+            page_mobile.wait_for_selector('[data-testid="club-operations-3d-canvas"]', timeout=15000)
+            page_mobile.wait_for_function(
+                """() => {
+                    const status = document.querySelector('[data-testid="glb-asset-status"]');
+                    return Boolean(status && (status.textContent || "").includes("6/6 GLB Assets Loaded"));
+                }""",
+                timeout=25000,
+            )
+            mobile_metrics = page_mobile.evaluate(
+                """() => ({
+                    scrollWidth: document.documentElement.scrollWidth,
+                    innerWidth: window.innerWidth,
+                })"""
+            )
+            print(f"  [MOBILE AUDIT] {mobile_metrics}")
+            assert (
+                mobile_metrics["scrollWidth"] <= mobile_metrics["innerWidth"] + 2
+            ), f"Mobile horizontal overflow detected: {mobile_metrics}"
+            page_mobile.locator('[data-testid="toggle-render-mode"]').click()
+            page_mobile.wait_for_selector('[data-testid="club-operations-2d-floorplan"]', timeout=10000)
+            print("[PASS] Mobile 390x844 WebGL 6/6 GLB + zero overflow + 2D switch verified.")
+        finally:
+            context_mobile.close()
+            print("[INFO] Closed the mobile responsive browser context.")
 
         # Fail verification if unexpected JavaScript page errors occurred on either page context
         if page_errors:
