@@ -105,14 +105,14 @@ def _seed_canonical_fixture(
         id=f"user-home-{suffix}",
         email=f"home-{suffix}@gtex.test",
         username=f"home_{suffix}",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=UserRole.USER,
     )
     user_away = User(
         id=f"user-away-{suffix}",
         email=f"away-{suffix}@gtex.test",
         username=f"away_{suffix}",
-        password_hash="hash",
+        password_hash="hash",  # pragma: allowlist secret
         role=UserRole.USER,
     )
     session.add_all([user_home, user_away])
@@ -295,9 +295,7 @@ def test_canonical_progressive_execution_halftime_pause_and_fulltime_settlement(
             pass
 
         events = list(
-            session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-            ).all()
+            session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
         )
         assert any(ev.event_type == "kickoff" for ev in events)
         assert any(ev.event_type == "halftime" for ev in events)
@@ -445,4 +443,3 @@ def test_autonomous_live_step_and_sync_autorunner_use_canonical_execution() -> N
         )
         assert batch_exec is not None
         assert batch_exec.execution_status == "completed"
-

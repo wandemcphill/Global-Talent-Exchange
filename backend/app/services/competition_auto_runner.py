@@ -582,9 +582,7 @@ class CompetitionAutoRunner:
         execution_revision: int = 1,
     ) -> None:
         existing_rows = list(
-            self.session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-            ).all()
+            self.session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
         )
         if existing_rows and all(row.event_key is None for row in existing_rows):
             return

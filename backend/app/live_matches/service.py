@@ -559,7 +559,8 @@ class LiveMatchHub:
                     event_type=event_type,
                     source_event_type=event_type,
                     team_id=team_id,
-                    team=raw.get("team_name") or (home_name if team_side == "home" else (away_name if team_side == "away" else None)),
+                    team=raw.get("team_name")
+                    or (home_name if team_side == "home" else (away_name if team_side == "away" else None)),
                     team_side=team_side,
                     player_id=raw.get("primary_player_id"),
                     player=raw.get("primary_player_name"),
@@ -571,8 +572,10 @@ class LiveMatchHub:
                     clock_label=f"{minute}'",
                     presentation_second=presentation_second,
                     importance_score=int(meta.get("importance", 2) or 2),
-                    is_penalty=event_type in {"penalty_goal", "penalty_miss", "penalty_awarded", "penalty_scored", "penalty_missed"},
-                    highlight_eligible=event_type in {"goal", "penalty_goal", "red_card", "substitution", "tactical_change", "halftime", "fulltime"},
+                    is_penalty=event_type
+                    in {"penalty_goal", "penalty_miss", "penalty_awarded", "penalty_scored", "penalty_missed"},
+                    highlight_eligible=event_type
+                    in {"goal", "penalty_goal", "red_card", "substitution", "tactical_change", "halftime", "fulltime"},
                     meta=meta,
                     metadata=meta,
                     execution_revision=event_revision,
@@ -632,9 +635,11 @@ class LiveMatchHub:
         )
         last_seq = events[-1].sequence if events else 0
         broadcast_category = str(getattr(execution, "broadcast_category", None) or "").strip().lower()
-        comp_type = str(
-            getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or ""
-        ).strip().lower()
+        comp_type = (
+            str(getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or "")
+            .strip()
+            .lower()
+        )
         stage = str(getattr(match, "stage", None) or "").strip().lower()
         is_major_knockout = bool(
             broadcast_category == "major_knockout"
@@ -852,7 +857,9 @@ class LiveMatchHub:
                     active_set.update(rows)
             except Exception:
                 pass
-        active_set.update(self._safe_hot_cache_call("list_active_matches", self._hot_cache.list_active_matches, default=()) or ())
+        active_set.update(
+            self._safe_hot_cache_call("list_active_matches", self._hot_cache.list_active_matches, default=()) or ()
+        )
         return sorted(active_set)
 
     def halt_match(

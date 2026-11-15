@@ -806,7 +806,9 @@ class LocalMatchExecutionWorker:
                 home_score = int(match.home_score)
                 away_score = int(match.away_score)
                 event_count = len(execution.committed_events_json or [])
-                replay_raw = (match.metadata_json or {}).get("replay_payload") if execution_status == "completed" else None
+                replay_raw = (
+                    (match.metadata_json or {}).get("replay_payload") if execution_status == "completed" else None
+                )
 
             for ev in new_events:
                 frame = {

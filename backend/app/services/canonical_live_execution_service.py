@@ -541,7 +541,15 @@ class CanonicalLiveExecutionService:
                             "commit_cursor": item_sequence,
                         }
                         self.match_stream_service.publish_event(match.id, item_payload)
-                elif kind in {"start", "kickoff", "tactics_updated", "halftime", "halftime_resumed", "completed", "halted"}:
+                elif kind in {
+                    "start",
+                    "kickoff",
+                    "tactics_updated",
+                    "halftime",
+                    "halftime_resumed",
+                    "completed",
+                    "halted",
+                }:
                     status_payload = {
                         "event_id": f"{match.id}:rev:{revision}:{kind}:{current_minute}",
                         "sequence": revision,
@@ -581,7 +589,9 @@ class CanonicalLiveExecutionService:
         if match is None:
             raise CanonicalMatchNotFoundError(f"Canonical match '{match_id}' was not found.")
         if is_terminal(match.status) or match.completed_at is not None:
-            raise CanonicalMatchNotLiveError(f"Canonical match '{match_id}' is already in terminal state '{match.status}'.")
+            raise CanonicalMatchNotLiveError(
+                f"Canonical match '{match_id}' is already in terminal state '{match.status}'."
+            )
 
         existing = self._lock_execution(match_id)
         if existing is not None:
@@ -926,7 +936,9 @@ class CanonicalLiveExecutionService:
             if out_id == in_id:
                 raise CanonicalExecutionValidationError("Outgoing and incoming player IDs must be distinct.")
             if out_id in seen_out or in_id in seen_in:
-                raise CanonicalExecutionValidationError("Duplicate player IDs are not permitted in a substitution batch.")
+                raise CanonicalExecutionValidationError(
+                    "Duplicate player IDs are not permitted in a substitution batch."
+                )
             seen_out.add(out_id)
             seen_in.add(in_id)
             normalized_subs.append(
@@ -962,9 +974,7 @@ class CanonicalLiveExecutionService:
             or (isinstance(halt_flag, dict) and halt_flag.get("enabled") is True)
             or hub_halted
         ):
-            raise CanonicalExecutionHaltedError(
-                "Match stream is halted; live tactics and substitutions are locked."
-            )
+            raise CanonicalExecutionHaltedError("Match stream is halted; live tactics and substitutions are locked.")
 
         if (
             is_terminal(match.status)
@@ -1005,7 +1015,11 @@ class CanonicalLiveExecutionService:
             )
             if existing_cmd is not None:
                 recorded_fp = (existing_cmd.command_payload_json or {}).get("fingerprint")
-                if recorded_fp == fingerprint and existing_cmd.status == "accepted" and existing_cmd.response_payload_json:
+                if (
+                    recorded_fp == fingerprint
+                    and existing_cmd.status == "accepted"
+                    and existing_cmd.response_payload_json
+                ):
                     return {
                         **dict(existing_cmd.response_payload_json),
                         "idempotent_replay": True,
@@ -1060,8 +1074,7 @@ class CanonicalLiveExecutionService:
             active_goalkeepers = {
                 pid
                 for pid in active_set
-                if pid in team_state.players_by_id
-                and team_state.players_by_id[pid].role is PlayerRole.GOALKEEPER
+                if pid in team_state.players_by_id and team_state.players_by_id[pid].role is PlayerRole.GOALKEEPER
             }
             for sub in normalized_subs:
                 out_id = sub["outgoing_player_id"]
@@ -1314,19 +1327,13 @@ class CanonicalLiveExecutionService:
         """Remove any stale/non-canonical events and persist exact settled events with per-event revision."""
 
         existing_rows = list(
-            self.session.scalars(
-                select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-            ).all()
+            self.session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
         )
         canonical_keys = {
             f"seq:{int(getattr(ev, 'sequence', 0) or 0)}:{getattr(ev.event_type, 'value', str(ev.event_type))}"
             for ev in replay_payload.timeline.events
         }
-        stale_rows = [
-            row
-            for row in existing_rows
-            if row.event_key is None or row.event_key not in canonical_keys
-        ]
+        stale_rows = [row for row in existing_rows if row.event_key is None or row.event_key not in canonical_keys]
         if stale_rows:
             for stale_row in stale_rows:
                 self.session.delete(stale_row)
@@ -1409,12 +1416,8 @@ class CanonicalLiveExecutionService:
                     "club_name": event.team_name,
                     "player_id": event.primary_player.player_id if event.primary_player else None,
                     "player_name": event.primary_player.player_name if event.primary_player else None,
-                    "secondary_player_id": (
-                        event.secondary_player.player_id if event.secondary_player else None
-                    ),
-                    "secondary_player_name": (
-                        event.secondary_player.player_name if event.secondary_player else None
-                    ),
+                    "secondary_player_id": (event.secondary_player.player_id if event.secondary_player else None),
+                    "secondary_player_name": (event.secondary_player.player_name if event.secondary_player else None),
                     "description": event.commentary,
                     "home_score": int(event.home_score),
                     "away_score": int(event.away_score),
@@ -1432,9 +1435,7 @@ class CanonicalLiveExecutionService:
                         "player_id": event.secondary_player.player_id,
                         "player_name": event.secondary_player.player_name,
                         "secondary_player_id": event.primary_player.player_id if event.primary_player else None,
-                        "secondary_player_name": (
-                            event.primary_player.player_name if event.primary_player else None
-                        ),
+                        "secondary_player_name": (event.primary_player.player_name if event.primary_player else None),
                         "description": (
                             f"Assist for {event.primary_player.player_name}"
                             if event.primary_player is not None
@@ -1450,9 +1451,7 @@ class CanonicalLiveExecutionService:
 
         owner_ids = list(
             self.session.scalars(
-                select(ClubProfile.owner_user_id).where(
-                    ClubProfile.id.in_([match.home_club_id, match.away_club_id])
-                )
+                select(ClubProfile.owner_user_id).where(ClubProfile.id.in_([match.home_club_id, match.away_club_id]))
             ).all()
         )
         participant_user_ids = tuple(dict.fromkeys(str(uid) for uid in owner_ids if uid))
@@ -1652,7 +1651,11 @@ class CanonicalLiveExecutionService:
     ) -> CompetitionMatch:
         """Atomically reconcile events, viewer replay, standings, performances, highlights, archive, and projections at FT."""
 
-        if match.status == MatchStatus.COMPLETED.value and match.stats_applied and execution.execution_status == "completed":
+        if (
+            match.status == MatchStatus.COMPLETED.value
+            and match.stats_applied
+            and execution.execution_status == "completed"
+        ):
             return match
         if is_terminal(match.status) and match.status != MatchStatus.COMPLETED.value:
             raise CanonicalMatchNotLiveError(

@@ -220,13 +220,10 @@ def _build_session_view(
 ) -> SpectatorSessionView:
     payload = dict(access or {})
     sync_strategy = str(
-        payload.get("sync_strategy")
-        or ("canonical_live_execution" if canonical_sync else "deterministic_playback")
+        payload.get("sync_strategy") or ("canonical_live_execution" if canonical_sync else "deterministic_playback")
     )
     resolved_revision = (
-        int(payload["execution_revision"])
-        if payload.get("execution_revision") is not None
-        else execution_revision
+        int(payload["execution_revision"]) if payload.get("execution_revision") is not None else execution_revision
     )
     return SpectatorSessionView(
         id=item.id,
@@ -1045,7 +1042,9 @@ def _load_strict_live_view_state(
         elif state is not None:
             events, _cursor = hub.get_events_since(match_id, 0)
             if any(_is_blocked_strict_live_source(_strict_live_event_source(event)) for event in events):
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found."
+                )
             try:
                 view_state = MatchTimelineService().build_from_live_stream(
                     match_id=match_id,
@@ -1799,17 +1798,23 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         else (dict(broadcast_session) if isinstance(broadcast_session, dict) else None)
     )
     if broadcast_session_payload is not None:
-        comp_category = str(
-            broadcast_session_payload.get("competition_category")
-            or getattr(view_state, "competition_category", "")
-            or ""
-        ).strip().lower()
+        comp_category = (
+            str(
+                broadcast_session_payload.get("competition_category")
+                or getattr(view_state, "competition_category", "")
+                or ""
+            )
+            .strip()
+            .lower()
+        )
         max_broadcast_seconds = 900 if comp_category == "major_knockout" else 600
         broadcast_session_payload["pause_replay_enabled"] = False
         if playback_context is not None:
             assigned_dur = min(
                 max_broadcast_seconds,
-                int(round(max(float(playback_context.target_runtime_seconds), float(view_state.duration_seconds), 1.0))),
+                int(
+                    round(max(float(playback_context.target_runtime_seconds), float(view_state.duration_seconds), 1.0))
+                ),
             )
             span_dur = min(float(assigned_dur), max(float(view_state.duration_seconds), 1.0))
             ratio = min(
@@ -1999,10 +2004,13 @@ def read_match_v2_tactics(
         current_user=current_user,
         payload=payload,
     )
-    execution_revision = max(
-        int(home_tactics.get("execution_revision") or 0),
-        int(away_tactics.get("execution_revision") or 0),
-    ) or None
+    execution_revision = (
+        max(
+            int(home_tactics.get("execution_revision") or 0),
+            int(away_tactics.get("execution_revision") or 0),
+        )
+        or None
+    )
     return {
         "match_id": payload["match_id"],
         **_strict_live_runtime_flags(),

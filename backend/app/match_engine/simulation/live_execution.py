@@ -95,9 +95,7 @@ def _deserialize_tactical_plan(payload: dict[str, Any]) -> TacticalPlan:
         red_card_fallback_formation=str(payload["red_card_fallback_formation"]),
         injury_auto_substitution=bool(payload["injury_auto_substitution"]),
         yellow_card_substitution_minute=int(payload["yellow_card_substitution_minute"]),
-        yellow_card_replacement_roles=tuple(
-            PlayerRole(str(role)) for role in payload["yellow_card_replacement_roles"]
-        ),
+        yellow_card_replacement_roles=tuple(PlayerRole(str(role)) for role in payload["yellow_card_replacement_roles"]),
         max_substitutions=int(payload["max_substitutions"]),
         allow_substitutions=bool(payload.get("allow_substitutions", True)),
         allow_tactical_changes=bool(payload.get("allow_tactical_changes", True)),
@@ -572,11 +570,7 @@ def _apply_substitution_strength_adjustment(
     midfield_delta = (incoming.control_value() - outgoing.control_value()) / active_count * 1.4
     overall_delta = (float(incoming.overall) - float(outgoing.overall)) / active_count * 1.2
     fitness_delta = (float(incoming.fitness) - float(outgoing.fitness)) / active_count * 1.0
-    gk_val = (
-        incoming.goalkeeping_value()
-        if incoming.role is PlayerRole.GOALKEEPER
-        else state.strength.goalkeeping
-    )
+    gk_val = incoming.goalkeeping_value() if incoming.role is PlayerRole.GOALKEEPER else state.strength.goalkeeping
     state.strength = TeamStrengthSnapshot(
         overall=_clamp(state.strength.overall + overall_delta, 25.0, 99.0),
         attack=_clamp(state.strength.attack + attack_delta, 25.0, 99.0),
@@ -652,9 +646,7 @@ def initialize_execution(
                 "approved_shorter_presentation": bool(
                     getattr(request.competition, "approved_shorter_presentation", False)
                 ),
-                "designated_major_knockout": bool(
-                    getattr(request.competition, "designated_major_knockout", False)
-                ),
+                "designated_major_knockout": bool(getattr(request.competition, "designated_major_knockout", False)),
                 "competition_allows_corner_var": bool(
                     getattr(request.competition, "competition_allows_corner_var", False)
                 ),
@@ -994,15 +986,17 @@ def rebuild_remaining_schedule(
     if checkpoint.extra_time_active or checkpoint.fulltime_processed:
         start_et = max(91, int(from_minute))
         # Re-weight remaining ET chances against the revised live ratings.
-        home_attack = generator._live_attack_rating(
-            home_eff, away_eff, start_et, narrative=checkpoint.narrative
+        home_attack = generator._live_attack_rating(home_eff, away_eff, start_et, narrative=checkpoint.narrative)
+        away_attack = generator._live_attack_rating(away_eff, home_eff, start_et, narrative=checkpoint.narrative)
+        home_def = max(
+            10.0, generator._live_defense_rating(home_eff, away_eff, start_et, narrative=checkpoint.narrative)
         )
-        away_attack = generator._live_attack_rating(
-            away_eff, home_eff, start_et, narrative=checkpoint.narrative
+        away_def = max(
+            10.0, generator._live_defense_rating(away_eff, home_eff, start_et, narrative=checkpoint.narrative)
         )
-        home_def = max(10.0, generator._live_defense_rating(home_eff, away_eff, start_et, narrative=checkpoint.narrative))
-        away_def = max(10.0, generator._live_defense_rating(away_eff, home_eff, start_et, narrative=checkpoint.narrative))
-        home_share = _clamp((home_attack / away_def) / max(0.01, (home_attack / away_def) + (away_attack / home_def)), 0.25, 0.75)
+        home_share = _clamp(
+            (home_attack / away_def) / max(0.01, (home_attack / away_def) + (away_attack / home_def)), 0.25, 0.75
+        )
         for item in checkpoint.future_schedule:
             if item.kind == "chance" and item.minute >= start_et:
                 next_index += 1
@@ -1040,7 +1034,9 @@ def rebuild_remaining_schedule(
         return generator._incident_minute(rng, bounded_lo, bounded_hi)
 
     for state, side in ((home_eff, "home"), (away_eff, "away")):
-        yellow_budget = max(0, round(generator._yellow_card_count(state, rng, narrative=checkpoint.narrative) * remaining_fraction))
+        yellow_budget = max(
+            0, round(generator._yellow_card_count(state, rng, narrative=checkpoint.narrative) * remaining_fraction)
+        )
         for _ in range(yellow_budget):
             next_index += 1
             preserved.append(
@@ -1076,7 +1072,9 @@ def rebuild_remaining_schedule(
                         index=next_index,
                     )
                 )
-        foul_budget = max(0, round(generator._tactical_foul_count(state, rng, narrative=checkpoint.narrative) * remaining_fraction))
+        foul_budget = max(
+            0, round(generator._tactical_foul_count(state, rng, narrative=checkpoint.narrative) * remaining_fraction)
+        )
         for _ in range(foul_budget):
             next_index += 1
             preserved.append(
@@ -1121,12 +1119,8 @@ def rebuild_remaining_schedule(
     remaining_chances = max(1 if (90 - min_minute) >= 6 else 0, round(full_chances * remaining_fraction))
 
     sample_minute = min(85, max(min_minute, 45))
-    home_attack = generator._live_attack_rating(
-        home_eff, away_eff, sample_minute, narrative=checkpoint.narrative
-    )
-    away_attack = generator._live_attack_rating(
-        away_eff, home_eff, sample_minute, narrative=checkpoint.narrative
-    )
+    home_attack = generator._live_attack_rating(home_eff, away_eff, sample_minute, narrative=checkpoint.narrative)
+    away_attack = generator._live_attack_rating(away_eff, home_eff, sample_minute, narrative=checkpoint.narrative)
     home_defense = max(
         10.0, generator._live_defense_rating(home_eff, away_eff, sample_minute, narrative=checkpoint.narrative)
     )
@@ -1142,9 +1136,7 @@ def rebuild_remaining_schedule(
     mode = min(max_minute, max(min_minute, round(min_minute + ((max_minute - min_minute) * 0.58))))
     for _ in range(remaining_chances):
         next_index += 1
-        chance_minute = generator._clamp_minute(
-            int(round(rng.triangular(min_minute, max_minute, mode)))
-        )
+        chance_minute = generator._clamp_minute(int(round(rng.triangular(min_minute, max_minute, mode))))
         chance_minute = max(min_minute, min(max_minute, chance_minute))
         preserved.append(
             ScheduledItem(

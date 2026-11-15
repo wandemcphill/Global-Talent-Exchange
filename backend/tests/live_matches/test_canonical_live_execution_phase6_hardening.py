@@ -38,9 +38,9 @@ def test_duplicate_kickoff_is_idempotent_and_does_not_reset_execution() -> None:
         assert second.id == first.id
         assert int(second.current_minute) == minute_after_step
         count = session.scalar(
-            select(func.count()).select_from(CompetitionMatchExecution).where(
-                CompetitionMatchExecution.match_id == match.id
-            )
+            select(func.count())
+            .select_from(CompetitionMatchExecution)
+            .where(CompetitionMatchExecution.match_id == match.id)
         )
         assert count == 1
 
@@ -162,14 +162,10 @@ def test_settlement_is_not_duplicated_when_repeated() -> None:
         session.refresh(match)
         assert match.status == MatchStatus.COMPLETED.value
         events_before = session.scalar(
-            select(func.count()).select_from(CompetitionMatchEvent).where(
-                CompetitionMatchEvent.match_id == match.id
-            )
+            select(func.count()).select_from(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
         )
         perf_before = session.scalar(
-            select(func.count()).select_from(PlayerMatchPerformance).where(
-                PlayerMatchPerformance.match_id == match.id
-            )
+            select(func.count()).select_from(PlayerMatchPerformance).where(PlayerMatchPerformance.match_id == match.id)
         )
         score = (match.home_score, match.away_score)
 
@@ -178,16 +174,22 @@ def test_settlement_is_not_duplicated_when_repeated() -> None:
         again = service.settle_completed_execution(match, execution)
         session.commit()
         assert (again.home_score, again.away_score) == score
-        assert session.scalar(
-            select(func.count()).select_from(CompetitionMatchEvent).where(
-                CompetitionMatchEvent.match_id == match.id
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(CompetitionMatchEvent)
+                .where(CompetitionMatchEvent.match_id == match.id)
             )
-        ) == events_before
-        assert session.scalar(
-            select(func.count()).select_from(PlayerMatchPerformance).where(
-                PlayerMatchPerformance.match_id == match.id
+            == events_before
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(PlayerMatchPerformance)
+                .where(PlayerMatchPerformance.match_id == match.id)
             )
-        ) == perf_before
+            == perf_before
+        )
 
 
 def test_halt_resume_and_termination_emit_structured_logs(caplog) -> None:

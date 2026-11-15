@@ -105,7 +105,9 @@ class CompetitionMatchTacticalCommand(UUIDPrimaryKeyMixin, CreatedAtMixin, Base)
     resulting_revision: Mapped[int | None] = mapped_column(Integer, nullable=True)
     submitted_at_minute: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     effective_minute: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
-    status: Mapped[str] = mapped_column(String(24), nullable=False, default="accepted", server_default="accepted", index=True)
+    status: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="accepted", server_default="accepted", index=True
+    )
     rejection_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
     command_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
     response_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

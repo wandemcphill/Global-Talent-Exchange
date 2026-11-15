@@ -384,14 +384,10 @@ def test_resimulated_settlement_reconciles_events_minutes_standings_archive_and_
             home_lineup = req["home_team"]["starters"]
             home_bench = req["home_team"]["bench"]
             starter_out = next(
-                p
-                for p in home_lineup
-                if p["role"] != "GK" and p["player_id"] in set(snap["active_player_ids"])
+                p for p in home_lineup if p["role"] != "GK" and p["player_id"] in set(snap["active_player_ids"])
             )
             bench_in = next(
-                p
-                for p in home_bench
-                if p["role"] != "GK" and p["player_id"] not in set(snap["active_player_ids"])
+                p for p in home_bench if p["role"] != "GK" and p["player_id"] not in set(snap["active_player_ids"])
             )
 
             tactic_res = svc.apply_live_tactical_command(
@@ -482,24 +478,16 @@ def test_resimulated_settlement_reconciles_events_minutes_standings_archive_and_
                 ).all()
             }
             assert len(perf_rows) > 0
-            summary_stats_by_id = {
-                item["player_id"]: item for item in summary["player_stats"] if item.get("player_id")
-            }
+            summary_stats_by_id = {item["player_id"]: item for item in summary["player_stats"] if item.get("player_id")}
             assert perf_rows[starter_out["player_id"]].started is True
             assert perf_rows[starter_out["player_id"]].minutes_played == 45
             assert perf_rows[bench_in["player_id"]].started is False
             bench_sub_out = summary_stats_by_id.get(bench_in["player_id"], {}).get("substituted_out_minute")
             expected_bench_minutes = (int(bench_sub_out) - 45) if bench_sub_out is not None else 45
             assert perf_rows[bench_in["player_id"]].minutes_played == expected_bench_minutes
-            subbed_in_ids = {
-                ev.player_id
-                for ev in events
-                if ev.event_type == "substitution" and ev.player_id
-            }
+            subbed_in_ids = {ev.player_id for ev in events if ev.event_type == "substitution" and ev.player_id}
             subbed_out_ids = {
-                ev.secondary_player_id
-                for ev in events
-                if ev.event_type == "substitution" and ev.secondary_player_id
+                ev.secondary_player_id for ev in events if ev.event_type == "substitution" and ev.secondary_player_id
             }
             for sub_ev in [ev for ev in events if ev.event_type == "substitution" and ev.player_id]:
                 in_id = sub_ev.player_id
@@ -508,11 +496,7 @@ def test_resimulated_settlement_reconciles_events_minutes_standings_archive_and_
                     assert perf_rows[in_id].minutes_played > 0
 
             # Full-90 starters who weren't subbed out recorded 90 minutes matching simulation summary.
-            full90_starters = [
-                p["player_id"]
-                for p in home_lineup
-                if p["player_id"] not in subbed_out_ids
-            ]
+            full90_starters = [p["player_id"] for p in home_lineup if p["player_id"] not in subbed_out_ids]
             assert len(full90_starters) > 0
             for pid in full90_starters:
                 assert perf_rows[pid].started is True

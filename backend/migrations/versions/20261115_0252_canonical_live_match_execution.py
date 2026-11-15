@@ -1,7 +1,7 @@
 """Add canonical live match execution tables and event versioning columns.
 
-Revision ID: 20261115_0251_canonical_live_match_execution
-Revises: 20261115_0250_academy_first_team_minutes
+Revision ID: 20261115_0252_canonical_live_match_execution
+Revises: 20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration
 Create Date: 2026-11-15 18:50:00
 """
 
@@ -10,8 +10,8 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261115_0251_canonical_live_match_execution"
-down_revision = "20261115_0250_academy_first_team_minutes"
+revision = "20261115_0252_canonical_live_match_execution"
+down_revision = "20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration"
 branch_labels = None
 depends_on = None
 
@@ -162,9 +162,7 @@ def upgrade() -> None:
         columns = {item["name"] for item in inspector.get_columns("competition_match_events")}
         indexes = {item["name"] for item in inspector.get_indexes("competition_match_events")}
         unique_constraints = {
-            item["name"]
-            for item in inspector.get_unique_constraints("competition_match_events")
-            if item.get("name")
+            item["name"] for item in inspector.get_unique_constraints("competition_match_events") if item.get("name")
         }
         with op.batch_alter_table("competition_match_events", schema=None) as batch_op:
             if "sequence" not in columns:
@@ -196,9 +194,7 @@ def downgrade() -> None:
         columns = {item["name"] for item in inspector.get_columns("competition_match_events")}
         indexes = {item["name"] for item in inspector.get_indexes("competition_match_events")}
         unique_constraints = {
-            item["name"]
-            for item in inspector.get_unique_constraints("competition_match_events")
-            if item.get("name")
+            item["name"] for item in inspector.get_unique_constraints("competition_match_events") if item.get("name")
         }
         sequence_ix = op.f("ix_competition_match_events_sequence")
         if sequence_ix in indexes:

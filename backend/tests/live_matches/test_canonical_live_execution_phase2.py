@@ -442,9 +442,7 @@ def test_canonical_live_tactical_revision_preserves_history_and_reconciles_settl
 
             cmd_rows = list(
                 session.scalars(
-                    select(CompetitionMatchTacticalCommand).where(
-                        CompetitionMatchTacticalCommand.match_id == match.id
-                    )
+                    select(CompetitionMatchTacticalCommand).where(CompetitionMatchTacticalCommand.match_id == match.id)
                 ).all()
             )
             assert len(cmd_rows) == 1
@@ -477,12 +475,14 @@ def test_halftime_pause_applies_tactics_and_substitutions_immediately_and_update
             out_player = next(
                 p
                 for p in home_starters
-                if str(p["role"]).upper() not in {"GK", "GOALKEEPER"} and p["player_id"] in home_state_json["active_player_ids"]
+                if str(p["role"]).upper() not in {"GK", "GOALKEEPER"}
+                and p["player_id"] in home_state_json["active_player_ids"]
             )
             in_player = next(
                 p
                 for p in home_bench
-                if str(p["role"]).upper() not in {"GK", "GOALKEEPER"} and p["player_id"] in home_state_json["bench_player_ids"]
+                if str(p["role"]).upper() not in {"GK", "GOALKEEPER"}
+                and p["player_id"] in home_state_json["bench_player_ids"]
             )
 
         app.dependency_overrides[get_current_match_user] = lambda: home_ftm
@@ -524,9 +524,7 @@ def test_halftime_pause_applies_tactics_and_substitutions_immediately_and_update
 
         with session_factory() as session:
             ht_events = list(
-                session.scalars(
-                    select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
-                ).all()
+                session.scalars(select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)).all()
             )
             assert any(ev.event_type == "substitution" and ev.minute == 45 for ev in ht_events)
             assert any(ev.event_type == "tactical_change" and ev.minute == 45 for ev in ht_events)

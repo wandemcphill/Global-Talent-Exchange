@@ -100,12 +100,8 @@ def test_progressive_checkpoint_roundtrip_matches_full_simulation_exactly() -> N
         (e.sequence, e.event_type, e.minute) for e in baseline.events
     ]
     assert [
-        (p.player_id, p.minutes_played, p.goals, p.assists, p.yellow_cards)
-        for p in stepped_result.player_stats
-    ] == [
-        (p.player_id, p.minutes_played, p.goals, p.assists, p.yellow_cards)
-        for p in baseline.player_stats
-    ]
+        (p.player_id, p.minutes_played, p.goals, p.assists, p.yellow_cards) for p in stepped_result.player_stats
+    ] == [(p.player_id, p.minutes_played, p.goals, p.assists, p.yellow_cards) for p in baseline.player_stats]
 
 
 def test_progressive_knockout_extra_time_and_penalties_match_full_simulation() -> None:
@@ -219,7 +215,9 @@ def test_live_tactical_revision_preserves_prefix_and_changes_future_execution() 
         for e in revised_result.events
     )
     assert any(
-        e.event_type.value == "substitution" and e.primary_player_id == incoming_id and e.secondary_player_id == outgoing_id
+        e.event_type.value == "substitution"
+        and e.primary_player_id == incoming_id
+        and e.secondary_player_id == outgoing_id
         for e in revised_result.events
     )
     # Regenerated second half produces a distinct revised second-half event stream from unmodified baseline.

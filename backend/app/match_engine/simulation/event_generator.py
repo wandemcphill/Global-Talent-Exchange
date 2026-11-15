@@ -435,9 +435,7 @@ class MatchEventGenerator:
             if event is not None:
                 record(event)
         elif item.kind == "tactical_change":
-            if not self._change_condition_met(
-                item.payload or {}, state=state, opponent=opponent, minute=item.minute
-            ):
+            if not self._change_condition_met(item.payload or {}, state=state, opponent=opponent, minute=item.minute):
                 return
             event = self._apply_tactical_change(
                 match_id=request.match_id,
@@ -450,9 +448,7 @@ class MatchEventGenerator:
             if event is not None:
                 record(event)
         elif item.kind == "tactical_substitution":
-            if not self._change_condition_met(
-                item.payload or {}, state=state, opponent=opponent, minute=item.minute
-            ):
+            if not self._change_condition_met(item.payload or {}, state=state, opponent=opponent, minute=item.minute):
                 return
             record(
                 self._apply_tactical_substitution(
