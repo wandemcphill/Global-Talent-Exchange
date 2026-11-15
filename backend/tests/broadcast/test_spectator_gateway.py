@@ -995,7 +995,8 @@ def test_canonical_matchday_atmosphere_is_shared_and_publicly_whitelisted() -> N
         )
         session.commit()
 
-    app = SimpleNamespace(state=SimpleNamespace(session_factory=factory))
+    app = _build_app()
+    app.state.session_factory = factory
     metadata = _canonical_match_spectator_metadata(app, match_id)
 
     assert metadata["institutional_atmosphere"]["home"]["crowd_intensity"] == 94
@@ -1003,3 +1004,11 @@ def test_canonical_matchday_atmosphere_is_shared_and_publicly_whitelisted() -> N
     assert metadata["institutional_atmosphere"]["away"]["dominant_mood"] == "anxious_scrutiny"
     assert "manager" not in metadata
     assert "private_owner_notes" not in metadata["institutional_atmosphere"]["home"]
+
+    client = TestClient(app)
+    with client.websocket_connect(f"/ws/spectate/{match_id}") as websocket:
+        snapshot = _receive_until_type(websocket, "snapshot")
+        public_atmosphere = snapshot["snapshot"]["metadata"]["institutional_atmosphere"]
+        assert public_atmosphere["home"]["crowd_intensity"] == 94
+        assert public_atmosphere["away"]["dominant_mood"] == "anxious_scrutiny"
+        assert "manager" not in snapshot["snapshot"]["metadata"]
