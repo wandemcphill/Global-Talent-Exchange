@@ -2146,9 +2146,9 @@ def get_club_operations_hub(
                 "direct" if staff["finance_commercial_director"]["is_appointed"] else "vacant"
             ),
             "wing_label": "East Treasury Vault · Floor 3",
-            "glb_model": "/models/campus/club_hq.glb",
-            "model_glb_url": "/models/campus/club_hq.glb",
-            "exterior_glb": "/models/campus/club_hq.glb",
+            "glb_model": "/models/campus/vip_hospitality.glb",
+            "model_glb_url": "/models/campus/vip_hospitality.glb",
+            "exterior_glb": "/models/campus/vip_hospitality.glb",
             "accent_color": "#22d3ee",
             "position_3d": [0, 0, -18],
             "camera_position": [0, 11, -12],

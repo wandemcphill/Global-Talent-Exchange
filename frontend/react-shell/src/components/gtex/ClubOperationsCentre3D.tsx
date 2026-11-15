@@ -9,6 +9,7 @@ import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment
 import {
   buildDepartmentInterior,
   type DepartmentScreenHandle,
+  updateDepartmentActors,
   updateDepartmentScreens,
 } from "./operationsRoomInteriors";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
@@ -385,6 +386,7 @@ export function ClubOperationsCentre3D({
   const isTransitioningRef = useRef<boolean>(true);
   const roomGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
   const roomScreensRef = useRef<DepartmentScreenHandle[]>([]);
+  const roomActorsRef = useRef<THREE.Group[]>([]);
   const hubRef = useRef<ClubOperationsHubPayload | null | undefined>(hub);
   hubRef.current = hub;
   const lightingObjectsRef = useRef<{
@@ -545,6 +547,7 @@ export function ClubOperationsCentre3D({
     let loadedModels = 0;
     roomGroupsRef.current.clear();
     roomScreensRef.current = [];
+    roomActorsRef.current = [];
 
     // Build each of the 6 Operational Destination Wings
     sceneDestinations.forEach((dest) => {
@@ -563,6 +566,7 @@ export function ClubOperationsCentre3D({
       pickables.push(...interiorBuild.pickables);
       animatedActors.push(...interiorBuild.animatedActors);
       roomScreensRef.current.push(...interiorBuild.screens);
+      roomActorsRef.current.push(...interiorBuild.animatedActors);
 
       // Corridor Light Path to Central Atrium
       const distToCenter = Math.hypot(rx, rz);
@@ -729,6 +733,7 @@ export function ClubOperationsCentre3D({
         scene,
         roomGroups: roomGroupsRef.current,
         roomScreens: roomScreensRef.current,
+        roomActors: roomActorsRef.current,
         camera,
         renderer,
       };
@@ -852,17 +857,23 @@ export function ClubOperationsCentre3D({
       lightingObjectsRef.current = null;
       roomGroupsRef.current.clear();
       roomScreensRef.current = [];
+      roomActorsRef.current = [];
       if (typeof window !== "undefined") {
         delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
       }
     };
   }, [renderMode, sceneConfigurationKey]);
 
-  // Live operational hub metrics update all 3D wall and terminal CanvasTextures in-place
+  // Live operational hub metrics and staff appointments update all 3D screens and actors in-place
   // without destroying or rebuilding the WebGLRenderer or Three.js scene graph.
   useEffect(() => {
-    if (renderMode !== "3d" || roomScreensRef.current.length === 0) return;
-    updateDepartmentScreens(roomScreensRef.current, destinations, hub);
+    if (renderMode !== "3d") return;
+    if (roomScreensRef.current.length > 0) {
+      updateDepartmentScreens(roomScreensRef.current, destinations, hub);
+    }
+    if (roomActorsRef.current.length > 0) {
+      updateDepartmentActors(roomActorsRef.current, destinations);
+    }
   }, [renderMode, destinations, hub]);
 
   // Day/night is a light-rig change, not a reason to destroy and reload the entire scene.

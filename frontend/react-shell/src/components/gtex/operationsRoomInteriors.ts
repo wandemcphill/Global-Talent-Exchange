@@ -720,16 +720,31 @@ export function updateDepartmentScreens(
   return updatedCount;
 }
 
+type StaffPropKind = "folio" | "tactical_tablet" | "clipboard" | "medical_scanner" | "ledger_tablet";
+
 function addStaffActor(
   root: THREE.Group,
+  destination: OperationsHubDestination,
   position: [number, number, number],
   palette: { jacket: number; shirt: number; tie: number; skin: number; hair: number },
   phase: number,
+  propKind: StaffPropKind = "folio",
 ): THREE.Group {
   const actor = new THREE.Group();
+  const staffLead = destination.staff_lead;
+  const isVacant = Boolean(staffLead?.is_vacant);
   actor.name = "department-staff-actor";
   actor.position.set(...position);
-  actor.userData = { idlePhase: phase, baseY: position[1] };
+  actor.visible = !isVacant;
+  actor.userData = {
+    idlePhase: phase,
+    baseY: position[1],
+    destinationKey: destination.destination_key,
+    roleKey: staffLead?.role_key || destination.lead_role_key || "staff",
+    staffName: staffLead?.name || "",
+    isVacant,
+    propKind,
+  };
 
   const jacket = standardMaterial(palette.jacket, 0.48, 0.12);
   const shirt = standardMaterial(palette.shirt, 0.82, 0.02);
@@ -738,9 +753,9 @@ function addStaffActor(
   const hair = standardMaterial(palette.hair, 0.92, 0.01);
   const trousers = standardMaterial(0x172335, 0.72, 0.04);
   const shoes = standardMaterial(0x080d16, 0.34, 0.16);
+  const trim = standardMaterial(palette.tie, 0.3, 0.45);
 
-  // A clean, stylised club-staff figure built from low-poly forms; no external
-  // character asset or texture dependency is required.
+  // Clean, stylised articulated club-staff figure with department attire and held operational tool.
   addCylinder(actor, 0.29, 0.38, 0.82, [0, 1.22, 0], jacket, 12);
   addCylinder(actor, 0.12, 0.12, 0.16, [0, 1.72, 0], skin, 12);
   const head = new THREE.Group();
@@ -757,15 +772,31 @@ function addStaffActor(
 
   addBox(actor, [0.14, 0.46, 0.035], [0, 1.28, 0.345], shirt);
   addBox(actor, [0.07, 0.42, 0.045], [0, 1.27, 0.37], tie);
+  // Department crest lapel pin
+  addBox(actor, [0.07, 0.045, 0.03], [0.16, 1.46, 0.34], trim);
+
   const leftArm = new THREE.Group();
   leftArm.position.set(-0.34, 1.52, 0);
   addCylinder(leftArm, 0.105, 0.13, 0.56, [0, -0.29, 0], jacket, 10);
   addCylinder(leftArm, 0.075, 0.085, 0.22, [0, -0.65, 0], skin, 10);
   actor.add(leftArm);
+
   const rightArm = new THREE.Group();
   rightArm.position.set(0.34, 1.52, 0);
   addCylinder(rightArm, 0.105, 0.13, 0.56, [0, -0.29, 0], jacket, 10);
   addCylinder(rightArm, 0.075, 0.085, 0.22, [0, -0.65, 0], skin, 10);
+  addBox(
+    rightArm,
+    [0.18, 0.03, 0.26],
+    [0.02, -0.74, 0.11],
+    standardMaterial(propKind === "folio" ? 0x2a1f16 : 0x0f172a, 0.28, 0.55),
+  );
+  addBox(
+    rightArm,
+    [0.14, 0.015, 0.2],
+    [0.02, -0.72, 0.11],
+    new THREE.MeshBasicMaterial({ color: palette.tie }),
+  );
   actor.add(rightArm);
 
   [-0.15, 0.15].forEach((x) => {
@@ -778,6 +809,32 @@ function addStaffActor(
   actor.userData.headPivot = head;
   root.add(actor);
   return actor;
+}
+
+export function updateDepartmentActors(
+  actors: THREE.Group[],
+  destinations: OperationsHubDestination[],
+): number {
+  const destMap = new Map<string, OperationsHubDestination>();
+  destinations.forEach((dest) => destMap.set(dest.destination_key, dest));
+
+  let changedCount = 0;
+  actors.forEach((actor) => {
+    const key = String(actor.userData.destinationKey || "");
+    const dest = destMap.get(key);
+    if (!dest) return;
+    const isVacant = Boolean(dest.staff_lead?.is_vacant);
+    const staffName = dest.staff_lead?.name || "";
+    const shouldBeVisible = !isVacant;
+    if (actor.visible !== shouldBeVisible || actor.userData.staffName !== staffName || actor.userData.isVacant !== isVacant) {
+      actor.visible = shouldBeVisible;
+      actor.userData.isVacant = isVacant;
+      actor.userData.staffName = staffName;
+      actor.userData.roleKey = dest.staff_lead?.role_key || dest.lead_role_key || "staff";
+      changedCount += 1;
+    }
+  });
+  return changedCount;
 }
 
 function addDepartmentScreen(
@@ -944,6 +1001,9 @@ function addExecutiveBoardroom(
   addCylinder(root, 0.62, 0.62, 0.14, [-4.1, 0.08, -3.2], standardMaterial(0x162c3d, 0.3, 0.35));
   addCylinder(root, 0.48, 0.48, 0.28, [-4.1, 0.27, -3.2], standardMaterial(0x2c4b58, 0.25, 0.42));
   addBox(root, [1.0, 1.2, 0.5], [4.1, 0.6, -3.1], standardMaterial(0x202f40, 0.58, 0.18));
+  // Architectural trophy rail & brass boardroom light bar
+  addBox(root, [3.6, 0.06, 0.22], [0, 3.05, -1.95], standardMaterial(0xd6b56d, 0.22, 0.78));
+  addCylinder(root, 0.08, 0.12, 0.28, [4.1, 1.34, -3.1], standardMaterial(0xd6b56d, 0.2, 0.85), 14);
 }
 
 function addManagerTechnicalRoom(
@@ -977,6 +1037,8 @@ function addManagerTechnicalRoom(
   addBox(root, [2.3, 0.72, 1.0], [0, 0.52, -0.05], standardMaterial(0x182a40, 0.28, 0.48));
   addBox(root, [2.1, 0.025, 0.8], [0, 0.9, -0.05], standardMaterial(0x0d6b58, 0.4, 0.15));
   [-1.3, 1.3].forEach((x) => addChair(root, x, 0.25, 0x38bdf8));
+  // Dugout canopy fascia over technical bench seats
+  addBox(root, [4.8, 0.07, 0.9], [-2.3, 1.92, 3.55], standardMaterial(0x16283e, 0.28, 0.55));
 }
 
 function addGeneralManagerSuite(
@@ -997,6 +1059,13 @@ function addGeneralManagerSuite(
   addBox(root, [3.0, 1.5, 0.15], [0, 1.85, -4.02], standardMaterial(0x141d32, 0.32, 0.38));
   addDepartmentScreen(root, screens, destination, "telemetry", hub, [0, 1.85, -3.92], [2.7, 1.1]);
   addBox(root, [1.0, 0.05, 0.65], [-3.9, 0.12, -3.4], standardMaterial(0x34485e, 0.52, 0.12));
+  // Glass partition divider separating dossier shelving from executive desk
+  addBox(
+    root,
+    [0.05, 2.2, 2.4],
+    [2.75, 1.15, -2.5],
+    new THREE.MeshStandardMaterial({ color: 0x8b5cf6, transparent: true, opacity: 0.22, roughness: 0.12, metalness: 0.1 }),
+  );
 }
 
 function addAcademyDevelopmentLab(
@@ -1026,6 +1095,9 @@ function addAcademyDevelopmentLab(
   addBox(root, [2.4, 1.15, 0.22], [3.9, 0.78, -3.5], standardMaterial(0x172b3f, 0.34, 0.42));
   addDepartmentScreen(root, screens, destination, "telemetry", hub, [3.9, 1.2, -3.36], [2.05, 0.9]);
   addBox(root, [1.8, 0.8, 0.9], [-3.7, 0.5, -3.3], standardMaterial(0x273a4b, 0.5, 0.1));
+  // Mini academy pitch floodlight stanchion
+  addCylinder(root, 0.06, 0.08, 2.7, [-4.3, 1.35, -3.7], standardMaterial(0x64748b, 0.3, 0.7), 10);
+  addBox(root, [0.55, 0.16, 0.24], [-4.3, 2.72, -3.62], new THREE.MeshBasicMaterial({ color: 0xfef3c7 }));
 }
 
 function addMedicalRehabilitationSuite(
@@ -1052,6 +1124,8 @@ function addMedicalRehabilitationSuite(
   addBox(root, [0.12, 2.2, 0.12], [-0.4, 1.1, 2.9], standardMaterial(0x64748b, 0.3, 0.65));
   addBox(root, [0.12, 2.2, 0.12], [0.4, 1.1, 2.9], standardMaterial(0x64748b, 0.3, 0.65));
   addBox(root, [0.92, 0.08, 0.08], [0, 2.08, 2.9], standardMaterial(0x94a3b8, 0.3, 0.6));
+  // Diagnostic vitals light bridge above treatment beds
+  addBox(root, [2.8, 0.08, 0.2], [2.25, 2.35, -2.1], new THREE.MeshBasicMaterial({ color: 0xf472b6 }));
 }
 
 function addFinanceCommercialSuite(
@@ -1073,6 +1147,8 @@ function addFinanceCommercialSuite(
   addDepartmentScreen(root, screens, destination, "telemetry", hub, [3.75, 1.8, -3.48], [2.2, 1.15]);
   addBox(root, [0.9, 1.0, 0.75], [0, 0.5, 2.9], standardMaterial(0x1a2d42, 0.36, 0.46));
   addBox(root, [0.98, 0.55, 0.06], [0, 1.3, 2.48], standardMaterial(0x123b4a, 0.24, 0.58));
+  // Illuminated vault security beacon above steel safe
+  addBox(root, [0.38, 0.08, 0.12], [-3.8, 2.66, -3.12], new THREE.MeshBasicMaterial({ color: 0x22d3ee }));
 }
 
 export function buildDepartmentInterior(
@@ -1092,39 +1168,39 @@ export function buildDepartmentInterior(
   switch (destination.destination_key) {
     case "executive_office":
       addExecutiveBoardroom(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [-4.05, 0, 0.55], {
+      animatedActors.push(addStaffActor(group, destination, [-4.05, 0, 0.55], {
         jacket: 0x1e293b, shirt: 0xf8fafc, tie: 0xd6b56d, skin: 0x9a6548, hair: 0x20202a,
-      }, 0.2));
+      }, 0.2, "folio"));
       break;
     case "managers_office":
       addManagerTechnicalRoom(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [4.0, 0, 1.5], {
+      animatedActors.push(addStaffActor(group, destination, [4.0, 0, 1.5], {
         jacket: 0x153c63, shirt: 0xe8f1fa, tie: 0x38bdf8, skin: 0x86583f, hair: 0x161c25,
-      }, 1.1));
+      }, 1.1, "tactical_tablet"));
       break;
     case "general_managers_office":
       addGeneralManagerSuite(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [-4.0, 0, 1.45], {
+      animatedActors.push(addStaffActor(group, destination, [-4.0, 0, 1.45], {
         jacket: 0x3a315a, shirt: 0xf5f3ff, tie: 0xa78bfa, skin: 0x70452f, hair: 0x191820,
-      }, 2.0));
+      }, 2.0, "clipboard"));
       break;
     case "academy_department":
       addAcademyDevelopmentLab(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [-4.05, 0, 1.5], {
+      animatedActors.push(addStaffActor(group, destination, [-4.05, 0, 1.5], {
         jacket: 0x24533f, shirt: 0xf0fdf4, tie: 0xf59e0b, skin: 0x986447, hair: 0x211d18,
-      }, 2.8));
+      }, 2.8, "clipboard"));
       break;
     case "medical_department":
       addMedicalRehabilitationSuite(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [4.0, 0, 1.45], {
+      animatedActors.push(addStaffActor(group, destination, [4.0, 0, 1.45], {
         jacket: 0x17616a, shirt: 0xf0fdfa, tie: 0xec4899, skin: 0x8d5e45, hair: 0x25212a,
-      }, 3.6));
+      }, 3.6, "medical_scanner"));
       break;
     case "finance_commercial_office":
       addFinanceCommercialSuite(group, screens, destination, hub);
-      animatedActors.push(addStaffActor(group, [4.05, 0, 0.8], {
+      animatedActors.push(addStaffActor(group, destination, [4.05, 0, 0.8], {
         jacket: 0x26394c, shirt: 0xf8fafc, tie: 0x22d3ee, skin: 0x9b694c, hair: 0x20242c,
-      }, 4.4));
+      }, 4.4, "ledger_tablet"));
       break;
   }
 
