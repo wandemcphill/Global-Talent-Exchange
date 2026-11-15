@@ -163,3 +163,49 @@ def test_heartbeat_without_page_view_does_not_create_visit_event(session) -> Non
     assert response.status_code == 200
     assert response.json()["recorded_page_view"] is False
     assert session.scalar(select(AnalyticsEvent.id).where(AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT)) is None
+
+
+
+def test_authenticated_heartbeat_refreshes_login_presence(session) -> None:
+    now = utcnow()
+    user = User(
+        email="heartbeat@gtex.test",
+        username="heartbeat_user",
+        password_hash="x",
+        is_active=True,
+    )
+    session.add(user)
+    session.flush()
+    auth_session = AuthSession(
+        user_id=user.id,
+        refresh_token_hash="heartbeat-hash",
+        expires_at=now + timedelta(hours=1),
+        last_used_at=now - timedelta(minutes=10),
+    )
+    session.add(auth_session)
+    session.commit()
+
+    app = FastAPI()
+    app.include_router(public_pulse_router)
+
+    def override_session():
+        yield session
+
+    @app.middleware("http")
+    async def attach_test_auth_session(request, call_next):
+        request.state.auth_session = auth_session
+        return await call_next(request)
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_optional_current_user] = lambda: user
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/public/traffic/heartbeat",
+            json={"visitor_id": str(uuid4()), "path": "/app/community", "page_view": False},
+        )
+
+    assert response.status_code == 200, response.text
+    assert auth_session.last_used_at is not None
+    assert (utcnow() - auth_session.last_used_at).total_seconds() < 5
+    assert PublicPulseService(session).live_world_pulse().users_online == 1
