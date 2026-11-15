@@ -80,16 +80,18 @@ def _update_ingestion_and_read_models(
     all_positions: list[str] | None = None,
     new_price: float | None = None,
 ) -> None:
-    row = conn.execute(
-        sa.text(
-            """
+    row = (
+        conn.execute(
+            sa.text("""
             SELECT id, governed_gsi, governed_potential_gsi, potential, dna_profile
             FROM ingestion_players
             WHERE id = :pid
-            """
-        ),
-        {"pid": player_id},
-    ).mappings().first()
+            """),
+            {"pid": player_id},
+        )
+        .mappings()
+        .first()
+    )
     if row is None:
         return
 
@@ -159,16 +161,18 @@ def _update_ingestion_and_read_models(
     )
 
     # Update player_summary_read_models
-    rm_row = conn.execute(
-        sa.text(
-            """
+    rm_row = (
+        conn.execute(
+            sa.text("""
             SELECT player_id, current_value_credits, summary_json
             FROM player_summary_read_models
             WHERE player_id = :pid
-            """
-        ),
-        {"pid": player_id},
-    ).mappings().first()
+            """),
+            {"pid": player_id},
+        )
+        .mappings()
+        .first()
+    )
     if rm_row is not None:
         summary = _as_dict(rm_row["summary_json"])
         if cur_gsi is not None:
@@ -234,16 +238,18 @@ def _update_ingestion_and_read_models(
         )
 
     # Update player_share_markets
-    mkt_row = conn.execute(
-        sa.text(
-            """
+    mkt_row = (
+        conn.execute(
+            sa.text("""
             SELECT id, circulating_shares, metadata_json
             FROM player_share_markets
             WHERE player_id = :pid
-            """
-        ),
-        {"pid": player_id},
-    ).mappings().first()
+            """),
+            {"pid": player_id},
+        )
+        .mappings()
+        .first()
+    )
     if mkt_row is not None:
         meta = _as_dict(mkt_row["metadata_json"])
         if cur_gsi is not None:
@@ -417,17 +423,20 @@ def upgrade() -> None:
     )
 
     if inspector.has_table("legendary_player_profiles"):
-        leg_row = conn.execute(
-            sa.text("SELECT id, metadata_json FROM legendary_player_profiles WHERE id = :lid"),
-            {"lid": ODEGBAMI_ID},
-        ).mappings().first()
+        leg_row = (
+            conn.execute(
+                sa.text("SELECT id, metadata_json FROM legendary_player_profiles WHERE id = :lid"),
+                {"lid": ODEGBAMI_ID},
+            )
+            .mappings()
+            .first()
+        )
         if leg_row is not None:
             leg_meta = _as_dict(leg_row["metadata_json"])
             leg_meta["position_display"] = "RW/RM/LW/LM/AM/ST"
             leg_meta["playstyle"] = "Inside Forward"
             conn.execute(
-                sa.text(
-                    """
+                sa.text("""
                     UPDATE legendary_player_profiles
                     SET primary_position = 'RW',
                         secondary_positions_json = CAST(:sec_pos AS json),
@@ -440,8 +449,7 @@ def upgrade() -> None:
                         metadata_json = CAST(:meta AS json),
                         updated_at = NOW()
                     WHERE id = :lid
-                    """
-                ),
+                    """),
                 {
                     "lid": ODEGBAMI_ID,
                     "sec_pos": json.dumps(["RM", "LW", "LM", "AM", "ST"]),
@@ -520,24 +528,20 @@ def upgrade() -> None:
 
     # Align archived duplicate record metadata cleanly while keeping it retired/non-tradable
     conn.execute(
-        sa.text(
-            """
+        sa.text("""
             UPDATE ingestion_players
             SET governed_gsi = 83,
                 governed_potential_gsi = 90,
                 potential = 90,
                 updated_at = NOW()
             WHERE id = :pid
-            """
-        ),
+            """),
         {"pid": CAMARA_DUPLICATE_ID},
     )
 
     # Sync legacy players table rows if present
     if inspector.has_table("players"):
-        conn.execute(
-            sa.text(
-                """
+        conn.execute(sa.text("""
                 UPDATE players
                 SET position = 'CM',
                     overall = 74,
@@ -550,12 +554,8 @@ def upgrade() -> None:
                     physical = 68,
                     updated_at = NOW()
                 WHERE player_id = 37917642
-                """
-            )
-        )
-        conn.execute(
-            sa.text(
-                """
+                """))
+        conn.execute(sa.text("""
                 UPDATE players
                 SET position = 'CM',
                     overall = 83,
@@ -568,9 +568,7 @@ def upgrade() -> None:
                     physical = 80,
                     updated_at = NOW()
                 WHERE player_id = 37642676
-                """
-            )
-        )
+                """))
 
 
 def downgrade() -> None:
