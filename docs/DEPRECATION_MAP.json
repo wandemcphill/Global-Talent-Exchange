@@ -1511,6 +1511,12 @@
       "from": "/api/v2/admin/operations-readiness",
       "to": "/api/admin/operations-readiness",
       "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
+    },
+    {
+      "consumer": "frontend/lib/data/gte_exchange_api_client.dart",
+      "from": "/api/v2/public/traffic/heartbeat",
+      "to": "/api/public/traffic/heartbeat",
+      "reason": "Canonical non-v1 route exists and should replace the legacy api_v1 contract."
     }
   ]
 }

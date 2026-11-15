@@ -16,6 +16,52 @@ void main() {
     expect(client.config.mode, GteBackendMode.live);
   });
 
+  test('Flutter presence heartbeat is authenticated and does not record a page view', () async {
+    const GteRepositoryConfig config = GteRepositoryConfig(
+      baseUrl: 'https://example.test',
+      mode: GteBackendMode.live,
+    );
+    final _RecordingTransport transport = _RecordingTransport();
+    final GteMemoryTokenStore tokenStore = GteMemoryTokenStore();
+    await tokenStore.writeToken('test-access-token');
+    final GteModeAwareApiRepository repository = GteModeAwareApiRepository(
+      config: config,
+      transport: transport,
+      fixtures: GteMockApi(),
+      tokenStore: tokenStore,
+    );
+    final GteExchangeApiClient client = GteExchangeApiClient(
+      config: config,
+      transport: transport,
+      repository: repository,
+    );
+
+    await client.sendPublicTrafficHeartbeat(
+      visitorId: 'd2719d4a-0a3b-4d7c-8f10-112233445566',
+    );
+
+    expect(transport.lastRequest, isNotNull);
+    expect(
+      transport.lastRequest!.uri.path,
+      anyOf(
+        '/api/public/traffic/heartbeat',
+        '/api/v2/public/traffic/heartbeat',
+      ),
+    );
+    expect(
+      transport.lastRequest!.headers['Authorization'],
+      'Bearer test-access-token',
+    );
+    expect(
+      (transport.lastRequest!.body as Map<String, Object?>)['visitor_id'],
+      'd2719d4a-0a3b-4d7c-8f10-112233445566',
+    );
+    expect(
+      (transport.lastRequest!.body as Map<String, Object?>)['page_view'],
+      isFalse,
+    );
+  });
+
   test('fixture client paginates and filters the market directory', () async {
     final GteExchangeApiClient client = GteExchangeApiClient.fixture();
 

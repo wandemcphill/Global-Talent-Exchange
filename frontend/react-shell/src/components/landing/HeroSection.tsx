@@ -16,7 +16,7 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
     return `${val}`;
   };
 
-  const clubsCount = pulse?.clubsOnGtex ? compactNumber(pulse.clubsOnGtex) : "1,240+";
+  const clubsCount = pulse ? compactNumber(pulse.clubsOnGtex) : "—";
 
   return (
     <section id="hero" className="relative min-h-[92vh] scroll-mt-[158px] overflow-hidden bg-[#0B1626] pt-0">

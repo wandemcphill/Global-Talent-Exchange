@@ -9520,6 +9520,18 @@
         "path": "/api/public/live-stats",
         "handler": "get_live_world_pulse",
         "response_model": "LiveWorldPulseView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/public/traffic/heartbeat",
+        "handler": "record_public_traffic_heartbeat",
+        "response_model": "PublicTrafficHeartbeatView"
+      },
+      {
+        "method": "POST",
+        "path": "/api/public/traffic/heartbeat",
+        "handler": "record_public_traffic_heartbeat",
+        "response_model": "PublicTrafficHeartbeatView"
       }
     ],
     "pundits": [
