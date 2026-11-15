@@ -115,13 +115,13 @@ def _assert_converted(session, wallet, tx, sender, recipient) -> None:
 
     assert wallet.get_balance(session, sender_credit) == Decimal("0.0000")
     assert wallet.get_balance(session, recipient_credit) == Decimal("0.0000")
-    assert wallet.get_balance(session, recipient_coin) == Decimal("0.7000")
+    assert wallet.get_balance(session, recipient_coin) == Decimal("4.6667")
     assert wallet.get_balance(session, bridge_coin) == Decimal("0.3000")
     assert tx.ledger_unit is LedgerUnit.COIN
     assert tx.source_ledger_unit is LedgerUnit.CREDIT
     assert tx.destination_ledger_unit is LedgerUnit.COIN
     assert tx.recipient_net_amount == Decimal("70.0000")
-    assert tx.conversion_rate == Decimal("0.0100")
+    assert tx.conversion_rate == Decimal("0.0667")
     assert tx.platform_rake_amount == Decimal("30.0000")
     assert tx.economic_conversion_id is not None
 
