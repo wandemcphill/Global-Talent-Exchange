@@ -42,7 +42,6 @@ def record_public_traffic_heartbeat(
         PublicPulseService(session).record_page_view(
             visitor_id=payload.visitor_id,
             path=payload.path,
-            user_id=current_user.id if current_user is not None else None,
         )
 
     # Commit the heartbeat's last_used_at update even on interval-only heartbeats.
