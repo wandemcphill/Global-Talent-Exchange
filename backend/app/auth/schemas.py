@@ -33,6 +33,23 @@ PROTECTED_PROFILE_FIELDS = frozenset(
     }
 )
 
+def _validate_trader_credential_hash(value: str, expected_purpose: str) -> str:
+    parts = value.strip().split("$")
+    if len(parts) != 5:
+        raise ValueError(f"{expected_purpose} credential must use the GTEX PBKDF2 format.")
+    algorithm, iterations, purpose, salt_hex, digest_hex = parts
+    if (
+        algorithm != "pbkdf2-sha256"
+        or iterations != "210000"
+        or purpose != expected_purpose
+        or len(salt_hex) != 32
+        or len(digest_hex) != 64
+        or any(character not in "0123456789abcdef" for character in salt_hex.lower())
+        or any(character not in "0123456789abcdef" for character in digest_hex.lower())
+    ):
+        raise ValueError(f"{expected_purpose} credential hash is invalid; create a new PIN or recovery phrase.")
+    return value.strip()
+
 
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -306,6 +323,17 @@ class TraderSignupRequest(BaseModel):
     recovery_phrase_hash: str = Field(min_length=16, max_length=255)
     security_pin_hash: str = Field(min_length=16, max_length=255)
     totp_code: str = Field(min_length=6, max_length=12)
+
+    @field_validator("recovery_phrase_hash")
+    @classmethod
+    def validate_recovery_phrase_hash(cls, value: str) -> str:
+        return _validate_trader_credential_hash(value, "recovery")
+
+    @field_validator("security_pin_hash")
+    @classmethod
+    def validate_security_pin_hash(cls, value: str) -> str:
+        return _validate_trader_credential_hash(value, "pin")
+
     # KYC is no longer collected at signup (only required when a trader withdraws).
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
