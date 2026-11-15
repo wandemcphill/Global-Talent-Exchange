@@ -8,6 +8,8 @@ import type { DailyBriefing, LivingWorldTimelineResponse } from "@/lib/ownerBrie
 
 var mockToastSuccess = jest.fn();
 var mockToastError = jest.fn();
+var mockToastWarning = jest.fn();
+var mockToastInfo = jest.fn();
 
 jest.mock("react-router-dom", () => {
   const ReactModule = require("react");
@@ -28,6 +30,8 @@ jest.mock("sonner", () => ({
   toast: {
     success: (...args: any[]) => mockToastSuccess(...args),
     error: (...args: any[]) => mockToastError(...args),
+    warning: (...args: any[]) => mockToastWarning(...args),
+    info: (...args: any[]) => mockToastInfo(...args),
   },
 }));
 
@@ -923,11 +927,235 @@ describe("ClubOperationsCentre3D Living World Timeline Integration", () => {
 
     expect(postedUrl).toBe("/owner/clubs/club-tl-1/communications/messages");
     expect(postedBody).toMatchObject({
-      thread_id: "staff:general_manager",
+      thread_id: "room:staff",
       message: "Please send the weekly executive operations report.",
       sender_role: "owner",
       request_reply: true,
     });
+  });
+
+  test("routes General Manager and Finance & Commercial direct chats to distinct department threads", async () => {
+    const postedThreads: string[] = [];
+    const separatedHub = {
+      ...mockHub,
+      destinations: [
+        {
+          ...mockDestination,
+          destination_key: "general_managers_office",
+          label: "General Manager's Office",
+          lead_role_key: "general_manager",
+          communication_thread_id: "staff:general_manager",
+          communication_channel_mode: "direct",
+          staff_lead: {
+            ...mockDestination.staff_lead,
+            role_key: "general_manager",
+            role_label: "General Manager",
+            name: "Dayo Adeleke",
+            is_appointed: true,
+            is_vacant: false,
+          },
+        },
+        {
+          ...mockDestination,
+          destination_key: "finance_commercial_office",
+          label: "Finance & Commercial Office",
+          lead_role_key: "finance_commercial_director",
+          communication_thread_id: "staff:finance_commercial_director",
+          communication_channel_mode: "direct",
+          staff_lead: {
+            ...mockDestination.staff_lead,
+            role_key: "finance_commercial_director",
+            role_label: "Finance & Commercial Director",
+            name: "Seyi Oguntimehin",
+            is_appointed: true,
+            is_vacant: false,
+          },
+        },
+      ],
+    };
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) return Promise.resolve({ data: separatedHub });
+      return Promise.resolve({ data: {} });
+    });
+    jest.spyOn(api, "post").mockImplementation((_url: string, body: any) => {
+      if (body?.thread_id) postedThreads.push(body.thread_id);
+      return Promise.resolve({ data: { status: "sent" } });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const input = container?.querySelector('[data-testid="department-staff-chat-input"]') as HTMLInputElement;
+    const send = container?.querySelector('[data-testid="department-staff-chat-send"]') as HTMLButtonElement;
+    await act(async () => {
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+      setter?.call(input, "Review campus budget allocations.");
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      send.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    const financeTab = container?.querySelector('[data-testid="ops-room-finance_commercial_office"]') as HTMLButtonElement;
+    if (financeTab) {
+      await act(async () => {
+        financeTab.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      await act(async () => {
+        const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+        setter?.call(input, "Confirm sponsor revenue ledger.");
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => {
+        send.click();
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      });
+      expect(postedThreads).toEqual(["staff:general_manager", "staff:finance_commercial_director"]);
+    } else {
+      expect(postedThreads).toEqual(["staff:general_manager"]);
+    }
+  });
+
+  test("disables direct staff messaging when a department seat is vacant", async () => {
+    const vacantHub = {
+      ...mockHub,
+      destinations: [
+        {
+          ...mockDestination,
+          destination_key: "general_managers_office",
+          label: "General Manager's Office",
+          lead_role_key: "general_manager",
+          communication_thread_id: "staff:general_manager",
+          communication_channel_mode: "vacant",
+          staff_lead: {
+            role_key: "general_manager",
+            role_label: "General Manager (Vacant)",
+            name: "General Manager (Vacant)",
+            mood: null,
+            is_appointed: false,
+            is_vacant: true,
+          },
+        },
+      ],
+    };
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) return Promise.resolve({ data: vacantHub });
+      return Promise.resolve({ data: {} });
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(container?.querySelector('[data-testid="vacant-staff-channel-notice"]')).not.toBeNull();
+    const input = container?.querySelector('[data-testid="department-staff-chat-input"]') as HTMLInputElement;
+    const send = container?.querySelector('[data-testid="department-staff-chat-send"]') as HTMLButtonElement;
+    expect(input.disabled).toBe(true);
+    expect(send.disabled).toBe(true);
+  });
+
+  test("renders separate requested, manager decision, and effective mentality when manager rejects owner directive", async () => {
+    mockToastSuccess.mockClear();
+    mockToastWarning.mockClear();
+    const managerHub = {
+      ...mockHub,
+      club: {
+        ...mockHub.club,
+        mentality: "defensive",
+        owner_requested_mentality: "attacking",
+        manager_preferred_mentality: "defensive",
+        effective_matchday_mentality: "defensive",
+        manager_decision_status: "rejected",
+        manager_decision_reasoning:
+          "Tunde Bakare rejected the Owner's ATTACKING request and retains matchday DEFENSIVE under 4-4-2 (Independence 89/100, Interference Tolerance 27/100).",
+      },
+      destinations: [
+        {
+          ...mockDestination,
+          destination_key: "managers_office",
+          label: "Manager's Office",
+          lead_role_key: "first_team_manager",
+          communication_thread_id: "staff:first_team_manager",
+          communication_channel_mode: "direct",
+          tactical_authority: {
+            authority_model: "first_team_manager_authoritative",
+            is_non_binding_preference: true,
+            manager_appointed: true,
+            manager_name: "Tunde Bakare",
+            owner_requested_mentality: "attacking",
+            manager_preferred_mentality: "defensive",
+            effective_mentality: "defensive",
+            decision_status: "rejected",
+            implemented_as_requested: false,
+            reasoning:
+              "Tunde Bakare rejected the Owner's ATTACKING request and retains matchday DEFENSIVE under 4-4-2 (Independence 89/100, Interference Tolerance 27/100).",
+          },
+        },
+      ],
+    };
+    jest.spyOn(api, "get").mockImplementation((url: string) => {
+      if (url.includes("/operations-hub")) return Promise.resolve({ data: managerHub });
+      return Promise.resolve({ data: {} });
+    });
+    jest.spyOn(api, "put").mockResolvedValue({
+      data: {
+        mentality: "defensive",
+        owner_requested_mentality: "attacking",
+        effective_matchday_mentality: "defensive",
+        manager_decision_status: "rejected",
+        manager_decision_reasoning:
+          "Tunde Bakare rejected the Owner's ATTACKING request and retains matchday DEFENSIVE.",
+        implemented_as_requested: false,
+      },
+    });
+
+    await act(async () => {
+      root!.render(
+        <QueryClientProvider client={queryClient}>
+          <ClubOperationsCentre3D clubId="club-tl-1" />
+        </QueryClientProvider>,
+      );
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(container?.querySelector('[data-testid="owner-requested-mentality"]')?.textContent?.toLowerCase()).toBe(
+      "attacking",
+    );
+    expect(container?.querySelector('[data-testid="effective-matchday-mentality"]')?.textContent?.toLowerCase()).toBe(
+      "defensive",
+    );
+    expect(container?.querySelector('[data-testid="manager-tactical-decision"]')?.textContent?.toLowerCase()).toContain(
+      "rejected",
+    );
+    expect(container?.querySelector('[data-testid="manager-tactical-reasoning"]')?.textContent).toContain("Tunde Bakare");
+
+    const attackBtn = container?.querySelector('[data-testid="set-mentality-attacking"]') as HTMLButtonElement;
+    await act(async () => {
+      attackBtn.click();
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(mockToastWarning).toHaveBeenCalled();
+    expect(mockToastSuccess).not.toHaveBeenCalled();
   });
 
   test("routes the General Manager office directive selector to executive objectives", async () => {

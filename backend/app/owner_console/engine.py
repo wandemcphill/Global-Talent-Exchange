@@ -1014,17 +1014,20 @@ def club_strength(
         + fitness_modifier
         - depth_penalty
     )
+    from app.owner_console import autonomous_staff_engine
+
+    mentality_authority = autonomous_staff_engine.resolve_manager_mentality_decision(
+        manager,
+        facilities_json=facilities,
+    )
     return {
         "strength": round(strength, 2),
         "xi": [p["id"] for p in fit],
         "bench": [p["id"] for p in bench],
         "promised_sub_ids": promised_sub_ids,
-        "formation": (mgr_profile.get("preferred_formations") or ["4-3-3"])[0],
-        "manager_mentality": (
-            "attacking"
-            if int(mgr_profile.get("attacking_vs_defensive", 60)) >= 70
-            else "defensive" if int(mgr_profile.get("attacking_vs_defensive", 60)) <= 38 else "balanced"
-        ),
+        "formation": str((facilities or {}).get("_tactical_setup", {}).get("formation") or (mgr_profile.get("preferred_formations") or ["4-3-3"])[0]),
+        "manager_mentality": mentality_authority["manager_preferred_mentality"],
+        "mentality_authority": mentality_authority,
         "avg_rating": round(avg_rating, 1),
         "avg_morale": round(avg_morale, 1),
         "avg_fitness": round(avg_fitness, 1),

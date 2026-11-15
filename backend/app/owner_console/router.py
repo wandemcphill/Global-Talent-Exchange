@@ -557,17 +557,19 @@ def set_mentality(
     def go():
         state = service.require_state(session, club_id, user.id)
         state.mentality = body.mentality
-        identities = autonomous_staff_engine.ensure_club_staff_identities(session, state)
-        mgr_prof = dict((identities.get("first_team_manager") or {}).get("personality_profile") or {})
-        mgr_indep = int(mgr_prof.get("professional_independence", 75))
-        mgr_tol = int(mgr_prof.get("tolerance_for_owner_interference", 45))
-        atk = int(mgr_prof.get("attacking_vs_defensive", 55))
-        mgr_mentality = "attacking" if atk >= 65 else ("defensive" if atk <= 40 else "balanced")
-        effective_mentality = body.mentality if (mgr_indep < 55 and mgr_tol >= 65) else mgr_mentality
+        decision = autonomous_staff_engine.evaluate_manager_mentality_authority(
+            session, state, requested_mentality=body.mentality
+        )
         return {
-            "mentality": state.mentality,
-            "effective_matchday_mentality": effective_mentality,
-            "authority_model": "first_team_manager_authoritative",
+            "mentality": decision["effective_mentality"],
+            "owner_requested_mentality": decision["owner_requested_mentality"],
+            "manager_preferred_mentality": decision["manager_preferred_mentality"],
+            "effective_matchday_mentality": decision["effective_mentality"],
+            "manager_decision_status": decision["decision_status"],
+            "manager_decision_reasoning": decision["reasoning"],
+            "manager_decision": decision,
+            "implemented_as_requested": decision["implemented_as_requested"],
+            "authority_model": decision["authority_model"],
             "is_non_binding_preference": True,
         }
 

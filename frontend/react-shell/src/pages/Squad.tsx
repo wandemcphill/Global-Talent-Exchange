@@ -150,9 +150,24 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer }: any) {
   const [mentality, setMentality] = useState(club.mentality || "balanced");
   const save = async (m: string) => {
     try {
-      await api.put(`/owner/clubs/${club.club_id}/mentality`, { mentality: m });
-      setMentality(m);
-      toast.success(`Default mentality updated to ${m}.`);
+      const res = await api.put(`/owner/clubs/${club.club_id}/mentality`, { mentality: m });
+      const decision = res?.data || {};
+      const decisionStatus = String(decision.manager_decision_status || decision.decision_status || "");
+      const effective = String(decision.effective_matchday_mentality || decision.mentality || m);
+      setMentality(decision.owner_requested_mentality || m);
+      if (decisionStatus === "rejected") {
+        toast.warning(
+          decision.manager_decision_reasoning ||
+            `Preference '${m}' logged; First-Team Manager retained '${effective}'.`,
+        );
+      } else if (decisionStatus === "modified") {
+        toast.info(
+          decision.manager_decision_reasoning ||
+            `Preference '${m}' adjusted to '${effective}' by First-Team Manager.`,
+        );
+      } else {
+        toast.success(decision.manager_decision_reasoning || `Matchday mentality synced to ${effective}.`);
+      }
     } catch (e) {
       toast.error(errMsg(e));
     }

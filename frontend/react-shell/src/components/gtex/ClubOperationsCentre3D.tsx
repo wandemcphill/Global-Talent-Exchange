@@ -866,9 +866,33 @@ export function ClubOperationsCentre3D({
   const handleSetMentality = async (mentality: "defensive" | "balanced" | "attacking") => {
     setBusyAction(`mentality:${mentality}`);
     try {
-      await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, { mentality });
+      const res = await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, { mentality });
+      const decision = res?.data || {};
       await invalidateAll();
-      toast.success(`First-team tactical mentality set to '${mentality.toUpperCase()}'.`);
+      const decisionStatus = String(decision.manager_decision_status || decision.decision_status || "");
+      const reasoning = String(decision.manager_decision_reasoning || "").trim();
+      if (decisionStatus === "rejected") {
+        toast.warning(
+          reasoning ||
+            `Owner preference '${mentality.toUpperCase()}' recorded, but First-Team Manager retained '${String(
+              decision.effective_matchday_mentality || decision.mentality || "balanced",
+            ).toUpperCase()}'.`,
+        );
+      } else if (decisionStatus === "modified") {
+        toast.info(
+          reasoning ||
+            `Manager modified request '${mentality.toUpperCase()}' to effective mentality '${String(
+              decision.effective_matchday_mentality || decision.mentality || "balanced",
+            ).toUpperCase()}'.`,
+        );
+      } else {
+        toast.success(
+          reasoning ||
+            `Matchday tactical plan synced to '${String(
+              decision.effective_matchday_mentality || decision.mentality || mentality,
+            ).toUpperCase()}'.`,
+        );
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -999,12 +1023,29 @@ export function ClubOperationsCentre3D({
   const handleSendStaffChat = async (roleKey: string) => {
     const message = staffMessageText.trim();
     if (!message || sendingChat) return;
+    if (
+      activeDestination &&
+      (activeDestination.communication_channel_mode === "vacant" || activeDestination.staff_lead?.is_vacant)
+    ) {
+      toast.info("This department position is currently vacant. Appoint staff before opening direct dialogue.");
+      return;
+    }
     setSendingChat(true);
     try {
       // Use the same durable communications thread as the Club Inbox.
-      // The legacy /staff/chat endpoint writes to the older story-chat flow.
-      const threadId = roleKey.startsWith("staff:") ? roleKey : `staff:${roleKey}`;
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
+      // Executive Office uses the office-wide room:staff channel; appointed offices route to their own role.
+      const isExecutiveRoom =
+        activeDestination?.destination_key === "executive_office" ||
+        activeDestination?.communication_channel_mode === "office_wide" ||
+        roleKey === "owner";
+      const threadId =
+        activeDestination?.communication_thread_id ||
+        (isExecutiveRoom
+          ? "room:staff"
+          : roleKey.startsWith("staff:") || roleKey.startsWith("room:")
+            ? roleKey
+            : `staff:${roleKey}`);
+      const res = await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
         thread_id: threadId,
         message,
         sender_role: "owner",
@@ -1016,7 +1057,15 @@ export function ClubOperationsCentre3D({
       await invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["communications", clubId] });
       queryClient.invalidateQueries({ queryKey: ["owner-comms-summary"] });
-      toast.success("Message delivered to the department's durable communications thread.");
+      if (res?.data?.role_vacant) {
+        toast.info("Executive broadcast recorded in Staff Room (awaiting appointed staff replies).");
+      } else {
+        toast.success(
+          isExecutiveRoom
+            ? "Executive broadcast delivered to the Staff Room."
+            : "Message delivered to the department's durable communications thread.",
+        );
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -1413,54 +1462,99 @@ export function ClubOperationsCentre3D({
           </div>
 
           {/* Quick Staff Communication Bar for Active Room Lead */}
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-sky-300">
-                  Direct Channel · {activeDestination.staff_lead.name} ({activeDestination.staff_lead.role_label})
-                </span>
-                <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
-                  Mood {activeDestination.staff_lead.mood ?? 78}%
-                </span>
-              </div>
-              <span className="text-[10px] text-slate-400">{activeDestination.staff_lead.specialty}</span>
-            </div>
+          {(() => {
+            const isExecutiveChannel =
+              activeDestination.destination_key === "executive_office" ||
+              activeDestination.communication_channel_mode === "office_wide" ||
+              activeDestination.lead_role_key === "owner";
+            const isVacantChannel =
+              !isExecutiveChannel &&
+              (activeDestination.communication_channel_mode === "vacant" ||
+                Boolean(activeDestination.staff_lead?.is_vacant));
+            return (
+              <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      data-testid="department-channel-heading"
+                      className="text-xs font-black uppercase tracking-wider text-sky-300"
+                    >
+                      {isExecutiveChannel
+                        ? `Office-Wide Staff Room · ${activeDestination.staff_lead.name} (Command)`
+                        : isVacantChannel
+                          ? `Position Vacant · ${activeDestination.staff_lead.role_label}`
+                          : `Direct Channel · ${activeDestination.staff_lead.name} (${activeDestination.staff_lead.role_label})`}
+                    </span>
+                    {isExecutiveChannel ? (
+                      <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
+                        {activeDestination.communication_thread_id || "room:staff"}
+                      </span>
+                    ) : isVacantChannel ? (
+                      <span className="gx-mono rounded bg-amber-950/70 border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300">
+                        Vacant Seat
+                      </span>
+                    ) : (
+                      <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
+                        Mood {activeDestination.staff_lead.mood ?? 78}%
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-400">{activeDestination.staff_lead.specialty}</span>
+                </div>
 
-            {activeDestination.recent_messages.length > 0 && (
-              <div className="max-h-24 overflow-y-auto space-y-1.5 rounded-lg border border-white/5 bg-slate-950/70 p-2.5 text-xs">
-                {activeDestination.recent_messages.slice(-2).map((m, idx) => (
-                  <p key={m.id || idx} className="text-slate-300">
-                    <span className="font-bold text-white">{m.sender}: </span>
-                    {m.message}
+                {activeDestination.recent_messages.length > 0 && (
+                  <div className="max-h-24 overflow-y-auto space-y-1.5 rounded-lg border border-white/5 bg-slate-950/70 p-2.5 text-xs">
+                    {activeDestination.recent_messages.slice(-2).map((m, idx) => (
+                      <p key={m.id || idx} className="text-slate-300">
+                        <span className="font-bold text-white">{m.sender}: </span>
+                        {m.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {isVacantChannel && (
+                  <p
+                    data-testid="vacant-staff-channel-notice"
+                    className="rounded-lg border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-200"
+                  >
+                    This department head role is vacant. Hire an executive appointee before initiating direct staff dialogue.
                   </p>
-                ))}
-              </div>
-            )}
+                )}
 
-            <div className="flex gap-2">
-              <input
-                type="text"
-                data-testid="department-staff-chat-input"
-                value={staffMessageText}
-                onChange={(e) => setStaffMessageText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendStaffChat(activeDestination.lead_role_key);
-                }}
-                placeholder={`Issue directive or ask ${activeDestination.staff_lead.name} about ${activeDestination.short_label}…`}
-                className="flex-1 rounded-lg border border-white/15 bg-slate-950/90 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                data-testid="department-staff-chat-send"
-                disabled={sendingChat || !staffMessageText.trim()}
-                onClick={() => handleSendStaffChat(activeDestination.lead_role_key)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/20 px-3.5 py-1.5 text-xs font-bold uppercase text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
-              >
-                <Send size={12} />
-                <span>{sendingChat ? "…" : "Send"}</span>
-              </button>
-            </div>
-          </div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    data-testid="department-staff-chat-input"
+                    disabled={isVacantChannel}
+                    value={staffMessageText}
+                    onChange={(e) => setStaffMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isVacantChannel) handleSendStaffChat(activeDestination.lead_role_key);
+                    }}
+                    placeholder={
+                      isExecutiveChannel
+                        ? "Broadcast executive directive to appointed senior staff in room:staff…"
+                        : isVacantChannel
+                          ? "Direct line unavailable while position is vacant…"
+                          : `Issue directive or ask ${activeDestination.staff_lead.name} about ${activeDestination.short_label}…`
+                    }
+                    className="flex-1 rounded-lg border border-white/15 bg-slate-950/90 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    data-testid="department-staff-chat-send"
+                    disabled={isVacantChannel || sendingChat || !staffMessageText.trim()}
+                    onClick={() => handleSendStaffChat(activeDestination.lead_role_key)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/20 px-3.5 py-1.5 text-xs font-bold uppercase text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
+                  >
+                    <Send size={12} />
+                    <span>{sendingChat ? "…" : isExecutiveChannel ? "Broadcast" : "Send"}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right 5 cols: Contextual Department Inspector & Decision Execution Panel */}
@@ -1904,30 +1998,103 @@ export function ClubOperationsCentre3D({
                   </div>
                 </div>
 
-                {/* Tactical Mentality Control */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
-                    Tactical Mentality Directive (Current: {hub.club.mentality.toUpperCase()})
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["defensive", "balanced", "attacking"] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        data-testid={`set-mentality-${m}`}
-                        disabled={Boolean(busyAction)}
-                        onClick={() => handleSetMentality(m)}
-                        className={`rounded-lg border py-1.5 text-[11px] font-black uppercase transition ${
-                          hub.club.mentality === m
-                            ? "border-sky-400 bg-sky-500/30 text-white"
-                            : "border-white/10 bg-slate-900 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                {/* Tactical Mentality Control & Manager Authority Split */}
+                {(() => {
+                  const tacticalAuthority =
+                    activeDestination.tactical_authority || hub.club.manager_tactical_authority;
+                  const ownerReq = String(
+                    tacticalAuthority?.owner_requested_mentality ||
+                      hub.club.owner_requested_mentality ||
+                      hub.club.mentality ||
+                      "balanced",
+                  );
+                  const effectiveMentality = String(
+                    tacticalAuthority?.effective_mentality ||
+                      hub.club.effective_matchday_mentality ||
+                      hub.club.mentality ||
+                      "balanced",
+                  );
+                  const decisionStatus = String(
+                    tacticalAuthority?.decision_status || hub.club.manager_decision_status || "aligned",
+                  );
+                  const decisionReasoning = String(
+                    tacticalAuthority?.reasoning || hub.club.manager_decision_reasoning || "",
+                  ).trim();
+                  const statusTone =
+                    decisionStatus === "rejected"
+                      ? "border-rose-500/40 bg-rose-950/40 text-rose-200"
+                      : decisionStatus === "modified"
+                        ? "border-amber-500/40 bg-amber-950/40 text-amber-200"
+                        : "border-emerald-500/40 bg-emerald-950/40 text-emerald-200";
+                  return (
+                    <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2.5">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
+                          Tactical Mentality Authority
+                        </p>
+                        <span
+                          data-testid="manager-tactical-decision"
+                          className={`gx-mono rounded border px-2 py-0.5 text-[10px] font-bold uppercase ${statusTone}`}
+                        >
+                          Decision: {decisionStatus.replace("_", " ")}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5">
+                          <span className="block text-[9px] font-bold uppercase text-slate-400">
+                            Owner Requested
+                          </span>
+                          <span
+                            data-testid="owner-requested-mentality"
+                            className="gx-mono font-black uppercase text-slate-100"
+                          >
+                            {ownerReq}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-sky-500/30 bg-sky-950/30 px-2.5 py-1.5">
+                          <span className="block text-[9px] font-bold uppercase text-sky-300">
+                            Effective Matchday
+                          </span>
+                          <span
+                            data-testid="effective-matchday-mentality"
+                            className="gx-mono font-black uppercase text-white"
+                          >
+                            {effectiveMentality}
+                          </span>
+                        </div>
+                      </div>
+                      {decisionReasoning && (
+                        <p
+                          data-testid="manager-tactical-reasoning"
+                          className="rounded-lg border border-white/5 bg-slate-950/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-300"
+                        >
+                          {decisionReasoning}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["defensive", "balanced", "attacking"] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            data-testid={`set-mentality-${m}`}
+                            disabled={Boolean(busyAction)}
+                            onClick={() => handleSetMentality(m)}
+                            className={`rounded-lg border py-1.5 text-[11px] font-black uppercase transition ${
+                              ownerReq === m
+                                ? "border-sky-400 bg-sky-500/30 text-white"
+                                : "border-white/10 bg-slate-900 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Non-binding Owner preference — live match coaching &amp; substitutions remain strictly under First-Team Manager authority.
+                      </p>
+                    </div>
+                  );
+                })()}
 
                 {/* Matchday Win Bonus Pledge */}
                 <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">

@@ -60,7 +60,13 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
 
     # General Manager
     gm_raw = exec_staff.get("general_manager")
-    gm_appointed = bool(gm_raw and isinstance(gm_raw, dict) and gm_raw.get("name"))
+    gm_appointed = bool(
+        gm_raw
+        and isinstance(gm_raw, dict)
+        and str(gm_raw.get("name") or "").strip()
+        and not gm_raw.get("is_vacant")
+        and "vacant" not in str(gm_raw.get("name") or "").lower()
+    )
     if gm_appointed:
         gm = dict(gm_raw)
         gm_name = str(gm.get("name") or "General Manager")
@@ -75,20 +81,26 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         gm_trait = str(gm.get("signature_trait") or gm.get("special_trait") or "Clause Architect")
     else:
         gm = {}
-        gm_name = "Vacant (Provisional Operations Lead)"
+        gm_name = "General Manager (Vacant)"
         gm_label = "General Manager (Vacant)"
         gm_status = "vacant"
         gm_negotiation = 10
         gm_discipline = 10
         gm_salary = 0
-        gm_mood = 70
-        gm_loyalty = 10
-        gm_agenda = "Maintain baseline administrative routines until a permanent General Manager is appointed"
-        gm_trait = "Provisional Caretaker"
+        gm_mood = None
+        gm_loyalty = 0
+        gm_agenda = "Appoint a General Manager to lead commercial administration and club operations."
+        gm_trait = "Position Vacant"
 
     # Head of Youth Development
     hoyd_raw = exec_staff.get("head_of_youth_development")
-    hoyd_appointed = bool(hoyd_raw and isinstance(hoyd_raw, dict) and hoyd_raw.get("name"))
+    hoyd_appointed = bool(
+        hoyd_raw
+        and isinstance(hoyd_raw, dict)
+        and str(hoyd_raw.get("name") or "").strip()
+        and not hoyd_raw.get("is_vacant")
+        and "vacant" not in str(hoyd_raw.get("name") or "").lower()
+    )
     if hoyd_appointed:
         hoyd = dict(hoyd_raw)
         hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
@@ -102,19 +114,25 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         hoyd_trait = str(hoyd.get("signature_trait") or hoyd.get("special_trait") or "Bloodline Whisperer")
     else:
         hoyd = {}
-        hoyd_name = "Vacant (Provisional Academy Coordinator)"
+        hoyd_name = "Head of Youth Development (Vacant)"
         hoyd_label = "Head of Youth Development (Vacant)"
         hoyd_status = "vacant"
         hoyd_youth = 10
         hoyd_salary = 0
-        hoyd_mood = 70
-        hoyd_loyalty = 10
-        hoyd_agenda = "Coordinate basic youth drills until a dedicated Head of Youth Development is appointed"
-        hoyd_trait = "Provisional Caretaker"
+        hoyd_mood = None
+        hoyd_loyalty = 0
+        hoyd_agenda = "Appoint a Head of Youth Development to coordinate academy intake and regen progression."
+        hoyd_trait = "Position Vacant"
 
     # Medical Director
     med_raw = exec_staff.get("medical_director")
-    med_appointed = bool(med_raw and isinstance(med_raw, dict) and med_raw.get("name"))
+    med_appointed = bool(
+        med_raw
+        and isinstance(med_raw, dict)
+        and str(med_raw.get("name") or "").strip()
+        and not med_raw.get("is_vacant")
+        and "vacant" not in str(med_raw.get("name") or "").lower()
+    )
     if med_appointed:
         med = dict(med_raw)
         med_name = str(med.get("name") or "Medical Director")
@@ -128,19 +146,25 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         med_trait = str(med.get("signature_trait") or med.get("special_trait") or "Strict Recovery Veto")
     else:
         med = {}
-        med_name = "Vacant (Provisional Medical Caretaker)"
+        med_name = "Medical Director (Vacant)"
         med_label = "Medical Director (Vacant)"
         med_status = "vacant"
         med_expertise = 10
         med_salary = 0
-        med_mood = 70
-        med_loyalty = 10
-        med_agenda = "Interim triage & basic athlete first-aid until a Medical Director is appointed"
-        med_trait = "Provisional Caretaker"
+        med_mood = None
+        med_loyalty = 0
+        med_agenda = "Appoint a Medical Director to manage rehabilitation and sports-science conditioning."
+        med_trait = "Position Vacant"
 
     # Chief Scout
     scout_raw = exec_staff.get("chief_scout")
-    scout_appointed = bool(scout_raw and isinstance(scout_raw, dict) and scout_raw.get("name"))
+    scout_appointed = bool(
+        scout_raw
+        and isinstance(scout_raw, dict)
+        and str(scout_raw.get("name") or "").strip()
+        and not scout_raw.get("is_vacant")
+        and "vacant" not in str(scout_raw.get("name") or "").lower()
+    )
     if scout_appointed:
         scout = dict(scout_raw)
         scout_name = str(scout.get("name") or "Chief Scout")
@@ -154,33 +178,78 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         scout_trait = str(scout.get("signature_trait") or scout.get("special_trait") or "Underground Agent Network")
     else:
         scout = {}
-        scout_name = "Vacant (Regional Scout Pool)"
+        scout_name = "Chief Scout (Vacant)"
         scout_label = "Chief Scout (Vacant)"
         scout_status = "vacant"
         scout_reach = 10
         scout_salary = 0
-        scout_mood = 70
-        scout_loyalty = 10
-        scout_agenda = "Monitor local domestic fixture lists until a Chief Scout is appointed"
-        scout_trait = "Provisional Caretaker"
+        scout_mood = None
+        scout_loyalty = 0
+        scout_agenda = "Appoint a Chief Scout to run dedicated talent identification assignments."
+        scout_trait = "Position Vacant"
 
-    mgr_name = str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager")
+    # Finance & Commercial Director
+    fin_raw = exec_staff.get("finance_commercial_director")
+    fin_appointed = bool(
+        fin_raw
+        and isinstance(fin_raw, dict)
+        and str(fin_raw.get("name") or "").strip()
+        and not fin_raw.get("is_vacant")
+        and "vacant" not in str(fin_raw.get("name") or "").lower()
+    )
+    if fin_appointed:
+        fin = dict(fin_raw)
+        fin_name = str(fin.get("name") or "Finance & Commercial Director")
+        fin_label = "Finance & Commercial Director"
+        fin_status = "appointed"
+        fin_discipline = _safe_int(fin.get("financial_discipline"), 15)
+        fin_negotiation = _safe_int(fin.get("negotiation"), 14)
+        fin_salary = _safe_int(fin.get("salary_gtex", fin.get("salary", 320)), 320)
+        fin_mood = _safe_int(fin.get("mood"), 79)
+        fin_loyalty = _safe_int(fin.get("loyalty"), 14)
+        fin_agenda = str(fin.get("personal_agenda") or "Enforce treasury solvency, sponsorship yield & matchday ROI")
+        fin_trait = str(fin.get("signature_trait") or fin.get("special_trait") or "Treasury Auditor")
+    else:
+        fin = {}
+        fin_name = "Finance & Commercial Director (Vacant)"
+        fin_label = "Finance & Commercial Director (Vacant)"
+        fin_status = "vacant"
+        fin_discipline = 10
+        fin_negotiation = 10
+        fin_salary = 0
+        fin_mood = None
+        fin_loyalty = 0
+        fin_agenda = "Authoritative ledger and treasury metrics remain live; commercial director seat is vacant."
+        fin_trait = "Position Vacant"
+
+    mgr_raw_name = str(mgr.get("name") or mgr.get("display_name") or "").strip()
+    mgr_appointed = bool(mgr and not mgr.get("is_vacant") and mgr_raw_name and "vacant" not in mgr_raw_name.lower())
+    mgr_name = mgr_raw_name if mgr_appointed else "First-Team Manager (Vacant)"
 
     return {
         "first_team_manager": {
             "role_key": "first_team_manager",
-            "role_label": "First-Team Manager",
+            "role_label": "First-Team Manager" if mgr_appointed else "First-Team Manager (Vacant)",
             "name": mgr_name,
-            "status": "appointed",
-            "is_appointed": True,
-            "mood": _safe_int(mgr.get("mood"), 75),
-            "loyalty": _safe_int(mgr.get("loyalty"), 12),
-            "temperament": str(mgr.get("temperament") or "ambitious"),
-            "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession"),
-            "youth_development": _safe_int(mgr.get("youth_development"), 12),
-            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500),
-            "personal_agenda": str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity"),
-            "signature_trait": str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand"),
+            "status": "appointed" if mgr_appointed else "vacant",
+            "is_appointed": mgr_appointed,
+            "is_vacant": not mgr_appointed,
+            "mood": _safe_int(mgr.get("mood"), 75) if mgr_appointed else None,
+            "loyalty": _safe_int(mgr.get("loyalty"), 12) if mgr_appointed else 0,
+            "temperament": str(mgr.get("temperament") or "ambitious") if mgr_appointed else "vacant",
+            "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession") if mgr_appointed else "Vacant",
+            "youth_development": _safe_int(mgr.get("youth_development"), 12) if mgr_appointed else 10,
+            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500) if mgr_appointed else 0,
+            "personal_agenda": (
+                str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity")
+                if mgr_appointed
+                else "Appoint a First-Team Manager to take full matchday tactical command."
+            ),
+            "signature_trait": (
+                str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand")
+                if mgr_appointed
+                else "Position Vacant"
+            ),
             "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr_name),
         },
         "general_manager": {
@@ -189,6 +258,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": gm_name,
             "status": gm_status,
             "is_appointed": gm_appointed,
+            "is_vacant": not gm_appointed,
             "mood": gm_mood,
             "loyalty": gm_loyalty,
             "negotiation": gm_negotiation,
@@ -204,6 +274,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": hoyd_name,
             "status": hoyd_status,
             "is_appointed": hoyd_appointed,
+            "is_vacant": not hoyd_appointed,
             "mood": hoyd_mood,
             "loyalty": hoyd_loyalty,
             "youth_development": hoyd_youth,
@@ -218,6 +289,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": med_name,
             "status": med_status,
             "is_appointed": med_appointed,
+            "is_vacant": not med_appointed,
             "mood": med_mood,
             "loyalty": med_loyalty,
             "medical_expertise": med_expertise,
@@ -232,6 +304,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "name": scout_name,
             "status": scout_status,
             "is_appointed": scout_appointed,
+            "is_vacant": not scout_appointed,
             "mood": scout_mood,
             "loyalty": scout_loyalty,
             "scouting_reach": scout_reach,
@@ -239,6 +312,22 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "personal_agenda": scout_agenda,
             "signature_trait": scout_trait,
             "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_scout", scout_name),
+        },
+        "finance_commercial_director": {
+            "role_key": "finance_commercial_director",
+            "role_label": fin_label,
+            "name": fin_name,
+            "status": fin_status,
+            "is_appointed": fin_appointed,
+            "is_vacant": not fin_appointed,
+            "mood": fin_mood,
+            "loyalty": fin_loyalty,
+            "financial_discipline": fin_discipline,
+            "negotiation": fin_negotiation,
+            "salary_gtex": fin_salary,
+            "personal_agenda": fin_agenda,
+            "signature_trait": fin_trait,
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_finance", fin_name),
         },
     }
 
@@ -1423,7 +1512,7 @@ def build_authoritative_daily_briefing(
             {
                 "section_key": "financial_commercial_report",
                 "role": "Finance & Commercial",
-                "sender": staff["general_manager"]["name"],
+                "sender": staff["finance_commercial_director"]["name"],
                 "title": financial_commercial_report["title"],
                 "summary": financial_commercial_report["summary"],
             },
@@ -1699,6 +1788,50 @@ def get_club_operations_hub(
         "decision_history": combined_history[:25],
     }
 
+    from app.models.user import User
+    from app.owner_console import autonomous_staff_engine, living_club_world
+    from app.owner_console.models import OwnerClubConversation, OwnerClubDirective, OwnerClubEvent, OwnerClubMessage
+
+    owner_user = session.get(User, user_id)
+    owner_display_name = (
+        (owner_user.display_name or owner_user.full_name or owner_user.username) if owner_user else "Club Owner"
+    )
+    mentality_decision = autonomous_staff_engine.evaluate_manager_mentality_authority(
+        session,
+        state,
+        requested_mentality=state.mentality,
+    )
+
+    staff_room_conv = session.scalar(
+        select(OwnerClubConversation).where(
+            OwnerClubConversation.club_id == club_id,
+            OwnerClubConversation.thread_key == "room:staff",
+            OwnerClubConversation.archived_at.is_(None),
+        )
+    )
+    staff_room_recent_messages: list[dict[str, Any]] = []
+    if staff_room_conv is not None:
+        rm_rows = list(
+            session.scalars(
+                select(OwnerClubMessage)
+                .where(OwnerClubMessage.conversation_id == staff_room_conv.id)
+                .order_by(OwnerClubMessage.created_at.desc())
+                .limit(6)
+            ).all()
+        )
+        rm_rows.reverse()
+        staff_room_recent_messages = [
+            {
+                "id": m.id,
+                "role": m.sender_role or "room:staff",
+                "sender": m.sender_name,
+                "message": m.body,
+                "topic": m.topic or "executive",
+                "created_at": m.created_at.isoformat() if m.created_at else None,
+            }
+            for m in rm_rows
+        ]
+
     # Build the 6 Interactive 3D Operational Destinations
     chat_history = list(facs.get("_staff_chat_history") or [])
 
@@ -1710,7 +1843,9 @@ def get_club_operations_hub(
             "title": "Executive Office",
             "short_label": "Executive",
             "subtitle": "Owner's Daily Briefing, Strategic Decisions & Club Command",
-            "lead_role_key": "general_manager",
+            "lead_role_key": "owner",
+            "communication_thread_id": "room:staff",
+            "communication_channel_mode": "office_wide",
             "wing_label": "Central Penthouses · Floor 4",
             "glb_model": "/models/campus/club_hq.glb",
             "model_glb_url": "/models/campus/club_hq.glb",
@@ -1721,13 +1856,16 @@ def get_club_operations_hub(
             "camera_target": [0, 2.5, 0],
             "camera_preset": {"position": [0, 13, 21], "target": [0, 2.5, 0], "fov": 42},
             "staff_lead": {
-                "role_key": "general_manager",
-                "role_label": "Chairman & Majority Owner",
-                "name": "Office of the Club Owner",
+                "role_key": "owner",
+                "role_label": "Club Owner",
+                "name": owner_display_name,
+                "status": "owner",
+                "is_appointed": True,
+                "is_owner_workspace": True,
                 "style": "Strategic Governance",
-                "mood": 92,
-                "loyalty": 20,
-                "specialty": "Club Strategy & Treasury Oversight",
+                "mood": 100,
+                "loyalty": 100,
+                "specialty": "Club Strategy, Approvals & Board Governance",
                 "portrait_url": storytelling.resolve_club_crest_url(session, club_id, state.club_name),
             },
             "alert_count": len(open_decisions_list),
@@ -1738,7 +1876,7 @@ def get_club_operations_hub(
                 {
                     "id": "exec_desk",
                     "hotspot_id": "exec_desk",
-                    "label": "Chairman's Briefing Desk",
+                    "label": "Owner's Command Briefing Desk",
                     "action": "inspect_briefing",
                     "offset": [0, 1.2, 0.5],
                 },
@@ -1765,7 +1903,11 @@ def get_club_operations_hub(
             "open_decisions_count": len(
                 [d for d in open_decisions_list if d.get("department") in ("executive_office", "boardroom")]
             ),
-            "recent_messages": [m for m in chat_history if m.get("role") in ("general_manager", "owner")][-6:],
+            "recent_messages": (
+                staff_room_recent_messages
+                if staff_room_recent_messages
+                else [m for m in chat_history if m.get("role") in ("owner", "room:staff")][-6:]
+            ),
         },
         {
             "destination_key": "managers_office",
@@ -1775,6 +1917,8 @@ def get_club_operations_hub(
             "short_label": "Manager",
             "subtitle": "First-Team Squad, Tactical Mentality & Matchday Preparation",
             "lead_role_key": "first_team_manager",
+            "communication_thread_id": "staff:first_team_manager",
+            "communication_channel_mode": "direct" if staff["first_team_manager"]["is_appointed"] else "vacant",
             "wing_label": "West Sporting Wing · Floor 2",
             "glb_model": "/models/campus/stadium_main.glb",
             "model_glb_url": "/models/campus/stadium_main.glb",
@@ -1785,8 +1929,9 @@ def get_club_operations_hub(
             "camera_target": [-14, 2, 4],
             "camera_preset": {"position": [-19, 10, 18], "target": [-14, 2, 4], "fov": 40},
             "staff_lead": staff["first_team_manager"],
+            "tactical_authority": mentality_decision,
             "alert_count": len([d for d in open_decisions_list if d.get("department") == "managers_office"]),
-            "status_badge": f"Mentality: {str(state.mentality or 'balanced').title()}",
+            "status_badge": f"Matchday: {str(mentality_decision['effective_mentality']).title()}",
             "hotspots": [
                 {
                     "id": "tactical_pitch_table",
@@ -1824,6 +1969,8 @@ def get_club_operations_hub(
             "short_label": "General Mgr",
             "subtitle": "Club Administration, Delegation Policy & Campus Masterplan",
             "lead_role_key": "general_manager",
+            "communication_thread_id": "staff:general_manager",
+            "communication_channel_mode": "direct" if staff["general_manager"]["is_appointed"] else "vacant",
             "wing_label": "East Executive Wing · Floor 3",
             "glb_model": "/models/campus/vip_skybox_concourse.glb",
             "model_glb_url": "/models/campus/vip_skybox_concourse.glb",
@@ -1875,6 +2022,10 @@ def get_club_operations_hub(
             "short_label": "Academy",
             "subtitle": "Youth Development Pipeline, Regen Progression & Scouting Intake",
             "lead_role_key": "head_of_youth_development",
+            "communication_thread_id": "staff:head_of_youth_development",
+            "communication_channel_mode": (
+                "direct" if staff["head_of_youth_development"]["is_appointed"] else "vacant"
+            ),
             "wing_label": "North Youth Precinct · Floor 1",
             "glb_model": "/models/campus/elite_academy_complex.glb",
             "model_glb_url": "/models/campus/elite_academy_complex.glb",
@@ -1926,6 +2077,8 @@ def get_club_operations_hub(
             "short_label": "Medical",
             "subtitle": "Injury Rehabilitation, Hydrotherapy & Workload Telemetry",
             "lead_role_key": "medical_director",
+            "communication_thread_id": "staff:medical_director",
+            "communication_channel_mode": "direct" if staff["medical_director"]["is_appointed"] else "vacant",
             "wing_label": "South Sports-Science Lab · Floor 1",
             "glb_model": "/models/campus/recovery_hydro_hub.glb",
             "model_glb_url": "/models/campus/recovery_hydro_hub.glb",
@@ -1981,7 +2134,11 @@ def get_club_operations_hub(
             "title": "Finance & Commercial Office",
             "short_label": "Finance",
             "subtitle": "Club Treasury, Authoritative Ledger, Sponsorships & Matchday Revenue",
-            "lead_role_key": "general_manager",
+            "lead_role_key": "finance_commercial_director",
+            "communication_thread_id": "staff:finance_commercial_director",
+            "communication_channel_mode": (
+                "direct" if staff["finance_commercial_director"]["is_appointed"] else "vacant"
+            ),
             "wing_label": "East Treasury Vault · Floor 3",
             "glb_model": "/models/campus/club_hq.glb",
             "model_glb_url": "/models/campus/club_hq.glb",
@@ -1991,7 +2148,7 @@ def get_club_operations_hub(
             "camera_position": [0, 11, -12],
             "camera_target": [0, 2, -18],
             "camera_preset": {"position": [0, 11, -12], "target": [0, 2, -18], "fov": 40},
-            "staff_lead": staff["general_manager"],
+            "staff_lead": staff["finance_commercial_director"],
             "alert_count": len([d for d in open_decisions_list if d.get("department") == "finance_commercial_office"]),
             "status_badge": f"{briefing['metrics']['cash_gtex']:,} GTX",
             "hotspots": [
@@ -2023,12 +2180,9 @@ def get_club_operations_hub(
             "open_decisions_count": len(
                 [d for d in open_decisions_list if d.get("department") == "finance_commercial_office"]
             ),
-            "recent_messages": [m for m in chat_history if m.get("role") == "general_manager"][-6:],
+            "recent_messages": [m for m in chat_history if m.get("role") == "finance_commercial_director"][-6:],
         },
     ]
-
-    from app.owner_console import living_club_world
-    from app.owner_console.models import OwnerClubEvent, OwnerClubDirective
 
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
     living_club_world.ensure_default_relationships(session, state, squad_players)
@@ -2077,9 +2231,9 @@ def get_club_operations_hub(
         "managers_office": "first_team_manager",
         "medical_department": "medical_director",
         "academy_department": "head_of_youth_development",
-        "finance_commercial_office": "general_manager",
-        "general_managers_office": "chief_scout",
-        "executive_office": "general_manager",
+        "finance_commercial_office": "finance_commercial_director",
+        "general_managers_office": "general_manager",
+        "executive_office": "club_president",
     }
 
     department_activity = {}
@@ -2119,12 +2273,19 @@ def get_club_operations_hub(
         "club": {
             "club_id": state.club_id,
             "club_name": state.club_name,
+            "owner_name": owner_display_name,
             "crest_url": storytelling.resolve_club_crest_url(session, club_id, state.club_name),
             "prestige": state.prestige,
             "prestige_tier": engine.prestige_tier_label(state.prestige),
             "world_day": world_day,
             "world_date": state.last_world_tick_date.isoformat() if state.last_world_tick_date else None,
-            "mentality": state.mentality,
+            "mentality": mentality_decision["effective_mentality"],
+            "owner_requested_mentality": mentality_decision["owner_requested_mentality"],
+            "manager_preferred_mentality": mentality_decision["manager_preferred_mentality"],
+            "effective_matchday_mentality": mentality_decision["effective_mentality"],
+            "manager_decision_status": mentality_decision["decision_status"],
+            "manager_decision_reasoning": mentality_decision["reasoning"],
+            "manager_tactical_authority": mentality_decision,
             "stage": state.stage,
             "fans": state.fans,
         },
@@ -2291,15 +2452,31 @@ def execute_owner_operational_decision(
                     f"Manager mood +{res['manager_mood_boost']}."
                 )
             elif op_key == "align_tactical_mentality":
+                from app.owner_console import autonomous_staff_engine
+
                 new_mentality = str(payload.get("mentality") or "attacking")
                 state.mentality = new_mentality
+                decision = autonomous_staff_engine.evaluate_manager_mentality_authority(
+                    session,
+                    state,
+                    requested_mentality=new_mentality,
+                )
                 mgr = dict(state.manager_json or {})
-                mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) + 4, 0, 100))
-                state.manager_json = mgr
-                flag_modified(state, "manager_json")
-                for p in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all():
-                    p.morale = int(engine.clamp(p.morale + 2, 0, 100))
-                outcome_text = f"Adopted '{new_mentality}' tactical match plan (+4 Manager Mood, +2 Squad Morale)."
+                if decision["implemented_as_requested"]:
+                    mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) + 4, 0, 100))
+                    state.manager_json = mgr
+                    flag_modified(state, "manager_json")
+                    for p in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all():
+                        p.morale = int(engine.clamp(p.morale + 2, 0, 100))
+                    outcome_text = (
+                        f"Manager implemented '{decision['effective_mentality']}' tactical match plan. "
+                        f"{decision['reasoning']}"
+                    )
+                else:
+                    outcome_text = (
+                        f"Owner preference '{new_mentality}' recorded; Manager set effective matchday mentality to "
+                        f"'{decision['effective_mentality']}'. {decision['reasoning']}"
+                    )
             elif op_key == "advance_campus_stage":
                 inst_id = str(payload.get("instance_id") or "")
                 res = prestige_campus_comms.start_campus_construction(

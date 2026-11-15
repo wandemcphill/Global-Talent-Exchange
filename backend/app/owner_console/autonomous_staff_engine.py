@@ -657,56 +657,97 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
     """Ensure the club's Manager, GM, Assistant Coaches, HOYD, Chief Scout, and Medical Director
     have persistent, individualized profiles and club culture state stored on `OwnerClubState`.
     """
+    def _is_appointed_manager(raw: Any) -> bool:
+        if not isinstance(raw, dict) or not raw or raw.get("is_vacant"):
+            return False
+        raw_name = str(raw.get("name") or raw.get("display_name") or "").strip()
+        return bool(raw_name and "vacant" not in raw_name.lower())
+
     mutated = False
     manager = dict(state.manager_json or {})
-    if not manager.get("id") and not manager.get("manager_id"):
-        manager["id"] = f"mgr_{_stable_hash_int(str(manager.get('name') or state.club_id)) % 900000 + 100000}"
-        mutated = True
-    elif not manager.get("id") and manager.get("manager_id"):
-        manager["id"] = str(manager["manager_id"])
-        mutated = True
-    if not manager.get("name") and manager.get("display_name"):
-        manager["name"] = str(manager["display_name"])
-        mutated = True
-    mgr_profile = derive_manager_personality(manager)
-    if manager.get("personality_profile") != mgr_profile:
-        manager["personality_profile"] = mgr_profile
-        state.manager_json = manager
-        flag_modified(state, "manager_json")
-        mutated = True
+    if not _is_appointed_manager(manager):
+        manager = {
+            "id": None,
+            "manager_id": None,
+            "name": "First-Team Manager (Vacant)",
+            "display_name": "First-Team Manager (Vacant)",
+            "is_vacant": True,
+            "is_appointed": False,
+            "personality_profile": {},
+        }
+        mgr_profile = {}
+    else:
+        if not manager.get("id") and not manager.get("manager_id"):
+            manager["id"] = f"mgr_{_stable_hash_int(str(manager.get('name') or state.club_id)) % 900000 + 100000}"
+            mutated = True
+        elif not manager.get("id") and manager.get("manager_id"):
+            manager["id"] = str(manager["manager_id"])
+            mutated = True
+        if not manager.get("name") and manager.get("display_name"):
+            manager["name"] = str(manager["display_name"])
+            mutated = True
+        manager["is_vacant"] = False
+        manager["is_appointed"] = True
+        mgr_profile = derive_manager_personality(manager)
+        if manager.get("personality_profile") != mgr_profile:
+            manager["personality_profile"] = mgr_profile
+            state.manager_json = manager
+            flag_modified(state, "manager_json")
+            mutated = True
+
+    def _is_appointed_record(raw: Any) -> bool:
+        if not isinstance(raw, dict) or not raw or raw.get("is_vacant"):
+            return False
+        raw_name = str(raw.get("name") or raw.get("display_name") or "").strip()
+        if not raw_name or "vacant" in raw_name.lower():
+            return False
+        return True
+
+    def _vacant_identity(role_key: str, role_title: str) -> dict[str, Any]:
+        return {
+            "id": None,
+            "staff_id": None,
+            "role": role_key,
+            "role_label": role_title,
+            "name": f"{role_title} (Vacant)",
+            "title": f"{role_title} (Vacant)",
+            "is_vacant": True,
+            "is_appointed": False,
+            "personality_profile": {},
+        }
 
     fac = dict(state.facilities_json or {})
     exec_staff = dict(fac.get("_executive_staff") or {})
     default_identities = dict(fac.get("_staff_default_identities") or {})
 
     gm_raw = exec_staff.get("general_manager")
-    if isinstance(gm_raw, dict) and gm_raw.get("is_vacant"):
+    if _is_appointed_record(gm_raw):
         gm = dict(gm_raw)
-        gm_profile = derive_gm_personality(gm)
-    elif isinstance(gm_raw, dict) and gm_raw:
-        gm = dict(gm_raw)
+        gm["is_vacant"] = False
+        gm["is_appointed"] = True
         gm_profile = derive_gm_personality(gm)
         if gm.get("personality_profile") != gm_profile or exec_staff.get("general_manager") != gm:
             gm["personality_profile"] = gm_profile
             exec_staff["general_manager"] = gm
             mutated = True
     else:
-        gm = dict(default_identities.get("general_manager") or FICTIONAL_STAFF_CATALOG["general_manager"][0])
-        gm_profile = derive_gm_personality(gm)
-        gm["personality_profile"] = gm_profile
-        if default_identities.get("general_manager") != gm:
-            default_identities["general_manager"] = gm
-            mutated = True
+        gm = _vacant_identity("general_manager", "General Manager")
+        gm_profile = {}
 
+    _role_titles = {
+        "chief_scout": "Chief Scout",
+        "head_of_youth_development": "Head of Youth Development",
+        "medical_director": "Medical Director",
+        "finance_commercial_director": "Finance & Commercial Director",
+    }
     resolved_depts: dict[str, dict[str, Any]] = {}
-    for role_key in ("chief_scout", "head_of_youth_development", "medical_director"):
-        default_entry = dict(FICTIONAL_STAFF_CATALOG[role_key][0])
+    for role_key, role_title in _role_titles.items():
+        default_entry = dict((FICTIONAL_STAFF_CATALOG.get(role_key) or [{}])[0] or {})
         raw_entry = exec_staff.get(role_key)
-        if isinstance(raw_entry, dict) and raw_entry.get("is_vacant"):
-            resolved_depts[role_key] = dict(raw_entry)
-            continue
-        if isinstance(raw_entry, dict) and raw_entry:
+        if _is_appointed_record(raw_entry):
             current_entry = dict(raw_entry)
+            current_entry["is_vacant"] = False
+            current_entry["is_appointed"] = True
             if not current_entry.get("personality_profile"):
                 current_entry["personality_profile"] = dict(default_entry.get("personality_profile") or {})
             if exec_staff.get(role_key) != current_entry:
@@ -714,13 +755,7 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
                 mutated = True
             resolved_depts[role_key] = current_entry
         else:
-            fallback_entry = dict(default_identities.get(role_key) or default_entry)
-            if not fallback_entry.get("personality_profile"):
-                fallback_entry["personality_profile"] = dict(default_entry.get("personality_profile") or {})
-            if default_identities.get(role_key) != fallback_entry:
-                default_identities[role_key] = fallback_entry
-                mutated = True
-            resolved_depts[role_key] = fallback_entry
+            resolved_depts[role_key] = _vacant_identity(role_key, role_title)
 
     coaching_staff = list(fac.get("_coaching_staff") or [])
     if not coaching_staff:
@@ -772,6 +807,7 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
         "chief_scout": resolved_depts["chief_scout"],
         "head_of_youth_development": resolved_depts["head_of_youth_development"],
         "medical_director": resolved_depts["medical_director"],
+        "finance_commercial_director": resolved_depts["finance_commercial_director"],
         "assistant_coaches": coaching_staff,
         "club_culture": club_culture,
     }
@@ -3796,6 +3832,234 @@ def resolve_boardroom_meeting_decision(
 # ---------------------------------------------------------------------------
 
 
+VALID_TACTICAL_MENTALITIES = ("defensive", "balanced", "attacking")
+
+
+def _normalize_tactical_mentality(value: Any, *, default: str = "balanced") -> str:
+    clean = str(value or "").strip().lower()
+    if clean in VALID_TACTICAL_MENTALITIES:
+        return clean
+    if any(k in clean for k in ("attack", "gegenpress", "high_press", "front_foot")):
+        return "attacking"
+    if any(k in clean for k in ("defens", "catenaccio", "pragmat", "low_block", "contain")):
+        return "defensive"
+    return default
+
+
+def resolve_manager_mentality_decision(
+    state_or_manager: OwnerClubState | dict[str, Any] | None,
+    *,
+    requested_mentality: str | None = None,
+    facilities_json: dict[str, Any] | None = None,
+    manager_override: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Canonical First-Team Manager tactical mentality authority calculation.
+
+    Used identically by owner tactical preference APIs, Operations Hub views,
+    matchday selection, and competition simulation so tactical authority never
+    disagrees across routes or simulation paths.
+    """
+    if isinstance(state_or_manager, dict):
+        manager = dict(manager_override or state_or_manager or {})
+        facs = dict(facilities_json or {})
+        stored_req = requested_mentality
+    elif state_or_manager is not None:
+        manager = dict(manager_override or getattr(state_or_manager, "manager_json", None) or {})
+        facs = dict(
+            facilities_json
+            if facilities_json is not None
+            else (getattr(state_or_manager, "facilities_json", None) or {})
+        )
+        stored_req = (
+            requested_mentality if requested_mentality is not None else getattr(state_or_manager, "mentality", None)
+        )
+    else:
+        manager = dict(manager_override or {})
+        facs = dict(facilities_json or {})
+        stored_req = requested_mentality
+
+    has_explicit_request = stored_req is not None and str(stored_req).strip().lower() in VALID_TACTICAL_MENTALITIES
+    owner_requested = _normalize_tactical_mentality(stored_req, default="balanced")
+
+    mgr_name = str(manager.get("name") or manager.get("display_name") or "").strip()
+    is_vacant = bool(not manager or manager.get("is_vacant") or not mgr_name or "vacant" in mgr_name.lower())
+
+    tactical_setup = {**dict(facs.get("_tactical_setup") or {}), **dict(facs.get("_tactical_config") or {})}
+
+    if is_vacant:
+        active_formation = str(tactical_setup.get("formation") or "4-3-3")
+        active_pressing = str(tactical_setup.get("pressing") or "medium")
+        effective_vacant = owner_requested if has_explicit_request else "balanced"
+        return {
+            "authority_model": "vacant_owner_provisional",
+            "is_non_binding_preference": True,
+            "manager_appointed": False,
+            "manager_id": None,
+            "manager_name": "First-Team Manager (Vacant)",
+            "manager_archetype": None,
+            "owner_requested_mentality": owner_requested,
+            "manager_preferred_mentality": "balanced",
+            "effective_mentality": effective_vacant,
+            "decision_status": "owner_provisional",
+            "implemented_as_requested": True,
+            "reasoning": (
+                "First-Team Manager seat is currently vacant. Provisional matchday preparation follows the "
+                f"Owner's '{effective_vacant.upper()}' setup until a permanent manager is appointed."
+            ),
+            "factors": {
+                "professional_independence": None,
+                "tolerance_for_owner_interference": None,
+                "tactical_flexibility": None,
+                "attacking_vs_defensive": None,
+                "active_formation": active_formation,
+                "pressing": active_pressing,
+                "preferred_tactical_philosophy": None,
+                "tactical_distance": 0,
+                "deference_score": None,
+            },
+        }
+
+    profile = dict(manager.get("personality_profile") or {})
+    if not profile or "professional_independence" not in profile or "tolerance_for_owner_interference" not in profile:
+        derived = derive_manager_personality(manager)
+        profile = {**derived, **profile}
+
+    indep = _clamp(int(profile.get("professional_independence", 75)))
+    tol = _clamp(int(profile.get("tolerance_for_owner_interference", 45)))
+    flex = _clamp(int(profile.get("tactical_flexibility", 60)))
+    loyalty = _clamp(int(profile.get("loyalty", 68)))
+    atk_def = _clamp(int(profile.get("attacking_vs_defensive", 55)))
+    philosophy = str(profile.get("preferred_tactical_philosophy") or manager.get("style") or "balanced_control")
+    preferred_formations = list(profile.get("preferred_formations") or ["4-3-3"])
+    active_formation = str(tactical_setup.get("formation") or preferred_formations[0])
+    active_pressing = str(
+        tactical_setup.get("pressing") or ("high" if int(profile.get("pressing_philosophy", 60)) >= 75 else "medium")
+    )
+
+    if atk_def >= 65:
+        manager_preferred = "attacking"
+    elif atk_def <= 38:
+        manager_preferred = "defensive"
+    else:
+        manager_preferred = "balanced"
+
+    if not has_explicit_request:
+        owner_requested = manager_preferred
+
+    mentality_order = {"defensive": 0, "balanced": 1, "attacking": 2}
+    distance = abs(mentality_order[owner_requested] - mentality_order[manager_preferred])
+    formation_mismatch = (owner_requested == "attacking" and active_formation.startswith("5-")) or (
+        owner_requested == "defensive" and active_formation in ("3-4-3", "4-2-4")
+    )
+
+    deference_score = (
+        (tol * 0.55)
+        + ((100 - indep) * 0.45)
+        + ((flex - 60) * 0.20)
+        + ((loyalty - 65) * 0.10)
+        - (distance * 8.0)
+        - (8.0 if formation_mismatch else 0.0)
+    )
+
+    ratified_by_manager = bool(
+        tactical_setup.get("ratified_by_manager") and tactical_setup.get("mentality") == owner_requested
+    )
+
+    if owner_requested == manager_preferred:
+        effective = manager_preferred
+        decision_status = "aligned"
+        reasoning = (
+            f"{mgr_name}'s tactical philosophy ({philosophy.replace('_', ' ')}, shape {active_formation}) "
+            f"already aligns with a {effective.upper()} matchday plan."
+        )
+    elif ratified_by_manager:
+        effective = owner_requested
+        decision_status = "accepted"
+        reasoning = (
+            f"{mgr_name} ratified a tactical agreement with ownership for {effective.upper()} "
+            f"under {active_formation} ({active_pressing} press)."
+        )
+    elif indep >= 75 or tol < 40:
+        effective = manager_preferred
+        decision_status = "rejected"
+        reasoning = (
+            f"{mgr_name} rejected the Owner's {owner_requested.upper()} request and retains matchday "
+            f"{effective.upper()} under {active_formation} (Independence {indep}/100, Interference Tolerance {tol}/100)."
+        )
+    elif deference_score >= 48.0 and indep < 75 and tol >= 50:
+        effective = owner_requested
+        decision_status = "accepted"
+        reasoning = (
+            f"{mgr_name} accepted the Owner's non-binding {owner_requested.upper()} preference over their natural "
+            f"{manager_preferred.upper()} inclination (Independence {indep}/100, Tolerance {tol}/100, Flexibility {flex}/100)."
+        )
+    elif 36.0 <= deference_score < 48.0:
+        if distance == 2:
+            effective = "balanced"
+            decision_status = "modified"
+            reasoning = (
+                f"{mgr_name} refused to jump straight from {manager_preferred.upper()} to {owner_requested.upper()} in "
+                f"{active_formation}, instead setting a BALANCED tactical compromise (Tolerance {tol}/100, Flexibility {flex}/100)."
+            )
+        elif distance == 1 and flex >= 70 and tol >= 55 and not formation_mismatch:
+            effective = owner_requested
+            decision_status = "accepted"
+            reasoning = (
+                f"{mgr_name} adapted their {active_formation} setup to accommodate the Owner's {owner_requested.upper()} "
+                f"preference (Flexibility {flex}/100, Tolerance {tol}/100)."
+            )
+        else:
+            effective = manager_preferred
+            decision_status = "rejected"
+            reasoning = (
+                f"{mgr_name} declined the Owner's {owner_requested.upper()} shift and kept {effective.upper()} to preserve "
+                f"{active_formation} shape integrity (Independence {indep}/100, Tolerance {tol}/100)."
+            )
+    else:
+        effective = manager_preferred
+        decision_status = "rejected"
+        reasoning = (
+            f"{mgr_name} upheld managerial authority and rejected {owner_requested.upper()}, maintaining "
+            f"{effective.upper()} in {active_formation} (Independence {indep}/100, Tolerance {tol}/100)."
+        )
+
+    return {
+        "authority_model": "first_team_manager_authoritative",
+        "is_non_binding_preference": True,
+        "manager_appointed": True,
+        "manager_id": str(manager.get("id") or manager.get("manager_id") or profile.get("staff_id") or ""),
+        "manager_name": mgr_name,
+        "manager_archetype": profile.get("archetype_label") or profile.get("archetype_key"),
+        "owner_requested_mentality": owner_requested,
+        "manager_preferred_mentality": manager_preferred,
+        "effective_mentality": effective,
+        "decision_status": decision_status,
+        "implemented_as_requested": effective == owner_requested,
+        "reasoning": reasoning,
+        "factors": {
+            "professional_independence": indep,
+            "tolerance_for_owner_interference": tol,
+            "tactical_flexibility": flex,
+            "attacking_vs_defensive": atk_def,
+            "active_formation": active_formation,
+            "pressing": active_pressing,
+            "preferred_tactical_philosophy": philosophy,
+            "tactical_distance": distance,
+            "deference_score": round(deference_score, 2),
+        },
+    }
+
+
+def evaluate_manager_mentality_authority(
+    db: Session,
+    state: OwnerClubState,
+    *,
+    requested_mentality: str | None = None,
+) -> dict[str, Any]:
+    ensure_club_staff_identities(db, state)
+    return resolve_manager_mentality_decision(state, requested_mentality=requested_mentality)
+
+
 def select_manager_matchday_lineup(
     db: Session,
     state: OwnerClubState,
@@ -3818,16 +4082,12 @@ def select_manager_matchday_lineup(
 
     youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
     veteran_pref = int(mgr_profile.get("preference_for_experienced_players", 55))
-    atk_def = int(mgr_profile.get("attacking_vs_defensive", 60))
     formations = list(mgr_profile.get("preferred_formations") or ["4-3-3"])
-    chosen_formation = str(formations[0] if formations else "4-3-3")
+    tactical_setup = {**dict(fac.get("_tactical_setup") or {}), **dict(fac.get("_tactical_config") or {})}
+    chosen_formation = str(tactical_setup.get("formation") or (formations[0] if formations else "4-3-3"))
 
-    if atk_def >= 70:
-        chosen_mentality = "attacking"
-    elif atk_def <= 38:
-        chosen_mentality = "defensive"
-    else:
-        chosen_mentality = "balanced"
+    mentality_authority = resolve_manager_mentality_decision(state)
+    chosen_mentality = str(mentality_authority["effective_mentality"])
 
     def _manager_player_score(p: OwnerSquadPlayer) -> float:
         base = float(p.rating or 70)
@@ -3886,6 +4146,7 @@ def select_manager_matchday_lineup(
         "manager_archetype": mgr_profile.get("archetype_label"),
         "formation": chosen_formation,
         "mentality": chosen_mentality,
+        "mentality_authority": mentality_authority,
         "tactical_philosophy": mgr_profile.get("preferred_tactical_philosophy"),
         "starting_xi_ids": [p.id for p in starters],
         "bench_ids": [p.id for p in bench],

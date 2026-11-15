@@ -347,9 +347,12 @@ export interface DepartmentStaffProfile {
   role_label: string;
   name: string;
   style?: string;
-  mood?: number;
+  mood?: number | null;
   loyalty?: number;
   specialty?: string;
+  is_vacant?: boolean;
+  is_appointed?: boolean;
+  is_owner_workspace?: boolean;
 }
 
 export interface ExecutiveBriefingSection {
@@ -443,6 +446,22 @@ export type DailyBriefing = {
   boardroom_dilemma?: BoardroomDilemma | null;
 };
 
+export interface ManagerTacticalAuthorityDecision {
+  authority_model: string;
+  is_non_binding_preference: boolean;
+  manager_appointed: boolean;
+  manager_id?: string | null;
+  manager_name: string;
+  manager_archetype?: string | null;
+  owner_requested_mentality: string;
+  manager_preferred_mentality: string;
+  effective_mentality: string;
+  decision_status: "aligned" | "accepted" | "modified" | "rejected" | "owner_provisional" | string;
+  implemented_as_requested: boolean;
+  reasoning: string;
+  factors?: Record<string, any>;
+}
+
 export interface OperationsHubDestination {
   destination_key:
     | "executive_office"
@@ -455,7 +474,10 @@ export interface OperationsHubDestination {
   short_label: string;
   subtitle: string;
   lead_role_key: string;
+  communication_thread_id?: string;
+  communication_channel_mode?: "office_wide" | "direct" | "vacant";
   staff_lead: DepartmentStaffProfile;
+  tactical_authority?: ManagerTacticalAuthorityDecision | null;
   glb_model: string;
   exterior_glb: string;
   accent_color: string;
@@ -492,11 +514,18 @@ export interface ClubOperationsHubPayload {
   club: {
     club_id: string;
     club_name: string;
+    owner_name?: string;
     world_day: number;
     prestige: number;
     prestige_tier: string;
     fans: number;
     mentality: string;
+    owner_requested_mentality?: string;
+    manager_preferred_mentality?: string;
+    effective_matchday_mentality?: string;
+    manager_decision_status?: string;
+    manager_decision_reasoning?: string;
+    manager_tactical_authority?: ManagerTacticalAuthorityDecision | null;
     cash_gtex: number;
     fan_coin: number;
     club_valuation_gtex: number;
