@@ -3523,11 +3523,15 @@ def conduct_press_conference(
             outlet_key="gtex_national_wire",
             story_type="press_conference",
             classification="verified_event",
-            headline=f"Owner Address at {state.club_name}: '{statement[:90]}'" if statement else f"Owner Speaks Publicly at {state.club_name}",
+            headline=(
+                f"Owner Address at {state.club_name}: '{statement[:90]}'"
+                if statement
+                else f"Owner Speaks Publicly at {state.club_name}"
+            ),
             subheadline=f"Verified press briefing · Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
             body=(
                 f"During a formal press briefing on World Day {world_day}, the {state.club_name} owner adopted a "
-                f"{tone.replace('_', ' ')} tone" + (f": \"{statement}\"" if statement else ".")
+                f"{tone.replace('_', ' ')} tone" + (f': "{statement}"' if statement else ".")
             ),
             source_type="press_conference",
             source_id=pc_ev.id,
@@ -3568,12 +3572,8 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
     exec_staff = dict(facs.get("_executive_staff") or {})
     gm_raw = exec_staff.get("general_manager")
     fin_raw = exec_staff.get("finance_commercial_director")
-    gm_appointed = bool(
-        gm_raw and isinstance(gm_raw, dict) and gm_raw.get("name") and not gm_raw.get("is_vacant")
-    )
-    fin_appointed = bool(
-        fin_raw and isinstance(fin_raw, dict) and fin_raw.get("name") and not fin_raw.get("is_vacant")
-    )
+    gm_appointed = bool(gm_raw and isinstance(gm_raw, dict) and gm_raw.get("name") and not gm_raw.get("is_vacant"))
+    fin_appointed = bool(fin_raw and isinstance(fin_raw, dict) and fin_raw.get("name") and not fin_raw.get("is_vacant"))
     if gm_appointed:
         gm = dict(gm_raw)
         gm_name = str(gm.get("name") or "General Manager")

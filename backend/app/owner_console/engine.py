@@ -1025,7 +1025,10 @@ def club_strength(
         "xi": [p["id"] for p in fit],
         "bench": [p["id"] for p in bench],
         "promised_sub_ids": promised_sub_ids,
-        "formation": str((facilities or {}).get("_tactical_setup", {}).get("formation") or (mgr_profile.get("preferred_formations") or ["4-3-3"])[0]),
+        "formation": str(
+            (facilities or {}).get("_tactical_setup", {}).get("formation")
+            or (mgr_profile.get("preferred_formations") or ["4-3-3"])[0]
+        ),
         "manager_mentality": mentality_authority["manager_preferred_mentality"],
         "mentality_authority": mentality_authority,
         "avg_rating": round(avg_rating, 1),

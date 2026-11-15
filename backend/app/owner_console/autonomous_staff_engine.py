@@ -657,6 +657,7 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
     """Ensure the club's Manager, GM, Assistant Coaches, HOYD, Chief Scout, and Medical Director
     have persistent, individualized profiles and club culture state stored on `OwnerClubState`.
     """
+
     def _is_appointed_manager(raw: Any) -> bool:
         if not isinstance(raw, dict) or not raw or raw.get("is_vacant"):
             return False

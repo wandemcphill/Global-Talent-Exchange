@@ -2202,7 +2202,12 @@ def converse_with_staff(
         target_staff = mgr
     else:
         raw_staff = exec_staff.get(norm_role)
-        if not raw_staff or not isinstance(raw_staff, dict) or raw_staff.get("is_vacant") or not str(raw_staff.get("name") or "").strip():
+        if (
+            not raw_staff
+            or not isinstance(raw_staff, dict)
+            or raw_staff.get("is_vacant")
+            or not str(raw_staff.get("name") or "").strip()
+        ):
             raise OwnerError(
                 "staff_role_vacant",
                 409,

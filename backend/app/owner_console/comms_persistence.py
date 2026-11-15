@@ -1449,11 +1449,7 @@ def _resolve_staff_identity_for_conversation(
             or (
                 autonomous_staff_engine.derive_manager_personality(dept)
                 if role_key == "first_team_manager"
-                else (
-                    autonomous_staff_engine.derive_gm_personality(dept)
-                    if role_key == "general_manager"
-                    else {}
-                )
+                else (autonomous_staff_engine.derive_gm_personality(dept) if role_key == "general_manager" else {})
             )
         )
     else:
@@ -2162,7 +2158,9 @@ def send_club_message_durable(
                 )
                 or 1
             )
-            squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+            squad_players = list(
+                session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+            )
 
             # Layer A: Authoritative Staff Decision Engine
             intent_data = autonomous_staff_engine.classify_owner_request(
@@ -2213,7 +2211,11 @@ def send_club_message_durable(
                 conv=conv,
                 sender_user_id=None,
                 sender_type="staff",
-                sender_id=f"staff:{role_key}" if conv.channel_type == "staff_room" else (conv.participant_id or f"staff:{role_key}"),
+                sender_id=(
+                    f"staff:{role_key}"
+                    if conv.channel_type == "staff_room"
+                    else (conv.participant_id or f"staff:{role_key}")
+                ),
                 sender_name=staff_name,
                 sender_role=staff_title,
                 topic=(topic or "").strip() or conv.subject or "Staff Response",

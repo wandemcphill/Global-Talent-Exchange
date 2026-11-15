@@ -237,7 +237,9 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "mood": _safe_int(mgr.get("mood"), 75) if mgr_appointed else None,
             "loyalty": _safe_int(mgr.get("loyalty"), 12) if mgr_appointed else 0,
             "temperament": str(mgr.get("temperament") or "ambitious") if mgr_appointed else "vacant",
-            "tactical_preference": str(mgr.get("tactical_preference") or "Balanced Possession") if mgr_appointed else "Vacant",
+            "tactical_preference": (
+                str(mgr.get("tactical_preference") or "Balanced Possession") if mgr_appointed else "Vacant"
+            ),
             "youth_development": _safe_int(mgr.get("youth_development"), 12) if mgr_appointed else 10,
             "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500) if mgr_appointed else 0,
             "personal_agenda": (
@@ -2732,9 +2734,7 @@ def _apply_medical_recovery_protocol(
         related_id=related_id,
         memo=f"Sports-science hydro & cryo recovery protocol (World Day {world_day})",
     )
-    squad_rows = list(
-        session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
-    )
+    squad_rows = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
     rehab_accelerated = 0
     for p in squad_rows:
         pers = dict(p.personality_json or {})

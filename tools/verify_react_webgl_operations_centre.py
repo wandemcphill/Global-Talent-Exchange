@@ -388,8 +388,7 @@ def run_verification(headless: bool = True) -> int:
         print("[PASS] No asset warning banner present during complete 6/6 load.")
 
         # Audit Stage 3 room screens, Stage 4 staff actors, and Stage 5 telemetry in WebGL scene
-        scene_audit = page.evaluate(
-            """() => {
+        scene_audit = page.evaluate("""() => {
                 const ops = window.__GTEX_OPERATIONS_3D__;
                 if (!ops) return null;
                 const telemetry = typeof ops.getTelemetry === 'function' ? ops.getTelemetry() : null;
@@ -398,8 +397,7 @@ def run_verification(headless: bool = True) -> int:
                     roomActors: Array.isArray(ops.roomActors) ? ops.roomActors.length : 0,
                     telemetry,
                 };
-            }"""
-        )
+            }""")
         print(f"  [SCENE AUDIT] Live headquarters objects: {scene_audit}")
         assert scene_audit is not None, "Missing __GTEX_OPERATIONS_3D__ debug handle."
         assert scene_audit["roomScreens"] >= 6, f"Expected >= 6 room screens, got {scene_audit['roomScreens']}"
@@ -676,12 +674,10 @@ def run_verification(headless: bool = True) -> int:
                 }""",
                 timeout=25000,
             )
-            mobile_metrics = page_mobile.evaluate(
-                """() => ({
+            mobile_metrics = page_mobile.evaluate("""() => ({
                     scrollWidth: document.documentElement.scrollWidth,
                     innerWidth: window.innerWidth,
-                })"""
-            )
+                })""")
             print(f"  [MOBILE AUDIT] {mobile_metrics}")
             assert (
                 mobile_metrics["scrollWidth"] <= mobile_metrics["innerWidth"] + 2

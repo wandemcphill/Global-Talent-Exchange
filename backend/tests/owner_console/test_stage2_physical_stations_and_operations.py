@@ -7,7 +7,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.orm.attributes import flag_modified
 from sqlalchemy.pool import StaticPool
@@ -232,10 +232,7 @@ def test_medical_recovery_protocol_endpoint_is_authoritative_and_daily_idempoten
         assert med_dest["report"]["rehabilitation_status"]["protocol_executed_today"] is True
 
         # Matching daily operational recommendation should also be synced as approved/resolved
-        all_decs = {
-            d["decision_id"]: d
-            for d in hub["daily_briefing"].get("department_decisions", [])
-        }
+        all_decs = {d["decision_id"]: d for d in hub["daily_briefing"].get("department_decisions", [])}
         med_dec = next((d for k, d in all_decs.items() if k.startswith("op_med_protocol_")), None)
         assert med_dec is not None and med_dec["status"] == "approved"
 
@@ -301,9 +298,7 @@ def test_gm_delegation_and_staff_dismiss_work_with_operations_hub() -> None:
 
         hub_res = client.get(f"/owner/clubs/{state.club_id}/operations-hub", params={"force_refresh": True})
         assert hub_res.status_code == 200
-        gm_dest = next(
-            d for d in hub_res.json()["destinations"] if d["destination_key"] == "general_managers_office"
-        )
+        gm_dest = next(d for d in hub_res.json()["destinations"] if d["destination_key"] == "general_managers_office")
         assert gm_dest["staff_lead"]["is_vacant"] is True
         assert gm_dest["report"]["administrative_matters"]["delegation_policy"]["mode"] == "hands_on"
     finally:
