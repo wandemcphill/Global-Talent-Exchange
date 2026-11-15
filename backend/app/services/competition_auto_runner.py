@@ -313,9 +313,7 @@ class CompetitionAutoRunner:
         club_ids = {str(match.home_club_id), str(match.away_club_id)}
         states = {
             str(row.club_id): row
-            for row in self.session.scalars(
-                select(OwnerClubState).where(OwnerClubState.club_id.in_(club_ids))
-            ).all()
+            for row in self.session.scalars(select(OwnerClubState).where(OwnerClubState.club_id.in_(club_ids))).all()
         }
         teams = {"home": request.home_team, "away": request.away_team}
         context: dict[str, object] = {
@@ -339,9 +337,7 @@ class CompetitionAutoRunner:
             state = states.get(club_id)
             team = teams[side_key]
             manager: dict[str, object] = dict(getattr(team, "manager_profile", None) or {})
-            manager_name = str(
-                manager.get("display_name") or manager.get("name") or manager.get("manager_name") or ""
-            )
+            manager_name = str(manager.get("display_name") or manager.get("name") or manager.get("manager_name") or "")
             manager_id = str(manager.get("manager_id") or manager.get("id") or "")
             club = self.session.get(ClubProfile, club_id)
             owner_user_id = str(club.owner_user_id) if club is not None else ""
