@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 from uuid import uuid4
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.identity.providers import get_identity_provider
@@ -158,19 +158,17 @@ class IdentityVerificationService:
         if not webhook_result.reference and not webhook_result.session_id:
             raise IdentityVerificationValidationError("Provider webhook is missing its verification reference.")
 
-        match_conditions = []
+        match_conditions = [
+            IdentityVerificationRecord.provider == adapter.provider_name,
+            IdentityVerificationRecord.verification_domain == "coin_trader",
+        ]
         if webhook_result.reference:
             match_conditions.append(IdentityVerificationRecord.provider_reference == webhook_result.reference)
-            match_conditions.append(IdentityVerificationRecord.idempotency_key == webhook_result.reference)
         if webhook_result.session_id:
             match_conditions.append(IdentityVerificationRecord.provider_session_id == webhook_result.session_id)
 
         record = self.session.scalar(
-            select(IdentityVerificationRecord).where(
-                IdentityVerificationRecord.provider == adapter.provider_name,
-                IdentityVerificationRecord.verification_domain == "coin_trader",
-                or_(*match_conditions),
-            )
+            select(IdentityVerificationRecord).where(*match_conditions)
         )
         if record is None:
             raise IdentitySessionNotFoundError(
