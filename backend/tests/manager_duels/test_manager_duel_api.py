@@ -154,6 +154,9 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
             assert {"home_line", "draw_line", "away_line", "volatility", "tension"} <= set(
                 first_message["payload"]["market_pulse"].keys()
             )
+            websocket.send_text("ping")
+            pong = websocket.receive_json()
+            assert pong["kind"] == "pong"
             saw_event_batch = False
             for _ in range(20):
                 message = websocket.receive_json()
