@@ -165,7 +165,6 @@ def test_heartbeat_without_page_view_does_not_create_visit_event(session) -> Non
     assert session.scalar(select(AnalyticsEvent.id).where(AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT)) is None
 
 
-
 def test_authenticated_heartbeat_refreshes_login_presence(session) -> None:
     now = utcnow()
     user = User(
