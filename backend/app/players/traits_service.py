@@ -17,6 +17,28 @@ def _norm_name(value: str | None) -> str:
 # Football Manager player traits, and Opta/scouting profiles.
 CURATED_PLAYER_PROFILES: dict[str, tuple[str, list[str]]] = {
     # Recently calibrated & featured players
+    "segun odegbami": (
+        "Inside Forward",
+        [
+            "Mathematical Dribbling",
+            "Technical Dribbler",
+            "Goal Sense",
+            "Clinical Finisher",
+            "Flair",
+            "Finesse Shot",
+        ],
+    ),
+    "victor ozhianvuna": (
+        "Advanced Playmaker",
+        [
+            "Technical Dribbler",
+            "Incisive Pass",
+            "First Touch",
+            "Flair",
+            "Press Proven",
+            "Relentless",
+        ],
+    ),
     "younes ebnoutalib": (
         "Target Man",
         [

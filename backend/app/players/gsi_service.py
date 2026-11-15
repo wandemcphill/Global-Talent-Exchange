@@ -227,6 +227,7 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "guille fernández": (77, 89),
     "gustavo guerra": (67, 81),
     "halam loboa": (69, 80),
+    "hamza abdelkarim": (73, 84),
     "harley emsden-james": (71, 85),
     "harry kane": (90, 90),
     "haruto nakano": (73, 84),
@@ -321,6 +322,7 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "lautaro martinez": (89, 90),
     "lautaro martínez": (89, 90),
     "lazola maku": (73, 84),
+    "lamine camara": (83, 90),
     "lamine yamal": (91, 96),
     "lamine yamal nasraoui ebana": (91, 96),
     "yamal": (91, 96),
@@ -559,6 +561,7 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "victor bastianele": (69, 83),
     "victor ikpeba": (88, 88),
     "victor osimhen": (90, 91),
+    "victor ozhianvuna": (74, 86),
     "victory okorie": (69, 83),
     "viktor bjarki daðason": (73, 84),
     "vincent joseph": (69, 83),
@@ -669,6 +672,7 @@ PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "85139014": (93, 95),  # Kylian Mbappé
     "2002042927": (91, 96),  # Lamine Yamal
     "85140178": (91, 92),  # Ousmane Dembélé
+    "12093439": (83, 90),  # Lamine Camara
     "12096621": (69, 83),
     "1421433": (74, 89),
     "2000077193": (82, 90),
@@ -1033,6 +1037,7 @@ PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "2002044535": (76, 88),
     "2002045113": (77, 88),
     "2002046177": (78, 89),
+    "2002053682": (73, 84),  # Hamza Abdelkarim
     "2002086609": (74, 89),
     "2002086652": (74, 89),
     "2002087591": (73, 92),
@@ -1080,6 +1085,7 @@ PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "37600357": (81, 90),
     "37612542": (81, 90),
     "37622274": (81, 89),
+    "37642676": (83, 90),  # Lamine Camara
     "37645043": (77, 88),
     "37656652": (77, 89),
     "37656790": (86, 94),
@@ -1090,6 +1096,7 @@ PROVIDER_ID_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "37720618": (74, 89),
     "37725233": (76, 87),
     "37729623": (78, 90),
+    "37917642": (74, 86),  # Victor Ozhianvuna
     "37974187": (74, 89),
     "5321": (84, 90),
     "601710": (90, 90),
