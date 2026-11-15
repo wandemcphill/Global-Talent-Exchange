@@ -1143,6 +1143,10 @@ def record_match_institutional_impact(
     manager_snapshot = dict(side.get("manager_snapshot") or {})
     if manager_snapshot_supplied:
         tenure = ensure_match_manager_tenure(session, state, manager_snapshot, world_day=world_day) if manager_snapshot else None
+    elif side.get("projection_event_id"):
+        # A canonical match without a persisted match-time manager identity must
+        # not be attributed to whoever happens to be appointed when retried.
+        tenure = None
     else:
         manager = dict(state.manager_json or {})
         tenure = ensure_active_manager_tenure(session, state, manager)
