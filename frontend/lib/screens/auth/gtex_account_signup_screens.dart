@@ -55,7 +55,11 @@ String _deriveTraderCredentialHash(String purpose, String value) {
 
   String hex(List<int> bytes) =>
       bytes.map((byte) => byte.toRadixString(16).padLeft(2, '0')).join();
-  return 'pbkdf2-sha256
+  final separator = String.fromCharCode(36);
+  return 'pbkdf2-sha256' + separator + iterations.toString() + separator +
+      purpose + separator + hex(salt) + separator + hex(derived);
+}
+
 class GtexAccountSelectorScreen extends StatelessWidget {
   const GtexAccountSelectorScreen({super.key, this.onOpenCreatorAccessRequest});
   final VoidCallback? onOpenCreatorAccessRequest;
@@ -608,7 +612,40 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         _totpCode,
         '2FA Authenticator Code',
         keyboardType: TextInputType.number,
-        validator: (value) => RegExp(r'^\d{6,12}      TurnstileChallenge(
+        validator: (value) {
+          final code = (value ?? '').trim();
+          final validDigits = code.codeUnits.every((unit) => unit >= 48 && unit <= 57);
+          return code.length >= 6 && code.length <= 12 && validDigits
+              ? null
+              : 'Enter the current 6–12 digit authenticator code';
+        },
+      ),
+      _field(
+        _recoveryPhrase,
+        'Recovery Phrase (at least 8 words)',
+        obscure: true,
+        validator: (value) {
+          final words = (value ?? '').trim().split(RegExp(r'\s+'));
+          return words.where((word) => word.isNotEmpty).length >= 8
+              ? null
+              : 'Use a recovery phrase containing at least 8 words';
+        },
+      ),
+      _field(
+        _securityPin,
+        'Security PIN (6–12 digits)',
+        obscure: true,
+        keyboardType: TextInputType.number,
+        validator: (value) {
+          final pin = (value ?? '').trim();
+          final validDigits = pin.codeUnits.every((unit) => unit >= 48 && unit <= 57);
+          return pin.length >= 6 && pin.length <= 12 && validDigits
+              ? null
+              : 'Use a security PIN containing 6–12 digits';
+        },
+      ),
+      const SizedBox(height: 8),
+      TurnstileChallenge(
         siteKey: _gtexTurnstileSiteKey,
         onTokenChanged: (String? token) {
           if (mounted) setState(() => _turnstileToken = token);
