@@ -165,6 +165,8 @@ jobs:
           backend/tests/leaderboards/test_ranking_service.py
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
+      - name: Verify public traffic analytics
+        run: python -m pytest backend/tests/public_pulse/test_live_world_pulse.py -q
 
   broadcast-redis-integration:
     runs-on: ubuntu-latest
