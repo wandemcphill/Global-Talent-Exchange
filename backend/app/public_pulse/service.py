@@ -93,10 +93,7 @@ class PublicPulseService:
             AnalyticsEvent.created_at >= today_start,
         )
         page_views_today = int(
-            self.session.scalar(
-                select(func.count()).select_from(AnalyticsEvent).where(*page_view_filter)
-            )
-            or 0
+            self.session.scalar(select(func.count()).select_from(AnalyticsEvent).where(*page_view_filter)) or 0
         )
         visitors_today = int(
             self.session.scalar(
