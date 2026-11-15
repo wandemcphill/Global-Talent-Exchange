@@ -34,6 +34,10 @@ class TreasurySettingsView(BaseModel):
     deposit_rate_direction: RateDirection
     withdrawal_rate_value: Decimal
     withdrawal_rate_direction: RateDirection
+    fan_coin_deposit_rate_value: Decimal
+    trader_coin_purchase_rate_value: Decimal
+    trader_fan_coin_purchase_rate_value: Decimal
+    trader_withdrawal_rate_value: Decimal
     min_trader_buy_rate_fiat: Decimal
     max_trader_buy_rate_fiat: Decimal
     min_trader_sell_rate_fiat: Decimal
@@ -61,6 +65,10 @@ class TreasurySettingsUpdate(BaseModel):
     deposit_rate_direction: RateDirection | None = None
     withdrawal_rate_value: Decimal | None = None
     withdrawal_rate_direction: RateDirection | None = None
+    fan_coin_deposit_rate_value: Decimal | None = None
+    trader_coin_purchase_rate_value: Decimal | None = None
+    trader_fan_coin_purchase_rate_value: Decimal | None = None
+    trader_withdrawal_rate_value: Decimal | None = None
     min_trader_buy_rate_fiat: Decimal | None = None
     max_trader_buy_rate_fiat: Decimal | None = None
     min_trader_sell_rate_fiat: Decimal | None = None
