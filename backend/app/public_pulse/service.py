@@ -88,17 +88,24 @@ class PublicPulseService:
         registered_users = int(
             self.session.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))) or 0
         )
-        page_view_metadata = self.session.scalars(
-            select(AnalyticsEvent.metadata_json).where(
-                AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT,
-                AnalyticsEvent.created_at >= today_start,
+        page_view_filter = (
+            AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT,
+            AnalyticsEvent.created_at >= today_start,
+        )
+        page_views_today = int(
+            self.session.scalar(
+                select(func.count()).select_from(AnalyticsEvent).where(*page_view_filter)
             )
-        ).all()
-        unique_visitors = {
-            str(metadata.get("visitor_key"))
-            for metadata in page_view_metadata
-            if isinstance(metadata, dict) and metadata.get("visitor_key")
-        }
+            or 0
+        )
+        visitors_today = int(
+            self.session.scalar(
+                select(func.count(func.distinct(AnalyticsEvent.metadata_json["visitor_key"].as_string()))).where(
+                    *page_view_filter
+                )
+            )
+            or 0
+        )
 
         players_online = self._managers_in_live_matches()
         return LiveWorldPulseView(
@@ -106,8 +113,8 @@ class PublicPulseService:
             users_online=users_online,
             players_online=players_online,
             users_online_window_seconds=USERS_ONLINE_WINDOW_SECONDS,
-            visitors_today=len(unique_visitors),
-            page_views_today=len(page_view_metadata),
+            visitors_today=visitors_today,
+            page_views_today=page_views_today,
             registered_users=registered_users,
             generated_at=now,
             labels={
