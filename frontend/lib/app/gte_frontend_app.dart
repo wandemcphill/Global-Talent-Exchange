@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -42,7 +43,8 @@ class GteFrontendApp extends StatefulWidget {
   State<GteFrontendApp> createState() => _GteFrontendAppState();
 }
 
-class _GteFrontendAppState extends State<GteFrontendApp> {
+class _GteFrontendAppState extends State<GteFrontendApp>
+    with WidgetsBindingObserver {
   late final GteAppConfig _config;
   late final GteExchangeController _controller;
   late final bool _ownsController;
@@ -58,10 +60,15 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
   bool _usesOwnedProviderContainer = false;
   bool _syncingFromController = false;
   bool _syncingFromProvider = false;
+  bool _appIsResumed = true;
+  bool _presenceHeartbeatInFlight = false;
+  Timer? _presenceTimer;
+  late final String _presenceVisitorId = _createPresenceVisitorId();
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _config = widget.config ?? GteAppConfig.fromRuntimeEnvironment();
     _fallbackAuthSessionStore = MemoryAuthSessionStore();
     final GteBackendMode activeBackendMode = _config.activeShellBackendMode;
@@ -107,6 +114,8 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
 
   @override
   void dispose() {
+    _presenceTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     _authSessionSubscription?.close();
     _sessionHydrationSubscription?.close();
     _ownedProviderContainer?.dispose();
@@ -249,6 +258,49 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
       return;
     }
     _syncControllerSessionIntoProvider();
+    _refreshPresenceHeartbeatSchedule();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _appIsResumed = state == AppLifecycleState.resumed;
+    _refreshPresenceHeartbeatSchedule();
+  }
+
+  void _refreshPresenceHeartbeatSchedule() {
+    final bool shouldSendHeartbeat =
+        _appIsResumed && _controller.isAuthenticated;
+    if (!shouldSendHeartbeat) {
+      _presenceTimer?.cancel();
+      _presenceTimer = null;
+      return;
+    }
+    if (_presenceTimer != null) {
+      return;
+    }
+    unawaited(_sendPresenceHeartbeat());
+    _presenceTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => unawaited(_sendPresenceHeartbeat()),
+    );
+  }
+
+  Future<void> _sendPresenceHeartbeat() async {
+    if (!_appIsResumed ||
+        !_controller.isAuthenticated ||
+        _presenceHeartbeatInFlight) {
+      return;
+    }
+    _presenceHeartbeatInFlight = true;
+    try {
+      await _controller.api.sendPublicTrafficHeartbeat(
+        visitorId: _presenceVisitorId,
+      );
+    } catch (_) {
+      // Telemetry failures must never block app use or trigger auth navigation.
+    } finally {
+      _presenceHeartbeatInFlight = false;
+    }
   }
 
   void _syncControllerSessionIntoProvider() {
@@ -281,6 +333,7 @@ class _GteFrontendAppState extends State<GteFrontendApp> {
     _syncingFromProvider = true;
     _controller.syncSession(next);
     _syncingFromProvider = false;
+    _refreshPresenceHeartbeatSchedule();
   }
 
   ({ProviderContainer container, bool owned}) _resolveProviderBinding() {
@@ -436,4 +489,22 @@ bool _stringListsEquivalent(List<String> left, List<String> right) {
     }
   }
   return true;
+}
+
+
+String _createPresenceVisitorId() {
+  final math.Random random = math.Random.secure();
+  final List<int> bytes = List<int>.generate(
+    16,
+    (_) => random.nextInt(256),
+    growable: false,
+  );
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final String hex = bytes
+      .map((int value) => value.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-'
+      '${hex.substring(12, 16)}-${hex.substring(16, 20)}-'
+      '${hex.substring(20, 32)}';
 }
