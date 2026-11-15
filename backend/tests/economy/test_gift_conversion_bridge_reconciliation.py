@@ -36,8 +36,8 @@ from scripts.audit_gift_conversion_bridge import audit_bridge  # noqa: E402
 
 GROSS = Decimal("100.0000")
 FAN_NET = Decimal("70.0000")
-GTEX_OUT = Decimal("0.7000")
-PURCHASED_GTEX = Decimal("1.0000")
+GTEX_OUT = Decimal("4.6667")
+PURCHASED_GTEX = Decimal("6.6667")
 
 
 def _make_session_and_url(tmp_path):
