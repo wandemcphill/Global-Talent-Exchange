@@ -1655,13 +1655,32 @@ export default function MatchCenter() {
     const normBx = Number.isFinite(rawBx) ? (rawBx > 1.5 ? rawBx / 100 : rawBx) : 0.5;
     const rawBy = Number(rawBall?.position?.y ?? rawBall?.y ?? 50);
     const normBy = Number.isFinite(rawBy) ? (rawBy > 1.5 ? rawBy / 100 : rawBy) : 0.5;
+    const institutionalAtmosphere = spectatorStream.matchMetadata?.institutional_atmosphere as
+      | Record<string, any>
+      | undefined;
+    const homeAtmosphere = institutionalAtmosphere?.home;
+    const awayAtmosphere = institutionalAtmosphere?.away;
+    const homeIntensity = Number(homeAtmosphere?.crowd_intensity);
+    const awayIntensity = Number(awayAtmosphere?.crowd_intensity);
+    const availableIntensities = [homeIntensity, awayIntensity].filter(Number.isFinite);
+    const crowdIntensity =
+      availableIntensities.length > 0
+        ? availableIntensities.reduce((total, value) => total + value, 0) / availableIntensities.length
+        : null;
+    const momentum = momentumAt(m?.narrative?.momentum, minute);
+    const dominantMood =
+      momentum >= 0
+        ? String(homeAtmosphere?.dominant_mood || awayAtmosphere?.dominant_mood || "")
+        : String(awayAtmosphere?.dominant_mood || homeAtmosphere?.dominant_mood || "");
     sharedMatchAudio.updateAtmosphere({
       ballX: normBx,
       ballY: normBy,
       dangerZone: (activeReplayFrame as any)?.danger_zone || null,
       eventType: activeEv,
       minute,
-      momentum: momentumAt(m?.narrative?.momentum, minute),
+      momentum,
+      crowdIntensity,
+      dominantMood,
     });
   }, [
     audioAtmosphere,
@@ -1670,6 +1689,7 @@ export default function MatchCenter() {
     activeReplayFrame,
     minute,
     m?.narrative?.momentum,
+    spectatorStream.matchMetadata,
   ]);
 
   const recentSubstitution = useMemo(() => {
