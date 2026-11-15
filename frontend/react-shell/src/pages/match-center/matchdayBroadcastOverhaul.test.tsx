@@ -153,8 +153,35 @@ async function flushUi(ticks = 6): Promise<void> {
   for (let i = 0; i < ticks; i += 1) {
     await act(async () => {
       await Promise.resolve();
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
     });
   }
+}
+
+async function waitForDomCondition(
+  predicate: () => boolean,
+  container: HTMLElement,
+  description: string,
+  timeoutMs = 5000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    if (predicate()) {
+      return;
+    }
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+    });
+    if (predicate()) {
+      return;
+    }
+  }
+  throw new Error(
+    `Timed out waiting for ${description} after ${timeoutMs}ms. DOM preview: ${
+      (container.textContent || "").slice(0, 400) || "<empty>"
+    }`,
+  );
 }
 
 describe("MatchCenter universal broadcast overhaul integration", () => {
@@ -357,6 +384,7 @@ describe("MatchCenter universal broadcast overhaul integration", () => {
       return { data: null };
     });
 
+    jest.useRealTimers();
     const queryClient = new QueryClient({
       defaultOptions: {
         queries: { retry: false },
@@ -371,7 +399,17 @@ describe("MatchCenter universal broadcast overhaul integration", () => {
       );
     });
 
-    await flushUi(8);
+    await waitForDomCondition(
+      () =>
+        Boolean(
+          container
+            .querySelector('[data-testid="broadcast-category-badge"]')
+            ?.textContent?.includes("major knockout · 15m") &&
+            container.querySelector('[data-testid="tactics-panel"]')?.textContent?.includes("82%"),
+        ),
+      container,
+      "MatchCenter broadcast badge and tactics telemetry",
+    );
 
     // 1. Category badge + kit swatches + authoritative xG
     expect(container.querySelector('[data-testid="broadcast-category-badge"]')?.textContent).toContain(
