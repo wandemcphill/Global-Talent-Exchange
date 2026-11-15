@@ -6,7 +6,12 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { buildDepartmentInterior } from "./operationsRoomInteriors";
+import {
+  buildDepartmentInterior,
+  type DepartmentScreenHandle,
+  updateDepartmentActors,
+  updateDepartmentScreens,
+} from "./operationsRoomInteriors";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
 import {
   Building2,
@@ -40,10 +45,12 @@ import { publicUrl } from "@/lib/publicPath";
 import {
   clubBriefingResolveDilemmaEndpoint,
   clubExecuteOperationalDecisionEndpoint,
+  clubMedicalRecoveryProtocolEndpoint,
   clubOperationsHubEndpoint,
   clubLivingWorldTimelineEndpoint,
   clubCreateDirectiveEndpoint,
   clubResolveEventEndpoint,
+  clubStaffMarketDismissEndpoint,
   type ClubOperationsHubPayload,
   type OperationalRecommendation,
   type OperationsHubDestination,
@@ -162,8 +169,18 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
   ],
 };
 
+const MAX_GLB_RETRIES = 2;
+
 const OVERVIEW_CAMERA_POS: [number, number, number] = [0, 34, 42];
 const OVERVIEW_CAMERA_TARGET: [number, number, number] = [0, 1.5, 0];
+
+interface OperationsPerfTelemetry {
+  fps: number;
+  frameMs: number;
+  tier: string;
+  pixelRatio: number;
+  contextLossCount: number;
+}
 
 export function ClubOperationsCentre3D({
   clubId,
@@ -188,9 +205,12 @@ export function ClubOperationsCentre3D({
   const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
   const [renderMode, setRenderMode] = useState<"3d" | "2d">(() => (detectWebGLAvailable() ? "3d" : "2d"));
-  const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "fallback">("initializing");
+  const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "context_lost" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
   const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
+  const [glbRetryCount, setGlbRetryCount] = useState<number>(0);
+  const [perfTelemetry, setPerfTelemetry] = useState<OperationsPerfTelemetry | null>(null);
+  const retryFailedGlbsRef = useRef<() => void>(() => {});
   const activeQualityProfile = useMemo(() => GtexSceneRegistry.detectDeviceQuality(), []);
 
   // Interactive department action states
@@ -288,57 +308,86 @@ export function ClubOperationsCentre3D({
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
+  const requestedHotspotRef = useRef<{ destKey: string; hotspotId: string } | null>(null);
+  const [focusedStationAction, setFocusedStationAction] = useState<string | null>(null);
+
+  const isDisabledTarget = (el: HTMLElement | null): boolean =>
+    Boolean(el && "disabled" in el && (el as HTMLButtonElement | HTMLInputElement).disabled);
+
   const focusHotspotAction = (action: string, destinationKey: string, hotspotId: string) => {
+    requestedHotspotRef.current = { destKey: destinationKey, hotspotId };
+    setCameraMode("room");
     setActiveDestKey(destinationKey);
     setActiveHotspotId(hotspotId);
+    setFocusedStationAction(action || null);
 
     if (action === "inspect_timeline") {
       setShowTimelineDrawer(true);
+      window.requestAnimationFrame(() => {
+        const drawer = document.querySelector<HTMLElement>('[data-testid="living-world-timeline-drawer"]');
+        drawer?.focus?.({ preventScroll: true });
+      });
       return;
     }
 
     const selectors: Record<string, string[]> = {
-      inspect_briefing: ['[data-testid="room-panel-executive-office"]'],
-      inspect_decisions: ['[data-testid="room-panel-executive-office"]'],
-      set_mentality: ['[data-testid="set-mentality-balanced"]'],
-      pledge_win_bonus: ['[data-testid="room-pledge-win-bonus-btn"]'],
-      configure_delegation: ['[data-testid="set-delegation-balanced"]'],
+      inspect_briefing: ['[data-testid="executive-briefing-summary"]', '[data-testid="room-panel-executive-office"]'],
+      inspect_decisions: ['[data-testid="executive-pending-decisions"]', '[data-testid="room-panel-executive-office"]'],
+      set_mentality: ['[data-testid="set-mentality-balanced"]', '[data-testid="manager-tactical-panel"]'],
+      pledge_win_bonus: ['[data-testid="room-pledge-win-bonus-btn"]', '[data-testid="manager-matchday-prep"]'],
+      configure_delegation: ['[data-testid="set-delegation-balanced"]', '[data-testid="gm-delegation-panel"]'],
       inspect_campus: ['[data-testid="campus-construction-projects"]', '[data-testid="room-panel-general-managers-office"]'],
       commission_intake: ['[data-testid="commission-academy-intake-btn"]'],
       manage_regens: ['[data-testid="academy-regen-pipeline"]', '[data-testid="room-panel-academy-department"]'],
-      run_conditioning: ['[data-testid="medical-rehabilitation-ward"]', '[data-testid="room-panel-medical-department"]'],
+      run_conditioning: ['[data-testid="run-medical-recovery-protocol-btn"]', '[data-testid="medical-rehabilitation-ward"]'],
       inspect_workloads: ['[data-testid="medical-workload-watchlist"]', '[data-testid="room-panel-medical-department"]'],
       inspect_ledger: ['[data-testid="finance-ledger-stream"]', '[data-testid="room-panel-finance-commercial-office"]'],
-      sign_sponsor: ['[data-testid^="sign-sponsor-"]', '[data-testid="finance-sponsor-offers"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      sign_sponsor: ['[data-testid^="sign-sponsor-"]', '[data-testid="finance-sponsor-offers"]'],
       inspect_matchday_econ: ['[data-testid="finance-matchday-economics"]', '[data-testid="room-panel-finance-commercial-office"]'],
     };
     const targets = action.startsWith("chat_")
-      ? ['[data-testid="department-staff-chat-input"]']
+      ? ['[data-testid="department-staff-chat-input"]', '[data-testid="vacant-staff-channel-notice"]']
       : selectors[action] || [];
     const panelSelector = `[data-testid="department-inspector-${destinationKey}"]`;
 
     window.requestAnimationFrame(() => {
-      let target: HTMLElement | null = null;
+      let firstMatch: HTMLElement | null = null;
+      let enabledTarget: HTMLElement | null = null;
       for (const selector of targets) {
-        target = document.querySelector<HTMLElement>(selector);
-        if (target) break;
+        const candidate = document.querySelector<HTMLElement>(selector);
+        if (!candidate) continue;
+        if (!firstMatch) firstMatch = candidate;
+        if (!isDisabledTarget(candidate)) {
+          enabledTarget = candidate;
+          break;
+        }
       }
-      target = target || document.querySelector<HTMLElement>(panelSelector);
-      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
-      if (action.startsWith("chat_")) target?.focus();
+      const focusNode = enabledTarget || firstMatch || document.querySelector<HTMLElement>(panelSelector);
+      focusNode?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      focusNode?.focus?.({ preventScroll: true });
     });
   };
+
+  const focusHotspotActionRef = useRef(focusHotspotAction);
+  focusHotspotActionRef.current = focusHotspotAction;
 
   const activeDirectiveDepartment =
     DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
   const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
 
-  // Sync hotspot when switching destination
+  // Sync hotspot when switching destination without clobbering explicit station selection
   useEffect(() => {
-    if (activeDestination?.hotspots?.length) {
+    const destKey = activeDestination?.destination_key;
+    const requested = requestedHotspotRef.current;
+    if (requested && requested.destKey === destKey) {
+      requestedHotspotRef.current = null;
+      setActiveHotspotId(requested.hotspotId);
+    } else if (activeDestination?.hotspots?.length) {
       setActiveHotspotId(activeDestination.hotspots[0].id);
+      setFocusedStationAction(null);
     } else {
       setActiveHotspotId(null);
+      setFocusedStationAction(null);
     }
     setDirectiveObjectiveKey("");
   }, [activeDestination?.destination_key]);
@@ -349,6 +398,10 @@ export function ClubOperationsCentre3D({
   const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...OVERVIEW_CAMERA_TARGET));
   const isTransitioningRef = useRef<boolean>(true);
   const roomGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const roomScreensRef = useRef<DepartmentScreenHandle[]>([]);
+  const roomActorsRef = useRef<THREE.Group[]>([]);
+  const hubRef = useRef<ClubOperationsHubPayload | null | undefined>(hub);
+  hubRef.current = hub;
   const lightingObjectsRef = useRef<{
     scene: THREE.Scene;
     hemisphere: THREE.HemisphereLight;
@@ -359,7 +412,12 @@ export function ClubOperationsCentre3D({
   const lightingRef = useRef<"day" | "night">(lightingMode);
   lightingRef.current = lightingMode;
 
-  // Update camera target whenever activeDestination or cameraMode changes
+  const activeHotspotForCamera = useMemo(
+    () => activeDestination?.hotspots.find((h) => h.id === activeHotspotId) || null,
+    [activeDestination, activeHotspotId],
+  );
+
+  // Update camera target whenever activeDestination, activeHotspot, or cameraMode changes
   useEffect(() => {
     if (cameraMode === "overview" || !activeDestination) {
       cameraGoalPosRef.current.set(...OVERVIEW_CAMERA_POS);
@@ -369,10 +427,11 @@ export function ClubOperationsCentre3D({
     }
     const [cx, cy, cz] = activeDestination.camera_position;
     const [tx, ty, tz] = activeDestination.camera_target;
-    cameraGoalPosRef.current.set(cx, cy, cz);
-    cameraGoalTargetRef.current.set(tx, ty, tz);
+    const [ox, oy, oz] = activeHotspotForCamera?.offset || [0, 0, 0];
+    cameraGoalPosRef.current.set(cx + ox * 0.45, cy, cz + oz * 0.45);
+    cameraGoalTargetRef.current.set(tx + ox * 0.65, ty + oy * 0.2, tz + oz * 0.65);
     isTransitioningRef.current = true;
-  }, [activeDestination, cameraMode]);
+  }, [activeDestination, activeHotspotForCamera, cameraMode]);
 
   // Build and manage the Three.js 3D Club Operations Headquarters scene
   useEffect(() => {
@@ -386,6 +445,9 @@ export function ClubOperationsCentre3D({
 
     setLoadedGlbCount(0);
     setFailedGlbModels([]);
+    setGlbRetryCount(0);
+    setPerfTelemetry(null);
+    setWebglStatus("initializing");
 
     const isCompactViewport =
       typeof window.matchMedia === "function"
@@ -498,46 +560,33 @@ export function ClubOperationsCentre3D({
     const animatedActors: THREE.Group[] = [];
     const loader = new GLTFLoader();
     let mounted = true;
-    let loadedModels = 0;
+    const loadedDestKeys = new Set<string>();
+    const failedDestKeys = new Set<string>();
+    const fallbackMeshes = new Map<string, THREE.Object3D>();
+    let retryAttemptCount = 0;
     roomGroupsRef.current.clear();
+    roomScreensRef.current = [];
+    roomActorsRef.current = [];
 
-    // Build each of the 6 Operational Destination Wings
-    sceneDestinations.forEach((dest) => {
-      const group = new THREE.Group();
-      const [rx, ry, rz] = dest.position_3d;
-      group.position.set(rx, ry, rz);
-      group.userData = { destinationKey: dest.destination_key };
-      roomGroupsRef.current.set(dest.destination_key, group);
-
-      const accent = new THREE.Color(dest.accent_color || "#38bdf8");
-
-      // Build a department-specific, walk-in cutaway interior.
-      // Each room has its own furniture, equipment, surfaces and named physical stations.
-      const interiorBuild = buildDepartmentInterior(dest);
-      group.add(interiorBuild.group);
-      pickables.push(...interiorBuild.pickables);
-      animatedActors.push(...interiorBuild.animatedActors);
-
-      // Corridor Light Path to Central Atrium
-      const distToCenter = Math.hypot(rx, rz);
-      if (distToCenter > 1) {
-        const pathGeo = new THREE.BoxGeometry(0.45, 0.04, distToCenter * 0.65);
-        const pathMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.35 });
-        const pathMesh = new THREE.Mesh(pathGeo, pathMat);
-        pathMesh.position.set(-rx * 0.35, 0.05, -rz * 0.35);
-        pathMesh.lookAt(new THREE.Vector3(0, 0.05, 0));
-        group.add(pathMesh);
-      }
-
-      // Load Certified Production GLB Model as Architectural Wing Monument behind/integrated with the Room
+    const mountDestinationGlb = (dest: OperationsHubDestination, group: THREE.Group, accent: THREE.Color) => {
       const rawGlbUrl = dest.glb_model || "/models/campus/club_hq.glb";
       const glbUrl = publicUrl(rawGlbUrl);
+      const fallbackName = `fallback-wireframe-${dest.destination_key}`;
+
+      // Remove prior fallback wireframe if retrying this destination
+      const priorFallback = fallbackMeshes.get(dest.destination_key);
+      if (priorFallback) {
+        const idx = pickables.indexOf(priorFallback);
+        if (idx >= 0) pickables.splice(idx, 1);
+        group.remove(priorFallback);
+        disposeObjectResources(priorFallback);
+        fallbackMeshes.delete(dest.destination_key);
+      }
+
       loader.load(
         glbUrl,
         (gltf) => {
           if (!mounted) {
-            // A GLB may finish downloading after this scene has been unmounted.
-            // Release its GPU resources instead of leaking a late asset response.
             disposeObjectResources(gltf.scene);
             return;
           }
@@ -557,8 +606,6 @@ export function ClubOperationsCentre3D({
           const scaledCenter = new THREE.Vector3();
           scaledBox.getCenter(scaledCenter);
 
-          // Keep the certified campus asset visible as an exterior landmark beside
-          // the department, rather than allowing it to obscure the new interior.
           model.position.x = 7.0 - scaledCenter.x;
           model.position.z = -scaledCenter.z - 0.8;
           model.position.y = -scaledBox.min.y + 0.12;
@@ -574,35 +621,86 @@ export function ClubOperationsCentre3D({
           });
 
           group.add(model);
-          loadedModels += 1;
-          setLoadedGlbCount(loadedModels);
+          failedDestKeys.delete(dest.destination_key);
+          loadedDestKeys.add(dest.destination_key);
+          setFailedGlbModels(Array.from(failedDestKeys));
+          setLoadedGlbCount(loadedDestKeys.size);
         },
         undefined,
         (err) => {
           if (!mounted) return;
           console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
-          setFailedGlbModels((prev) => (prev.includes(dest.destination_key) ? prev : [...prev, dest.destination_key]));
+          failedDestKeys.add(dest.destination_key);
+          setFailedGlbModels(Array.from(failedDestKeys));
 
-          // Procedural wireframe fallback mesh so destination remains interactive and visible
-          const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
-          const fallbackMat = new THREE.MeshStandardMaterial({
-            color: accent,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.7,
-            emissive: accent,
-            emissiveIntensity: 0.2,
-          });
-          const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
-          fallbackMesh.name = `fallback-wireframe-${dest.destination_key}`;
-          fallbackMesh.position.set(7.0, 1.2, -0.8);
-          fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
-          fallbackMesh.castShadow = true;
-          fallbackMesh.receiveShadow = true;
-          pickables.push(fallbackMesh);
-          group.add(fallbackMesh);
-        }
+          if (!fallbackMeshes.has(dest.destination_key)) {
+            const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
+            const fallbackMat = new THREE.MeshStandardMaterial({
+              color: accent,
+              wireframe: true,
+              transparent: true,
+              opacity: 0.7,
+              emissive: accent,
+              emissiveIntensity: 0.2,
+            });
+            const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+            fallbackMesh.name = fallbackName;
+            fallbackMesh.position.set(7.0, 1.2, -0.8);
+            fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
+            fallbackMesh.castShadow = true;
+            fallbackMesh.receiveShadow = true;
+            pickables.push(fallbackMesh);
+            fallbackMeshes.set(dest.destination_key, fallbackMesh);
+            group.add(fallbackMesh);
+          }
+        },
       );
+    };
+
+    retryFailedGlbsRef.current = () => {
+      if (!mounted || retryAttemptCount >= MAX_GLB_RETRIES || failedDestKeys.size === 0) return;
+      retryAttemptCount += 1;
+      setGlbRetryCount(retryAttemptCount);
+      Array.from(failedDestKeys).forEach((destKey) => {
+        const dest = sceneDestinations.find((item) => item.destination_key === destKey);
+        const group = roomGroupsRef.current.get(destKey);
+        if (!dest || !group) return;
+        mountDestinationGlb(dest, group, new THREE.Color(dest.accent_color || "#38bdf8"));
+      });
+    };
+
+    // Build each of the 6 Operational Destination Wings
+    sceneDestinations.forEach((dest) => {
+      const group = new THREE.Group();
+      const [rx, ry, rz] = dest.position_3d;
+      group.position.set(rx, ry, rz);
+      group.userData = { destinationKey: dest.destination_key };
+      roomGroupsRef.current.set(dest.destination_key, group);
+
+      const accent = new THREE.Color(dest.accent_color || "#38bdf8");
+
+      // Build a department-specific, walk-in cutaway interior.
+      // Each room has its own furniture, equipment, surfaces and named physical stations.
+      const interiorBuild = buildDepartmentInterior(dest, hubRef.current);
+      group.add(interiorBuild.group);
+      pickables.push(...interiorBuild.pickables);
+      animatedActors.push(...interiorBuild.animatedActors);
+      roomScreensRef.current.push(...interiorBuild.screens);
+      roomActorsRef.current.push(...interiorBuild.animatedActors);
+
+      // Corridor Light Path to Central Atrium
+      const distToCenter = Math.hypot(rx, rz);
+      if (distToCenter > 1) {
+        const pathGeo = new THREE.BoxGeometry(0.45, 0.04, distToCenter * 0.65);
+        const pathMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.35 });
+        const pathMesh = new THREE.Mesh(pathGeo, pathMat);
+        pathMesh.position.set(-rx * 0.35, 0.05, -rz * 0.35);
+        pathMesh.lookAt(new THREE.Vector3(0, 0.05, 0));
+        group.add(pathMesh);
+      }
+
+      // Load Certified Production GLB Model as Architectural Wing Monument behind/integrated with the Room
+      mountDestinationGlb(dest, group, accent);
 
       scene.add(group);
     });
@@ -632,14 +730,15 @@ export function ClubOperationsCentre3D({
         }
         if (obj?.userData?.destinationKey) {
           const destKey = String(obj.userData.destinationKey);
-          setCameraMode("room");
-          setActiveDestKey(destKey);
           if (obj.userData.hotspotId) {
-            focusHotspotAction(
+            focusHotspotActionRef.current(
               String(obj.userData.hotspotAction || ""),
               destKey,
               String(obj.userData.hotspotId),
             );
+          } else {
+            setCameraMode("room");
+            setActiveDestKey(destKey);
           }
         }
       }
@@ -661,13 +760,24 @@ export function ClubOperationsCentre3D({
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
     resizeObserver?.observe(container);
 
+    let isContextLost = false;
+    let contextLossCount = 0;
+
     const onWebglContextLost = (event: Event) => {
       event.preventDefault();
-      // Keep the canvas mounted so the browser can restore this WebGL context.
-      // The owner can still choose the 2D floorplan manually if restoration fails.
-      setWebglStatus("fallback");
+      if (!mounted) return;
+      isContextLost = true;
+      contextLossCount += 1;
+      if (contextLossCount >= 2) {
+        setWebglStatus("fallback");
+        setRenderMode("2d");
+      } else {
+        setWebglStatus("context_lost");
+      }
     };
     const onWebglContextRestored = () => {
+      if (!mounted) return;
+      isContextLost = false;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
       onResize();
       setWebglStatus("ready");
@@ -677,15 +787,6 @@ export function ClubOperationsCentre3D({
 
     setWebglStatus("ready");
 
-    if (typeof window !== "undefined") {
-      (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
-        scene,
-        roomGroups: roomGroupsRef.current,
-        camera,
-        renderer,
-      };
-    }
-
     let animFrameId = 0;
     let lastRenderAt = 0;
     let qualityWindowStartedAt = performance.now();
@@ -694,17 +795,54 @@ export function ClubOperationsCentre3D({
     let slowQualityWindows = 0;
     let fastQualityWindows = 0;
     let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
+    let latestTelemetry: OperationsPerfTelemetry = {
+      fps: qualityProfile.targetFps,
+      frameMs: Math.round((1000 / Math.max(1, qualityProfile.targetFps)) * 10) / 10,
+      tier: qualityTier,
+      pixelRatio: adaptivePixelRatio,
+      contextLossCount,
+    };
+
+    if (typeof window !== "undefined") {
+      (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
+        scene,
+        roomGroups: roomGroupsRef.current,
+        roomScreens: roomScreensRef.current,
+        roomActors: roomActorsRef.current,
+        camera,
+        renderer,
+        getTelemetry: () => ({
+          ...latestTelemetry,
+          loadedGlbs: loadedDestKeys.size,
+          failedGlbs: failedDestKeys.size,
+          retryAttempts: retryAttemptCount,
+          contextLossCount,
+        }),
+      };
+    }
     const targetFrameInterval = 1000 / qualityProfile.targetFps;
     // Allow 2.5ms of rAF timer jitter so 60Hz monitors never drop every second frame
     // and trigger false-positive adaptive quality downgrades.
     const frameCapThreshold = Math.max(0, targetFrameInterval - 2.5);
     const animate = (now: number) => {
       animFrameId = requestAnimationFrame(animate);
+      if (isContextLost) return;
       if (lastRenderAt > 0 && now - lastRenderAt < frameCapThreshold) return;
       const frameDelta = lastRenderAt > 0 ? Math.min(250, now - lastRenderAt) : targetFrameInterval;
       lastRenderAt = now;
       qualityFrameCount += 1;
       qualityFrameTotalMs += frameDelta;
+      if (qualityFrameCount === 2 || qualityFrameCount === 5) {
+        const warmupMs = Math.max(1, qualityFrameTotalMs / qualityFrameCount);
+        latestTelemetry = {
+          fps: Math.max(1, Math.round(1000 / warmupMs)),
+          frameMs: Math.round(warmupMs * 10) / 10,
+          tier: qualityTier,
+          pixelRatio: adaptivePixelRatio,
+          contextLossCount,
+        };
+        setPerfTelemetry(latestTelemetry);
+      }
       if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
         const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
         const slowFrameThreshold = Math.max(24, targetFrameInterval * 1.25);
@@ -741,6 +879,14 @@ export function ClubOperationsCentre3D({
           }
           fastQualityWindows = 0;
         }
+        latestTelemetry = {
+          fps: Math.max(1, Math.round(1000 / Math.max(1, averageFrameMs))),
+          frameMs: Math.round(averageFrameMs * 10) / 10,
+          tier: qualityTier,
+          pixelRatio: adaptivePixelRatio,
+          contextLossCount,
+        };
+        setPerfTelemetry(latestTelemetry);
         qualityWindowStartedAt = now;
         qualityFrameCount = 0;
         qualityFrameTotalMs = 0;
@@ -802,12 +948,27 @@ export function ClubOperationsCentre3D({
       renderer.domElement.remove();
       renderer.dispose();
       lightingObjectsRef.current = null;
+      retryFailedGlbsRef.current = () => {};
       roomGroupsRef.current.clear();
+      roomScreensRef.current = [];
+      roomActorsRef.current = [];
       if (typeof window !== "undefined") {
         delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
       }
     };
   }, [renderMode, sceneConfigurationKey]);
+
+  // Live operational hub metrics and staff appointments update all 3D screens and actors in-place
+  // without destroying or rebuilding the WebGLRenderer or Three.js scene graph.
+  useEffect(() => {
+    if (renderMode !== "3d") return;
+    if (roomScreensRef.current.length > 0) {
+      updateDepartmentScreens(roomScreensRef.current, destinations, hub);
+    }
+    if (roomActorsRef.current.length > 0) {
+      updateDepartmentActors(roomActorsRef.current, destinations);
+    }
+  }, [renderMode, destinations, hub]);
 
   // Day/night is a light-rig change, not a reason to destroy and reload the entire scene.
   useEffect(() => {
@@ -866,9 +1027,33 @@ export function ClubOperationsCentre3D({
   const handleSetMentality = async (mentality: "defensive" | "balanced" | "attacking") => {
     setBusyAction(`mentality:${mentality}`);
     try {
-      await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, { mentality });
+      const res = await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, { mentality });
+      const decision = res?.data || {};
       await invalidateAll();
-      toast.success(`First-team tactical mentality set to '${mentality.toUpperCase()}'.`);
+      const decisionStatus = String(decision.manager_decision_status || decision.decision_status || "");
+      const reasoning = String(decision.manager_decision_reasoning || "").trim();
+      if (decisionStatus === "rejected") {
+        toast.warning(
+          reasoning ||
+            `Owner preference '${mentality.toUpperCase()}' recorded, but First-Team Manager retained '${String(
+              decision.effective_matchday_mentality || decision.mentality || "balanced",
+            ).toUpperCase()}'.`,
+        );
+      } else if (decisionStatus === "modified") {
+        toast.info(
+          reasoning ||
+            `Manager modified request '${mentality.toUpperCase()}' to effective mentality '${String(
+              decision.effective_matchday_mentality || decision.mentality || "balanced",
+            ).toUpperCase()}'.`,
+        );
+      } else {
+        toast.success(
+          reasoning ||
+            `Matchday tactical plan synced to '${String(
+              decision.effective_matchday_mentality || decision.mentality || mentality,
+            ).toUpperCase()}'.`,
+        );
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -896,11 +1081,10 @@ export function ClubOperationsCentre3D({
     setBusyAction(`delegation:${style}`);
     try {
       await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/delegation`, {
-        delegation_style: style,
-        auto_renew_contracts: style !== "hands_on",
-        auto_scout_youth: true,
-        auto_manage_ticket_PR: style === "delegating",
-        wage_cap_pct: style === "hands_on" ? 60 : 70,
+        mode: style,
+        gm_transfer_autonomy: style !== "hands_on",
+        hoyd_youth_contracts: style !== "hands_on",
+        manager_tactics_autonomy: true,
       });
       await invalidateAll();
       toast.success(`General Manager delegation policy updated to '${style.replace("_", " ")}'.`);
@@ -996,15 +1180,63 @@ export function ClubOperationsCentre3D({
     }
   };
 
+  const handleRunMedicalRecoveryProtocol = async (costGtex = 800) => {
+    setBusyAction("medical-recovery-protocol");
+    try {
+      const res = await api.post(clubMedicalRecoveryProtocolEndpoint(clubId), { cost_gtex: costGtex });
+      await invalidateAll();
+      toast.success(
+        String(res?.data?.outcome || "Executed Hydro & Cryo conditioning protocol for the squad."),
+      );
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleDismissStaffMember = async (roleKey: string, staffName: string) => {
+    setBusyAction(`dismiss-staff:${roleKey}`);
+    try {
+      await api.post(clubStaffMarketDismissEndpoint(clubId), {
+        role: roleKey,
+        reason: "Released via General Manager's Operations Desk",
+      });
+      await invalidateAll();
+      toast.success(`${staffName} released from executive duties.`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
   const handleSendStaffChat = async (roleKey: string) => {
     const message = staffMessageText.trim();
     if (!message || sendingChat) return;
+    if (
+      activeDestination &&
+      (activeDestination.communication_channel_mode === "vacant" || activeDestination.staff_lead?.is_vacant)
+    ) {
+      toast.info("This department position is currently vacant. Appoint staff before opening direct dialogue.");
+      return;
+    }
     setSendingChat(true);
     try {
       // Use the same durable communications thread as the Club Inbox.
-      // The legacy /staff/chat endpoint writes to the older story-chat flow.
-      const threadId = roleKey.startsWith("staff:") ? roleKey : `staff:${roleKey}`;
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
+      // Executive Office uses the office-wide room:staff channel; appointed offices route to their own role.
+      const isExecutiveRoom =
+        activeDestination?.destination_key === "executive_office" ||
+        activeDestination?.communication_channel_mode === "office_wide" ||
+        roleKey === "owner";
+      const threadId =
+        activeDestination?.communication_thread_id ||
+        (isExecutiveRoom
+          ? "room:staff"
+          : roleKey.startsWith("staff:") || roleKey.startsWith("room:")
+            ? roleKey
+            : `staff:${roleKey}`);
+      const res = await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
         thread_id: threadId,
         message,
         sender_role: "owner",
@@ -1016,7 +1248,15 @@ export function ClubOperationsCentre3D({
       await invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["communications", clubId] });
       queryClient.invalidateQueries({ queryKey: ["owner-comms-summary"] });
-      toast.success("Message delivered to the department's durable communications thread.");
+      if (res?.data?.role_vacant) {
+        toast.info("Executive broadcast recorded in Staff Room (awaiting appointed staff replies).");
+      } else {
+        toast.success(
+          isExecutiveRoom
+            ? "Executive broadcast delivered to the Staff Room."
+            : "Message delivered to the department's durable communications thread.",
+        );
+      }
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -1289,9 +1529,23 @@ export function ClubOperationsCentre3D({
                     return (
                       <div
                         key={dest.destination_key}
+                        role="button"
+                        tabIndex={0}
+                        aria-pressed={isSelected}
+                        aria-label={`Select ${dest.label} wing`}
                         data-testid={`floorplan-room-${dest.destination_key}`}
-                        onClick={() => setActiveDestKey(dest.destination_key)}
-                        className={`cursor-pointer rounded-xl border p-3.5 transition flex flex-col justify-between ${
+                        onClick={() => {
+                          setCameraMode("room");
+                          setActiveDestKey(dest.destination_key);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") {
+                            e.preventDefault();
+                            setCameraMode("room");
+                            setActiveDestKey(dest.destination_key);
+                          }
+                        }}
+                        className={`cursor-pointer rounded-xl border p-3.5 transition flex flex-col justify-between focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                           isSelected
                             ? "border-sky-400 bg-sky-950/60 ring-2 ring-sky-400/30"
                             : "border-white/15 bg-black/40 hover:border-white/30"
@@ -1313,24 +1567,40 @@ export function ClubOperationsCentre3D({
                           </div>
                           <p className="mt-1 text-xs font-bold text-white">{dest.staff_lead.name}</p>
                           <p className="text-[10px] text-slate-400">
-                            Mood: {dest.staff_lead.mood ?? 78}% · {dest.staff_lead.role_label}
+                            {dest.staff_lead.is_owner_workspace
+                              ? `Executive Command · ${dest.staff_lead.role_label}`
+                              : dest.staff_lead.is_vacant
+                                ? `Position Vacant · ${dest.staff_lead.role_label}`
+                                : `Mood: ${dest.staff_lead.mood ?? 78}% · ${dest.staff_lead.role_label}`}
                           </p>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1 pt-2 border-t border-white/10">
-                          {dest.hotspots.map((hs) => (
-                            <button
-                              key={hs.id}
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setActiveDestKey(dest.destination_key);
-                                setActiveHotspotId(hs.id);
-                              }}
-                              className="rounded bg-white/10 px-1.5 py-0.5 text-[9px] font-semibold text-slate-200 hover:bg-sky-500/30"
-                            >
-                              {hs.label}
-                            </button>
-                          ))}
+                          {dest.hotspots.map((hs) => {
+                            const isHotspotSelected = isSelected && activeHotspotId === hs.id;
+                            return (
+                              <button
+                                key={hs.id}
+                                type="button"
+                                data-testid={`floorplan-hotspot-${dest.destination_key}-${hs.id}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  focusHotspotAction(hs.action, dest.destination_key, hs.id);
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" || e.key === " ") {
+                                    e.stopPropagation();
+                                  }
+                                }}
+                                className={`rounded px-1.5 py-0.5 text-[9px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+                                  isHotspotSelected
+                                    ? "bg-sky-500 text-slate-950 font-black"
+                                    : "bg-white/10 text-slate-200 hover:bg-sky-500/30"
+                                }`}
+                              >
+                                {hs.label}
+                              </button>
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -1359,26 +1629,84 @@ export function ClubOperationsCentre3D({
 
               <div
                 data-testid="glb-asset-status"
-                className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md"
+                className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md"
               >
                 <span>
                   {renderMode === "3d"
-                    ? `WebGL ${webglStatus === "ready" ? "Active" : "Init"} · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
+                    ? `WebGL ${
+                        webglStatus === "ready"
+                          ? "Active"
+                          : webglStatus === "context_lost"
+                            ? "Context Lost"
+                            : webglStatus === "fallback"
+                              ? "Fallback"
+                              : "Init"
+                      } · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
                     : "2D Blueprint Active"}
                 </span>
+                {renderMode === "3d" && perfTelemetry && (
+                  <span
+                    data-testid="webgl-perf-telemetry"
+                    className="gx-mono border-l border-white/15 pl-2 text-[9px] text-sky-300"
+                  >
+                    {perfTelemetry.fps} FPS · {perfTelemetry.frameMs.toFixed(1)}ms · {perfTelemetry.tier}
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* WebGL Context Loss Resilience Banner */}
+            {renderMode === "3d" && webglStatus === "context_lost" && (
+              <div
+                data-testid="webgl-context-lost-banner"
+                className="pointer-events-auto absolute inset-x-3 top-14 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/60 bg-rose-950/90 px-3 py-2 text-xs text-rose-100 backdrop-blur-md z-20"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-rose-400 shrink-0" />
+                  <span>
+                    3D WebGL GPU context was interrupted. Waiting for automatic browser recovery, or switch to the 2D Blueprint view.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="switch-to-2d-on-loss-btn"
+                  onClick={() => {
+                    setWebglStatus("fallback");
+                    setRenderMode("2d");
+                  }}
+                  className="rounded-lg border border-rose-400/50 bg-rose-500/20 px-2.5 py-1 text-[10px] font-bold uppercase text-rose-100 hover:bg-rose-500/30"
+                >
+                  Switch to 2D Blueprint
+                </button>
+              </div>
+            )}
 
             {/* GLB Asset Warning Banner */}
             {failedGlbModels.length > 0 && (
               <div
                 data-testid="glb-asset-warning"
-                className="pointer-events-auto absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md z-10"
+                className={`pointer-events-auto absolute inset-x-3 ${
+                  webglStatus === "context_lost" ? "top-28" : "top-14"
+                } flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/50 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md z-10`}
               >
-                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                <span>
-                  {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for {failedGlbModels.join(", ")}.
-                </span>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                  <span>
+                    {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for{" "}
+                    {failedGlbModels.join(", ")}.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="retry-failed-glb-btn"
+                  disabled={glbRetryCount >= MAX_GLB_RETRIES}
+                  onClick={() => retryFailedGlbsRef.current()}
+                  className="rounded-lg border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-100 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {glbRetryCount >= MAX_GLB_RETRIES
+                    ? `Retry Limit Reached (${glbRetryCount}/${MAX_GLB_RETRIES})`
+                    : `Retry Failed Assets (${glbRetryCount}/${MAX_GLB_RETRIES})`}
+                </button>
               </div>
             )}
 
@@ -1396,8 +1724,9 @@ export function ClubOperationsCentre3D({
                         key={hs.id}
                         type="button"
                         data-testid={`room-hotspot-${hs.id}`}
-                        onClick={() => setActiveHotspotId(hs.id)}
-                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                        aria-pressed={isHsActive}
+                        onClick={() => focusHotspotAction(hs.action, activeDestination.destination_key, hs.id)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                           isHsActive
                             ? "bg-sky-500 text-slate-950 font-black"
                             : "bg-white/5 text-slate-200 hover:bg-white/15"
@@ -1413,54 +1742,110 @@ export function ClubOperationsCentre3D({
           </div>
 
           {/* Quick Staff Communication Bar for Active Room Lead */}
-          <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 space-y-2.5">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-black uppercase tracking-wider text-sky-300">
-                  Direct Channel · {activeDestination.staff_lead.name} ({activeDestination.staff_lead.role_label})
-                </span>
-                <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
-                  Mood {activeDestination.staff_lead.mood ?? 78}%
-                </span>
-              </div>
-              <span className="text-[10px] text-slate-400">{activeDestination.staff_lead.specialty}</span>
-            </div>
-
-            {activeDestination.recent_messages.length > 0 && (
-              <div className="max-h-24 overflow-y-auto space-y-1.5 rounded-lg border border-white/5 bg-slate-950/70 p-2.5 text-xs">
-                {activeDestination.recent_messages.slice(-2).map((m, idx) => (
-                  <p key={m.id || idx} className="text-slate-300">
-                    <span className="font-bold text-white">{m.sender}: </span>
-                    {m.message}
-                  </p>
-                ))}
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              <input
-                type="text"
-                data-testid="department-staff-chat-input"
-                value={staffMessageText}
-                onChange={(e) => setStaffMessageText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleSendStaffChat(activeDestination.lead_role_key);
-                }}
-                placeholder={`Issue directive or ask ${activeDestination.staff_lead.name} about ${activeDestination.short_label}…`}
-                className="flex-1 rounded-lg border border-white/15 bg-slate-950/90 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none"
-              />
-              <button
-                type="button"
-                data-testid="department-staff-chat-send"
-                disabled={sendingChat || !staffMessageText.trim()}
-                onClick={() => handleSendStaffChat(activeDestination.lead_role_key)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/20 px-3.5 py-1.5 text-xs font-bold uppercase text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
+          {(() => {
+            const isExecutiveChannel =
+              activeDestination.destination_key === "executive_office" ||
+              activeDestination.communication_channel_mode === "office_wide" ||
+              activeDestination.lead_role_key === "owner";
+            const isVacantChannel =
+              !isExecutiveChannel &&
+              (activeDestination.communication_channel_mode === "vacant" ||
+                Boolean(activeDestination.staff_lead?.is_vacant));
+            const isChatFocused = Boolean(focusedStationAction?.startsWith("chat_"));
+            return (
+              <div
+                tabIndex={-1}
+                className={`rounded-xl border bg-black/40 p-3.5 space-y-2.5 transition ${
+                  isChatFocused ? "border-sky-400/70 ring-2 ring-sky-400/40" : "border-white/10"
+                }`}
               >
-                <Send size={12} />
-                <span>{sendingChat ? "…" : "Send"}</span>
-              </button>
-            </div>
-          </div>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      data-testid="department-channel-heading"
+                      className="text-xs font-black uppercase tracking-wider text-sky-300"
+                    >
+                      {isExecutiveChannel
+                        ? `Office-Wide Staff Room · ${activeDestination.staff_lead.name} (Command)`
+                        : isVacantChannel
+                          ? `Position Vacant · ${activeDestination.staff_lead.role_label}`
+                          : `Direct Channel · ${activeDestination.staff_lead.name} (${activeDestination.staff_lead.role_label})`}
+                    </span>
+                    {isExecutiveChannel ? (
+                      <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
+                        {activeDestination.communication_thread_id || "room:staff"}
+                      </span>
+                    ) : isVacantChannel ? (
+                      <span className="gx-mono rounded bg-amber-950/70 border border-amber-500/30 px-2 py-0.5 text-[10px] text-amber-300">
+                        Vacant Seat
+                      </span>
+                    ) : (
+                      <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
+                        Mood {activeDestination.staff_lead.mood ?? 78}%
+                      </span>
+                    )}
+                  </div>
+                  <span className="text-[10px] text-slate-400">{activeDestination.staff_lead.specialty}</span>
+                </div>
+
+                {activeDestination.recent_messages.length > 0 && (
+                  <div className="max-h-24 overflow-y-auto space-y-1.5 rounded-lg border border-white/5 bg-slate-950/70 p-2.5 text-xs">
+                    {activeDestination.recent_messages.slice(-2).map((m, idx) => (
+                      <p key={m.id || idx} className="text-slate-300">
+                        <span className="font-bold text-white">{m.sender}: </span>
+                        {m.message}
+                      </p>
+                    ))}
+                  </div>
+                )}
+
+                {isVacantChannel && (
+                  <p
+                    tabIndex={-1}
+                    data-testid="vacant-staff-channel-notice"
+                    className="rounded-lg border border-amber-500/30 bg-amber-950/30 px-3 py-2 text-[11px] text-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-400/70"
+                  >
+                    This department head role is vacant. Appoint an executive candidate via{" "}
+                    <a href="/app/staff-market" className="font-bold underline hover:text-white">
+                      Staff Market
+                    </a>{" "}
+                    before initiating direct staff dialogue.
+                  </p>
+                )}
+
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    data-testid="department-staff-chat-input"
+                    disabled={isVacantChannel}
+                    value={staffMessageText}
+                    onChange={(e) => setStaffMessageText(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !isVacantChannel) handleSendStaffChat(activeDestination.lead_role_key);
+                    }}
+                    placeholder={
+                      isExecutiveChannel
+                        ? "Broadcast executive directive to appointed senior staff in room:staff…"
+                        : isVacantChannel
+                          ? "Direct line unavailable while position is vacant…"
+                          : `Issue directive or ask ${activeDestination.staff_lead.name} about ${activeDestination.short_label}…`
+                    }
+                    className="flex-1 rounded-lg border border-white/15 bg-slate-950/90 px-3 py-1.5 text-xs text-white placeholder:text-slate-500 focus:border-sky-400 focus:outline-none disabled:opacity-50"
+                  />
+                  <button
+                    type="button"
+                    data-testid="department-staff-chat-send"
+                    disabled={isVacantChannel || sendingChat || !staffMessageText.trim()}
+                    onClick={() => handleSendStaffChat(activeDestination.lead_role_key)}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-sky-400/50 bg-sky-500/20 px-3.5 py-1.5 text-xs font-bold uppercase text-sky-200 hover:bg-sky-500/30 disabled:opacity-50"
+                  >
+                    <Send size={12} />
+                    <span>{sendingChat ? "…" : isExecutiveChannel ? "Broadcast" : "Send"}</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* Right 5 cols: Contextual Department Inspector & Decision Execution Panel */}
@@ -1746,7 +2131,13 @@ export function ClubOperationsCentre3D({
             {/* 1. EXECUTIVE OFFICE VIEW */}
             {activeDestination.destination_key === "executive_office" && (
               <div className="space-y-3.5" data-testid="room-panel-executive-office">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div
+                  tabIndex={-1}
+                  data-testid="executive-briefing-summary"
+                  className={`grid grid-cols-2 gap-2.5 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-emerald-400/70 ${
+                    focusedStationAction === "inspect_briefing" ? "ring-2 ring-emerald-400/60 p-1" : ""
+                  }`}
+                >
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Club Treasury</p>
                     <p className="gx-mono text-sm font-black text-white mt-0.5">
@@ -1776,19 +2167,28 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Urgent Risks */}
-                {(rpt.urgent_risks || []).length > 0 && (
-                  <div className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                      <ShieldAlert size={13} />
-                      <span>Executive Risk Watchlist</span>
-                    </p>
-                    {(rpt.urgent_risks || []).map((r: any) => (
+                <div
+                  tabIndex={-1}
+                  data-testid="executive-urgent-risks"
+                  className="rounded-xl border border-rose-500/30 bg-rose-950/20 p-3 space-y-2 focus:outline-none focus:ring-2 focus:ring-rose-400/70"
+                >
+                  <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+                    <ShieldAlert size={13} />
+                    <span>Executive Risk Watchlist ({(rpt.urgent_risks || []).length})</span>
+                  </p>
+                  {(rpt.urgent_risks || []).length === 0 ? (
+                    <p className="text-[11px] text-emerald-300">No acute strategic or financial risks flagged today.</p>
+                  ) : (
+                    (rpt.urgent_risks || []).map((r: any) => (
                       <div key={r.risk_id} className="rounded border border-white/10 bg-black/40 p-2 text-xs">
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-white">{r.title}</span>
                           <button
                             type="button"
-                            onClick={() => setActiveDestKey(r.department)}
+                            onClick={() => {
+                              setCameraMode("room");
+                              setActiveDestKey(r.department);
+                            }}
                             className="text-[10px] font-bold uppercase text-sky-300 hover:underline"
                           >
                             Open Wing
@@ -1796,81 +2196,110 @@ export function ClubOperationsCentre3D({
                         </div>
                         <p className="text-[11px] text-slate-300 mt-0.5">{r.detail}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
 
-                {/* Boardroom Dilemma Quick Resolution */}
-                {dilemma && dilemma.status === "open" && (
-                  <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Boardroom Dilemma · {dilemma.title}
-                    </p>
-                    <p className="text-[11px] text-slate-300">{dilemma.conflict_summary}</p>
-                    <div className="space-y-1.5 pt-1">
-                      {dilemma.choices.map((ch) => (
-                        <button
-                          key={ch.choice_id}
-                          type="button"
-                          disabled={Boolean(busyAction)}
-                          onClick={() => handleResolveDilemma(ch.choice_id)}
-                          className="w-full rounded-lg border border-white/15 bg-black/50 p-2 text-left hover:border-amber-400/60"
+                {/* Boardroom Dilemma + Cross-Departmental Decisions */}
+                <div
+                  tabIndex={-1}
+                  data-testid="executive-pending-decisions"
+                  className={`space-y-3 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                    focusedStationAction === "inspect_decisions" ? "ring-2 ring-amber-400/60 p-1.5" : ""
+                  }`}
+                >
+                  {dilemma && dilemma.status === "open" && (
+                    <div className="rounded-xl border border-amber-500/40 bg-amber-950/20 p-3 space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
+                        Boardroom Dilemma · {dilemma.title}
+                      </p>
+                      <p className="text-[11px] text-slate-300">{dilemma.conflict_summary}</p>
+                      <div className="space-y-1.5 pt-1">
+                        {dilemma.choices.map((ch) => (
+                          <button
+                            key={ch.choice_id}
+                            type="button"
+                            disabled={Boolean(busyAction)}
+                            onClick={() => handleResolveDilemma(ch.choice_id)}
+                            className="w-full rounded-lg border border-white/15 bg-black/50 p-2 text-left hover:border-amber-400/60"
+                          >
+                            <div className="flex items-center justify-between text-xs font-bold text-white">
+                              <span>{ch.label}</span>
+                              <span className="text-[10px] text-emerald-300">{ch.effects_preview}</span>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {allOpenDeptDecisions.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Cross-Departmental Decisions Queue ({allOpenDeptDecisions.length})
+                      </p>
+                      {allOpenDeptDecisions.map((dec) => (
+                        <div
+                          key={dec.decision_id}
+                          className="rounded-lg border border-white/10 bg-black/40 p-2.5 flex items-center justify-between gap-2"
                         >
-                          <div className="flex items-center justify-between text-xs font-bold text-white">
-                            <span>{ch.label}</span>
-                            <span className="text-[10px] text-emerald-300">{ch.effects_preview}</span>
+                          <div>
+                            <p className="text-xs font-bold text-white">{dec.title}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {dec.staff_name} · {dec.cost_gtex > 0 ? `${fmt(dec.cost_gtex)} GTEX` : "No Fee"}
+                            </p>
                           </div>
-                        </button>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCameraMode("room");
+                                setActiveDestKey(dec.department);
+                              }}
+                              className="rounded border border-white/15 px-2 py-1 text-[10px] font-bold text-slate-300 hover:bg-white/10"
+                            >
+                              Room
+                            </button>
+                            <button
+                              type="button"
+                              disabled={Boolean(busyDecisionId)}
+                              onClick={() => handleExecuteDecision(dec, "approve")}
+                              className="rounded border border-emerald-500/50 bg-emerald-600/30 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-200 hover:bg-emerald-600/50"
+                            >
+                              Approve
+                            </button>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </div>
-                )}
-
-                {/* All-Club Pending Department Decisions */}
-                {allOpenDeptDecisions.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Cross-Departmental Decisions Queue ({allOpenDeptDecisions.length})
-                    </p>
-                    {allOpenDeptDecisions.map((dec) => (
-                      <div
-                        key={dec.decision_id}
-                        className="rounded-lg border border-white/10 bg-black/40 p-2.5 flex items-center justify-between gap-2"
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-white">{dec.title}</p>
-                          <p className="text-[10px] text-slate-400">
-                            {dec.staff_name} · {dec.cost_gtex > 0 ? `${fmt(dec.cost_gtex)} GTEX` : "No Fee"}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setActiveDestKey(dec.department)}
-                            className="rounded border border-white/15 px-2 py-1 text-[10px] font-bold text-slate-300 hover:bg-white/10"
-                          >
-                            Room
-                          </button>
-                          <button
-                            type="button"
-                            disabled={Boolean(busyDecisionId)}
-                            onClick={() => handleExecuteDecision(dec, "approve")}
-                            className="rounded border border-emerald-500/50 bg-emerald-600/30 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-200 hover:bg-emerald-600/50"
-                          >
-                            Approve
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                  ) : !(dilemma && dilemma.status === "open") ? (
+                    <div className="rounded-xl border border-white/10 bg-black/40 p-3">
+                      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        Boardroom &amp; Executive Decisions
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-300">
+                        All open boardroom dilemmas and cross-departmental decisions are resolved for today.
+                      </p>
+                    </div>
+                  ) : null}
+                </div>
 
                 {/* Persistent Operational Timeline */}
                 <div className="space-y-1.5 pt-2 border-t border-white/10">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
-                    <History size={12} />
-                    <span>Persistent Club Operational Log</span>
-                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+                      <History size={12} />
+                      <span>Persistent Club Operational Log</span>
+                    </p>
+                    <button
+                      type="button"
+                      data-testid="executive-open-timeline-btn"
+                      onClick={() => focusHotspotAction("inspect_timeline", "executive_office", "world_chronometer")}
+                      className="rounded border border-purple-400/40 bg-purple-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-200 hover:bg-purple-500/30"
+                    >
+                      Open Timeline Drawer
+                    </button>
+                  </div>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
                     {(Array.isArray(hub.operational_timeline) ? hub.operational_timeline : []).slice(0, 8).map((ev) => (
                       <div key={ev.id} className="rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]">
@@ -1904,33 +2333,173 @@ export function ClubOperationsCentre3D({
                   </div>
                 </div>
 
-                {/* Tactical Mentality Control */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
-                    Tactical Mentality Directive (Current: {hub.club.mentality.toUpperCase()})
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {(["defensive", "balanced", "attacking"] as const).map((m) => (
-                      <button
-                        key={m}
-                        type="button"
-                        data-testid={`set-mentality-${m}`}
-                        disabled={Boolean(busyAction)}
-                        onClick={() => handleSetMentality(m)}
-                        className={`rounded-lg border py-1.5 text-[11px] font-black uppercase transition ${
-                          hub.club.mentality === m
-                            ? "border-sky-400 bg-sky-500/30 text-white"
-                            : "border-white/10 bg-slate-900 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {m}
-                      </button>
-                    ))}
+                {/* Tactical Mentality Control & Manager Authority Split */}
+                {(() => {
+                  const tacticalAuthority =
+                    activeDestination.tactical_authority || hub.club.manager_tactical_authority;
+                  const ownerReq = String(
+                    tacticalAuthority?.owner_requested_mentality ||
+                      hub.club.owner_requested_mentality ||
+                      hub.club.mentality ||
+                      "balanced",
+                  );
+                  const effectiveMentality = String(
+                    tacticalAuthority?.effective_mentality ||
+                      hub.club.effective_matchday_mentality ||
+                      hub.club.mentality ||
+                      "balanced",
+                  );
+                  const decisionStatus = String(
+                    tacticalAuthority?.decision_status || hub.club.manager_decision_status || "aligned",
+                  );
+                  const decisionReasoning = String(
+                    tacticalAuthority?.reasoning || hub.club.manager_decision_reasoning || "",
+                  ).trim();
+                  const statusTone =
+                    decisionStatus === "rejected"
+                      ? "border-rose-500/40 bg-rose-950/40 text-rose-200"
+                      : decisionStatus === "modified"
+                        ? "border-amber-500/40 bg-amber-950/40 text-amber-200"
+                        : "border-emerald-500/40 bg-emerald-950/40 text-emerald-200";
+                  return (
+                    <div
+                      tabIndex={-1}
+                      data-testid="manager-tactical-panel"
+                      className={`rounded-xl border bg-black/40 p-3 space-y-2.5 transition focus:outline-none focus:ring-2 focus:ring-sky-400/70 ${
+                        focusedStationAction === "set_mentality" ? "border-sky-400/70 ring-2 ring-sky-400/50" : "border-white/10"
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
+                          Tactical Mentality Authority
+                        </p>
+                        <span
+                          data-testid="manager-tactical-decision"
+                          className={`gx-mono rounded border px-2 py-0.5 text-[10px] font-bold uppercase ${statusTone}`}
+                        >
+                          Decision: {decisionStatus.replace("_", " ")}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 text-[11px]">
+                        <div className="rounded-lg border border-white/10 bg-slate-950/80 px-2.5 py-1.5">
+                          <span className="block text-[9px] font-bold uppercase text-slate-400">
+                            Owner Requested
+                          </span>
+                          <span
+                            data-testid="owner-requested-mentality"
+                            className="gx-mono font-black uppercase text-slate-100"
+                          >
+                            {ownerReq}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border border-sky-500/30 bg-sky-950/30 px-2.5 py-1.5">
+                          <span className="block text-[9px] font-bold uppercase text-sky-300">
+                            Effective Matchday
+                          </span>
+                          <span
+                            data-testid="effective-matchday-mentality"
+                            className="gx-mono font-black uppercase text-white"
+                          >
+                            {effectiveMentality}
+                          </span>
+                        </div>
+                      </div>
+                      {decisionReasoning && (
+                        <p
+                          data-testid="manager-tactical-reasoning"
+                          className="rounded-lg border border-white/5 bg-slate-950/60 px-2.5 py-1.5 text-[11px] leading-relaxed text-slate-300"
+                        >
+                          {decisionReasoning}
+                        </p>
+                      )}
+                      <div className="grid grid-cols-3 gap-2">
+                        {(["defensive", "balanced", "attacking"] as const).map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            data-testid={`set-mentality-${m}`}
+                            disabled={Boolean(busyAction)}
+                            onClick={() => handleSetMentality(m)}
+                            className={`rounded-lg border py-1.5 text-[11px] font-black uppercase transition ${
+                              ownerReq === m
+                                ? "border-sky-400 bg-sky-500/30 text-white"
+                                : "border-white/10 bg-slate-900 text-slate-400 hover:text-white"
+                            }`}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                      <p className="text-[10px] text-slate-400">
+                        Non-binding Owner preference — live match coaching &amp; substitutions remain strictly under First-Team Manager authority.
+                      </p>
+                    </div>
+                  );
+                })()}
+
+                {/* Squad Readiness & Matchday Preparation */}
+                <div
+                  tabIndex={-1}
+                  data-testid="manager-squad-readiness"
+                  className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2 focus:outline-none focus:ring-2 focus:ring-sky-400/70"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
+                      Squad Readiness &amp; Matchday Prep
+                    </p>
+                    <span className="gx-mono text-[10px] text-slate-300">
+                      Shape: {rpt.tactical_and_squad_concerns?.formation || "4-3-3"} · XI{" "}
+                      {rpt.fitness_and_selection?.starting_xi_count ?? 11}
+                    </span>
                   </div>
+                  <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
+                    <div className="rounded border border-white/10 bg-slate-950/70 p-1.5">
+                      <span className="block text-slate-400">Fit Available</span>
+                      <span className="gx-mono font-black text-emerald-300">
+                        {rpt.fitness_and_selection?.available_count ?? 0}
+                      </span>
+                    </div>
+                    <div className="rounded border border-white/10 bg-slate-950/70 p-1.5">
+                      <span className="block text-slate-400">Avg Fitness</span>
+                      <span className="gx-mono font-black text-sky-300">
+                        {rpt.fitness_and_selection?.avg_fitness ?? 95}%
+                      </span>
+                    </div>
+                    <div className="rounded border border-white/10 bg-slate-950/70 p-1.5">
+                      <span className="block text-slate-400">Injured Out</span>
+                      <span className="gx-mono font-black text-rose-300">
+                        {rpt.fitness_and_selection?.unavailable_injured_count ?? 0}
+                      </span>
+                    </div>
+                  </div>
+                  {rpt.upcoming_match_preparation?.next_fixture ? (
+                    <p className="text-[11px] text-slate-300">
+                      Next Fixture:{" "}
+                      <span className="font-bold text-white">
+                        {rpt.upcoming_match_preparation.next_fixture.home_name} vs{" "}
+                        {rpt.upcoming_match_preparation.next_fixture.away_name}
+                      </span>
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400">
+                      Training preparation active · No scheduled fixture awaiting kickoff.
+                    </p>
+                  )}
+                  {(rpt.tactical_and_squad_concerns?.thin_positions || []).length > 0 && (
+                    <p className="text-[10px] text-amber-300">
+                      Depth alert: {rpt.tactical_and_squad_concerns.thin_positions.join(", ")}
+                    </p>
+                  )}
                 </div>
 
                 {/* Matchday Win Bonus Pledge */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                <div
+                  tabIndex={-1}
+                  data-testid="manager-matchday-prep"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                    focusedStationAction === "pledge_win_bonus" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                  }`}
+                >
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       Pledge Matchday Win Bonus
@@ -1985,14 +2554,36 @@ export function ClubOperationsCentre3D({
             {/* 3. GENERAL MANAGER'S OFFICE VIEW */}
             {activeDestination.destination_key === "general_managers_office" && (
               <div className="space-y-3.5" data-testid="room-panel-general-managers-office">
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                    <Sliders size={12} />
-                    <span>Executive Delegation Policy</span>
-                  </p>
+                <div
+                  tabIndex={-1}
+                  data-testid="gm-delegation-panel"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-purple-400/70 ${
+                    focusedStationAction === "configure_delegation" ? "border-purple-400/70 ring-2 ring-purple-400/50" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
+                      <Sliders size={12} />
+                      <span>Executive Delegation Policy</span>
+                    </p>
+                    <button
+                      type="button"
+                      data-testid="gm-open-directive-btn"
+                      onClick={() => {
+                        setDirectiveObjectiveKey("");
+                        setShowDirectiveModal(true);
+                      }}
+                      className="rounded border border-purple-400/40 bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-200 hover:bg-purple-500/30"
+                    >
+                      + Admin Directive
+                    </button>
+                  </div>
                   <div className="grid grid-cols-3 gap-2">
                     {(["hands_on", "balanced", "delegating"] as const).map((style) => {
-                      const currentStyle = rpt.administrative_matters?.delegation_policy?.delegation_style || "balanced";
+                      const currentStyle =
+                        rpt.administrative_matters?.delegation_policy?.mode ||
+                        rpt.administrative_matters?.delegation_policy?.delegation_style ||
+                        "balanced";
                       return (
                         <button
                           key={style}
@@ -2008,6 +2599,64 @@ export function ClubOperationsCentre3D({
                         >
                           {style.replace("_", " ")}
                         </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Executive Staffing Directory & Vacancies */}
+                <div
+                  tabIndex={-1}
+                  data-testid="gm-staffing-overview"
+                  className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2 focus:outline-none focus:ring-2 focus:ring-purple-400/70"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-300 flex items-center gap-1.5">
+                      <Users size={12} />
+                      <span>Executive Staffing &amp; Organization</span>
+                    </p>
+                    <a
+                      href="/app/staff-market"
+                      className="text-[10px] font-bold uppercase text-purple-300 hover:underline"
+                    >
+                      Hire / Staff Market
+                    </a>
+                  </div>
+                  <div className="space-y-1.5">
+                    {(rpt.staff_and_organisation?.executive_team || []).map((member: any) => {
+                      const isVacant = Boolean(member.is_vacant);
+                      return (
+                        <div
+                          key={member.role_key}
+                          className="flex items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-950 px-2.5 py-1.5 text-[11px]"
+                        >
+                          <div className="min-w-0">
+                            <p className="truncate font-bold text-white">{member.name}</p>
+                            <p className="text-[10px] text-slate-400">
+                              {member.role_label}
+                              {!isVacant && member.mood != null ? ` · Mood ${member.mood}%` : ""}
+                            </p>
+                          </div>
+                          {isVacant ? (
+                            <a
+                              href={`/app/staff-market?role=${encodeURIComponent(member.role_key)}`}
+                              data-testid={`appoint-staff-${member.role_key}`}
+                              className="shrink-0 rounded border border-emerald-400/40 bg-emerald-500/20 px-2 py-0.5 text-[9px] font-black uppercase text-emerald-200 hover:bg-emerald-500/30"
+                            >
+                              Appoint
+                            </a>
+                          ) : (
+                            <button
+                              type="button"
+                              data-testid={`dismiss-staff-${member.role_key}`}
+                              disabled={Boolean(busyAction)}
+                              onClick={() => handleDismissStaffMember(member.role_key, member.name)}
+                              className="shrink-0 rounded border border-rose-400/40 bg-rose-500/15 px-2 py-0.5 text-[9px] font-bold uppercase text-rose-200 hover:bg-rose-500/30 disabled:opacity-40"
+                            >
+                              Release
+                            </button>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -2043,21 +2692,40 @@ export function ClubOperationsCentre3D({
                   </div>
                 </div>
 
-                {/* Active 3D Campus Construction Projects */}
-                {(rpt.club_operations?.active_construction_projects || []).length > 0 && (
-                  <div data-testid="campus-construction-projects" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                {/* Campus Blueprint & Construction Progress */}
+                <div
+                  tabIndex={-1}
+                  data-testid="campus-construction-projects"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                    focusedStationAction === "inspect_campus" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Active Campus Construction Projects
+                      Campus Projects &amp; Construction ({rpt.club_operations?.operational_modules_count ?? 0} Built)
                     </p>
-                    {(rpt.club_operations?.active_construction_projects || []).map((proj: any) => (
+                    <a
+                      href="/app/campus"
+                      data-testid="open-campus-masterplan-link"
+                      className="text-[10px] font-bold uppercase text-sky-300 hover:underline"
+                    >
+                      Campus Map
+                    </a>
+                  </div>
+                  {(rpt.club_operations?.active_construction_projects || []).length === 0 ? (
+                    <p className="text-[11px] text-slate-400">
+                      No active campus builds underway. Commission new campus modules from the Campus Masterplan or upgrade core facilities above.
+                    </p>
+                  ) : (
+                    (rpt.club_operations?.active_construction_projects || []).map((proj: any) => (
                       <div
                         key={proj.instance_id}
                         className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-2 text-xs"
                       >
                         <div>
-                          <p className="font-bold text-white">{proj.name}</p>
+                          <p className="font-bold text-white">{proj.name || proj.module_name}</p>
                           <p className="text-[10px] text-slate-400">
-                            Stage {proj.stage_index}/{proj.total_stages}: {proj.construction_stage_label}
+                            Stage {proj.stage_index}/{proj.total_stages}: {proj.construction_stage_label || proj.stage}
                           </p>
                         </div>
                         <button
@@ -2069,9 +2737,9 @@ export function ClubOperationsCentre3D({
                           Advance Stage
                         </button>
                       </div>
-                    ))}
-                  </div>
-                )}
+                    ))
+                  )}
+                </div>
               </div>
             )}
 
@@ -2088,13 +2756,13 @@ export function ClubOperationsCentre3D({
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Ceiling Bonus</p>
                     <p className="gx-mono text-sm font-black text-amber-300">
-                      +{rpt.academy_development?.campus_regen_potential_bonus ?? 0} POT
+                      +{rpt.academy_development?.campus_academy_ceiling_bonus ?? rpt.academy_development?.campus_ceiling_bonus ?? rpt.academy_development?.campus_regen_potential_bonus ?? 0} POT
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Intake Quality</p>
                     <p className="gx-mono text-sm font-black text-sky-300">
-                      +{rpt.academy_development?.campus_youth_intake_quality_bonus ?? 0} OVR
+                      +{rpt.academy_development?.campus_intake_quality_pct ?? rpt.academy_development?.campus_youth_intake_quality_bonus ?? 0}%
                     </p>
                   </div>
                 </div>
@@ -2104,57 +2772,78 @@ export function ClubOperationsCentre3D({
                   data-testid="commission-academy-intake-btn"
                   disabled={busyAction === "academy-intake"}
                   onClick={handleAcademyIntake}
-                  className="w-full rounded-xl border border-emerald-400/50 bg-emerald-500/20 py-2 text-xs font-black uppercase text-emerald-200 hover:bg-emerald-500/30"
+                  className={`w-full rounded-xl border border-emerald-400/50 bg-emerald-500/20 py-2 text-xs font-black uppercase text-emerald-200 hover:bg-emerald-500/30 focus:outline-none focus:ring-2 focus:ring-emerald-400/70 ${
+                    focusedStationAction === "commission_intake" ? "ring-2 ring-emerald-400/60" : ""
+                  }`}
                 >
                   {busyAction === "academy-intake"
                     ? "Scouting & Enrolling Regens…"
-                    : `Commission New Youth Intake (${fmt(rpt.intake_recommendations?.intake_cost_gtex ?? 400)} GTEX)`}
+                    : `Commission New Youth Intake (${fmt(rpt.intake_recommendations?.next_intake_cost_gtex ?? rpt.intake_recommendations?.intake_cost_gtex ?? 1500)} GTEX)`}
                 </button>
 
-                <div className="space-y-2" data-testid="academy-regen-pipeline">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    Prospective Academy & Regen Pipeline ({(rpt.prospective_youth_players || []).length})
-                  </p>
-                  <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-                    {(rpt.prospective_youth_players || []).map((p: any) => (
-                      <div
-                        key={p.id}
-                        className="rounded-lg border border-white/10 bg-black/40 p-2.5 flex items-center justify-between gap-2"
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-white">
-                            {p.name}{" "}
-                            <span className="text-[10px] text-slate-400">
-                              ({p.position} · Age {p.age})
-                            </span>
-                          </p>
-                          <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">
-                            OVR {p.rating} → POT {p.potential} (+{p.headroom} Headroom) · Morale {p.morale}%
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            disabled={Boolean(busyAction)}
-                            onClick={() => handleOfferYouthContract(p.id, p.name)}
-                            className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[9px] font-bold uppercase text-sky-200 hover:bg-sky-500/30"
-                          >
-                            Extend
-                          </button>
-                          {!["first_team", "senior"].includes(String(p.squad_status || "")) && (
+                <div
+                  tabIndex={-1}
+                  data-testid="academy-regen-pipeline"
+                  className={`space-y-2 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                    focusedStationAction === "manage_regens" ? "ring-2 ring-amber-400/60 p-1.5" : ""
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                      Prospective Academy &amp; Regen Pipeline ({(rpt.prospective_youth_players || []).length})
+                    </p>
+                    <span className="text-[10px] text-emerald-300">
+                      Ready: {rpt.academy_development?.ready_for_senior_count ?? 0}
+                    </span>
+                  </div>
+                  {(rpt.prospective_youth_players || []).length === 0 ? (
+                    <p className="rounded-lg border border-white/10 bg-black/40 p-3 text-xs text-slate-400">
+                      No youth intake regens currently enrolled. Commission a youth intake cohort above to scout prospects.
+                    </p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+                      {(rpt.prospective_youth_players || []).map((p: any) => (
+                        <div
+                          key={p.id}
+                          className="rounded-lg border border-white/10 bg-black/40 p-2.5 flex items-center justify-between gap-2"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-white">
+                              {p.name}{" "}
+                              <span className="text-[10px] text-slate-400">
+                                ({p.position} · Age {p.age})
+                              </span>
+                            </p>
+                            <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">
+                              OVR {p.rating} → POT {p.potential} (+{p.headroom ?? Math.max(0, (p.potential || 0) - (p.rating || 0))} Headroom) · Morale {p.morale}%
+                            </p>
+                          </div>
+                          <div className="flex items-center gap-1.5">
                             <button
                               type="button"
+                              data-testid={`academy-extend-${p.id}`}
                               disabled={Boolean(busyAction)}
-                              onClick={() => handlePromoteYouthPlayer(p.id, p.name)}
-                              className="rounded border border-emerald-400/40 bg-emerald-500/20 px-2 py-1 text-[9px] font-bold uppercase text-emerald-200 hover:bg-emerald-500/30"
+                              onClick={() => handleOfferYouthContract(p.id, p.name)}
+                              className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[9px] font-bold uppercase text-sky-200 hover:bg-sky-500/30"
                             >
-                              Promote
+                              Extend
                             </button>
-                          )}
+                            {!["first_team", "senior"].includes(String(p.squad_status || "")) && (
+                              <button
+                                type="button"
+                                data-testid={`academy-promote-${p.id}`}
+                                disabled={Boolean(busyAction)}
+                                onClick={() => handlePromoteYouthPlayer(p.id, p.name)}
+                                className="rounded border border-emerald-400/40 bg-emerald-500/20 px-2 py-1 text-[9px] font-bold uppercase text-emerald-200 hover:bg-emerald-500/30"
+                              >
+                                Promote
+                              </button>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2183,15 +2872,43 @@ export function ClubOperationsCentre3D({
                   </div>
                 </div>
 
-                {/* Active Rehabilitation Dossiers */}
-                <div data-testid="medical-rehabilitation-ward" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
-                    <Activity size={12} />
-                    <span>Active Rehabilitation Ward ({(rpt.injured_players || []).length})</span>
-                  </p>
+                {/* Active Rehabilitation & Recovery Protocols */}
+                <div
+                  tabIndex={-1}
+                  data-testid="medical-rehabilitation-ward"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2.5 transition focus:outline-none focus:ring-2 focus:ring-pink-400/70 ${
+                    focusedStationAction === "run_conditioning" ? "border-pink-400/70 ring-2 ring-pink-400/50" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
+                      <Activity size={12} />
+                      <span>Rehabilitation &amp; Recovery Protocols ({(rpt.injured_players || []).length} Injured)</span>
+                    </p>
+                    <button
+                      type="button"
+                      data-testid="run-medical-recovery-protocol-btn"
+                      disabled={
+                        busyAction === "medical-recovery-protocol" ||
+                        Boolean(rpt.rehabilitation_status?.protocol_executed_today)
+                      }
+                      onClick={() =>
+                        handleRunMedicalRecoveryProtocol(
+                          Number(rpt.rehabilitation_status?.protocol_cost_gtex ?? 800),
+                        )
+                      }
+                      className="rounded-lg border border-pink-400/50 bg-pink-500/20 px-2.5 py-1 text-[10px] font-black uppercase text-pink-200 hover:bg-pink-500/30 disabled:opacity-50"
+                    >
+                      {busyAction === "medical-recovery-protocol"
+                        ? "Running Protocol…"
+                        : rpt.rehabilitation_status?.protocol_executed_today
+                          ? "Protocol Active Today"
+                          : `Run Hydro & Cryo (${fmt(rpt.rehabilitation_status?.protocol_cost_gtex ?? 800)} GTEX)`}
+                    </button>
+                  </div>
                   {(rpt.injured_players || []).length === 0 ? (
                     <p className="text-xs text-emerald-300">
-                      Zero players in the treatment room. All squad members cleared for training.
+                      Zero players in the treatment room. Preventive recovery protocol restores +6% squad conditioning.
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -2215,12 +2932,27 @@ export function ClubOperationsCentre3D({
                   )}
                 </div>
 
-                {/* Players Requiring Special Attention */}
-                {(rpt.players_requiring_special_attention || []).length > 0 && (
-                  <div data-testid="medical-workload-watchlist" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                {/* Workload Monitoring & Conditioning Watchlist */}
+                <div
+                  tabIndex={-1}
+                  data-testid="medical-workload-watchlist"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
+                    focusedStationAction === "inspect_workloads" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Workload & Conditioning Watchlist
+                      Workload &amp; Conditioning Watchlist ({(rpt.players_requiring_special_attention || []).length})
                     </p>
+                    <span className="gx-mono text-[10px] text-slate-400">
+                      Recovery +{rpt.medical_facility_performance?.fatigue_recovery_pct ?? 0}%
+                    </span>
+                  </div>
+                  {(rpt.players_requiring_special_attention || []).length === 0 ? (
+                    <p className="text-xs text-emerald-300">
+                      All monitored squad members are within safe conditioning and training load thresholds.
+                    </p>
+                  ) : (
                     <div className="space-y-1.5 max-h-40 overflow-y-auto">
                       {(rpt.players_requiring_special_attention || []).map((sp: any) => (
                         <div key={sp.id} className="flex items-center justify-between text-xs">
@@ -2233,15 +2965,21 @@ export function ClubOperationsCentre3D({
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )}
 
             {/* 6. FINANCE & COMMERCIAL OFFICE VIEW */}
             {activeDestination.destination_key === "finance_commercial_office" && (
               <div className="space-y-3.5" data-testid="room-panel-finance-commercial-office">
-                <div data-testid="finance-matchday-economics" className="grid grid-cols-2 gap-2.5">
+                <div
+                  tabIndex={-1}
+                  data-testid="finance-matchday-economics"
+                  className={`grid grid-cols-2 gap-2.5 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-cyan-400/70 ${
+                    focusedStationAction === "inspect_matchday_econ" ? "ring-2 ring-cyan-400/60 p-1" : ""
+                  }`}
+                >
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Treasury Balance</p>
                     <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">
@@ -2269,55 +3007,100 @@ export function ClubOperationsCentre3D({
                   </div>
                 </div>
 
-                {/* Signable Sponsor Offers */}
-                <div data-testid="finance-sponsor-offers" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
-                  <p className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
-                    <Award size={12} />
-                    <span>Commercial Sponsorship Desk</span>
-                  </p>
-                  {(rpt.sponsor_income?.available_offers || [])
-                    .filter((o: any) => !o.locked)
-                    .slice(0, 2)
-                    .map((offer: any) => (
-                      <div
-                        key={offer.offer_id}
-                        className="rounded-lg border border-white/10 bg-slate-950 p-2.5 flex items-center justify-between gap-2"
-                      >
-                        <div>
-                          <p className="text-xs font-bold text-white">{offer.sponsor_name}</p>
-                          <p className="gx-mono text-[10px] text-emerald-300">
-                            +{fmt(offer.upfront_signing_bonus_gtex)} Upfront · +{fmt(offer.per_match_gross_gtex)}/Match
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          data-testid={`sign-sponsor-${offer.offer_id}`}
-                          disabled={Boolean(busyAction)}
-                          onClick={() => handleSignSponsorOffer(offer.offer_id)}
-                          className="rounded border border-cyan-400/50 bg-cyan-500/20 px-2.5 py-1 text-[10px] font-black uppercase text-cyan-200 hover:bg-cyan-500/30"
+                {/* Sponsorship Contracts & Commercial Operations */}
+                <div
+                  tabIndex={-1}
+                  data-testid="finance-sponsor-offers"
+                  className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-cyan-400/70 ${
+                    focusedStationAction === "sign_sponsor" ? "border-cyan-400/70 ring-2 ring-cyan-400/50" : "border-white/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
+                      <Award size={12} />
+                      <span>Commercial Sponsorship Desk</span>
+                    </p>
+                    <span className="gx-mono text-[10px] text-emerald-300">
+                      Active: {(rpt.sponsor_income?.active_deals || []).length} (
+                      {fmt(rpt.sponsor_income?.per_match_sponsor_income_gtex ?? 0)}/Match)
+                    </span>
+                  </div>
+                  {(rpt.sponsor_income?.active_deals || []).length > 0 && (
+                    <div className="space-y-1">
+                      {(rpt.sponsor_income?.active_deals || []).map((deal: any, idx: number) => (
+                        <div
+                          key={deal.deal_id || deal.offer_id || idx}
+                          className="flex items-center justify-between rounded border border-emerald-500/20 bg-emerald-950/15 px-2.5 py-1 text-[11px]"
                         >
-                          Sign Deal
-                        </button>
-                      </div>
-                    ))}
+                          <span className="font-semibold text-white">{deal.sponsor_name}</span>
+                          <span className="gx-mono text-emerald-300">
+                            {fmt(deal.per_match_gross)} GTX/m · {deal.matches_remaining ?? deal.matches_duration}m left
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {(rpt.sponsor_income?.available_offers || []).filter((o: any) => !o.locked).length === 0 ? (
+                    <p className="text-xs text-slate-400">
+                      No new unlocked sponsorship offers awaiting signature. Grow prestige to unlock higher commercial tiers.
+                    </p>
+                  ) : (
+                    (rpt.sponsor_income?.available_offers || [])
+                      .filter((o: any) => !o.locked)
+                      .slice(0, 2)
+                      .map((offer: any) => (
+                        <div
+                          key={offer.offer_id}
+                          className="rounded-lg border border-white/10 bg-slate-950 p-2.5 flex items-center justify-between gap-2"
+                        >
+                          <div>
+                            <p className="text-xs font-bold text-white">{offer.sponsor_name}</p>
+                            <p className="gx-mono text-[10px] text-emerald-300">
+                              +{fmt(offer.upfront_signing_bonus_gtex)} Upfront · +{fmt(offer.per_match_gross_gtex)}/Match
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid={`sign-sponsor-${offer.offer_id}`}
+                            disabled={Boolean(busyAction)}
+                            onClick={() => handleSignSponsorOffer(offer.offer_id)}
+                            className="rounded border border-cyan-400/50 bg-cyan-500/20 px-2.5 py-1 text-[10px] font-black uppercase text-cyan-200 hover:bg-cyan-500/30"
+                          >
+                            Sign Deal
+                          </button>
+                        </div>
+                      ))
+                  )}
                 </div>
 
                 {/* Recent Authoritative Ledger Entries */}
-                <div className="space-y-1.5" data-testid="finance-ledger-stream">
+                <div
+                  tabIndex={-1}
+                  className={`space-y-1.5 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-cyan-400/70 ${
+                    focusedStationAction === "inspect_ledger" ? "ring-2 ring-cyan-400/60 p-1.5" : ""
+                  }`}
+                  data-testid="finance-ledger-stream"
+                >
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Authoritative Ledger Stream
                   </p>
-                  <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                    {(rpt.recent_income_and_expenditure?.recent_ledger_entries || []).slice(0, 6).map((le: any) => (
-                      <div
-                        key={le.id}
-                        className="flex items-center justify-between rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]"
-                      >
-                        <span className="truncate text-slate-300">{le.memo || le.event_type}</span>
-                        <span className="gx-mono font-bold text-white">{fmt(le.net_amount)} GTX</span>
-                      </div>
-                    ))}
-                  </div>
+                  {(rpt.recent_income_and_expenditure?.recent_ledger_entries || []).length === 0 ? (
+                    <p className="rounded border border-white/10 bg-black/30 px-2.5 py-2 text-xs text-slate-400">
+                      No ledger transactions recorded yet for this treasury account.
+                    </p>
+                  ) : (
+                    <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                      {(rpt.recent_income_and_expenditure?.recent_ledger_entries || []).slice(0, 6).map((le: any) => (
+                        <div
+                          key={le.id}
+                          className="flex items-center justify-between rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]"
+                        >
+                          <span className="truncate text-slate-300">{le.memo || le.event_type}</span>
+                          <span className="gx-mono font-bold text-white">{fmt(le.net_amount)} GTX</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -2437,8 +3220,12 @@ export function ClubOperationsCentre3D({
       {showTimelineDrawer && (
         <div className="fixed inset-0 z-50 flex justify-end bg-black/60 backdrop-blur-sm">
           <div
+            tabIndex={-1}
             data-testid="living-world-timeline-drawer"
-            className="h-full w-full max-w-lg border-l border-white/15 bg-slate-950 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto"
+            onKeyDown={(e) => {
+              if (e.key === "Escape") setShowTimelineDrawer(false);
+            }}
+            className="h-full w-full max-w-lg border-l border-white/15 bg-slate-950 p-6 shadow-2xl flex flex-col justify-between overflow-y-auto focus:outline-none focus:ring-2 focus:ring-purple-400/70"
           >
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-white/10 pb-3">

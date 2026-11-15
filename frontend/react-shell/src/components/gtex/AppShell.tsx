@@ -436,7 +436,7 @@ export default function AppShell() {
             </div>
           </div>
           <button
-            data-testid="logout-button"
+            data-testid="sidebar-logout-button"
             onClick={() => {
               logout();
               navigate("/");
@@ -525,6 +525,20 @@ export default function AppShell() {
             <span className="hidden xl:inline text-[10px] font-semibold text-slate-500" data-testid="coin-naira-key">
               1 GTX = ₦{fmt(moneyRates.nairaPerGtex)} · 1 FAN = ₦{fmt(moneyRates.nairaPerFan, 2)}
             </span>
+            <button
+              type="button"
+              data-testid="logout-button"
+              aria-label="Sign out of GTEX"
+              title="Sign out of GTEX"
+              onClick={() => {
+                logout();
+                navigate("/");
+              }}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-2.5 py-1.5 text-xs font-semibold text-rose-200 transition hover:border-rose-400/60 hover:bg-rose-500/20 hover:text-white"
+            >
+              <LogOut size={14} />
+              <span>Sign out</span>
+            </button>
           </div>
 
           {/* Responsive Mobile Navigation Rail */}

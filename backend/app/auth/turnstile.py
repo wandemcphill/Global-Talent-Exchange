@@ -24,8 +24,8 @@ def turnstile_site_key() -> str | None:
 
 
 def turnstile_required() -> bool:
-    """Require Turnstile when a secret is configured (production)."""
-    return turnstile_secret() is not None
+    """Require Turnstile only when both the public widget and verifier are configured."""
+    return turnstile_site_key() is not None and turnstile_secret() is not None
 
 
 def verify_turnstile_token(
@@ -35,13 +35,17 @@ def verify_turnstile_token(
 ) -> None:
     """Raise AuthError when verification fails.
 
-    When no secret is configured (local/dev), accept empty / bypass tokens so
-    tests and local signup keep working. When a secret is set, token is required.
+    If the public widget key is absent, the frontend cannot render a challenge.
+    In that configuration, do not block registration on an invisible challenge.
+    When the widget key is present, a server secret and a valid token are required.
     """
     candidate = (token or "").strip()
     secret = turnstile_secret()
+    site_key = turnstile_site_key()
+    app_env = (os.environ.get("GTE_APP_ENV") or "development").strip().lower()
+    if not candidate and site_key is None:
+        return
     if secret is None:
-        app_env = (os.environ.get("GTE_APP_ENV") or "development").strip().lower()
         if app_env == "production":
             raise AuthError("Security check is unavailable. Please try again later.")
         return

@@ -188,9 +188,9 @@ DEPARTMENT_TO_ROLE_KEY = {
     "manager": "first_team_manager",
     "medical": "medical_director",
     "academy": "head_of_youth_development",
-    "finance": "general_manager",
+    "finance": "finance_commercial_director",
     "scouting": "chief_scout",
-    "executive": "general_manager",
+    "executive": "club_president",
 }
 
 DEFAULT_STAFF_METRICS = {
@@ -256,6 +256,7 @@ STAFF_ROLE_LABELS = {
     "head_of_youth_development": "Head of Youth Development",
     "medical_director": "Medical Director",
     "chief_scout": "Chief Scout",
+    "finance_commercial_director": "Finance & Commercial Director",
     "club_president": "Club President",
 }
 
@@ -363,6 +364,7 @@ def resolve_club_staff_roster(state: OwnerClubState) -> dict[str, dict[str, Any]
         "head_of_youth_development",
         "medical_director",
         "chief_scout",
+        "finance_commercial_director",
         "club_president",
     ):
         role_label = STAFF_ROLE_LABELS[role_key]
@@ -4252,7 +4254,15 @@ def propose_tactical_adjustment(
         "tempo": proposed_tempo,
         "autonomy_mode": active_autonomy,
         "updated_at_world_day": w_day,
+        "ratified_by_manager": True,
         "rationale": rationale or "Owner-Manager tactical alignment",
+    }
+    facs["_tactical_setup"] = {
+        **dict(facs.get("_tactical_setup") or {}),
+        "formation": proposed_formation,
+        "mentality": proposed_mentality,
+        "pressing": proposed_pressing,
+        "ratified_by_manager": True,
     }
     state.facilities_json = facs
     session.flush()

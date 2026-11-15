@@ -1,6 +1,6 @@
 {
   "generated_from": "tools/audit/generate_contract_audit.py",
-  "route_count": 1878,
+  "route_count": 1879,
   "routes": [
     {
       "method": "POST",
@@ -3359,31 +3359,6 @@
       },
       "version": "canonical",
       "domain": "ads"
-    },
-    {
-      "method": "GET",
-      "path": "/api/world/clock",
-      "effective_paths": [
-        "/api/world/clock"
-      ],
-      "file": "backend/app/world_simulation/router.py",
-      "handler": "get_world_clock",
-      "router_variable": "router",
-      "module_path": "app.world_simulation.router",
-      "module_mounts": [
-        "world_simulation"
-      ],
-      "request_shape": {
-        "parameters": [
-          "session"
-        ]
-      },
-      "response_shape": {
-        "response_model": "WorldClockView",
-        "returns": "WorldClockView"
-      },
-      "version": "canonical",
-      "domain": "world"
     },
     {
       "method": "GET",
@@ -36270,6 +36245,35 @@
       "domain": "public"
     },
     {
+      "method": "POST",
+      "path": "/public/traffic/heartbeat",
+      "effective_paths": [
+        "/api/public/traffic/heartbeat",
+        "/public/traffic/heartbeat"
+      ],
+      "file": "backend/app/public_pulse/router.py",
+      "handler": "record_public_traffic_heartbeat",
+      "router_variable": "router",
+      "module_path": "app.public_pulse.router",
+      "module_mounts": [
+        "public_pulse"
+      ],
+      "request_shape": {
+        "parameters": [
+          "payload",
+          "request",
+          "session",
+          "current_user"
+        ]
+      },
+      "response_shape": {
+        "response_model": "PublicTrafficHeartbeatView",
+        "returns": "PublicTrafficHeartbeatView"
+      },
+      "version": "canonical",
+      "domain": "public"
+    },
+    {
       "method": "GET",
       "path": "/api/pundits/matches/{match_key}",
       "effective_paths": [
@@ -51571,6 +51575,31 @@
       },
       "version": "canonical",
       "domain": "wallets"
+    },
+    {
+      "method": "GET",
+      "path": "/api/world/clock",
+      "effective_paths": [
+        "/api/world/clock"
+      ],
+      "file": "backend/app/world_simulation/router.py",
+      "handler": "get_world_clock",
+      "router_variable": "router",
+      "module_path": "app.world_simulation.router",
+      "module_mounts": [
+        "world_simulation"
+      ],
+      "request_shape": {
+        "parameters": [
+          "session"
+        ]
+      },
+      "response_shape": {
+        "response_model": "WorldClockView",
+        "returns": "WorldClockView"
+      },
+      "version": "canonical",
+      "domain": "world"
     },
     {
       "method": "GET",
