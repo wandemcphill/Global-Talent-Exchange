@@ -50,6 +50,42 @@ class CoinTraderPricingGovernanceService:
     ) -> CoinTraderGovernanceResult:
         normalized_unit = self._ledger_unit(coin_unit)
         spread = self._amount(Decimal(sell_rate_fiat) - Decimal(buy_rate_fiat))
+        settings = settings or self.treasury_service.ensure_settings(self.session)
+        if normalized_unit == LedgerUnit.CREDIT:
+            # Fan Coin marketplace quotes must stay below the ₦4 retail gateway price,
+            # while allowing traders a clear, positive margin over their ₦2.50 inventory cost.
+            wholesale_rate = self._amount(settings.trader_fan_coin_purchase_rate_value)
+            retail_rate = self._amount(settings.fan_coin_deposit_rate_value)
+            min_buy = wholesale_rate
+            max_buy = wholesale_rate
+            min_sell = self._amount(wholesale_rate + Decimal("0.2500"))
+            max_sell = self._amount(min(retail_rate - Decimal("0.5000"), wholesale_rate + Decimal("1.0000")))
+            max_spread = self._amount(Decimal("1.0000"))
+            buy_rate = self._amount(buy_rate_fiat)
+            sell_rate = self._amount(sell_rate_fiat)
+            reasons: list[str] = []
+            if buy_rate < min_buy or buy_rate > max_buy:
+                reasons.append(f"Fan Coin trader buy rate must be ₦{wholesale_rate} per FAN.")
+            if sell_rate < min_sell:
+                reasons.append(f"Fan Coin sell rate is below the ₦{min_sell} minimum.")
+            if sell_rate > max_sell:
+                reasons.append(f"Fan Coin sell rate exceeds the ₦{max_sell} cap.")
+            if spread < Decimal("0.0000"):
+                reasons.append("Trader sell rate cannot be below trader buy rate.")
+            if spread > max_spread:
+                reasons.append(f"Fan Coin trader spread {spread} exceeds maximum {max_spread}.")
+            return CoinTraderGovernanceResult(
+                spread_fiat=spread,
+                treasury_deposit_rate_fiat=retail_rate,
+                treasury_withdrawal_rate_fiat=None,
+                min_trader_buy_rate_fiat=min_buy,
+                max_trader_buy_rate_fiat=max_buy,
+                min_trader_sell_rate_fiat=min_sell,
+                max_trader_sell_rate_fiat=max_sell,
+                max_trader_spread_fiat=max_spread,
+                governance_status="out_of_bounds" if reasons else "compliant",
+                governance_reasons=tuple(reasons),
+            )
         if normalized_unit != LedgerUnit.COIN:
             return CoinTraderGovernanceResult(
                 spread_fiat=spread,
@@ -64,7 +100,6 @@ class CoinTraderPricingGovernanceService:
                 governance_reasons=(),
             )
 
-        settings = settings or self.treasury_service.ensure_settings(self.session)
         deposit_rate = self._amount(settings.deposit_rate_value)
         withdrawal_rate = self._amount(settings.withdrawal_rate_value)
         reasons: list[str] = []
