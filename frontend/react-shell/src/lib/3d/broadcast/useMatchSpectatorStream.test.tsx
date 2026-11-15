@@ -149,11 +149,23 @@ describe("useMatchSpectatorStream", () => {
             away_score: 1,
             minute: 68,
           },
+          metadata: {
+            institutional_atmosphere: {
+              home: { crowd_intensity: 92, dominant_mood: "electric_belief" },
+              away: { crowd_intensity: 44, dominant_mood: "anxious_scrutiny" },
+            },
+          },
         },
       });
     });
 
     expect(latestResult?.viewerCount).toBe(1420);
+    expect(latestResult?.matchMetadata).toEqual({
+      institutional_atmosphere: {
+        home: { crowd_intensity: 92, dominant_mood: "electric_belief" },
+        away: { crowd_intensity: 44, dominant_mood: "anxious_scrutiny" },
+      },
+    });
     expect(onViewerCountUpdate).toHaveBeenCalledWith(1420);
     expect(latestResult?.latestScore).toEqual({
       home_score: 2,
