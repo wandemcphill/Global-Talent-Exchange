@@ -702,6 +702,55 @@ async def get_match_spectators(
     return presence
 
 
+def _public_matchday_atmosphere(value: Any) -> dict[str, Any]:
+    """Whitelist presentation-safe institutional atmosphere fields for every spectator."""
+    if not isinstance(value, dict):
+        return {}
+    result: dict[str, Any] = {}
+    for key in ("dominant_mood", "stadium_ambience", "protest_stage", "rivalry_tier"):
+        raw = value.get(key)
+        if raw is not None:
+            result[key] = str(raw)[:180]
+    for key in ("crowd_intensity", "chant_volume_db", "rivalry_intensity", "attendance_modifier_pct"):
+        raw = value.get(key)
+        if isinstance(raw, (int, float)) and not isinstance(raw, bool):
+            result[key] = max(0, min(120, int(raw)))
+    for key in ("banners", "chants", "visible_reactions"):
+        raw = value.get(key)
+        if isinstance(raw, list):
+            result[key] = [str(item)[:180] for item in raw[:3] if item is not None]
+    return result
+
+
+def _canonical_match_spectator_metadata(app: Any, match_id: str) -> dict[str, Any]:
+    """Read the persisted pre-match atmosphere snapshot; never recompute per viewer."""
+    session_factory = getattr(getattr(app, "state", None), "session_factory", None)
+    if session_factory is None:
+        return {}
+    try:
+        from app.models.competition_match import CompetitionMatch
+
+        with session_factory() as session:
+            match = session.get(CompetitionMatch, str(match_id))
+            if match is None:
+                return {}
+            metadata = dict(match.metadata_json or {})
+            context = metadata.get("institutional_match_context")
+            if not isinstance(context, dict):
+                return {}
+            atmosphere: dict[str, Any] = {}
+            for side in ("home", "away"):
+                side_context = context.get(side)
+                if isinstance(side_context, dict):
+                    safe = _public_matchday_atmosphere(side_context.get("atmosphere"))
+                    if safe:
+                        atmosphere[side] = safe
+            return {"institutional_atmosphere": atmosphere} if atmosphere else {}
+    except Exception:
+        logger.exception("broadcast.institutional_atmosphere_snapshot_failed match_id=%s", match_id)
+        return {}
+
+
 @router.websocket("/ws/spectate/{match_id}")
 async def spectate_match(websocket: WebSocket, match_id: str) -> None:
     runtime = ensure_broadcast_runtime(websocket.scope["app"])
@@ -724,7 +773,10 @@ async def spectate_match(websocket: WebSocket, match_id: str) -> None:
     )
     await runtime.match_room_manager.join_room(match_id, client)
     presence = await runtime.presence_service.register_viewer(match_id, client.connection_id, client.user_id)
-    snapshot = await runtime.match_snapshot(match_id)
+    snapshot = await runtime.match_snapshot(
+        match_id,
+        metadata=_canonical_match_spectator_metadata(websocket.scope["app"], match_id),
+    )
     await websocket.send_json(
         sanitize_public_spectator_payload(
             SpectatorEvent(
