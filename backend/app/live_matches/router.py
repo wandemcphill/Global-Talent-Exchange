@@ -2774,6 +2774,14 @@ async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str
     )
     try:
         while True:
+            try:
+                incoming = await asyncio.wait_for(websocket.receive(), timeout=0.05)
+                if incoming.get("type") == "websocket.disconnect":
+                    break
+                if str(incoming.get("text") or "").strip().lower() == "ping":
+                    await websocket.send_json({"channel": initial_state.channel, "kind": "pong", "payload": {}})
+            except asyncio.TimeoutError:
+                pass
             state = hub.get_state(match_id)
             if state is None:
                 break
@@ -2828,6 +2836,14 @@ async def _stream_legacy_commentary_contract(
     cursor = 0
     try:
         while True:
+            try:
+                incoming = await asyncio.wait_for(websocket.receive(), timeout=0.05)
+                if incoming.get("type") == "websocket.disconnect":
+                    break
+                if str(incoming.get("text") or "").strip().lower() == "ping":
+                    await websocket.send_json({"channel": initial_state.channel, "kind": "pong", "payload": {}})
+            except asyncio.TimeoutError:
+                pass
             state = hub.get_state(match_id)
             if state is None:
                 break
