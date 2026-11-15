@@ -707,6 +707,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once(monkey
                     session.scalars(
                         select(OwnerMediaStory).where(
                             OwnerMediaStory.club_id == club_id,
+                            OwnerMediaStory.story_type == "match_report",
                             OwnerMediaStory.source_type == "canonical_match",
                             OwnerMediaStory.source_id == completed.id,
                         )
