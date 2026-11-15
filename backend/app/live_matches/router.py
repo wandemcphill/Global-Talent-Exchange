@@ -210,8 +210,24 @@ def _bootstrap_infinite_league_stream(app, hub, match_id: str, *, restart_if_com
     return True
 
 
-def _build_session_view(match_id: str, item, access: dict[str, object] | None = None) -> SpectatorSessionView:
+def _build_session_view(
+    match_id: str,
+    item,
+    access: dict[str, object] | None = None,
+    *,
+    execution_revision: int | None = None,
+    canonical_sync: bool = False,
+) -> SpectatorSessionView:
     payload = dict(access or {})
+    sync_strategy = str(
+        payload.get("sync_strategy")
+        or ("canonical_live_execution" if canonical_sync else "deterministic_playback")
+    )
+    resolved_revision = (
+        int(payload["execution_revision"])
+        if payload.get("execution_revision") is not None
+        else execution_revision
+    )
     return SpectatorSessionView(
         id=item.id,
         match_id=item.match_id,
@@ -234,9 +250,11 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         sponsored_overlays=list(payload.get("sponsored_overlays") or []),
         stadium_ads=list(payload.get("stadium_ads") or []),
         channel_context=dict(payload.get("channel_context") or {}),
-        sync_strategy=str(payload.get("sync_strategy") or "deterministic_playback"),
+        sync_strategy=sync_strategy,
         watch_party_enabled=bool(payload.get("watch_party_enabled", True)),
         reactions_enabled=bool(payload.get("reactions_enabled", True)),
+        pause_replay_enabled=False,
+        execution_revision=resolved_revision,
     )
 
 
@@ -1780,22 +1798,37 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         if hasattr(broadcast_session, "model_dump")
         else (dict(broadcast_session) if isinstance(broadcast_session, dict) else None)
     )
-    if playback_context is not None and broadcast_session_payload is not None:
-        assigned_dur = int(
-            round(max(float(playback_context.target_runtime_seconds), float(view_state.duration_seconds), 1.0))
-        )
-        span_dur = max(float(view_state.duration_seconds), 1.0)
-        ratio = min(
-            1.0,
-            max(
-                0.0,
-                float(playback_context.elapsed_runtime_seconds)
-                / max(float(playback_context.target_runtime_seconds), 1.0),
-            ),
-        )
-        broadcast_session_payload["assigned_duration_seconds"] = assigned_dur
-        broadcast_session_payload["current_broadcast_position_seconds"] = round(span_dur * ratio, 2)
-        broadcast_session_payload["status"] = "live" if is_live else "completed"
+    if broadcast_session_payload is not None:
+        comp_category = str(
+            broadcast_session_payload.get("competition_category")
+            or getattr(view_state, "competition_category", "")
+            or ""
+        ).strip().lower()
+        max_broadcast_seconds = 900 if comp_category == "major_knockout" else 600
+        broadcast_session_payload["pause_replay_enabled"] = False
+        if playback_context is not None:
+            assigned_dur = min(
+                max_broadcast_seconds,
+                int(round(max(float(playback_context.target_runtime_seconds), float(view_state.duration_seconds), 1.0))),
+            )
+            span_dur = min(float(assigned_dur), max(float(view_state.duration_seconds), 1.0))
+            ratio = min(
+                1.0,
+                max(
+                    0.0,
+                    float(playback_context.elapsed_runtime_seconds)
+                    / max(float(playback_context.target_runtime_seconds), 1.0),
+                ),
+            )
+            broadcast_session_payload["assigned_duration_seconds"] = assigned_dur
+            broadcast_session_payload["current_broadcast_position_seconds"] = round(span_dur * ratio, 2)
+            broadcast_session_payload["status"] = "live" if is_live else "completed"
+        else:
+            raw_assigned = broadcast_session_payload.get("assigned_duration_seconds")
+            if raw_assigned is not None:
+                broadcast_session_payload["assigned_duration_seconds"] = min(
+                    max_broadcast_seconds, max(1, int(round(float(raw_assigned))))
+                )
     return {
         "match_id": view_state.match_id,
         "matchId": view_state.match_id,
@@ -1812,6 +1845,8 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "frame_id": frame.frame_id,
         "snapshot_version": int(frame_index) + (int(len(view_state.events)) * 100000) + (tactic_revision * 1000000000),
         "execution_revision": execution_revision or None,
+        "commit_cursor": len(events),
+        "pause_replay_enabled": False,
         "phase": _enum_value(frame.phase) or "LIVE",
         "home": _v2_team_payload(
             view_state.home_team,
@@ -1873,6 +1908,9 @@ def read_match_v2_events(match_id: str, request: Request) -> dict[str, object]:
     return {
         "match_id": payload["match_id"],
         **_strict_live_runtime_flags(),
+        "execution_revision": payload.get("execution_revision"),
+        "commit_cursor": payload.get("commit_cursor"),
+        "pause_replay_enabled": False,
         "events": payload["events"],
     }
 
@@ -2571,7 +2609,21 @@ def join_spectate(
         current_user=current_user,
         pay_to_view=pay_to_view,
     )
-    return _build_session_view(match_id, spectator_session, access_payload)
+    hub = ensure_live_match_hub(request.app)
+    state = hub.get_state(match_id)
+    execution_revision = None if state is None else getattr(state, "execution_revision", None)
+    canonical_sync = bool(
+        state is not None
+        and state.spectator_sync is not None
+        and state.spectator_sync.sync_strategy == "canonical_live_execution"
+    )
+    return _build_session_view(
+        match_id,
+        spectator_session,
+        access_payload,
+        execution_revision=execution_revision,
+        canonical_sync=canonical_sync,
+    )
 
 
 @legacy_router.post("/{match_id}/unity-access", response_model=UnityLiveAccessView)
@@ -2809,7 +2861,12 @@ def get_match_commentary_stream(
 
 @legacy_router.websocket("/{match_id}/stream")
 @api_router.websocket("/{match_id}/stream")
-async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> None:
+async def stream_match(
+    match_id: str,
+    websocket: WebSocket,
+    session_id: str,
+    cursor: int = Query(default=0, ge=0),
+) -> None:
     app = websocket.scope["app"]
     hub = ensure_live_match_hub(app)
     try:
@@ -2825,7 +2882,7 @@ async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> 
         await websocket.close(code=4404)
         return
 
-    await _stream_legacy_match_contract(websocket, hub, match_id, state)
+    await _stream_legacy_match_contract(websocket, hub, match_id, state, cursor=cursor)
 
 
 @legacy_router.websocket("/{match_id}/commentary/stream")
@@ -2912,14 +2969,24 @@ router.include_router(match_router)
 router.include_router(api_match_router)
 
 
-async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str, initial_state) -> None:
+async def _stream_legacy_match_contract(
+    websocket: WebSocket,
+    hub,
+    match_id: str,
+    initial_state,
+    *,
+    cursor: int = 0,
+) -> None:
     """Serve the established channel/kind envelope from the canonical live-match hub."""
     await websocket.accept()
-    cursor = 0
+    cursor = max(0, int(cursor or 0))
+    last_revision = getattr(initial_state, "execution_revision", None)
     await websocket.send_json(
         {
             "channel": initial_state.channel,
             "kind": "snapshot",
+            "execution_revision": last_revision,
+            "commit_cursor": cursor,
             "payload": initial_state.snapshot.model_dump(mode="json"),
         }
     )
@@ -2938,12 +3005,26 @@ async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str
             state = hub.get_state(match_id)
             if state is None:
                 break
+            current_revision = getattr(state, "execution_revision", None)
+            if current_revision != last_revision:
+                last_revision = current_revision
+                await websocket.send_json(
+                    {
+                        "channel": state.channel,
+                        "kind": "snapshot",
+                        "execution_revision": current_revision,
+                        "commit_cursor": cursor,
+                        "payload": state.snapshot.model_dump(mode="json"),
+                    }
+                )
             events, next_cursor = hub.get_events_since(match_id, cursor)
             if events:
                 await websocket.send_json(
                     {
                         "channel": state.channel,
                         "kind": "events",
+                        "execution_revision": current_revision,
+                        "commit_cursor": next_cursor,
                         "payload": [event.model_dump(mode="json") for event in events],
                     }
                 )

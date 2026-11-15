@@ -505,26 +505,57 @@ class CanonicalLiveExecutionService:
         *,
         kind: str = "step",
     ) -> None:
+        revision = int(execution.execution_revision)
+        current_minute = int(execution.current_minute)
+        logger.info(
+            "canonical_live_execution.stream_publish match_id=%s competition_id=%s kind=%s execution_revision=%s minute=%s status=%s event_count=%s",
+            match.id,
+            match.competition_id,
+            kind,
+            revision,
+            current_minute,
+            execution.execution_status,
+            len(new_events),
+        )
         if self.match_stream_service is None and self.hub is None:
             return
-        payload = {
-            "kind": kind,
-            "match_id": match.id,
-            "execution_revision": int(execution.execution_revision),
+        base_metadata = {
+            "execution_revision": revision,
             "execution_status": execution.execution_status,
             "clock_phase": execution.clock_phase,
-            "current_minute": int(execution.current_minute),
-            "home_score": int(match.home_score),
-            "away_score": int(match.away_score),
-            "events": [serialize_match_event(ev) for ev in new_events],
+            "current_minute": current_minute,
+            "kind": kind,
         }
         if self.match_stream_service is not None:
             try:
-                self.match_stream_service.publish_event(
-                    match_id=match.id,
-                    event_payload=payload,
-                    event_type=f"match.{kind}",
-                )
+                events_to_publish = list(new_events)
+                if events_to_publish:
+                    for offset, ev in enumerate(events_to_publish, start=1):
+                        item_payload = dict(serialize_match_event(ev))
+                        item_metadata = dict(item_payload.get("metadata") or {})
+                        item_sequence = int(item_payload.get("sequence") or offset)
+                        item_payload["sequence"] = item_sequence
+                        item_payload["metadata"] = {
+                            **item_metadata,
+                            **base_metadata,
+                            "commit_cursor": item_sequence,
+                        }
+                        self.match_stream_service.publish_event(match.id, item_payload)
+                elif kind in {"start", "kickoff", "tactics_updated", "halftime", "halftime_resumed", "completed", "halted"}:
+                    status_payload = {
+                        "event_id": f"{match.id}:rev:{revision}:{kind}:{current_minute}",
+                        "sequence": revision,
+                        "event_type": f"match_{kind}",
+                        "minute": current_minute,
+                        "clock": f"{current_minute}'",
+                        "home_score": int(match.home_score),
+                        "away_score": int(match.away_score),
+                        "metadata": {
+                            **base_metadata,
+                            "commit_cursor": int(len(execution.committed_events_json or [])),
+                        },
+                    }
+                    self.match_stream_service.publish_event(match.id, status_payload)
             except Exception:
                 logger.exception("match.stream_publish_failed match_id=%s", match.id)
         if self.hub is not None and hasattr(self.hub, "sync_canonical_execution"):
@@ -909,12 +940,18 @@ class CanonicalLiveExecutionService:
                 f"Match '{match_id}' does not have an active canonical live execution session."
             )
 
+        hub_halted = False
+        if self.hub is not None:
+            try:
+                hub_halted = bool(self.hub.is_match_halted(match_id, include_db=False))
+            except TypeError:
+                hub_halted = bool(self.hub.is_match_halted(match_id))
         halt_flag = (match.metadata_json or {}).get("admin_halt")
         if (
             execution.execution_status == "halted"
             or execution.paused_reason == "admin_halt"
             or (isinstance(halt_flag, dict) and halt_flag.get("enabled") is True)
-            or (self.hub is not None and self.hub.is_match_halted(match_id))
+            or hub_halted
         ):
             raise CanonicalExecutionHaltedError(
                 "Match stream is halted; live tactics and substitutions are locked."

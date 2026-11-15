@@ -101,6 +101,9 @@ class LiveMatchStreamEventView(CommonSchema):
     meta: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     experience: MatchExperienceLayerView | None = None
+    execution_revision: int | None = None
+    effective_from_minute: int | None = None
+    commit_cursor: int | None = None
 
 
 class LiveMatchSnapshotView(CommonSchema):
@@ -131,6 +134,10 @@ class LiveMatchStateView(CommonSchema):
     snapshot: LiveMatchSnapshotView
     crowd_state: MatchCrowdStateView | None = None
     spectator_sync: MatchSpectatorSyncView | None = None
+    execution_revision: int | None = None
+    commit_cursor: int | None = None
+    pause_replay_enabled: bool = False
+    assigned_duration_seconds: int | None = None
 
 
 class SpectatorSessionView(CommonSchema):
@@ -158,6 +165,8 @@ class SpectatorSessionView(CommonSchema):
     sync_strategy: str = "deterministic_playback"
     watch_party_enabled: bool = True
     reactions_enabled: bool = True
+    pause_replay_enabled: bool = False
+    execution_revision: int | None = None
 
 
 class UnityLiveAccessView(CommonSchema):
