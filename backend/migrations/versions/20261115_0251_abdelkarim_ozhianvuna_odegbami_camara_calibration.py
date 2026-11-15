@@ -60,6 +60,14 @@ def _merge_attributes(existing: Any, patch: dict[str, Any]) -> dict[str, Any]:
     return merged
 
 
+def _is_postgres(conn: sa.Connection) -> bool:
+    return getattr(getattr(conn, "dialect", None), "name", "") == "postgresql"
+
+
+def _json_param(param_name: str, *, is_postgres: bool) -> str:
+    return f"CAST(:{param_name} AS json)" if is_postgres else f":{param_name}"
+
+
 def _update_ingestion_and_read_models(
     conn: sa.Connection,
     *,
@@ -127,7 +135,8 @@ def _update_ingestion_and_read_models(
     if full_attrs:
         dna["attributes"] = full_attrs
 
-    set_clauses = ["dna_profile = CAST(:dna AS json)", "updated_at = NOW()"]
+    is_postgres = _is_postgres(conn)
+    set_clauses = [f"dna_profile = {_json_param('dna', is_postgres=is_postgres)}", "updated_at = CURRENT_TIMESTAMP"]
     params: dict[str, Any] = {"pid": player_id, "dna": json.dumps(dna)}
 
     if cur_gsi is not None:
@@ -143,7 +152,7 @@ def _update_ingestion_and_read_models(
         set_clauses.append("normalized_position = :norm_pos")
         params["norm_pos"] = normalized_position
     if secondary_positions is not None:
-        set_clauses.append("secondary_positions_json = CAST(:sec_pos AS json)")
+        set_clauses.append(f"secondary_positions_json = {_json_param('sec_pos', is_postgres=is_postgres)}")
         params["sec_pos"] = json.dumps(secondary_positions)
     if preferred_foot is not None:
         set_clauses.append("preferred_foot = :foot")
@@ -212,7 +221,10 @@ def _update_ingestion_and_read_models(
         if new_price is not None:
             summary["share_price_coin"] = new_price
 
-        rm_sets = ["summary_json = CAST(:summary AS json)", "updated_at = NOW()"]
+        rm_sets = [
+            f"summary_json = {_json_param('summary', is_postgres=is_postgres)}",
+            "updated_at = CURRENT_TIMESTAMP",
+        ]
         rm_params: dict[str, Any] = {"pid": player_id, "summary": json.dumps(summary)}
         if cur_gsi is not None:
             rm_sets.append("market_interest_score = :mis")
@@ -273,7 +285,7 @@ def _update_ingestion_and_read_models(
         if new_price is not None and int(mkt_row["circulating_shares"] or 0) == 0:
             meta["initial_share_price_coin"] = new_price
 
-        mkt_sets = ["metadata_json = CAST(:meta AS json)", "updated_at = NOW()"]
+        mkt_sets = [f"metadata_json = {_json_param('meta', is_postgres=is_postgres)}", "updated_at = CURRENT_TIMESTAMP"]
         mkt_params: dict[str, Any] = {"pid": player_id, "meta": json.dumps(meta)}
         if new_price is not None and int(mkt_row["circulating_shares"] or 0) == 0:
             mkt_sets.append("share_price_coin = :price")
@@ -287,6 +299,7 @@ def _update_ingestion_and_read_models(
 
 def upgrade() -> None:
     conn = op.get_bind()
+    is_postgres = _is_postgres(conn)
     inspector = sa.inspect(conn)
     if not inspector.has_table("ingestion_players"):
         return
@@ -436,18 +449,18 @@ def upgrade() -> None:
             leg_meta["position_display"] = "RW/RM/LW/LM/AM/ST"
             leg_meta["playstyle"] = "Inside Forward"
             conn.execute(
-                sa.text("""
+                sa.text(f"""
                     UPDATE legendary_player_profiles
                     SET primary_position = 'RW',
-                        secondary_positions_json = CAST(:sec_pos AS json),
+                        secondary_positions_json = {_json_param('sec_pos', is_postgres=is_postgres)},
                         preferred_foot = 'right',
                         signature_role = 'Inside Forward',
-                        signature_traits_json = CAST(:traits AS json),
-                        technical_profile_json = CAST(:tech AS json),
-                        mental_profile_json = CAST(:mental AS json),
-                        physical_profile_json = CAST(:phys AS json),
-                        metadata_json = CAST(:meta AS json),
-                        updated_at = NOW()
+                        signature_traits_json = {_json_param('traits', is_postgres=is_postgres)},
+                        technical_profile_json = {_json_param('tech', is_postgres=is_postgres)},
+                        mental_profile_json = {_json_param('mental', is_postgres=is_postgres)},
+                        physical_profile_json = {_json_param('phys', is_postgres=is_postgres)},
+                        metadata_json = {_json_param('meta', is_postgres=is_postgres)},
+                        updated_at = CURRENT_TIMESTAMP
                     WHERE id = :lid
                     """),
                 {
@@ -533,7 +546,7 @@ def upgrade() -> None:
             SET governed_gsi = 83,
                 governed_potential_gsi = 90,
                 potential = 90,
-                updated_at = NOW()
+                updated_at = CURRENT_TIMESTAMP
             WHERE id = :pid
             """),
         {"pid": CAMARA_DUPLICATE_ID},
@@ -552,7 +565,7 @@ def upgrade() -> None:
                     dribbling = 79,
                     defending = 56,
                     physical = 68,
-                    updated_at = NOW()
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE player_id = 37917642
                 """))
         conn.execute(sa.text("""
@@ -566,7 +579,7 @@ def upgrade() -> None:
                     dribbling = 85,
                     defending = 72,
                     physical = 80,
-                    updated_at = NOW()
+                    updated_at = CURRENT_TIMESTAMP
                 WHERE player_id = 37642676
                 """))
 
