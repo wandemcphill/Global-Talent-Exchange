@@ -248,12 +248,55 @@ def _project_one_club(
         "prior_head_to_head": _prior_head_to_head(session, match, state.club_id, opponent_id),
         "atmosphere_snapshot": side_context.get("atmosphere"),
         "projection_event_id": source_event.id,
+        "source_event_id": source_event.id,
     }
     try:
         with session.begin_nested():
             impact = living_institution.record_match_institutional_impact(
                 session, match_view, competition_view, side, {"state": None}, is_home, gf, ga
             )
+            # Private HOYD intelligence is persisted as a staff-only club event.
+            # It is separate from public academy debut coverage and does not expose
+            # confidential academy assessment details.
+            for debut in impact.get("debutant_records") or []:
+                player_id = str(debut.get("player_id") or "")
+                player_name = str(debut.get("player_name") or "Academy graduate")
+                living_club_world.create_club_event(
+                    session,
+                    club_id=state.club_id,
+                    category="academy",
+                    event_type="academy_first_team_debut",
+                    severity="important",
+                    title=f"Academy Debut: {player_name}",
+                    description=(
+                        f"{player_name} made an actual first-team appearance against {opponent_name} "
+                        f"in {competition.name}, playing {int(debut.get('minutes_played') or 0)} minutes."
+                    ),
+                    world_day=world_day,
+                    source_type="canonical_match",
+                    source_id=match.id,
+                    participants=[
+                        {
+                            "participant_type": "staff_role",
+                            "role_key": "head_of_youth_development",
+                        },
+                        {
+                            "participant_type": "player",
+                            "player_id": str(debut.get("canonical_player_id") or player_id),
+                            "player_name": player_name,
+                        },
+                    ],
+                    consequences={
+                        "canonical_match_id": match.id,
+                        "source_event_id": source_event.id,
+                        "minutes_played": int(debut.get("minutes_played") or 0),
+                        "goals": int(debut.get("goals") or 0),
+                        "assists": int(debut.get("assists") or 0),
+                        "confidentiality": "staff_intelligence",
+                    },
+                    idempotency_key=f"canonical_match_academy_debut:{match.id}:{state.club_id}:{player_id}",
+                    status="active",
+                )
             living_club_world.record_canonical_projection(
                 session,
                 source_event,
