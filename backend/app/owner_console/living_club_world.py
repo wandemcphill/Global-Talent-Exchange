@@ -1051,8 +1051,15 @@ def emit_canonical_club_event(
 ) -> tuple[OwnerClubEvent, bool]:
     """Create one source event for a completed canonical CompetitionMatch."""
     match_key = str(match_id).strip()
-    idempotency_key = f"canonical_match:{match_key}"
-    existing = session.scalar(select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == idempotency_key))
+    # OwnerClubEvent is club-scoped. Keep a distinct durable source record for
+    # each participating institution while retaining the canonical match ID.
+    idempotency_key = f"canonical_match:{match_key}:club:{str(anchor_club_id)}"
+    existing = session.scalar(
+        select(OwnerClubEvent).where(
+            OwnerClubEvent.club_id == str(anchor_club_id),
+            OwnerClubEvent.idempotency_key == idempotency_key,
+        )
+    )
     if existing is not None:
         return existing, False
     required = list(required_projections or [])
