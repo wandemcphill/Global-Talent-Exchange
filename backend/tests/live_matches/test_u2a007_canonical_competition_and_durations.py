@@ -490,7 +490,6 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
         )
 
 
-
 def test_canonical_competition_completion_projects_both_living_clubs_once():
     """A real CompetitionAutoRunner completion must project to both clubs idempotently."""
     from sqlalchemy import select
@@ -568,9 +567,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                 )
 
                 canonical_players = list(
-                    session.scalars(
-                        select(Player).where(Player.current_club_profile_id == club_id)
-                    ).all()
+                    session.scalars(select(Player).where(Player.current_club_profile_id == club_id)).all()
                 )
                 assert len(canonical_players) >= 18
                 for player in canonical_players:
@@ -620,7 +617,8 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                 tenure = session.scalar(
                     select(OwnerClubManagerialTenure).where(
                         OwnerClubManagerialTenure.club_id == club_id,
-                        OwnerClubManagerialTenure.manager_id == f"canonical-{('home' if club_id == club_rows[0]['id'] else 'away')}-manager",
+                        OwnerClubManagerialTenure.manager_id
+                        == f"canonical-{('home' if club_id == club_rows[0]['id'] else 'away')}-manager",
                     )
                 )
                 assert tenure is not None
@@ -653,9 +651,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
 
                 graduates = list(
                     session.scalars(
-                        select(OwnerClubAcademyGraduate).where(
-                            OwnerClubAcademyGraduate.club_id == club_id
-                        )
+                        select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.club_id == club_id)
                     ).all()
                 )
                 assert graduates
@@ -676,31 +672,37 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                     assert graduate.first_team_appearances >= 1
                     assert graduate.first_team_minutes > 0
 
-                unused_players = [
-                    row for row in owner_players.values()
-                    if str(row.player_ref) not in played_player_ids
-                ]
+                unused_players = [row for row in owner_players.values() if str(row.player_ref) not in played_player_ids]
                 for unused in unused_players:
-                    assert session.scalar(
-                        select(OwnerClubAcademyGraduate.id).where(
-                            OwnerClubAcademyGraduate.club_id == club_id,
-                            OwnerClubAcademyGraduate.player_id == unused.id,
+                    assert (
+                        session.scalar(
+                            select(OwnerClubAcademyGraduate.id).where(
+                                OwnerClubAcademyGraduate.club_id == club_id,
+                                OwnerClubAcademyGraduate.player_id == unused.id,
+                            )
                         )
-                    ) is None
+                        is None
+                    )
 
             # The first encounter is ordinary head-to-head history, not an automatic rivalry.
-            assert session.scalar(
-                select(OwnerClubRivalry.id).where(
-                    OwnerClubRivalry.club_id == str(club_rows[0]["id"]),
-                    OwnerClubRivalry.rival_club_id == str(club_rows[1]["id"]),
+            assert (
+                session.scalar(
+                    select(OwnerClubRivalry.id).where(
+                        OwnerClubRivalry.club_id == str(club_rows[0]["id"]),
+                        OwnerClubRivalry.rival_club_id == str(club_rows[1]["id"]),
+                    )
                 )
-            ) is None
-            assert session.scalar(
-                select(OwnerClubRivalry.id).where(
-                    OwnerClubRivalry.club_id == str(club_rows[1]["id"]),
-                    OwnerClubRivalry.rival_club_id == str(club_rows[0]["id"]),
+                is None
+            )
+            assert (
+                session.scalar(
+                    select(OwnerClubRivalry.id).where(
+                        OwnerClubRivalry.club_id == str(club_rows[1]["id"]),
+                        OwnerClubRivalry.rival_club_id == str(club_rows[0]["id"]),
+                    )
                 )
-            ) is None
+                is None
+            )
 
             before = {
                 str(club_data["id"]): (
@@ -723,17 +725,26 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
             assert replayed["status"] == "projected"
             for club_data in club_rows:
                 club_id = str(club_data["id"])
-                assert replayed["clubs"]["home" if club_id == str(club_rows[0]["id"]) else "away"]["status"] == "already_projected"
-                assert session.scalar(
-                    select(OwnerClubManagerialTenure.matches_managed).where(
-                        OwnerClubManagerialTenure.club_id == club_id
+                assert (
+                    replayed["clubs"]["home" if club_id == str(club_rows[0]["id"]) else "away"]["status"]
+                    == "already_projected"
+                )
+                assert (
+                    session.scalar(
+                        select(OwnerClubManagerialTenure.matches_managed).where(
+                            OwnerClubManagerialTenure.club_id == club_id
+                        )
                     )
-                ) == before[club_id][0]
-                assert session.scalar(
-                    select(OwnerSupporterEvent.id).where(
-                        OwnerSupporterEvent.club_id == club_id,
-                        OwnerSupporterEvent.trigger_source_id == completed.id,
+                    == before[club_id][0]
+                )
+                assert (
+                    session.scalar(
+                        select(OwnerSupporterEvent.id).where(
+                            OwnerSupporterEvent.club_id == club_id,
+                            OwnerSupporterEvent.trigger_source_id == completed.id,
+                        )
                     )
-                ) == before[club_id][1]
+                    == before[club_id][1]
+                )
     finally:
         app.state.cleanup_test_environment()
