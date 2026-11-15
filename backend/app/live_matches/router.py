@@ -39,7 +39,6 @@ from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
 from app.models.user import User
-from app.realtime.service import commentary_topic, match_topic
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchTimelineFrameView, MatchViewStateView
 from app.services.device_fingerprint_service import DeviceFingerprintService
