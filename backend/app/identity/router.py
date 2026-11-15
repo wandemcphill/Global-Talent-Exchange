@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.coin_traders.service import CoinTraderService
+from app.identity.providers.didit import IdentityProviderConfigurationError
 from app.identity.service import (
     IdentityVerificationError,
     IdentityVerificationIdempotencyError,
@@ -17,6 +18,7 @@ from app.identity.service import (
     IdentityVerificationSignatureError,
     IdentityVerificationValidationError,
 )
+from app.models.coin_trader import CoinTraderProfile
 from app.models.user import User
 from app.schemas.coin_trader_verification import (
     CoinTraderAdminActionRequest,
@@ -41,6 +43,11 @@ def _coin_trader_service(session: Session = Depends(get_session)) -> CoinTraderS
 
 
 def _raise_identity_http(exc: Exception) -> None:
+    if isinstance(exc, IdentityProviderConfigurationError):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     if isinstance(exc, IdentityVerificationNotFoundError):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if isinstance(exc, IdentityVerificationPermissionError):
@@ -72,13 +79,24 @@ def initiate_trader_verification(
     service: IdentityVerificationService = Depends(_service),
 ) -> CoinTraderVerificationSessionView:
     try:
-        return service.initiate_trader_verification(
-            user_id=current_user.id,
-            provider_name=payload.provider,
-            request_payload=payload.model_dump(),
+        record = service.initiate_trader_verification(
+            actor=current_user,
+            verification_type=payload.verification_type,
             callback_url=payload.callback_url,
         )
-    except IdentityVerificationError as exc:
+        metadata = dict(record.metadata_json or {})
+        handoff_url = metadata.pop("handoff_url", None)
+        return CoinTraderVerificationSessionView(
+            session_id=record.provider_session_id or "",
+            provider=record.provider,
+            reference=record.provider_reference or "",
+            handoff_url=handoff_url,
+            verification_type=record.verification_type,
+            status=record.status,
+            expires_at=record.expires_at,
+            metadata=metadata,
+        )
+    except (IdentityVerificationError, IdentityProviderConfigurationError) as exc:
         _raise_identity_http(exc)
 
 
@@ -94,10 +112,26 @@ def get_trader_verification_status(
     current_user: User = Depends(get_current_user),
     service: IdentityVerificationService = Depends(_service),
 ) -> CoinTraderVerificationStatusView:
-    try:
-        return service.get_trader_verification_status(user_id=current_user.id)
-    except IdentityVerificationError as exc:
-        _raise_identity_http(exc)
+    record = service.get_latest_trader_verification(actor=current_user)
+    if record is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No trader identity verification has been started.",
+        )
+    return CoinTraderVerificationStatusView(
+        id=record.id,
+        user_id=record.user_id,
+        trader_profile_id=record.trader_profile_id,
+        provider=record.provider,
+        provider_reference=record.provider_reference,
+        verification_type=record.verification_type,
+        status=record.status,
+        decision=record.decision,
+        rejection_reason=record.rejection_reason,
+        checks_summary=dict(record.checks_summary_json or {}),
+        initiated_at=record.initiated_at,
+        verified_at=record.verified_at,
+    )
 
 
 @router.post("/api/kyc/webhooks/{provider_name}")
@@ -109,24 +143,16 @@ async def handle_provider_webhook(
     raw_payload = await request.body()
     headers = dict(request.headers)
     try:
-        result = service.process_provider_webhook(
+        return service.process_provider_webhook(
             provider_name=provider_name,
-            raw_payload=raw_payload,
+            payload_bytes=raw_payload,
             headers=headers,
         )
-        return {
-            "status": "success",
-            "provider": provider_name,
-            "session_id": result.session_id,
-            "decision": result.decision,
-            "idempotent": result.idempotent,
-            "user_id": result.user_id,
-        }
-    except IdentityVerificationSignatureError as exc:
-        logger.warning("Webhook signature verification failed for provider %s: %s", provider_name, exc)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid webhook signature") from exc
-    except IdentityVerificationError as exc:
-        logger.error("Webhook processing error for provider %s: %s", provider_name, exc)
+    except (IdentityVerificationError, IdentityProviderConfigurationError) as exc:
+        if isinstance(exc, IdentityVerificationSignatureError):
+            logger.warning("Webhook signature verification failed for provider %s", provider_name)
+        else:
+            logger.error("Webhook processing failed for provider %s: %s", provider_name, exc)
         _raise_identity_http(exc)
 
 
@@ -148,13 +174,43 @@ def list_verification_records(
     service: IdentityVerificationService = Depends(_service),
 ) -> list[IdentityVerificationRecordAdminView]:
     _ = current_admin
-    return service.list_verification_records(
+    records = service.list_verification_records(
         user_id=user_id,
         domain=domain,
         status=record_status,
         limit=limit,
         offset=offset,
     )
+    views: list[IdentityVerificationRecordAdminView] = []
+    for record in records:
+        user = service.session.get(User, record.user_id)
+        profile = (
+            service.session.get(CoinTraderProfile, record.trader_profile_id)
+            if record.trader_profile_id
+            else None
+        )
+        views.append(
+            IdentityVerificationRecordAdminView(
+                id=record.id,
+                user_id=record.user_id,
+                user_email=user.email if user else None,
+                trader_profile_id=record.trader_profile_id,
+                trader_display_name=profile.display_name if profile else None,
+                provider=record.provider,
+                provider_session_id=record.provider_session_id,
+                provider_reference=record.provider_reference,
+                verification_type=record.verification_type,
+                status=record.status,
+                decision=record.decision,
+                rejection_reason=record.rejection_reason,
+                checks_summary=dict(record.checks_summary_json or {}),
+                evidence_fingerprint=record.evidence_fingerprint,
+                initiated_at=record.initiated_at,
+                verified_at=record.verified_at,
+                history=list(record.history_json or []),
+            )
+        )
+    return views
 
 
 @admin_router.post("/api/admin/coin-traders/{profile_id}/suspend")
