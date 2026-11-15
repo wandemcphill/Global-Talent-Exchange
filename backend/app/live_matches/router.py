@@ -29,7 +29,15 @@ from app.live_matches.schemas import (
     UnityLiveAccessRefreshRequest,
 )
 from app.live_matches.authority import resolve_match_tactical_authority
-from app.live_matches.service import LiveMatchError, LiveMatchPersistenceError, ensure_live_match_hub
+from app.live_matches.service import (
+    LiveMatchError,
+    LiveMatchNotFoundError,
+    LiveMatchNotLiveError,
+    LiveMatchPersistenceError,
+    LiveMatchResimulationError,
+    LiveMatchUnavailableError,
+    ensure_live_match_hub,
+)
 from app.live_matches.unity_access import (
     issue_unity_live_token_bundle,
     validate_unity_live_access_token,
@@ -2008,8 +2016,12 @@ def update_match_v2_tactics(
             instructions=payload.instructions,
             require_live=True,
         )
-    except LiveMatchPersistenceError as exc:
+    except (LiveMatchUnavailableError, LiveMatchPersistenceError) as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except LiveMatchNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except (LiveMatchNotLiveError, LiveMatchResimulationError) as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except (LiveMatchError, ValueError) as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

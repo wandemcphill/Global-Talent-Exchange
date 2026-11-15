@@ -57,6 +57,22 @@ class LiveMatchPersistenceError(RuntimeError):
     """Raised when an accepted-looking tactical change cannot be persisted."""
 
 
+class LiveMatchNotFoundError(LiveMatchError):
+    """Raised when a canonical CompetitionMatch row does not exist."""
+
+
+class LiveMatchNotLiveError(LiveMatchError):
+    """Raised when the canonical competition lifecycle is not currently live."""
+
+
+class LiveMatchUnavailableError(LiveMatchError):
+    """Raised when the database cannot establish the authoritative match state."""
+
+
+class LiveMatchResimulationError(LiveMatchError):
+    """Raised when a live tactical change cannot be reconciled with canonical results."""
+
+
 BatchCallback = Callable[[str, list[LiveMatchStreamEventView], LiveMatchSnapshotView], None]
 CompleteCallback = Callable[[str], None]
 AttendanceOverlayProvider = Callable[[str, MatchCrowdStateView | None], MatchCrowdStateView | None]
@@ -625,6 +641,38 @@ class LiveMatchHub:
             logger.debug("Failed to load simulation request for %s", match_id, exc_info=True)
         return None
 
+    def _require_live_competition_match(self, match_id: str) -> None:
+        """Require a canonical, currently live CompetitionMatch before public mutations.
+
+        Runtime objects are process-local and may outlive the database match lifecycle.
+        They are never authoritative for whether a competition match can still be changed.
+        """
+        if self.session_factory is None:
+            raise LiveMatchUnavailableError(
+                "Match lifecycle storage is unavailable; live tactics cannot be verified."
+            )
+
+        try:
+            from app.matches.lifecycle import is_live
+            from app.models.competition_match import CompetitionMatch
+
+            with self.session_factory() as session:
+                persisted_match = session.get(CompetitionMatch, match_id)
+                if persisted_match is None:
+                    raise LiveMatchNotFoundError(f"Match '{match_id}' was not found.")
+                if persisted_match.completed_at is not None or not is_live(persisted_match.status):
+                    raise LiveMatchNotLiveError(
+                        "Match is not currently live; scheduled, completed, halted, cancelled, "
+                        "postponed, abandoned and failed matches cannot accept live changes."
+                    )
+        except LiveMatchError:
+            raise
+        except Exception as exc:
+            logger.exception("Unable to verify canonical live-match state for %s", match_id)
+            raise LiveMatchUnavailableError(
+                "Unable to verify the match lifecycle. Live changes are temporarily unavailable."
+            ) from exc
+
     def _resimulate_remaining(
         self,
         match_id: str,
@@ -744,6 +792,29 @@ class LiveMatchHub:
             _validate_formation_string(str(formation).strip())
 
         with self._lock:
+            # Runtime state is process-local and can be stale after another worker settles
+            # the canonical CompetitionMatch. The database lifecycle is checked first.
+            if match_id in self._halted_matches:
+                raise LiveMatchError("Match stream is halted; live tactics and substitutions are locked.")
+            if require_live:
+                self._require_live_competition_match(match_id)
+
+            runtime = self._matches.get(match_id)
+            result_affecting_change = any(
+                value is not None
+                for value in (formation, mentality, press_intensity, defensive_line, tempo, risk_level)
+            ) or bool(substitutions)
+            if require_live and runtime is not None and result_affecting_change:
+                # _resimulate_remaining() rebuilds only an in-memory viewer tail. It does
+                # not replace the official CompetitionMatch result, CompetitionMatchEvent
+                # rows, player-performance/appearance records, standings, replay archive or
+                # spectator snapshots. Reject until one canonical transactional execution
+                # contract updates all of those records from the same replay payload.
+                raise LiveMatchResimulationError(
+                    "This match's live tactical resimulator cannot safely reconcile the "
+                    "official competition result and event history. The change was not applied."
+                )
+
             prior_tactics = copy.deepcopy(self._tactics.get(match_id))
             prior_runtime = self._matches.get(match_id)
             prior_viewer_state = (
@@ -766,27 +837,6 @@ class LiveMatchHub:
                     or snapshot_status in {"completed", "full_time", "fulltime", "finished", "halted"}
                 ):
                     raise LiveMatchError("Match has already completed; live tactics and substitutions are locked.")
-            elif require_live and self.session_factory is not None:
-                try:
-                    from app.models.competition_match import CompetitionMatch
-
-                    with self.session_factory() as session:
-                        persisted_match = session.get(CompetitionMatch, match_id)
-                        if persisted_match is None or (
-                            persisted_match.completed_at is not None
-                            or str(persisted_match.status or "").strip().lower()
-                            in {"completed", "full_time", "fulltime", "finished", "settled"}
-                        ):
-                            raise LiveMatchError(
-                                "Match has already completed; live tactics and substitutions are locked."
-                            )
-                except LiveMatchError:
-                    raise
-                except Exception:
-                    pass
-            elif require_live:
-                raise LiveMatchError("Match is not currently live; tactics cannot be modified.")
-
             existing_match_tactics = self._tactics.get(match_id) or {}
             base_tactics = existing_match_tactics.get(
                 side_norm,
