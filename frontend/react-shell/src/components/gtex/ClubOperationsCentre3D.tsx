@@ -6,6 +6,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
+import { buildDepartmentInterior } from "./operationsRoomInteriors";
+import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
 import {
   Building2,
   Compass,
@@ -63,6 +65,42 @@ function detectWebGLAvailable(): boolean {
   }
 }
 
+function disposeObjectResources(root: THREE.Object3D): void {
+  const disposedMaterials = new Set<THREE.Material>();
+  const disposedTextures = new Set<THREE.Texture>();
+  root.traverse((object) => {
+    const renderable = object as THREE.Mesh;
+    if (renderable.geometry && typeof renderable.geometry.dispose === "function") {
+      renderable.geometry.dispose();
+    }
+    const materialValue = renderable.material;
+    const materials = Array.isArray(materialValue)
+      ? materialValue
+      : materialValue
+        ? [materialValue]
+        : [];
+    materials.forEach((material) => {
+      if (disposedMaterials.has(material)) return;
+      disposedMaterials.add(material);
+      Object.values(material as unknown as Record<string, unknown>).forEach((value) => {
+        if (
+          value &&
+          typeof value === "object" &&
+          "isTexture" in value &&
+          Boolean((value as THREE.Texture & { isTexture?: boolean }).isTexture)
+        ) {
+          const texture = value as THREE.Texture;
+          if (!disposedTextures.has(texture)) {
+            disposedTextures.add(texture);
+            texture.dispose();
+          }
+        }
+      });
+      material.dispose();
+    });
+  });
+}
+
 const DESTINATION_ICONS: Record<string, React.ReactNode> = {
   executive_office: <Building2 size={15} />,
   managers_office: <Users size={15} />,
@@ -77,7 +115,9 @@ const DIRECTIVE_DEPARTMENT_BY_DESTINATION: Record<string, string> = {
   medical_department: "medical",
   academy_department: "academy",
   finance_commercial_office: "finance",
-  general_managers_office: "scouting",
+  // The General Manager owns cross-department execution and campus operations,
+  // not the Chief Scout's recruitment-only directive queue.
+  general_managers_office: "executive",
   executive_office: "executive",
 };
 
@@ -151,6 +191,7 @@ export function ClubOperationsCentre3D({
   const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
   const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
+  const activeQualityProfile = useMemo(() => GtexSceneRegistry.detectDeviceQuality(), []);
 
   // Interactive department action states
   const [busyDecisionId, setBusyDecisionId] = useState<string | null>(null);
@@ -208,6 +249,8 @@ export function ClubOperationsCentre3D({
   const {
     data: hub,
     isLoading,
+    isError: isHubError,
+    error: hubError,
     refetch,
   } = useQuery<ClubOperationsHubPayload | null>({
     queryKey: ["club-operations-hub", clubId],
@@ -220,10 +263,72 @@ export function ClubOperationsCentre3D({
   });
 
   const destinations = useMemo(() => hub?.destinations || [], [hub?.destinations]);
+  const sceneConfigurationKey = useMemo(
+    () =>
+      destinations
+        .map((destination) =>
+          [
+            destination.destination_key,
+            destination.glb_model,
+            destination.position_3d.join(","),
+            destination.accent_color,
+            destination.label,
+            destination.subtitle,
+            (destination.hotspots || [])
+              .map((hotspot) => [hotspot.id, hotspot.action, hotspot.label, hotspot.offset.join(",")].join("~"))
+              .join(";"),
+          ].join("|"),
+        )
+        .join("||"),
+    [destinations],
+  );
+  const destinationsRef = useRef<OperationsHubDestination[]>(destinations);
+  destinationsRef.current = destinations;
   const activeDestination: OperationsHubDestination | undefined = useMemo(
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
     [destinations, activeDestKey]
   );
+  const focusHotspotAction = (action: string, destinationKey: string, hotspotId: string) => {
+    setActiveDestKey(destinationKey);
+    setActiveHotspotId(hotspotId);
+
+    if (action === "inspect_timeline") {
+      setShowTimelineDrawer(true);
+      return;
+    }
+
+    const selectors: Record<string, string[]> = {
+      inspect_briefing: ['[data-testid="room-panel-executive-office"]'],
+      inspect_decisions: ['[data-testid="room-panel-executive-office"]'],
+      set_mentality: ['[data-testid="set-mentality-balanced"]'],
+      pledge_win_bonus: ['[data-testid="room-pledge-win-bonus-btn"]'],
+      configure_delegation: ['[data-testid="set-delegation-balanced"]'],
+      inspect_campus: ['[data-testid="campus-construction-projects"]', '[data-testid="room-panel-general-managers-office"]'],
+      commission_intake: ['[data-testid="commission-academy-intake-btn"]'],
+      manage_regens: ['[data-testid="academy-regen-pipeline"]', '[data-testid="room-panel-academy-department"]'],
+      run_conditioning: ['[data-testid="medical-rehabilitation-ward"]', '[data-testid="room-panel-medical-department"]'],
+      inspect_workloads: ['[data-testid="medical-workload-watchlist"]', '[data-testid="room-panel-medical-department"]'],
+      inspect_ledger: ['[data-testid="finance-ledger-stream"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      sign_sponsor: ['[data-testid^="sign-sponsor-"]', '[data-testid="finance-sponsor-offers"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      inspect_matchday_econ: ['[data-testid="finance-matchday-economics"]', '[data-testid="room-panel-finance-commercial-office"]'],
+    };
+    const targets = action.startsWith("chat_")
+      ? ['[data-testid="department-staff-chat-input"]']
+      : selectors[action] || [];
+    const panelSelector = `[data-testid="department-inspector-${destinationKey}"]`;
+
+    window.requestAnimationFrame(() => {
+      let target: HTMLElement | null = null;
+      for (const selector of targets) {
+        target = document.querySelector<HTMLElement>(selector);
+        if (target) break;
+      }
+      target = target || document.querySelector<HTMLElement>(panelSelector);
+      target?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+      if (action.startsWith("chat_")) target?.focus();
+    });
+  };
+
   const activeDirectiveDepartment =
     DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
   const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
@@ -244,6 +349,11 @@ export function ClubOperationsCentre3D({
   const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...OVERVIEW_CAMERA_TARGET));
   const isTransitioningRef = useRef<boolean>(true);
   const roomGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const lightingObjectsRef = useRef<{
+    scene: THREE.Scene;
+    hemisphere: THREE.HemisphereLight;
+    sun: THREE.DirectionalLight;
+  } | null>(null);
   const activeDestRef = useRef<string>(activeDestKey);
   activeDestRef.current = activeDestKey;
   const lightingRef = useRef<"day" | "night">(lightingMode);
@@ -271,14 +381,25 @@ export function ClubOperationsCentre3D({
       return;
     }
     const container = mountRef.current;
-    if (!container || destinations.length === 0) return;
+    const sceneDestinations = destinationsRef.current;
+    if (!container || sceneDestinations.length === 0) return;
+
+    setLoadedGlbCount(0);
+    setFailedGlbModels([]);
+
+    const isCompactViewport =
+      typeof window.matchMedia === "function"
+        ? window.matchMedia("(max-width: 768px)").matches
+        : window.innerWidth <= 768;
+    const qualityTier = isCompactViewport && activeQualityProfile.tier === "ultra" ? "high" : activeQualityProfile.tier;
+    const qualityProfile = QUALITY_PROFILES[qualityTier];
+    const lowPowerDevice = qualityTier === "low" || qualityTier === "medium";
 
     let renderer: THREE.WebGLRenderer;
     try {
       renderer = new THREE.WebGLRenderer({
-        antialias: true,
-        powerPreference: "high-performance",
-        preserveDrawingBuffer: true,
+        antialias: qualityProfile.antialias,
+        powerPreference: lowPowerDevice ? "low-power" : "high-performance",
       });
     } catch {
       setWebglStatus("fallback");
@@ -289,8 +410,8 @@ export function ClubOperationsCentre3D({
     const width = Math.max(320, container.clientWidth || 960);
     const height = Math.max(380, container.clientHeight || 520);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
-    renderer.shadowMap.enabled = true;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+    renderer.shadowMap.enabled = qualityProfile.shadowsEnabled;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.15;
@@ -335,8 +456,9 @@ export function ClubOperationsCentre3D({
       lightingRef.current === "day" ? 2.1 : 0.9
     );
     sunLight.position.set(28, 42, 24);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
+    sunLight.castShadow = qualityProfile.shadowsEnabled;
+    const shadowMapSize = qualityTier === "ultra" ? 2048 : qualityTier === "high" ? 1024 : 512;
+    sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     sunLight.shadow.camera.near = 2;
     sunLight.shadow.camera.far = 120;
     const d = 38;
@@ -345,6 +467,7 @@ export function ClubOperationsCentre3D({
     sunLight.shadow.camera.top = d;
     sunLight.shadow.camera.bottom = -d;
     scene.add(sunLight);
+    lightingObjectsRef.current = { scene, hemisphere: hemiLight, sun: sunLight };
 
     // Architectural HQ Plaza Ground & Central Rotunda
     const plazaGeo = new THREE.CylinderGeometry(34, 36, 0.8, 64);
@@ -372,13 +495,14 @@ export function ClubOperationsCentre3D({
     scene.add(rotundaRing);
 
     const pickables: THREE.Object3D[] = [];
+    const animatedActors: THREE.Group[] = [];
     const loader = new GLTFLoader();
     let mounted = true;
     let loadedModels = 0;
     roomGroupsRef.current.clear();
 
     // Build each of the 6 Operational Destination Wings
-    destinations.forEach((dest) => {
+    sceneDestinations.forEach((dest) => {
       const group = new THREE.Group();
       const [rx, ry, rz] = dest.position_3d;
       group.position.set(rx, ry, rz);
@@ -387,105 +511,12 @@ export function ClubOperationsCentre3D({
 
       const accent = new THREE.Color(dest.accent_color || "#38bdf8");
 
-      // Architectural Room Floor Pad
-      const padGeo = new THREE.BoxGeometry(10.5, 0.32, 8.5);
-      const padMat = new THREE.MeshStandardMaterial({
-        color: 0x111c33,
-        roughness: 0.35,
-        metalness: 0.4,
-      });
-      const padMesh = new THREE.Mesh(padGeo, padMat);
-      padMesh.position.y = 0.16;
-      padMesh.receiveShadow = true;
-      padMesh.userData = { destinationKey: dest.destination_key };
-      group.add(padMesh);
-      pickables.push(padMesh);
-
-      // Luminous Room Perimeter Frame
-      const borderGeo = new THREE.EdgesGeometry(new THREE.BoxGeometry(10.6, 0.36, 8.6));
-      const borderMat = new THREE.LineBasicMaterial({ color: accent });
-      const borderLines = new THREE.LineSegments(borderGeo, borderMat);
-      borderLines.position.y = 0.18;
-      borderLines.name = "room-border";
-      group.add(borderLines);
-
-      // Glass Cutaway Partition Walls (Back & Side)
-      const glassMat = new THREE.MeshPhysicalMaterial({
-        color: accent,
-        transparent: true,
-        opacity: 0.16,
-        roughness: 0.15,
-        metalness: 0.1,
-      });
-      const backWall = new THREE.Mesh(new THREE.BoxGeometry(10.4, 3.2, 0.14), glassMat);
-      backWall.position.set(0, 1.75, -4.15);
-      backWall.userData = { destinationKey: dest.destination_key };
-      group.add(backWall);
-      pickables.push(backWall);
-
-      // Interior Command Desk / Tactical Table
-      const deskMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(3.2, 0.85, 1.6),
-        new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.6 })
-      );
-      deskMesh.position.set(0, 0.75, 0.3);
-      deskMesh.castShadow = true;
-      deskMesh.userData = { destinationKey: dest.destination_key };
-      group.add(deskMesh);
-      pickables.push(deskMesh);
-
-      // Holographic Display Screen above Desk
-      const holoMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(2.6, 1.1),
-        new THREE.MeshBasicMaterial({
-          color: accent,
-          transparent: true,
-          opacity: 0.42,
-          side: THREE.DoubleSide,
-        })
-      );
-      holoMesh.position.set(0, 2.05, 0.3);
-      holoMesh.userData = { destinationKey: dest.destination_key };
-      group.add(holoMesh);
-      pickables.push(holoMesh);
-
-      // Dedicated Room PointLight
-      const roomLight = new THREE.PointLight(accent, 2.2, 16);
-      roomLight.position.set(0, 4.2, 0);
-      group.add(roomLight);
-
-      // Interactive Hotspot Beacons inside the Room
-      (dest.hotspots || []).forEach((hs) => {
-        const [hx, hy, hz] = hs.offset;
-        const beaconGroup = new THREE.Group();
-        beaconGroup.position.set(hx, hy, hz);
-
-        const orb = new THREE.Mesh(
-          new THREE.SphereGeometry(0.36, 20, 20),
-          new THREE.MeshStandardMaterial({
-            color: accent,
-            emissive: accent,
-            emissiveIntensity: 0.85,
-            roughness: 0.2,
-          })
-        );
-        orb.userData = {
-          destinationKey: dest.destination_key,
-          hotspotId: hs.id,
-          hotspotLabel: hs.label,
-        };
-        beaconGroup.add(orb);
-        pickables.push(orb);
-
-        const stem = new THREE.Mesh(
-          new THREE.CylinderGeometry(0.05, 0.05, Math.max(0.4, hy), 8),
-          new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.5 })
-        );
-        stem.position.y = -hy / 2;
-        beaconGroup.add(stem);
-
-        group.add(beaconGroup);
-      });
+      // Build a department-specific, walk-in cutaway interior.
+      // Each room has its own furniture, equipment, surfaces and named physical stations.
+      const interiorBuild = buildDepartmentInterior(dest);
+      group.add(interiorBuild.group);
+      pickables.push(...interiorBuild.pickables);
+      animatedActors.push(...interiorBuild.animatedActors);
 
       // Corridor Light Path to Central Atrium
       const distToCenter = Math.hypot(rx, rz);
@@ -504,7 +535,12 @@ export function ClubOperationsCentre3D({
       loader.load(
         glbUrl,
         (gltf) => {
-          if (!mounted) return;
+          if (!mounted) {
+            // A GLB may finish downloading after this scene has been unmounted.
+            // Release its GPU resources instead of leaking a late asset response.
+            disposeObjectResources(gltf.scene);
+            return;
+          }
           const model = gltf.scene.clone(true);
           const box = new THREE.Box3().setFromObject(model);
           const size = new THREE.Vector3();
@@ -513,7 +549,7 @@ export function ClubOperationsCentre3D({
           box.getCenter(center);
 
           const maxDim = Math.max(size.x, size.y, size.z, 1);
-          const targetSpan = 5.4;
+          const targetSpan = 2.8;
           const scale = targetSpan / maxDim;
           model.scale.setScalar(scale);
 
@@ -521,9 +557,11 @@ export function ClubOperationsCentre3D({
           const scaledCenter = new THREE.Vector3();
           scaledBox.getCenter(scaledCenter);
 
-          model.position.x = -scaledCenter.x;
-          model.position.z = -scaledCenter.z - 1.5;
-          model.position.y = -scaledBox.min.y + 0.32;
+          // Keep the certified campus asset visible as an exterior landmark beside
+          // the department, rather than allowing it to obscure the new interior.
+          model.position.x = 7.0 - scaledCenter.x;
+          model.position.z = -scaledCenter.z - 0.8;
+          model.position.y = -scaledBox.min.y + 0.12;
 
           model.traverse((child) => {
             if ((child as THREE.Mesh).isMesh) {
@@ -557,7 +595,7 @@ export function ClubOperationsCentre3D({
           });
           const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
           fallbackMesh.name = `fallback-wireframe-${dest.destination_key}`;
-          fallbackMesh.position.set(0, 1.4, -1.5);
+          fallbackMesh.position.set(7.0, 1.2, -0.8);
           fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
           fallbackMesh.castShadow = true;
           fallbackMesh.receiveShadow = true;
@@ -597,7 +635,11 @@ export function ClubOperationsCentre3D({
           setCameraMode("room");
           setActiveDestKey(destKey);
           if (obj.userData.hotspotId) {
-            setActiveHotspotId(String(obj.userData.hotspotId));
+            focusHotspotAction(
+              String(obj.userData.hotspotAction || ""),
+              destKey,
+              String(obj.userData.hotspotId),
+            );
           }
         }
       }
@@ -615,6 +657,23 @@ export function ClubOperationsCentre3D({
       renderer.setSize(w, h);
     };
     window.addEventListener("resize", onResize);
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
+    resizeObserver?.observe(container);
+
+    const onWebglContextLost = (event: Event) => {
+      event.preventDefault();
+      // Keep the canvas mounted so the browser can restore this WebGL context.
+      // The owner can still choose the 2D floorplan manually if restoration fails.
+      setWebglStatus("fallback");
+    };
+    const onWebglContextRestored = () => {
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+      onResize();
+      setWebglStatus("ready");
+    };
+    renderer.domElement.addEventListener("webglcontextlost", onWebglContextLost);
+    renderer.domElement.addEventListener("webglcontextrestored", onWebglContextRestored);
 
     setWebglStatus("ready");
 
@@ -628,8 +687,64 @@ export function ClubOperationsCentre3D({
     }
 
     let animFrameId = 0;
-    const animate = () => {
+    let lastRenderAt = 0;
+    let qualityWindowStartedAt = performance.now();
+    let qualityFrameCount = 0;
+    let qualityFrameTotalMs = 0;
+    let slowQualityWindows = 0;
+    let fastQualityWindows = 0;
+    let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
+    const targetFrameInterval = 1000 / qualityProfile.targetFps;
+    // Allow 2.5ms of rAF timer jitter so 60Hz monitors never drop every second frame
+    // and trigger false-positive adaptive quality downgrades.
+    const frameCapThreshold = Math.max(0, targetFrameInterval - 2.5);
+    const animate = (now: number) => {
       animFrameId = requestAnimationFrame(animate);
+      if (lastRenderAt > 0 && now - lastRenderAt < frameCapThreshold) return;
+      const frameDelta = lastRenderAt > 0 ? Math.min(250, now - lastRenderAt) : targetFrameInterval;
+      lastRenderAt = now;
+      qualityFrameCount += 1;
+      qualityFrameTotalMs += frameDelta;
+      if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
+        const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
+        const slowFrameThreshold = Math.max(24, targetFrameInterval * 1.25);
+        const fastFrameThreshold = Math.max(18, targetFrameInterval * 0.9);
+        if (averageFrameMs > slowFrameThreshold) {
+          slowQualityWindows += 1;
+          fastQualityWindows = 0;
+        } else if (averageFrameMs < fastFrameThreshold) {
+          fastQualityWindows += 1;
+          slowQualityWindows = 0;
+        } else {
+          slowQualityWindows = 0;
+          fastQualityWindows = 0;
+        }
+        if (slowQualityWindows >= 2 && adaptivePixelRatio > 0.85) {
+          adaptivePixelRatio = Math.max(0.85, adaptivePixelRatio * 0.85);
+          renderer.setPixelRatio(adaptivePixelRatio);
+          renderer.shadowMap.enabled = false;
+          sunLight.castShadow = false;
+          slowQualityWindows = 0;
+        } else if (
+          fastQualityWindows >= 3 &&
+          adaptivePixelRatio < Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio)
+        ) {
+          adaptivePixelRatio = Math.min(
+            window.devicePixelRatio || 1,
+            qualityProfile.pixelRatio,
+            adaptivePixelRatio / 0.85,
+          );
+          renderer.setPixelRatio(adaptivePixelRatio);
+          if (qualityProfile.shadowsEnabled) {
+            renderer.shadowMap.enabled = true;
+            sunLight.castShadow = true;
+          }
+          fastQualityWindows = 0;
+        }
+        qualityWindowStartedAt = now;
+        qualityFrameCount = 0;
+        qualityFrameTotalMs = 0;
+      }
 
       // Smoothly interpolate camera & target during room transitions without reloading scene
       if (isTransitioningRef.current) {
@@ -643,6 +758,20 @@ export function ClubOperationsCentre3D({
         }
       }
 
+      // Quiet idle motion keeps each department inhabited without a heavy
+      // skeletal animation dependency or extra network-loaded character assets.
+      animatedActors.forEach((actor) => {
+        const phase = Number(actor.userData.idlePhase || 0);
+        const wave = Math.sin(now * 0.00115 + phase);
+        actor.position.y = Number(actor.userData.baseY || 0) + wave * 0.025;
+        const leftArm = actor.userData.leftArmPivot as THREE.Group | undefined;
+        const rightArm = actor.userData.rightArmPivot as THREE.Group | undefined;
+        const head = actor.userData.headPivot as THREE.Group | undefined;
+        if (leftArm) leftArm.rotation.z = wave * 0.035;
+        if (rightArm) rightArm.rotation.z = -wave * 0.035;
+        if (head) head.rotation.y = Math.sin(now * 0.00055 + phase) * 0.075;
+      });
+
       // Highlight selected room wing
       roomGroupsRef.current.forEach((grp, key) => {
         const isSelected = key === activeDestRef.current;
@@ -652,23 +781,46 @@ export function ClubOperationsCentre3D({
       controls.update();
       renderer.render(scene, camera);
     };
-    animate();
+    animate(performance.now());
 
     return () => {
       mounted = false;
       cancelAnimationFrame(animFrameId);
       window.removeEventListener("resize", onResize);
+      resizeObserver?.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);
       renderer.domElement.removeEventListener("pointerup", onPointerUp);
+      renderer.domElement.removeEventListener("webglcontextlost", onWebglContextLost);
+      renderer.domElement.removeEventListener("webglcontextrestored", onWebglContextRestored);
+      controls.removeEventListener("start", stopAutoTransition);
       controls.dispose();
+
+      // Release room geometry, GLB materials and generated screen textures on every teardown.
+      disposeObjectResources(scene);
       envTex.dispose();
       pmrem.dispose();
+      renderer.domElement.remove();
       renderer.dispose();
+      lightingObjectsRef.current = null;
+      roomGroupsRef.current.clear();
       if (typeof window !== "undefined") {
         delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
       }
     };
-  }, [renderMode, destinations.length, lightingMode]);
+  }, [renderMode, sceneConfigurationKey]);
+
+  // Day/night is a light-rig change, not a reason to destroy and reload the entire scene.
+  useEffect(() => {
+    const lighting = lightingObjectsRef.current;
+    if (!lighting) return;
+    const night = lightingMode === "night";
+    const background = night ? 0x040914 : 0x091526;
+    lighting.scene.background = new THREE.Color(background);
+    lighting.scene.fog = new THREE.FogExp2(background, 0.0085);
+    lighting.hemisphere.intensity = night ? 0.45 : 1.1;
+    lighting.sun.color.setHex(night ? 0x60a5fa : 0xfffbeb);
+    lighting.sun.intensity = night ? 0.9 : 2.1;
+  }, [lightingMode]);
 
   const invalidateAll = async () => {
     await refetch();
@@ -805,11 +957,10 @@ export function ClubOperationsCentre3D({
     setBusyAction(`promote:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/players/${encodeURIComponent(playerId)}/squad-status`,
-        { status: "first_team" }
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/promote`
       );
       await invalidateAll();
-      toast.success(`Promoted ${playerName} to First-Team senior squad.`);
+      toast.success(`Promoted ${playerName} into the senior squad.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -817,19 +968,14 @@ export function ClubOperationsCentre3D({
     }
   };
 
-  const handleOfferYouthContract = async (playerId: string, playerName: string, wage: number) => {
+  const handleOfferYouthContract = async (playerId: string, playerName: string) => {
     setBusyAction(`contract:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/players/${encodeURIComponent(playerId)}/contract`,
-        {
-          wage_gtex: Math.max(50, Math.round(wage * 1.25)),
-          years: 4,
-          promise_role: "prospect",
-        }
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/contract`
       );
       await invalidateAll();
-      toast.success(`Signed ${playerName} to improved long-term contract.`);
+      toast.success(`Improved ${playerName}'s academy contract for 1,000 Fan Coin.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -851,17 +997,26 @@ export function ClubOperationsCentre3D({
   };
 
   const handleSendStaffChat = async (roleKey: string) => {
-    if (!staffMessageText.trim()) return;
+    const message = staffMessageText.trim();
+    if (!message || sendingChat) return;
     setSendingChat(true);
     try {
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/staff/chat`, {
-        role: roleKey,
-        message: staffMessageText.trim(),
+      // Use the same durable communications thread as the Club Inbox.
+      // The legacy /staff/chat endpoint writes to the older story-chat flow.
+      const threadId = roleKey.startsWith("staff:") ? roleKey : `staff:${roleKey}`;
+      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
+        thread_id: threadId,
+        message,
+        sender_role: "owner",
         topic: activeHotspotId || "operations",
+        priority: "normal",
+        request_reply: true,
       });
       setStaffMessageText("");
       await invalidateAll();
-      toast.success("Executive directive logged with department lead.");
+      queryClient.invalidateQueries({ queryKey: ["communications", clubId] });
+      queryClient.invalidateQueries({ queryKey: ["owner-comms-summary"] });
+      toast.success("Message delivered to the department's durable communications thread.");
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -928,9 +1083,38 @@ export function ClubOperationsCentre3D({
     );
   }
 
+  if (isHubError && !hub) {
+    return (
+      <section
+        data-testid="living-club-management-centre-error"
+        className="rounded-2xl border border-rose-400/30 bg-[#060d1a] p-6 text-slate-200"
+      >
+        <div className="flex items-start gap-3">
+          <AlertTriangle size={20} className="mt-0.5 text-rose-300" />
+          <div className="min-w-0 flex-1">
+            <h3 className="text-sm font-black text-white">Club Operations Centre could not load</h3>
+            <p className="mt-1 text-xs text-slate-400">
+              The department scene and operational controls are unavailable until the club data request succeeds.
+            </p>
+            <p className="mt-2 break-words text-xs text-rose-200">{errMsg(hubError)}</p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-3 inline-flex items-center gap-2 rounded-lg border border-sky-400/40 bg-sky-500/15 px-3 py-2 text-xs font-bold text-sky-200 hover:bg-sky-500/25"
+            >
+              <RefreshCw size={13} />
+              Retry operations data
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (!hub || !activeDestination) return null;
 
   const rpt = activeDestination.report || {};
+  const activeHotspot = activeDestination.hotspots.find((hotspot) => hotspot.id === activeHotspotId);
   const openDeptDecisions = activeDestination.open_decisions || [];
   const allOpenDeptDecisions = hub.actionable_decisions?.department_decisions || [];
   const dilemma = hub.daily_briefing?.boardroom_dilemma;
@@ -1083,7 +1267,7 @@ export function ClubOperationsCentre3D({
               /* Non-WebGL / 2D Interactive Architectural Floorplan Fallback */
               <div
                 data-testid="club-operations-2d-floorplan"
-                className="flex h-full w-full flex-col justify-between bg-gradient-to-br from-[#071224] via-[#091930] to-[#050c18] p-4 sm:p-6"
+                className="flex h-full w-full flex-col justify-between overflow-y-auto bg-gradient-to-br from-[#071224] via-[#091930] to-[#050c18] p-4 pt-14 sm:p-6 sm:pt-14"
               >
                 <div className="flex items-center justify-between border-b border-white/10 pb-2.5">
                   <div>
@@ -1198,32 +1382,34 @@ export function ClubOperationsCentre3D({
               </div>
             )}
 
-            {/* Interactive Room Hotspots Bar at Bottom of Viewport */}
-            <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-between gap-2">
-              <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/90 p-1.5 backdrop-blur-md">
-                <span className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
-                  Room Stations:
-                </span>
-                {activeDestination.hotspots.map((hs) => {
-                  const isHsActive = activeHotspotId === hs.id;
-                  return (
-                    <button
-                      key={hs.id}
-                      type="button"
-                      data-testid={`room-hotspot-${hs.id}`}
-                      onClick={() => setActiveHotspotId(hs.id)}
-                      className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
-                        isHsActive
-                          ? "bg-sky-500 text-slate-950 font-black"
-                          : "bg-white/5 text-slate-200 hover:bg-white/15"
-                      }`}
-                    >
-                      {hs.label}
-                    </button>
-                  );
-                })}
+            {/* Interactive Room Hotspots Bar at Bottom of 3D Viewport (2D cards render stations inline) */}
+            {renderMode === "3d" && (
+              <div className="pointer-events-none absolute inset-x-3 bottom-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/90 p-1.5 backdrop-blur-md">
+                  <span className="px-2 text-[10px] font-black uppercase tracking-wider text-slate-400">
+                    Room Stations:
+                  </span>
+                  {activeDestination.hotspots.map((hs) => {
+                    const isHsActive = activeHotspotId === hs.id;
+                    return (
+                      <button
+                        key={hs.id}
+                        type="button"
+                        data-testid={`room-hotspot-${hs.id}`}
+                        onClick={() => setActiveHotspotId(hs.id)}
+                        className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition ${
+                          isHsActive
+                            ? "bg-sky-500 text-slate-950 font-black"
+                            : "bg-white/5 text-slate-200 hover:bg-white/15"
+                        }`}
+                      >
+                        {hs.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            )}
           </div>
 
           {/* Quick Staff Communication Bar for Active Room Lead */}
@@ -1293,7 +1479,8 @@ export function ClubOperationsCentre3D({
                   {activeDestination.label}
                 </span>
                 <span className="gx-mono text-[11px] text-slate-400">
-                  Station: {activeDestination.hotspots.find((h) => h.id === activeHotspotId)?.label || "Overview"}
+                  Station: {activeHotspot?.label || "Overview"}
+                  {activeHotspot ? ` · ${activeHotspot.action.replace(/_/g, " ")}` : ""}
                 </span>
               </div>
               <h3 className="mt-1 text-lg font-black text-white">{rpt.title || activeDestination.subtitle}</h3>
@@ -1858,7 +2045,7 @@ export function ClubOperationsCentre3D({
 
                 {/* Active 3D Campus Construction Projects */}
                 {(rpt.club_operations?.active_construction_projects || []).length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                  <div data-testid="campus-construction-projects" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       Active Campus Construction Projects
                     </p>
@@ -1924,7 +2111,7 @@ export function ClubOperationsCentre3D({
                     : `Commission New Youth Intake (${fmt(rpt.intake_recommendations?.intake_cost_gtex ?? 400)} GTEX)`}
                 </button>
 
-                <div className="space-y-2">
+                <div className="space-y-2" data-testid="academy-regen-pipeline">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Prospective Academy & Regen Pipeline ({(rpt.prospective_youth_players || []).length})
                   </p>
@@ -1949,12 +2136,12 @@ export function ClubOperationsCentre3D({
                           <button
                             type="button"
                             disabled={Boolean(busyAction)}
-                            onClick={() => handleOfferYouthContract(p.id, p.name, p.contract_wage)}
+                            onClick={() => handleOfferYouthContract(p.id, p.name)}
                             className="rounded border border-sky-400/40 bg-sky-500/20 px-2 py-1 text-[9px] font-bold uppercase text-sky-200 hover:bg-sky-500/30"
                           >
                             Extend
                           </button>
-                          {p.squad_status !== "first_team" && (
+                          {!["first_team", "senior"].includes(String(p.squad_status || "")) && (
                             <button
                               type="button"
                               disabled={Boolean(busyAction)}
@@ -1997,7 +2184,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Active Rehabilitation Dossiers */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                <div data-testid="medical-rehabilitation-ward" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
                     <Activity size={12} />
                     <span>Active Rehabilitation Ward ({(rpt.injured_players || []).length})</span>
@@ -2030,7 +2217,7 @@ export function ClubOperationsCentre3D({
 
                 {/* Players Requiring Special Attention */}
                 {(rpt.players_requiring_special_attention || []).length > 0 && (
-                  <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                  <div data-testid="medical-workload-watchlist" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
                       Workload & Conditioning Watchlist
                     </p>
@@ -2054,7 +2241,7 @@ export function ClubOperationsCentre3D({
             {/* 6. FINANCE & COMMERCIAL OFFICE VIEW */}
             {activeDestination.destination_key === "finance_commercial_office" && (
               <div className="space-y-3.5" data-testid="room-panel-finance-commercial-office">
-                <div className="grid grid-cols-2 gap-2.5">
+                <div data-testid="finance-matchday-economics" className="grid grid-cols-2 gap-2.5">
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Treasury Balance</p>
                     <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">
@@ -2083,7 +2270,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Signable Sponsor Offers */}
-                <div className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
+                <div data-testid="finance-sponsor-offers" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-2">
                   <p className="text-[10px] font-black uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
                     <Award size={12} />
                     <span>Commercial Sponsorship Desk</span>
@@ -2116,7 +2303,7 @@ export function ClubOperationsCentre3D({
                 </div>
 
                 {/* Recent Authoritative Ledger Entries */}
-                <div className="space-y-1.5">
+                <div className="space-y-1.5" data-testid="finance-ledger-stream">
                   <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
                     Authoritative Ledger Stream
                   </p>

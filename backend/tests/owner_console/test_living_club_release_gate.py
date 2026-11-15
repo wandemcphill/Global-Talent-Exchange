@@ -173,6 +173,17 @@ def _seed_club_world(
         user_id=owner.id,
         memo="Initial release-gate fan coin",
     )
+    ledger.record(
+        session,
+        event_type="test_club_fan_grant",
+        source=ledger.WORLD_CLUBS,
+        destination=ledger.club_account(club.id),
+        currency=ledger.FAN,
+        gross=50000,
+        club_id=club.id,
+        user_id=owner.id,
+        memo="Initial release-gate club fan coin",
+    )
 
     squad_spec = [
         ("p-gk-1", "Emeka Obi", "Goalkeeper", 28, 79, 80, False),
@@ -516,7 +527,7 @@ def test_alembic_fresh_and_seeded_upgrade_preserves_legacy_records(tmp_path: Pat
 
     script = ScriptDirectory.from_config(fresh_cfg)
     heads = script.get_heads()
-    assert heads == ["20261114_0247_living_supporter_media_club_history"]
+    assert heads == ["20261114_0249_merge_institution_and_fan_coin_revisions"]
 
     command.upgrade(fresh_cfg, "head")
     fresh_eng = create_engine(fresh_url)

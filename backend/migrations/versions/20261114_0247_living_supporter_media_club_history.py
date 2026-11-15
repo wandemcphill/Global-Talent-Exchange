@@ -106,7 +106,6 @@ def upgrade() -> None:
         op.create_index("ix_owner_supporter_events_world_day", "owner_supporter_events", ["world_day"])
         op.create_index("ix_owner_supporter_events_event_type", "owner_supporter_events", ["event_type"])
         op.create_index("ix_owner_supporter_events_idempotency_key", "owner_supporter_events", ["idempotency_key"])
-        op.create_index("ix_owner_supporter_events_created_at", "owner_supporter_events", ["created_at"])
 
     if "owner_media_outlets" not in existing_tables:
         op.create_table(
@@ -161,11 +160,9 @@ def upgrade() -> None:
         )
         op.create_index("ix_owner_media_stories_club_id", "owner_media_stories", ["club_id"])
         op.create_index("ix_owner_media_stories_world_day", "owner_media_stories", ["world_day"])
-        op.create_index("ix_owner_media_stories_outlet_key", "owner_media_stories", ["outlet_key"])
         op.create_index("ix_owner_media_stories_story_type", "owner_media_stories", ["story_type"])
         op.create_index("ix_owner_media_stories_classification", "owner_media_stories", ["classification"])
         op.create_index("ix_owner_media_stories_idempotency_key", "owner_media_stories", ["idempotency_key"])
-        op.create_index("ix_owner_media_stories_created_at", "owner_media_stories", ["created_at"])
 
     if "owner_club_history_entries" not in existing_tables:
         op.create_table(
@@ -188,17 +185,11 @@ def upgrade() -> None:
             sa.UniqueConstraint("idempotency_key", name="uq_owner_club_history_entries_idempotency"),
         )
         op.create_index("ix_owner_club_history_entries_club_id", "owner_club_history_entries", ["club_id"])
-        op.create_index("ix_owner_club_history_entries_season_number", "owner_club_history_entries", ["season_number"])
-        op.create_index("ix_owner_club_history_entries_world_day", "owner_club_history_entries", ["world_day"])
         op.create_index("ix_owner_club_history_entries_category", "owner_club_history_entries", ["category"])
-        op.create_index("ix_owner_club_history_entries_event_type", "owner_club_history_entries", ["event_type"])
-        op.create_index(
-            "ix_owner_club_history_entries_is_major_milestone", "owner_club_history_entries", ["is_major_milestone"]
-        )
+        op.create_index("ix_owner_club_history_entries_world_day", "owner_club_history_entries", ["world_day"])
         op.create_index(
             "ix_owner_club_history_entries_idempotency_key", "owner_club_history_entries", ["idempotency_key"]
         )
-        op.create_index("ix_owner_club_history_entries_created_at", "owner_club_history_entries", ["created_at"])
 
     if "owner_club_season_archives" not in existing_tables:
         op.create_table(
@@ -233,11 +224,9 @@ def upgrade() -> None:
             sa.UniqueConstraint("idempotency_key", name="uq_owner_club_season_archives_idempotency"),
         )
         op.create_index("ix_owner_club_season_archives_club_id", "owner_club_season_archives", ["club_id"])
-        op.create_index("ix_owner_club_season_archives_season_number", "owner_club_season_archives", ["season_number"])
         op.create_index(
             "ix_owner_club_season_archives_competition_id", "owner_club_season_archives", ["competition_id"]
         )
-        op.create_index("ix_owner_club_season_archives_created_at", "owner_club_season_archives", ["created_at"])
 
     if "owner_club_managerial_tenures" not in existing_tables:
         op.create_table(
@@ -266,7 +255,6 @@ def upgrade() -> None:
             sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         )
         op.create_index("ix_owner_club_managerial_tenures_club_id", "owner_club_managerial_tenures", ["club_id"])
-        op.create_index("ix_owner_club_managerial_tenures_manager_id", "owner_club_managerial_tenures", ["manager_id"])
         op.create_index("ix_owner_club_managerial_tenures_status", "owner_club_managerial_tenures", ["status"])
 
     if "owner_club_transfer_records" not in existing_tables:
@@ -297,9 +285,6 @@ def upgrade() -> None:
         )
         op.create_index("ix_owner_club_transfer_records_club_id", "owner_club_transfer_records", ["club_id"])
         op.create_index("ix_owner_club_transfer_records_direction", "owner_club_transfer_records", ["direction"])
-        op.create_index("ix_owner_club_transfer_records_player_id", "owner_club_transfer_records", ["player_id"])
-        op.create_index("ix_owner_club_transfer_records_world_day", "owner_club_transfer_records", ["world_day"])
-        op.create_index("ix_owner_club_transfer_records_created_at", "owner_club_transfer_records", ["created_at"])
 
     if "owner_club_academy_graduates" not in existing_tables:
         op.create_table(
@@ -328,7 +313,6 @@ def upgrade() -> None:
         )
         op.create_index("ix_owner_club_academy_graduates_club_id", "owner_club_academy_graduates", ["club_id"])
         op.create_index("ix_owner_club_academy_graduates_player_id", "owner_club_academy_graduates", ["player_id"])
-        op.create_index("ix_owner_club_academy_graduates_status", "owner_club_academy_graduates", ["status"])
 
     if "owner_club_rivalries" not in existing_tables:
         op.create_table(
@@ -353,7 +337,6 @@ def upgrade() -> None:
             sa.UniqueConstraint("club_id", "rival_club_id", name="uq_owner_club_rivalries_club_rival"),
         )
         op.create_index("ix_owner_club_rivalries_club_id", "owner_club_rivalries", ["club_id"])
-        op.create_index("ix_owner_club_rivalries_rival_club_id", "owner_club_rivalries", ["rival_club_id"])
 
 
 def downgrade() -> None:

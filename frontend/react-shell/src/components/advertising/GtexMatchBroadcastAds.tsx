@@ -78,12 +78,11 @@ export function useMatchCommercialInventory(_matchId?: string, _enabled = true) 
         const sponsors = all.filter((c) => matchesPlacement(c, "match_sponsor_id", ["partner_showcase"]));
         const panels = all.filter((c) => matchesPlacement(c, "live_match_panel", ["homepage_rail", "public_homepage"]));
         const halftimes = all.filter((c) => matchesPlacement(c, "halftime_sponsorship", ["homepage_hero", "live_match_panel"]));
-        const perimeters = all.filter((c) => matchesPlacement(c, "stadium_perimeter", ["match_sponsor_id", "partner_showcase"]));
 
         setSponsorIdAd(sponsors[0] || all[0] || null);
         setLivePanelAds(panels.length > 0 ? panels : all.slice(0, 3));
         setHalftimeAds(halftimes.length > 0 ? halftimes : panels.slice(0, 2));
-        setPerimeterAds(perimeters.length > 0 ? perimeters : sponsors.slice(0, 3));
+        setPerimeterAds(sponsors.slice(0, 3));
       } catch {
         // Non-blocking fallback when no live campaigns exist
       }
@@ -279,7 +278,7 @@ export function StadiumPerimeterLEDShowcase({
 }) {
   const { perimeterAd, sponsorAd } = useMatchCommercialInventory();
   const activeAd = perimeterAd || sponsorAd;
-  const placementKey = "stadium_perimeter";
+  const placementKey = "match_sponsor_id";
 
   useEffect(() => {
     if (activeAd) {

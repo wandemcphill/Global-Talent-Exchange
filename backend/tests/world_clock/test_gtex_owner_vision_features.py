@@ -239,8 +239,13 @@ def test_academy_readiness_youth_contract_and_senior_promotion():
     assert "decision_factors" in pdict
     assert "readiness_assessment" in pdict
 
+    fan_before = ledger.balance(session, ledger.club_account("club-1"), ledger.FAN)
+    gtex_before = ledger.balance(session, ledger.club_account("club-1"), ledger.GTEX)
     contract_res = service.academy_contract(session, "user-1", "club-1", prospect.id)
+    assert contract_res["cost_fan_coin"] == 1_000
     assert contract_res["player"]["morale"] > pdict["morale"] or contract_res["player"]["morale"] == 100
+    assert ledger.balance(session, ledger.club_account("club-1"), ledger.FAN) == fan_before - 1_000
+    assert ledger.balance(session, ledger.club_account("club-1"), ledger.GTEX) == gtex_before
 
     promo_res = service.academy_promote(session, "user-1", "club-1", prospect.id)
     assert promo_res["player"]["squad_status"] == "senior"

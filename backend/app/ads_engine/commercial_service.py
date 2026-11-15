@@ -266,7 +266,7 @@ DEFAULT_PLACEMENT_SPECS: tuple[dict[str, Any], ...] = (
         "name": "Digital Perimeter Stadium Advertising",
         "division": "brand",
         "category": "Live Match Broadcast",
-        "description": "Digital LED perimeter pitchside boards inside supported 2.5D and 3D match renderers.",
+        "description": "Digital LED perimeter pitchside boards inside 3D match renderers (currently disabled while 3D gameplay is closed).",
         "supported_media_types_json": ["image/png", "image/jpeg", "image/webp"],
         "aspect_ratio": "8:1",
         "recommended_width": 1600,
@@ -279,6 +279,8 @@ DEFAULT_PLACEMENT_SPECS: tuple[dict[str, Any], ...] = (
         "rotation_interval_seconds": 30,
         "priority_weight": 170,
         "device_compatibility_json": ["desktop", "mobile", "tablet"],
+        "is_enabled": False,
+        "delivery_surface_ready": False,
     },
     {
         "placement_key": "music_rotation",
@@ -467,6 +469,49 @@ def clean_track_title_from_filename(filename: str) -> str:
     return (cleaned or "Untitled Track")[:180]
 
 
+def _is_3d_stadium_ads_enabled() -> bool:
+    return os.getenv("GTE_3D_STADIUM_ADS_ENABLED", "false").strip().lower() in {"true", "1", "yes"}
+
+
+def _extract_wav_duration_seconds(data: bytes) -> int | None:
+    if len(data) < 44 or data[:4] != b"RIFF" or data[8:12] != b"WAVE":
+        return None
+    idx = 12
+    byte_rate: int | None = None
+    data_size: int | None = None
+    length = len(data)
+    while idx + 8 <= length:
+        chunk_id = data[idx : idx + 4]
+        chunk_size = struct.unpack("<I", data[idx + 4 : idx + 8])[0]
+        payload_start = idx + 8
+        if chunk_id == b"fmt " and payload_start + 12 <= length:
+            byte_rate = struct.unpack("<I", data[payload_start + 8 : payload_start + 12])[0]
+        elif chunk_id == b"data":
+            data_size = chunk_size
+            if byte_rate:
+                break
+        idx = payload_start + chunk_size + (chunk_size % 2)
+    if byte_rate and byte_rate > 0 and data_size is not None and data_size > 0:
+        return max(1, int(round(data_size / float(byte_rate))))
+    return None
+
+
+def _extract_mp4_duration_seconds(data: bytes) -> int | None:
+    mvhd_idx = data.find(b"mvhd")
+    if mvhd_idx == -1 or mvhd_idx + 24 > len(data):
+        return None
+    version = data[mvhd_idx + 4]
+    if version == 0 and mvhd_idx + 24 <= len(data):
+        timescale, duration = struct.unpack(">II", data[mvhd_idx + 16 : mvhd_idx + 24])
+        if timescale > 0 and duration > 0:
+            return max(1, int(round(duration / float(timescale))))
+    elif version == 1 and mvhd_idx + 36 <= len(data):
+        timescale, duration = struct.unpack(">IQ", data[mvhd_idx + 24 : mvhd_idx + 36])
+        if timescale > 0 and duration > 0:
+            return max(1, int(round(duration / float(timescale))))
+    return None
+
+
 def inspect_and_validate_media_bytes(
     *,
     asset_kind: str,
@@ -474,7 +519,7 @@ def inspect_and_validate_media_bytes(
     declared_content_type: str | None,
     data: bytes,
 ) -> dict[str, Any]:
-    """Validate media magic bytes, size limits, dimensions, and silent-video requirements."""
+    """Validate media magic bytes, size limits, dimensions, duration, and silent-video requirements."""
     if not data:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Uploaded media file is empty.")
 
@@ -496,13 +541,15 @@ def inspect_and_validate_media_bytes(
     detected_mime: str | None = None
     width: int | None = None
     height: int | None = None
+    duration_seconds: int | None = None
     has_audio_track = False
     is_silent_verified = True
 
     # 1. Check image magic bytes (PNG, JPEG, WebP)
     if data.startswith(b"\x89PNG\r\n\x1a\n") and len(data) >= 24:
         detected_mime = "image/png"
-        width, height = struct.unpack(">II", data[16:24])
+        if data[12:16] == b"IHDR":
+            width, height = struct.unpack(">II", data[16:24])
     elif data.startswith(b"\xff\xd8\xff"):
         detected_mime = "image/jpeg"
         width, height = _extract_jpeg_dimensions(data)
@@ -512,6 +559,7 @@ def inspect_and_validate_media_bytes(
     # 2. Check MP4 / M4A container (ftyp box)
     elif len(data) >= 12 and data[4:8] == b"ftyp":
         major_brand = data[8:12]
+        duration_seconds = _extract_mp4_duration_seconds(data)
         if asset_kind == "music_audio" or major_brand in {b"M4A ", b"M4B "}:
             detected_mime = "audio/mp4"
             has_audio_track = True
@@ -535,6 +583,7 @@ def inspect_and_validate_media_bytes(
         is_silent_verified = False
     elif len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WAVE":
         detected_mime = "audio/wav"
+        duration_seconds = _extract_wav_duration_seconds(data)
         has_audio_track = True
         is_silent_verified = False
     elif data.startswith(b"OggS"):
@@ -569,11 +618,35 @@ def inspect_and_validate_media_bytes(
             detail="Visual advertisements on GTEX must be silent. The uploaded video contains an audio track; please upload a silent video creative.",
         )
 
+    if asset_kind == "music_audio" and duration_seconds is not None and duration_seconds > 420:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Music audio duration ({duration_seconds}s) exceeds maximum allowed duration of 420 seconds.",
+        )
+
+    if asset_kind == "brand_video" and duration_seconds is not None and duration_seconds > 45:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Brand video duration ({duration_seconds}s) exceeds maximum allowed duration of 45 seconds.",
+        )
+
+    if width is not None and (width <= 0 or width > 8192):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Media width ({width}px) is outside supported bounds (1..8192 px).",
+        )
+    if height is not None and (height <= 0 or height > 8192):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Media height ({height}px) is outside supported bounds (1..8192 px).",
+        )
+
     return {
         "mime_type": detected_mime,
         "size_bytes": size_bytes,
         "width": width,
         "height": height,
+        "duration_seconds": duration_seconds,
         "has_audio_track": has_audio_track,
         "is_silent_verified": is_silent_verified,
         "sha256_hash": hashlib.sha256(data).hexdigest(),
@@ -642,14 +715,25 @@ class CommercialNetworkService:
 
     def ensure_default_catalog(self) -> None:
         """Seed default placement specs and NGN pricing package definitions if missing."""
-        existing_placements = {row.placement_key for row in self.session.scalars(select(AdPlacementSpec)).all()}
+        existing_rows = {row.placement_key: row for row in self.session.scalars(select(AdPlacementSpec)).all()}
+        stadium_3d_ready = _is_3d_stadium_ads_enabled()
         for spec_def in DEFAULT_PLACEMENT_SPECS:
-            if spec_def["placement_key"] in existing_placements:
+            pkey = spec_def["placement_key"]
+            if pkey in existing_rows:
+                if pkey == "stadium_perimeter" and not stadium_3d_ready:
+                    row = existing_rows[pkey]
+                    row.is_enabled = False
+                    row.delivery_surface_ready = False
                 continue
             rate = _env_minor_ngn(spec_def["env_rate_key"])
+            default_enabled = bool(spec_def.get("is_enabled", True))
+            default_ready = bool(spec_def.get("delivery_surface_ready", True))
+            if pkey == "stadium_perimeter" and not stadium_3d_ready:
+                default_enabled = False
+                default_ready = False
             self.session.add(
                 AdPlacementSpec(
-                    placement_key=spec_def["placement_key"],
+                    placement_key=pkey,
                     name=spec_def["name"],
                     division=spec_def["division"],
                     category=spec_def["category"],
@@ -662,8 +746,8 @@ class CommercialNetworkService:
                     max_duration_seconds=spec_def["max_duration_seconds"],
                     requires_silent_media=spec_def["requires_silent_media"],
                     weekly_rate_minor_ngn=rate,
-                    is_enabled=True,
-                    delivery_surface_ready=True,
+                    is_enabled=default_enabled,
+                    delivery_surface_ready=default_ready,
                     frequency_cap_per_session=spec_def["frequency_cap_per_session"],
                     rotation_interval_seconds=spec_def["rotation_interval_seconds"],
                     priority_weight=spec_def["priority_weight"],
@@ -950,8 +1034,79 @@ class CommercialNetworkService:
             )
         return workspace
 
+    def require_workspace_permission(self, user: User, permission: str) -> AdvertiserWorkspace:
+        workspace = self.require_active_workspace(user)
+        if user.id == workspace.owner_user_id or user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+            return workspace
+        member = self.session.scalar(
+            select(AdvertiserWorkspaceMember).where(
+                AdvertiserWorkspaceMember.workspace_id == workspace.id,
+                or_(
+                    AdvertiserWorkspaceMember.user_id == user.id,
+                    AdvertiserWorkspaceMember.invited_email == user.email.lower(),
+                ),
+                AdvertiserWorkspaceMember.status == "active",
+            )
+        )
+        if member is not None:
+            perms = set(member.permissions_json or [])
+            if member.role in {"owner", "admin"} or permission in perms or "manage_workspace" in perms:
+                return workspace
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=f"Insufficient workspace permissions: '{permission}' permission is required.",
+        )
+
+    def _media_preview_secret(self) -> bytes:
+        secret = (
+            os.getenv("GTE_MEDIA_SIGNING_SECRET")
+            or os.getenv("GTE_AUTH_SECRET")
+            or os.getenv("SECRET_KEY")
+            or "gtex-commercial-media-preview-key-v1"
+        ).strip()
+        return secret.encode("utf-8")
+
+    def build_media_preview_token(
+        self,
+        asset_id: str,
+        workspace_id: str | None = None,
+        *,
+        ttl_seconds: int = 86400,
+    ) -> str:
+        exp = int(_utcnow().timestamp()) + max(60, ttl_seconds)
+        ws = workspace_id or "global"
+        msg = f"{asset_id}:{ws}:{exp}".encode("utf-8")
+        sig = hmac.new(self._media_preview_secret(), msg, hashlib.sha256).hexdigest()
+        return f"{exp}.{sig}"
+
+    def verify_media_preview_token(
+        self,
+        asset_id: str,
+        workspace_id: str | None,
+        token: str | None,
+    ) -> bool:
+        if not token or "." not in token:
+            return False
+        try:
+            exp_str, sig = token.strip().split(".", 1)
+            exp = int(exp_str)
+        except ValueError:
+            return False
+        if exp < int(_utcnow().timestamp()):
+            return False
+        ws = workspace_id or "global"
+        msg = f"{asset_id}:{ws}:{exp}".encode("utf-8")
+        expected = hmac.new(self._media_preview_secret(), msg, hashlib.sha256).hexdigest()
+        return hmac.compare_digest(expected, sig)
+
+    def _asset_preview_delivery_url(self, asset_id: str | None, workspace_id: str | None) -> str | None:
+        if not asset_id:
+            return None
+        token = self.build_media_preview_token(asset_id, workspace_id)
+        return f"/api/v2/public/ads/media/{asset_id}?token={token}"
+
     def serialize_workspace(self, workspace: AdvertiserWorkspace) -> AdvertiserWorkspaceView:
-        logo_url = f"/api/v2/public/ads/media/{workspace.logo_asset_id}" if workspace.logo_asset_id else None
+        logo_url = self._asset_preview_delivery_url(workspace.logo_asset_id, workspace.id)
         return AdvertiserWorkspaceView(
             id=workspace.id,
             owner_user_id=workspace.owner_user_id,
@@ -978,10 +1133,14 @@ class CommercialNetworkService:
         user: User,
         payload: AdvertiserWorkspaceUpdateRequest,
     ) -> AdvertiserWorkspaceView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_workspace")
         updates = payload.model_dump(exclude_unset=True)
         if "logo_asset_id" in updates and updates["logo_asset_id"]:
-            self._require_valid_asset(updates["logo_asset_id"], expected_kinds={"logo", "brand_image"})
+            self._require_valid_asset(
+                updates["logo_asset_id"],
+                expected_kinds={"logo", "brand_image"},
+                workspace_id=workspace.id,
+            )
         for key, val in updates.items():
             setattr(workspace, key, val)
         self.record_audit_log(
@@ -1025,7 +1184,7 @@ class CommercialNetworkService:
         user: User,
         payload: AdvertiserMemberInviteRequest,
     ) -> AdvertiserMemberView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_team")
         existing = self.session.scalar(
             select(AdvertiserWorkspaceMember).where(
                 AdvertiserWorkspaceMember.workspace_id == workspace.id,
@@ -1096,7 +1255,7 @@ class CommercialNetworkService:
                 contact_phone=row.contact_phone,
                 website_url=row.website_url,
                 logo_asset_id=row.logo_asset_id,
-                logo_url=f"/api/v2/public/ads/media/{row.logo_asset_id}" if row.logo_asset_id else None,
+                logo_url=self._asset_preview_delivery_url(row.logo_asset_id, workspace.id),
                 industry=row.industry,
                 is_active=row.is_active,
                 created_at=_as_utc(row.created_at) or _utcnow(),
@@ -1109,9 +1268,13 @@ class CommercialNetworkService:
         user: User,
         payload: AdvertiserClientBrandCreateRequest,
     ) -> AdvertiserClientBrandView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_campaigns")
         if payload.logo_asset_id:
-            self._require_valid_asset(payload.logo_asset_id, expected_kinds={"logo", "brand_image"})
+            self._require_valid_asset(
+                payload.logo_asset_id,
+                expected_kinds={"logo", "brand_image"},
+                workspace_id=workspace.id,
+            )
         row = AdvertiserClientBrand(
             workspace_id=workspace.id,
             brand_name=payload.brand_name.strip(),
@@ -1144,19 +1307,19 @@ class CommercialNetworkService:
             contact_phone=row.contact_phone,
             website_url=row.website_url,
             logo_asset_id=row.logo_asset_id,
-            logo_url=f"/api/v2/public/ads/media/{row.logo_asset_id}" if row.logo_asset_id else None,
+            logo_url=self._asset_preview_delivery_url(row.logo_asset_id, workspace.id),
             industry=row.industry,
             is_active=row.is_active,
             created_at=_as_utc(row.created_at) or _utcnow(),
         )
 
     def get_storage(self):
-        from app.storage import get_default_object_storage
+        from app.storage import get_commercial_object_storage
 
-        return get_default_object_storage()
+        return get_commercial_object_storage()
 
     # ------------------------------------------------------------------
-    # Direct Media Upload & Validation
+    # Direct Media Upload, Privacy Controls, CDN Delivery & Lifecycle
     # ------------------------------------------------------------------
     def upload_media_asset(
         self,
@@ -1167,7 +1330,7 @@ class CommercialNetworkService:
         declared_content_type: str | None,
         data: bytes,
     ) -> AdvertiserMediaAssetView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_campaigns")
         inspected = inspect_and_validate_media_bytes(
             asset_kind=asset_kind,
             filename=filename,
@@ -1175,25 +1338,114 @@ class CommercialNetworkService:
             data=data,
         )
 
-        storage_key = f"commercial/{workspace.id}/{asset_kind}/{uuid4().hex}_{inspected['sanitized_filename']}"
+        from app.storage import (
+            CloudinaryObjectStorage,
+            S3ObjectStorage,
+            generate_commercial_public_id,
+            resolve_commercial_resource_type,
+        )
+
         try:
             storage = self.get_storage()
-            storage_provider_name = "s3" if hasattr(storage, "bucket") else "local_disk"
-            storage.put_bytes(
+        except Exception as cfg_ex:
+            logger.error("Commercial object storage configuration error during media upload: %s", cfg_ex)
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Durable object storage service is unavailable or not configured. Media upload cannot proceed.",
+            ) from cfg_ex
+
+        resource_type = resolve_commercial_resource_type(asset_kind, content_type=inspected["mime_type"])
+        if isinstance(storage, CloudinaryObjectStorage):
+            folder, _leaf_id, storage_key = generate_commercial_public_id(asset_kind, workspace.id)
+            storage_provider_name = "cloudinary"
+        elif isinstance(storage, S3ObjectStorage) or hasattr(storage, "bucket"):
+            folder = f"commercial/{workspace.id}/{asset_kind}"
+            storage_key = f"{folder}/{uuid4().hex}_{inspected['sanitized_filename']}"
+            storage_provider_name = "s3"
+        else:
+            folder = f"commercial/{workspace.id}/{asset_kind}"
+            storage_key = f"{folder}/{uuid4().hex}_{inspected['sanitized_filename']}"
+            storage_provider_name = "local_disk"
+
+        try:
+            stored_obj = storage.put_bytes(
                 key=storage_key,
                 content=data,
                 content_type=inspected["mime_type"],
                 metadata={
                     "workspace_id": workspace.id,
                     "asset_kind": asset_kind,
+                    "original_filename": filename,
+                    "resource_type": resource_type,
                     "sha256": inspected["sha256_hash"],
                 },
             )
         except Exception as storage_ex:
-            logger.error("Durable object storage write failed for media upload: %s", storage_ex)
+            logger.error("Durable object storage write failed for media upload (kind=%s): %s", asset_kind, storage_ex)
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Durable object storage service is unavailable. Media upload cannot proceed.",
+            ) from storage_ex
+
+        stored_meta = dict(stored_obj.metadata or {}) if stored_obj and hasattr(stored_obj, "metadata") else {}
+        stored_key = stored_obj.key if stored_obj and getattr(stored_obj, "key", None) else storage_key
+
+        # Post-upload duration verification (in case duration was only reported by Cloudinary after upload)
+        returned_duration = stored_meta.get("duration")
+        duration_seconds = inspected.get("duration_seconds")
+        if duration_seconds is None and returned_duration is not None:
+            try:
+                duration_seconds = max(1, int(round(float(returned_duration))))
+            except (TypeError, ValueError):
+                duration_seconds = None
+
+        max_duration_by_kind = {"music_audio": 420, "brand_video": 45}
+        max_dur = max_duration_by_kind.get(asset_kind)
+        if max_dur is not None and duration_seconds is not None and duration_seconds > max_dur:
+            try:
+                if isinstance(storage, CloudinaryObjectStorage):
+                    storage.delete(
+                        key=stored_key,
+                        resource_type=stored_meta.get("resource_type") or resource_type,
+                        delivery_type=stored_meta.get("delivery_type", "authenticated"),
+                    )
+                else:
+                    storage.delete(key=stored_key)
+            except Exception as cleanup_ex:
+                logger.error("Compensating delete failed after duration rejection on %s: %s", stored_key, cleanup_ex)
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Media duration ({duration_seconds}s) exceeds maximum allowed duration of {max_dur} seconds for {asset_kind}.",
+            )
+
+        resolved_width = inspected["width"] or (
+            int(stored_meta["width"]) if stored_meta.get("width") is not None else None
+        )
+        resolved_height = inspected["height"] or (
+            int(stored_meta["height"]) if stored_meta.get("height") is not None else None
+        )
+        now = _utcnow()
+        asset_metadata: dict[str, Any] = {
+            "declared_content_type": declared_content_type,
+            "original_filename": (filename or "upload")[:255],
+            "auto_track_title": clean_track_title_from_filename(filename) if asset_kind == "music_audio" else None,
+            "storage_provider": storage_provider_name,
+            "resource_type": stored_meta.get("resource_type") or resource_type,
+            "folder": stored_meta.get("folder") or folder,
+            "uploaded_at": now.isoformat(),
+        }
+        if storage_provider_name == "cloudinary":
+            asset_metadata.update(
+                {
+                    "cloudinary_public_id": stored_key,
+                    "cloudinary_asset_id": stored_meta.get("cloudinary_asset_id"),
+                    "cloudinary_version": stored_meta.get("cloudinary_version"),
+                    "secure_url": stored_meta.get("secure_url"),
+                    "delivery_type": stored_meta.get("delivery_type", "authenticated"),
+                    "format": stored_meta.get("format"),
+                    "bytes": stored_meta.get("bytes", inspected["size_bytes"]),
+                    "etag": stored_meta.get("etag"),
+                }
             )
 
         asset = AdvertiserMediaAsset(
@@ -1205,45 +1457,292 @@ class CommercialNetworkService:
             mime_type=inspected["mime_type"],
             size_bytes=inspected["size_bytes"],
             sha256_hash=inspected["sha256_hash"],
-            width=inspected["width"],
-            height=inspected["height"],
+            width=resolved_width,
+            height=resolved_height,
+            duration_seconds=duration_seconds,
             has_audio_track=inspected["has_audio_track"],
             is_silent_verified=inspected["is_silent_verified"],
             validation_status="valid",
             storage_provider=storage_provider_name,
-            storage_key=storage_key,
-            access_classification="public",
-            data=None,  # Stored in durable object storage, not in DB!
-            metadata_json={
-                "declared_content_type": declared_content_type,
-                "auto_track_title": clean_track_title_from_filename(filename) if asset_kind == "music_audio" else None,
-            },
+            storage_key=stored_key,
+            access_classification="draft",
+            data=None,  # Stored in durable object storage, never in DB BLOB!
+            metadata_json=asset_metadata,
         )
-        self.session.add(asset)
-        self.session.flush()
-        self.record_audit_log(
-            actor_user_id=user.id,
-            workspace_id=workspace.id,
-            entity_type="media_asset",
-            entity_id=asset.id,
-            action="uploaded",
-            metadata_json={
-                "asset_kind": asset.asset_kind,
-                "mime_type": asset.mime_type,
-                "size_bytes": asset.size_bytes,
-                "is_silent_verified": asset.is_silent_verified,
-                "storage_key": storage_key,
-            },
-        )
-        self.session.commit()
-        self.session.refresh(asset)
+        try:
+            self.session.add(asset)
+            self.session.flush()
+            self.record_audit_log(
+                actor_user_id=user.id,
+                workspace_id=workspace.id,
+                entity_type="media_asset",
+                entity_id=asset.id,
+                action="uploaded",
+                metadata_json={
+                    "asset_kind": asset.asset_kind,
+                    "mime_type": asset.mime_type,
+                    "size_bytes": asset.size_bytes,
+                    "is_silent_verified": asset.is_silent_verified,
+                    "storage_provider": storage_provider_name,
+                    "storage_key": stored_key,
+                    "resource_type": asset_metadata["resource_type"],
+                },
+            )
+            self.session.commit()
+            self.session.refresh(asset)
+        except Exception as db_exc:
+            self.session.rollback()
+            logger.error(
+                "Database transaction failed after media upload (%s); attempting compensating delete.", stored_key
+            )
+            try:
+                if isinstance(storage, CloudinaryObjectStorage):
+                    storage.delete(
+                        key=stored_key,
+                        resource_type=asset_metadata["resource_type"],
+                        delivery_type=stored_meta.get("delivery_type", "authenticated"),
+                    )
+                else:
+                    storage.delete(key=stored_key)
+            except Exception as cleanup_exc:
+                logger.error(
+                    "Compensating storage delete failed for orphaned key %s (provider=%s): %s",
+                    stored_key,
+                    storage_provider_name,
+                    cleanup_exc,
+                )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Failed to persist media metadata; uploaded asset was rolled back.",
+            ) from db_exc
+
         return self.serialize_media_asset(asset)
 
-    def get_media_asset_bytes(self, asset: AdvertiserMediaAsset) -> bytes:
-        """Retrieve media binary bytes with dual-read support (storage first, legacy DB BLOB fallback)."""
+    def get_cloudinary_delivery_url(self, asset: AdvertiserMediaAsset) -> str | None:
+        if asset.storage_provider != "cloudinary":
+            return None
+        meta = asset.metadata_json if isinstance(asset.metadata_json, dict) else {}
+        secure_url = str(meta.get("secure_url") or "").strip()
+        if secure_url.startswith("https://"):
+            return secure_url
         if asset.storage_key:
             try:
-                storage = self.get_storage()
+                from app.storage import CloudinaryObjectStorage, resolve_commercial_resource_type
+
+                c_storage = CloudinaryObjectStorage.from_env()
+                if c_storage.is_configured():
+                    res_type = str(meta.get("resource_type") or "") or resolve_commercial_resource_type(
+                        asset.asset_kind,
+                        content_type=asset.mime_type,
+                        key=asset.storage_key,
+                    )
+                    deliv_type = str(meta.get("delivery_type") or "authenticated")
+                    return c_storage.build_delivery_url(
+                        asset.storage_key,
+                        resource_type=res_type,
+                        delivery_type=deliv_type,
+                        version=meta.get("cloudinary_version"),
+                        fmt=meta.get("format"),
+                        signed=(deliv_type in {"authenticated", "private"}),
+                    )
+            except Exception:
+                return None
+        return None
+
+    def resolve_public_asset_url(self, asset_id: str | None, fallback_url: str | None) -> str | None:
+        """Return direct Cloudinary CDN URL for publicly deliverable Cloudinary-backed assets."""
+        if asset_id:
+            asset = self.session.get(AdvertiserMediaAsset, asset_id)
+            if asset is not None and asset.validation_status == "valid":
+                if not self.is_asset_publicly_deliverable(asset):
+                    return None
+                cloudinary_url = self.get_cloudinary_delivery_url(asset)
+                if cloudinary_url:
+                    return cloudinary_url
+                return fallback_url or f"/api/v2/public/ads/media/{asset.id}"
+        return fallback_url
+
+    def is_asset_publicly_deliverable(self, asset: AdvertiserMediaAsset) -> bool:
+        """Check if a media asset is eligible for unauthenticated public delivery."""
+        if asset.validation_status != "valid" or asset.access_classification in {"deleted", "revoked"}:
+            return False
+
+        now = _utcnow()
+        referencing_campaigns = self.session.scalars(
+            select(BrandAdCampaign).where(
+                or_(
+                    BrandAdCampaign.logo_asset_id == asset.id,
+                    BrandAdCampaign.creative_asset_id == asset.id,
+                    BrandAdCampaign.music_audio_asset_id == asset.id,
+                    BrandAdCampaign.music_artwork_asset_id == asset.id,
+                )
+            )
+        ).all()
+
+        if referencing_campaigns:
+            for camp in referencing_campaigns:
+                start_utc = _as_utc(camp.start_at)
+                end_utc = _as_utc(camp.end_at)
+                in_window = bool(start_utc and end_utc and start_utc <= now < end_utc)
+                rights_ok = True if camp.campaign_type != "music" else bool(camp.music_rights_verified)
+                ws_ok = True
+                if camp.workspace_id:
+                    ws = self.session.get(AdvertiserWorkspace, camp.workspace_id)
+                    if ws is not None and ws.status != "active":
+                        ws_ok = False
+                if (
+                    camp.is_approved
+                    and camp.is_active
+                    and camp.payment_status == "paid"
+                    and camp.status in {"approved", "active"}
+                    and in_window
+                    and rights_ok
+                    and ws_ok
+                ):
+                    return True
+            return False
+
+        return False
+
+    def _revoke_cloudinary_asset_if_needed(
+        self,
+        asset: AdvertiserMediaAsset,
+        *,
+        was_public: bool,
+        force_revoke_check: bool = False,
+    ) -> None:
+        """Rotate the Cloudinary public_id with CDN invalidation when an asset loses public eligibility."""
+        if not (was_public or force_revoke_check):
+            return
+        if asset.storage_provider != "cloudinary" or not asset.storage_key:
+            return
+        meta = dict(asset.metadata_json) if isinstance(asset.metadata_json, dict) else {}
+        old_key = asset.storage_key
+        old_url = meta.get("secure_url")
+        res_type = str(meta.get("resource_type") or "") or None
+        deliv_type = str(meta.get("delivery_type") or "authenticated")
+        fmt = str(meta.get("format") or "") or None
+
+        try:
+            from app.storage import CloudinaryObjectStorage
+
+            c_storage = CloudinaryObjectStorage.from_env()
+            if c_storage.is_configured():
+                revoked = c_storage.revoke_public_delivery(
+                    key=old_key,
+                    resource_type=res_type,
+                    delivery_type=deliv_type,
+                    fmt=fmt,
+                )
+                asset.storage_key = revoked["new_public_id"]
+                meta["cloudinary_public_id"] = revoked["new_public_id"]
+                meta["secure_url"] = revoked["secure_url"]
+                if revoked.get("version"):
+                    meta["cloudinary_version"] = revoked["version"]
+                meta["delivery_type"] = revoked["delivery_type"]
+                meta["cdn_invalidated"] = True
+                meta["last_revoked_at"] = revoked["revoked_at"]
+                prev_ids = list(meta.get("revoked_public_ids") or [])
+                if old_key not in prev_ids:
+                    prev_ids.append(old_key)
+                meta["revoked_public_ids"] = prev_ids[-20:]
+                prev_urls = list(meta.get("revoked_urls") or [])
+                if old_url and old_url not in prev_urls:
+                    prev_urls.append(old_url)
+                meta["revoked_urls"] = prev_urls[-20:]
+                meta["revocation_count"] = int(meta.get("revocation_count") or 0) + 1
+                asset.metadata_json = meta
+                return
+        except Exception as exc:
+            logger.warning(
+                "Cloudinary CDN revocation/rename warning for asset %s (%s): %s",
+                asset.id,
+                old_key,
+                exc,
+            )
+
+        # Fallback metadata record if provider call was offline/unavailable in test mode
+        meta["last_revoked_at"] = _utcnow().isoformat()
+        meta["revocation_count"] = int(meta.get("revocation_count") or 0) + 1
+        asset.metadata_json = meta
+
+    def sync_campaign_media_access(
+        self,
+        campaign: BrandAdCampaign,
+        *,
+        force_revoke_check: bool = False,
+    ) -> None:
+        """Synchronize access_classification and Cloudinary CDN revocation on campaign media assets.
+
+        Shared assets still referenced by another legitimate active campaign remain public
+        and are never invalidated.
+        """
+        asset_ids = {
+            aid
+            for aid in (
+                campaign.logo_asset_id,
+                campaign.creative_asset_id,
+                campaign.music_audio_asset_id,
+                campaign.music_artwork_asset_id,
+            )
+            if aid
+        }
+        for aid in asset_ids:
+            asset = self.session.get(AdvertiserMediaAsset, aid)
+            if asset is None or asset.validation_status != "valid":
+                continue
+            was_public = asset.access_classification == "public"
+            if self.is_asset_publicly_deliverable(asset):
+                asset.access_classification = "public"
+            else:
+                asset.access_classification = "draft"
+                self._revoke_cloudinary_asset_if_needed(
+                    asset,
+                    was_public=was_public,
+                    force_revoke_check=force_revoke_check,
+                )
+
+    def verify_media_asset_access(
+        self,
+        asset: AdvertiserMediaAsset,
+        *,
+        current_user: User | None = None,
+        token: str | None = None,
+    ) -> bool:
+        """Determine whether a request is authorized to access an AdvertiserMediaAsset."""
+        if asset.validation_status != "valid" or asset.access_classification in {"deleted", "revoked"}:
+            return False
+        if self.is_asset_publicly_deliverable(asset):
+            return True
+        ws_active = True
+        if asset.workspace_id:
+            ws_obj = self.session.get(AdvertiserWorkspace, asset.workspace_id)
+            if ws_obj is not None and ws_obj.status != "active":
+                ws_active = False
+        if token and ws_active and self.verify_media_preview_token(asset.id, asset.workspace_id, token):
+            return True
+        if current_user is not None:
+            if current_user.role in {UserRole.ADMIN, UserRole.SUPER_ADMIN}:
+                return True
+            ws = self.resolve_workspace_for_user(current_user, auto_provision_if_advertiser=False)
+            if ws is not None and ws.id == asset.workspace_id and ws.status == "active":
+                return True
+        return False
+
+    def get_media_asset_bytes(self, asset: AdvertiserMediaAsset) -> bytes:
+        """Retrieve media binary bytes with mixed-provider support (Cloudinary, S3, local disk, legacy DB BLOB)."""
+        if asset.storage_key:
+            try:
+                from app.storage import CloudinaryObjectStorage, get_storage_for_provider
+
+                storage = get_storage_for_provider(asset.storage_provider)
+                if isinstance(storage, CloudinaryObjectStorage):
+                    meta = asset.metadata_json if isinstance(asset.metadata_json, dict) else {}
+                    return storage.get_bytes(
+                        key=asset.storage_key,
+                        resource_type=meta.get("resource_type"),
+                        delivery_url=meta.get("secure_url"),
+                    )
                 return storage.get_bytes(key=asset.storage_key)
             except Exception as ex:
                 logger.warning("Object storage read failed for asset %s (%s): %s", asset.id, asset.storage_key, ex)
@@ -1251,10 +1750,155 @@ class CommercialNetworkService:
                     return bytes(asset.data)
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Media asset binary not found in storage."
-                )
+                ) from ex
         if asset.data:
             return bytes(asset.data)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media asset binary data not available.")
+
+    def list_workspace_media_assets(
+        self,
+        user: User,
+        *,
+        asset_kind: str | None = None,
+    ) -> list[AdvertiserMediaAssetView]:
+        workspace = self.require_active_workspace(user)
+        stmt = (
+            select(AdvertiserMediaAsset)
+            .where(
+                AdvertiserMediaAsset.workspace_id == workspace.id,
+                AdvertiserMediaAsset.validation_status == "valid",
+            )
+            .order_by(AdvertiserMediaAsset.created_at.desc())
+        )
+        if asset_kind:
+            stmt = stmt.where(AdvertiserMediaAsset.asset_kind == asset_kind)
+        rows = self.session.scalars(stmt).all()
+        return [self.serialize_media_asset(row) for row in rows]
+
+    def delete_media_asset(self, user: User, asset_id: str) -> dict[str, Any]:
+        workspace = self.require_workspace_permission(user, "manage_campaigns")
+        asset = self.session.get(AdvertiserMediaAsset, asset_id)
+        if asset is None or asset.validation_status != "valid":
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media asset not found.")
+        if asset.workspace_id != workspace.id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot delete media asset belonging to another workspace.",
+            )
+
+        # Prevent deleting media attached to an active, approved, scheduled, or under-review campaign
+        blocking_campaigns = self.session.scalars(
+            select(BrandAdCampaign).where(
+                or_(
+                    BrandAdCampaign.logo_asset_id == asset.id,
+                    BrandAdCampaign.creative_asset_id == asset.id,
+                    BrandAdCampaign.music_audio_asset_id == asset.id,
+                    BrandAdCampaign.music_artwork_asset_id == asset.id,
+                ),
+                or_(
+                    BrandAdCampaign.is_active.is_(True),
+                    BrandAdCampaign.status.in_(
+                        (
+                            "active",
+                            "approved",
+                            "scheduled",
+                            "under_review",
+                            "submitted",
+                            "awaiting_payment",
+                            "pending_payment",
+                            "draft",
+                        )
+                    ),
+                ),
+            )
+        ).all()
+        if blocking_campaigns:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Media asset cannot be deleted while attached to an active or under-review campaign.",
+            )
+
+        storage_key = asset.storage_key
+        storage_provider = asset.storage_provider
+        meta = asset.metadata_json if isinstance(asset.metadata_json, dict) else {}
+
+        if storage_key:
+            try:
+                from app.storage import CloudinaryObjectStorage, get_storage_for_provider
+
+                storage = get_storage_for_provider(storage_provider)
+                if isinstance(storage, CloudinaryObjectStorage):
+                    inferred_delivery = (
+                        "authenticated" if "/authenticated/" in str(meta.get("secure_url") or "") else "upload"
+                    )
+                    storage.delete(
+                        key=storage_key,
+                        resource_type=meta.get("resource_type"),
+                        delivery_type=meta.get("delivery_type") or inferred_delivery,
+                    )
+                else:
+                    storage.delete(key=storage_key)
+            except Exception as del_exc:
+                logger.warning("Storage provider delete warning for asset %s (%s): %s", asset.id, storage_key, del_exc)
+
+        if workspace.logo_asset_id == asset.id:
+            workspace.logo_asset_id = None
+        client_brands = self.session.scalars(
+            select(AdvertiserClientBrand).where(AdvertiserClientBrand.logo_asset_id == asset.id)
+        ).all()
+        for cb in client_brands:
+            cb.logo_asset_id = None
+
+        asset.validation_status = "quarantined"
+        asset.access_classification = "deleted"
+        asset.storage_key = None
+        asset.data = None
+        updated_meta = dict(meta)
+        updated_meta["deleted_at"] = _utcnow().isoformat()
+        updated_meta["deleted_by_user_id"] = user.id
+        asset.metadata_json = updated_meta
+
+        self.record_audit_log(
+            actor_user_id=user.id,
+            workspace_id=workspace.id,
+            entity_type="media_asset",
+            entity_id=asset.id,
+            action="deleted",
+            metadata_json={"previous_storage_provider": storage_provider, "previous_storage_key": storage_key},
+        )
+        self.session.commit()
+        return {"id": asset.id, "status": "deleted"}
+
+    def detect_orphaned_cloudinary_assets(self, *, prefix: str = "gtex/commercial") -> dict[str, Any]:
+        """Identify unreferenced Cloudinary assets under the commercial folder without destructive auto-deletion."""
+        from app.storage import CloudinaryObjectStorage
+
+        c_storage = CloudinaryObjectStorage.from_env()
+        if not c_storage.is_configured():
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Cloudinary credentials are not configured.",
+            )
+        remote_keys = set(c_storage.list_prefix(prefix=prefix))
+        db_keys = {
+            str(k)
+            for k in self.session.scalars(
+                select(AdvertiserMediaAsset.storage_key).where(
+                    AdvertiserMediaAsset.storage_key.is_not(None),
+                    AdvertiserMediaAsset.validation_status == "valid",
+                )
+            ).all()
+            if k
+        }
+        orphaned = sorted(remote_keys - db_keys)
+        return {
+            "prefix": prefix,
+            "remote_assets_scanned": len(remote_keys),
+            "database_referenced_keys": len(db_keys),
+            "orphaned_count": len(orphaned),
+            "orphaned_public_ids": orphaned,
+            "auto_deleted": False,
+        }
 
     def backfill_legacy_media_blobs(self) -> dict[str, Any]:
         """Idempotently migrate any legacy database BLOBs to durable object storage without data loss."""
@@ -1269,7 +1913,21 @@ class CommercialNetworkService:
         migrated = 0
         errors = []
         storage = self.get_storage()
-        storage_provider_name = "s3" if hasattr(storage, "bucket") else "local_disk"
+        from app.storage import (
+            CloudinaryObjectStorage,
+            S3ObjectStorage,
+            generate_commercial_public_id,
+            resolve_commercial_resource_type,
+        )
+
+        is_cloudinary = isinstance(storage, CloudinaryObjectStorage)
+        storage_provider_name = (
+            "cloudinary"
+            if is_cloudinary
+            else (
+                "s3" if (isinstance(storage, S3ObjectStorage) or hasattr(storage, "bucket")) else "local_object_storage"
+            )
+        )
         for asset in records:
             try:
                 content = bytes(asset.data or b"")
@@ -1277,19 +1935,33 @@ class CommercialNetworkService:
                 if actual_hash != asset.sha256_hash:
                     errors.append(f"Checksum mismatch for asset {asset.id}")
                     continue
-                key = f"commercial/{asset.workspace_id or 'global'}/{asset.asset_kind}/{asset.id}_{asset.sanitized_filename}"
+                if is_cloudinary:
+                    _folder, _leaf, key = generate_commercial_public_id(asset.asset_kind, asset.workspace_id)
+                else:
+                    key = f"commercial/{asset.workspace_id or 'global'}/{asset.asset_kind}/{asset.id}_{asset.sanitized_filename}"
                 stored = storage.put_bytes(
                     key=key,
                     content=content,
                     content_type=asset.mime_type,
-                    metadata={"workspace_id": asset.workspace_id, "migrated_from_blob": True},
+                    metadata={
+                        "workspace_id": asset.workspace_id,
+                        "asset_kind": asset.asset_kind,
+                        "original_filename": asset.original_filename,
+                        "resource_type": resolve_commercial_resource_type(
+                            asset.asset_kind, content_type=asset.mime_type
+                        ),
+                        "migrated_from_blob": True,
+                    },
                 )
-                asset.storage_provider = storage_provider_name
                 if stored.size_bytes != len(content):
                     errors.append(f"Size verification failed for asset {asset.id}")
                     continue
-                asset.storage_provider = "local_object_storage"
-                asset.storage_key = key
+                asset.storage_provider = storage_provider_name
+                asset.storage_key = stored.key
+                if is_cloudinary:
+                    meta = dict(asset.metadata_json or {})
+                    meta.update(stored.metadata or {})
+                    asset.metadata_json = meta
                 migrated += 1
             except Exception as ex:
                 errors.append(f"Migration error on asset {asset.id}: {ex}")
@@ -1297,6 +1969,13 @@ class CommercialNetworkService:
         return {"total_found": len(records), "migrated": migrated, "errors": errors}
 
     def serialize_media_asset(self, asset: AdvertiserMediaAsset) -> AdvertiserMediaAssetView:
+        meta = dict(asset.metadata_json or {}) if isinstance(asset.metadata_json, dict) else {}
+        preview_token = self.build_media_preview_token(asset.id, asset.workspace_id)
+        preview_url = f"/api/v2/public/ads/media/{asset.id}?token={preview_token}"
+        cloudinary_url = self.get_cloudinary_delivery_url(asset)
+        delivery_url = (
+            f"/api/v2/public/ads/media/{asset.id}" if asset.access_classification == "public" else preview_url
+        )
         return AdvertiserMediaAssetView(
             id=asset.id,
             workspace_id=asset.workspace_id,
@@ -1314,17 +1993,34 @@ class CommercialNetworkService:
             validation_status=asset.validation_status,
             storage_provider=asset.storage_provider,
             storage_key=asset.storage_key,
-            access_classification=asset.access_classification,
-            delivery_url=f"/api/v2/public/ads/media/{asset.id}",
+            cloudinary_public_id=meta.get("cloudinary_public_id")
+            or (asset.storage_key if asset.storage_provider == "cloudinary" else None),
+            cloudinary_resource_type=meta.get("resource_type"),
+            cloudinary_url=cloudinary_url,
+            access_classification=asset.access_classification or "draft",
+            delivery_url=delivery_url,
+            preview_url=preview_url,
+            metadata_json=meta,
             created_at=_as_utc(asset.created_at) or _utcnow(),
         )
 
-    def _require_valid_asset(self, asset_id: str, *, expected_kinds: set[str]) -> AdvertiserMediaAsset:
+    def _require_valid_asset(
+        self,
+        asset_id: str,
+        *,
+        expected_kinds: set[str],
+        workspace_id: str | None = None,
+    ) -> AdvertiserMediaAsset:
         asset = self.session.get(AdvertiserMediaAsset, asset_id)
         if asset is None or asset.validation_status != "valid":
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail=f"Uploaded media asset '{asset_id}' was not found or failed validation.",
+            )
+        if workspace_id and asset.workspace_id and asset.workspace_id != workspace_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Cannot reference a media asset owned by another advertiser workspace.",
             )
         if asset.asset_kind not in expected_kinds:
             raise HTTPException(
@@ -1387,6 +2083,12 @@ class CommercialNetworkService:
         if row is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Placement not found.")
         updates = payload.model_dump(exclude_unset=True)
+        if placement_key == "stadium_perimeter" and not _is_3d_stadium_ads_enabled():
+            if updates.get("is_enabled") is True or updates.get("delivery_surface_ready") is True:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Placement 'stadium_perimeter' cannot be enabled while 3D gameplay is closed.",
+                )
         for key, val in updates.items():
             setattr(row, key, val)
         self.record_audit_log(
@@ -1517,6 +2219,14 @@ class CommercialNetworkService:
                     detail=f"Pricing package '{payload.package_code}' was not found or is inactive.",
                 )
 
+        if not _is_3d_stadium_ads_enabled():
+            pkg_placements = list(pkg.placement_keys_json or []) if pkg is not None else []
+            if "stadium_perimeter" in (payload.placements or []) or "stadium_perimeter" in pkg_placements:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Placement 'stadium_perimeter' is closed while 3D stadium gameplay is not open.",
+                )
+
         # If package has a configured price and matches the division/bundle
         if pkg is not None and pkg.price_minor_ngn is not None and (pkg.is_bundle or payload.division == "music"):
             subtotal = int(pkg.price_minor_ngn)
@@ -1637,7 +2347,7 @@ class CommercialNetworkService:
         user: User,
         payload: BrandCampaignWizardCreateRequest,
     ) -> CommercialCampaignView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_campaigns")
         self.ensure_default_catalog()
 
         if payload.client_brand_id:
@@ -1649,6 +2359,7 @@ class CommercialNetworkService:
         creative_asset = self._require_valid_asset(
             payload.creative_asset_id,
             expected_kinds={"brand_image", "brand_video"},
+            workspace_id=workspace.id,
         )
         if not creative_asset.is_silent_verified or creative_asset.has_audio_track:
             raise HTTPException(
@@ -1658,11 +2369,20 @@ class CommercialNetworkService:
 
         logo_asset: AdvertiserMediaAsset | None = None
         if payload.logo_asset_id:
-            logo_asset = self._require_valid_asset(payload.logo_asset_id, expected_kinds={"logo", "brand_image"})
+            logo_asset = self._require_valid_asset(
+                payload.logo_asset_id,
+                expected_kinds={"logo", "brand_image"},
+                workspace_id=workspace.id,
+            )
 
         # Validate placements against central registry & supported media types
         deduped_placements = list(dict.fromkeys(payload.placements))
         for placement_key in deduped_placements:
+            if placement_key == "stadium_perimeter" and not _is_3d_stadium_ads_enabled():
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Placement 'stadium_perimeter' is closed while 3D stadium gameplay is not open.",
+                )
             spec = self.session.scalar(
                 select(AdPlacementSpec).where(
                     AdPlacementSpec.placement_key == placement_key,
@@ -1678,6 +2398,38 @@ class CommercialNetworkService:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail=f"Creative format '{creative_asset.mime_type}' is not supported by placement '{spec.name}'. Supported: {', '.join(spec.supported_media_types_json or [])}.",
+                )
+            if spec.max_file_size_bytes and creative_asset.size_bytes > spec.max_file_size_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Creative file size ({creative_asset.size_bytes} bytes) exceeds maximum allowed "
+                        f"for placement '{spec.name}' ({spec.max_file_size_bytes} bytes)."
+                    ),
+                )
+            if spec.max_duration_seconds is not None and creative_asset.duration_seconds is not None:
+                if creative_asset.duration_seconds > spec.max_duration_seconds:
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail=(
+                            f"Creative video duration ({creative_asset.duration_seconds}s) exceeds maximum allowed "
+                            f"duration of {spec.max_duration_seconds} seconds for placement '{spec.name}'."
+                        ),
+                    )
+            if spec.requires_silent_media and (creative_asset.has_audio_track or not creative_asset.is_silent_verified):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Placement '{spec.name}' requires silent visual media.",
+                )
+            if creative_asset.width is not None and (creative_asset.width <= 0 or creative_asset.width > 8192):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Creative width ({creative_asset.width}px) exceeds placement dimension limits.",
+                )
+            if creative_asset.height is not None and (creative_asset.height <= 0 or creative_asset.height > 8192):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Creative height ({creative_asset.height}px) exceeds placement dimension limits.",
                 )
 
         price_calc = self.calculate_price_ngn(
@@ -1737,6 +2489,7 @@ class CommercialNetworkService:
         )
         self.session.add(campaign)
         self.session.flush()
+        self.sync_campaign_media_access(campaign)
 
         self.session.add(
             BrandAdReviewEvent(
@@ -1772,14 +2525,46 @@ class CommercialNetworkService:
         user: User,
         payload: MusicPromotionWizardCreateRequest,
     ) -> CommercialCampaignView:
-        workspace = self.require_active_workspace(user)
+        workspace = self.require_workspace_permission(user, "manage_campaigns")
         self.ensure_default_catalog()
 
-        audio_asset = self._require_valid_asset(payload.audio_asset_id, expected_kinds={"music_audio"})
+        audio_asset = self._require_valid_asset(
+            payload.audio_asset_id,
+            expected_kinds={"music_audio"},
+            workspace_id=workspace.id,
+        )
+        music_spec = self.session.scalar(
+            select(AdPlacementSpec).where(AdPlacementSpec.placement_key == "music_rotation")
+        )
+        if music_spec is not None:
+            if audio_asset.mime_type not in (music_spec.supported_media_types_json or []):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Audio format '{audio_asset.mime_type}' is not supported by '{music_spec.name}'.",
+                )
+            if music_spec.max_file_size_bytes and audio_asset.size_bytes > music_spec.max_file_size_bytes:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Audio file size ({audio_asset.size_bytes} bytes) exceeds maximum allowed for '{music_spec.name}'.",
+                )
+            if (
+                music_spec.max_duration_seconds is not None
+                and audio_asset.duration_seconds is not None
+                and audio_asset.duration_seconds > music_spec.max_duration_seconds
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=(
+                        f"Audio duration ({audio_asset.duration_seconds}s) exceeds maximum allowed "
+                        f"duration of {music_spec.max_duration_seconds} seconds for '{music_spec.name}'."
+                    ),
+                )
         artwork_asset: AdvertiserMediaAsset | None = None
         if payload.artwork_asset_id:
             artwork_asset = self._require_valid_asset(
-                payload.artwork_asset_id, expected_kinds={"music_artwork", "brand_image", "logo"}
+                payload.artwork_asset_id,
+                expected_kinds={"music_artwork", "brand_image", "logo"},
+                workspace_id=workspace.id,
             )
 
         track_title = (payload.track_title or "").strip() or clean_track_title_from_filename(
@@ -1861,6 +2646,7 @@ class CommercialNetworkService:
         )
         self.session.add(campaign)
         self.session.flush()
+        self.sync_campaign_media_access(campaign)
 
         self.session.add(
             BrandAdReviewEvent(
@@ -1891,10 +2677,32 @@ class CommercialNetworkService:
         self.session.refresh(campaign)
         return self.serialize_campaign(campaign)
 
+    def _serialize_campaign_asset_url(
+        self,
+        *,
+        asset_id: str | None,
+        fallback_url: str | None,
+        workspace_id: str | None,
+        is_public: bool,
+    ) -> str | None:
+        if not asset_id:
+            return fallback_url
+        if is_public:
+            return self.resolve_public_asset_url(asset_id, fallback_url)
+        token = self.build_media_preview_token(asset_id=asset_id, workspace_id=workspace_id)
+        return f"/api/v2/public/ads/media/{asset_id}?token={token}"
+
     def serialize_campaign(self, campaign: BrandAdCampaign) -> CommercialCampaignView:
         placements = list(campaign.placements_json or [])
         if not placements and campaign.placement:
             placements = [campaign.placement]
+        is_public = bool(
+            campaign.is_approved
+            and campaign.is_active
+            and campaign.status in {"approved", "active"}
+            and campaign.payment_status in {"paid", "settled", None}
+            and (campaign.campaign_type != "music" or bool(campaign.music_rights_verified))
+        )
         return CommercialCampaignView(
             id=campaign.id,
             workspace_id=campaign.workspace_id,
@@ -1912,9 +2720,19 @@ class CommercialNetworkService:
             placements=placements,
             destination_url=campaign.destination_url,
             logo_asset_id=campaign.logo_asset_id,
-            logo_url=campaign.logo_url,
+            logo_url=self._serialize_campaign_asset_url(
+                asset_id=campaign.logo_asset_id,
+                fallback_url=campaign.logo_url,
+                workspace_id=campaign.workspace_id,
+                is_public=is_public,
+            ),
             creative_asset_id=campaign.creative_asset_id,
-            creative_url=campaign.creative_url,
+            creative_url=self._serialize_campaign_asset_url(
+                asset_id=campaign.creative_asset_id,
+                fallback_url=campaign.creative_url,
+                workspace_id=campaign.workspace_id,
+                is_public=is_public,
+            ),
             creative_media_type=campaign.creative_media_type,
             is_silent_creative=campaign.is_silent_creative,
             duration_days=campaign.duration_days or 7,
@@ -1936,8 +2754,18 @@ class CommercialNetworkService:
             music_genre=campaign.music_genre,
             music_audio_asset_id=campaign.music_audio_asset_id,
             music_artwork_asset_id=campaign.music_artwork_asset_id,
-            music_audio_url=campaign.music_audio_url,
-            music_artwork_url=campaign.music_artwork_url,
+            music_audio_url=self._serialize_campaign_asset_url(
+                asset_id=campaign.music_audio_asset_id,
+                fallback_url=campaign.music_audio_url,
+                workspace_id=campaign.workspace_id,
+                is_public=is_public,
+            ),
+            music_artwork_url=self._serialize_campaign_asset_url(
+                asset_id=campaign.music_artwork_asset_id,
+                fallback_url=campaign.music_artwork_url,
+                workspace_id=campaign.workspace_id,
+                is_public=is_public,
+            ),
             music_explicit_content=bool(campaign.music_explicit_content),
             music_rights_declaration_accepted=bool(campaign.music_rights_declaration_accepted),
             music_rights_verified=bool(campaign.music_rights_verified),
@@ -1963,7 +2791,9 @@ class CommercialNetworkService:
             campaign.end_at = now + timedelta(days=duration)
             campaign.status = "active"
             campaign.is_active = True
+            self.sync_campaign_media_access(campaign)
             return True
+        self.sync_campaign_media_access(campaign)
         return False
 
     def refresh_expired_campaigns(self) -> int:
@@ -1978,6 +2808,7 @@ class CommercialNetworkService:
         for row in active_rows:
             row.is_active = False
             row.status = "completed"
+            self.sync_campaign_media_access(row, force_revoke_check=True)
             count += 1
         if count:
             self.session.flush()
@@ -2228,6 +3059,7 @@ class CommercialNetworkService:
                 campaign.payment_status = "reversed"
                 campaign.is_active = False
                 campaign.status = "paused"
+                self.sync_campaign_media_access(campaign, force_revoke_check=True)
         invoice = self.session.scalar(
             select(AdvertiserInvoice).where(AdvertiserInvoice.payment_record_id == payment.id)
         )
@@ -2803,6 +3635,7 @@ class CommercialNetworkService:
                             campaign.payment_status = "refunded"
                             campaign.is_active = False
                             campaign.status = "paused"
+                            self.sync_campaign_media_access(campaign, force_revoke_check=True)
                 else:
                     target_payment.status = "partially_refunded"
 
@@ -3045,6 +3878,7 @@ class CommercialNetworkService:
                 campaign.payment_status = "refunded"
                 campaign.is_active = False
                 campaign.status = "paused"
+                self.sync_campaign_media_access(campaign, force_revoke_check=True)
 
         self.record_audit_log(
             actor_user_id=finance_admin.id,
@@ -3110,6 +3944,18 @@ class CommercialNetworkService:
             campaign.review_note = payload.note
             if campaign.is_approved:
                 self.activate_campaign_if_ready(campaign)
+        elif action == "revoke_rights":
+            if campaign.campaign_type != "music":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Only music campaigns support music rights revocation.",
+                )
+            campaign.music_rights_verified = False
+            campaign.is_active = False
+            campaign.status = "paused"
+            campaign.reviewed_at = now
+            campaign.reviewed_by_user_id = admin_user.id
+            campaign.review_note = payload.note or "Music rights verification revoked."
         elif action in {"reject", "request_changes"}:
             campaign.is_approved = False
             campaign.is_active = False
@@ -3133,6 +3979,17 @@ class CommercialNetworkService:
             campaign.is_active = False
             campaign.status = "archived"
             campaign.archived_at = now
+
+        force_revoke = action in {
+            "reject",
+            "request_changes",
+            "pause",
+            "suspend",
+            "takedown",
+            "archive",
+            "revoke_rights",
+        }
+        self.sync_campaign_media_access(campaign, force_revoke_check=force_revoke)
 
         self.session.add(
             BrandAdReviewEvent(
@@ -3185,6 +4042,19 @@ class CommercialNetworkService:
                 camp.is_active = False
                 if camp.status == "active":
                     camp.status = "suspended"
+                self.sync_campaign_media_access(camp, force_revoke_check=True)
+            # Also revoke any workspace assets not attached to active campaigns
+            ws_assets = self.session.scalars(
+                select(AdvertiserMediaAsset).where(
+                    AdvertiserMediaAsset.workspace_id == workspace.id,
+                    AdvertiserMediaAsset.validation_status == "valid",
+                )
+            ).all()
+            for ws_asset in ws_assets:
+                was_pub = ws_asset.access_classification == "public"
+                if not self.is_asset_publicly_deliverable(ws_asset):
+                    ws_asset.access_classification = "draft"
+                    self._revoke_cloudinary_asset_if_needed(ws_asset, was_public=was_pub, force_revoke_check=True)
         elif payload.action == "reactivate":
             workspace.status = "active"
             workspace.suspended_reason = None
@@ -3224,13 +4094,25 @@ class CommercialNetworkService:
 
         tracks: list[MusicRotationTrackView] = []
         for row in rows:
-            audio_url = row.music_audio_url or (
-                f"/api/v2/public/ads/media/{row.music_audio_asset_id}" if row.music_audio_asset_id else None
+            if row.workspace_id:
+                ws = self.session.get(AdvertiserWorkspace, row.workspace_id)
+                if ws is not None and ws.status != "active":
+                    continue
+            audio_url = self.resolve_public_asset_url(
+                row.music_audio_asset_id,
+                row.music_audio_url
+                or (f"/api/v2/public/ads/media/{row.music_audio_asset_id}" if row.music_audio_asset_id else None),
             )
             if not audio_url:
                 continue
-            artwork_url = row.music_artwork_url or (
-                f"/api/v2/public/ads/media/{row.music_artwork_asset_id}" if row.music_artwork_asset_id else row.logo_url
+            artwork_url = self.resolve_public_asset_url(
+                row.music_artwork_asset_id or row.logo_asset_id,
+                row.music_artwork_url
+                or (
+                    f"/api/v2/public/ads/media/{row.music_artwork_asset_id}"
+                    if row.music_artwork_asset_id
+                    else row.logo_url
+                ),
             )
             tracks.append(
                 MusicRotationTrackView(

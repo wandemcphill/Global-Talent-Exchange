@@ -29,6 +29,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from sqlalchemy.orm.attributes import flag_modified  # noqa: E402
+from app.ingestion.models import Club as IngestionClub  # noqa: E402
+from app.ingestion.models import Competition as IngestionCompetition  # noqa: E402
+from app.ingestion.models import Country as IngestionCountry  # noqa: E402
+from app.ingestion.models import Player  # noqa: E402
+from app.models.academy_player import AcademyPlayer  # noqa: E402
+from app.models.base import Base  # noqa: E402
+from app.models.player_contract import PlayerContract  # noqa: E402
 from app.owner_console import daily_operations_hub, ledger, living_club_world, service, storytelling  # noqa: E402
 from tests.world_clock.test_gtex_club_prestige_campus_comms import _seed_club, _session  # noqa: E402
 
@@ -47,7 +54,7 @@ EXPECTED_GLBS = {
     "general_managers_office": "/models/campus/vip_skybox_concourse.glb",
     "academy_department": "/models/campus/elite_academy_complex.glb",
     "medical_department": "/models/campus/recovery_hydro_hub.glb",
-    "finance_commercial_office": "/models/campus/high_performance_centre.glb",
+    "finance_commercial_office": "/models/campus/club_hq.glb",
 }
 
 
@@ -81,6 +88,19 @@ class ConsoleSPARequestHandler(SimpleHTTPRequestHandler):
 
 def seed_test_database():
     session = _session()
+    # service.club_detail() queries player_contracts / academy_players / players via authoritative_squad_counts.
+    Base.metadata.create_all(
+        session.get_bind(),
+        tables=[
+            IngestionCountry.__table__,
+            IngestionCompetition.__table__,
+            IngestionClub.__table__,
+            Player.__table__,
+            AcademyPlayer.__table__,
+            PlayerContract.__table__,
+        ],
+        checkfirst=True,
+    )
     state = _seed_club(session, prestige=82, cash=500_000)
     user_id = state.owner_user_id
     club_id = state.club_id
@@ -368,86 +388,6 @@ def run_verification(headless: bool = True) -> int:
         print("[PASS] No asset warning banner present during complete 6/6 load.")
 
         # -------------------------------------------------------------
-        # TEST 2: Asset Failure Warning & Procedural Wireframe Fallback
-        # -------------------------------------------------------------
-        print("\n--- Test 2: Asset Failure Warning & Wireframe Fallback Mesh ---")
-        context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
-        page_fail = context_fail.new_page()
-        page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
-        page_fail.on(
-            "response",
-            lambda response: (
-                print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
-            ),
-        )
-        page_fail.route("**/api/**", handle_api)
-        page_fail.route("http://localhost:8000/**", handle_api)
-        page_fail.route("http://127.0.0.1:8000/**", handle_api)
-
-        # Block one specific GLB to simulate missing/corrupt asset
-        blocked_glb = "high_performance_centre.glb"
-        page_fail.route(
-            f"**/{blocked_glb}",
-            lambda route: route.abort("failed"),
-        )
-
-        page_fail.goto(f"{console_url}/", wait_until="domcontentloaded")
-        page_fail.evaluate(f"""() => {{
-                localStorage.setItem('gtex_access', 'live-phase2-3-owner-token');
-                localStorage.setItem('gtex_active_club', '{club_id}');
-            }}""")
-
-        page_fail.goto(f"{console_url}/app", wait_until="domcontentloaded")
-        page_fail.wait_for_selector('[data-testid="living-club-management-centre"]', timeout=30000)
-
-        # Wait for asset warning banner to appear
-        page_fail.wait_for_selector('[data-testid="glb-asset-warning"]', timeout=20000)
-        warning_text = page_fail.locator('[data-testid="glb-asset-warning"]').inner_text()
-        print(f"[PASS] Asset warning displayed: '{warning_text}'")
-        assert "finance_commercial_office" in warning_text or "1 3D model" in warning_text
-
-        # Verify wireframe fallback destination button remains interactive
-        btn_fallback = page_fail.locator('[data-testid="destination-tab-finance_commercial_office"]')
-        assert btn_fallback.is_visible()
-        btn_fallback.click()
-        print("[PASS] Fallback wireframe destination is selectable and interactive.")
-
-        # Reliable assertion for the actual fallback wireframe mesh in the Three.js scene
-        fallback_mesh_info = page_fail.evaluate("""() => {
-                const api = window.__GTEX_OPERATIONS_3D__;
-                if (!api || !api.roomGroups) return null;
-                const grp = api.roomGroups.get("finance_commercial_office");
-                if (!grp) return null;
-                const mesh = grp.children.find(
-                    (c) => c.name === "fallback-wireframe-finance_commercial_office" || c.userData?.isFallbackWireframe
-                );
-                if (!mesh) return null;
-                return {
-                    name: mesh.name,
-                    isMesh: Boolean(mesh.isMesh),
-                    isWireframe: Boolean(mesh.material && mesh.material.wireframe),
-                    visible: Boolean(mesh.visible),
-                    position: [mesh.position.x, mesh.position.y, mesh.position.z],
-                    userData: mesh.userData,
-                };
-            }""")
-        print(f"  [SCENE AUDIT] Fallback mesh in Three.js scene: {fallback_mesh_info}")
-        assert fallback_mesh_info is not None, "Fallback wireframe mesh was NOT found in Three.js scene group!"
-        assert fallback_mesh_info["isMesh"] is True, "Fallback scene object is not a THREE.Mesh"
-        assert fallback_mesh_info["isWireframe"] is True, "Fallback mesh material is not wireframe"
-        assert fallback_mesh_info["visible"] is True, "Fallback mesh is not visible"
-        assert (
-            fallback_mesh_info["userData"].get("isFallbackWireframe") is True
-        ), "Fallback mesh missing isFallbackWireframe"
-        print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
-
-        # Release the failure-injection browser context before the next
-        # WebGL test. Keeping two Three.js scenes alive can contend for GPU
-        # resources and starve browser-side React interactions in headless CI.
-        context_fail.close()
-        print("[INFO] Closed the isolated GLB-failure browser context.")
-
-        # -------------------------------------------------------------
         # TEST 3: 2D Floorplan Fallback Switch & Navigation
         # -------------------------------------------------------------
         print("\n--- Test 3: 2D Floorplan Fallback Switch & Navigation ---")
@@ -578,19 +518,103 @@ def run_verification(headless: bool = True) -> int:
         )
         print("[PASS] Timeline drawer closed successfully.")
 
+        # Close primary browser context before running the isolated failure-injection
+        # WebGL test so only one Three.js context occupies headless GPU resources at a time.
+        context.close()
+
+        # -------------------------------------------------------------
+        # TEST 2: Asset Failure Warning & Procedural Wireframe Fallback
+        # -------------------------------------------------------------
+        print("\n--- Test 2: Asset Failure Warning & Wireframe Fallback Mesh ---")
+        context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
+        try:
+            page_fail = context_fail.new_page()
+            page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
+            page_fail.on(
+                "response",
+                lambda response: (
+                    print(f"  [BROWSER HTTP {response.status}] {response.url}") if response.status >= 500 else None
+                ),
+            )
+            page_fail.route("**/api/**", handle_api)
+            page_fail.route("http://localhost:8000/**", handle_api)
+            page_fail.route("http://127.0.0.1:8000/**", handle_api)
+
+            # Block one single-destination GLB from EXPECTED_GLBS to simulate missing/corrupt asset
+            target_dest = "medical_department"
+            blocked_glb = EXPECTED_GLBS[target_dest].rsplit("/", 1)[-1]
+            page_fail.route(
+                f"**/{blocked_glb}",
+                lambda route: route.abort("failed"),
+            )
+
+            page_fail.goto(f"{console_url}/", wait_until="domcontentloaded")
+            page_fail.evaluate(f"""() => {{
+                    localStorage.setItem('gtex_access', 'live-phase2-3-owner-token');
+                    localStorage.setItem('gtex_active_club', '{club_id}');
+                }}""")
+
+            page_fail.goto(f"{console_url}/app", wait_until="domcontentloaded")
+            page_fail.wait_for_selector('[data-testid="living-club-management-centre"]', timeout=30000)
+
+            # Wait for asset warning banner to appear
+            page_fail.wait_for_selector('[data-testid="glb-asset-warning"]', timeout=20000)
+            warning_text = page_fail.locator('[data-testid="glb-asset-warning"]').inner_text()
+            print(f"[PASS] Asset warning displayed: '{warning_text}'")
+            assert target_dest in warning_text or "1 3D model" in warning_text
+
+            # Verify wireframe fallback destination button remains interactive
+            btn_fallback = page_fail.locator(f'[data-testid="destination-tab-{target_dest}"]')
+            assert btn_fallback.is_visible()
+            btn_fallback.click()
+            print("[PASS] Fallback wireframe destination is selectable and interactive.")
+
+            # Reliable assertion for the actual fallback wireframe mesh in the Three.js scene
+            fallback_mesh_info = page_fail.evaluate(
+                """(destKey) => {
+                    const api = window.__GTEX_OPERATIONS_3D__;
+                    if (!api || !api.roomGroups) return null;
+                    const grp = api.roomGroups.get(destKey);
+                    if (!grp) return null;
+                    const expectedName = `fallback-wireframe-${destKey}`;
+                    const mesh = grp.children.find(
+                        (c) => c.name === expectedName || c.userData?.isFallbackWireframe
+                    );
+                    if (!mesh) return null;
+                    return {
+                        name: mesh.name,
+                        isMesh: Boolean(mesh.isMesh),
+                        isWireframe: Boolean(mesh.material && mesh.material.wireframe),
+                        visible: Boolean(mesh.visible),
+                        position: [mesh.position.x, mesh.position.y, mesh.position.z],
+                        userData: mesh.userData,
+                    };
+                }""",
+                target_dest,
+            )
+            print(f"  [SCENE AUDIT] Fallback mesh in Three.js scene: {fallback_mesh_info}")
+            assert fallback_mesh_info is not None, "Fallback wireframe mesh was NOT found in Three.js scene group!"
+            assert fallback_mesh_info["isMesh"] is True, "Fallback scene object is not a THREE.Mesh"
+            assert fallback_mesh_info["isWireframe"] is True, "Fallback mesh material is not wireframe"
+            assert fallback_mesh_info["visible"] is True, "Fallback mesh is not visible"
+            assert (
+                fallback_mesh_info["userData"].get("isFallbackWireframe") is True
+            ), "Fallback mesh missing isFallbackWireframe"
+            print("[PASS] Confirmed procedural wireframe mesh is added to Three.js scene with wireframe material.")
+        finally:
+            context_fail.close()
+            print("[INFO] Closed the isolated GLB-failure browser context.")
+
         # Fail verification if unexpected JavaScript page errors occurred on either page context
         if page_errors:
             print(f"\n[FAIL] Unexpected JavaScript page errors encountered ({len(page_errors)}):")
             for pe in page_errors:
                 print(f"  - {pe}")
-            context_fail.close()
-            context.close()
             browser.close()
             server.shutdown()
             return 1
         print("[PASS] Zero unhandled JavaScript page errors detected across all browser contexts.")
 
-        context.close()
         browser.close()
         server.shutdown()
 

@@ -58,7 +58,7 @@ export default function StaffMarket() {
       await api.post(`/owner/clubs/${clubId}/living-world/staff-market/offers`, {
         profile_id: candidate.profile_id,
         role: candidate.role_key,
-        offered_salary_gtex: Number(salary || candidate.expected_salary_gtex || 600),
+        offered_salary_fan_coin: Number(salary || candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 600),
         contract_years: Number(years || 3),
       });
       toast.success(`Offer sent to ${candidate.name}.`);
@@ -142,7 +142,7 @@ export default function StaffMarket() {
                 <p className="mt-1 text-sm text-amber-200">Expected wage {coinWithNaira(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 0, "FAN")} / year</p>
                 </div>
               </div>
-              <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(candidate.expected_salary_gtex || "")); }}>
+              <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || "")); }}>
                 Hire
               </Btn>
             </div>

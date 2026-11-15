@@ -67,4 +67,15 @@ if [[ -z "${GTE_MEDIA_SIGNING_SECRET:-}" ]]; then
   exit 1
 fi
 
+if [[ "${GTE_COMMERCIAL_MEDIA_PROVIDER:-}" == "cloudinary" ]]; then
+  _has_cld_triple=false
+  if [[ -n "${CLOUDINARY_CLOUD_NAME:-}" && -n "${CLOUDINARY_API_KEY:-}" && -n "${CLOUDINARY_API_SECRET:-}" ]]; then
+    _has_cld_triple=true
+  fi
+  if [[ "${_has_cld_triple}" != "true" && "${CLOUDINARY_URL:-}" != cloudinary://* ]]; then
+    echo "GTE_COMMERCIAL_MEDIA_PROVIDER=cloudinary requires CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, and CLOUDINARY_API_SECRET (or CLOUDINARY_URL)." >&2
+    exit 1
+  fi
+fi
+
 echo "GTEX production preflight passed."

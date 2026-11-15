@@ -89,7 +89,13 @@ export default function CommercialPublicPortal({
     };
   }, []);
 
-  const brandPlacements = placements.filter((p) => p.division === "brand");
+  const brandPlacements = placements.filter(
+    (p) =>
+      p.division === "brand" &&
+      p.is_enabled &&
+      p.delivery_surface_ready &&
+      p.placement_key !== "stadium_perimeter",
+  );
   const brandPackages = packages.filter((p) => p.division === "brand");
   const musicPackages = packages.filter((p) => p.division === "music");
 
@@ -257,7 +263,7 @@ export default function CommercialPublicPortal({
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                    9 centrally managed placements including Live Match Split-Screen, Halftime &amp; Stadium Perimeter
+                    8 active centrally managed placements including Homepage, App, Live Match Split-Screen &amp; Halftime
                   </li>
                   <li className="flex items-center gap-2.5">
                     <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
@@ -387,7 +393,7 @@ export default function CommercialPublicPortal({
               {
                 step: "Step 02",
                 title: "Select GTEX Inventory",
-                desc: "Choose from 9 brand placements (Homepage, App, Live Match Panel, Halftime, Stadium) or Global Music Player Rotation.",
+                desc: "Choose from 8 active brand placements (Homepage, App, Sponsored Cards, Live Match Panel, Halftime) or Global Music Player Rotation.",
                 icon: Layers,
               },
               {

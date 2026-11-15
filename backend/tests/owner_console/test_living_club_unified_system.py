@@ -161,6 +161,17 @@ def _setup_unified_test_env(*, city: str = "Lagos", club_name: str | None = None
         user_id=owner.id,
         memo="Initial fan coin",
     )
+    ledger.record(
+        session,
+        event_type="test_club_fan_grant",
+        source=ledger.WORLD_CLUBS,
+        destination=ledger.club_account(club.id),
+        currency=ledger.FAN,
+        gross=50000,
+        club_id=club.id,
+        user_id=owner.id,
+        memo="Initial club fan coin",
+    )
 
     squad_spec = [
         ("p-gk-1", "Emeka Obi", "Goalkeeper", 28, 79, 80, False),

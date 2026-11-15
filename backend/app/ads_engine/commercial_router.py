@@ -4,6 +4,7 @@ import json
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -44,6 +45,7 @@ from app.auth.dependencies import (
     get_current_advertiser_user,
     get_current_commercial_admin,
     get_current_finance_admin,
+    get_optional_current_user,
     get_session,
 )
 from app.models.brand_ad_campaign import BrandAdCampaign
@@ -117,6 +119,9 @@ def get_public_music_rotation_feed(
 def stream_public_advertiser_media_asset(
     asset_id: str,
     request: Request,
+    token: str | None = Query(default=None),
+    proxy: bool = Query(default=False),
+    current_user: User | None = Depends(get_optional_current_user),
     session: Session = Depends(get_session),
 ) -> Response:
     asset = session.get(AdvertiserMediaAsset, asset_id)
@@ -124,16 +129,40 @@ def stream_public_advertiser_media_asset(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Media asset not found.")
 
     service = CommercialNetworkService(session)
+    service.refresh_expired_campaigns()
+    if not service.verify_media_asset_access(asset, current_user=current_user, token=token):
+        session.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Media asset is not publicly published or requires workspace authorization.",
+        )
+
+    is_public = service.is_asset_publicly_deliverable(asset)
+    cache_control = "public, max-age=60, must-revalidate" if is_public else "private, no-store"
+    range_header = request.headers.get("range")
+
+    if asset.storage_provider == "cloudinary" and not proxy and not range_header:
+        cloudinary_url = service.get_cloudinary_delivery_url(asset)
+        if cloudinary_url:
+            session.commit()
+            return RedirectResponse(
+                url=cloudinary_url,
+                status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+                headers={
+                    "Cache-Control": cache_control,
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+
     raw_bytes = service.get_media_asset_bytes(asset)
     total_len = len(raw_bytes)
     headers = {
-        "Cache-Control": "public, max-age=86400",
+        "Cache-Control": cache_control,
         "X-Content-Type-Options": "nosniff",
         "Accept-Ranges": "bytes",
         "Content-Disposition": f'inline; filename="{asset.sanitized_filename}"',
     }
 
-    range_header = request.headers.get("range")
     if range_header and range_header.startswith("bytes=") and total_len > 0:
         try:
             range_spec = range_header[6:].split(",")[0].strip()
@@ -353,12 +382,50 @@ async def upload_advertiser_media_asset(
     if resolved_kind not in {"logo", "brand_image", "brand_video", "music_audio", "music_artwork"}:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid asset_kind.")
 
+    max_sizes = {
+        "logo": 5 * 1024 * 1024,
+        "brand_image": 15 * 1024 * 1024,
+        "music_artwork": 10 * 1024 * 1024,
+        "brand_video": 50 * 1024 * 1024,
+        "music_audio": 50 * 1024 * 1024,
+    }
+    max_allowed = max_sizes.get(resolved_kind, 15 * 1024 * 1024)
+
     if file is not None:
-        data = await file.read()
+        chunks: list[bytes] = []
+        total_read = 0
+        while True:
+            chunk = await file.read(1024 * 1024)
+            if not chunk:
+                break
+            total_read += len(chunk)
+            if total_read > max_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File size exceeds maximum allowed for {resolved_kind} ({max_allowed} bytes).",
+                )
+            chunks.append(chunk)
+        data = b"".join(chunks)
         filename = file.filename or x_filename or "upload.bin"
         content_type = file.content_type
     else:
-        data = await request.body()
+        content_len_hdr = request.headers.get("content-length")
+        if content_len_hdr and content_len_hdr.isdigit() and int(content_len_hdr) > max_allowed:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File size exceeds maximum allowed for {resolved_kind} ({max_allowed} bytes).",
+            )
+        raw_chunks: list[bytes] = []
+        raw_read = 0
+        async for chunk in request.stream():
+            raw_read += len(chunk)
+            if raw_read > max_allowed:
+                raise HTTPException(
+                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                    detail=f"File size exceeds maximum allowed for {resolved_kind} ({max_allowed} bytes).",
+                )
+            raw_chunks.append(chunk)
+        data = b"".join(raw_chunks)
         filename = x_filename or "upload.bin"
         content_type = request.headers.get("content-type")
 
@@ -370,6 +437,26 @@ async def upload_advertiser_media_asset(
         declared_content_type=content_type,
         data=data,
     )
+
+
+@advertiser_router.get("/media", response_model=list[AdvertiserMediaAssetView])
+def list_advertiser_media_assets(
+    asset_kind: MediaAssetKind | None = Query(default=None),
+    current_user: User = Depends(get_current_advertiser_user),
+    session: Session = Depends(get_session),
+) -> list[AdvertiserMediaAssetView]:
+    service = CommercialNetworkService(session)
+    return service.list_workspace_media_assets(user=current_user, asset_kind=asset_kind)
+
+
+@advertiser_router.delete("/media/{asset_id}")
+def delete_advertiser_media_asset(
+    asset_id: str,
+    current_user: User = Depends(get_current_advertiser_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    service = CommercialNetworkService(session)
+    return service.delete_media_asset(user=current_user, asset_id=asset_id)
 
 
 @advertiser_router.get("/campaigns", response_model=list[CommercialCampaignView])
@@ -472,6 +559,7 @@ def advertiser_campaign_lifecycle_action(
         campaign.status = "archived"
         campaign.archived_at = _utcnow()
 
+    service.sync_campaign_media_access(campaign, force_revoke_check=(action in {"pause", "archive"}))
     session.add(
         BrandAdReviewEvent(
             campaign_id=campaign.id,
@@ -793,3 +881,13 @@ def admin_backfill_media_storage(
 ) -> dict[str, Any]:
     service = CommercialNetworkService(session)
     return service.backfill_legacy_media_blobs()
+
+
+@admin_commercial_router.get("/media/orphans")
+def admin_detect_orphaned_cloudinary_assets(
+    prefix: str = Query(default="gtex/commercial/"),
+    _: User = Depends(get_current_commercial_admin),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    service = CommercialNetworkService(session)
+    return service.detect_orphaned_cloudinary_assets(prefix=prefix)

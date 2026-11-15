@@ -409,6 +409,12 @@ def admin_review_brand_campaign(
     campaign.reviewed_at = now
     campaign.reviewed_by_user_id = admin.id
     campaign.review_note = payload.note
+    from app.ads_engine.commercial_service import CommercialNetworkService
+
+    CommercialNetworkService(session).sync_campaign_media_access(
+        campaign,
+        force_revoke_check=(payload.action in {"reject", "pause", "archive"}),
+    )
     session.add(
         BrandAdReviewEvent(
             campaign_id=campaign.id,
@@ -443,6 +449,19 @@ def admin_verify_music_rights(
     campaign.music_rights_verified = payload.music_rights_verified
     campaign.music_rights_holder = payload.music_rights_holder
     campaign.music_license_doc_url = payload.music_license_doc_url
+    if not payload.music_rights_verified:
+        campaign.is_active = False
+        if campaign.status in {"active", "approved"}:
+            campaign.status = "paused"
+    from app.ads_engine.commercial_service import CommercialNetworkService
+
+    comm_svc = CommercialNetworkService(session)
+    if payload.music_rights_verified and campaign.is_approved:
+        comm_svc.activate_campaign_if_ready(campaign)
+    comm_svc.sync_campaign_media_access(
+        campaign,
+        force_revoke_check=not payload.music_rights_verified,
+    )
     session.add(
         BrandAdReviewEvent(
             campaign_id=campaign.id,
@@ -498,13 +517,21 @@ def get_public_music_promotions(
     now = _now()
     rows = session.scalars(_live_campaign_statement(campaign_type="music", now=now).limit(100)).all()
     candidate_ids = [row.id for row in rows]
-    counts_by_campaign = (
-        _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
-    )
+    counts_by_campaign = _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
+    from app.ads_engine.commercial_service import CommercialNetworkService
+
+    commercial_service = CommercialNetworkService(session)
+    workspace_status: dict[str, str | None] = {}
     promotions = []
     for row in rows:
         if row.payment_status != "paid":
             continue
+        if row.workspace_id:
+            if row.workspace_id not in workspace_status:
+                ws = session.get(AdvertiserWorkspace, row.workspace_id)
+                workspace_status[row.workspace_id] = ws.status if ws is not None else None
+            if workspace_status[row.workspace_id] != "active":
+                continue
         if row.music_target_type not in {"track", "artist", "playlist"}:
             continue
         if not row.music_target_id or not _safe_http_url(row.destination_url):
@@ -519,11 +546,21 @@ def get_public_music_promotions(
                 spend = _estimated_spend(row, counts_by_campaign.get(row.id, {}))
                 if spend >= budget:
                     continue
-        audio_url = row.music_audio_url or (
-            f"/api/v2/public/ads/media/{row.music_audio_asset_id}" if row.music_audio_asset_id else None
+        audio_url = commercial_service.resolve_public_asset_url(
+            row.music_audio_asset_id,
+            row.music_audio_url
+            or (f"/api/v2/public/ads/media/{row.music_audio_asset_id}" if row.music_audio_asset_id else None),
         )
-        artwork_url = row.music_artwork_url or (
-            f"/api/v2/public/ads/media/{row.music_artwork_asset_id}" if row.music_artwork_asset_id else row.logo_url
+        artwork_url = commercial_service.resolve_public_asset_url(
+            row.music_artwork_asset_id or row.logo_asset_id,
+            row.music_artwork_url
+            or (
+                f"/api/v2/public/ads/media/{row.music_artwork_asset_id}" if row.music_artwork_asset_id else row.logo_url
+            ),
+        )
+        creative_url = commercial_service.resolve_public_asset_url(
+            row.creative_asset_id or row.music_artwork_asset_id,
+            row.creative_url,
         )
         promotions.append(
             PublicMusicPromotionView(
@@ -532,7 +569,7 @@ def get_public_music_promotions(
                 headline=row.headline,
                 description=row.description or "",
                 destination_url=row.destination_url,
-                creative_url=row.creative_url if _safe_media_or_http_url(row.creative_url) else None,
+                creative_url=creative_url if _safe_media_or_http_url(creative_url) else None,
                 audio_url=audio_url if _safe_media_or_http_url(audio_url) else None,
                 artwork_url=artwork_url if _safe_media_or_http_url(artwork_url) else None,
                 explicit_content=bool(row.music_explicit_content),

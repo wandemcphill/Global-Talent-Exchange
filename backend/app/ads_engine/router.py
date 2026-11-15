@@ -169,12 +169,15 @@ def get_public_brand_ad_campaigns(
 
     from decimal import Decimal
     from app.ads_engine.brand_campaigns import _estimated_spend, _event_counts
+    from app.ads_engine.commercial_service import CommercialNetworkService
+    from app.models.commercial_network import AdvertiserWorkspace
+
+    commercial_service = CommercialNetworkService(session)
+    workspace_status: dict[str, str | None] = {}
 
     candidates = session.scalars(statement).all()
     candidate_ids = [c.id for c in candidates]
-    counts_by_campaign = (
-        _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
-    )
+    counts_by_campaign = _event_counts(session, candidate_ids, include_client_analytics=False) if candidate_ids else {}
 
     equivalent_keys = set(PLACEMENT_EQUIVALENCE_MAP.get(placement, (placement,))) if placement else set()
 
@@ -184,6 +187,12 @@ def get_public_brand_ad_campaigns(
             break
         if campaign.payment_status != "paid":
             continue
+        if campaign.workspace_id:
+            if campaign.workspace_id not in workspace_status:
+                ws = session.get(AdvertiserWorkspace, campaign.workspace_id)
+                workspace_status[campaign.workspace_id] = ws.status if ws is not None else None
+            if workspace_status[campaign.workspace_id] != "active":
+                continue
         if not _is_safe_public_http_url(campaign.destination_url):
             continue
         campaign_placements = list(campaign.placements_json or [])
@@ -208,6 +217,10 @@ def get_public_brand_ad_campaigns(
         resolved_placement = (
             placement if (placement and placement in (campaign.placements_json or [])) else campaign.placement
         )
+        resolved_logo_url = commercial_service.resolve_public_asset_url(campaign.logo_asset_id, campaign.logo_url)
+        resolved_creative_url = commercial_service.resolve_public_asset_url(
+            campaign.creative_asset_id, campaign.creative_url
+        )
         campaigns.append(
             PublicBrandAdCampaignView(
                 id=campaign.id,
@@ -217,8 +230,8 @@ def get_public_brand_ad_campaigns(
                 placement=resolved_placement,  # type: ignore[arg-type]
                 placements=campaign_placements,
                 destination_url=campaign.destination_url,
-                logo_url=campaign.logo_url if _is_safe_public_media_url(campaign.logo_url) else None,
-                creative_url=(campaign.creative_url if _is_safe_public_media_url(campaign.creative_url) else None),
+                logo_url=resolved_logo_url if _is_safe_public_media_url(resolved_logo_url) else None,
+                creative_url=resolved_creative_url if _is_safe_public_media_url(resolved_creative_url) else None,
                 creative_media_type=campaign.creative_media_type,
                 is_silent_creative=True,
                 sponsored_label="Sponsored",

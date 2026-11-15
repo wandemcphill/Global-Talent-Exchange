@@ -125,10 +125,75 @@ export interface AdvertiserWorkspace {
   updated_at: string;
 }
 
+export type CommercialMediaAssetKind =
+  | "logo"
+  | "brand_image"
+  | "brand_video"
+  | "music_audio"
+  | "music_artwork";
+
+export const COMMERCIAL_MEDIA_RULES: Record<
+  CommercialMediaAssetKind,
+  {
+    maxBytes: number;
+    maxLabel: string;
+    acceptedMimeTypes: string[];
+    maxDurationSeconds?: number;
+  }
+> = {
+  logo: {
+    maxBytes: 5 * 1024 * 1024,
+    maxLabel: "5 MB",
+    acceptedMimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  brand_image: {
+    maxBytes: 15 * 1024 * 1024,
+    maxLabel: "15 MB",
+    acceptedMimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+  brand_video: {
+    maxBytes: 50 * 1024 * 1024,
+    maxLabel: "50 MB",
+    acceptedMimeTypes: ["video/mp4", "video/webm"],
+    maxDurationSeconds: 45,
+  },
+  music_audio: {
+    maxBytes: 50 * 1024 * 1024,
+    maxLabel: "50 MB",
+    acceptedMimeTypes: ["audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4", "audio/aac"],
+    maxDurationSeconds: 420,
+  },
+  music_artwork: {
+    maxBytes: 10 * 1024 * 1024,
+    maxLabel: "10 MB",
+    acceptedMimeTypes: ["image/png", "image/jpeg", "image/webp"],
+  },
+};
+
+export function validateCommercialMediaFile(
+  file: File,
+  assetKind: CommercialMediaAssetKind,
+): string | null {
+  const rule = COMMERCIAL_MEDIA_RULES[assetKind];
+  if (!rule) {
+    return "Unsupported media asset kind.";
+  }
+  if (file.size <= 0) {
+    return "Selected file is empty.";
+  }
+  if (file.size > rule.maxBytes) {
+    return `File exceeds maximum size for ${assetKind.replace("_", " ")} (${rule.maxLabel}).`;
+  }
+  if (file.type && !rule.acceptedMimeTypes.includes(file.type.toLowerCase())) {
+    return `Unsupported format '${file.type}'. Allowed: ${rule.acceptedMimeTypes.join(", ")}.`;
+  }
+  return null;
+}
+
 export interface AdvertiserMediaAsset {
   id: string;
   workspace_id: string | null;
-  asset_kind: "logo" | "brand_image" | "brand_video" | "music_audio" | "music_artwork";
+  asset_kind: CommercialMediaAssetKind;
   original_filename: string;
   sanitized_filename: string;
   mime_type: string;
@@ -140,6 +205,14 @@ export interface AdvertiserMediaAsset {
   has_audio_track: boolean;
   is_silent_verified: boolean;
   validation_status: string;
+  storage_provider?: string;
+  storage_key?: string | null;
+  cloudinary_public_id?: string | null;
+  cloudinary_resource_type?: string | null;
+  cloudinary_url?: string | null;
+  preview_url?: string | null;
+  access_classification?: string;
+  metadata_json?: Record<string, any>;
   delivery_url: string;
   created_at: string;
 }
@@ -293,17 +366,38 @@ export const commercialApi = {
 
   async uploadMediaAsset(
     file: File,
-    assetKind: "logo" | "brand_image" | "brand_video" | "music_audio" | "music_artwork",
+    assetKind: CommercialMediaAssetKind,
+    options?: { onProgress?: (percent: number) => void },
   ): Promise<AdvertiserMediaAsset> {
     const formData = new FormData();
     formData.append("file", file);
     formData.append("asset_kind", assetKind);
-    const { data } = await api.post("/v2/advertiser/media/upload", formData, {
+    const config: Record<string, any> = {
       headers: {
         "X-Asset-Kind": assetKind,
         "X-Filename": file.name,
       },
+    };
+    if (options?.onProgress) {
+      config.onUploadProgress = (evt: { loaded?: number; total?: number }) => {
+        if (evt.total && evt.total > 0 && typeof evt.loaded === "number") {
+          options.onProgress?.(Math.min(100, Math.round((evt.loaded / evt.total) * 100)));
+        }
+      };
+    }
+    const { data } = await api.post("/v2/advertiser/media/upload", formData, config);
+    return data;
+  },
+
+  async listMediaAssets(assetKind?: CommercialMediaAssetKind): Promise<AdvertiserMediaAsset[]> {
+    const { data } = await api.get("/v2/advertiser/media", {
+      params: assetKind ? { asset_kind: assetKind } : undefined,
     });
+    return Array.isArray(data) ? data : [];
+  },
+
+  async deleteMediaAsset(assetId: string): Promise<{ deleted: boolean; asset_id: string; storage_provider: string }> {
+    const { data } = await api.delete(`/v2/advertiser/media/${encodeURIComponent(assetId)}`);
     return data;
   },
 
@@ -486,6 +580,13 @@ export const commercialApi = {
 
   async getAdminAnalytics() {
     const { data } = await api.get("/v2/admin/advertising/analytics");
+    return data;
+  },
+
+  async adminDetectOrphanedMedia(prefix = "gtex/commercial/") {
+    const { data } = await api.get("/v2/admin/advertising/media/orphans", {
+      params: { prefix },
+    });
     return data;
   },
 };

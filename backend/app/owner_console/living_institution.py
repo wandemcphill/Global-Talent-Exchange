@@ -1179,6 +1179,7 @@ def publish_media_story(
                 OwnerNewsroomArticle(
                     save_context_id=f"club:{state.club_id}",
                     club_id=state.club_id,
+                    visibility="save",
                     source_event_id=story.id,
                     category=story_type,
                     headline=headline[:200],
@@ -2059,6 +2060,7 @@ def record_managerial_change(
     new_manager: dict[str, Any] | None = None,
     previous_manager: dict[str, Any] | None = None,
     reason: str = "boardroom_decision",
+    severance_fan_coin: int = 0,
     severance_gtex: int = 0,
     idempotency_key: str | None = None,
     source_subsystem: str = "living_institution",
@@ -2104,8 +2106,14 @@ def record_managerial_change(
                 row.departed_world_day = world_day
                 row.departure_reason = reason
                 row.severance_paid_gtex = Decimal(str(severance_gtex))
+                row.severance_paid_fan_coin = Decimal(str(severance_fan_coin))
+                severance_label = (
+                    f"{severance_fan_coin:,} Fan Coin severance"
+                    if severance_fan_coin
+                    else (f"{severance_gtex:,} GTEX severance" if severance_gtex else "no severance")
+                )
                 row.tenure_summary = (
-                    f"{row.manager_name} {action} on World Day {world_day} ({reason}) after {row.matches_managed} matches "
+                    f"{row.manager_name} {action} on World Day {world_day} ({reason}) with {severance_label} after {row.matches_managed} matches "
                     f"({row.wins}W-{row.draws}D-{row.losses}L, {row.trophies_won} trophies)."
                 )
                 closed_tenure_ids.append(row.id)
@@ -2127,8 +2135,11 @@ def record_managerial_change(
             f"{prev_name} resigned from {state.club_name} on World Day {world_day} ({reason}); "
             f"{new_name} assumed caretaker charge."
         )
+    elif severance_fan_coin:
+        title = f"Managerial Departure: {prev_name} Relieved of Duties ({severance_fan_coin:,} Fan Coin Severance)"
+        summary = f"{prev_name} departed {state.club_name} on World Day {world_day} ({reason}); {new_name} installed."
     else:
-        title = f"Managerial Departure: {prev_name} Relieved of Duties ({severance_gtex} GTX Severance)"
+        title = f"Managerial Departure: {prev_name} Relieved of Duties ({severance_gtex:,} GTX Severance)"
         summary = f"{prev_name} departed {state.club_name} on World Day {world_day} ({reason}); {new_name} installed."
 
     canonical_ev = emit_canonical_club_event(
@@ -2155,7 +2166,9 @@ def record_managerial_change(
             "reason": reason,
             "previous_manager": prev_name,
             "new_manager": new_name,
+            "severance_fan_coin": int(severance_fan_coin),
             "severance_gtex": int(severance_gtex),
+            "severance_currency": "FAN_COIN" if severance_fan_coin else ("GTEX_COIN" if severance_gtex else None),
             "previous_tenure_matches": prev_matches,
             "previous_tenure_wins": prev_wins,
         },
@@ -2197,7 +2210,9 @@ def record_managerial_change(
             "previous_manager": prev_name,
             "new_manager": new_name,
             "world_day": world_day,
+            "severance_fan_coin": int(severance_fan_coin),
             "severance_gtex": int(severance_gtex),
+            "severance_currency": "FAN_COIN" if severance_fan_coin else ("GTEX_COIN" if severance_gtex else None),
             "canonical_event_id": canonical_ev.id,
             "correlation_id": corr_id,
         },
@@ -2269,7 +2284,9 @@ def record_managerial_change(
             "world_day": world_day,
             "previous_manager": prev_name,
             "new_manager": new_name,
+            "severance_fan_coin": int(severance_fan_coin),
             "severance_gtex": int(severance_gtex),
+            "severance_currency": "FAN_COIN" if severance_fan_coin else ("GTEX_COIN" if severance_gtex else None),
         },
         idempotency_key=f"media:{idem}",
         reputation_delta=1 if action == "appointed" else -2 if action == "resigned" else -1,
@@ -2293,6 +2310,7 @@ def record_executive_staff_change(
     staff_id: str,
     staff_name: str,
     fee_gtex: int = 0,
+    fee_fan_coin: int = 0,
     reason: str = "boardroom_staff_change",
     idempotency_key: str | None = None,
 ) -> OwnerClubEvent:
@@ -2329,6 +2347,7 @@ def record_executive_staff_change(
                 row.departed_world_day = world_day
                 row.departure_reason = reason
                 row.severance_paid_gtex = Decimal(str(fee_gtex if action == "dismissed" else 0))
+                row.severance_paid_fan_coin = Decimal(str(fee_fan_coin if action == "dismissed" else 0))
                 row.tenure_summary = f"{row.manager_name} departed {clean_role} post on World Day {world_day} ({reason})."
                 closed_names.append(row.manager_name)
                 closed_ids.append(row.id)
@@ -2364,7 +2383,10 @@ def record_executive_staff_change(
         summary = f"{state.club_name} appointed {staff_name} as {role_label} on World Day {world_day}."
     else:
         title = f"Executive Departure: {staff_name} Exits {role_label} Role at {state.club_name}"
-        summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason})."
+        if fee_fan_coin:
+            summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason}) with {fee_fan_coin:,} Fan Coin severance."
+        else:
+            summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason})."
 
     canonical_ev = emit_canonical_club_event(
         session,
@@ -2386,7 +2408,9 @@ def record_executive_staff_change(
             "staff_id": staff_id,
             "staff_name": staff_name,
             "replaced_staff": closed_names,
+            "fee_fan_coin": int(fee_fan_coin),
             "fee_gtex": int(fee_gtex),
+            "severance_currency": "FAN_COIN" if fee_fan_coin else ("GTEX_COIN" if fee_gtex else None),
         },
     )
     for cid in closed_ids:
@@ -2423,6 +2447,9 @@ def record_executive_staff_change(
             "staff_role": clean_role,
             "staff_name": staff_name,
             "world_day": world_day,
+            "fee_fan_coin": int(fee_fan_coin),
+            "fee_gtex": int(fee_gtex),
+            "severance_currency": "FAN_COIN" if fee_fan_coin else ("GTEX_COIN" if fee_gtex else None),
             "canonical_event_id": canonical_ev.id,
             "correlation_id": corr_id,
         },

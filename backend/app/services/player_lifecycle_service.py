@@ -103,6 +103,7 @@ from app.services.player_agency_context_service import clamp
 from app.services.team_dynamics_service import TeamDynamicsService
 from app.services.regen_transfer_addon import (
     BigClubApproachInputs,
+    ConversionQuote,
     TeamDynamicsInputs,
     TransferPressureInputs,
     build_team_dynamics,
@@ -110,7 +111,6 @@ from app.services.regen_transfer_addon import (
     default_minimum_salary_fancoin,
     default_training_fee_gtex,
     evaluate_big_club_approach,
-    quote_conversion,
     render_transfer_headline,
     resolution_for_event,
     unresolved_days_since,
@@ -121,6 +121,36 @@ from app.owner_console import ledger as club_ledger
 from app.wallets.service import LedgerPosting, WalletService
 
 CONTRACT_EXPIRING_SOON_DAYS = 90
+
+FAN_COIN_CONTRACT_FUNDING_NOTE = (
+    "Player and staff contract salaries must be funded entirely in Fan Coin. "
+    "GTex Coin auto-conversion is not accepted for contract salary payments."
+)
+
+
+def _quote_fan_coin_contract_funding(
+    *,
+    required_fancoin: Decimal,
+    current_fancoin_balance: Decimal,
+    current_gtex_balance: Decimal,
+) -> ConversionQuote:
+    required = Decimal(required_fancoin).quantize(Decimal("0.0001"))
+    available_fan = Decimal(current_fancoin_balance).quantize(Decimal("0.0001"))
+    available_gtex = Decimal(current_gtex_balance).quantize(Decimal("0.0001"))
+    shortfall = max(required - available_fan, Decimal("0.0000"))
+    return ConversionQuote(
+        required_fancoin=required,
+        current_fancoin_balance=available_fan,
+        shortfall_fancoin=shortfall,
+        current_gtex_balance=available_gtex,
+        direct_gtex_equivalent=Decimal("0.0000"),
+        gtex_required_for_conversion=Decimal("0.0000"),
+        conversion_premium_bps=0,
+        can_cover_shortfall=(shortfall == Decimal("0.0000")),
+        premium_note=FAN_COIN_CONTRACT_FUNDING_NOTE,
+    )
+
+
 DEFAULT_INJURY_RECOVERY_DAYS: dict[InjurySeverity, int] = {
     InjurySeverity.MINOR: 7,
     InjurySeverity.MODERATE: 21,
@@ -809,7 +839,7 @@ class PlayerLifecycleService:
         gtex_balance = wallet_service.get_wallet_summary(
             self.session, owner, currency=LedgerUnit.COIN
         ).available_balance
-        conversion = quote_conversion(
+        conversion = _quote_fan_coin_contract_funding(
             required_fancoin=payload.offered_salary_fancoin_per_year * payload.contract_years,
             current_fancoin_balance=fancoin_balance,
             current_gtex_balance=gtex_balance,
@@ -832,6 +862,8 @@ class PlayerLifecycleService:
             metadata_json={
                 "training_fee_gtex_coin": str(visibility.training_fee_gtex_coin),
                 "minimum_salary_fancoin_per_year": str(visibility.minimum_salary_fancoin_per_year),
+                "salary_funding_currency": "FAN_COIN",
+                "gtex_auto_conversion_allowed": False,
                 "premium_note": conversion.premium_note,
             },
         )
@@ -1824,7 +1856,7 @@ class PlayerLifecycleService:
             gtex_balance = wallet_service.get_wallet_summary(
                 self.session, owner, currency=LedgerUnit.COIN
             ).available_balance
-            conversion = quote_conversion(
+            conversion = _quote_fan_coin_contract_funding(
                 required_fancoin=offered_salary * payload.contract_years,
                 current_fancoin_balance=fancoin_balance,
                 current_gtex_balance=gtex_balance,
@@ -1847,6 +1879,8 @@ class PlayerLifecycleService:
                 metadata_json={
                     "training_fee_gtex_coin": str(offer_market.training_fee_gtex_coin),
                     "minimum_salary_fancoin_per_year": str(offer_market.minimum_salary_fancoin_per_year),
+                    "salary_funding_currency": "FAN_COIN",
+                    "gtex_auto_conversion_allowed": False,
                     "premium_note": conversion.premium_note,
                 },
             )
@@ -3074,54 +3108,24 @@ class PlayerLifecycleService:
         salary_package = (offer.offered_salary_fancoin_per_year * offer.contract_years).quantize(Decimal("0.0001"))
         fancoin_summary = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.CREDIT)
         gtex_summary = wallet_service.get_wallet_summary(self.session, owner, currency=LedgerUnit.COIN)
-        conversion = quote_conversion(
-            required_fancoin=salary_package,
-            current_fancoin_balance=fancoin_summary.available_balance,
-            current_gtex_balance=gtex_summary.available_balance,
-        )
-        total_gtex_required = offer.training_fee_gtex_coin + conversion.gtex_required_for_conversion
+        if fancoin_summary.available_balance < salary_package:
+            raise PlayerLifecycleValidationError(
+                f"Player contract salary requires {salary_package} Fan Coin. "
+                f"Available Fan Coin is {fancoin_summary.available_balance}; GTEX Coin cannot fund or convert into contract salary."
+            )
+        # Regen training fees are a separate GTEX charge; they are not salary
+        # and cannot be used to cover any Fan Coin contract shortfall.
         if offer.training_fee_gtex_coin > Decimal("0"):
             classes = club_ledger.wallet_classes(self.session, owner.id)
             deposited_available = Decimal(str(classes.get("deposited") or "0"))
             if deposited_available < offer.training_fee_gtex_coin:
                 raise PlayerLifecycleValidationError(
-                    "Regens are restricted players and require deposited GTEX Coin. Promotional launch credit cannot be used."
+                    "Regens are restricted players and require deposited GTEX Coin for the separate training fee. "
+                    "Promotional launch credit cannot be used."
                 )
-        if gtex_summary.available_balance < total_gtex_required:
+        if gtex_summary.available_balance < offer.training_fee_gtex_coin:
             raise PlayerLifecycleValidationError(
-                "Buying club owner does not have enough GTex Coin for the training fee and required Fan Coin auto-conversion"
-            )
-        if conversion.shortfall_fancoin > 0 and not conversion.can_cover_shortfall:
-            raise PlayerLifecycleValidationError("Buying club owner cannot cover the Fan Coin salary shortfall")
-        if conversion.shortfall_fancoin > 0:
-            wallet_service.settle_available_funds(
-                self.session,
-                user=owner,
-                amount=conversion.gtex_required_for_conversion,
-                reference=f"regen-offer:{offer.id}:conversion",
-                description=f"Auto-convert GTex Coin for {new_contract.player_id} contract salary",
-                external_reference=offer.id,
-                unit=LedgerUnit.COIN,
-                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            )
-            wallet_service.credit_trade_proceeds(
-                self.session,
-                user=owner,
-                amount=conversion.shortfall_fancoin,
-                reference=f"regen-offer:{offer.id}:conversion-credit",
-                description=f"Fan Coin credited from GTex auto-conversion for {new_contract.player_id}",
-                external_reference=offer.id,
-                unit=LedgerUnit.CREDIT,
-                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            )
-        refreshed_fancoin_balance = wallet_service.get_wallet_summary(
-            self.session,
-            owner,
-            currency=LedgerUnit.CREDIT,
-        ).available_balance
-        if refreshed_fancoin_balance < salary_package:
-            raise PlayerLifecycleValidationError(
-                "Buying club owner does not have enough Fan Coin for the salary package"
+                "Buying club owner does not have enough deposited GTEX Coin for the separate regen training fee."
             )
 
         free_agent_terms = dict((bid.structured_terms_json or {}).get("free_agent_capture_split") or {})
@@ -3190,8 +3194,10 @@ class PlayerLifecycleService:
             **dict(offer.metadata_json or {}),
             "settled_on": acceptance_on.isoformat(),
             "salary_package_fancoin": str(salary_package),
-            "conversion_shortfall_fancoin": str(conversion.shortfall_fancoin),
-            "conversion_gtex_used": str(conversion.gtex_required_for_conversion),
+            "conversion_shortfall_fancoin": "0.0000",
+            "conversion_gtex_used": "0.0000",
+            "salary_funding_currency": "FAN_COIN",
+            "gtex_auto_conversion_allowed": False,
             "previous_club_id": previous_club_id,
         }
 
