@@ -28,22 +28,28 @@ class DIDitVerificationAdapter(BaseIdentityVerificationAdapter):
     def provider_name(self) -> str:
         return "didit"
 
-    def _configuration(self) -> tuple[str, str, str]:
+    def _api_configuration(self) -> tuple[str, str]:
         api_key = os.environ.get("GTE_DIDIT_API_KEY") or os.environ.get("DIDIT_API_KEY")
         workflow_id = os.environ.get("GTE_DIDIT_WORKFLOW_ID") or os.environ.get("DIDIT_WORKFLOW_ID")
-        webhook_secret = os.environ.get("GTE_DIDIT_WEBHOOK_SECRET") or os.environ.get("DIDIT_WEBHOOK_SECRET")
         missing = [
             name for name, value in (
                 ("GTE_DIDIT_API_KEY", api_key),
                 ("GTE_DIDIT_WORKFLOW_ID", workflow_id),
-                ("GTE_DIDIT_WEBHOOK_SECRET", webhook_secret),
             ) if not value
         ]
         if missing:
             raise IdentityProviderConfigurationError(
                 "DIDit live KYC is not configured. Missing provider credentials: " + ", ".join(missing)
             )
-        return api_key.strip(), workflow_id.strip(), webhook_secret.strip()
+        return api_key.strip(), workflow_id.strip()
+
+    def _webhook_secret(self) -> str:
+        webhook_secret = os.environ.get("GTE_DIDIT_WEBHOOK_SECRET") or os.environ.get("DIDIT_WEBHOOK_SECRET")
+        if not webhook_secret:
+            raise IdentityProviderConfigurationError(
+                "DIDit webhook verification is not configured. Add GTE_DIDIT_WEBHOOK_SECRET."
+            )
+        return webhook_secret.strip()
 
     def initiate_session(
         self,
@@ -54,7 +60,7 @@ class DIDitVerificationAdapter(BaseIdentityVerificationAdapter):
         callback_url: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> VerificationSessionResult:
-        api_key, workflow_id, _ = self._configuration()
+        api_key, workflow_id = self._api_configuration()
         safe_metadata = dict(metadata or {})
         contact_details: dict[str, Any] = {}
         if safe_metadata.get("email"):
@@ -137,7 +143,7 @@ class DIDitVerificationAdapter(BaseIdentityVerificationAdapter):
         headers: dict[str, str],
     ) -> bool:
         try:
-            _, _, webhook_secret = self._configuration()
+            webhook_secret = self._webhook_secret()
             payload = json.loads(payload_bytes.decode("utf-8"))
         except (IdentityProviderConfigurationError, UnicodeDecodeError, json.JSONDecodeError):
             return False
