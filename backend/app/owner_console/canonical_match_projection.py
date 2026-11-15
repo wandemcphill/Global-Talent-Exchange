@@ -173,11 +173,9 @@ def _source_event(
     session: Session,
     match: CompetitionMatch,
     competition: UserCompetition,
-    states: dict[str, OwnerClubState],
+    anchor: OwnerClubState,
 ) -> OwnerClubEvent:
-    anchor = states.get(str(match.home_club_id)) or states.get(str(match.away_club_id))
-    if anchor is None:
-        raise ValueError("Neither participating club has an OwnerClubState.")
+    projection_key = f"club:{anchor.club_id}:institutional_consequences"
     participants = [
         {
             "participant_type": "club",
@@ -204,7 +202,7 @@ def _source_event(
             f"Round {match.round_number}. Persisted events and replay statistics are authoritative."
         ),
         participants=participants,
-        required_projections=[f"club:{club_id}:institutional_consequences" for club_id in sorted(states)],
+        required_projections=[projection_key],
     )
     return event
 
@@ -401,13 +399,12 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
     competition_view = CanonicalInstitutionalCompetition(
         id=competition.id, name=competition.name, format="knockout" if is_knockout else "league"
     )
-    source_event = _source_event(session, match, competition, states)
-
     outcomes: dict[str, Any] = {"match_id": match.id, "status": "projected", "clubs": {}}
     if str(match.home_club_id) in states:
+        home_source_event = _source_event(session, match, competition, states[str(match.home_club_id)])
         outcomes["clubs"]["home"] = _project_one_club(
             session,
-            source_event=source_event,
+            source_event=home_source_event,
             match=match,
             competition=competition,
             match_view=match_view,
@@ -421,9 +418,10 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
             context=context,
         )
     if str(match.away_club_id) in states:
+        away_source_event = _source_event(session, match, competition, states[str(match.away_club_id)])
         outcomes["clubs"]["away"] = _project_one_club(
             session,
-            source_event=source_event,
+            source_event=away_source_event,
             match=match,
             competition=competition,
             match_view=match_view,
