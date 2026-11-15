@@ -16,10 +16,12 @@ from app.leagues.repository import InMemoryLeagueEventRepository
 from app.leagues.service import LeagueSeasonLifecycleService
 from app.match_engine.services import LeagueFixtureExecutionService, LocalMatchExecutionWorker
 from app.match_engine.services.team_factory import SyntheticSquadFactory
+from app.manager_market.service import ManagerMarketService
 from app.schemas.player_lifecycle import ContractCreateRequest, InjuryCreateRequest
 from app.services.player_lifecycle_service import PlayerLifecycleService, PlayerLifecycleValidationError
 from app.models.base import Base
 from app.models.club_profile import ClubProfile
+from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
 from app.models.user import KycStatus, User, UserRole
 from app.notifications.service import NotificationCenter
 from app.replay_archive.persistence import InMemoryReplayArchiveRepository
@@ -230,5 +232,64 @@ def test_team_factory_uses_persistent_player_ids_and_enforces_eligibility() -> N
                 match_date=date(2026, 3, 12),
                 lifecycle_service=lifecycle,
             )
+    finally:
+        session.close()
+
+
+def test_team_factory_resolves_assigned_manager_market_impact_without_wallet_service() -> None:
+    session = _build_lifecycle_session()
+    try:
+        context = _seed_managed_team_context(session)
+        lifecycle = PlayerLifecycleService(session)
+        for index in range(1, 14):
+            lifecycle.create_contract(
+                f"managed-player-{index}",
+                ContractCreateRequest(
+                    club_id=context["club_profile_id"],
+                    wage_amount=10000,
+                    signed_on=date(2026, 1, 1),
+                    starts_on=date(2026, 1, 1),
+                    ends_on=date(2026, 12, 31),
+                ),
+            )
+
+        manager = ManagerCatalogEntry(
+            manager_id="mgr-tactician-01",
+            display_name="Diego Tactician",
+            rarity="legendary",
+            mentality="attacking",
+            tactics=["high_press", "possession_control", "wing_overload", "counter_press"],
+            traits=["great_motivator", "tactical_genius"],
+            substitution_tendency="balanced_rotation",
+            philosophy_summary="High-press possession architecture.",
+            club_associations=["Managed FC"],
+            supply_total=1,
+            supply_available=0,
+        )
+        holding = ManagerHolding(
+            asset_id="mgr-asset-01",
+            manager_id=manager.manager_id,
+            owner_user_id="managed-owner",
+            status="owned",
+            acquired_at="2026-03-01T00:00:00Z",
+        )
+        assignment = ManagerTeamAssignment(
+            user_id="managed-owner",
+            main_manager_asset_id=holding.asset_id,
+        )
+        session.add_all([manager, holding, assignment])
+        session.commit()
+
+        team = SyntheticSquadFactory().build_team(
+            team_id=context["club_profile_id"],
+            team_name="Managed FC",
+            base_overall=76,
+            match_date=date(2026, 3, 12),
+            lifecycle_service=lifecycle,
+        )
+        assert team.manager_profile is not None
+        assert team.manager_profile["display_name"] == "Diego Tactician"
+        assert team.manager_profile["manager_impact"] == ManagerMarketService._manager_impact_score(manager)
+        assert team.manager_profile["manager_impact"] == 98
     finally:
         session.close()
