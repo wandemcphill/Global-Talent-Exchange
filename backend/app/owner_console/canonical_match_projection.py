@@ -48,12 +48,13 @@ class CanonicalInstitutionalCompetition:
 def _replay_summary(match: CompetitionMatch) -> dict[str, Any]:
     metadata = dict(match.metadata_json or {})
     summary = metadata.get("simulation_summary")
-    if isinstance(summary, dict):
+    if isinstance(summary, dict) and isinstance(summary.get("player_stats"), list):
         return summary
     replay = metadata.get("replay_payload")
-    if isinstance(replay, dict) and isinstance(replay.get("summary"), dict):
-        return dict(replay["summary"])
-    return {}
+    replay_summary = replay.get("summary") if isinstance(replay, dict) else None
+    if isinstance(replay_summary, dict) and isinstance(replay_summary.get("player_stats"), list):
+        return dict(replay_summary)
+    return dict(summary) if isinstance(summary, dict) else {}
 
 
 def normalize_authoritative_appearances(
@@ -360,15 +361,45 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
 
     summary = _replay_summary(match)
     raw_stats = summary.get("player_stats")
-    if not isinstance(raw_stats, list):
-        # Older or partially persisted fixtures may not have their authoritative
-        # appearance ledger yet. Leave them eligible for a later reconciliation
-        # pass instead of aborting the entire owner-world tick.
+    if not isinstance(raw_stats, list) or not raw_stats:
+        # Persist one independently retryable source event per participating
+        # Living Club before deferring. This prevents a missing replay summary
+        # from falling out of the bounded recent-match backfill window.
+        awaiting: dict[str, Any] = {}
+        for side_key, club_id in (
+            ("home", str(match.home_club_id)),
+            ("away", str(match.away_club_id)),
+        ):
+            state = states.get(club_id)
+            if state is None:
+                continue
+            projection_key = f"club:{club_id}:institutional_consequences"
+            source_event = _source_event(session, match, competition, state)
+            consequences = dict(source_event.consequences_json or {})
+            statuses = dict(consequences.get("projection_status") or {})
+            current = statuses.get(projection_key)
+            if not (isinstance(current, dict) and current.get("status") == "complete"):
+                statuses[projection_key] = {
+                    "status": "pending",
+                    "reason": "awaiting_replay_statistics",
+                }
+                consequences["projection_status"] = statuses
+                source_event.consequences_json = consequences
+                source_event.status = "active"
+                source_event.resolved_at = None
+            awaiting[side_key] = {
+                "club_id": club_id,
+                "status": "awaiting_replay_statistics",
+            }
         logger.warning(
             "canonical_match_projection.awaiting_player_stats match_id=%s",
             match.id,
         )
-        return {"match_id": match.id, "status": "awaiting_replay_statistics"}
+        return {
+            "match_id": match.id,
+            "status": "awaiting_replay_statistics",
+            "clubs": awaiting,
+        }
     player_stats = [dict(row) for row in raw_stats if isinstance(row, dict)]
     event_rows = list(
         session.scalars(
@@ -443,6 +474,8 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
         )
     if any(item.get("status") == "pending_retry" for item in outcomes["clubs"].values()):
         outcomes["status"] = "pending_retry"
+    elif any(item.get("status") == "awaiting_replay_statistics" for item in outcomes["clubs"].values()):
+        outcomes["status"] = "awaiting_replay_statistics"
     return outcomes
 
 
@@ -472,7 +505,16 @@ def reconcile_pending_canonical_match_projections(session: Session, *, limit: in
     match_ids = list(dict.fromkeys(str(value) for value in pending_ids + recent_ids if value))
     projected = pending = considered = 0
     for match_id in match_ids:
-        result = project_completed_canonical_match(session, match_id)
+        try:
+            # Isolate failures outside the per-club savepoints too (for example,
+            # source-event creation/flush errors) so the owner-world transaction
+            # remains usable for later clubs and work in this tick.
+            with session.begin_nested():
+                result = project_completed_canonical_match(session, match_id)
+        except Exception:
+            logger.exception("canonical_match.reconciliation_attempt_failed match_id=%s", match_id)
+            pending += 1
+            continue
         if result.get("status") in {"projected", "pending_retry", "awaiting_replay_statistics"}:
             considered += 1
         club_results = result.get("clubs") or {}

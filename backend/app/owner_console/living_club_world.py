@@ -1118,7 +1118,6 @@ def record_canonical_projection(
     return True
 
 
-
 def format_event_dict(event: OwnerClubEvent) -> dict[str, Any]:
     return {
         "id": event.id,

@@ -236,7 +236,10 @@ class CompetitionAutoRunner:
         try:
             from app.owner_console.canonical_match_projection import project_completed_canonical_match
 
-            project_completed_canonical_match(self.session, completed.id)
+            # The adapter owns per-club savepoints; this outer savepoint also
+            # contains failures during canonical source-event creation/flush.
+            with self.session.begin_nested():
+                project_completed_canonical_match(self.session, completed.id)
         except Exception:
             logger.exception(
                 "canonical_match.institutional_projection_deferred match_id=%s",

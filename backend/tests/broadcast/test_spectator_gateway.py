@@ -10,6 +10,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import pytest
 from redis.exceptions import RedisError
 from starlette.websockets import WebSocketDisconnect
@@ -954,7 +955,13 @@ def test_fake_redis_spectator_ticket_store_compatibility() -> None:
 
 
 def test_canonical_matchday_atmosphere_is_shared_and_publicly_whitelisted() -> None:
-    engine = create_engine("sqlite+pysqlite:///:memory:")
+    # FastAPI's TestClient opens the WebSocket on another thread. Share the
+    # in-memory SQLite connection so the WebSocket sees the seeded match row.
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
     CompetitionMatch.__table__.create(engine)
     factory = sessionmaker(bind=engine, expire_on_commit=False)
     match_id = "atmosphere-match-1"

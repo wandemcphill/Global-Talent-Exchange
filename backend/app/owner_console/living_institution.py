@@ -571,6 +571,7 @@ def ensure_match_manager_tenure(
     if manager_source == "manager_marketplace":
         from app.models.club_profile import ClubProfile
         from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerProfile
+
         club = session.get(ClubProfile, state.club_id)
         contract = session.scalar(
             select(ManagerContract).where(
@@ -587,6 +588,7 @@ def ensure_match_manager_tenure(
     elif manager_source == "manager_market":
         from app.models.club_profile import ClubProfile
         from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+
         club = session.get(ClubProfile, state.club_id)
         assignment = session.scalar(
             select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == (club.owner_user_id if club else ""))

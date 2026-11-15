@@ -490,7 +490,7 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
         )
 
 
-def test_canonical_competition_completion_projects_both_living_clubs_once():
+def test_canonical_competition_completion_projects_both_living_clubs_once(monkeypatch):
     """A real CompetitionAutoRunner completion must project to both clubs idempotently."""
     from sqlalchemy import select
 
@@ -587,8 +587,70 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
 
             session.commit()
 
+            # Exercise the true deferred path: hide both persisted copies of the
+            # replay appearance ledger during the first attempt, then restore the
+            # canonical metadata and let reconciliation retry without resimulation.
+            from app.owner_console import canonical_match_projection
+
+            real_project = canonical_match_projection.project_completed_canonical_match
+            deferred_attempt: dict[str, object] = {}
+
+            def project_without_appearance_ledger(project_session, match_id):
+                match_row = project_session.get(CompetitionMatch, match_id)
+                original_metadata = dict(match_row.metadata_json or {})
+                altered_metadata = dict(original_metadata)
+                altered_summary = dict(altered_metadata.get("simulation_summary") or {})
+                altered_summary.pop("player_stats", None)
+                altered_metadata["simulation_summary"] = altered_summary
+                replay = dict(altered_metadata.get("replay_payload") or {})
+                replay_summary = dict(replay.get("summary") or {})
+                replay_summary.pop("player_stats", None)
+                replay["summary"] = replay_summary
+                altered_metadata["replay_payload"] = replay
+                match_row.metadata_json = altered_metadata
+                try:
+                    result = real_project(project_session, match_id)
+                finally:
+                    match_row.metadata_json = original_metadata
+                deferred_attempt["result"] = result
+                return result
+
+            monkeypatch.setattr(
+                canonical_match_projection,
+                "project_completed_canonical_match",
+                project_without_appearance_ledger,
+            )
             completed = CompetitionAutoRunner(session)._simulate_match(competition, fixture)
             session.commit()
+            session.refresh(completed)
+
+            assert deferred_attempt["result"]["status"] == "awaiting_replay_statistics"
+            deferred_events = list(
+                session.scalars(
+                    select(OwnerClubEvent).where(
+                        OwnerClubEvent.source_type == "canonical_match",
+                        OwnerClubEvent.source_id == completed.id,
+                    )
+                ).all()
+            )
+            assert len(deferred_events) == 2
+            assert all(event.status == "active" for event in deferred_events)
+            assert all(
+                next(iter(event.consequences_json["projection_status"].values()))["status"] == "pending"
+                for event in deferred_events
+            )
+
+            monkeypatch.setattr(
+                canonical_match_projection,
+                "project_completed_canonical_match",
+                real_project,
+            )
+            retry_summary = canonical_match_projection.reconcile_pending_canonical_match_projections(
+                session,
+                limit=1,
+            )
+            session.commit()
+            assert retry_summary["matches_pending_retry"] == 0
             session.refresh(completed)
 
             assert completed.status == MatchStatus.COMPLETED.value
@@ -604,13 +666,15 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                     )
                 ).all()
             )
-            assert len(source_events) == 1
-            source_event = source_events[0]
-            assert source_event.status == "resolved"
-            projection_status = source_event.consequences_json["projection_status"]
+            assert len(source_events) == 2
+            source_events_by_club = {str(event.club_id): event for event in source_events}
+            assert set(source_events_by_club) == {str(row["id"]) for row in club_rows}
             for club_data in club_rows:
-                key = f"club:{club_data['id']}:institutional_consequences"
-                assert projection_status[key]["status"] == "complete"
+                club_id = str(club_data["id"])
+                source_event = source_events_by_club[club_id]
+                assert source_event.status == "resolved"
+                key = f"club:{club_id}:institutional_consequences"
+                assert source_event.consequences_json["projection_status"][key]["status"] == "complete"
 
             for club_data in club_rows:
                 club_id = str(club_data["id"])
@@ -630,7 +694,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                     session.scalars(
                         select(OwnerSupporterEvent).where(
                             OwnerSupporterEvent.club_id == club_id,
-                            OwnerSupporterEvent.trigger_source_type == "match",
+                            OwnerSupporterEvent.trigger_source_type == "canonical_match",
                             OwnerSupporterEvent.trigger_source_id == completed.id,
                         )
                     ).all()
@@ -641,7 +705,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once():
                     session.scalars(
                         select(OwnerMediaStory).where(
                             OwnerMediaStory.club_id == club_id,
-                            OwnerMediaStory.source_type == "match",
+                            OwnerMediaStory.source_type == "canonical_match",
                             OwnerMediaStory.source_id == completed.id,
                         )
                     ).all()
