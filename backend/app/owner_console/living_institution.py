@@ -1108,6 +1108,9 @@ def record_match_institutional_impact(
         return {}
 
     idem_prefix = f"match:{match.id}:club:{state.club_id}"
+    canonical_source_event_id = str(side.get("source_event_id") or "")
+    media_source_type = "canonical_match" if canonical_source_event_id else "match"
+    media_source_id = canonical_source_event_id or str(match.id)
     existing_hist = session.scalar(
         select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result")
     )
@@ -1475,8 +1478,8 @@ def record_match_institutional_impact(
         session,
         state,
         event_type="match_reaction",
-        trigger_source_type="match",
-        trigger_source_id=match.id,
+        trigger_source_type=media_source_type,
+        trigger_source_id=media_source_id,
         headline=sup_headline,
         summary=sup_summary,
         driver_Impacts=drivers,
@@ -1534,8 +1537,8 @@ def record_match_institutional_impact(
             f"Overall supporter sentiment stands at {profile.overall_sentiment} "
             f"following a {sup_event.overall_sentiment_delta:+d} shift."
         ),
-        source_type="match",
-        source_id=match.id,
+        source_type=media_source_type,
+        source_id=media_source_id,
         established_facts={
             "match_id": match.id,
             "club_goals": gf,
@@ -1573,8 +1576,8 @@ def record_match_institutional_impact(
                 f"Supporter sentiment has fallen to {profile.overall_sentiment} with accumulated frustration at "
                 f"{profile.accumulated_frustration}."
             ),
-            source_type="match_streak",
-            source_id=match.id,
+            source_type=media_source_type,
+            source_id=media_source_id,
             established_facts={
                 "consecutive_disappointments": int(profile.consecutive_disappointments),
                 "club_goals": gf,
@@ -1603,8 +1606,8 @@ def record_match_institutional_impact(
                 f"in Round {match.round_number} of {comp.name}, recording a senior rating of {deb.current_rating} "
                 f"and ceiling of {deb.potential_rating}."
             ),
-            source_type="academy_debut",
-            source_id=f"{match.id}:{deb.player_id}",
+            source_type=media_source_type,
+            source_id=media_source_id,
             established_facts={
                 "player_name": deb.player_name,
                 "round_number": int(match.round_number),
