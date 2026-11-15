@@ -648,9 +648,7 @@ class LiveMatchHub:
         They are never authoritative for whether a competition match can still be changed.
         """
         if self.session_factory is None:
-            raise LiveMatchUnavailableError(
-                "Match lifecycle storage is unavailable; live tactics cannot be verified."
-            )
+            raise LiveMatchUnavailableError("Match lifecycle storage is unavailable; live tactics cannot be verified.")
 
         try:
             from app.matches.lifecycle import is_live
