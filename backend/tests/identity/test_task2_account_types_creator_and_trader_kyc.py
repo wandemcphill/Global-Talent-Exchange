@@ -400,8 +400,10 @@ def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Sessio
     assert isinstance(sandbox_adapter, SandboxAdapter)
     with pytest.raises(IdentityProviderConfigurationError):
         get_identity_provider("smile_id")
+    monkeypatch.delenv("GTE_STARTUP_PROFILE", raising=False)
+    monkeypatch.delenv("GTE_KYC_ALLOW_SANDBOX", raising=False)
     with pytest.raises(IdentityProviderConfigurationError):
-        get_identity_provider("sandbox") if monkeypatch.delenv("GTE_STARTUP_PROFILE", raising=False) else None
+        get_identity_provider("sandbox")
     monkeypatch.setenv("GTE_STARTUP_PROFILE", "test")
 
     # 2. Initiate trader verification session
