@@ -13,12 +13,15 @@ import {
   progressivePassMeters,
   resolveBallPresentation,
   sceneObjectCount,
+  type CardDetailSummary,
   type FeedPresentationStatus,
+  type OffsideSnapshot,
   type PitchBall,
   type PitchFrame,
   type PitchPlayer,
   type PitchShotMarker,
   type PitchSide,
+  type VarReviewSummary,
 } from "./matchStateAdapter";
 import {
   ATLAS_COLUMNS,
@@ -28,6 +31,7 @@ import {
   buildAtlasPixels,
   buildDigitPixels,
   cellUv,
+  deterministicAppearance,
   getCachedBallBitmap,
   getCachedPitchBitmap,
   getCachedRingBitmap,
@@ -36,10 +40,36 @@ import {
   rasterPitch,
   rasterRing,
   sampleTrajectory,
+  type KitPattern,
   type RigAction,
 } from "./playerRig";
 
 export type PitchCameraMode = "2d" | "2.5d" | "zoom";
+
+function normalizeKitPattern(raw?: string | null): KitPattern {
+  const v = String(raw || "").trim().toLowerCase();
+  if (v === "striped" || v === "stripes") return "stripes";
+  if (v === "hoops" || v === "sash" || v === "halves" || v === "chevron") return v;
+  return "solid";
+}
+
+function buildScaleForProfile(profile?: string | null): number {
+  const v = String(profile || "").trim().toLowerCase();
+  if (v === "stocky" || v === "heavy") return 1.08;
+  if (v === "tall") return 1.06;
+  if (v === "slim" || v === "agile") return 0.92;
+  return 1;
+}
+
+function resolveOffsideMetrics(snap: OffsideSnapshot) {
+  return {
+    defenderLineX: Number(snap.offside_line_x ?? 0.5),
+    attackerLineX: Number(snap.attacker_line_x ?? 0.5),
+    isOffside: Boolean(snap.is_penalised ?? snap.is_offside_position),
+    marginMeters: typeof snap.margin_meters === "number" ? snap.margin_meters : null,
+    playableBodyPart: snap.attacker_body_part || "torso",
+  };
+}
 
 export type SampledPitchFrame = {
   players: PitchPlayer[];
@@ -59,6 +89,9 @@ export type SampledPitchFrame = {
   homeScore?: number | null;
   awayScore?: number | null;
   eventBanner?: string | null;
+  offsideSnapshot?: OffsideSnapshot | null;
+  varReview?: VarReviewSummary | null;
+  cardDetail?: CardDetailSummary | null;
 };
 
 export type OrthographicPitchProps = {
@@ -77,6 +110,16 @@ export type OrthographicPitchProps = {
   homeAttacksRight?: boolean;
   homeColor?: string;
   awayColor?: string;
+  homeSecondaryColor?: string;
+  homeAccentColor?: string;
+  awaySecondaryColor?: string;
+  awayAccentColor?: string;
+  homeShortsColor?: string;
+  awayShortsColor?: string;
+  homeSocksColor?: string;
+  awaySocksColor?: string;
+  homeKitPattern?: KitPattern;
+  awayKitPattern?: KitPattern;
   goalkeeperHome?: string;
   goalkeeperAway?: string;
   selectedKey?: string | null;
@@ -91,6 +134,9 @@ export type OrthographicPitchProps = {
   showPassingLanes?: boolean;
   showShotMap?: boolean;
   shotMarkers?: PitchShotMarker[];
+  offsideSnapshot?: OffsideSnapshot | null;
+  varReview?: VarReviewSummary | null;
+  cardDetail?: CardDetailSummary | null;
   /** Optional match clock + score so the broadcast director can stage injury-time framing. */
   clockMinute?: number | null;
   homeScore?: number | null;
@@ -126,8 +172,18 @@ const FRAGMENT = `
   precision highp float;
   uniform sampler2D uBody;
   uniform sampler2D uKit;
+  uniform sampler2D uParts;
   uniform sampler2D uDigits;
   uniform vec3 uKitColor;
+  uniform vec3 uSecondaryColor;
+  uniform vec3 uAccentColor;
+  uniform vec3 uShortsColor;
+  uniform vec3 uSocksColor;
+  uniform vec3 uSkinColor;
+  uniform vec3 uHairColor;
+  uniform vec3 uBootColor;
+  uniform float uKitPattern;
+  uniform float uHasGloves;
   uniform vec2 uOffset;
   uniform vec2 uRepeat;
   uniform float uShirt;
@@ -135,10 +191,48 @@ const FRAGMENT = `
   void main() {
     vec4 body = texture2D(uBody, vUv);
     vec4 kit = texture2D(uKit, vUv);
-    vec3 shadedKit = uKitColor * kit.rgb;
-    vec3 color = mix(body.rgb, shadedKit, kit.a);
-    float alpha = max(body.a, kit.a);
+    float partCode = floor(texture2D(uParts, vUv).r * 255.0 / 32.0 + 0.5);
     vec2 localUv = (vUv - uOffset) / uRepeat;
+
+    vec3 bodyColor = body.rgb;
+    if (body.a > 0.08) {
+      if (abs(partCode - 4.0) < 0.4) {
+        bodyColor = clamp(uSkinColor * 0.92 + vec3(0.05), 0.0, 1.0);
+      } else if (abs(partCode - 5.0) < 0.4) {
+        bodyColor = uHairColor;
+      } else if (abs(partCode - 6.0) < 0.4) {
+        bodyColor = uBootColor;
+      } else if (abs(partCode - 7.0) < 0.4 && uHasGloves > 0.5) {
+        bodyColor = vec3(0.95, 0.97, 1.0);
+      }
+    }
+
+    vec3 kitBase = uKitColor;
+    if (abs(partCode - 2.0) < 0.4 || (partCode < 0.4 && localUv.y < 0.49 && localUv.y >= 0.33)) {
+      kitBase = uShortsColor;
+    } else if (abs(partCode - 3.0) < 0.4 || (partCode < 0.4 && localUv.y < 0.33)) {
+      kitBase = uSocksColor;
+    } else {
+      float px = floor(localUv.x * 64.0);
+      float py = floor((1.0 - localUv.y) * 64.0);
+      if (abs(uKitPattern - 1.0) < 0.4 && mod(px, 6.0) < 3.0) {
+        kitBase = uSecondaryColor;
+      } else if (abs(uKitPattern - 2.0) < 0.4 && mod(py, 6.0) < 3.0) {
+        kitBase = uSecondaryColor;
+      } else if (abs(uKitPattern - 3.0) < 0.4 && abs(localUv.x - (1.0 - localUv.y) - 0.05) < 0.09) {
+        kitBase = uSecondaryColor;
+      } else if (abs(uKitPattern - 4.0) < 0.4 && localUv.x >= 0.5) {
+        kitBase = uSecondaryColor;
+      } else if (abs(uKitPattern - 5.0) < 0.4 && abs((1.0 - localUv.y) - (0.34 + abs(localUv.x - 0.5) * 0.28)) < 0.065) {
+        kitBase = uSecondaryColor;
+      } else if (localUv.y > 0.69) {
+        kitBase = uAccentColor;
+      }
+    }
+
+    vec3 shadedKit = kitBase * kit.rgb;
+    vec3 color = mix(bodyColor, shadedKit, kit.a);
+    float alpha = max(body.a, kit.a);
     float digitAlpha = 0.0;
     float digitShadow = 0.0;
     if (localUv.y > 0.41 && localUv.y < 0.63 && localUv.x > 0.35 && localUv.x < 0.65) {
@@ -165,6 +259,59 @@ const FRAGMENT = `
     gl_FragColor = vec4(color, visible);
   }
 `;
+
+const KIT_PATTERN_CODE: Record<KitPattern, number> = {
+  solid: 0,
+  stripes: 1,
+  hoops: 2,
+  sash: 3,
+  halves: 4,
+  chevron: 5,
+};
+
+export function projectPitchToView(
+  x: number,
+  y: number,
+  cameraMode: PitchCameraMode = "2d",
+): { vx: number; vy: number; depthScale: number; zOrder: number } {
+  const py = Math.max(-0.15, Math.min(1.15, Number.isFinite(y) ? y : 0.5));
+  const px = Number.isFinite(x) ? x : 0.5;
+  if (cameraMode !== "2.5d") {
+    return {
+      vx: px,
+      vy: py,
+      depthScale: 1,
+      zOrder: 1 - py,
+    };
+  }
+  const depthScale = Math.max(0.68, Math.min(1.26, 0.78 + 0.34 * py));
+  const vx = 0.5 + (px - 0.5) * depthScale;
+  const vy = (0.78 * py + 0.17 * py * py) / 0.95;
+  return {
+    vx,
+    vy,
+    depthScale,
+    zOrder: py,
+  };
+}
+
+export function unprojectViewToPitch(
+  vx: number,
+  vy: number,
+  cameraMode: PitchCameraMode = "2d",
+): { x: number; y: number } {
+  if (cameraMode !== "2.5d") {
+    return { x: vx, y: vy };
+  }
+  const a = 0.17;
+  const b = 0.78;
+  const c = -0.95 * vy;
+  const disc = Math.max(0.01, b * b - 4 * a * c);
+  const py = (-b + Math.sqrt(disc)) / (2 * a);
+  const depthScale = Math.max(0.35, b + 2 * a * py);
+  const px = 0.5 + (vx - 0.5) / depthScale;
+  return { x: px, y: py };
+}
 
 export const lastRenderProfile = {
   calls: 0,
@@ -206,7 +353,7 @@ export function screenToPitchPoint(
   clientX: number,
   clientY: number,
   rect: { left: number; top: number; width: number; height: number },
-  camera: { zoom: number; panX: number; panY: number },
+  camera: { zoom: number; panX: number; panY: number; cameraMode?: PitchCameraMode },
 ): { x: number; y: number; worldX: number; worldY: number } {
   const width = Math.max(1, rect.width);
   const height = Math.max(1, rect.height);
@@ -219,11 +366,14 @@ export function screenToPitchPoint(
   const ndcX = screenNormX * 2 - 1;
   const ndcY = 1 - screenNormY * 2;
 
-  const worldX = panX + ndcX * (PITCH_W / (2 * zoom));
-  const worldY = panY + ndcY * (PITCH_H / (2 * zoom));
+  const viewWorldX = panX + ndcX * (PITCH_W / (2 * zoom));
+  const viewWorldY = panY + ndcY * (PITCH_H / (2 * zoom));
 
-  const x = worldX / PITCH_W + 0.5;
-  const y = 0.5 - worldY / PITCH_H;
+  const vx = viewWorldX / PITCH_W + 0.5;
+  const vy = 0.5 - viewWorldY / PITCH_H;
+  const { x, y } = unprojectViewToPitch(vx, vy, camera.cameraMode || "2d");
+  const worldX = (x - 0.5) * PITCH_W;
+  const worldY = (0.5 - y) * PITCH_H;
 
   return { x, y, worldX, worldY };
 }
@@ -370,6 +520,16 @@ function OrthographicPitchComponent({
   homeAttacksRight = true,
   homeColor = "#00e87a",
   awayColor = "#ffb800",
+  homeSecondaryColor = "#ffffff",
+  homeAccentColor = "#e2e8f0",
+  awaySecondaryColor = "#1e293b",
+  awayAccentColor = "#f8fafc",
+  homeShortsColor = "#0f172a",
+  awayShortsColor = "#0f172a",
+  homeSocksColor,
+  awaySocksColor,
+  homeKitPattern = "solid",
+  awayKitPattern = "solid",
   goalkeeperHome = "#f8fafc",
   goalkeeperAway = "#111827",
   selectedKey,
@@ -384,6 +544,9 @@ function OrthographicPitchComponent({
   showPassingLanes = false,
   showShotMap = false,
   shotMarkers = [],
+  offsideSnapshot = null,
+  varReview = null,
+  cardDetail = null,
   clockMinute = null,
   homeScore = null,
   awayScore = null,
@@ -410,6 +573,16 @@ function OrthographicPitchComponent({
     homeAttacksRight,
     homeColor,
     awayColor,
+    homeSecondaryColor,
+    homeAccentColor,
+    awaySecondaryColor,
+    awayAccentColor,
+    homeShortsColor,
+    awayShortsColor,
+    homeSocksColor,
+    awaySocksColor,
+    homeKitPattern,
+    awayKitPattern,
     goalkeeperHome,
     goalkeeperAway,
     selectedKey,
@@ -420,6 +593,9 @@ function OrthographicPitchComponent({
     showPassingLanes,
     showShotMap,
     shotMarkers,
+    offsideSnapshot,
+    varReview,
+    cardDetail,
     clockMinute,
     homeScore,
     awayScore,
@@ -446,6 +622,16 @@ function OrthographicPitchComponent({
     homeAttacksRight,
     homeColor,
     awayColor,
+    homeSecondaryColor,
+    homeAccentColor,
+    awaySecondaryColor,
+    awayAccentColor,
+    homeShortsColor,
+    awayShortsColor,
+    homeSocksColor,
+    awaySocksColor,
+    homeKitPattern,
+    awayKitPattern,
     goalkeeperHome,
     goalkeeperAway,
     selectedKey,
@@ -456,6 +642,9 @@ function OrthographicPitchComponent({
     showPassingLanes,
     showShotMap,
     shotMarkers,
+    offsideSnapshot,
+    varReview,
+    cardDetail,
     clockMinute,
     homeScore,
     awayScore,
@@ -509,14 +698,22 @@ function OrthographicPitchComponent({
     const camera = new THREE.OrthographicCamera(-PITCH_W / 2, PITCH_W / 2, PITCH_H / 2, -PITCH_H / 2, 0.1, 50);
     camera.position.set(0, 0, 10);
 
+    // Floodlit broadcast stadium surround apron behind the pitched turf trapezoid
+    const surroundGeometry = new THREE.PlaneGeometry(PITCH_W * 1.4, PITCH_H * 1.4);
+    const surroundMaterial = new THREE.MeshBasicMaterial({ color: 0x091612, side: THREE.DoubleSide });
+    const surroundMesh = new THREE.Mesh(surroundGeometry, surroundMaterial);
+    surroundMesh.position.set(0, 0, -0.2);
+    scene.add(surroundMesh);
+
     const pitchPixels = rasterPitch(PITCH_TEX_W, PITCH_TEX_H);
     const pitchTexture = dataTexture(pitchPixels, PITCH_TEX_W, PITCH_TEX_H);
-    const pitchGeometry = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
+    const pitchGeometry = new THREE.PlaneGeometry(PITCH_W, PITCH_H, 24, 16);
+    const pitchBasePositions = new Float32Array(pitchGeometry.attributes.position.array as Float32Array);
     const pitchMaterial = new THREE.MeshBasicMaterial({ map: pitchTexture, side: THREE.DoubleSide });
     const pitch = new THREE.Mesh(pitchGeometry, pitchMaterial);
     scene.add(pitch);
 
-    // Dynamic tactical, trajectory & broadcast callout overlay layer
+    // Dynamic tactical, trajectory, VAR offside & broadcast callout overlay layer
     const overlayCanvas = document.createElement("canvas");
     overlayCanvas.width = OVERLAY_W;
     overlayCanvas.height = OVERLAY_H;
@@ -536,7 +733,8 @@ function OrthographicPitchComponent({
     overlayTexture.minFilter = THREE.LinearFilter;
     overlayTexture.magFilter = THREE.LinearFilter;
     overlayTexture.generateMipmaps = false;
-    const overlayGeometry = new THREE.PlaneGeometry(PITCH_W, PITCH_H);
+    const overlayGeometry = new THREE.PlaneGeometry(PITCH_W, PITCH_H, 24, 16);
+    const overlayBasePositions = new Float32Array(overlayGeometry.attributes.position.array as Float32Array);
     const overlayMaterial = new THREE.MeshBasicMaterial({
       map: overlayTexture,
       transparent: true,
@@ -548,9 +746,69 @@ function OrthographicPitchComponent({
     overlayMesh.visible = false;
     scene.add(overlayMesh);
 
+    // 2.5D Dimensional Goal Frames (visible when cameraMode === "2.5d")
+    const goalSegments: number[] = [];
+    const buildGoalBox = (goalX: number, dir: number) => {
+      const top = projectPitchToView(goalX, 0.445, "2.5d");
+      const bot = projectPitchToView(goalX, 0.555, "2.5d");
+      const backTop = projectPitchToView(goalX + dir * 0.022, 0.445, "2.5d");
+      const backBot = projectPitchToView(goalX + dir * 0.022, 0.555, "2.5d");
+      const wx = (vx: number) => (vx - 0.5) * PITCH_W;
+      const wy = (vy: number) => (0.5 - vy) * PITCH_H;
+      const barH = 2.8;
+      // Front posts & crossbar
+      goalSegments.push(
+        wx(top.vx), wy(top.vy), 0.32, wx(top.vx), wy(top.vy) + barH * top.depthScale, 1.9,
+        wx(bot.vx), wy(bot.vy), 0.32, wx(bot.vx), wy(bot.vy) + barH * bot.depthScale, 1.9,
+        wx(top.vx), wy(top.vy) + barH * top.depthScale, 1.9, wx(bot.vx), wy(bot.vy) + barH * bot.depthScale, 1.9,
+        // Top net support & back stanchions
+        wx(top.vx), wy(top.vy) + barH * top.depthScale, 1.9, wx(backTop.vx), wy(backTop.vy) + barH * 0.85 * backTop.depthScale, 1.6,
+        wx(bot.vx), wy(bot.vy) + barH * bot.depthScale, 1.9, wx(backBot.vx), wy(backBot.vy) + barH * 0.85 * backBot.depthScale, 1.6,
+        wx(backTop.vx), wy(backTop.vy) + barH * 0.85 * backTop.depthScale, 1.6, wx(backBot.vx), wy(backBot.vy) + barH * 0.85 * backBot.depthScale, 1.6,
+        wx(backTop.vx), wy(backTop.vy), 0.32, wx(backTop.vx), wy(backTop.vy) + barH * 0.85 * backTop.depthScale, 1.6,
+        wx(backBot.vx), wy(backBot.vy), 0.32, wx(backBot.vx), wy(backBot.vy) + barH * 0.85 * backBot.depthScale, 1.6,
+      );
+    };
+    buildGoalBox(0.024, -1);
+    buildGoalBox(0.976, 1);
+    const goalFrameGeometry = new THREE.BufferGeometry();
+    goalFrameGeometry.setAttribute("position", new THREE.Float32BufferAttribute(goalSegments, 3));
+    const goalFrameMaterial = new THREE.LineBasicMaterial({
+      color: 0xf8fafc,
+      transparent: true,
+      opacity: 0.92,
+    });
+    const goalFrameLines = new THREE.LineSegments(goalFrameGeometry, goalFrameMaterial);
+    goalFrameLines.visible = false;
+    scene.add(goalFrameLines);
+
+    let appliedGeometryMode: PitchCameraMode | null = null;
+    const syncGeometryProjection = (mode: PitchCameraMode) => {
+      if (appliedGeometryMode === mode) return;
+      appliedGeometryMode = mode;
+      const syncMesh = (geom: THREE.PlaneGeometry, base: Float32Array) => {
+        const attr = geom.attributes.position as THREE.BufferAttribute;
+        for (let i = 0; i < base.length; i += 3) {
+          const px = base[i] / PITCH_W + 0.5;
+          const py = 0.5 - base[i + 1] / PITCH_H;
+          const projected = projectPitchToView(px, py, mode);
+          attr.array[i] = (projected.vx - 0.5) * PITCH_W;
+          attr.array[i + 1] = (0.5 - projected.vy) * PITCH_H;
+          attr.array[i + 2] = base[i + 2];
+        }
+        attr.needsUpdate = true;
+      };
+      syncMesh(pitchGeometry, pitchBasePositions);
+      syncMesh(overlayGeometry, overlayBasePositions);
+      goalFrameLines.visible = mode === "2.5d";
+    };
+
     const atlas = buildAtlasPixels();
     const bodyTexture = dataTexture(atlas.body, atlas.width, atlas.height);
     const kitTexture = dataTexture(atlas.kit, atlas.width, atlas.height);
+    const partsTexture = dataTexture(atlas.parts, atlas.width, atlas.height);
+    partsTexture.magFilter = THREE.NearestFilter;
+    partsTexture.minFilter = THREE.NearestFilter;
     const digits = buildDigitPixels();
     const digitTexture = dataTexture(digits.data, digits.width, digits.height);
     digitTexture.magFilter = THREE.NearestFilter;
@@ -630,9 +888,20 @@ function OrthographicPitchComponent({
     scene.add(cueMesh);
 
     const pool: THREE.Mesh[] = [];
+    const shadowPool: THREE.Mesh[] = [];
     const assigned = new Map<string, THREE.Mesh>();
+    const assignedShadow = new Map<string, THREE.Mesh>();
     const free: THREE.Mesh[] = [];
+    const freeShadow: THREE.Mesh[] = [];
     const sharedGeometry = new THREE.PlaneGeometry(4.85, 4.85);
+    const playerShadowGeometry = new THREE.PlaneGeometry(2.7, 1.15);
+    const playerShadowMaterial = new THREE.MeshBasicMaterial({
+      color: 0x020617,
+      transparent: true,
+      opacity: 0.36,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+    });
     for (let index = 0; index < POOL_SIZE; index += 1) {
       const material = new THREE.ShaderMaterial({
         transparent: true,
@@ -641,8 +910,18 @@ function OrthographicPitchComponent({
         uniforms: {
           uBody: { value: bodyTexture },
           uKit: { value: kitTexture },
+          uParts: { value: partsTexture },
           uDigits: { value: digitTexture },
           uKitColor: { value: new THREE.Color("#ffffff") },
+          uSecondaryColor: { value: new THREE.Color("#ffffff") },
+          uAccentColor: { value: new THREE.Color("#e2e8f0") },
+          uShortsColor: { value: new THREE.Color("#0f172a") },
+          uSocksColor: { value: new THREE.Color("#ffffff") },
+          uSkinColor: { value: new THREE.Color("#dfa278") },
+          uHairColor: { value: new THREE.Color("#1c1917") },
+          uBootColor: { value: new THREE.Color("#0f172a") },
+          uKitPattern: { value: 0 },
+          uHasGloves: { value: 0 },
           uOffset: { value: new THREE.Vector2() },
           uRepeat: { value: new THREE.Vector2(1 / ATLAS_COLUMNS, 1 / ATLAS_ROWS) },
           uShirt: { value: 0 },
@@ -655,6 +934,12 @@ function OrthographicPitchComponent({
       scene.add(mesh);
       pool.push(mesh);
       free.push(mesh);
+
+      const shadowMesh = new THREE.Mesh(playerShadowGeometry, playerShadowMaterial);
+      shadowMesh.visible = false;
+      scene.add(shadowMesh);
+      shadowPool.push(shadowMesh);
+      freeShadow.push(shadowMesh);
     }
 
     const motionTracker = new PlayerMotionTracker();
@@ -663,6 +948,7 @@ function OrthographicPitchComponent({
     let heatmapSeeded = false;
     let lastOverlayPaintMs = -1000;
     let lastOverlaySignature = "";
+    let lastFrameMs = 0;
     let previousBall: { x: number; y: number } | null = null;
     // Ball spin / bounce state
     let ballSpinAngle = 0;
@@ -743,13 +1029,17 @@ function OrthographicPitchComponent({
       pitchTexture.needsUpdate = true;
       bodyTexture.needsUpdate = true;
       kitTexture.needsUpdate = true;
+      partsTexture.needsUpdate = true;
       digitTexture.needsUpdate = true;
       ballTexture.needsUpdate = true;
       ringTexture.needsUpdate = true;
       overlayTexture.needsUpdate = true;
+      surroundMaterial.needsUpdate = true;
       pitchMaterial.needsUpdate = true;
       ballMaterial.needsUpdate = true;
       ballShadowMaterial.needsUpdate = true;
+      playerShadowMaterial.needsUpdate = true;
+      goalFrameMaterial.needsUpdate = true;
       ringMaterial.needsUpdate = true;
       carrierRingMaterial.needsUpdate = true;
       overlayMaterial.needsUpdate = true;
@@ -781,10 +1071,15 @@ function OrthographicPitchComponent({
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(resize);
     observer?.observe(host);
 
-    const toWorld = (x: number, y: number) => ({
-      x: (x - 0.5) * PITCH_W,
-      y: (0.5 - y) * PITCH_H,
-    });
+    const toWorld = (x: number, y: number, cameraMode: PitchCameraMode = propsRef.current.cameraMode || "2d") => {
+      const projected = projectPitchToView(x, y, cameraMode);
+      return {
+        x: (projected.vx - 0.5) * PITCH_W,
+        y: (0.5 - projected.vy) * PITCH_H,
+        depthScale: projected.depthScale,
+        zOrder: projected.zOrder,
+      };
+    };
 
     const acquire = (compositeKey: string) => {
       let mesh = assigned.get(compositeKey);
@@ -796,16 +1091,33 @@ function OrthographicPitchComponent({
       return mesh;
     };
 
+    const acquireShadow = (compositeKey: string) => {
+      let mesh = assignedShadow.get(compositeKey);
+      if (mesh) return mesh;
+      mesh = freeShadow.pop();
+      if (!mesh) return null;
+      mesh.visible = true;
+      assignedShadow.set(compositeKey, mesh);
+      return mesh;
+    };
+
     const paint = () => {
       if (stopped) return;
       frameId = window.requestAnimationFrame(paint);
       const frameStart = performance.now();
+      const dtSec =
+        lastFrameMs > 0 ? Math.min(0.1, Math.max(0.001, (frameStart - lastFrameMs) / 1000)) : 1 / 60;
+      lastFrameMs = frameStart;
       const view = cameraRef.current;
       const current = propsRef.current;
+      const activeMode = current.cameraMode || "2d";
+      syncGeometryProjection(activeMode);
 
       // Sample continuous 60fps interpolated frame if provided by Pitch2DView
       const liveSampled = current.sampleFrame ? current.sampleFrame(frameStart) : null;
-      const activePlayers = liveSampled && liveSampled.players.length > 0 ? liveSampled.players : current.players;
+      const rawPlayers = liveSampled && liveSampled.players.length > 0 ? liveSampled.players : current.players;
+      // Dismissed (red-carded) players stay off the pitch
+      const activePlayers = rawPlayers.filter((p) => p.active !== false);
       const activeBall = liveSampled ? liveSampled.ball : current.ball;
       const activeTrajectory = liveSampled
         ? liveSampled.ballTrajectory ?? current.ballTrajectory
@@ -820,8 +1132,11 @@ function OrthographicPitchComponent({
       const activePrimaryId = liveSampled?.primaryPlayerId ?? current.primaryPlayerId;
       const activeSecondaryId = liveSampled?.secondaryPlayerId ?? current.secondaryPlayerId;
       const activeHomeAttacksRight = liveSampled?.homeAttacksRight ?? current.homeAttacksRight ?? true;
+      const activeOffsideSnapshot = liveSampled?.offsideSnapshot ?? current.offsideSnapshot ?? null;
+      const activeVarReview = liveSampled?.varReview ?? current.varReview ?? null;
+      const activeCardDetail = liveSampled?.cardDetail ?? current.cardDetail ?? null;
 
-      // Accumulate real player coordinates into the spatial heatmap grid (with initial formation seed)
+      // Accumulate real player coordinates into the spatial heatmap grid (frame-rate independent via dtSec)
       if (activePlayers.length > 0) {
         if (!heatmapSeeded) {
           heatmapSeeded = true;
@@ -838,13 +1153,15 @@ function OrthographicPitchComponent({
             }
           }
         }
+        const decayFactor = Math.exp(-0.24 * dtSec);
         for (let i = 0; i < GRID_W * GRID_H; i += 1) {
-          heatmapBins[i] *= 0.996;
+          heatmapBins[i] *= decayFactor;
         }
+        const addWeight = 10.5 * dtSec;
         for (const p of activePlayers) {
           const gx = Math.min(GRID_W - 1, Math.max(0, Math.floor(p.x * GRID_W)));
           const gy = Math.min(GRID_H - 1, Math.max(0, Math.floor(p.y * GRID_H)));
-          heatmapBins[gy * GRID_W + gx] = Math.min(12, heatmapBins[gy * GRID_W + gx] + 0.18);
+          heatmapBins[gy * GRID_W + gx] = Math.min(12, heatmapBins[gy * GRID_W + gx] + addWeight);
         }
       }
 
@@ -923,12 +1240,13 @@ function OrthographicPitchComponent({
                 : 1.44
               : current.cameraMode === "2.5d"
                 ? isBoxMoment
-                  ? 1.22
+                  ? 1.24
                   : 1.14
                 : view.zoom;
           const targetZoom = directorActive ? baseZoom * director.zoomMultiplier : baseZoom;
-          // TV cuts are snappier than the ambient drift
-          const zoomEase = director.kind === "goal_cut" ? 0.18 : 0.05;
+          // TV cuts are snappier than the ambient drift (elapsed-time smoothed via dtSec)
+          const zoomRate = director.kind === "goal_cut" ? 11.5 : 3.1;
+          const zoomEase = 1 - Math.exp(-zoomRate * dtSec);
           view.zoom = view.zoom + (targetZoom - view.zoom) * zoomEase;
         }
 
@@ -941,8 +1259,9 @@ function OrthographicPitchComponent({
           directorPull,
           current.cameraMode === "zoom" ? 0.34 : view.follow ? 0.26 : 0.1,
         );
-        const tiltBiasY = current.cameraMode === "2.5d" ? -1.8 : 0;
-        const panEase = director.kind === "goal_cut" ? 0.2 : 0.08;
+        const tiltBiasY = current.cameraMode === "2.5d" ? -1.4 : 0;
+        const panRate = director.kind === "goal_cut" ? 13.0 : 5.0;
+        const panEase = 1 - Math.exp(-panRate * dtSec);
         const nextPanX = camera.position.x + (focus.x * trackStrengthX - camera.position.x) * panEase;
         const nextPanY = camera.position.y + (focus.y * trackStrengthY + tiltBiasY - camera.position.y) * panEase;
         const clamped = clampCameraPan(nextPanX, nextPanY, view.zoom);
@@ -998,29 +1317,67 @@ function OrthographicPitchComponent({
         });
 
         const keeper = Boolean(player.isGoalkeeper) || String(player.role || "").toLowerCase().includes("gk");
-        const kitColor = keeper
-          ? player.side === "home"
+        const isHome = player.side === "home";
+        const baseKitColor = keeper
+          ? isHome
             ? current.goalkeeperHome
             : current.goalkeeperAway
-          : player.side === "home"
+          : isHome
             ? current.homeColor
             : current.awayColor;
+        const fallbackAppearance = deterministicAppearance(key);
+        const resolvedPattern: KitPattern = keeper
+          ? "solid"
+          : normalizeKitPattern(player.kitPattern || (isHome ? current.homeKitPattern : current.awayKitPattern));
+        const resolvedSecondary = keeper
+          ? baseKitColor
+          : isHome
+            ? current.homeSecondaryColor
+            : current.awaySecondaryColor;
+        const resolvedAccent = isHome ? current.homeAccentColor : current.awayAccentColor;
+        const resolvedShorts =
+          player.shortsColor ||
+          (keeper ? baseKitColor : isHome ? current.homeShortsColor : current.awayShortsColor);
+        const resolvedSocks =
+          player.socksColor ||
+          (isHome ? current.homeSocksColor || current.homeColor : current.awaySocksColor || current.awayColor);
+        const buildScale = buildScaleForProfile(player.buildProfile);
 
-        const point = toWorld(player.x, player.y);
+        const point = toWorld(player.x, player.y, activeMode);
+        const liftY = activeMode === "2.5d" ? 0.62 * point.depthScale : 0;
         const mesh = acquire(key);
         if (mesh) {
-          mesh.position.set(point.x, point.y, 1 + (1 - player.y) * 0.05);
+          mesh.position.set(point.x, point.y + liftY, 1 + point.zOrder * 0.55);
+          mesh.scale.set(point.depthScale * buildScale, point.depthScale * buildScale, 1);
           const material = mesh.material as THREE.ShaderMaterial;
           const uv = cellUv(tracked.action, tracked.direction, tracked.frame);
           material.uniforms.uOffset.value.set(uv.offsetX, uv.offsetY);
-          material.uniforms.uKitColor.value.set(kitColor);
+          material.uniforms.uKitColor.value.set(baseKitColor);
+          material.uniforms.uSecondaryColor.value.set(resolvedSecondary);
+          material.uniforms.uAccentColor.value.set(resolvedAccent);
+          material.uniforms.uShortsColor.value.set(resolvedShorts);
+          material.uniforms.uSocksColor.value.set(resolvedSocks);
+          material.uniforms.uSkinColor.value.set(player.skinTone || fallbackAppearance.skinTone);
+          material.uniforms.uHairColor.value.set(player.hairColor || fallbackAppearance.hairColor);
+          material.uniforms.uBootColor.value.set(player.bootColor || fallbackAppearance.bootColor);
+          material.uniforms.uKitPattern.value = KIT_PATTERN_CODE[resolvedPattern] ?? 0;
+          material.uniforms.uHasGloves.value = keeper ? 1 : 0;
           material.uniforms.uShirt.value = player.shirtNumber;
+        }
+        const shadowMesh = acquireShadow(key);
+        if (shadowMesh) {
+          shadowMesh.position.set(
+            point.x + (activeMode === "2.5d" ? 0.35 : 0.15),
+            point.y - 1.38 * point.depthScale,
+            0.62,
+          );
+          shadowMesh.scale.set(point.depthScale * buildScale, point.depthScale * 0.9, 1);
         }
         if (current.selectedKey === key) {
           selectedPlayerObj = player;
           ring.visible = true;
-          ring.position.set(point.x, point.y - 1.2, 0.4);
-          const pulse = 1 + Math.sin(frameStart / 190) * 0.06;
+          ring.position.set(point.x, point.y - 1.2 * point.depthScale, 0.45);
+          const pulse = (1 + Math.sin(frameStart / 190) * 0.06) * point.depthScale;
           ring.scale.set(pulse, pulse, 1);
         }
         if (isCarrier && !carrierPlayerObj) {
@@ -1032,9 +1389,10 @@ function OrthographicPitchComponent({
         ring.visible = false;
       }
       if (carrierPlayerObj) {
-        const cp = toWorld((carrierPlayerObj as PitchPlayer).x, (carrierPlayerObj as PitchPlayer).y);
+        const cp = toWorld((carrierPlayerObj as PitchPlayer).x, (carrierPlayerObj as PitchPlayer).y, activeMode);
         carrierRing.visible = true;
-        carrierRing.position.set(cp.x, cp.y - 1.2, 0.35);
+        carrierRing.position.set(cp.x, cp.y - 1.2 * cp.depthScale, 0.4);
+        carrierRing.scale.set(cp.depthScale, cp.depthScale, 1);
       } else {
         carrierRing.visible = false;
       }
@@ -1044,6 +1402,13 @@ function OrthographicPitchComponent({
           mesh.visible = false;
           assigned.delete(key);
           free.push(mesh);
+        }
+      });
+      assignedShadow.forEach((shadowMesh, key) => {
+        if (!seenKeys.has(key)) {
+          shadowMesh.visible = false;
+          assignedShadow.delete(key);
+          freeShadow.push(shadowMesh);
         }
       });
       motionTracker.prune(seenKeys);
@@ -1077,11 +1442,12 @@ function OrthographicPitchComponent({
         ? activePlayers.find((p) => playerIdentityKey(p) === passGainRing!.key) || null
         : null;
 
-      // Update tactical, trajectory & player callout overlay canvas
+      // Update tactical, trajectory, VAR offside & player callout overlay canvas
       const hasCalloutOrTrajectory = Boolean(
         carrierPlayerObj ||
           selectedPlayerObj ||
           activeEvent ||
+          activeOffsideSnapshot ||
           passGainPlayer ||
           (activeTrajectory && activeTrajectory.length > 1 && resolvedBall?.inFlight),
       );
@@ -1098,7 +1464,11 @@ function OrthographicPitchComponent({
       const activeOverlayCtx = anyOverlayActive ? getOverlayCtx() : null;
       if (anyOverlayActive && activeOverlayCtx) {
         const carrierKey = carrierPlayerObj ? playerIdentityKey(carrierPlayerObj) : "";
-        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.showShotMap ? 1 : 0}:${current.shotMarkers?.length || 0}:${current.selectedKey || ""}:${carrierKey}:${activeEvent || ""}`;
+        const offsideMetrics = activeOffsideSnapshot ? resolveOffsideMetrics(activeOffsideSnapshot) : null;
+        const offsideSig = offsideMetrics
+          ? `${offsideMetrics.attackerLineX.toFixed(3)}:${offsideMetrics.defenderLineX.toFixed(3)}:${offsideMetrics.isOffside ? 1 : 0}`
+          : "";
+        const sig = `${current.showVoronoi ? 1 : 0}:${current.showHeatmap ? 1 : 0}:${current.showTactics ? 1 : 0}:${current.showPassingLanes ? 1 : 0}:${current.showShotMap ? 1 : 0}:${current.shotMarkers?.length || 0}:${current.selectedKey || ""}:${carrierKey}:${activeEvent || ""}:${offsideSig}`;
         if (sig !== lastOverlaySignature || frameStart - lastOverlayPaintMs >= 55) {
           lastOverlaySignature = sig;
           lastOverlayPaintMs = frameStart;
@@ -1109,6 +1479,7 @@ function OrthographicPitchComponent({
             ballTrajectory: activeTrajectory,
             trajectoryAlpha: activeAlpha,
             eventType: activeEvent,
+            offsideSnapshot: activeOffsideSnapshot,
             selectedKey: current.selectedKey || null,
             carrierPlayer: carrierPlayerObj,
             selectedPlayer: selectedPlayerObj,
@@ -1138,16 +1509,20 @@ function OrthographicPitchComponent({
 
       const cue = effectFor(activeEvent);
       if (ballPoint) {
-        const shadowWorld = toWorld(resolvedBall?.shadowX ?? ballPoint.x, resolvedBall?.shadowY ?? ballPoint.y);
-        const point = toWorld(ballPoint.x, ballPoint.y);
+        const shadowWorld = toWorld(
+          resolvedBall?.shadowX ?? ballPoint.x,
+          resolvedBall?.shadowY ?? ballPoint.y,
+          activeMode,
+        );
+        const point = toWorld(ballPoint.x, ballPoint.y, activeMode);
         const elev = resolvedBall?.heightMeters ?? 0;
-        const liftY = Math.min(4.2, elev * 0.92);
-        const scaleBoost = 1 + Math.min(0.32, elev * 0.09);
+        const liftY = Math.min(4.8, elev * (activeMode === "2.5d" ? 1.12 : 0.92)) * point.depthScale;
+        const scaleBoost = (1 + Math.min(0.32, elev * 0.09)) * point.depthScale;
 
         if (elev > 0.14) {
           ballShadowMesh.visible = true;
-          ballShadowMesh.position.set(shadowWorld.x, shadowWorld.y - 0.35, 1.4);
-          const shadowScale = Math.max(0.55, 1 - elev * 0.1);
+          ballShadowMesh.position.set(shadowWorld.x, shadowWorld.y - 0.35 * shadowWorld.depthScale, 1.4);
+          const shadowScale = Math.max(0.55, 1 - elev * 0.1) * shadowWorld.depthScale;
           ballShadowMesh.scale.set(shadowScale, shadowScale, 1);
           ballShadowMaterial.opacity = Math.max(0.18, 0.46 - elev * 0.07);
         } else {
@@ -1158,9 +1533,9 @@ function OrthographicPitchComponent({
         ballMesh.scale.set(scaleBoost, scaleBoost, 1);
         ballMesh.visible = true;
 
-        // Ball spin rotation — rate proportional to speed; faster when aerial
+        // Ball spin rotation — frame-rate independent angular speed
         const spinRate = resolvedBall
-          ? resolvedBall.speedNorm * (resolvedBall.inFlight ? 0.14 : 0.06)
+          ? resolvedBall.speedNorm * (resolvedBall.inFlight ? 8.4 : 3.6) * dtSec
           : 0;
         ballSpinAngle += spinRate;
         ballMesh.rotation.z = ballSpinAngle;
@@ -1168,18 +1543,16 @@ function OrthographicPitchComponent({
         // Ground bounce squash/stretch — trigger when ball transitions from aerial to ground
         const curElev = elev;
         if (lastBallHeightMeters > 0.4 && curElev < 0.12) {
-          // Landing detected — trigger squash pulse
           ballBounceScale = 0.7;
         }
         lastBallHeightMeters = curElev;
-        // Recover bounce scale back to 1 smoothly
         if (ballBounceScale < 1) {
-          ballBounceScale = Math.min(1, ballBounceScale + 0.08);
+          ballBounceScale = Math.min(1, ballBounceScale + 4.8 * dtSec);
           const stretchX = 1 / Math.max(0.6, ballBounceScale);
           ballMesh.scale.set(scaleBoost * stretchX, scaleBoost * ballBounceScale, 1);
         }
 
-        const from = previousBall ? toWorld(previousBall.x, previousBall.y) : point;
+        const from = previousBall ? toWorld(previousBall.x, previousBall.y, activeMode) : point;
         effect.visible = cue === "pass" || cue === "shot" || cue === "goal";
         if (effect.visible) {
           const dx = point.x - from.x;
@@ -1242,8 +1615,19 @@ function OrthographicPitchComponent({
         paintCanvasFallback(fallback, fallbackCanvas, {
           players: activePlayers,
           eventType: activeEvent,
+          cameraMode: activeMode,
           homeColor: current.homeColor,
           awayColor: current.awayColor,
+          homeSecondaryColor: current.homeSecondaryColor,
+          homeAccentColor: current.homeAccentColor,
+          awaySecondaryColor: current.awaySecondaryColor,
+          awayAccentColor: current.awayAccentColor,
+          homeShortsColor: current.homeShortsColor,
+          awayShortsColor: current.awayShortsColor,
+          homeSocksColor: current.homeSocksColor,
+          awaySocksColor: current.awaySocksColor,
+          homeKitPattern: current.homeKitPattern,
+          awayKitPattern: current.awayKitPattern,
           goalkeeperHome: current.goalkeeperHome,
           goalkeeperAway: current.goalkeeperAway,
           selectedKey: current.selectedKey || null,
@@ -1275,10 +1659,13 @@ function OrthographicPitchComponent({
       const activeCanvas = (!contextLost && renderer?.domElement) || fallbackCanvas || host;
       const rect = activeCanvas.getBoundingClientRect();
       if (!rect || rect.width <= 0 || rect.height <= 0) return;
-      const pitchPoint = screenToPitchPoint(clientX, clientY, rect, cameraRef.current);
+      const pitchPoint = screenToPitchPoint(clientX, clientY, rect, {
+        ...cameraRef.current,
+        cameraMode: propsRef.current.cameraMode || "2d",
+      });
       const liveSampled = propsRef.current.sampleFrame ? propsRef.current.sampleFrame(performance.now()) : null;
-      const activePlayers =
-        liveSampled && liveSampled.players.length > 0 ? liveSampled.players : propsRef.current.players;
+      const rawPlayers = liveSampled && liveSampled.players.length > 0 ? liveSampled.players : propsRef.current.players;
+      const activePlayers = rawPlayers.filter((p) => p.active !== false);
       const hit = pickPlayerAtPoint(activePlayers, pitchPoint, cameraRef.current.zoom);
       if (hit) {
         onSelect(playerIdentityKey(hit));
@@ -1382,11 +1769,18 @@ function OrthographicPitchComponent({
       renderer?.domElement.removeEventListener("webglcontextrestored", onContextRestored);
 
       pool.forEach((mesh) => (mesh.material as THREE.Material).dispose());
+      shadowPool.length = 0;
+      playerShadowGeometry.dispose();
+      playerShadowMaterial.dispose();
       sharedGeometry.dispose();
+      surroundGeometry.dispose();
+      surroundMaterial.dispose();
       pitchGeometry.dispose();
       pitchMaterial.dispose();
       overlayGeometry.dispose();
       overlayMaterial.dispose();
+      goalFrameGeometry.dispose();
+      goalFrameMaterial.dispose();
       ballShadowGeometry.dispose();
       ballShadowMaterial.dispose();
       ballGeometry.dispose();
@@ -1404,6 +1798,7 @@ function OrthographicPitchComponent({
       overlayTexture.dispose();
       bodyTexture.dispose();
       kitTexture.dispose();
+      partsTexture.dispose();
       digitTexture.dispose();
       ballTexture.dispose();
       ringTexture.dispose();
@@ -1577,6 +1972,7 @@ function paintTacticalOverlays(
     ballTrajectory?: PitchBall[] | null;
     trajectoryAlpha?: number;
     eventType?: string | null;
+    offsideSnapshot?: OffsideSnapshot | null;
     selectedKey: string | null;
     carrierPlayer: PitchPlayer | null;
     selectedPlayer: PitchPlayer | null;
@@ -2265,7 +2661,11 @@ function paintTacticalOverlays(
           ? "#10b981"
           : m.outcome === "saved"
             ? "#38bdf8"
-            : "#f43f5e";
+            : m.outcome === "woodwork"
+              ? "#f59e0b"
+              : m.outcome === "disallowed"
+                ? "#94a3b8"
+                : "#f43f5e";
 
       ctx.strokeStyle = hexToRgbaString(color, 0.55);
       ctx.lineWidth = m.outcome === "goal" ? 2.2 : 1.3;
@@ -2301,6 +2701,62 @@ function paintTacticalOverlays(
       OVERLAY_W / 2,
       OVERLAY_H - 15,
     );
+    ctx.restore();
+  }
+
+  // 5E. Calibrated VAR Offside Lines (rendered in normalized pitch space so 2.5D warp aligns automatically)
+  if (input.offsideSnapshot) {
+    const metrics = resolveOffsideMetrics(input.offsideSnapshot);
+    const defX = Math.max(0.03, Math.min(0.97, metrics.defenderLineX)) * OVERLAY_W;
+    const attX = Math.max(0.03, Math.min(0.97, metrics.attackerLineX)) * OVERLAY_W;
+    ctx.save();
+
+    if (Math.abs(attX - defX) >= 1) {
+      const leftX = Math.min(defX, attX);
+      const bandW = Math.abs(attX - defX);
+      ctx.fillStyle = metrics.isOffside ? "rgba(239, 68, 68, 0.16)" : "rgba(16, 185, 129, 0.14)";
+      ctx.fillRect(leftX, 14, bandW, OVERLAY_H - 28);
+    }
+
+    // Last second-to-last opponent line (blue)
+    ctx.strokeStyle = "#38bdf8";
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    ctx.moveTo(defX, 14);
+    ctx.lineTo(defX, OVERLAY_H - 14);
+    ctx.stroke();
+
+    // Attacker playable body-part line (red if offside, emerald if onside)
+    ctx.strokeStyle = metrics.isOffside ? "#ef4444" : "#10b981";
+    ctx.lineWidth = 2.2;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(attX, 14);
+    ctx.lineTo(attX, OVERLAY_H - 14);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    const marginText =
+      metrics.marginMeters !== null
+        ? ` (${metrics.marginMeters >= 0 ? "+" : ""}${Math.round(metrics.marginMeters * 100)}cm)`
+        : "";
+    const statusText = `${metrics.isOffside ? "VAR OFFSIDE" : "VAR ONSIDE"} · ${metrics.playableBodyPart.toUpperCase()}${marginText}`;
+    const bannerW = Math.min(240, Math.max(136, statusText.length * 6.5 + 16));
+    const bannerX = Math.max(8, Math.min(OVERLAY_W - bannerW - 8, (attX + defX) * 0.5 - bannerW / 2));
+    drawRoundedBannerBox(
+      ctx,
+      bannerX,
+      20,
+      bannerW,
+      18,
+      "rgba(2, 6, 23, 0.92)",
+      metrics.isOffside ? "rgba(239, 68, 68, 0.9)" : "rgba(16, 185, 129, 0.9)",
+    );
+    ctx.font = "bold 9px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillStyle = metrics.isOffside ? "#fecaca" : "#a7f3d0";
+    safeFillText(ctx, statusText, bannerX + bannerW / 2, 32);
     ctx.restore();
   }
 
@@ -2361,8 +2817,19 @@ function paintCanvasFallback(
   state: {
     players: PitchPlayer[];
     eventType?: string | null;
+    cameraMode?: PitchCameraMode;
     homeColor: string;
     awayColor: string;
+    homeSecondaryColor?: string;
+    homeAccentColor?: string;
+    awaySecondaryColor?: string;
+    awayAccentColor?: string;
+    homeShortsColor?: string;
+    awayShortsColor?: string;
+    homeSocksColor?: string;
+    awaySocksColor?: string;
+    homeKitPattern?: KitPattern;
+    awayKitPattern?: KitPattern;
     goalkeeperHome: string;
     goalkeeperAway: string;
     selectedKey: string | null;
@@ -2376,12 +2843,13 @@ function paintCanvasFallback(
   const width = canvas.width;
   const height = canvas.height;
   ctx.clearRect(0, 0, width, height);
-  ctx.fillStyle = "#0c2418";
+  ctx.fillStyle = "#091612";
   ctx.fillRect(0, 0, width, height);
 
   const zoom = Math.max(0.8, state.camera.zoom || 1);
   const offsetX = -(state.camera.panX / PITCH_W) * width * zoom;
   const offsetY = (state.camera.panY / PITCH_H) * height * zoom;
+  const mode = state.cameraMode || "2d";
 
   ctx.save();
   ctx.translate(width / 2 + offsetX, height / 2 + offsetY);
@@ -2389,7 +2857,36 @@ function paintCanvasFallback(
   ctx.translate(-width / 2, -height / 2);
 
   const pitchBitmap = getCachedPitchBitmap(PITCH_TEX_W, PITCH_TEX_H);
-  if (pitchBitmap) {
+  if (mode === "2.5d") {
+    const stripCount = 16;
+    for (let s = 0; s < stripCount; s += 1) {
+      const y0 = s / stripCount;
+      const y1 = (s + 1) / stripCount;
+      const p0 = projectPitchToView(0, y0, "2.5d");
+      const p1 = projectPitchToView(1, y0, "2.5d");
+      const pNext = projectPitchToView(0, y1, "2.5d");
+      const dx0 = p0.vx * width;
+      const dw = (p1.vx - p0.vx) * width;
+      const dy0 = p0.vy * height;
+      const dh = Math.max(1, (pNext.vy - p0.vy) * height + 0.6);
+      if (pitchBitmap) {
+        ctx.drawImage(
+          pitchBitmap,
+          0,
+          y0 * PITCH_TEX_H,
+          PITCH_TEX_W,
+          PITCH_TEX_H / stripCount,
+          dx0,
+          dy0,
+          dw,
+          dh,
+        );
+      } else {
+        ctx.fillStyle = s % 2 === 0 ? "#1f7a45" : "#1a683b";
+        ctx.fillRect(dx0, dy0, dw, dh);
+      }
+    }
+  } else if (pitchBitmap) {
     ctx.drawImage(pitchBitmap, 0, 0, width, height);
   } else {
     ctx.fillStyle = "#1f7a45";
@@ -2401,31 +2898,51 @@ function paintCanvasFallback(
   }
 
   const ringBitmap = getCachedRingBitmap();
-  state.players.forEach((player) => {
+  const sortedPlayers = [...state.players].sort((a, b) => a.y - b.y);
+  sortedPlayers.forEach((player) => {
+    if (player.active === false) return;
     const key = playerIdentityKey(player);
     const tracked = state.motionTracker.get(key);
     const keeper = Boolean(player.isGoalkeeper) || String(player.role || "").toLowerCase().includes("gk");
+    const isHome = player.side === "home";
     const kitColor = keeper
-      ? player.side === "home"
+      ? isHome
         ? state.goalkeeperHome
         : state.goalkeeperAway
-      : player.side === "home"
+      : isHome
         ? state.homeColor
         : state.awayColor;
-
-    const px = player.x * width;
-    const py = player.y * height;
+    const fallbackApp = deterministicAppearance(key);
+    const projected = projectPitchToView(player.x, player.y, mode);
+    const px = projected.vx * width;
+    const py = projected.vy * height;
+    const scale = projected.depthScale * buildScaleForProfile(player.buildProfile);
 
     if (state.selectedKey === key && ringBitmap) {
-      ctx.drawImage(ringBitmap, px - 18, py - 10, 36, 20);
+      ctx.drawImage(ringBitmap, px - 18 * scale, py - 10 * scale, 36 * scale, 20 * scale);
     }
 
-    paintRig(ctx, px, py, 42, {
+    paintRig(ctx, px, py, Math.round(42 * scale), {
       action: (tracked?.action || animationFor(player, state.eventType)) as RigAction,
       frame: tracked?.frame ?? 0,
       direction: tracked?.direction ?? 0,
       kitColor,
       shirtNumber: player.shirtNumber,
+      appearance: {
+        primaryColor: kitColor,
+        secondaryColor: keeper ? kitColor : isHome ? state.homeSecondaryColor : state.awaySecondaryColor,
+        accentColor: isHome ? state.homeAccentColor : state.awayAccentColor,
+        shortsColor: player.shortsColor || (keeper ? kitColor : isHome ? state.homeShortsColor : state.awayShortsColor),
+        socksColor: player.socksColor || (isHome ? state.homeSocksColor || state.homeColor : state.awaySocksColor || state.awayColor),
+        kitPattern: keeper
+          ? "solid"
+          : normalizeKitPattern(player.kitPattern || (isHome ? state.homeKitPattern : state.awayKitPattern)),
+        skinTone: player.skinTone || fallbackApp.skinTone,
+        hairColor: player.hairColor || fallbackApp.hairColor,
+        bootColor: player.bootColor || fallbackApp.bootColor,
+        isGoalkeeper: keeper,
+        hasGloves: keeper,
+      },
     });
   });
 
@@ -2433,13 +2950,15 @@ function paintCanvasFallback(
     const ballBitmap = getCachedBallBitmap();
     if (ballBitmap) {
       const elev = state.resolvedBall?.heightMeters ?? 0;
-      const bx = state.ballPoint.x * width;
-      const by = state.ballPoint.y * height;
+      const projected = projectPitchToView(state.ballPoint.x, state.ballPoint.y, mode);
+      const bx = projected.vx * width;
+      const by = projected.vy * height;
+      const s = projected.depthScale;
       if (elev > 0.14) {
         ctx.fillStyle = "rgba(3, 7, 18, 0.42)";
-        fillPolyCircle(ctx, bx, by + 3, 7, 3.2, 16);
+        fillPolyCircle(ctx, bx, by + 3 * s, 7 * s, 3.2 * s, 16);
       }
-      ctx.drawImage(ballBitmap, bx - 9, by - 9 - elev * 4.5, 18, 18);
+      ctx.drawImage(ballBitmap, bx - 9 * s, by - 9 * s - elev * 4.5 * s, 18 * s, 18 * s);
     }
   }
 

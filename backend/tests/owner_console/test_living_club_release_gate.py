@@ -527,7 +527,7 @@ def test_alembic_fresh_and_seeded_upgrade_preserves_legacy_records(tmp_path: Pat
 
     script = ScriptDirectory.from_config(fresh_cfg)
     heads = script.get_heads()
-    assert heads == ["20261114_0249_merge_institution_and_fan_coin_revisions"]
+    assert heads == ["20261115_0250_academy_first_team_minutes"]
 
     command.upgrade(fresh_cfg, "head")
     fresh_eng = create_engine(fresh_url)

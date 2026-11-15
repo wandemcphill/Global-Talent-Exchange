@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from hashlib import md5
 from math import cos, hypot, sin, tau
 from typing import Any
@@ -15,6 +16,7 @@ _LINE_Y = {
     5: (14.0, 32.0, 50.0, 68.0, 86.0),
 }
 _LINE_X = {3: (24.0, 50.0, 76.0), 4: (20.0, 38.0, 62.0, 80.0)}
+_UNSET: Any = object()
 
 
 def _clamp(value: float, low: float = 0.0, high: float = 100.0) -> float:
@@ -26,6 +28,7 @@ def _smoothstep(value: float) -> float:
     return value * value * (3.0 - (2.0 * value))
 
 
+@lru_cache(maxsize=4096)
 def _hash_phase(player_id: str) -> tuple[float, float]:
     digest = md5(player_id.encode("utf-8"), usedforsecurity=False).digest()
     return (
@@ -34,63 +37,131 @@ def _hash_phase(player_id: str) -> tuple[float, float]:
     )
 
 
-def _line_sizes(runtime: Any) -> list[int]:
-    outfield = runtime.lineup[1:]
-    total = len(outfield)
+_SKIN_TONES = ("#F3CBB2", "#E5B493", "#D29873", "#B97D56", "#8F5A3B", "#663B24")
+_HAIR_STYLES = ("short", "fade", "curly", "buzz", "parted", "afro", "braids")
+_HAIR_COLORS = ("#171412", "#2D1E16", "#593A22", "#8E6334", "#C49E5B", "#0E0E10")
+_BUILD_PROFILES = ("lean", "athletic", "stocky")
+_BOOT_COLORS = ("#111827", "#F8FAFC", "#EF4444", "#38BDF8", "#FACC15", "#FB7185", "#34D399")
+
+
+@lru_cache(maxsize=4096)
+def _player_appearance_cached(
+    player_id: str,
+    role_val: str,
+    skin_tone: str | None,
+    hair_style: str | None,
+    hair_color: str | None,
+    build_profile: str | None,
+    height_cm: int | None,
+    boot_color: str | None,
+) -> dict[str, Any]:
+    digest = md5(player_id.encode("utf-8"), usedforsecurity=False).digest()
+    resolved_skin = skin_tone or _SKIN_TONES[digest[0] % len(_SKIN_TONES)]
+    resolved_hair_style = hair_style or _HAIR_STYLES[digest[1] % len(_HAIR_STYLES)]
+    resolved_hair_color = hair_color or _HAIR_COLORS[digest[2] % len(_HAIR_COLORS)]
+    resolved_build = build_profile or (
+        "athletic" if role_val == "GK" else _BUILD_PROFILES[digest[3] % len(_BUILD_PROFILES)]
+    )
+    resolved_height = height_cm or (186 + (digest[4] % 10) if role_val == "GK" else 171 + (digest[4] % 22))
+    resolved_boot = boot_color or _BOOT_COLORS[digest[5] % len(_BOOT_COLORS)]
+    return {
+        "skin_tone": str(resolved_skin),
+        "hair_style": str(resolved_hair_style),
+        "hair_color": str(resolved_hair_color),
+        "build_profile": str(resolved_build),
+        "height_cm": int(resolved_height),
+        "boot_color": str(resolved_boot),
+    }
+
+
+def _player_appearance(player: Any) -> dict[str, Any]:
+    player_id = str(getattr(player, "player_id", "") or "player")
+    role_obj = getattr(player, "role", None)
+    role_val = str(getattr(role_obj, "value", role_obj) or "MF").upper()
+    return _player_appearance_cached(
+        player_id,
+        role_val,
+        getattr(player, "skin_tone", None),
+        getattr(player, "hair_style", None),
+        getattr(player, "hair_color", None),
+        getattr(player, "build_profile", None),
+        getattr(player, "height_cm", None),
+        getattr(player, "boot_color", None),
+    )
+
+
+@lru_cache(maxsize=512)
+def _line_sizes_cached(
+    formation: str,
+    roles: tuple[Any, ...],
+) -> tuple[int, ...]:
+    total = len(roles)
     if total <= 0:
-        return []
+        return ()
 
     try:
-        values = [max(0, int(part)) for part in str(runtime.current_formation).split("-")]
+        values = [max(0, int(part)) for part in str(formation).split("-")]
     except ValueError:
         values = []
     if values and sum(values) == total and all(value > 0 for value in values):
-        return values
+        return tuple(values)
 
-    defenders = sum(runtime.players_by_id[item].role is PlayerRole.DEFENDER for item in outfield)
-    midfielders = sum(runtime.players_by_id[item].role is PlayerRole.MIDFIELDER for item in outfield)
-    forwards = sum(runtime.players_by_id[item].role is PlayerRole.FORWARD for item in outfield)
+    defenders = sum(role is PlayerRole.DEFENDER for role in roles)
+    midfielders = sum(role is PlayerRole.MIDFIELDER for role in roles)
+    forwards = sum(role is PlayerRole.FORWARD for role in roles)
     role_sizes = [size for size in (defenders, midfielders, forwards) if size > 0]
     if role_sizes and sum(role_sizes) == total:
-        return role_sizes
+        return tuple(role_sizes)
 
     defaults = {
-        1: [1],
-        2: [1, 1],
-        3: [1, 1, 1],
-        4: [2, 1, 1],
-        5: [2, 2, 1],
-        6: [3, 2, 1],
-        7: [3, 2, 2],
-        8: [3, 3, 2],
-        9: [4, 3, 2],
-        10: [4, 3, 3],
-        11: [4, 4, 3],
+        1: (1,),
+        2: (1, 1),
+        3: (1, 1, 1),
+        4: (2, 1, 1),
+        5: (2, 2, 1),
+        6: (3, 2, 1),
+        7: (3, 2, 2),
+        8: (3, 3, 2),
+        9: (4, 3, 2),
+        10: (4, 3, 3),
+        11: (4, 4, 3),
     }
     if total in defaults:
         return defaults[total]
 
     if total == 1:
-        return [1]
+        return (1,)
     defenders = min(4, max(1, total - 2))
     forwards = min(3, max(1, total - defenders - 1))
     midfielders = total - defenders - forwards
     if midfielders < 1:
         midfielders = 1
         defenders = max(1, total - forwards - midfielders)
-    return [defenders, midfielders, forwards]
+    return (defenders, midfielders, forwards)
 
 
-def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
-    if not runtime.lineup:
+def _line_sizes(runtime: Any) -> list[int]:
+    outfield = runtime.lineup[1:]
+    if not outfield:
+        return []
+    roles = tuple(runtime.players_by_id[item].role for item in outfield)
+    return list(_line_sizes_cached(str(runtime.current_formation), roles))
+
+
+@lru_cache(maxsize=512)
+def _anchors_tuples(
+    lineup: tuple[str, ...],
+    sizes: tuple[int, ...],
+    defensive_line: float,
+    width: float,
+    attacks_right: bool,
+) -> dict[str, tuple[float, float]]:
+    if not lineup:
         return {}
-    sizes = _line_sizes(runtime)
     base_x = _LINE_X.get(len(sizes))
     if base_x is None:
         gap = 58.0 / max(1, len(sizes) - 1)
         base_x = tuple(21.0 + (gap * index) for index in range(len(sizes)))
-    defensive_line = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
-    width = float(getattr(runtime, "width", 50.0) or 50.0)
     line_shift = (defensive_line - 50.0) * 0.28
     adjusted_x = []
     for i, x in enumerate(base_x):
@@ -104,35 +175,60 @@ def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
     base_x = tuple(adjusted_x)
     if not attacks_right:
         base_x = tuple(100.0 - value for value in base_x)
-    result = {runtime.lineup[0]: {"x": 8.0 if attacks_right else 92.0, "y": 50.0}}
+    result: dict[str, tuple[float, float]] = {lineup[0]: (8.0 if attacks_right else 92.0, 50.0)}
     cursor = 0
-    outfield = runtime.lineup[1:]
+    outfield = lineup[1:]
     width_factor = 1.0 + ((width - 50.0) * 0.008)
     for group_index, size in enumerate(sizes):
         ys = _LINE_Y.get(size, tuple(10.0 + ((i + 1) * (80.0 / (size + 1))) for i in range(size)))
         if width_factor != 1.0:
             ys = tuple(_clamp(50.0 + (y - 50.0) * width_factor, 8.0, 92.0) for y in ys)
+        bx = float(base_x[group_index])
         for local_index in range(size):
-            result[outfield[cursor + local_index]] = {"x": float(base_x[group_index]), "y": float(ys[local_index])}
+            result[outfield[cursor + local_index]] = (bx, float(ys[local_index]))
         cursor += size
     return result
 
 
-def _line(runtime: Any, player_id: str) -> str:
-    if runtime.lineup and runtime.lineup[0] == player_id:
-        return "goalkeeper"
+def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
+    if not runtime.lineup:
+        return {}
     outfield = runtime.lineup[1:]
+    roles = tuple(runtime.players_by_id[item].role for item in outfield)
+    sizes = _line_sizes_cached(str(runtime.current_formation), roles)
+    defensive_line = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
+    width = float(getattr(runtime, "width", 50.0) or 50.0)
+    raw = _anchors_tuples(tuple(runtime.lineup), sizes, defensive_line, width, bool(attacks_right))
+    return {pid: {"x": pt[0], "y": pt[1]} for pid, pt in raw.items()}
+
+
+@lru_cache(maxsize=512)
+def _line_map_cached(lineup: tuple[str, ...], sizes: tuple[int, ...]) -> dict[str, str]:
+    if not lineup:
+        return {}
+    mapping: dict[str, str] = {lineup[0]: "goalkeeper"}
+    outfield = lineup[1:]
     cursor = 0
-    sizes = _line_sizes(runtime)
+    num_sizes = len(sizes)
     for index, size in enumerate(sizes):
-        if player_id in outfield[cursor : cursor + size]:
-            if index == 0:
-                return "defense"
-            if index == len(sizes) - 1:
-                return "attack"
-            return "midfield"
+        label = "defense" if index == 0 else ("attack" if index == num_sizes - 1 else "midfield")
+        for pid in outfield[cursor : cursor + size]:
+            mapping[pid] = label
         cursor += size
-    return "midfield"
+    return mapping
+
+
+def _line_map(runtime: Any) -> dict[str, str]:
+    if not runtime.lineup:
+        return {}
+    outfield = runtime.lineup[1:]
+    roles = tuple(runtime.players_by_id[item].role for item in outfield)
+    sizes = _line_sizes_cached(str(runtime.current_formation), roles)
+    return _line_map_cached(tuple(runtime.lineup), sizes)
+
+
+def _line(runtime: Any, player_id: str) -> str:
+    return _line_map(runtime).get(player_id, "midfield")
 
 
 def _side_attacks_right(side: MatchViewerSide, home_attacks_right: bool) -> bool:
@@ -344,11 +440,18 @@ def _player_position(
     possession_side: MatchViewerSide,
     home_attacks_right: bool,
     phase_depth: float | None = None,
+    precomputed_anchors: dict[str, dict[str, float]] | None = None,
+    precomputed_line_map: dict[str, str] | None = None,
+    precomputed_carrier_id: Any = _UNSET,
+    precomputed_support_id: Any = _UNSET,
+    precomputed_presser_id: Any = _UNSET,
 ) -> tuple[dict[str, float], MatchViewerPlayerState, bool]:
     attacks_right = _side_attacks_right(runtime.view.side, home_attacks_right)
-    anchor = _anchors(runtime, attacks_right)[player.player_id]
+    anchors = precomputed_anchors if precomputed_anchors is not None else _anchors(runtime, attacks_right)
+    anchor = anchors[player.player_id]
     position = dict(anchor)
-    line = _line(runtime, player.player_id)
+    line_map = precomputed_line_map if precomputed_line_map is not None else _line_map(runtime)
+    line = line_map.get(player.player_id, "midfield")
     highlighted = bool(active_event is not None and player.player_id in active_event.view.highlighted_player_ids)
     state = MatchViewerPlayerState.IDLE
     event_side = getattr(active_event, "team_side", None) if active_event is not None else None
@@ -476,6 +579,11 @@ def _player_position(
         attacks_right=attacks_right,
         phase_depth=phase_depth,
         active_event=active_event,
+        precomputed_carrier_id=precomputed_carrier_id,
+        precomputed_support_id=precomputed_support_id,
+        precomputed_presser_id=precomputed_presser_id,
+        precomputed_anchors=anchors,
+        precomputed_line_map=line_map,
     )
     _apply_restart(
         position,
@@ -491,12 +599,19 @@ def _player_position(
 
 
 def _nearest_on_line(
-    runtime: Any, attacks_right: bool, ball: dict[str, float], lines: set[str], exclude: str | None
+    runtime: Any,
+    attacks_right: bool,
+    ball: dict[str, float],
+    lines: set[str],
+    exclude: str | None,
+    precomputed_anchors: dict[str, dict[str, float]] | None = None,
+    precomputed_line_map: dict[str, str] | None = None,
 ) -> str | None:
-    anchors = _anchors(runtime, attacks_right)
+    anchors = precomputed_anchors if precomputed_anchors is not None else _anchors(runtime, attacks_right)
+    line_map = precomputed_line_map if precomputed_line_map is not None else _line_map(runtime)
     ranked: list[tuple[float, str]] = []
     for player_id in runtime.lineup:
-        if player_id == exclude or _line(runtime, player_id) not in lines:
+        if player_id == exclude or line_map.get(player_id, "midfield") not in lines:
             continue
         anchor = anchors[player_id]
         channel_y = anchor["y"] * 0.74 + ball["y"] * 0.26
@@ -509,14 +624,25 @@ def _nearest_on_line(
 
 
 def _support_id(
-    runtime: Any, attacks_right: bool, ball: dict[str, float], direction: float, carrier_id: str | None
+    runtime: Any,
+    attacks_right: bool,
+    ball: dict[str, float],
+    direction: float,
+    carrier_id: str | None,
+    precomputed_anchors: dict[str, dict[str, float]] | None = None,
+    precomputed_line_map: dict[str, str] | None = None,
 ) -> str | None:
-    anchors = _anchors(runtime, attacks_right)
+    anchors = precomputed_anchors if precomputed_anchors is not None else _anchors(runtime, attacks_right)
+    line_map = precomputed_line_map if precomputed_line_map is not None else _line_map(runtime)
     attackers = [
-        player_id for player_id in runtime.lineup if _line(runtime, player_id) == "attack" and player_id != carrier_id
+        player_id
+        for player_id in runtime.lineup
+        if line_map.get(player_id, "midfield") == "attack" and player_id != carrier_id
     ]
     pool = attackers or [
-        player_id for player_id in runtime.lineup if _line(runtime, player_id) == "midfield" and player_id != carrier_id
+        player_id
+        for player_id in runtime.lineup
+        if line_map.get(player_id, "midfield") == "midfield" and player_id != carrier_id
     ]
     if not pool:
         return None
@@ -542,17 +668,32 @@ def _engage_around_the_ball(
     attacks_right: bool,
     phase_depth: float | None,
     active_event: Any,
+    precomputed_carrier_id: Any = _UNSET,
+    precomputed_support_id: Any = _UNSET,
+    precomputed_presser_id: Any = _UNSET,
+    precomputed_anchors: dict[str, dict[str, float]] | None = None,
+    precomputed_line_map: dict[str, str] | None = None,
 ) -> MatchViewerPlayerState:
     """Put the carrier on the ball, send one runner, and step one opponent out."""
     if ball_point is None or phase_depth is None or active_event is not None:
         return state
-    carrier_id = _carrier_id(runtime, attacks_right, phase_depth) if in_possession else None
+    carrier_id = (
+        precomputed_carrier_id
+        if precomputed_carrier_id is not _UNSET
+        else (_carrier_id(runtime, attacks_right, phase_depth) if in_possession else None)
+    )
     if in_possession and player.player_id == carrier_id:
         position["x"] = ball_point["x"]
         position["y"] = ball_point["y"]
         return state
     if in_possession:
-        support_id = _support_id(runtime, attacks_right, ball_point, direction, carrier_id)
+        support_id = (
+            precomputed_support_id
+            if precomputed_support_id is not _UNSET
+            else _support_id(
+                runtime, attacks_right, ball_point, direction, carrier_id, precomputed_anchors, precomputed_line_map
+            )
+        )
         if player.player_id == support_id:
             position["x"] += 6.2 * direction
             position["y"] += (ball_point["y"] - position["y"]) * 0.38
@@ -561,8 +702,17 @@ def _engage_around_the_ball(
     if line == "goalkeeper":
         position["y"] += (ball_point["y"] - position["y"]) * 0.4
         return state
-    presser_id = _nearest_on_line(runtime, attacks_right, ball_point, {"midfield"}, None) or _nearest_on_line(
-        runtime, attacks_right, ball_point, {"attack"}, None
+    presser_id = (
+        precomputed_presser_id
+        if precomputed_presser_id is not _UNSET
+        else (
+            _nearest_on_line(
+                runtime, attacks_right, ball_point, {"midfield"}, None, precomputed_anchors, precomputed_line_map
+            )
+            or _nearest_on_line(
+                runtime, attacks_right, ball_point, {"attack"}, None, precomputed_anchors, precomputed_line_map
+            )
+        )
     )
     if player.player_id != presser_id:
         return state
@@ -682,9 +832,18 @@ def _apply_restart(
     position["y"] += (_clamp(desired["y"], 4.0, 96.0) - position["y"]) * blend
 
 
-def _velocity_for_player(runtime: Any, player: Any, **kwargs: Any) -> tuple[float, float]:
+def _velocity_for_player(
+    runtime: Any,
+    player: Any,
+    *,
+    current_position: dict[str, float] | None = None,
+    **kwargs: Any,
+) -> tuple[float, float]:
     now = kwargs["time_seconds"]
-    current, _, _ = _player_position(runtime, player, **kwargs)
+    if current_position is not None:
+        current = current_position
+    else:
+        current, _, _ = _player_position(runtime, player, **kwargs)
     previous_kwargs = dict(kwargs)
     previous_kwargs["time_seconds"] = max(0.0, now - 0.08)
     previous, _, _ = _player_position(runtime, player, **previous_kwargs)
@@ -730,10 +889,25 @@ def build_player_payloads(
     for runtime in (home_runtime, away_runtime):
         attacks_right = _side_attacks_right(runtime.view.side, home_attacks_right)
         anchors = _anchors(runtime, attacks_right)
+        line_map = _line_map(runtime)
+        in_possession = runtime.view.side is possession_side
         carrier_id = None
-        if phase_depth is not None and active_event is None and runtime.view.side is possession_side:
-            carrier_id = _carrier_id(runtime, attacks_right, phase_depth)
-        direction = 1.0 if _side_attacks_right(possession_side, home_attacks_right) else -1.0
+        support_id = None
+        presser_id = None
+        attacking_side = (
+            getattr(active_event, "team_side", None) if active_event is not None else None
+        ) or possession_side
+        direction = 1.0 if _side_attacks_right(attacking_side, home_attacks_right) else -1.0
+        possession_dir = 1.0 if _side_attacks_right(possession_side, home_attacks_right) else -1.0
+        if phase_depth is not None and active_event is None:
+            depth_ball = _ball_from_depth(_side_attacks_right(possession_side, home_attacks_right), phase_depth)
+            if in_possession:
+                carrier_id = _carrier_id(runtime, attacks_right, phase_depth)
+                support_id = _support_id(runtime, attacks_right, depth_ball, direction, carrier_id, anchors, line_map)
+            else:
+                presser_id = _nearest_on_line(
+                    runtime, attacks_right, depth_ball, {"midfield"}, None, anchors, line_map
+                ) or _nearest_on_line(runtime, attacks_right, depth_ball, {"attack"}, None, anchors, line_map)
         for player_id in runtime.lineup:
             player = runtime.players_by_id[player_id]
             position, state, highlighted = _player_position(
@@ -746,10 +920,16 @@ def build_player_payloads(
                 possession_side=possession_side,
                 home_attacks_right=home_attacks_right,
                 phase_depth=phase_depth,
+                precomputed_anchors=anchors,
+                precomputed_line_map=line_map,
+                precomputed_carrier_id=carrier_id,
+                precomputed_support_id=support_id,
+                precomputed_presser_id=presser_id,
             )
             vx, vy = _velocity_for_player(
                 runtime,
                 player,
+                current_position=position,
                 time_seconds=time_seconds,
                 active_event=active_event,
                 stage=stage,
@@ -757,13 +937,19 @@ def build_player_payloads(
                 possession_side=possession_side,
                 home_attacks_right=home_attacks_right,
                 phase_depth=phase_depth,
+                precomputed_anchors=anchors,
+                precomputed_line_map=line_map,
+                precomputed_carrier_id=carrier_id,
+                precomputed_support_id=support_id,
+                precomputed_presser_id=presser_id,
             )
-            line = _line(runtime, player_id)
+            line = line_map.get(player_id, "midfield")
             if phase_depth is not None and active_event is None and line != "goalkeeper" and hypot(vx, vy) < 0.2:
-                moving = 1.4 if runtime.view.side is possession_side else -0.7
-                vx = moving * direction
+                moving = 1.4 if in_possession else -0.7
+                vx = moving * possession_dir
                 vy = 0.0
             speed_ratio = _clamp(hypot(vx, vy) / 8.5, 0.0, 1.0)
+            appearance = _player_appearance(player)
             payloads.append(
                 {
                     "player_id": player.player_id,
@@ -772,14 +958,14 @@ def build_player_payloads(
                     "shirt_number": player.shirt_number,
                     "label": player.label,
                     "role": player.role,
-                    "line": _line(runtime, player_id),
+                    "line": line,
                     "state": state,
                     "active": True,
                     "highlighted": highlighted,
                     "position": position,
-                    "anchor_position": anchors[player_id],
+                    "anchor_position": dict(anchors[player_id]),
                     "animation_state": _animation_for_player(
-                        player, _line(runtime, player_id), state, speed_ratio, active_event, time_seconds
+                        player, line, state, speed_ratio, active_event, time_seconds
                     ),
                     "speed_ratio": speed_ratio,
                     "blend_factor": _smoothstep(speed_ratio),
@@ -794,6 +980,7 @@ def build_player_payloads(
                     ),
                     "facing": {"x": 1.0 if vx >= 0 else -1.0, "y": 0.0},
                     "velocity": {"x": round(vx, 3), "y": round(vy, 3)},
+                    **appearance,
                 }
             )
     return payloads

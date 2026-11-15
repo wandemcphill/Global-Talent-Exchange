@@ -99,21 +99,13 @@ def set_tactics(
     current_user: User = Depends(get_current_user),
 ) -> LiveMatchSessionView:
     try:
-        side = engine.resolve_owned_side(match_id=match_id, user_id=current_user.id, side=payload.side)
-        return _view(
-            engine.set_tactics(
-                match_id=match_id,
-                side=side,
-                formation=payload.formation,
-                mentality=payload.mentality,
-                pressing=payload.pressing,
-                tempo=payload.tempo,
-            ),
-            user_id=current_user.id,
-        )
+        engine.get(match_id)
     except LiveMatchError as exc:
-        _raise(exc)
-        raise
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Owners cannot intervene in live match tactics; the appointed First-Team Manager holds exclusive matchday authority.",
+    )
 
 
 @router.post("/sessions/{match_id}/halftime/ready", response_model=LiveMatchSessionView)

@@ -200,6 +200,9 @@ class MatchCompetitionContextInput(CommonSchema):
     requires_winner: bool | None = None
     extra_time: bool = False
     halftime_duration_seconds: int | None = Field(default=None, ge=60, le=120)
+    approved_shorter_presentation: bool = False
+    designated_major_knockout: bool = False
+    competition_allows_corner_var: bool = False
 
 
 class MatchTacticalAdjustmentInput(CommonSchema):

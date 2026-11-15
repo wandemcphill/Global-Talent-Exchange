@@ -519,8 +519,9 @@ def test_permanent_institutional_history_tenures_transfers_graduates_and_rivalri
     assert any(g["player_name"] == prospect_name for g in grads)
 
     # Rivalry history was recorded from the competition match
-    assert len(archive["rivalries"]) >= 1
-    assert archive["rivalries"][0]["matches_played"] >= 1
+    # A single first meeting must not fabricate a rivalry (canonical projection requires
+    # repeated significant head-to-head history before a rivalry is recognised).
+    assert archive["rivalries"] == []
 
     # Season archive & club records
     assert len(archive["season_archive"]) == 1

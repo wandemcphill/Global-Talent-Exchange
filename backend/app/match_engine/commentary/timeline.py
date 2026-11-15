@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from app.config.competition_constants import (
-    FINAL_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MAX_MINUTES,
-    MATCH_PRESENTATION_MIN_MINUTES,
 )
 from app.match_engine.schemas import MatchEventTimelineView, MatchEventView, MatchPlayerReferenceView
 from app.match_engine.simulation.models import MatchEventType, SimulationResult
+from app.match_engine.simulation.offside_var import (
+    resolve_assigned_broadcast_duration,
+    resolve_match_broadcast_category,
+)
 
 
 class MatchCommentaryTimelineGenerator:
@@ -52,9 +54,17 @@ class MatchCommentaryTimelineGenerator:
         )
 
     def _resolve_presentation_duration(self, result: SimulationResult) -> int:
-        minimum = MATCH_PRESENTATION_MIN_MINUTES * 60
-        standard_maximum = MATCH_PRESENTATION_MAX_MINUTES * 60
-        final_maximum = FINAL_PRESENTATION_MAX_MINUTES * 60
+        kickoff_meta = dict(result.events[0].metadata) if result.events else {}
+        competition_type = getattr(
+            getattr(result, "competition_type", None), "value", getattr(result, "competition_type", None)
+        )
+        category = resolve_match_broadcast_category(
+            is_final=bool(getattr(result, "is_final", False)),
+            stage=getattr(result, "stage", None),
+            competition_type=str(competition_type) if competition_type is not None else None,
+            approved_shorter_presentation=bool(kickoff_meta.get("approved_shorter_presentation", False)),
+            metadata=kickoff_meta,
+        )
         high_impact_events = sum(
             event.event_type
             in {
@@ -65,6 +75,7 @@ class MatchCommentaryTimelineGenerator:
                 MatchEventType.PENALTY_MISS,
                 MatchEventType.PENALTY_SCORED,
                 MatchEventType.PENALTY_MISSED,
+                MatchEventType.PENALTY_AWARDED,
                 MatchEventType.DOUBLE_SAVE,
                 MatchEventType.GOALKEEPER_SAVE,
                 MatchEventType.WOODWORK,
@@ -76,21 +87,19 @@ class MatchCommentaryTimelineGenerator:
             }
             for event in result.events
         )
-        penalty_events = sum(
-            event.event_type
-            in {
-                MatchEventType.PENALTY_GOAL,
-                MatchEventType.PENALTY_MISS,
-                MatchEventType.PENALTY_SCORED,
-                MatchEventType.PENALTY_MISSED,
-            }
+        var_review_count = sum(
+            1
             for event in result.events
+            if isinstance(event.metadata, dict)
+            and isinstance(event.metadata.get("var_review"), dict)
+            and bool(event.metadata["var_review"].get("formal_review_initiated"))
         )
-        duration = minimum + (len(result.events) * 6) + (high_impact_events * 5) + (penalty_events * 3)
-        maximum = final_maximum if result.is_final else standard_maximum
-        if result.is_final and duration <= standard_maximum and len(result.events) >= 16:
-            duration = standard_maximum + ((len(result.events) - 15) * 8)
-        return max(minimum, min(maximum, duration))
+        return resolve_assigned_broadcast_duration(
+            category,
+            event_count=len(result.events),
+            high_impact_count=high_impact_events,
+            var_review_count=var_review_count,
+        )
 
     def _resolve_presentation_seconds(self, result: SimulationResult, duration: int) -> list[int]:
         events = list(result.events)
@@ -198,7 +207,7 @@ class MatchCommentaryTimelineGenerator:
             if event.metadata.get("reviewable") and event.metadata.get("review_decision") == "confirmed":
                 return (
                     f"Goal for {event.team_name}. VAR checks the phase and confirms "
-                    f"{event.primary_player_name}'s finish."
+                    f"{event.primary_player_name}'s finish. The score is {event.home_score}-{event.away_score}."
                 )
             return self._attack_call(event, result, outcome="goal", family_phrase=family_phrase)
         if event.event_type is MatchEventType.YELLOW_CARD:

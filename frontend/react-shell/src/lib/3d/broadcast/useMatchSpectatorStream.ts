@@ -69,6 +69,7 @@ export interface UseMatchSpectatorStreamOptions {
 export interface UseMatchSpectatorStreamResult {
   connectionStatus: SpectatorConnectionStatus;
   viewerCount: number;
+  matchMetadata: Record<string, unknown>;
   lastFrame: SpectatorSafeFrameView | null;
   recentEvents: SpectatorSafeEventView[];
   latestScore: SpectatorScoreUpdate | null;
@@ -121,6 +122,7 @@ export function useMatchSpectatorStream(
 
   const [connectionStatus, setConnectionStatus] = useState<SpectatorConnectionStatus>("disconnected");
   const [viewerCount, setViewerCount] = useState<number>(0);
+  const [matchMetadata, setMatchMetadata] = useState<Record<string, unknown>>({});
   const [lastFrame, setLastFrame] = useState<SpectatorSafeFrameView | null>(null);
   const [recentEvents, setRecentEvents] = useState<SpectatorSafeEventView[]>([]);
   const [latestScore, setLatestScore] = useState<SpectatorScoreUpdate | null>(null);
@@ -225,6 +227,29 @@ export function useMatchSpectatorStream(
     }
   }, []);
 
+  const connectRef = useRef<(fromManualReconnect?: boolean) => Promise<void>>(async () => {});
+
+  const scheduleReconnectOrFail = useCallback(() => {
+    if (manualDisconnectRef.current) {
+      setConnectionStatus("disconnected");
+      return;
+    }
+    isReconnectingRef.current = true;
+    attemptsRef.current += 1;
+    setReconnectAttempts(attemptsRef.current);
+
+    if (attemptsRef.current <= maxReconnectAttempts) {
+      setConnectionStatus("reconnecting");
+      const delayMs = Math.min(15000, Math.pow(2, attemptsRef.current - 1) * 1000);
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        void connectRef.current(false);
+      }, delayMs);
+    } else {
+      setConnectionStatus("error");
+    }
+  }, [maxReconnectAttempts]);
+
   // Connect function with async single-use ticket acquisition & concurrency guard
   const connect = useCallback(
     async (fromManualReconnect: boolean = false) => {
@@ -268,8 +293,8 @@ export function useMatchSpectatorStream(
 
           const trimmedTicket = typeof issued === "string" ? issued.trim() : "";
           if (!trimmedTicket || consumedTicketsRef.current.has(trimmedTicket)) {
-            // Do not silently downgrade failed or replayed ticket to guest authentication
-            setConnectionStatus("error");
+            // Do not silently downgrade failed or replayed ticket to guest authentication; recover via backoff
+            scheduleReconnectOrFail();
             return;
           }
           consumedTicketsRef.current.add(trimmedTicket);
@@ -281,8 +306,8 @@ export function useMatchSpectatorStream(
           if (opId !== connectSeqRef.current || manualDisconnectRef.current) {
             return;
           }
-          // Failed authenticated ticket request must fail closed without guest downgrade
-          setConnectionStatus("error");
+          // Failed authenticated ticket request must fail closed without guest downgrade and retry via backoff
+          scheduleReconnectOrFail();
           return;
         }
       }
@@ -334,6 +359,12 @@ export function useMatchSpectatorStream(
             }
 
             if (data.type === "snapshot" && data.snapshot) {
+              const snapshotMetadata = data.snapshot.metadata;
+              setMatchMetadata(
+                snapshotMetadata && typeof snapshotMetadata === "object"
+                  ? (snapshotMetadata as Record<string, unknown>)
+                  : {}
+              );
               const count = Number(data.snapshot.viewer_count) || 0;
               setViewerCount(count);
               if (onViewerCountRef.current) {
@@ -442,26 +473,16 @@ export function useMatchSpectatorStream(
             return;
           }
 
-          isReconnectingRef.current = true;
-          attemptsRef.current += 1;
-          setReconnectAttempts(attemptsRef.current);
-
-          if (attemptsRef.current <= maxReconnectAttempts) {
-            setConnectionStatus("reconnecting");
-            const delayMs = Math.min(15000, Math.pow(2, attemptsRef.current - 1) * 1000);
-            reconnectTimerRef.current = setTimeout(() => {
-              void connect(false);
-            }, delayMs);
-          } else {
-            setConnectionStatus("error");
-          }
+          scheduleReconnectOrFail();
         };
       } catch {
-        setConnectionStatus("error");
+        scheduleReconnectOrFail();
       }
     },
-    [enabled, matchId, canonicalId, isAuthenticated, buildTargetWsUrl, cleanupSocket, maxReconnectAttempts]
+    [enabled, matchId, canonicalId, isAuthenticated, buildTargetWsUrl, cleanupSocket, scheduleReconnectOrFail]
   );
+
+  connectRef.current = connect;
 
   // Connect on mount or when dependencies change
   useEffect(() => {
@@ -521,6 +542,7 @@ export function useMatchSpectatorStream(
   return {
     connectionStatus,
     viewerCount,
+    matchMetadata,
     lastFrame,
     recentEvents,
     latestScore,

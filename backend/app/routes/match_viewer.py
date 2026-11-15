@@ -16,6 +16,12 @@ from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.fast_match import FastMatchSession
 from app.replay_archive.service import ensure_replay_archive
+from app.match_engine.simulation.offside_var import (
+    BROADCAST_CATEGORY_DURATION_WINDOWS,
+    BROADCAST_CATEGORY_MAX_SECONDS,
+    MatchBroadcastCategory,
+    resolve_match_broadcast_category,
+)
 from app.schemas.match_viewer import MatchMode, MatchViewerSessionView, MatchViewStateView
 from app.services.ads.engine import AdDecisionEngine
 from app.services.match_viewer_presentation_service import MatchViewerPresentationService
@@ -443,6 +449,59 @@ def _resolve_match_viewer_context(
     )
 
 
+def _resolve_server_broadcast_params(
+    canonical_view: MatchViewStateView,
+    metadata_json: dict[str, object],
+) -> tuple[MatchMode, int]:
+    """Derive server-authoritative broadcast mode and duration from competition category only.
+
+    Viewer query overrides (mode, speed, target_duration_seconds) are ignored so every
+    spectator receives the same universal broadcast timeline (Section 3.1 & 3.2).
+    """
+    comp_meta = metadata_json.get("competition") if isinstance(metadata_json.get("competition"), dict) else {}
+    replay_payload = (
+        metadata_json.get("replay_payload") if isinstance(metadata_json.get("replay_payload"), dict) else {}
+    )
+    summary = replay_payload.get("summary") if isinstance(replay_payload.get("summary"), dict) else {}
+    category = resolve_match_broadcast_category(
+        is_final=bool(metadata_json.get("is_final") or comp_meta.get("is_final") or summary.get("is_final")),
+        stage=str(metadata_json.get("stage") or comp_meta.get("stage") or summary.get("stage") or ""),
+        competition_type=str(
+            metadata_json.get("competition_type")
+            or comp_meta.get("competition_type")
+            or summary.get("competition_type")
+            or ""
+        ),
+        approved_shorter_presentation=bool(
+            metadata_json.get("approved_shorter_presentation") or comp_meta.get("approved_shorter_presentation")
+        ),
+        metadata={
+            "competition_category": getattr(canonical_view, "competition_category", None),
+            **(canonical_view.broadcast_session if isinstance(canonical_view.broadcast_session, dict) else {}),
+        },
+    )
+    min_win, max_win = BROADCAST_CATEGORY_DURATION_WINDOWS[category]
+    hard_cap = BROADCAST_CATEGORY_MAX_SECONDS[category]
+    server_mode = (
+        MatchMode.CINEMATIC
+        if category
+        in {MatchBroadcastCategory.FINAL, MatchBroadcastCategory.SEMI_FINAL, MatchBroadcastCategory.MAJOR_KNOCKOUT}
+        else MatchMode.STANDARD
+    )
+    persisted_session = (
+        canonical_view.broadcast_session
+        if isinstance(canonical_view.broadcast_session, dict)
+        else metadata_json.get("broadcast_session") if isinstance(metadata_json.get("broadcast_session"), dict) else {}
+    )
+    assigned = persisted_session.get("assigned_duration_seconds")
+    if isinstance(assigned, (int, float)) and assigned >= 60:
+        server_duration = max(min_win, min(hard_cap, int(assigned)))
+    else:
+        raw_dur = int(canonical_view.duration_seconds or max_win)
+        server_duration = max(min_win, min(hard_cap, raw_dur))
+    return server_mode, server_duration
+
+
 @router.get("/{match_key}", response_model=MatchViewStateView)
 def read_match_viewer_timeline(
     match_key: str,
@@ -457,6 +516,7 @@ def read_match_viewer_timeline(
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewStateView:
+    del mode, target_duration_seconds
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
         request=request,
@@ -469,17 +529,22 @@ def read_match_viewer_timeline(
             detail=f"Match viewer payload for {match_key} was not found.",
         )
 
+    server_mode, server_duration = _resolve_server_broadcast_params(
+        resolved.canonical_view,
+        resolved.metadata_json,
+    )
+
     if resolved.fairness_metadata is not None:
         try:
             secured = integrity_service.build_viewer_session(
                 match_id=match_key,
                 view_state=scaling_service.transform(
                     resolved.canonical_view,
-                    mode=mode,
-                    target_duration_seconds=target_duration_seconds,
+                    mode=server_mode,
+                    target_duration_seconds=server_duration,
                 ),
                 fairness_metadata=resolved.fairness_metadata,
-                mode=mode,
+                mode=server_mode,
                 canonical_view_state=resolved.canonical_view,
             )
             can_view_coach_notes = _is_owner_or_manager(current_user, resolved.match, session)
@@ -506,8 +571,8 @@ def read_match_viewer_timeline(
     transformed = _attach_presentation(
         scaling_service.transform(
             resolved.canonical_view,
-            mode=mode,
-            target_duration_seconds=target_duration_seconds,
+            mode=server_mode,
+            target_duration_seconds=server_duration,
         ),
         match_key=match_key,
         presentation_service=presentation_service,
@@ -539,6 +604,7 @@ def read_match_viewer_session(
     ad_engine: AdDecisionEngine = Depends(get_ad_decision_engine),
     current_user: User | None = Depends(get_optional_current_user),
 ) -> MatchViewerSessionView:
+    del mode
     resolved = _resolve_match_viewer_context(
         match_key=match_key,
         request=request,
@@ -551,13 +617,21 @@ def read_match_viewer_session(
             detail=f"Match viewer payload for {match_key} was not found.",
         )
 
-    base_view = scaling_service.transform(resolved.canonical_view, mode=mode)
+    server_mode, server_duration = _resolve_server_broadcast_params(
+        resolved.canonical_view,
+        resolved.metadata_json,
+    )
+    base_view = scaling_service.transform(
+        resolved.canonical_view,
+        mode=server_mode,
+        target_duration_seconds=server_duration,
+    )
     try:
         secured = integrity_service.build_viewer_session(
             match_id=match_key,
             view_state=base_view,
             fairness_metadata=resolved.fairness_metadata,
-            mode=mode,
+            mode=server_mode,
             continuation_token=token,
             canonical_view_state=resolved.canonical_view,
         )

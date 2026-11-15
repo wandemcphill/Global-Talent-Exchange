@@ -239,6 +239,9 @@ jobs:
           backend/tests/live_matches/test_live_match_router.py
           backend/tests/live_matches/test_live_match_hot_path_cache.py
           backend/tests/live_matches/test_live_match_sampling.py
+          backend/tests/live_matches/test_u2a007_canonical_competition_and_durations.py
+          backend/tests/owner_console/test_canonical_match_projection.py
+          backend/tests/manager_duels/test_manager_duel_api.py
           backend/tests/match_engine/test_live_match_experience_contract.py
           backend/tests/test_match_timeline_service.py
           -q

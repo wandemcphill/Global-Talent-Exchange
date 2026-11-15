@@ -157,15 +157,16 @@ def test_tactics_rejects_non_participants_with_forbidden(engine: LiveMatchEngine
     assert engine.get("owned-match").home_tactics.mentality == "balanced"
 
 
-def test_tactics_rejects_a_participant_steering_the_other_side(engine: LiveMatchEngine) -> None:
+def test_tactics_rejects_club_owners_and_participants_under_manager_authority(engine: LiveMatchEngine) -> None:
     _create_owned_session(engine)
     with _build_client(engine, user=HOME_USER) as client:
         response = client.post(
             "/live-match/sessions/owned-match/tactics",
-            json={"side": "away", "mentality": "defensive"},
+            json={"side": "home", "mentality": "attacking"},
         )
 
     assert response.status_code == 403
+    assert engine.get("owned-match").home_tactics.mentality == "balanced"
     assert engine.get("owned-match").away_tactics.mentality == "balanced"
 
 

@@ -13,7 +13,7 @@ from app.competition_engine.queue_contracts import SUPPORTED_MATCH_MOMENTS
 from app.config.competition_constants import (
     FINAL_PRESENTATION_MAX_MINUTES,
     MATCH_PRESENTATION_MAX_MINUTES,
-    MATCH_PRESENTATION_MIN_MINUTES,
+    SHORTER_PRESENTATION_MIN_MINUTES,
 )
 
 
@@ -71,7 +71,7 @@ class CompetitionContextView(CommonSchema):
         max_allowed = FINAL_PRESENTATION_MAX_MINUTES if self.is_final else MATCH_PRESENTATION_MAX_MINUTES
         if self.presentation_duration_minutes is None:
             self.presentation_duration_minutes = max_allowed
-        if self.presentation_duration_minutes < MATCH_PRESENTATION_MIN_MINUTES:
+        if self.presentation_duration_minutes < SHORTER_PRESENTATION_MIN_MINUTES:
             raise ValueError("Replay presentation duration falls below the supported minimum.")
         if self.presentation_duration_minutes > max_allowed:
             raise ValueError("Replay presentation duration exceeds the supported maximum.")

@@ -254,9 +254,7 @@ describe("Pitch2DView broadcast HUD, honesty states, and live frame ingestion", 
     expect(lastPitchProps?.players[0]?.staminaPct).toBeCloseTo(89, 1);
   });
 
-  test("renders instant replay controls on goals, tactical touchline banner, and forwards shotMarkers", () => {
-    const onWatchReplay = jest.fn();
-    const onExitReplay = jest.fn();
+  test("enforces shared universal broadcast clock without manual replay buttons and renders VAR/offside/card overlays and FINAL replay badge", () => {
     act(() => {
       root.render(
         <Pitch2DView
@@ -265,10 +263,30 @@ describe("Pitch2DView broadcast HUD, honesty states, and live frame ingestion", 
           homeScore={1}
           awayScore={0}
           showShotMap={true}
-          onWatchReplay={onWatchReplay}
-          isInstantReplay={false}
-          onExitInstantReplay={onExitReplay}
           tacticalBanner="4-2-4 GEGENPRESS · PRESS 88% · LINE 82%"
+          offsideSnapshot={{
+            offside_line_x: 0.78,
+            attacker_line_x: 0.81,
+            margin_meters: 0.42,
+            attacker_name: "V. Osimhen",
+            attacker_body_part: "foot",
+            second_last_defender_name: "K. Koulibaly",
+            second_last_defender_body_part: "torso",
+            is_offside_position: true,
+            is_penalised: true,
+          }}
+          varReview={{
+            review_id: "var-1",
+            category: "goal_no_goal",
+            final_decision: "DISALLOWED - OFFSIDE",
+            referee_action: "Free kick awarded",
+          }}
+          cardDetail={{
+            card_type: "red_card",
+            reason: "Denial of obvious goal-scoring opportunity",
+            player_name: "A. Defender",
+            dismissed: true,
+          }}
           events={[
             {
               event_id: "g-1",
@@ -283,44 +301,72 @@ describe("Pitch2DView broadcast HUD, honesty states, and live frame ingestion", 
               y: 48,
             } as any,
           ]}
-          socketFrame={{
-            frame_id: "f-goal",
-            sequence: 10,
-            time_seconds: 120,
-            clock_minute: 24,
-            phase: "first_half",
-            event_type: "goal",
-            players: [
-              {
-                player_id: "h9",
-                side: "home",
-                name: "V. Osimhen",
-                shirt_number: 9,
-                role: "ST",
-                x: 88,
-                y: 48,
-                has_ball: true,
-              } as any,
-            ],
-            ball: { x: 99, y: 50, z: 0.4, owner_player_id: "h9" },
-          }}
+          frames={[
+            {
+              frame_id: "rec-1",
+              time_seconds: 100,
+              clock_minute: 20,
+              players: [
+                {
+                  player_id: "h9",
+                  side: "home",
+                  name: "V. Osimhen",
+                  shirt_number: 9,
+                  role: "ST",
+                  x: 82,
+                  y: 48,
+                } as any,
+              ],
+              ball: { x: 82, y: 48, z: 0 },
+            },
+            {
+              frame_id: "rec-2",
+              time_seconds: 120,
+              clock_minute: 24,
+              event_type: "goal",
+              players: [
+                {
+                  player_id: "h9",
+                  side: "home",
+                  name: "V. Osimhen",
+                  shirt_number: 9,
+                  role: "ST",
+                  x: 88,
+                  y: 48,
+                  has_ball: true,
+                } as any,
+              ],
+              ball: { x: 99, y: 50, z: 0.4, owner_player_id: "h9" },
+            },
+          ]}
         />,
       );
     });
+
+    const feedBadge = container.querySelector('[data-testid="pitch-feed-status"]');
+    expect(feedBadge?.getAttribute("data-status")).toBe("FINAL");
+    expect(feedBadge?.textContent).toBe("FINAL");
 
     const tacticalToast = container.querySelector('[data-testid="touchline-tactical-toast"]');
     expect(tacticalToast).not.toBeNull();
     expect(tacticalToast?.textContent).toContain("4-2-4 GEGENPRESS");
 
-    const watchBtn = container.querySelector('[data-testid="watch-instant-replay-btn"]') as HTMLButtonElement;
-    expect(watchBtn).not.toBeNull();
-    act(() => {
-      watchBtn.click();
-    });
-    expect(onWatchReplay).toHaveBeenCalledWith(114);
+    expect(container.querySelector('[data-testid="watch-instant-replay-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="exit-instant-replay-btn"]')).toBeNull();
+
+    expect(container.querySelector('[data-testid="pitch-var-monitor"]')?.textContent).toContain(
+      "DISALLOWED - OFFSIDE",
+    );
+    expect(container.querySelector('[data-testid="pitch-offside-banner"]')?.textContent).toContain(
+      "OFFSIDE",
+    );
+    expect(container.querySelector('[data-testid="pitch-card-detail-banner"]')?.textContent).toContain(
+      "Denial of obvious goal-scoring opportunity",
+    );
 
     expect(lastPitchProps?.showShotMap).toBe(true);
-    expect(lastPitchProps?.shotMarkers).toHaveLength(1);
-    expect(lastPitchProps?.shotMarkers[0]?.outcome).toBe("goal");
+    expect((lastPitchProps as any)?.shotMarkers).toHaveLength(1);
+    expect((lastPitchProps as any)?.shotMarkers[0]?.outcome).toBe("goal");
+    expect((lastPitchProps as any)?.varReview?.final_decision).toBe("DISALLOWED - OFFSIDE");
   });
 });

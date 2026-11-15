@@ -24,12 +24,11 @@ from app.live_matches.schemas import (
     MatchHighlightResponseView,
     MatchHighlightShareItemView,
     MatchHighlightSharePackageView,
-    LiveMatchSpeedModeView,
     SpectatorSessionView,
     UnityLiveAccessView,
     UnityLiveAccessRefreshRequest,
 )
-from app.live_matches.service import LiveMatchError, LiveMatchPersistenceError, ensure_live_match_hub
+from app.live_matches.service import LiveMatchError, ensure_live_match_hub
 from app.live_matches.unity_access import (
     issue_unity_live_token_bundle,
     validate_unity_live_access_token,
@@ -40,7 +39,6 @@ from app.match_engine.schemas import MatchReplayPayloadView
 from app.models.competition_match import CompetitionMatch
 from app.models.manager_duel import ManagerDuel
 from app.models.user import User
-from app.realtime.service import commentary_topic, match_topic
 from app.replay_archive.service import ensure_replay_archive
 from app.schemas.match_viewer import MatchTimelineFrameView, MatchViewStateView
 from app.services.device_fingerprint_service import DeviceFingerprintService
@@ -59,9 +57,12 @@ _UNITY_ALLOWED_ACCESS_SOURCES = frozenset(
     {"infinite_league", "open", "non_exclusive", "rights_owner", "grant", "paid_view"}
 )
 _UNITY_ACCESS_POLICY_MESSAGE = "Unity live access requires session-backed rights validation for non-generated matches."
-_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = max(
-    60.0,
-    float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "900")),
+_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS = min(
+    600.0,
+    max(
+        60.0,
+        float(os.environ.get("GTE_INFINITE_LEAGUE_TARGET_RUNTIME_SECONDS", "540")),
+    ),
 )
 _STRICT_LIVE_BLOCKED_SOURCES = frozenset({"demo", "fixture", "infinite_league", "infinite_league_runtime", "synthetic"})
 _GENERATED_LIVE_BRIDGE_ENV = "GTE_ENABLE_INFINITE_LEAGUE_LIVE_BRIDGE"
@@ -216,11 +217,7 @@ def _build_session_view(match_id: str, item, access: dict[str, object] | None = 
         presence_websocket_path=f"/ws/spectate/{match_id}",
         tts_websocket_path="/tts/live?voice=default",
         replay_route=f"/api/matches/{match_id}/replay",
-        speed_modes=[
-            LiveMatchSpeedModeView(key="normal", label="Normal", target_duration_seconds=90),
-            LiveMatchSpeedModeView(key="fast", label="Fast", target_duration_seconds=30),
-            LiveMatchSpeedModeView(key="turbo", label="Turbo", target_duration_seconds=10),
-        ],
+        speed_modes=[],
         access_source=payload.get("access_source"),
         rights_owner_id=payload.get("rights_owner_id"),
         viewing_fee_coin=payload.get("viewing_fee_coin") or 0,
@@ -1262,6 +1259,8 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
 
 
 def _v2_pitch_player_payload(player) -> dict[str, object]:
+    facing = getattr(player, "facing", None)
+    velocity = getattr(player, "velocity", None)
     return {
         "player_id": player.player_id,
         "team_id": player.team_id,
@@ -1275,6 +1274,30 @@ def _v2_pitch_player_payload(player) -> dict[str, object]:
         "state": _enum_value(getattr(player, "state", None)) or "idle",
         "animation_state": _enum_value(getattr(player, "animation_state", None)) or "idle",
         "stamina_pct": round(_float_or_default(getattr(player, "stamina_pct", 100.0)), 1),
+        "active": bool(getattr(player, "active", True)),
+        "speed_ratio": round(_float_or_default(getattr(player, "speed_ratio", 0.0)), 3),
+        "facing": (
+            {
+                "x": round(_float_or_default(getattr(facing, "x", 0.0)), 3),
+                "y": round(_float_or_default(getattr(facing, "y", 0.0)), 3),
+            }
+            if facing is not None
+            else None
+        ),
+        "velocity": (
+            {
+                "x": round(_float_or_default(getattr(velocity, "x", 0.0)), 3),
+                "y": round(_float_or_default(getattr(velocity, "y", 0.0)), 3),
+            }
+            if velocity is not None
+            else None
+        ),
+        "skin_tone": getattr(player, "skin_tone", None),
+        "hair_style": getattr(player, "hair_style", None),
+        "hair_color": getattr(player, "hair_color", None),
+        "build_profile": getattr(player, "build_profile", None),
+        "height_cm": getattr(player, "height_cm", None),
+        "boot_color": getattr(player, "boot_color", None),
     }
 
 
@@ -1291,7 +1314,7 @@ def _v2_event_type(raw: object | None) -> str:
 
 
 def _v2_event_payload(event) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "id": event.event_id,
         "type": _v2_event_type(event.event_type),
         "minute": int(event.minute),
@@ -1299,9 +1322,18 @@ def _v2_event_payload(event) -> dict[str, object]:
         "description": event.commentary,
         "team_id": event.team_id,
         "player_name": event.primary_player_name,
+        "secondary_player_name": getattr(event, "secondary_player_name", None),
         "home_score": int(event.home_score),
         "away_score": int(event.away_score),
+        "flags": list(getattr(event, "flags", None) or []),
     }
+    if getattr(event, "offside_snapshot", None) is not None:
+        payload["offside_snapshot"] = dict(event.offside_snapshot)
+    if getattr(event, "var_review", None) is not None:
+        payload["var_review"] = dict(event.var_review)
+    if getattr(event, "card_detail", None) is not None:
+        payload["card_detail"] = dict(event.card_detail)
+    return payload
 
 
 def _v2_bench_payload(player) -> dict[str, object]:
@@ -1330,8 +1362,14 @@ def _v2_team_payload(
         "score": int(score),
         "formation": team.formation,
         "primary_color_hex": team.primary_color,
-        "crest_url": crest_url,
-        "goalkeeper_color": goalkeeper_color,
+        "secondary_color_hex": getattr(team, "secondary_color", None),
+        "accent_color_hex": getattr(team, "accent_color", None),
+        "kit_pattern": getattr(team, "kit_pattern", None) or "solid",
+        "shorts_color": getattr(team, "shorts_color", None),
+        "socks_color": getattr(team, "socks_color", None),
+        "sponsor_text": getattr(team, "sponsor_text", None),
+        "crest_url": crest_url or getattr(team, "crest_url", None),
+        "goalkeeper_color": goalkeeper_color or getattr(team, "goalkeeper_color", None),
         "players": [_v2_player_payload(player) for player in players],
         "bench": [_v2_bench_payload(player) for player in (bench or [])],
     }
@@ -1698,6 +1736,30 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     away_sheet = getattr(presentation, "away", None) if presentation is not None else None
     home_crest = getattr(getattr(home_sheet, "crest", None), "image_url", None)
     away_crest = getattr(getattr(away_sheet, "crest", None), "image_url", None)
+    hub = ensure_live_match_hub(app)
+    playback_context = hub.get_playback_context(match_id)
+    broadcast_session = getattr(view_state, "broadcast_session", None)
+    broadcast_session_payload: dict[str, object] | None = (
+        broadcast_session.model_dump(mode="json")
+        if hasattr(broadcast_session, "model_dump")
+        else (dict(broadcast_session) if isinstance(broadcast_session, dict) else None)
+    )
+    if playback_context is not None and broadcast_session_payload is not None:
+        assigned_dur = int(
+            round(max(float(playback_context.target_runtime_seconds), float(view_state.duration_seconds), 1.0))
+        )
+        span_dur = max(float(view_state.duration_seconds), 1.0)
+        ratio = min(
+            1.0,
+            max(
+                0.0,
+                float(playback_context.elapsed_runtime_seconds)
+                / max(float(playback_context.target_runtime_seconds), 1.0),
+            ),
+        )
+        broadcast_session_payload["assigned_duration_seconds"] = assigned_dur
+        broadcast_session_payload["current_broadcast_position_seconds"] = round(span_dur * ratio, 2)
+        broadcast_session_payload["status"] = "live" if is_live else "completed"
     return {
         "match_id": view_state.match_id,
         "matchId": view_state.match_id,
@@ -1706,6 +1768,9 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "isLive": bool(is_live),
         "source": view_state.source,
         "status": "LIVE" if is_live else "FT",
+        "competition_category": getattr(view_state, "competition_category", "ordinary_league"),
+        "duration_seconds": int(round(float(getattr(view_state, "duration_seconds", 0) or 0))),
+        "broadcast_session": broadcast_session_payload,
         "minute": int(round(_float_or_default(frame.clock_minute))),
         "time_seconds": round(float(frame.time_seconds), 2),
         "frame_id": frame.frame_id,
@@ -1866,84 +1931,10 @@ def update_match_v2_tactics(
     current_user: User = Depends(get_current_match_user),
 ) -> dict[str, object]:
     _load_strict_live_view_state(match_id, request.app)
-    hub = ensure_live_match_hub(request.app)
-    side = (payload.side or "home").strip().lower()
-    if side not in {"home", "away"}:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Tactical instruction side must be 'home' or 'away'.",
-        )
-
-    session_factory = getattr(request.app.state, "session_factory", None)
-    if session_factory is None:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Tactical changes are disabled because durable ownership validation is unavailable.",
-        )
-    try:
-        with session_factory() as session:
-            comp_match = session.get(CompetitionMatch, match_id)
-            if comp_match is None:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Match not found.")
-            is_admin = bool(getattr(current_user, "is_admin", False) or getattr(current_user, "is_superuser", False))
-            if not is_admin:
-                from app.models.club_profile import ClubProfile
-
-                target_club_id = comp_match.home_club_id if side == "home" else comp_match.away_club_id
-                club = session.get(ClubProfile, target_club_id) if target_club_id else None
-                if club is None:
-                    raise HTTPException(
-                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-                        detail="Tactical changes are disabled because club ownership records are unavailable.",
-                    )
-                if str(club.owner_user_id) != str(current_user.id):
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail=f"You cannot submit tactical adjustments for opponent's team ({side}).",
-                    )
-    except HTTPException:
-        raise
-    except Exception as exc:
-        logger.exception("Unable to verify club ownership for match tactics")
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Tactical changes are disabled because ownership could not be verified.",
-        ) from exc
-
-    try:
-        applied = hub.set_tactics(
-            match_id,
-            side=side,
-            press_intensity=payload.press_intensity if payload.press_intensity is not None else payload.pressing,
-            defensive_line=payload.defensive_line,
-            tempo=payload.tempo,
-            risk_level=payload.risk_level,
-            mentality=payload.mentality,
-            formation=payload.formation,
-            substitutions=payload.substitutions,
-            instructions=payload.instructions,
-        )
-    except LiveMatchPersistenceError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Tactical changes could not be durably saved; no successful update is being reported.",
-        ) from exc
-    except LiveMatchError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(exc),
-        ) from exc
-
-    return {
-        "status": "accepted",
-        "match_id": match_id,
-        **_strict_live_runtime_flags(),
-        "side": side,
-        "tactics": applied,
-        "message": f"Tactical instructions applied to {side} team.",
-    }
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Club owners watch live matches; the appointed First-Team Manager holds exclusive matchday tactical and substitution authority.",
+    )
 
 
 @api_router.post("/{match_id}/predictions")
@@ -2682,11 +2673,7 @@ async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> 
         await websocket.close(code=4404)
         return
 
-    await _stream_realtime_topics(
-        websocket,
-        user_id=None,
-        topics=(match_topic(match_id),),
-    )
+    await _stream_legacy_match_contract(websocket, hub, match_id, state)
 
 
 @legacy_router.websocket("/{match_id}/commentary/stream")
@@ -2707,10 +2694,13 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
         await websocket.close(code=4404)
         return
 
-    await _stream_realtime_topics(
+    await _stream_legacy_commentary_contract(
         websocket,
-        user_id=spectator_session.user_id,
-        topics=(commentary_topic(match_id),),
+        app,
+        hub,
+        match_id,
+        spectator_session.user_id,
+        state,
     )
 
 
@@ -2768,6 +2758,124 @@ router.include_router(legacy_router)
 router.include_router(api_router)
 router.include_router(match_router)
 router.include_router(api_match_router)
+
+
+async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str, initial_state) -> None:
+    """Serve the established channel/kind envelope from the canonical live-match hub."""
+    await websocket.accept()
+    cursor = 0
+    await websocket.send_json(
+        {
+            "channel": initial_state.channel,
+            "kind": "snapshot",
+            "payload": initial_state.snapshot.model_dump(mode="json"),
+        }
+    )
+    try:
+        while True:
+            try:
+                incoming = await asyncio.wait_for(websocket.receive(), timeout=0.05)
+                if incoming.get("type") == "websocket.disconnect":
+                    break
+                if str(incoming.get("text") or "").strip().lower() == "ping":
+                    await websocket.send_json({"channel": initial_state.channel, "kind": "pong", "payload": {}})
+            except asyncio.TimeoutError:
+                pass
+            state = hub.get_state(match_id)
+            if state is None:
+                break
+            events, next_cursor = hub.get_events_since(match_id, cursor)
+            if events:
+                await websocket.send_json(
+                    {
+                        "channel": state.channel,
+                        "kind": "events",
+                        "payload": [event.model_dump(mode="json") for event in events],
+                    }
+                )
+            cursor = next_cursor
+            if not state.is_live and cursor >= state.event_count:
+                break
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        return
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+async def _stream_legacy_commentary_contract(
+    websocket: WebSocket,
+    app,
+    hub,
+    match_id: str,
+    user_id: str,
+    initial_state,
+) -> None:
+    """Serve the established commentary snapshot/event envelope without a second event source."""
+    await websocket.accept()
+    initial = _commentary_response(
+        app,
+        hub,
+        match_id=match_id,
+        user_id=user_id,
+        status=initial_state.snapshot.status,
+        events=[],
+        cursor=0,
+    )
+    await websocket.send_json(
+        {
+            "channel": initial_state.channel,
+            "kind": "commentary_snapshot",
+            "payload": initial.model_dump(mode="json") if initial is not None else {"match_id": match_id},
+        }
+    )
+    cursor = 0
+    try:
+        while True:
+            try:
+                incoming = await asyncio.wait_for(websocket.receive(), timeout=0.05)
+                if incoming.get("type") == "websocket.disconnect":
+                    break
+                if str(incoming.get("text") or "").strip().lower() == "ping":
+                    await websocket.send_json({"channel": initial_state.channel, "kind": "pong", "payload": {}})
+            except asyncio.TimeoutError:
+                pass
+            state = hub.get_state(match_id)
+            if state is None:
+                break
+            events, next_cursor = hub.get_events_since(match_id, cursor)
+            if events:
+                commentary = _commentary_response(
+                    app,
+                    hub,
+                    match_id=match_id,
+                    user_id=user_id,
+                    status=state.snapshot.status,
+                    events=list(events),
+                    cursor=next_cursor,
+                )
+                if commentary is not None and commentary.events:
+                    await websocket.send_json(
+                        {
+                            "channel": state.channel,
+                            "kind": "commentary",
+                            "payload": [event.model_dump(mode="json") for event in commentary.events],
+                        }
+                    )
+            cursor = next_cursor
+            if not state.is_live and cursor >= state.event_count:
+                break
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        return
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 async def _stream_realtime_topics(

@@ -2690,6 +2690,17 @@ def process_due_owner_world_ticks(
     clock_state = clock.get_or_create_state()
     target_date = clock.now_virtual().date()
 
+    canonical_projection_summary: dict[str, Any] = {}
+    try:
+        from app.owner_console.canonical_match_projection import reconcile_pending_canonical_match_projections
+
+        canonical_projection_summary = reconcile_pending_canonical_match_projections(
+            session,
+            limit=max(1, min(int(limit or 500), 250)),
+        )
+    except Exception:
+        logger.exception("owner_console.canonical_match_projection_reconcile_failed")
+
     stmt = (
         select(OwnerClubState)
         .where(OwnerClubState.stage.in_(("competition", "active")))
@@ -2717,6 +2728,7 @@ def process_due_owner_world_ticks(
             "ticks_failed": 0,
             "clock_paused": bool(clock_state.is_paused),
             "regens_retired": regens_retired,
+            "canonical_match_projections": canonical_projection_summary,
             **({"tick_results": []} if include_details else {}),
         }
 
@@ -2737,6 +2749,7 @@ def process_due_owner_world_ticks(
             "ticks_failed": 0,
             "legacy_anchors_created": anchored,
             "clock_paused": True,
+            "canonical_match_projections": canonical_projection_summary,
             **({"tick_results": []} if include_details else {}),
         }
 
@@ -2810,6 +2823,7 @@ def process_due_owner_world_ticks(
         "legacy_anchors_created": anchored,
         "clock_paused": False,
         "regens_retired": regens_retired,
+        "canonical_match_projections": canonical_projection_summary,
         **({"tick_results": tick_results} if include_details else {}),
     }
 

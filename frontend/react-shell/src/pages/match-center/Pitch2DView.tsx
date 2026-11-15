@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { OrthographicPitch, type PitchCameraMode, type SampledPitchFrame } from "@/match2d/OrthographicPitch";
+import type { KitPattern } from "@/match2d/playerRig";
 import {
   deriveBroadcastBanner,
   extractShotMarkers,
@@ -12,10 +13,13 @@ import {
   resolveFeedPresentationStatus,
   seekTime,
   suppliedCrest,
+  type CardDetailSummary,
   type FeedFreshnessStatus,
   type LivePitchSample,
+  type OffsideSnapshot,
   type PitchFrame,
   type PitchPlayer,
+  type VarReviewSummary,
 } from "@/match2d/matchStateAdapter";
 
 type RawPoint = { x?: number; y?: number; position?: { x?: number; y?: number } };
@@ -43,6 +47,18 @@ type RawPlayer = {
   anchor_position?: { x?: number; y?: number } | null;
   speed_ratio?: number | null;
   highlighted?: boolean;
+  active?: boolean;
+  skin_tone?: string | null;
+  hair_color?: string | null;
+  hair_style?: string | null;
+  build_profile?: string | null;
+  boot_color?: string | null;
+  kit_pattern?: string | null;
+  primary_color?: string | null;
+  secondary_color?: string | null;
+  accent_color?: string | null;
+  shorts_color?: string | null;
+  socks_color?: string | null;
 };
 type RawFrame = {
   frame_id?: string;
@@ -58,6 +74,9 @@ type RawFrame = {
   ball?: RawPoint & { owner_player_id?: string | null; trajectory?: RawPoint[]; state?: string };
   event_type?: string;
   active_event?: { type?: string; event_type?: string } | null;
+  offside_snapshot?: OffsideSnapshot | null;
+  var_review?: VarReviewSummary | null;
+  card_detail?: CardDetailSummary | null;
 };
 type MatchEventRow = {
   type?: string;
@@ -95,6 +114,9 @@ export type Pitch2DViewProps = {
     ball?: (RawPoint & { owner_player_id?: string | null; trajectory?: RawPoint[] }) | null;
     event_type?: string;
     active_event?: { type?: string; event_type?: string } | null;
+    offside_snapshot?: OffsideSnapshot | null;
+    var_review?: VarReviewSummary | null;
+    card_detail?: CardDetailSummary | null;
   } | null;
   events?: MatchEventRow[] | null;
   activeEventType?: string | null;
@@ -102,6 +124,16 @@ export type Pitch2DViewProps = {
   awayScore?: number | null;
   homeColor?: string;
   awayColor?: string;
+  homeSecondaryColor?: string;
+  homeAccentColor?: string;
+  awaySecondaryColor?: string;
+  awayAccentColor?: string;
+  homeShortsColor?: string;
+  awayShortsColor?: string;
+  homeSocksColor?: string;
+  awaySocksColor?: string;
+  homeKitPattern?: KitPattern;
+  awayKitPattern?: KitPattern;
   goalkeeperHome?: string;
   goalkeeperAway?: string;
   homeName?: string;
@@ -114,8 +146,6 @@ export type Pitch2DViewProps = {
   reconnectToken?: number;
   connectionStatus?: string | null;
   matchPhase?: string | null;
-  paused?: boolean;
-  playbackSpeed?: number;
   cameraMode?: PitchCameraMode;
   onCameraModeChange?: (mode: PitchCameraMode) => void;
   showVoronoi?: boolean;
@@ -123,9 +153,10 @@ export type Pitch2DViewProps = {
   showTactics?: boolean;
   showPassingLanes?: boolean;
   showShotMap?: boolean;
-  onWatchReplay?: (replayStartSeconds: number) => void;
-  isInstantReplay?: boolean;
-  onExitInstantReplay?: () => void;
+  offsideSnapshot?: OffsideSnapshot | null;
+  varReview?: VarReviewSummary | null;
+  cardDetail?: CardDetailSummary | null;
+  isAutoVarReplay?: boolean;
   tacticalBanner?: string | null;
 };
 
@@ -168,12 +199,24 @@ function toPitchPlayer(raw: RawPlayer, ownerPlayerId?: string | null): PitchPlay
     hasBall: Boolean(raw?.has_ball || raw?.has_possession || (ownerPlayerId && ownerPlayerId === playerId)),
     isGoalkeeper: /gk|goal/i.test(role),
     highlighted: Boolean(raw?.highlighted),
+    active: raw?.active !== false,
     speedRatio: Number.isFinite(speedRatio) ? speedRatio : null,
     staminaPct: raw?.stamina_pct ?? null,
     anchorX: anchor ? anchor.x : null,
     anchorY: anchor ? anchor.y : null,
     velocity: vec(raw?.velocity),
     facing: vec(raw?.facing),
+    skinTone: raw?.skin_tone ?? null,
+    hairColor: raw?.hair_color ?? null,
+    hairStyle: raw?.hair_style ?? null,
+    buildProfile: raw?.build_profile ?? null,
+    bootColor: raw?.boot_color ?? null,
+    kitPattern: raw?.kit_pattern ?? null,
+    primaryColor: raw?.primary_color ?? null,
+    secondaryColor: raw?.secondary_color ?? null,
+    accentColor: raw?.accent_color ?? null,
+    shortsColor: raw?.shorts_color ?? null,
+    socksColor: raw?.socks_color ?? null,
   };
 }
 
@@ -214,6 +257,9 @@ function frameMeta(raw: Record<string, unknown> | null | undefined) {
     homeAttacksRight: typeof r.home_attacks_right === "boolean" ? r.home_attacks_right : undefined,
     homeScore: n(r.home_score) ?? undefined,
     awayScore: n(r.away_score) ?? undefined,
+    offsideSnapshot: r.offside_snapshot ?? r.offsideSnapshot ?? null,
+    varReview: r.var_review ?? r.varReview ?? null,
+    cardDetail: r.card_detail ?? r.cardDetail ?? null,
   };
 }
 
@@ -268,7 +314,9 @@ function recordFor(events: MatchEventRow[], playerId: string) {
 
 function renderOf(f: PitchFrame, alpha: number, fallbackEvent: string | null): SampledPitchFrame {
   return {
-    players: f.players,
+    players: f.players.filter(
+      (player) => player.active !== false && String(player.state || "").toLowerCase() !== "sent_off",
+    ),
     ball: f.ball,
     ballTrajectory: f.ballTrajectory || null,
     trajectoryAlpha: alpha,
@@ -285,6 +333,9 @@ function renderOf(f: PitchFrame, alpha: number, fallbackEvent: string | null): S
     homeScore: f.homeScore ?? null,
     awayScore: f.awayScore ?? null,
     eventBanner: f.eventBanner ?? null,
+    offsideSnapshot: f.offsideSnapshot ?? null,
+    varReview: f.varReview ?? null,
+    cardDetail: f.cardDetail ?? null,
   };
 }
 
@@ -375,9 +426,17 @@ export function Pitch2DView({
   demo = false,
   reconnectToken = 0,
   connectionStatus = "idle",
+  homeSecondaryColor,
+  homeAccentColor,
+  awaySecondaryColor,
+  awayAccentColor,
+  homeShortsColor,
+  awayShortsColor,
+  homeSocksColor,
+  awaySocksColor,
+  homeKitPattern,
+  awayKitPattern,
   matchPhase = null,
-  paused = false,
-  playbackSpeed = 1,
   cameraMode,
   onCameraModeChange,
   showVoronoi = false,
@@ -385,9 +444,10 @@ export function Pitch2DView({
   showTactics = false,
   showPassingLanes = false,
   showShotMap = false,
-  onWatchReplay,
-  isInstantReplay = false,
-  onExitInstantReplay,
+  offsideSnapshot = null,
+  varReview = null,
+  cardDetail = null,
+  isAutoVarReplay = false,
   tacticalBanner = null,
 }: Pitch2DViewProps) {
   const bufferRef = useRef(new LiveRenderBuffer());
@@ -598,28 +658,21 @@ export function Pitch2DView({
   }, [currentRenderData]);
 
   const latestRef = useRef({
-    paused,
-    playbackSpeed,
     recordedSample,
     immediateLiveFallback,
     activeEventType,
   });
   latestRef.current = {
-    paused,
-    playbackSpeed,
     recordedSample,
     immediateLiveFallback,
     activeEventType,
   };
 
-  // Monotonic wall-clock sampler invoked by OrthographicPitch on every 60fps animation frame.
+  // Monotonic 1.0x shared wall-clock sampler invoked by OrthographicPitch on every 60fps animation frame.
   const sampleFrame = useCallback((nowMs: number) => {
     const state = latestRef.current;
     if (bufferRef.current.next) {
-      const sampled = bufferRef.current.advanceWallClock(nowMs, {
-        paused: state.paused,
-        speed: state.playbackSpeed,
-      });
+      const sampled = bufferRef.current.advanceWallClock(nowMs);
       if (sampled.frame?.players?.length) {
         return renderOf(sampled.frame, sampled.trajectoryAlpha, state.activeEventType);
       }
@@ -638,6 +691,9 @@ export function Pitch2DView({
   const trajectory = currentRenderData?.ballTrajectory || null;
   const shownEvent = currentRenderData?.eventType || null;
   const trajectoryAlpha = currentRenderData?.trajectoryAlpha ?? 1;
+  const activeOffsideSnapshot = offsideSnapshot ?? currentRenderData?.offsideSnapshot ?? null;
+  const activeVarReview = varReview ?? currentRenderData?.varReview ?? null;
+  const activeCardDetail = cardDetail ?? currentRenderData?.cardDetail ?? null;
   const unavailable = source === "unavailable" && !shown.length;
   const banner = useMemo(() => {
     if (!currentRenderData) return null;
@@ -682,9 +738,6 @@ export function Pitch2DView({
     const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
     const effectivePhase = socketFrame?.phase || matchPhase || null;
     const hasRecordedOnly = !hasLiveFrame && timedRecorded.length > 0 && !unavailable;
-    if (hasRecordedOnly && !effectivePhase) {
-      return { status: "LIVE" as FeedFreshnessStatus, ageMs: null };
-    }
     const isHttpSnapshotOnly = !socketRows?.length && Boolean(snapshotPlayers?.length);
     const effectiveConnectionStatus =
       (isHttpSnapshotOnly || hasRecordedOnly) && (connectionStatus === "reconnecting" || connectionStatus === "error" || connectionStatus === "idle" || connectionStatus === "disconnected")
@@ -781,6 +834,16 @@ export function Pitch2DView({
         homeAttacksRight={currentRenderData?.homeAttacksRight}
         homeColor={homeColor}
         awayColor={awayColor}
+        homeSecondaryColor={homeSecondaryColor}
+        homeAccentColor={homeAccentColor}
+        awaySecondaryColor={awaySecondaryColor}
+        awayAccentColor={awayAccentColor}
+        homeShortsColor={homeShortsColor}
+        awayShortsColor={awayShortsColor}
+        homeSocksColor={homeSocksColor}
+        awaySocksColor={awaySocksColor}
+        homeKitPattern={homeKitPattern}
+        awayKitPattern={awayKitPattern}
         goalkeeperHome={goalkeeperHome}
         goalkeeperAway={goalkeeperAway}
         selectedKey={selectedKey}
@@ -795,32 +858,86 @@ export function Pitch2DView({
         showPassingLanes={showPassingLanes}
         showShotMap={showShotMap}
         shotMarkers={shotMarkers}
+        offsideSnapshot={activeOffsideSnapshot}
+        varReview={activeVarReview}
+        cardDetail={activeCardDetail}
         clockMinute={currentRenderData?.clockMinute ?? null}
         homeScore={currentRenderData?.homeScore ?? homeScore ?? null}
         awayScore={currentRenderData?.awayScore ?? awayScore ?? null}
         sampleFrame={sampleFrame}
         feedFreshness={feedStatus.status}
       />
-      {isInstantReplay && (
+      {isAutoVarReplay && (
         <div
-          data-testid="instant-replay-badge"
+          data-testid="auto-var-replay-badge"
           className="flex items-center justify-between gap-2 rounded-lg border border-amber-400/60 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100"
         >
           <div className="flex items-center gap-2">
             <span className="inline-block size-2 animate-ping rounded-full bg-amber-400" />
             <span className="font-mono text-[11px] font-black uppercase tracking-widest text-amber-300">
-              INSTANT REPLAY · 0.75x SLOW-MO ACTION ZOOM
+              AUTOMATIC VAR / BROADCAST REPLAY
             </span>
           </div>
-          {onExitInstantReplay && (
-            <button
-              type="button"
-              data-testid="exit-instant-replay-btn"
-              onClick={onExitInstantReplay}
-              className="rounded border border-amber-300/50 bg-black/40 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-400 hover:text-slate-950"
-            >
-              EXIT REPLAY · RESUME
-            </button>
+          <span className="font-mono text-[10px] font-bold uppercase tracking-wider text-amber-200">
+            SHARED TIMELINE
+          </span>
+        </div>
+      )}
+      {activeVarReview && (
+        <div
+          data-testid="pitch-var-monitor"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-400/55 bg-slate-950/90 px-3 py-2 text-xs text-amber-100"
+        >
+          <div className="flex items-center gap-2">
+            <span className="rounded border border-amber-400/50 bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] font-black uppercase tracking-widest text-amber-300">
+              VAR {(activeVarReview.category || "REVIEW").replace(/_/g, " ")}
+            </span>
+            <span className="font-bold text-white">
+              {activeVarReview.final_decision || activeVarReview.decision_outcome || activeVarReview.reason || "Check in progress"}
+            </span>
+          </div>
+          {activeVarReview.referee_action && (
+            <span className="font-mono text-[10px] uppercase tracking-wider text-amber-200">
+              {activeVarReview.referee_action}
+            </span>
+          )}
+        </div>
+      )}
+      {activeOffsideSnapshot && (
+        <div
+          data-testid="pitch-offside-banner"
+          className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-cyan-400/50 bg-slate-950/90 px-3 py-1.5 text-xs text-cyan-100"
+        >
+          <span className="font-mono text-[10px] font-black uppercase tracking-widest text-cyan-300">
+            LAW 11 OFFSIDE · {activeOffsideSnapshot.is_penalised ? "OFFSIDE" : "ONSIDE"}
+          </span>
+          <span className="font-mono text-[11px] text-slate-200">
+            {activeOffsideSnapshot.attacker_name || "Attacker"} ({activeOffsideSnapshot.attacker_body_part || "torso"}) vs{" "}
+            {activeOffsideSnapshot.second_last_defender_name || "2nd Last Defender"} (
+            {activeOffsideSnapshot.second_last_defender_body_part || "torso"})
+            {typeof activeOffsideSnapshot.margin_meters === "number"
+              ? ` · ${activeOffsideSnapshot.margin_meters.toFixed(2)}m`
+              : ""}
+          </span>
+        </div>
+      )}
+      {activeCardDetail && (
+        <div
+          data-testid="pitch-card-detail-banner"
+          className={`flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-1.5 text-xs ${
+            String(activeCardDetail.card_type || "").toLowerCase().includes("red") || activeCardDetail.dismissed
+              ? "border-rose-400/60 bg-rose-950/60 text-rose-100"
+              : "border-yellow-400/60 bg-yellow-950/40 text-yellow-100"
+          }`}
+        >
+          <span className="font-mono text-[10px] font-black uppercase tracking-widest">
+            {activeCardDetail.second_yellow
+              ? "SECOND YELLOW -> RED"
+              : activeCardDetail.card_type || "DISCIPLINE"}{" "}
+            · {activeCardDetail.player_name || "Player"}
+          </span>
+          {activeCardDetail.reason && (
+            <span className="font-semibold text-slate-100">{activeCardDetail.reason}</span>
           )}
         </div>
       )}
@@ -830,7 +947,7 @@ export function Pitch2DView({
           className="flex items-center justify-between gap-2 rounded-lg border border-emerald-400/60 bg-emerald-500/15 px-3 py-1.5 text-xs text-emerald-100"
         >
           <span className="font-mono text-[10px] font-black uppercase tracking-widest text-emerald-300">
-            TOUCHLINE ORDER APPLIED
+            TOUCHLINE ORDER OBSERVED
           </span>
           <span className="truncate font-bold text-white">{tacticalBanner}</span>
         </div>
@@ -860,16 +977,6 @@ export function Pitch2DView({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono font-bold">
-            {(banner.kind === "goal" || banner.kind === "save") && onWatchReplay && !isInstantReplay ? (
-              <button
-                type="button"
-                data-testid="watch-instant-replay-btn"
-                onClick={() => onWatchReplay(Math.max(0, timeSeconds - 6))}
-                className="rounded border border-white/30 bg-black/45 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white transition hover:border-emerald-300 hover:bg-emerald-500 hover:text-slate-950"
-              >
-                ↺ WATCH REPLAY
-              </button>
-            ) : null}
             {banner.scoreline ? <span>{banner.scoreline}</span> : null}
             <span>{banner.minuteLabel}</span>
           </div>

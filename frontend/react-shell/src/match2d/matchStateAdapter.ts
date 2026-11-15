@@ -3,6 +3,8 @@ import type { RigAction } from "./playerRig";
 export type PitchSide = "home" | "away";
 
 export type PitchPlayer = {
+  id?: string;
+  renderKey?: string;
   playerId: string;
   side: PitchSide;
   x: number;
@@ -16,12 +18,71 @@ export type PitchPlayer = {
   hasBall?: boolean;
   isGoalkeeper?: boolean;
   highlighted?: boolean;
+  active?: boolean;
   speedRatio?: number | null;
   staminaPct?: number | null;
   anchorX?: number | null;
   anchorY?: number | null;
   velocity?: { x: number; y: number } | null;
   facing?: { x: number; y: number } | null;
+  skinTone?: string | null;
+  hairColor?: string | null;
+  hairStyle?: string | null;
+  buildProfile?: string | null;
+  bootColor?: string | null;
+  kitPattern?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  accentColor?: string | null;
+  shortsColor?: string | null;
+  socksColor?: string | null;
+};
+
+export type OffsideSnapshot = {
+  pass_contact_second?: number;
+  attacking_direction?: number;
+  offside_line_x: number;
+  attacker_line_x: number;
+  margin_meters?: number;
+  attacker_id?: string | null;
+  attacker_name?: string | null;
+  attacker_body_part?: string | null;
+  second_last_defender_id?: string | null;
+  second_last_defender_name?: string | null;
+  second_last_defender_body_part?: string | null;
+  is_offside_position?: boolean;
+  is_penalised?: boolean;
+  reason?: string | null;
+};
+
+export type VarReviewSummary = {
+  review_id?: string | null;
+  category?: string | null;
+  original_decision?: string | null;
+  final_decision?: string | null;
+  decision_outcome?: string | null;
+  reason?: string | null;
+  referee_action?: string | null;
+  steps?: string[] | null;
+};
+
+export type CardDetailSummary = {
+  card_type?: string | null;
+  reason?: string | null;
+  player_id?: string | null;
+  player_name?: string | null;
+  second_yellow?: boolean;
+  dismissed?: boolean;
+  var_overturned?: boolean;
+};
+
+export type BroadcastSessionMeta = {
+  match_id?: string | null;
+  competition_category?: string | null;
+  assigned_duration_seconds?: number | null;
+  server_start_timestamp?: string | null;
+  current_broadcast_position_seconds?: number | null;
+  broadcast_status?: string | null;
 };
 
 export type PitchBall = {
@@ -54,6 +115,9 @@ export type PitchFrame = {
   celebrationTeamId?: string | null;
   primaryPlayerId?: string | null;
   secondaryPlayerId?: string | null;
+  offsideSnapshot?: OffsideSnapshot | null;
+  varReview?: VarReviewSummary | null;
+  cardDetail?: CardDetailSummary | null;
   players: PitchPlayer[];
   ball: PitchBall | null;
   eventType?: string | null;
@@ -384,15 +448,16 @@ export class LiveRenderBuffer {
    */
   advanceWallClock(
     nowMs: number,
-    options?: { paused?: boolean; speed?: number },
+    _options?: { paused?: boolean; speed?: number },
   ): { frame: LiveSample | null; trajectoryAlpha: number; cursorTimeSeconds: number; renderTimeSeconds: number } {
     if (!this.next) {
       this.lastWallClockMs = nowMs;
       return { frame: null, trajectoryAlpha: 1, cursorTimeSeconds: 0, renderTimeSeconds: 0 };
     }
 
-    const paused = Boolean(options?.paused);
-    const speed = Number.isFinite(options?.speed) && (options?.speed as number) > 0 ? (options?.speed as number) : 1;
+    // Shared universal broadcast clock: live streams never pause or scale playback speed per viewer.
+    const paused = false;
+    const speed = 1;
 
     if (this.lastWallClockMs === null || !Number.isFinite(this.lastWallClockMs)) {
       this.lastWallClockMs = nowMs;
@@ -543,9 +608,9 @@ export function isHighlightMoment(
 }
 
 /**
- * Steps a recorded replay cursor forward monotonically, respecting pause/resume,
- * playback speed changes, highlight mode fast-forwarding between dead phases,
- * and clamping at the authoritative end-of-replay timestamp.
+ * Steps a broadcast timeline cursor forward monotonically at universal 1.0x wall-clock speed.
+ * Any viewer pause, speed multiplier, or highlight-skip arguments are ignored to enforce
+ * one shared universal broadcast clock for all spectators.
  */
 export function stepReplayClock(input: {
   currentTimeSeconds: number;
@@ -564,15 +629,48 @@ export function stepReplayClock(input: {
     maxDuration,
     Math.max(0, Number.isFinite(input.currentTimeSeconds) ? input.currentTimeSeconds : 0),
   );
-  if (input.paused) {
-    return current;
-  }
-  const baseSpeed = Number.isFinite(input.speed) && (input.speed as number) > 0 ? (input.speed as number) : 1;
-  const mode = input.highlightMode || "full";
-  const inHighlight = isHighlightMoment(current, input.events, mode);
-  const effectiveSpeed = mode === "full" || inHighlight ? baseSpeed : Math.max(baseSpeed * 3.5, 4.2);
   const deltaSeconds = Math.max(0, Number.isFinite(input.deltaMs) ? input.deltaMs / 1000 : 0);
-  return Math.min(maxDuration, current + deltaSeconds * effectiveSpeed);
+  return Math.min(maxDuration, current + deltaSeconds);
+}
+
+/**
+ * Derives the synchronized playback offset (seconds) from server-authoritative broadcast_session
+ * metadata so late joiners and reconnectors align to the universal broadcast position.
+ */
+export function deriveUniversalBroadcastPosition(
+  broadcastSession: {
+    assigned_duration_seconds?: number | null;
+    current_broadcast_position_seconds?: number | null;
+    server_start_timestamp?: string | number | null;
+    broadcast_status?: string | null;
+  } | null | undefined,
+  nowMs: number = Date.now(),
+): number | null {
+  if (!broadcastSession) return null;
+  const assigned = Number(broadcastSession.assigned_duration_seconds ?? 0);
+  const cap = Number.isFinite(assigned) && assigned > 0 ? assigned : Number.POSITIVE_INFINITY;
+  const status = String(broadcastSession.broadcast_status || "").toLowerCase();
+  if (status === "completed" || status === "fulltime" || status === "final") {
+    return Number.isFinite(cap) ? cap : Number(broadcastSession.current_broadcast_position_seconds ?? 0);
+  }
+  const serverPos = Number(broadcastSession.current_broadcast_position_seconds);
+  if (broadcastSession.server_start_timestamp != null) {
+    const startMs =
+      typeof broadcastSession.server_start_timestamp === "number"
+        ? broadcastSession.server_start_timestamp
+        : Date.parse(String(broadcastSession.server_start_timestamp));
+    if (Number.isFinite(startMs)) {
+      const derived = Math.max(0, (nowMs - startMs) / 1000);
+      if (Number.isFinite(serverPos) && serverPos >= 0) {
+        return Math.min(cap, Math.max(serverPos, derived));
+      }
+      return Math.min(cap, derived);
+    }
+  }
+  if (Number.isFinite(serverPos) && serverPos >= 0) {
+    return Math.min(cap, serverPos);
+  }
+  return null;
 }
 
 export function acceptSnapshot<T extends SnapshotCursor>(previous: T | null, next: T | null): T | null {
@@ -780,6 +878,14 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
     eventType: t < 0.5 ? from?.eventType : to?.eventType,
     ballTrajectory:
       t < 0.5 ? from?.ballTrajectory || to?.ballTrajectory || null : to?.ballTrajectory || from?.ballTrajectory || null,
+    offsideSnapshot:
+      t < 0.5
+        ? from?.offsideSnapshot ?? to?.offsideSnapshot ?? null
+        : to?.offsideSnapshot ?? from?.offsideSnapshot ?? null,
+    varReview:
+      t < 0.5 ? from?.varReview ?? to?.varReview ?? null : to?.varReview ?? from?.varReview ?? null,
+    cardDetail:
+      t < 0.5 ? from?.cardDetail ?? to?.cardDetail ?? null : to?.cardDetail ?? from?.cardDetail ?? null,
   };
 }
 
@@ -927,23 +1033,32 @@ export function animationFor(
     return resolveIndividualMovementAction(player);
   }
 
-  if (event === "save") {
+  if (event === "save" || event === "double_save" || event === "catch") {
     if (keeper) {
-      return isDefendingKeeperNearBall ? "save" : "idle";
+      if (!isDefendingKeeperNearBall) return "idle";
+      if (state.includes("catch") || event === "catch") return "catch";
+      if (state.includes("parry")) return "parry";
+      return "save";
     }
     if (isPrimaryActor) return "shoot";
     return resolveIndividualMovementAction(player);
   }
 
-  if (event === "shot" || event === "miss" || event === "penalty") {
+  if (event === "shot" || event === "miss" || event === "woodwork" || event === "penalty") {
     if (keeper) {
       return isDefendingKeeperNearBall ? "dive" : "idle";
     }
     if (isPrimaryActor) {
+      if ((event === "miss" || event === "woodwork") && context?.stage === "post_event") {
+        return "frustrated";
+      }
       if (state.includes("header") || (ball?.height && ball.height >= 1.35)) {
         return "header";
       }
       return "shoot";
+    }
+    if (isSecondaryActor || (state.includes("block") && distToBall <= 0.08)) {
+      return "block";
     }
     return resolveIndividualMovementAction(player);
   }
@@ -956,12 +1071,21 @@ export function animationFor(
     event === "corner" ||
     event === "free_kick" ||
     event === "goal_kick" ||
+    event === "clearance" ||
     event === "kickoff"
   ) {
     if (isPrimaryActor) {
       if (state.includes("header")) return "header";
+      if (event === "cross") return "cross";
+      if (event === "through_ball") return "through_pass";
+      if (event === "goal_kick" || event === "clearance" || state.includes("long")) return "long_pass";
       return "pass";
     }
+    return resolveIndividualMovementAction(player);
+  }
+
+  if (event === "block") {
+    if (isPrimaryActor || distToBall <= 0.075) return "block";
     return resolveIndividualMovementAction(player);
   }
 
@@ -1472,6 +1596,16 @@ export function resolveFeedPresentationStatus(input: {
     };
   }
 
+  if (input.isRecordedReplay && hasFrame) {
+    return {
+      status: "FINAL",
+      label: "FINAL",
+      ageMs,
+      ageSeconds,
+      isStale: false,
+    };
+  }
+
   if (
     conn === "reconnecting" ||
     (!isDemo && !input.isRecordedReplay && (conn === "error" || conn === "closed"))
@@ -1513,7 +1647,7 @@ export type PitchShotMarker = {
   x: number;
   y: number;
   side: PitchSide;
-  outcome: "goal" | "saved" | "missed";
+  outcome: "goal" | "saved" | "missed" | "woodwork" | "disallowed";
   xg: number;
   minute: number;
   playerName?: string;
@@ -1535,7 +1669,9 @@ export function extractShotMarkers(
     const ev = events[i];
     if (!ev) continue;
     const rawType = String(ev.type || ev.event_type || "").toLowerCase();
-    if (!["goal", "penalty_goal", "shot", "save", "miss"].includes(rawType)) continue;
+    if (!["goal", "penalty_goal", "own_goal", "shot", "save", "miss", "woodwork", "disallowed_goal"].includes(rawType)) {
+      continue;
+    }
 
     const minute = Number.isFinite(Number(ev.minute ?? ev.clock_minute))
       ? Math.max(0, Math.round(Number(ev.minute ?? ev.clock_minute)))
@@ -1595,12 +1731,18 @@ export function extractShotMarkers(
           ? 0.78
           : Math.min(0.68, Math.max(0.05, Number((0.52 * Math.exp(-distToGoal * 4.2)).toFixed(2))));
 
+    const rawOutcome = String(ev.outcome || "").toLowerCase();
+    const varDecision = String(ev.var_review?.final_decision || ev.varReview?.finalDecision || "").toLowerCase();
     const outcome: PitchShotMarker["outcome"] =
-      rawType === "goal" || rawType === "penalty_goal"
-        ? "goal"
-        : rawType === "save"
-          ? "saved"
-          : "missed";
+      rawType === "disallowed_goal" || varDecision === "overturned" || rawOutcome === "disallowed"
+        ? "disallowed"
+        : rawType === "woodwork" || rawOutcome === "woodwork" || rawOutcome === "post" || rawOutcome === "crossbar"
+          ? "woodwork"
+          : rawType === "goal" || rawType === "penalty_goal"
+            ? "goal"
+            : rawType === "save" || rawOutcome === "saved"
+              ? "saved"
+              : "missed";
 
     markers.push({
       id,
@@ -1770,7 +1912,10 @@ export type LiveXgTotals = {
  * Aggregates expected goals from an accumulated shot-marker list produced by extractShotMarkers().
  * Safe to call on every render frame — O(n) over shot count which is always small.
  */
-export function computeLiveXgTotals(markers: Array<{ side: PitchSide; xg: number }>): LiveXgTotals {
+export function computeLiveXgTotals(
+  markers: Array<{ side: PitchSide; xg: number }>,
+  authoritative?: { homeXg?: number | null; awayXg?: number | null; homeShots?: number | null; awayShots?: number | null } | null,
+): LiveXgTotals {
   let home = 0;
   let away = 0;
   let homeShots = 0;
@@ -1784,7 +1929,16 @@ export function computeLiveXgTotals(markers: Array<{ side: PitchSide; xg: number
       awayShots += 1;
     }
   }
-  return { home, away, homeShots, awayShots };
+  const authHome = Number(authoritative?.homeXg);
+  const authAway = Number(authoritative?.awayXg);
+  const authHomeShots = Number(authoritative?.homeShots);
+  const authAwayShots = Number(authoritative?.awayShots);
+  return {
+    home: Number.isFinite(authHome) && authHome >= 0 ? authHome : home,
+    away: Number.isFinite(authAway) && authAway >= 0 ? authAway : away,
+    homeShots: Number.isFinite(authHomeShots) && authHomeShots >= 0 ? authHomeShots : homeShots,
+    awayShots: Number.isFinite(authAwayShots) && authAwayShots >= 0 ? authAwayShots : awayShots,
+  };
 }
 
 
@@ -1818,7 +1972,18 @@ export function momentumAt(values: ReadonlyArray<number> | null | undefined, min
 // ---------------------------------------------------------------------------
 
 export type DirectorShot = {
-  kind: "kickoff_wide" | "goal_cut" | "set_piece" | "injury_time" | "none";
+  kind:
+    | "kickoff_wide"
+    | "goal_cut"
+    | "set_piece"
+    | "injury_time"
+    | "var_review"
+    | "card_focus"
+    | "sub_focus"
+    | "box_danger"
+    | "save_close"
+    | "buildup"
+    | "none";
   /** Multiplier applied on top of the camera mode's base zoom. */
   zoomMultiplier: number;
   /** Optional normalised focus point (0-1) the camera should drift toward. */
@@ -1839,22 +2004,56 @@ export function deriveDirectorShot(input: {
   scorer?: { x: number; y: number } | null;
   leadingSide?: PitchSide | null;
   homeAttacksRight?: boolean;
+  dangerZone?: string | null;
+  hasVarReview?: boolean;
 }): DirectorShot {
   const ev = String(input.eventType || "").toLowerCase();
   const age = input.eventAgeMs ?? 0;
   const t = input.timeSeconds ?? null;
+  const bx = input.ball?.x ?? 0.5;
+  const by = input.ball?.y ?? 0.5;
 
-  if (ev === "goal" || ev === "penalty_goal") {
-    if (age < 800 && input.scorer) {
+  if (input.hasVarReview || ev === "var_check" || ev === "var_review" || ev === "offside") {
+    return {
+      kind: "var_review",
+      zoomMultiplier: 1.56,
+      focus: { x: bx, y: by },
+    };
+  }
+  if (ev === "goal" || ev === "penalty_goal" || ev === "own_goal") {
+    if (age < 850 && input.scorer) {
       return { kind: "goal_cut", zoomMultiplier: 1.8, focus: input.scorer };
     }
     return { kind: "none", zoomMultiplier: 1, focus: null };
   }
+  if (ev === "save" || ev === "double_save") {
+    const keeperX = bx >= 0.5 ? 0.91 : 0.09;
+    return { kind: "save_close", zoomMultiplier: 1.42, focus: { x: keeperX, y: by } };
+  }
   if (ev === "corner" || ev === "free_kick" || ev === "penalty") {
-    const bx = input.ball?.x ?? 0.5;
-    // Frame the box the ball is attacking: both penalty spots stay in shot
     const boxX = bx >= 0.5 ? 0.86 : 0.14;
     return { kind: "set_piece", zoomMultiplier: ev === "penalty" ? 1.5 : 1.32, focus: { x: boxX, y: 0.5 } };
+  }
+  if (ev === "red_card" || ev === "yellow_card") {
+    return { kind: "card_focus", zoomMultiplier: 1.4, focus: input.scorer ?? { x: bx, y: by } };
+  }
+  if (ev === "substitution") {
+    return { kind: "sub_focus", zoomMultiplier: 1.24, focus: { x: 0.5, y: 0.9 } };
+  }
+  if (ev === "shot" || ev === "miss" || ev === "woodwork" || ev === "cross" || input.dangerZone === "box") {
+    const boxX = bx >= 0.5 ? 0.84 : 0.16;
+    return {
+      kind: "box_danger",
+      zoomMultiplier: 1.28,
+      focus: { x: boxX, y: Math.max(0.25, Math.min(0.75, 0.5 + (by - 0.5) * 0.45)) },
+    };
+  }
+  if (ev === "through_ball" || ev === "counterattack" || ev === "attack") {
+    return {
+      kind: "buildup",
+      zoomMultiplier: 1.14,
+      focus: { x: 0.5 + (bx - 0.5) * 0.55, y: 0.5 + (by - 0.5) * 0.35 },
+    };
   }
   if (ev === "kickoff" || (String(input.phase || "").toLowerCase() === "first_half" && t !== null && t < 3)) {
     if (ev !== "kickoff" || age < 1500) {
@@ -1863,7 +2062,6 @@ export function deriveDirectorShot(input: {
   }
   if ((input.minute ?? 0) >= 90 && input.leadingSide) {
     const homeRight = input.homeAttacksRight !== false;
-    // Drift toward the goal the trailing side is attacking — that is where the tension is
     const trailingAttacksRight = input.leadingSide === "home" ? !homeRight : homeRight;
     return { kind: "injury_time", zoomMultiplier: 1.06, focus: { x: trailingAttacksRight ? 0.7 : 0.3, y: 0.5 } };
   }

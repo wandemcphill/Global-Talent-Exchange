@@ -695,7 +695,7 @@ class SyntheticSquadFactory:
             return None
         from app.manager_market.service import ManagerMarketService
 
-        impact = ManagerMarketService()._manager_impact_score(manager)
+        impact = ManagerMarketService._manager_impact_score(manager)
         return {
             "display_name": manager.display_name,
             "mentality": manager.mentality,

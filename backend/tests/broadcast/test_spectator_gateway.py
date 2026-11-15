@@ -8,11 +8,15 @@ from types import SimpleNamespace
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 import pytest
 from redis.exceptions import RedisError
 from starlette.websockets import WebSocketDisconnect
 
 from app.auth.dependencies import get_current_user
+from app.models.competition_match import CompetitionMatch
 from app.broadcast.broadcast_models import ScoreUpdate, SpectatorEvent, TournamentEvent
 from app.broadcast.match_room_manager import adapt_match_stream_message
 from app.realtime.match_stream_service import MatchStreamService
@@ -24,6 +28,7 @@ from app.broadcast.spectator_gateway import (
     redact_ticket_from_log_text,
     router,
     ticket_sha256_digest,
+    _canonical_match_spectator_metadata,
 )
 
 
@@ -947,3 +952,70 @@ def test_fake_redis_spectator_ticket_store_compatibility() -> None:
             await redis_client.aclose()
 
     asyncio.run(_run_fake_compatibility())
+
+
+def test_canonical_matchday_atmosphere_is_shared_and_publicly_whitelisted() -> None:
+    # FastAPI's TestClient opens the WebSocket on another thread. Share the
+    # in-memory SQLite connection so the WebSocket sees the seeded match row.
+    engine = create_engine(
+        "sqlite+pysqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    CompetitionMatch.__table__.create(engine)
+    factory = sessionmaker(bind=engine, expire_on_commit=False)
+    match_id = "atmosphere-match-1"
+    with factory() as session:
+        session.add(
+            CompetitionMatch(
+                id=match_id,
+                competition_id="competition-1",
+                round_id="round-1",
+                round_number=1,
+                home_club_id="home-club",
+                away_club_id="away-club",
+                metadata_json={
+                    "institutional_match_context": {
+                        "home": {
+                            "manager": {"manager_id": "private-manager"},
+                            "atmosphere": {
+                                "dominant_mood": "ferocious_derby_cauldron",
+                                "crowd_intensity": 94,
+                                "chant_volume_db": 105,
+                                "stadium_ambience": "Electric home end",
+                                "banners": ["Pride of the club"],
+                                "chants": ["Come on home"],
+                                "visible_reactions": ["Full-stand tifo"],
+                                "private_owner_notes": "must not be broadcast",
+                            },
+                        },
+                        "away": {
+                            "atmosphere": {
+                                "dominant_mood": "anxious_scrutiny",
+                                "crowd_intensity": 38,
+                                "protest_stage": "banner_protest",
+                            }
+                        },
+                    }
+                },
+            )
+        )
+        session.commit()
+
+    app = _build_app()
+    app.state.session_factory = factory
+    metadata = _canonical_match_spectator_metadata(app, match_id)
+
+    assert metadata["institutional_atmosphere"]["home"]["crowd_intensity"] == 94
+    assert metadata["institutional_atmosphere"]["home"]["banners"] == ["Pride of the club"]
+    assert metadata["institutional_atmosphere"]["away"]["dominant_mood"] == "anxious_scrutiny"
+    assert "manager" not in metadata
+    assert "private_owner_notes" not in metadata["institutional_atmosphere"]["home"]
+
+    client = TestClient(app)
+    with client.websocket_connect(f"/ws/spectate/{match_id}") as websocket:
+        snapshot = _receive_until_type(websocket, "snapshot")
+        public_atmosphere = snapshot["snapshot"]["metadata"]["institutional_atmosphere"]
+        assert public_atmosphere["home"]["crowd_intensity"] == 94
+        assert public_atmosphere["away"]["dominant_mood"] == "anxious_scrutiny"
+        assert "manager" not in snapshot["snapshot"]["metadata"]
