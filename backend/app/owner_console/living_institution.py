@@ -1110,9 +1110,9 @@ def record_match_institutional_impact(
         return {}
 
     idem_prefix = f"match:{match.id}:club:{state.club_id}"
-    canonical_source_event_id = str(side.get("source_event_id") or "")
-    media_source_type = "canonical_match" if canonical_source_event_id else "match"
-    media_source_id = canonical_source_event_id or str(match.id)
+    canonical_match_id = str(side.get("canonical_match_id") or "")
+    media_source_type = "canonical_match" if canonical_match_id else "match"
+    media_source_id = canonical_match_id or str(match.id)
     existing_hist = session.scalar(
         select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == f"{idem_prefix}:result")
     )

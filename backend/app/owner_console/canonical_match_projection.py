@@ -251,7 +251,7 @@ def _project_one_club(
         "prior_head_to_head": _prior_head_to_head(session, match, state.club_id, opponent_id),
         "atmosphere_snapshot": side_context.get("atmosphere"),
         "projection_event_id": source_event.id,
-        "source_event_id": source_event.id,
+        "canonical_match_id": str(match.id),
     }
     try:
         with session.begin_nested():
