@@ -71,6 +71,20 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=RateDirection.FIAT_PER_COIN,
     )
+
+    # Separate retail and trader wholesale prices for the Fan Coin rail.
+    fan_coin_deposit_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("4.0000"), server_default="4.0000"
+    )
+    trader_coin_purchase_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("50.0000"), server_default="50.0000"
+    )
+    trader_fan_coin_purchase_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("2.5000"), server_default="2.5000"
+    )
+    trader_withdrawal_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("50.0000"), server_default="50.0000"
+    )
     min_trader_buy_rate_fiat: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=Decimal("820.0000"), server_default="820.0000"
     )
