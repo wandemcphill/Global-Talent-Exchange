@@ -169,8 +169,18 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
   ],
 };
 
+const MAX_GLB_RETRIES = 2;
+
 const OVERVIEW_CAMERA_POS: [number, number, number] = [0, 34, 42];
 const OVERVIEW_CAMERA_TARGET: [number, number, number] = [0, 1.5, 0];
+
+interface OperationsPerfTelemetry {
+  fps: number;
+  frameMs: number;
+  tier: string;
+  pixelRatio: number;
+  contextLossCount: number;
+}
 
 export function ClubOperationsCentre3D({
   clubId,
@@ -195,9 +205,12 @@ export function ClubOperationsCentre3D({
   const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
   const [renderMode, setRenderMode] = useState<"3d" | "2d">(() => (detectWebGLAvailable() ? "3d" : "2d"));
-  const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "fallback">("initializing");
+  const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "context_lost" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
   const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
+  const [glbRetryCount, setGlbRetryCount] = useState<number>(0);
+  const [perfTelemetry, setPerfTelemetry] = useState<OperationsPerfTelemetry | null>(null);
+  const retryFailedGlbsRef = useRef<() => void>(() => {});
   const activeQualityProfile = useMemo(() => GtexSceneRegistry.detectDeviceQuality(), []);
 
   // Interactive department action states
@@ -432,6 +445,9 @@ export function ClubOperationsCentre3D({
 
     setLoadedGlbCount(0);
     setFailedGlbModels([]);
+    setGlbRetryCount(0);
+    setPerfTelemetry(null);
+    setWebglStatus("initializing");
 
     const isCompactViewport =
       typeof window.matchMedia === "function"
@@ -544,10 +560,114 @@ export function ClubOperationsCentre3D({
     const animatedActors: THREE.Group[] = [];
     const loader = new GLTFLoader();
     let mounted = true;
-    let loadedModels = 0;
+    const loadedDestKeys = new Set<string>();
+    const failedDestKeys = new Set<string>();
+    const fallbackMeshes = new Map<string, THREE.Object3D>();
+    let retryAttemptCount = 0;
     roomGroupsRef.current.clear();
     roomScreensRef.current = [];
     roomActorsRef.current = [];
+
+    const mountDestinationGlb = (dest: OperationsHubDestination, group: THREE.Group, accent: THREE.Color) => {
+      const rawGlbUrl = dest.glb_model || "/models/campus/club_hq.glb";
+      const glbUrl = publicUrl(rawGlbUrl);
+      const fallbackName = `fallback-wireframe-${dest.destination_key}`;
+
+      // Remove prior fallback wireframe if retrying this destination
+      const priorFallback = fallbackMeshes.get(dest.destination_key);
+      if (priorFallback) {
+        const idx = pickables.indexOf(priorFallback);
+        if (idx >= 0) pickables.splice(idx, 1);
+        group.remove(priorFallback);
+        disposeObjectResources(priorFallback);
+        fallbackMeshes.delete(dest.destination_key);
+      }
+
+      loader.load(
+        glbUrl,
+        (gltf) => {
+          if (!mounted) {
+            disposeObjectResources(gltf.scene);
+            return;
+          }
+          const model = gltf.scene.clone(true);
+          const box = new THREE.Box3().setFromObject(model);
+          const size = new THREE.Vector3();
+          const center = new THREE.Vector3();
+          box.getSize(size);
+          box.getCenter(center);
+
+          const maxDim = Math.max(size.x, size.y, size.z, 1);
+          const targetSpan = 2.8;
+          const scale = targetSpan / maxDim;
+          model.scale.setScalar(scale);
+
+          const scaledBox = new THREE.Box3().setFromObject(model);
+          const scaledCenter = new THREE.Vector3();
+          scaledBox.getCenter(scaledCenter);
+
+          model.position.x = 7.0 - scaledCenter.x;
+          model.position.z = -scaledCenter.z - 0.8;
+          model.position.y = -scaledBox.min.y + 0.12;
+
+          model.traverse((child) => {
+            if ((child as THREE.Mesh).isMesh) {
+              const m = child as THREE.Mesh;
+              m.castShadow = true;
+              m.receiveShadow = true;
+              m.userData = { destinationKey: dest.destination_key };
+              pickables.push(m);
+            }
+          });
+
+          group.add(model);
+          failedDestKeys.delete(dest.destination_key);
+          loadedDestKeys.add(dest.destination_key);
+          setFailedGlbModels(Array.from(failedDestKeys));
+          setLoadedGlbCount(loadedDestKeys.size);
+        },
+        undefined,
+        (err) => {
+          if (!mounted) return;
+          console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
+          failedDestKeys.add(dest.destination_key);
+          setFailedGlbModels(Array.from(failedDestKeys));
+
+          if (!fallbackMeshes.has(dest.destination_key)) {
+            const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
+            const fallbackMat = new THREE.MeshStandardMaterial({
+              color: accent,
+              wireframe: true,
+              transparent: true,
+              opacity: 0.7,
+              emissive: accent,
+              emissiveIntensity: 0.2,
+            });
+            const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
+            fallbackMesh.name = fallbackName;
+            fallbackMesh.position.set(7.0, 1.2, -0.8);
+            fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
+            fallbackMesh.castShadow = true;
+            fallbackMesh.receiveShadow = true;
+            pickables.push(fallbackMesh);
+            fallbackMeshes.set(dest.destination_key, fallbackMesh);
+            group.add(fallbackMesh);
+          }
+        },
+      );
+    };
+
+    retryFailedGlbsRef.current = () => {
+      if (!mounted || retryAttemptCount >= MAX_GLB_RETRIES || failedDestKeys.size === 0) return;
+      retryAttemptCount += 1;
+      setGlbRetryCount(retryAttemptCount);
+      Array.from(failedDestKeys).forEach((destKey) => {
+        const dest = sceneDestinations.find((item) => item.destination_key === destKey);
+        const group = roomGroupsRef.current.get(destKey);
+        if (!dest || !group) return;
+        mountDestinationGlb(dest, group, new THREE.Color(dest.accent_color || "#38bdf8"));
+      });
+    };
 
     // Build each of the 6 Operational Destination Wings
     sceneDestinations.forEach((dest) => {
@@ -580,79 +700,7 @@ export function ClubOperationsCentre3D({
       }
 
       // Load Certified Production GLB Model as Architectural Wing Monument behind/integrated with the Room
-      const rawGlbUrl = dest.glb_model || "/models/campus/club_hq.glb";
-      const glbUrl = publicUrl(rawGlbUrl);
-      loader.load(
-        glbUrl,
-        (gltf) => {
-          if (!mounted) {
-            // A GLB may finish downloading after this scene has been unmounted.
-            // Release its GPU resources instead of leaking a late asset response.
-            disposeObjectResources(gltf.scene);
-            return;
-          }
-          const model = gltf.scene.clone(true);
-          const box = new THREE.Box3().setFromObject(model);
-          const size = new THREE.Vector3();
-          const center = new THREE.Vector3();
-          box.getSize(size);
-          box.getCenter(center);
-
-          const maxDim = Math.max(size.x, size.y, size.z, 1);
-          const targetSpan = 2.8;
-          const scale = targetSpan / maxDim;
-          model.scale.setScalar(scale);
-
-          const scaledBox = new THREE.Box3().setFromObject(model);
-          const scaledCenter = new THREE.Vector3();
-          scaledBox.getCenter(scaledCenter);
-
-          // Keep the certified campus asset visible as an exterior landmark beside
-          // the department, rather than allowing it to obscure the new interior.
-          model.position.x = 7.0 - scaledCenter.x;
-          model.position.z = -scaledCenter.z - 0.8;
-          model.position.y = -scaledBox.min.y + 0.12;
-
-          model.traverse((child) => {
-            if ((child as THREE.Mesh).isMesh) {
-              const m = child as THREE.Mesh;
-              m.castShadow = true;
-              m.receiveShadow = true;
-              m.userData = { destinationKey: dest.destination_key };
-              pickables.push(m);
-            }
-          });
-
-          group.add(model);
-          loadedModels += 1;
-          setLoadedGlbCount(loadedModels);
-        },
-        undefined,
-        (err) => {
-          if (!mounted) return;
-          console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
-          setFailedGlbModels((prev) => (prev.includes(dest.destination_key) ? prev : [...prev, dest.destination_key]));
-
-          // Procedural wireframe fallback mesh so destination remains interactive and visible
-          const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
-          const fallbackMat = new THREE.MeshStandardMaterial({
-            color: accent,
-            wireframe: true,
-            transparent: true,
-            opacity: 0.7,
-            emissive: accent,
-            emissiveIntensity: 0.2,
-          });
-          const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
-          fallbackMesh.name = `fallback-wireframe-${dest.destination_key}`;
-          fallbackMesh.position.set(7.0, 1.2, -0.8);
-          fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
-          fallbackMesh.castShadow = true;
-          fallbackMesh.receiveShadow = true;
-          pickables.push(fallbackMesh);
-          group.add(fallbackMesh);
-        }
-      );
+      mountDestinationGlb(dest, group, accent);
 
       scene.add(group);
     });
@@ -712,13 +760,24 @@ export function ClubOperationsCentre3D({
       typeof ResizeObserver !== "undefined" ? new ResizeObserver(onResize) : null;
     resizeObserver?.observe(container);
 
+    let isContextLost = false;
+    let contextLossCount = 0;
+
     const onWebglContextLost = (event: Event) => {
       event.preventDefault();
-      // Keep the canvas mounted so the browser can restore this WebGL context.
-      // The owner can still choose the 2D floorplan manually if restoration fails.
-      setWebglStatus("fallback");
+      if (!mounted) return;
+      isContextLost = true;
+      contextLossCount += 1;
+      if (contextLossCount >= 2) {
+        setWebglStatus("fallback");
+        setRenderMode("2d");
+      } else {
+        setWebglStatus("context_lost");
+      }
     };
     const onWebglContextRestored = () => {
+      if (!mounted) return;
+      isContextLost = false;
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
       onResize();
       setWebglStatus("ready");
@@ -728,17 +787,6 @@ export function ClubOperationsCentre3D({
 
     setWebglStatus("ready");
 
-    if (typeof window !== "undefined") {
-      (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
-        scene,
-        roomGroups: roomGroupsRef.current,
-        roomScreens: roomScreensRef.current,
-        roomActors: roomActorsRef.current,
-        camera,
-        renderer,
-      };
-    }
-
     let animFrameId = 0;
     let lastRenderAt = 0;
     let qualityWindowStartedAt = performance.now();
@@ -747,17 +795,54 @@ export function ClubOperationsCentre3D({
     let slowQualityWindows = 0;
     let fastQualityWindows = 0;
     let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
+    let latestTelemetry: OperationsPerfTelemetry = {
+      fps: qualityProfile.targetFps,
+      frameMs: Math.round((1000 / Math.max(1, qualityProfile.targetFps)) * 10) / 10,
+      tier: qualityTier,
+      pixelRatio: adaptivePixelRatio,
+      contextLossCount,
+    };
+
+    if (typeof window !== "undefined") {
+      (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
+        scene,
+        roomGroups: roomGroupsRef.current,
+        roomScreens: roomScreensRef.current,
+        roomActors: roomActorsRef.current,
+        camera,
+        renderer,
+        getTelemetry: () => ({
+          ...latestTelemetry,
+          loadedGlbs: loadedDestKeys.size,
+          failedGlbs: failedDestKeys.size,
+          retryAttempts: retryAttemptCount,
+          contextLossCount,
+        }),
+      };
+    }
     const targetFrameInterval = 1000 / qualityProfile.targetFps;
     // Allow 2.5ms of rAF timer jitter so 60Hz monitors never drop every second frame
     // and trigger false-positive adaptive quality downgrades.
     const frameCapThreshold = Math.max(0, targetFrameInterval - 2.5);
     const animate = (now: number) => {
       animFrameId = requestAnimationFrame(animate);
+      if (isContextLost) return;
       if (lastRenderAt > 0 && now - lastRenderAt < frameCapThreshold) return;
       const frameDelta = lastRenderAt > 0 ? Math.min(250, now - lastRenderAt) : targetFrameInterval;
       lastRenderAt = now;
       qualityFrameCount += 1;
       qualityFrameTotalMs += frameDelta;
+      if (qualityFrameCount === 2 || qualityFrameCount === 5) {
+        const warmupMs = Math.max(1, qualityFrameTotalMs / qualityFrameCount);
+        latestTelemetry = {
+          fps: Math.max(1, Math.round(1000 / warmupMs)),
+          frameMs: Math.round(warmupMs * 10) / 10,
+          tier: qualityTier,
+          pixelRatio: adaptivePixelRatio,
+          contextLossCount,
+        };
+        setPerfTelemetry(latestTelemetry);
+      }
       if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
         const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
         const slowFrameThreshold = Math.max(24, targetFrameInterval * 1.25);
@@ -794,6 +879,14 @@ export function ClubOperationsCentre3D({
           }
           fastQualityWindows = 0;
         }
+        latestTelemetry = {
+          fps: Math.max(1, Math.round(1000 / Math.max(1, averageFrameMs))),
+          frameMs: Math.round(averageFrameMs * 10) / 10,
+          tier: qualityTier,
+          pixelRatio: adaptivePixelRatio,
+          contextLossCount,
+        };
+        setPerfTelemetry(latestTelemetry);
         qualityWindowStartedAt = now;
         qualityFrameCount = 0;
         qualityFrameTotalMs = 0;
@@ -855,6 +948,7 @@ export function ClubOperationsCentre3D({
       renderer.domElement.remove();
       renderer.dispose();
       lightingObjectsRef.current = null;
+      retryFailedGlbsRef.current = () => {};
       roomGroupsRef.current.clear();
       roomScreensRef.current = [];
       roomActorsRef.current = [];
@@ -1535,26 +1629,84 @@ export function ClubOperationsCentre3D({
 
               <div
                 data-testid="glb-asset-status"
-                className="pointer-events-auto flex items-center gap-1.5 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md"
+                className="pointer-events-auto flex items-center gap-2 rounded-xl border border-white/15 bg-slate-950/85 px-2.5 py-1 text-[10px] font-bold text-slate-300 backdrop-blur-md"
               >
                 <span>
                   {renderMode === "3d"
-                    ? `WebGL ${webglStatus === "ready" ? "Active" : "Init"} · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
+                    ? `WebGL ${
+                        webglStatus === "ready"
+                          ? "Active"
+                          : webglStatus === "context_lost"
+                            ? "Context Lost"
+                            : webglStatus === "fallback"
+                              ? "Fallback"
+                              : "Init"
+                      } · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
                     : "2D Blueprint Active"}
                 </span>
+                {renderMode === "3d" && perfTelemetry && (
+                  <span
+                    data-testid="webgl-perf-telemetry"
+                    className="gx-mono border-l border-white/15 pl-2 text-[9px] text-sky-300"
+                  >
+                    {perfTelemetry.fps} FPS · {perfTelemetry.frameMs.toFixed(1)}ms · {perfTelemetry.tier}
+                  </span>
+                )}
               </div>
             </div>
+
+            {/* WebGL Context Loss Resilience Banner */}
+            {renderMode === "3d" && webglStatus === "context_lost" && (
+              <div
+                data-testid="webgl-context-lost-banner"
+                className="pointer-events-auto absolute inset-x-3 top-14 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-rose-500/60 bg-rose-950/90 px-3 py-2 text-xs text-rose-100 backdrop-blur-md z-20"
+              >
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-rose-400 shrink-0" />
+                  <span>
+                    3D WebGL GPU context was interrupted. Waiting for automatic browser recovery, or switch to the 2D Blueprint view.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="switch-to-2d-on-loss-btn"
+                  onClick={() => {
+                    setWebglStatus("fallback");
+                    setRenderMode("2d");
+                  }}
+                  className="rounded-lg border border-rose-400/50 bg-rose-500/20 px-2.5 py-1 text-[10px] font-bold uppercase text-rose-100 hover:bg-rose-500/30"
+                >
+                  Switch to 2D Blueprint
+                </button>
+              </div>
+            )}
 
             {/* GLB Asset Warning Banner */}
             {failedGlbModels.length > 0 && (
               <div
                 data-testid="glb-asset-warning"
-                className="pointer-events-auto absolute inset-x-3 top-14 flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md z-10"
+                className={`pointer-events-auto absolute inset-x-3 ${
+                  webglStatus === "context_lost" ? "top-28" : "top-14"
+                } flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-500/50 bg-amber-950/90 px-3 py-1.5 text-xs text-amber-200 backdrop-blur-md z-10`}
               >
-                <AlertTriangle size={14} className="text-amber-400 shrink-0" />
-                <span>
-                  {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for {failedGlbModels.join(", ")}.
-                </span>
+                <div className="flex items-center gap-2">
+                  <AlertTriangle size={14} className="text-amber-400 shrink-0" />
+                  <span>
+                    {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for{" "}
+                    {failedGlbModels.join(", ")}.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  data-testid="retry-failed-glb-btn"
+                  disabled={glbRetryCount >= MAX_GLB_RETRIES}
+                  onClick={() => retryFailedGlbsRef.current()}
+                  className="rounded-lg border border-amber-400/50 bg-amber-500/20 px-2.5 py-1 text-[10px] font-bold uppercase text-amber-100 hover:bg-amber-500/30 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {glbRetryCount >= MAX_GLB_RETRIES
+                    ? `Retry Limit Reached (${glbRetryCount}/${MAX_GLB_RETRIES})`
+                    : `Retry Failed Assets (${glbRetryCount}/${MAX_GLB_RETRIES})`}
+                </button>
               </div>
             )}
 
