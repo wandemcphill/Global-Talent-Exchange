@@ -220,6 +220,7 @@ class CompetitionAutoRunner:
         request = self.team_factory.build_request(job, session=self.session)
         request = self._apply_owner_pre_match_tactics(request, match)
         self._capture_institutional_match_context(match, competition, request)
+        from app.match_engine.simulation.live_execution import MatchExecutionCheckpoint
         from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
 
         live_exec = CanonicalLiveExecutionService(
@@ -235,35 +236,42 @@ class CompetitionAutoRunner:
             request=request,
             settle=False,
         )
-        self._store_match_viewer_payload(match, replay_payload)
-        self._store_match_events(match, replay_payload, execution_revision=int(execution.execution_revision))
-        completed = self.lifecycle_service.complete_match(
-            match=match,
-            home_score=replay_payload.summary.home_score,
-            away_score=replay_payload.summary.away_score,
-            decided_by_penalties=replay_payload.summary.decided_by_penalties,
-            winner_club_id=replay_payload.summary.winner_team_id,
+        resolved_checkpoint = MatchExecutionCheckpoint.from_dict(
+            execution.checkpoint_json,
+            generator=live_exec.event_generator,
+            request=request,
         )
-        execution.execution_status = "completed"
-        execution.clock_phase = "completed"
-        execution.settled_at = completed.completed_at
-        execution.next_step_at = None
-        execution.lease_owner = None
-        execution.lease_expires_at = None
-        # Recorded *after* settlement so the performances carry the match's real
-        # completion timestamp, which is what form windows are ordered by.
-        self._store_match_performances(completed, replay_payload)
-        try:
-            from app.owner_console.canonical_match_projection import project_completed_canonical_match
+        with self.session.begin_nested():
+            self._store_match_viewer_payload(match, replay_payload)
+            self._store_match_events(match, replay_payload, execution_revision=int(execution.execution_revision))
+            completed = self.lifecycle_service.complete_match(
+                match=match,
+                home_score=replay_payload.summary.home_score,
+                away_score=replay_payload.summary.away_score,
+                decided_by_penalties=replay_payload.summary.decided_by_penalties,
+                winner_club_id=replay_payload.summary.winner_team_id,
+            )
+            # Recorded *after* settlement so the performances carry the match's real
+            # completion timestamp, which is what form windows are ordered by.
+            self._store_match_performances(completed, replay_payload)
+            live_exec.persist_replay_artifacts(completed, execution, replay_payload)
+            try:
+                from app.owner_console.canonical_match_projection import project_completed_canonical_match
 
-            # The adapter owns per-club savepoints; this outer savepoint also
-            # contains failures during canonical source-event creation/flush.
-            with self.session.begin_nested():
-                project_completed_canonical_match(self.session, completed.id)
-        except Exception:
-            logger.exception(
-                "canonical_match.institutional_projection_deferred match_id=%s",
-                completed.id,
+                # The adapter owns per-club savepoints; this outer savepoint also
+                # contains failures during canonical source-event creation/flush.
+                with self.session.begin_nested():
+                    project_completed_canonical_match(self.session, completed.id)
+            except Exception:
+                logger.exception(
+                    "canonical_match.institutional_projection_deferred match_id=%s",
+                    completed.id,
+                )
+            live_exec.mark_execution_settled(
+                completed,
+                execution,
+                resolved_checkpoint,
+                sim_request=request,
             )
         return completed
 
@@ -573,8 +581,6 @@ class CompetitionAutoRunner:
         *,
         execution_revision: int = 1,
     ) -> None:
-        from sqlalchemy import delete
-
         existing_rows = list(
             self.session.scalars(
                 select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
@@ -583,59 +589,19 @@ class CompetitionAutoRunner:
         if existing_rows and all(row.event_key is None for row in existing_rows):
             return
 
-        canonical_keys = {
-            f"r{int(execution_revision)}:{int(getattr(event, 'sequence', 0) or 0)}:{getattr(event.event_type, 'value', str(event.event_type))}"
-            for event in replay_payload.timeline.events
-        }
-        stale_ids = [row.id for row in existing_rows if row.event_key is None or row.event_key not in canonical_keys]
-        if stale_ids:
-            self.session.execute(delete(CompetitionMatchEvent).where(CompetitionMatchEvent.id.in_(stale_ids)))
-            self.session.flush()
+        from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
 
-        for event in replay_payload.timeline.events:
-            event_type = getattr(event.event_type, "value", str(event.event_type))
-            seq = int(getattr(event, "sequence", 0) or 0)
-            event_key = f"r{int(execution_revision)}:{seq}:{event_type}"
-            card_type = None
-            if event_type == "yellow_card":
-                card_type = "yellow"
-            elif event_type == "red_card":
-                card_type = "red"
-            self.lifecycle_service.record_match_event(
-                match=match,
-                event_type=event_type,
-                minute=event.minute,
-                added_time=event.added_time,
-                club_id=event.team_id,
-                player_id=event.primary_player.player_id if event.primary_player else None,
-                secondary_player_id=(event.secondary_player.player_id if event.secondary_player else None),
-                card_type=card_type,
-                highlight=event_type
-                in {
-                    "goal",
-                    "penalty_goal",
-                    "penalty_scored",
-                    "red_card",
-                    "injury",
-                    "fulltime",
-                    "halftime",
-                    "substitution",
-                    "tactical_change",
-                },
-                metadata_json={
-                    "commentary": event.commentary,
-                    "analyst_commentary": event.analyst_commentary,
-                    "clock_label": event.clock_label,
-                    "home_score": event.home_score,
-                    "away_score": event.away_score,
-                    "presentation_second": event.presentation_second,
-                    "execution_revision": int(execution_revision),
-                    **dict(event.metadata or {}),
-                },
-                sequence=seq,
-                execution_revision=int(execution_revision),
-                event_key=event_key,
-            )
+        CanonicalLiveExecutionService(
+            self.session,
+            match_service=self.match_service,
+            timeline_service=self.timeline_service,
+            team_factory=self.team_factory,
+            lifecycle_service=self.lifecycle_service,
+        ).reconcile_settled_events(
+            match,
+            replay_payload,
+            execution_revision=int(execution_revision),
+        )
 
     def _club_name(self, competition_id: str, club_id: str) -> str:
         club_profile = self.session.get(ClubProfile, club_id)

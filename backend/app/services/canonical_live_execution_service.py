@@ -4,14 +4,18 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha256
 import json
 import logging
+from math import ceil
 from typing import Any
 from uuid import uuid4
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from app.common.enums.competition_format import CompetitionFormat
+from app.common.enums.competition_type import CompetitionType
 from app.common.enums.match_status import MatchStatus
+from app.live_matches.highlights import SmartHighlightService
 from app.match_engine.schemas import (
     MatchReplayPayloadView,
     MatchSimulationRequest,
@@ -32,12 +36,19 @@ from app.match_engine.simulation.live_execution import (
     resume_from_halftime,
     serialize_match_event,
 )
-from app.match_engine.simulation.models import MatchEvent, PlayerRole, SimulationResult, TacticalStyle, TeamRuntimeState
+from app.match_engine.simulation.models import (
+    MatchEvent,
+    PlayerRole,
+    SimulationResult,
+    TacticalStyle,
+    TeamRuntimeState,
+)
 from app.match_engine.simulation.offside_var import (
     BROADCAST_CATEGORY_MAX_SECONDS,
     resolve_match_broadcast_category,
 )
 from app.matches.lifecycle import assert_transition, is_terminal
+from app.models.club_profile import ClubProfile
 from app.models.competition import Competition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
@@ -45,8 +56,19 @@ from app.models.competition_match_execution import (
     CompetitionMatchExecution,
     CompetitionMatchTacticalCommand,
 )
+from app.models.competition_participant import CompetitionParticipant
 from app.models.event_backbone import EventOutbox
 from app.players.performance_recorder import PlayerMatchPerformanceRecorder
+from app.replay_archive.persistence import ReplayArchiveRecordRow
+from app.replay_archive.policy import SpectatorVisibilityPolicyService
+from app.replay_archive.schemas import (
+    CompetitionContextView,
+    ReplayArchiveIngest,
+    ReplayArchiveRecord,
+    ReplayClubView,
+    ReplayMomentView,
+    ReplayScoreline,
+)
 from app.services.competition_lifecycle_service import CompetitionLifecycleService
 from app.services.match_timeline_service import MatchTimelineService
 
@@ -265,6 +287,30 @@ def _event_highlight(event_type: str) -> bool:
     }
 
 
+def _card_type_for_event(event_type: str) -> str | None:
+    if event_type == "yellow_card":
+        return "yellow"
+    if event_type == "red_card":
+        return "red"
+    return None
+
+
+_REPLAY_MOMENT_EVENT_MAP: dict[str, str] = {
+    "goal": "goals",
+    "missed_chance": "missed_chances",
+    "woodwork": "missed_chances",
+    "double_save": "missed_chances",
+    "yellow_card": "yellow_cards",
+    "red_card": "red_cards",
+    "substitution": "substitutions",
+    "injury": "injuries",
+    "penalty_goal": "penalties",
+    "penalty_scored": "penalties",
+    "penalty_miss": "penalties",
+    "penalty_missed": "penalties",
+}
+
+
 class CanonicalLiveExecutionService:
     """Authoritative database-backed lifecycle and checkpoint execution owner for canonical matches."""
 
@@ -393,11 +439,7 @@ class CanonicalLiveExecutionService:
         revision: int,
     ) -> CompetitionMatchEvent:
         event_type = raw_event.event_type.value
-        card_type = None
-        if event_type == "yellow_card":
-            card_type = "yellow"
-        elif event_type == "red_card":
-            card_type = "red"
+        card_type = _card_type_for_event(event_type)
         meta = dict(raw_event.metadata or {})
         origin_revision = int(meta.get("execution_revision") or revision)
         event_key = f"seq:{int(raw_event.sequence)}:{event_type}"
@@ -1205,62 +1247,40 @@ class CanonicalLiveExecutionService:
         replay_payload = self.match_service.build_replay_payload_from_result(sim_request, result)
         return match, execution, result, replay_payload
 
-    def settle_completed_execution(
+    def reconcile_settled_events(
         self,
         match: CompetitionMatch,
-        execution: CompetitionMatchExecution,
+        replay_payload: MatchReplayPayloadView,
         *,
-        request: MatchSimulationRequest | None = None,
-        checkpoint: MatchExecutionCheckpoint | None = None,
-    ) -> CompetitionMatch:
-        """Atomically reconcile events, viewer replay, standings, performances, and projections at FT."""
+        execution_revision: int,
+    ) -> None:
+        """Remove any stale/non-canonical events and persist exact settled events with per-event revision."""
 
-        if match.status == MatchStatus.COMPLETED.value and match.stats_applied and execution.execution_status == "completed":
-            return match
-
-        sim_request = request or MatchSimulationRequest.model_validate(execution.simulation_request_json)
-        resolved_checkpoint = checkpoint or MatchExecutionCheckpoint.from_dict(
-            execution.checkpoint_json,
-            generator=self.event_generator,
-            request=sim_request,
-        )
-        result = finalize_checkpoint(self.event_generator, sim_request, resolved_checkpoint)
-        replay_payload = self.match_service.build_replay_payload_from_result(sim_request, result)
-
-        # Remove any stale non-authoritative or prior-revision rows before reconciling the final timeline.
         existing_rows = list(
             self.session.scalars(
                 select(CompetitionMatchEvent).where(CompetitionMatchEvent.match_id == match.id)
             ).all()
         )
-        canonical_keys: set[str] = set()
-        for timeline_event in replay_payload.timeline.events:
-            event_type = getattr(timeline_event.event_type, "value", str(timeline_event.event_type))
-            seq = int(getattr(timeline_event, "sequence", 0) or 0)
-            canonical_keys.add(f"seq:{seq}:{event_type}")
-
-        stale_ids = [
-            row.id
+        canonical_keys = {
+            f"seq:{int(getattr(ev, 'sequence', 0) or 0)}:{getattr(ev.event_type, 'value', str(ev.event_type))}"
+            for ev in replay_payload.timeline.events
+        }
+        stale_rows = [
+            row
             for row in existing_rows
             if row.event_key is None or row.event_key not in canonical_keys
         ]
-        if stale_ids:
-            self.session.execute(
-                delete(CompetitionMatchEvent).where(CompetitionMatchEvent.id.in_(stale_ids))
-            )
+        if stale_rows:
+            for stale_row in stale_rows:
+                self.session.delete(stale_row)
             self.session.flush()
 
         for timeline_event in replay_payload.timeline.events:
             event_type = getattr(timeline_event.event_type, "value", str(timeline_event.event_type))
-            card_type = None
-            if event_type == "yellow_card":
-                card_type = "yellow"
-            elif event_type == "red_card":
-                card_type = "red"
             seq = int(getattr(timeline_event, "sequence", 0) or 0)
             event_key = f"seq:{seq}:{event_type}"
             raw_meta = dict(timeline_event.metadata or {})
-            event_rev = int(raw_meta.get("execution_revision") or execution.execution_revision)
+            event_rev = int(raw_meta.get("execution_revision") or execution_revision)
             self.lifecycle_service.record_match_event(
                 match=match,
                 event_type=event_type,
@@ -1271,7 +1291,7 @@ class CanonicalLiveExecutionService:
                 secondary_player_id=(
                     timeline_event.secondary_player.player_id if timeline_event.secondary_player else None
                 ),
-                card_type=card_type,
+                card_type=_card_type_for_event(event_type),
                 highlight=_event_highlight(event_type),
                 metadata_json={
                     "commentary": timeline_event.commentary,
@@ -1288,83 +1308,386 @@ class CanonicalLiveExecutionService:
                 event_key=event_key,
             )
 
-        viewer_payload = self.timeline_service.build_from_replay_payload(replay_payload)
-        match.metadata_json = {
-            **dict(match.metadata_json or {}),
-            "match_viewer": viewer_payload.model_dump(mode="json"),
-            "replay_payload": replay_payload.model_dump(mode="json"),
-            "simulation_summary": replay_payload.summary.model_dump(mode="json"),
-            "simulation_seed": replay_payload.seed,
-            "tactics": {
-                "home": _extract_tactics_snapshot(resolved_checkpoint.home_state, execution.execution_revision),
-                "away": _extract_tactics_snapshot(resolved_checkpoint.away_state, execution.execution_revision),
-            },
-        }
+    def _persist_replay_archive_record(
+        self,
+        match: CompetitionMatch,
+        execution: CompetitionMatchExecution,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        competition = self.session.get(Competition, match.competition_id)
+        if competition is None:
+            return
+        try:
+            format_enum = CompetitionFormat(competition.format)
+            competition_type = (
+                CompetitionType.LEAGUE if format_enum is CompetitionFormat.LEAGUE else CompetitionType.FAST_CUP
+            )
+            is_cup_match = format_enum is CompetitionFormat.CUP or bool(match.requires_winner)
+        except ValueError:
+            competition_type = CompetitionType.LEAGUE
+            is_cup_match = bool(match.requires_winner)
 
-        completed = self.lifecycle_service.complete_match(
-            match=match,
-            home_score=replay_payload.summary.home_score,
-            away_score=replay_payload.summary.away_score,
-            decided_by_penalties=replay_payload.summary.decided_by_penalties,
-            winner_club_id=replay_payload.summary.winner_team_id,
+        raw_moments: list[dict[str, Any]] = []
+        last_minute = 0
+        for event in replay_payload.timeline.events:
+            event_type = getattr(event.event_type, "value", str(event.event_type))
+            moment_type = _REPLAY_MOMENT_EVENT_MAP.get(event_type)
+            if moment_type is None:
+                continue
+            is_pen = event_type in {"penalty_goal", "penalty_scored", "penalty_miss", "penalty_missed"}
+            if is_pen and not is_cup_match:
+                if event_type in {"penalty_goal", "penalty_scored"}:
+                    moment_type = "goals"
+                else:
+                    moment_type = "missed_chances"
+                is_pen = False
+            minute = max(last_minute, max(0, int(event.minute or 0)))
+            last_minute = minute
+            raw_moments.append(
+                {
+                    "event_id": str(event.event_id),
+                    "minute": minute,
+                    "event_type": moment_type,
+                    "club_id": event.team_id,
+                    "club_name": event.team_name,
+                    "player_id": event.primary_player.player_id if event.primary_player else None,
+                    "player_name": event.primary_player.player_name if event.primary_player else None,
+                    "secondary_player_id": (
+                        event.secondary_player.player_id if event.secondary_player else None
+                    ),
+                    "secondary_player_name": (
+                        event.secondary_player.player_name if event.secondary_player else None
+                    ),
+                    "description": event.commentary,
+                    "home_score": int(event.home_score),
+                    "away_score": int(event.away_score),
+                    "is_penalty": is_pen,
+                }
+            )
+            if event_type in {"goal", "penalty_goal", "penalty_scored"} and event.secondary_player is not None:
+                raw_moments.append(
+                    {
+                        "event_id": f"{event.event_id}:assist",
+                        "minute": minute,
+                        "event_type": "assists",
+                        "club_id": event.team_id,
+                        "club_name": event.team_name,
+                        "player_id": event.secondary_player.player_id,
+                        "player_name": event.secondary_player.player_name,
+                        "secondary_player_id": event.primary_player.player_id if event.primary_player else None,
+                        "secondary_player_name": (
+                            event.primary_player.player_name if event.primary_player else None
+                        ),
+                        "description": (
+                            f"Assist for {event.primary_player.player_name}"
+                            if event.primary_player is not None
+                            else "Assist"
+                        ),
+                        "home_score": int(event.home_score),
+                        "away_score": int(event.away_score),
+                        "is_penalty": False,
+                    }
+                )
+        if not raw_moments:
+            return
+
+        owner_ids = list(
+            self.session.scalars(
+                select(ClubProfile.owner_user_id).where(
+                    ClubProfile.id.in_([match.home_club_id, match.away_club_id])
+                )
+            ).all()
         )
+        participant_user_ids = tuple(dict.fromkeys(str(uid) for uid in owner_ids if uid))
+        is_final = str(match.stage or "").lower() == "final" or bool(
+            execution.broadcast_category == "designated_major_knockout"
+        )
+        max_minutes = 15 if is_final else 10
+        duration_minutes = max(
+            3,
+            min(max_minutes, ceil(float(replay_payload.timeline.presentation_duration_seconds or 180) / 60.0)),
+        )
+        scheduled_start = match.scheduled_at or execution.started_at or _utcnow()
+        final_whistle = match.completed_at or execution.settled_at or _utcnow()
+        replay_id = f"replay:{match.id}"
 
-        # Record per-player stats strictly inside savepoint after completion timestamp exists.
+        ingest = ReplayArchiveIngest.model_validate(
+            {
+                "replay_id": replay_id,
+                "fixture_id": match.id,
+                "scheduled_start": scheduled_start,
+                "started_at": execution.started_at or scheduled_start,
+                "final_whistle_at": final_whistle,
+                "live": False,
+                "home_club": ReplayClubView(
+                    club_id=match.home_club_id,
+                    club_name=replay_payload.summary.home_stats.team_name or match.home_club_id,
+                ),
+                "away_club": ReplayClubView(
+                    club_id=match.away_club_id,
+                    club_name=replay_payload.summary.away_stats.team_name or match.away_club_id,
+                ),
+                "scoreline": ReplayScoreline(
+                    home_goals=int(replay_payload.summary.home_score),
+                    away_goals=int(replay_payload.summary.away_score),
+                ),
+                "visual_identity": replay_payload.visual_identity,
+                "timeline": tuple(ReplayMomentView.model_validate(m) for m in raw_moments),
+                "participant_user_ids": participant_user_ids,
+                "competition_context": CompetitionContextView(
+                    competition_id=competition.id,
+                    competition_type=competition_type,
+                    competition_name=competition.name or competition.id,
+                    stage_name=match.stage,
+                    round_number=max(1, int(match.round_number or 1)),
+                    is_final=is_final,
+                    is_cup_match=is_cup_match,
+                    competition_allows_public=is_final or int(match.round_number or 1) >= 3,
+                    allow_early_round_public=False,
+                    presentation_duration_minutes=duration_minutes,
+                ),
+            }
+        )
+        decision = SpectatorVisibilityPolicyService().resolve(
+            replay_visibility=ingest.competition_context.replay_visibility,
+            round_number=ingest.competition_context.round_number,
+            stage_name=ingest.competition_context.stage_name,
+            is_final=ingest.competition_context.is_final,
+            competition_allows_public=ingest.competition_context.competition_allows_public,
+            allow_early_round_public=ingest.competition_context.allow_early_round_public,
+        )
+        max_version = self.session.scalar(
+            select(func.max(ReplayArchiveRecordRow.version)).where(ReplayArchiveRecordRow.replay_id == replay_id)
+        )
+        now = _utcnow()
+        record = ReplayArchiveRecord(
+            replay_id=replay_id,
+            version=int(max_version or 0) + 1,
+            fixture_id=ingest.fixture_id,
+            created_at=final_whistle,
+            updated_at=now,
+            scheduled_start=scheduled_start,
+            started_at=ingest.started_at,
+            final_whistle_at=ingest.final_whistle_at,
+            live=False,
+            home_club=ingest.home_club,
+            away_club=ingest.away_club,
+            scoreline=ingest.scoreline,
+            visual_identity=ingest.visual_identity,
+            timeline=ingest.timeline,
+            scorers=tuple(m for m in ingest.timeline if m.event_type == "goals"),
+            assisters=tuple(m for m in ingest.timeline if m.event_type == "assists"),
+            cards=tuple(m for m in ingest.timeline if m.event_type in {"yellow_cards", "red_cards"}),
+            injuries=tuple(m for m in ingest.timeline if m.event_type == "injuries"),
+            substitutions=tuple(m for m in ingest.timeline if m.event_type == "substitutions"),
+            participant_user_ids=ingest.participant_user_ids,
+            competition_context=ingest.competition_context.model_copy(
+                update={
+                    "resolved_visibility": decision.resolved_visibility,
+                    "public_metadata_visible": decision.public_metadata_visible,
+                    "featured_public": decision.featured_public,
+                }
+            ),
+        )
+        self.session.add(
+            ReplayArchiveRecordRow(
+                replay_id=record.replay_id,
+                version=record.version,
+                fixture_id=record.fixture_id,
+                created_at=record.created_at,
+                updated_at=record.updated_at,
+                scheduled_start=record.scheduled_start,
+                started_at=record.started_at,
+                final_whistle_at=record.final_whistle_at,
+                live=record.live,
+                home_club_json=record.home_club.model_dump(mode="json"),
+                away_club_json=record.away_club.model_dump(mode="json"),
+                scoreline_json=record.scoreline.model_dump(mode="json"),
+                visual_identity_json=(
+                    record.visual_identity.model_dump(mode="json") if record.visual_identity is not None else None
+                ),
+                timeline_json=[ev.model_dump(mode="json") for ev in record.timeline],
+                scorers_json=[ev.model_dump(mode="json") for ev in record.scorers],
+                assisters_json=[ev.model_dump(mode="json") for ev in record.assisters],
+                cards_json=[ev.model_dump(mode="json") for ev in record.cards],
+                injuries_json=[ev.model_dump(mode="json") for ev in record.injuries],
+                substitutions_json=[ev.model_dump(mode="json") for ev in record.substitutions],
+                participant_user_ids_json=list(record.participant_user_ids),
+                competition_context_json=record.competition_context.model_dump(mode="json"),
+            )
+        )
+        self.session.flush()
+
+    def persist_replay_artifacts(
+        self,
+        match: CompetitionMatch,
+        execution: CompetitionMatchExecution,
+        replay_payload: MatchReplayPayloadView,
+    ) -> None:
+        """Persist highlights and archive record cleanly inside nested savepoints."""
+
         try:
             with self.session.begin_nested():
-                PlayerMatchPerformanceRecorder(self.session).record_match(
-                    match=completed,
-                    player_stats=replay_payload.summary.player_stats,
+                SmartHighlightService().persist_from_replay_payload(
+                    match.id,
+                    replay_payload,
+                    session=self.session,
                 )
         except SQLAlchemyError:
-            logger.exception(
-                "canonical_execution.performance_recording_failed match_id=%s competition_id=%s",
-                completed.id,
-                completed.competition_id,
-            )
+            logger.exception("canonical_execution.highlight_persist_failed match_id=%s", match.id)
 
         try:
-            from app.owner_console.canonical_match_projection import project_completed_canonical_match
-
             with self.session.begin_nested():
-                project_completed_canonical_match(self.session, completed.id)
-        except Exception:
-            logger.exception(
-                "canonical_match.institutional_projection_deferred match_id=%s",
-                completed.id,
-            )
+                self._persist_replay_archive_record(match, execution, replay_payload)
+        except (SQLAlchemyError, ValueError):
+            logger.exception("canonical_execution.replay_archive_persist_failed match_id=%s", match.id)
 
+    def mark_execution_settled(
+        self,
+        match: CompetitionMatch,
+        execution: CompetitionMatchExecution,
+        checkpoint: MatchExecutionCheckpoint,
+        *,
+        sim_request: MatchSimulationRequest | None = None,
+    ) -> None:
+        """Finalize execution state, sync metadata, and emit settled outbox event."""
+
+        resolved_request = sim_request or MatchSimulationRequest.model_validate(execution.simulation_request_json)
         execution.execution_status = "completed"
         execution.clock_phase = "completed"
-        execution.settled_at = completed.completed_at or _utcnow()
+        execution.settled_at = match.completed_at or _utcnow()
         execution.next_step_at = None
         execution.lease_owner = None
         execution.lease_expires_at = None
-        execution.checkpoint_json = resolved_checkpoint.to_dict()
-        execution.committed_events_json = [serialize_match_event(ev) for ev in resolved_checkpoint.committed_events]
+        execution.checkpoint_json = checkpoint.to_dict()
+        execution.committed_events_json = [serialize_match_event(ev) for ev in checkpoint.committed_events]
         execution.projected_tail_events_json = []
         self._sync_live_metadata(
-            completed,
+            match,
             execution,
-            resolved_checkpoint,
-            sim_request=sim_request,
+            checkpoint,
+            sim_request=resolved_request,
             refresh_viewer=False,
         )
         self._emit_outbox(
             event_type="competition.match.execution.settled",
-            match=completed,
+            match=match,
             execution=execution,
             payload={
-                "match_id": completed.id,
-                "competition_id": completed.competition_id,
+                "match_id": match.id,
+                "competition_id": match.competition_id,
                 "execution_revision": int(execution.execution_revision),
-                "home_score": int(completed.home_score),
-                "away_score": int(completed.away_score),
-                "winner_club_id": completed.winner_club_id,
-                "decided_by_penalties": bool(completed.decided_by_penalties),
+                "home_score": int(match.home_score),
+                "away_score": int(match.away_score),
+                "winner_club_id": match.winner_club_id,
+                "decided_by_penalties": bool(match.decided_by_penalties),
             },
         )
         self.session.flush()
+
+    def settle_completed_execution(
+        self,
+        match: CompetitionMatch,
+        execution: CompetitionMatchExecution,
+        *,
+        request: MatchSimulationRequest | None = None,
+        checkpoint: MatchExecutionCheckpoint | None = None,
+    ) -> CompetitionMatch:
+        """Atomically reconcile events, viewer replay, standings, performances, highlights, archive, and projections at FT."""
+
+        if match.status == MatchStatus.COMPLETED.value and match.stats_applied and execution.execution_status == "completed":
+            return match
+        if is_terminal(match.status) and match.status != MatchStatus.COMPLETED.value:
+            raise CanonicalMatchNotLiveError(
+                f"Match '{match.id}' is in terminal state '{match.status}' and cannot be settled."
+            )
+
+        sim_request = request or MatchSimulationRequest.model_validate(execution.simulation_request_json)
+        resolved_checkpoint = checkpoint or MatchExecutionCheckpoint.from_dict(
+            execution.checkpoint_json,
+            generator=self.event_generator,
+            request=sim_request,
+        )
+        result = finalize_checkpoint(self.event_generator, sim_request, resolved_checkpoint)
+        replay_payload = self.match_service.build_replay_payload_from_result(sim_request, result)
+        viewer_payload = self.timeline_service.build_from_replay_payload(replay_payload)
+
+        participants = list(
+            self.session.scalars(
+                select(CompetitionParticipant).where(
+                    CompetitionParticipant.competition_id == match.competition_id,
+                    CompetitionParticipant.club_id.in_([match.home_club_id, match.away_club_id]),
+                )
+            ).all()
+        )
+
+        try:
+            with self.session.begin_nested():
+                self.reconcile_settled_events(
+                    match,
+                    replay_payload,
+                    execution_revision=int(execution.execution_revision),
+                )
+
+                match.metadata_json = {
+                    **dict(match.metadata_json or {}),
+                    "match_viewer": viewer_payload.model_dump(mode="json"),
+                    "replay_payload": replay_payload.model_dump(mode="json"),
+                    "simulation_summary": replay_payload.summary.model_dump(mode="json"),
+                    "simulation_seed": replay_payload.seed,
+                    "tactics": {
+                        "home": _extract_tactics_snapshot(resolved_checkpoint.home_state, execution.execution_revision),
+                        "away": _extract_tactics_snapshot(resolved_checkpoint.away_state, execution.execution_revision),
+                    },
+                }
+
+                completed = self.lifecycle_service.complete_match(
+                    match=match,
+                    home_score=replay_payload.summary.home_score,
+                    away_score=replay_payload.summary.away_score,
+                    decided_by_penalties=replay_payload.summary.decided_by_penalties,
+                    winner_club_id=replay_payload.summary.winner_team_id,
+                )
+
+                # Record per-player stats strictly inside savepoint after completion timestamp exists.
+                try:
+                    with self.session.begin_nested():
+                        PlayerMatchPerformanceRecorder(self.session).record_match(
+                            match=completed,
+                            player_stats=replay_payload.summary.player_stats,
+                        )
+                except SQLAlchemyError:
+                    logger.exception(
+                        "canonical_execution.performance_recording_failed match_id=%s competition_id=%s",
+                        completed.id,
+                        completed.competition_id,
+                    )
+
+                self.persist_replay_artifacts(completed, execution, replay_payload)
+
+                try:
+                    from app.owner_console.canonical_match_projection import project_completed_canonical_match
+
+                    with self.session.begin_nested():
+                        project_completed_canonical_match(self.session, completed.id)
+                except Exception:
+                    logger.exception(
+                        "canonical_match.institutional_projection_deferred match_id=%s",
+                        completed.id,
+                    )
+
+                self.mark_execution_settled(
+                    completed,
+                    execution,
+                    resolved_checkpoint,
+                    sim_request=sim_request,
+                )
+        except Exception:
+            self.session.expire(match)
+            self.session.expire(execution)
+            for participant in participants:
+                self.session.expire(participant)
+            raise
         return completed
 
     def halt_execution(
