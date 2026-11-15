@@ -55,11 +55,15 @@ class IdentityVerificationService:
         callback_url: str | None = None,
     ) -> IdentityVerificationRecord:
         if actor.account_type != PublicAccountType.COIN_TRADER:
-            raise IdentityVerificationError("Identity verification on this path is reserved for Coin Trader accounts.")
+            raise IdentityVerificationPermissionError(
+                "Identity verification on this path is reserved for Coin Trader accounts."
+            )
+        normalized_type = verification_type.strip().lower()
+        if normalized_type not in {"full_kyc", "government_id", "document_and_selfie"}:
+            raise IdentityVerificationValidationError("Unsupported trader verification type.")
 
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
         if profile is None:
-            # Auto-create basic profile if trader signed up but profile not initialized
             profile = CoinTraderProfile(
                 user_id=actor.id,
                 display_name=actor.display_name or actor.username,
@@ -75,13 +79,17 @@ class IdentityVerificationService:
 
         adapter = get_identity_provider(provider_name)
         now = datetime.now(timezone.utc)
-        reference = f"kyc_trader_{uuid4().hex[:16]}"
+        reference = f"gtex-kyc-{uuid4().hex}"
         session_result = adapter.initiate_session(
             user_id=actor.id,
             reference=reference,
-            verification_type=verification_type,
+            verification_type=normalized_type,
             callback_url=callback_url,
-            metadata={"trader_profile_id": profile.id},
+            metadata={
+                "trader_profile_id": profile.id,
+                "email": actor.email,
+                "phone": getattr(actor, "phone_number", None),
+            },
         )
 
         record = IdentityVerificationRecord(
@@ -91,12 +99,13 @@ class IdentityVerificationService:
             provider=adapter.provider_name,
             provider_session_id=session_result.session_id,
             provider_reference=reference,
-            verification_type=verification_type,
+            verification_type=normalized_type,
             status="pending",
-            decision=None,
+            decision="pending",
             checks_summary_json={},
             idempotency_key=reference,
             initiated_at=now,
+            expires_at=session_result.expires_at,
             history_json=[
                 {
                     "action": "initiated",
@@ -106,7 +115,10 @@ class IdentityVerificationService:
                     "session_id": session_result.session_id,
                 }
             ],
-            metadata_json={"handoff_url": session_result.handoff_url, **session_result.metadata},
+            metadata_json={
+                "handoff_url": session_result.handoff_url,
+                **session_result.metadata,
+            },
         )
         self.session.add(record)
         self.session.commit()
@@ -137,177 +149,242 @@ class IdentityVerificationService:
 
         try:
             payload_dict = json.loads(payload_bytes.decode("utf-8"))
-        except Exception as exc:
-            raise IdentityVerificationError("Invalid webhook JSON payload.") from exc
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise IdentityVerificationValidationError("Invalid webhook JSON payload.") from exc
+        if not isinstance(payload_dict, dict):
+            raise IdentityVerificationValidationError("Provider webhook must be a JSON object.")
 
         webhook_result = adapter.parse_webhook_payload(payload=payload_dict)
-        now = datetime.now(timezone.utc)
+        if not webhook_result.reference and not webhook_result.session_id:
+            raise IdentityVerificationValidationError("Provider webhook is missing its verification reference.")
 
-        # Lookup by provider_reference or provider_session_id
+        match_conditions = []
+        if webhook_result.reference:
+            match_conditions.append(IdentityVerificationRecord.provider_reference == webhook_result.reference)
+            match_conditions.append(IdentityVerificationRecord.idempotency_key == webhook_result.reference)
+        if webhook_result.session_id:
+            match_conditions.append(IdentityVerificationRecord.provider_session_id == webhook_result.session_id)
+
         record = self.session.scalar(
             select(IdentityVerificationRecord).where(
-                (IdentityVerificationRecord.provider_reference == webhook_result.reference)
-                | (IdentityVerificationRecord.provider_session_id == webhook_result.session_id)
-                | (IdentityVerificationRecord.idempotency_key == webhook_result.reference)
+                IdentityVerificationRecord.provider == adapter.provider_name,
+                IdentityVerificationRecord.verification_domain == "coin_trader",
+                *([match_conditions[0] | match_conditions[1] | match_conditions[2]]
+                  if len(match_conditions) == 3 else
+                  [match_conditions[0] | match_conditions[1]]
+                  if len(match_conditions) == 2 else
+                  [match_conditions[0]])
             )
         )
         if record is None:
-            # If no existing record matching reference, check if user_id or partner params specified
-            user_id = payload_dict.get("user_id") or (payload_dict.get("metadata") or {}).get("user_id")
-            if user_id:
-                record = self.session.scalar(
-                    select(IdentityVerificationRecord)
-                    .where(IdentityVerificationRecord.user_id == user_id)
-                    .order_by(IdentityVerificationRecord.created_at.desc())
-                    .limit(1)
-                )
-
-        if record is None:
             raise IdentitySessionNotFoundError(
-                f"No matching verification record found for reference '{webhook_result.reference}'."
+                "No pending GTEX verification session matches this provider event."
             )
 
-        # Idempotency check: duplicate webhooks do not repeat side effects
-        if record.status == "verified":
+        now = datetime.now(timezone.utc)
+        fingerprint = webhook_result.evidence_fingerprint
+        if record.status == "verified" or (
+            fingerprint and record.evidence_fingerprint == fingerprint
+        ):
             return {
                 "status": "idempotent_duplicate",
-                "decision": "verified",
+                "provider": adapter.provider_name,
+                "session_id": record.provider_session_id,
+                "decision": record.decision or record.status,
+                "idempotent": True,
+                "user_id": record.user_id,
                 "reference": record.provider_reference,
-                "verified_at": record.verified_at.isoformat() if record.verified_at else None,
             }
 
-        # Status transition
+        decision = str(webhook_result.decision or "pending").strip().lower()
         record.provider_session_id = webhook_result.session_id or record.provider_session_id
+        record.checks_summary_json = webhook_result.checks if isinstance(webhook_result.checks, dict) else {}
+        record.evidence_fingerprint = fingerprint
+        record.decision = decision
         if webhook_result.reference:
             record.provider_reference = webhook_result.reference
-        record.checks_summary_json = webhook_result.checks
-        record.evidence_fingerprint = webhook_result.evidence_fingerprint
 
-        if webhook_result.decision == "verified":
+        if decision in {"pending", "requires_review", "requires_retry", "in_review"}:
+            # Provider "In Review" is not a failed verification and must never
+            # approve or reject a trader before the final provider decision.
+            record.status = "pending"
+            record.history_json = [
+                *list(record.history_json or []),
+                {
+                    "action": "provider_update",
+                    "status": "pending",
+                    "decision": decision,
+                    "timestamp": now.isoformat(),
+                    "provider": adapter.provider_name,
+                },
+            ]
+            self.session.commit()
+            return {
+                "status": "pending",
+                "provider": adapter.provider_name,
+                "session_id": record.provider_session_id,
+                "decision": decision,
+                "idempotent": False,
+                "user_id": record.user_id,
+                "reference": record.provider_reference,
+            }
+
+        if decision == "verified":
+            verified_at = webhook_result.verified_at or now
             record.status = "verified"
             record.decision = "verified"
-            record.verified_at = webhook_result.verified_at or now
+            record.verified_at = verified_at
             record.rejection_reason = None
             record.history_json = [
                 *list(record.history_json or []),
                 {
                     "action": "webhook_verified",
                     "status": "verified",
-                    "timestamp": record.verified_at.isoformat(),
+                    "timestamp": verified_at.isoformat(),
                     "provider": adapter.provider_name,
                 },
             ]
 
-            # Activate the CoinTraderProfile automatically
             profile = (
-                self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
+                self.session.get(CoinTraderProfile, record.trader_profile_id)
+                if record.trader_profile_id
+                else None
             )
             if profile is None:
                 profile = self.session.scalar(
                     select(CoinTraderProfile).where(CoinTraderProfile.user_id == record.user_id)
                 )
-            if profile is not None:
-                profile.status = CoinTraderProfileStatus.APPROVED.value
-                profile.verification_level = "fully_verified"
-                profile.verified_at = record.verified_at
-                profile.verification_provider = adapter.provider_name
-                profile.verification_reference = record.provider_reference
-                profile.approved_at = record.verified_at
-                profile.rejected_at = None
-                profile.frozen_at = None
-                profile.suspended_at = None
+            if profile is None:
+                raise IdentityVerificationError("Coin Trader profile is missing for the verified session.")
 
-            # Update User KYC status via authoritative compliance boundary
+            profile.status = CoinTraderProfileStatus.APPROVED.value
+            profile.verification_level = "fully_verified"
+            profile.verified_at = verified_at
+            profile.verification_provider = adapter.provider_name
+            profile.verification_reference = record.provider_reference
+            profile.approved_at = verified_at
+            profile.rejected_at = None
+            profile.frozen_at = None
+            profile.suspended_at = None
+
             from app.identity.compliance_service import IdentityComplianceService, VerificationEvidence
 
             user = self.session.get(User, record.user_id)
-            if user is not None:
-                evidence = VerificationEvidence(
+            if user is None:
+                raise IdentityVerificationError("The user tied to this verification session no longer exists.")
+            checks = webhook_result.checks if isinstance(webhook_result.checks, dict) else {}
+            IdentityComplianceService(self.session).verify(
+                user=user,
+                evidence=VerificationEvidence(
                     provider=adapter.provider_name,
                     provider_subject=record.provider_reference or record.user_id,
                     decision="verified",
-                    verified_at=now,
-                    checks=webhook_result.checks or {"document": "pass", "face_match": "pass"},
+                    verified_at=verified_at,
+                    checks=checks,
                     reference=record.provider_reference,
-                )
-                IdentityComplianceService(self.session).verify(
-                    user=user,
-                    evidence=evidence,
-                    actor_user_id=None,
-                )
+                ),
+                actor_user_id=None,
+            )
 
-            # Immutable audit log
             self.session.add(
                 AuditLog(
                     actor_user_id=None,
                     action_key="identity.coin_trader.activated",
                     resource_type="coin_trader_profile",
-                    resource_id=profile.id if profile else record.user_id,
+                    resource_id=profile.id,
                     outcome="success",
-                    detail=f"Coin trader activated automatically from {adapter.provider_name} verified webhook result.",
+                    detail=f"Coin trader activated from an authoritative {adapter.provider_name} verification result.",
                     metadata_json={
                         "provider": adapter.provider_name,
                         "reference": record.provider_reference,
                         "session_id": record.provider_session_id,
-                        "verified_at": record.verified_at.isoformat(),
+                        "verified_at": verified_at.isoformat(),
                         "fingerprint": record.evidence_fingerprint,
-                        "checks": webhook_result.checks,
+                        "checks": checks,
                     },
                 )
             )
             self.session.commit()
             return {
                 "status": "success",
+                "provider": adapter.provider_name,
+                "session_id": record.provider_session_id,
                 "decision": "verified",
+                "idempotent": False,
+                "user_id": record.user_id,
                 "reference": record.provider_reference,
-                "verified_at": record.verified_at.isoformat(),
+                "verified_at": verified_at.isoformat(),
             }
-        else:
-            record.status = "rejected"
-            record.decision = webhook_result.decision
-            record.rejection_reason = webhook_result.rejection_reason or "Identity verification checks failed."
-            record.history_json = [
-                *list(record.history_json or []),
-                {
-                    "action": "webhook_rejected",
-                    "status": "rejected",
-                    "timestamp": now.isoformat(),
-                    "reason": record.rejection_reason,
-                    "provider": adapter.provider_name,
-                },
-            ]
-            profile = (
-                self.session.get(CoinTraderProfile, record.trader_profile_id) if record.trader_profile_id else None
-            )
-            if profile is not None:
-                profile.status = CoinTraderProfileStatus.REJECTED.value
-                profile.rejected_at = now
 
-            self.session.add(
-                AuditLog(
-                    actor_user_id=None,
-                    action_key="identity.coin_trader.rejected",
-                    resource_type="coin_trader_profile",
-                    resource_id=profile.id if profile else record.user_id,
-                    outcome="failure",
-                    detail=f"Coin trader verification failed from {adapter.provider_name}: {record.rejection_reason}",
-                    metadata_json={
-                        "provider": adapter.provider_name,
-                        "reference": record.provider_reference,
-                        "rejection_reason": record.rejection_reason,
-                    },
-                )
+        if decision != "rejected":
+            raise IdentityVerificationValidationError(
+                f"Unsupported provider decision '{decision}'. Trader status was not changed."
             )
-            self.session.commit()
-            return {
+
+        record.status = "rejected"
+        record.decision = "rejected"
+        record.rejection_reason = webhook_result.rejection_reason or "Identity verification checks failed."
+        record.history_json = [
+            *list(record.history_json or []),
+            {
+                "action": "webhook_rejected",
                 "status": "rejected",
-                "decision": "rejected",
-                "reference": record.provider_reference,
+                "timestamp": now.isoformat(),
                 "reason": record.rejection_reason,
-            }
+                "provider": adapter.provider_name,
+            },
+        ]
+        profile = (
+            self.session.get(CoinTraderProfile, record.trader_profile_id)
+            if record.trader_profile_id
+            else None
+        )
+        if profile is not None:
+            profile.status = CoinTraderProfileStatus.REJECTED.value
+            profile.rejected_at = now
 
-    def list_verification_records(self, *, status_filter: str | None = None) -> list[IdentityVerificationRecord]:
+        self.session.add(
+            AuditLog(
+                actor_user_id=None,
+                action_key="identity.coin_trader.rejected",
+                resource_type="coin_trader_profile",
+                resource_id=profile.id if profile else record.user_id,
+                outcome="failure",
+                detail=f"Coin trader verification failed from {adapter.provider_name}: {record.rejection_reason}",
+                metadata_json={
+                    "provider": adapter.provider_name,
+                    "reference": record.provider_reference,
+                    "rejection_reason": record.rejection_reason,
+                },
+            )
+        )
+        self.session.commit()
+        return {
+            "status": "rejected",
+            "provider": adapter.provider_name,
+            "session_id": record.provider_session_id,
+            "decision": "rejected",
+            "idempotent": False,
+            "user_id": record.user_id,
+            "reference": record.provider_reference,
+            "reason": record.rejection_reason,
+        }
+
+    def list_verification_records(
+        self,
+        *,
+        user_id: str | None = None,
+        domain: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> list[IdentityVerificationRecord]:
         stmt = select(IdentityVerificationRecord).order_by(IdentityVerificationRecord.created_at.desc())
-        if status_filter:
-            stmt = stmt.where(IdentityVerificationRecord.status == status_filter)
+        if user_id:
+            stmt = stmt.where(IdentityVerificationRecord.user_id == user_id)
+        if domain:
+            stmt = stmt.where(IdentityVerificationRecord.verification_domain == domain)
+        if status:
+            stmt = stmt.where(IdentityVerificationRecord.status == status)
+        stmt = stmt.limit(limit).offset(offset)
         return list(self.session.scalars(stmt).all())
