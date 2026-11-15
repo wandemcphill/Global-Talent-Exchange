@@ -629,6 +629,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once(monkey
                 session.scalars(
                     select(OwnerClubEvent).where(
                         OwnerClubEvent.source_type == "canonical_match",
+                        OwnerClubEvent.event_type == "canonical_match_completed",
                         OwnerClubEvent.source_id == completed.id,
                     )
                 ).all()
@@ -662,6 +663,7 @@ def test_canonical_competition_completion_projects_both_living_clubs_once(monkey
                 session.scalars(
                     select(OwnerClubEvent).where(
                         OwnerClubEvent.source_type == "canonical_match",
+                        OwnerClubEvent.event_type == "canonical_match_completed",
                         OwnerClubEvent.source_id == completed.id,
                     )
                 ).all()
