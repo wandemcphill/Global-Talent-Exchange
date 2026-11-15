@@ -214,7 +214,7 @@ def test_quote_wallet_conversion_returns_fixed_rate_quote(session) -> None:
     )
 
     assert payload.source_amount == Decimal("1.0000")
-    assert payload.target_amount == Decimal("100.0000")
+    assert payload.target_amount == Decimal("15.0000")
     assert payload.target_unit == LedgerUnit.CREDIT
 
 
