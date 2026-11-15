@@ -219,6 +219,7 @@ class CompetitionAutoRunner:
         job = self._simulation_job(competition, match)
         request = self.team_factory.build_request(job, session=self.session)
         request = self._apply_owner_pre_match_tactics(request, match)
+        self._capture_institutional_match_context(match, competition, request)
         replay_payload = self.match_service.build_replay_payload(request)
         self._store_match_viewer_payload(match, replay_payload)
         self._store_match_events(match, replay_payload)
@@ -232,6 +233,15 @@ class CompetitionAutoRunner:
         # Recorded *after* settlement so the performances carry the match's real
         # completion timestamp, which is what form windows are ordered by.
         self._store_match_performances(completed, replay_payload)
+        try:
+            from app.owner_console.canonical_match_projection import project_completed_canonical_match
+
+            project_completed_canonical_match(self.session, completed.id)
+        except Exception:
+            logger.exception(
+                "canonical_match.institutional_projection_deferred match_id=%s",
+                completed.id,
+            )
         return completed
 
     @staticmethod
@@ -286,6 +296,128 @@ class CompetitionAutoRunner:
                 "away_team": apply(request.away_team),
             }
         )
+
+    def _capture_institutional_match_context(self, match: CompetitionMatch, competition: Competition, request) -> None:
+        """Capture stable manager identity and home/away atmosphere before kickoff.
+
+        This context is presentation and institutional metadata only. It is not
+        supplied to the simulator and cannot change player ability or the result.
+        """
+        from datetime import datetime, timezone
+
+        from app.owner_console import living_institution
+        from app.owner_console.models import OwnerClubState
+        from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+        from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerProfile
+
+        club_ids = {str(match.home_club_id), str(match.away_club_id)}
+        states = {
+            str(row.club_id): row
+            for row in self.session.scalars(
+                select(OwnerClubState).where(OwnerClubState.club_id.in_(club_ids))
+            ).all()
+        }
+        teams = {"home": request.home_team, "away": request.away_team}
+        context: dict[str, object] = {
+            "captured_at": datetime.now(timezone.utc).isoformat(),
+            "competition_id": str(competition.id),
+            "competition_name": str(competition.name),
+            "round_number": int(match.round_number),
+            "stage": str(match.stage or ""),
+            "requires_winner": bool(match.requires_winner),
+        }
+        is_decider = bool(
+            match.requires_winner
+            or str(match.stage or "").lower() in {"knockout", "final", "semi_final", "quarter_final"}
+            or str(getattr(competition, "format", "")).lower() in {"cup", "knockout"}
+        )
+
+        for side_key, club_id, opponent_id in (
+            ("home", str(match.home_club_id), str(match.away_club_id)),
+            ("away", str(match.away_club_id), str(match.home_club_id)),
+        ):
+            state = states.get(club_id)
+            team = teams[side_key]
+            manager: dict[str, object] = dict(getattr(team, "manager_profile", None) or {})
+            manager_name = str(
+                manager.get("display_name") or manager.get("name") or manager.get("manager_name") or ""
+            )
+            manager_id = str(manager.get("manager_id") or manager.get("id") or "")
+            club = self.session.get(ClubProfile, club_id)
+            owner_user_id = str(club.owner_user_id) if club is not None else ""
+
+            if owner_user_id:
+                contract = self.session.scalar(
+                    select(ManagerContract).where(
+                        ManagerContract.club_user_id == owner_user_id,
+                        ManagerContract.status == ManagerContractStatus.ACTIVE,
+                    )
+                )
+                if contract is not None:
+                    manager_profile = self.session.scalar(
+                        select(ManagerProfile).where(ManagerProfile.manager_id == contract.manager_id)
+                    )
+                    if manager_profile is not None:
+                        manager_id = str(manager_profile.manager_id or manager_id)
+                        manager_name = str(manager_profile.name or manager_name or "First-Team Manager")
+                        manager["preferred_style"] = manager_profile.preferred_style
+
+                if not manager_id:
+                    assignment = self.session.scalar(
+                        select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == owner_user_id)
+                    )
+                    if assignment is not None and assignment.main_manager_asset_id:
+                        holding = self.session.scalar(
+                            select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id)
+                        )
+                        if holding is not None:
+                            catalog = self.session.scalar(
+                                select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id)
+                            )
+                            if catalog is not None:
+                                manager_id = str(catalog.manager_id)
+                                manager_name = str(catalog.display_name)
+                                manager["mentality"] = catalog.mentality
+
+            if manager_id:
+                manager["id"] = manager_id
+                manager["manager_id"] = manager_id
+            if manager_name:
+                manager["name"] = manager_name
+            supplied = bool(manager_id or manager_name)
+
+            if state is not None:
+                supporter_profile, segments = living_institution.ensure_club_institutional_ecosystem(
+                    self.session, state
+                )
+                opponent_team = teams["away" if side_key == "home" else "home"]
+                atmosphere = living_institution.compute_matchday_atmosphere(
+                    self.session,
+                    state,
+                    profile=supporter_profile,
+                    segments=segments,
+                    opponent_club_id=opponent_id,
+                    opponent_name=str(getattr(opponent_team, "team_name", opponent_id)),
+                    is_knockout_or_decider=is_decider,
+                )
+                context[side_key] = {
+                    "club_id": club_id,
+                    "world_day": max(1, int(state.world_day or 1)),
+                    "manager": manager if supplied else {},
+                    "manager_snapshot_supplied": supplied,
+                    "atmosphere": atmosphere,
+                }
+            else:
+                context[side_key] = {
+                    "club_id": club_id,
+                    "manager": manager if supplied else {},
+                    "manager_snapshot_supplied": supplied,
+                }
+
+        metadata = dict(match.metadata_json or {})
+        if not isinstance(metadata.get("institutional_match_context"), dict):
+            metadata["institutional_match_context"] = context
+            match.metadata_json = metadata
 
     def _store_match_performances(self, match: CompetitionMatch, replay_payload) -> None:
         """Persist per-player ratings so this match can reach form and valuation.

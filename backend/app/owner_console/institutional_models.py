@@ -286,6 +286,7 @@ class OwnerClubAcademyGraduate(Base):
     current_rating: Mapped[int] = mapped_column(Integer, default=55)
     potential_rating: Mapped[int] = mapped_column(Integer, default=78)
     first_team_appearances: Mapped[int] = mapped_column(Integer, default=0)
+    first_team_minutes: Mapped[int] = mapped_column(Integer, default=0)
     first_team_goals: Mapped[int] = mapped_column(Integer, default=0)
     status: Mapped[str] = mapped_column(String(32), index=True, default="academy_prospect")
     narrative_note: Mapped[str] = mapped_column(String(240), default="")

@@ -1037,6 +1037,85 @@ def create_club_event(
     return event, True
 
 
+
+def emit_canonical_club_event(
+    session: Session,
+    *,
+    anchor_club_id: str,
+    match_id: str,
+    competition_id: str,
+    world_day: int,
+    title: str,
+    description: str,
+    participants: list[dict[str, Any]] | None = None,
+    required_projections: list[str] | None = None,
+) -> tuple[OwnerClubEvent, bool]:
+    """Create one source event for a completed canonical CompetitionMatch."""
+    match_key = str(match_id).strip()
+    idempotency_key = f"canonical_match:{match_key}"
+    existing = session.scalar(
+        select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == idempotency_key)
+    )
+    if existing is not None:
+        return existing, False
+    required = list(required_projections or [])
+    return create_club_event(
+        session,
+        club_id=str(anchor_club_id),
+        category="tactical",
+        event_type="canonical_match_completed",
+        severity="important",
+        title=title[:200],
+        description=description,
+        world_day=max(1, int(world_day or 1)),
+        source_type="canonical_match",
+        source_id=match_key,
+        participants=participants or [],
+        consequences={
+            "canonical_match_id": match_key,
+            "competition_id": str(competition_id),
+            "required_projections": required,
+            "projection_status": {name: {"status": "pending"} for name in required},
+        },
+        idempotency_key=idempotency_key,
+        status="active",
+    )
+
+
+def record_canonical_projection(
+    session: Session,
+    event: OwnerClubEvent,
+    projection_key: str,
+    result: dict[str, Any] | None = None,
+) -> bool:
+    """Complete one independently retryable projection on the canonical source event."""
+    key = str(projection_key).strip()
+    consequences = dict(event.consequences_json or {})
+    statuses = dict(consequences.get("projection_status") or {})
+    current = statuses.get(key)
+    if isinstance(current, dict) and current.get("status") == "complete":
+        return False
+    statuses[key] = {
+        "status": "complete",
+        "completed_at": utcnow().isoformat(),
+        "result": dict(result or {}),
+    }
+    consequences["projection_status"] = statuses
+    event.consequences_json = consequences
+    required = set(consequences.get("required_projections") or [])
+    completed = {
+        name for name, value in statuses.items()
+        if isinstance(value, dict) and value.get("status") == "complete"
+    }
+    if required and required.issubset(completed):
+        event.status = "resolved"
+        event.resolved_at = event.resolved_at or utcnow()
+    event.updated_at = utcnow()
+    session.flush()
+    return True
+
+
+
 def format_event_dict(event: OwnerClubEvent) -> dict[str, Any]:
     return {
         "id": event.id,
