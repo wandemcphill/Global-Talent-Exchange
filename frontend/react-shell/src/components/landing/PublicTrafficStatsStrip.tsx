@@ -6,7 +6,7 @@ interface PublicTrafficStatsStripProps {
   pulse: GtexLiveWorldPulse | null;
 }
 
-const numberLabel = (value: number | undefined) =>
+const numberLabel = (value: number | null | undefined) =>
   typeof value === "number" ? new Intl.NumberFormat("en").format(value) : "—";
 
 export const PublicTrafficStatsStrip: React.FC<PublicTrafficStatsStripProps> = ({ pulse }) => {
