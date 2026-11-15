@@ -346,6 +346,7 @@ class CompetitionAutoRunner:
             club = self.session.get(ClubProfile, club_id)
             owner_user_id = str(club.owner_user_id) if club is not None else ""
 
+            manager_source = ""
             if owner_user_id:
                 contract = self.session.scalar(
                     select(ManagerContract).where(
@@ -361,6 +362,7 @@ class CompetitionAutoRunner:
                         manager_id = str(manager_profile.manager_id or manager_id)
                         manager_name = str(manager_profile.name or manager_name or "First-Team Manager")
                         manager["preferred_style"] = manager_profile.preferred_style
+                        manager_source = "manager_marketplace"
 
                 if not manager_id:
                     assignment = self.session.scalar(
@@ -378,8 +380,10 @@ class CompetitionAutoRunner:
                                 manager_id = str(catalog.manager_id)
                                 manager_name = str(catalog.display_name)
                                 manager["mentality"] = catalog.mentality
+                                manager_source = "manager_market"
 
             if manager_id:
+                manager["_manager_source"] = manager_source
                 manager["id"] = manager_id
                 manager["manager_id"] = manager_id
             if manager_name:
