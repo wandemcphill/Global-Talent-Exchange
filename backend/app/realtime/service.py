@@ -356,6 +356,25 @@ class RealtimeHub:
             with self._sync_lock:
                 self._delivered_messages += delivered
 
+    def build_dispatch_envelopes(
+        self,
+        event: DomainEvent,
+        *,
+        topics: tuple[str, ...],
+    ) -> list[dict[str, Any]]:
+        """Map a domain event into wire envelopes matching the requested topics."""
+        topic_set = set(topics)
+        return [
+            _payload_for_dispatch(dispatch)
+            for dispatch in self._map_domain_event(event)
+            if any(topic in topic_set for topic in dispatch.topics)
+        ]
+
+    @staticmethod
+    def build_topic_envelope(*, event_type: str, topics: tuple[str, ...], data: dict[str, Any]) -> dict[str, Any]:
+        """Build a canonical wire envelope for a single realtime dispatch."""
+        return _payload_for_dispatch(RealtimeDispatch(type=event_type, topics=topics, data=data))
+
     def _map_domain_event(self, event: DomainEvent) -> list[RealtimeDispatch]:
         payload = dict(event.payload or {})
         if event.name == "storytelling.ticker.broadcast":
@@ -541,6 +560,8 @@ class RealtimeHub:
             score_payload = {
                 "match_id": match_id,
                 "event_id": payload.get("event_id"),
+                "sequence": payload.get("sequence"),
+                "sequence_id": payload.get("sequence_id") or payload.get("sequence"),
                 "minute": payload.get("minute"),
                 "event_type": payload.get("event_type"),
                 "source_event_type": payload.get("source_event_type"),
@@ -554,9 +575,19 @@ class RealtimeHub:
                 "player_name": payload.get("player") or payload.get("player_name"),
                 "secondary_player_id": payload.get("secondary_player_id"),
                 "secondary_player_name": payload.get("secondary_player") or payload.get("secondary_player_name"),
+                "importance_score": payload.get("importance_score"),
+                "audio_stem_channels": payload.get("audio_stem_channels"),
                 "commentary": commentary,
                 "description": commentary,
             }
+            if payload.get("experience") is not None:
+                score_payload["experience"] = payload.get("experience")
+            if payload.get("win_probability") is not None:
+                score_payload["win_probability"] = payload.get("win_probability")
+            if payload.get("market_pulse") is not None:
+                score_payload["market_pulse"] = payload.get("market_pulse")
+            if payload.get("snapshot") is not None:
+                score_payload["snapshot"] = payload.get("snapshot")
             dispatches = [
                 RealtimeDispatch(
                     type="match_update",
@@ -570,13 +601,21 @@ class RealtimeHub:
                 ),
             ]
             if commentary:
+                experience_payload = payload.get("experience")
+                commentary_cue = payload.get("cue") or (
+                    experience_payload.get("commentary") if isinstance(experience_payload, dict) else None
+                )
+                commentary_payload = {
+                    **score_payload,
+                    "line": _optional_string(payload.get("line")) or commentary,
+                }
+                if commentary_cue is not None:
+                    commentary_payload["cue"] = commentary_cue
                 dispatches.append(
                     RealtimeDispatch(
                         type="commentary",
                         topics=(commentary_topic(match_id),),
-                        data={
-                            **score_payload,
-                        },
+                        data=commentary_payload,
                     )
                 )
             return dispatches

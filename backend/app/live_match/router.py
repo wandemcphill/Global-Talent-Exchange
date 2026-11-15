@@ -57,6 +57,8 @@ def create_session(
         away_formation=payload.away_formation,
         home_user_id=payload.home_user_id,
         away_user_id=payload.away_user_id,
+        home_manager_user_id=payload.home_manager_user_id,
+        away_manager_user_id=payload.away_manager_user_id,
     )
     return _view(session, user_id=current_user.id)
 
@@ -102,10 +104,23 @@ def set_tactics(
         engine.get(match_id)
     except LiveMatchError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Owners cannot intervene in live match tactics; the appointed First-Team Manager holds exclusive matchday authority.",
-    )
+    try:
+        resolved_side = engine.resolve_manager_side(
+            match_id=match_id,
+            user_id=current_user.id,
+            side=payload.side,
+        )
+        session = engine.set_tactics(
+            match_id=match_id,
+            side=resolved_side,
+            formation=payload.formation,
+            mentality=payload.mentality,
+            pressing=payload.pressing,
+            tempo=payload.tempo,
+        )
+        return _view(session, user_id=current_user.id)
+    except LiveMatchError as exc:
+        _raise(exc)
 
 
 @router.post("/sessions/{match_id}/halftime/ready", response_model=LiveMatchSessionView)

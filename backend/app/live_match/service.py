@@ -77,9 +77,12 @@ class LiveMatchSession:
     events: list[dict[str, Any]] = field(default_factory=list)
     halftime_ready: set[str] = field(default_factory=set)
     halftime_deadline: datetime | None = None
-    # Controlling users — only the owner of a side may change its tactics / mark ready.
+    # Controlling users — owners watch and drive shared ticks when unpinned; only
+    # appointed First-Team Managers may change side-scoped live tactics.
     home_user_id: str | None = None
     away_user_id: str | None = None
+    home_manager_user_id: str | None = None
+    away_manager_user_id: str | None = None
 
     def tactics_for(self, side: str) -> LiveTeamTactics:
         return self.home_tactics if side == "home" else self.away_tactics
@@ -90,6 +93,15 @@ class LiveMatchSession:
         if self.home_user_id is not None and user_id == self.home_user_id:
             return "home"
         if self.away_user_id is not None and user_id == self.away_user_id:
+            return "away"
+        return None
+
+    def manager_side_for_user(self, user_id: str | None) -> str | None:
+        if user_id is None:
+            return None
+        if self.home_manager_user_id is not None and user_id == self.home_manager_user_id:
+            return "home"
+        if self.away_manager_user_id is not None and user_id == self.away_manager_user_id:
             return "away"
         return None
 
@@ -114,6 +126,8 @@ class LiveMatchEngine:
         away_formation: str = "4-3-3",
         home_user_id: str | None = None,
         away_user_id: str | None = None,
+        home_manager_user_id: str | None = None,
+        away_manager_user_id: str | None = None,
     ) -> LiveMatchSession:
         seed = abs(hash((match_id, home_id, away_id))) % (2**31)
         session = LiveMatchSession(
@@ -129,6 +143,8 @@ class LiveMatchEngine:
             away_tactics=LiveTeamTactics(formation=away_formation),
             home_user_id=home_user_id,
             away_user_id=away_user_id,
+            home_manager_user_id=home_manager_user_id,
+            away_manager_user_id=away_manager_user_id,
         )
         self.store.put(session)
         self.store.mark_active(match_id)
@@ -151,6 +167,20 @@ class LiveMatchEngine:
         if side is not None and side != owned:
             raise LiveMatchPermissionError("You can only change tactics for your own team.")
         return owned
+
+    def resolve_manager_side(self, *, match_id: str, user_id: str | None, side: str | None = None) -> str:
+        """Resolve exclusive First-Team Manager authority for live tactical mutations."""
+        session = self.get(match_id)
+        managed_side = session.manager_side_for_user(user_id)
+        if managed_side is None:
+            raise LiveMatchPermissionError(
+                "Owners cannot intervene in live match tactics; the appointed First-Team Manager holds exclusive matchday authority."
+            )
+        if side is not None and side != managed_side:
+            raise LiveMatchPermissionError("You can only change tactics for your own team.")
+        if session.phase == "full_time":
+            raise LiveMatchError("Match has already completed; live tactics are locked.")
+        return managed_side
 
     def assert_participant(self, *, match_id: str, user_id: str | None) -> LiveMatchSession:
         """Authorize a caller to drive a session's shared clock.
@@ -187,6 +217,8 @@ class LiveMatchEngine:
             raise LiveMatchError("side must be 'home' or 'away'.")
         with self.store.lock(match_id):
             session = self.get(match_id)
+            if session.phase == "full_time":
+                raise LiveMatchError("Match has already completed; live tactics are locked.")
             return self._apply_tactics(
                 session,
                 side=side,

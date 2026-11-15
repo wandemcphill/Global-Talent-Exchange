@@ -132,10 +132,13 @@ const PIN_BADGE: Record<TimelinePin["type"], { text: string; tone: string }> = {
 export function MatchTimelineScrubber({
   model,
   currentSeconds,
+  onSeek,
+  readOnly = true,
 }: {
   model: TimelineModel;
   currentSeconds: number;
   onSeek?: (seconds: number) => void;
+  readOnly?: boolean;
 }) {
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
   const { durationSeconds, segments, pins } = model;
@@ -145,14 +148,52 @@ export function MatchTimelineScrubber({
   const activeSegment = segments.find((s) => clamped >= s.startSeconds && clamped <= s.endSeconds);
   const hoveredPin = hoveredPinId ? pins.find((p) => p.id === hoveredPinId) || null : null;
 
+  const handlePrevKey = () => {
+    if (!onSeek) return;
+    const prevPin = [...pins].reverse().find((p) => p.timeSeconds < clamped - 1);
+    if (prevPin) {
+      onSeek(Math.max(0, prevPin.timeSeconds - 6));
+    } else {
+      onSeek(0);
+    }
+  };
+
+  const handleNextKey = () => {
+    if (!onSeek) return;
+    const nextPin = pins.find((p) => p.timeSeconds > clamped + 1);
+    if (nextPin) {
+      onSeek(Math.max(0, nextPin.timeSeconds - 6));
+    }
+  };
+
   return (
     <div data-testid="match-timeline-scrubber" className="relative mt-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-2">
       <div className="mb-1 flex flex-wrap items-center justify-between gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-400">
         <div className="flex items-center gap-2">
-          <span data-testid="match-timeline-phase">{activeSegment?.label || "Broadcast"}</span>
+          <span data-testid="match-timeline-phase">{activeSegment?.label || (readOnly ? "Broadcast" : "Replay")}</span>
           <span className="rounded border border-emerald-400/25 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-black text-emerald-300">
-            Universal Broadcast Timeline
+            {readOnly ? "Universal Broadcast Timeline" : "Recorded Replay Timeline"}
           </span>
+          {!readOnly && onSeek && (
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                data-testid="timeline-prev-event"
+                onClick={handlePrevKey}
+                className="rounded border border-white/20 bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-300 hover:bg-slate-700 hover:text-white"
+              >
+                PREV KEY
+              </button>
+              <button
+                type="button"
+                data-testid="timeline-next-event"
+                onClick={handleNextKey}
+                className="rounded border border-white/20 bg-slate-800 px-1.5 py-0.5 text-[9px] font-bold text-slate-300 hover:bg-slate-700 hover:text-white"
+              >
+                NEXT KEY
+              </button>
+            </div>
+          )}
         </div>
         <span className="font-mono">
           {Math.floor(clamped / 60)}:{String(Math.floor(clamped % 60)).padStart(2, "0")} /{" "}
@@ -187,6 +228,18 @@ export function MatchTimelineScrubber({
             />
           ))}
         </div>
+        {!readOnly && onSeek && (
+          <input
+            type="range"
+            data-testid="match-timeline-range"
+            aria-label="Match timeline"
+            min={0}
+            max={Math.round(durationSeconds)}
+            value={Math.round(clamped)}
+            onChange={(e) => onSeek(Number(e.target.value))}
+            className="absolute inset-x-0 top-0 z-20 h-6 w-full cursor-pointer opacity-0"
+          />
+        )}
         {pins.map((pin) => (
           <div
             key={pin.id}
@@ -199,7 +252,8 @@ export function MatchTimelineScrubber({
             onMouseLeave={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
             onFocus={() => setHoveredPinId(pin.id)}
             onBlur={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
-            className={`pointer-events-auto absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm ${PIN_STYLE[pin.type]}`}
+            onClick={!readOnly && onSeek ? () => onSeek(Math.max(0, pin.timeSeconds - 6)) : undefined}
+            className={`pointer-events-auto absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm ${PIN_STYLE[pin.type]} ${!readOnly && onSeek ? "cursor-pointer" : ""}`}
             style={{ left: pct(pin.timeSeconds) }}
           />
         ))}

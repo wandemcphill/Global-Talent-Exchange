@@ -347,6 +347,10 @@ function TacticalHUD({
   side,
   bench = [],
   starters = [],
+  canEditTactics = false,
+  matchId,
+  completed = false,
+  onTacticsApplied,
 }: {
   formation: string;
   setFormation?: (f: string) => void;
@@ -366,9 +370,60 @@ function TacticalHUD({
   side: "home" | "away";
   bench?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
   starters?: Array<{ player_id?: string; name?: string; shirt_number?: number }>;
+  /** True only for the authenticated appointed First-Team Manager of `side` (server-resolved). */
+  canEditTactics?: boolean;
+  completed?: boolean;
+  onTacticsApplied?: () => void;
 }) {
   const myScore = side === "away" ? awayScore : homeScore;
   const theirScore = side === "away" ? homeScore : awayScore;
+  const editable = canEditTactics && !completed;
+  const [draftFormation, setDraftFormation] = useState(formation);
+  const [draftPress, setDraftPress] = useState(press);
+  const [draftLine, setDraftLine] = useState(line);
+  const [draftTempo, setDraftTempo] = useState(tempo);
+  const [draftRisk, setDraftRisk] = useState(risk);
+  const [subOut, setSubOut] = useState("");
+  const [subIn, setSubIn] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [tacticsError, setTacticsError] = useState<string | null>(null);
+
+  const submitTactics = async (payload: Record<string, unknown>) => {
+    setSubmitting(true);
+    setTacticsError(null);
+    try {
+      await api.post(`/matches/${matchId}/tactics`, { side, ...payload });
+      toast.success("Touchline order issued");
+      onTacticsApplied?.();
+    } catch (err: any) {
+      const detail = err?.response?.data?.detail;
+      const message = typeof detail === "string" ? detail : "Tactics update rejected by the match server.";
+      setTacticsError(message);
+      toast.error(message);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitSubstitution = () => {
+    const outgoing = starters.find((p) => p.player_id === subOut);
+    const incoming = bench.find((p) => p.player_id === subIn);
+    if (!outgoing || !incoming) return;
+    void submitTactics({
+      substitutions: [
+        {
+          out_player_id: outgoing.player_id,
+          in_player_id: incoming.player_id,
+          out_player_name: outgoing.name,
+          in_player_name: incoming.name,
+          shirt_number: incoming.shirt_number,
+        },
+      ],
+    }).then(() => {
+      setSubOut("");
+      setSubIn("");
+    });
+  };
 
   // Autonomous Dugout Technical Area Telemetry (First-Team Manager + Assistant Coaches)
   const dugoutTelemetry = useMemo(() => {
@@ -419,7 +474,7 @@ function TacticalHUD({
             <Shield size={13} /> Club Owner Broadcast Mode · Touchline Authority Belongs to First-Team Manager
           </span>
           <span className="rounded border border-amber-400/40 bg-black/30 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-200">
-            READ-ONLY DUGOUT TELEMETRY
+            {editable ? "FIRST-TEAM MANAGER · LIVE TACTICS AUTHORITY" : "READ-ONLY DUGOUT TELEMETRY"}
           </span>
         </div>
         <p className="mt-1.5 text-[11px] leading-relaxed text-slate-200">
@@ -511,6 +566,98 @@ function TacticalHUD({
           </div>
         </div>
       </div>
+
+      {editable && (
+        <div data-testid="manager-tactics-editor" className="mt-4 rounded-sm border border-emerald-500/30 bg-emerald-500/5 p-3">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-300">
+            Issue Live Touchline Orders ({side.toUpperCase()})
+          </span>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            <select
+              data-testid="tactics-formation-select"
+              value={draftFormation}
+              onChange={(e) => setDraftFormation(e.target.value)}
+              className="rounded border border-white/15 bg-slate-900 px-2 py-1 text-xs text-white"
+            >
+              {Array.from(new Set([formation, "4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-3-2"])).map((f) => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            {([
+              ["Press", draftPress, setDraftPress, "tactics-press-input"],
+              ["Line", draftLine, setDraftLine, "tactics-line-input"],
+              ["Tempo", draftTempo, setDraftTempo, "tactics-tempo-input"],
+              ["Risk", draftRisk, setDraftRisk, "tactics-risk-input"],
+            ] as const).map(([label, value, setter, tid]) => (
+              <label key={label} className="text-[10px] text-slate-400">
+                {label} {value}%
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  data-testid={tid}
+                  value={value}
+                  onChange={(e) => setter(Number(e.target.value))}
+                  className="w-full"
+                />
+              </label>
+            ))}
+          </div>
+          <button
+            type="button"
+            data-testid="apply-tactics-btn"
+            disabled={submitting}
+            onClick={() =>
+              void submitTactics({
+                formation: draftFormation,
+                press_intensity: draftPress,
+                defensive_line: draftLine,
+                tempo: draftTempo,
+                risk_level: draftRisk,
+              })
+            }
+            className="mt-2 rounded bg-emerald-500 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 disabled:opacity-50"
+          >
+            Apply Tactics
+          </button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <select
+              data-testid="sub-out-select"
+              value={subOut}
+              onChange={(e) => setSubOut(e.target.value)}
+              className="rounded border border-white/15 bg-slate-900 px-2 py-1 text-xs text-white"
+            >
+              <option value="">Player off…</option>
+              {starters.map((p) => (
+                <option key={p.player_id} value={p.player_id}>#{p.shirt_number} {p.name}</option>
+              ))}
+            </select>
+            <select
+              data-testid="sub-in-select"
+              value={subIn}
+              onChange={(e) => setSubIn(e.target.value)}
+              className="rounded border border-white/15 bg-slate-900 px-2 py-1 text-xs text-white"
+            >
+              <option value="">Player on…</option>
+              {bench.map((p) => (
+                <option key={p.player_id} value={p.player_id}>#{p.shirt_number} {p.name}</option>
+              ))}
+            </select>
+            <button
+              type="button"
+              data-testid="apply-substitution-btn"
+              disabled={submitting || !subOut || !subIn}
+              onClick={submitSubstitution}
+              className="rounded bg-sky-400 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 disabled:opacity-50"
+            >
+              Make Substitution
+            </button>
+          </div>
+          {tacticsError && (
+            <p data-testid="tactics-error" className="mt-2 text-[11px] font-bold text-rose-300">{tacticsError}</p>
+          )}
+        </div>
+      )}
     </Panel>
   );
 }
@@ -1205,7 +1352,7 @@ export default function MatchCenter() {
     retry: false,
   });
 
-  const { data: appliedTactics } = useQuery({
+  const { data: appliedTactics, refetch: refetchAppliedTactics } = useQuery({
     queryKey: ["match-applied-tactics", id],
     queryFn: async () => {
       try {
@@ -1388,6 +1535,24 @@ export default function MatchCenter() {
     );
   }, [timedRecordedFrames, broadcastSession?.assigned_duration_seconds, viewerData?.duration_seconds, m?.duration_seconds]);
 
+  // Universal shared broadcast (server-authoritative, strictly 1.0x, read-only) vs. recorded replay archive
+  // (local inspection only: seek, pause, speed, instant replay never touch shared state).
+  const isSharedLiveBroadcast = Boolean(
+    acceptedLive ||
+      spectatorStream.lastFrame ||
+      String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live",
+  );
+  const canLocalReplay = !isSharedLiveBroadcast && timedRecordedFrames.length >= 2;
+  const [replayPaused, setReplayPaused] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 2>(1);
+  const [instantReplayActive, setInstantReplayActive] = useState(false);
+  const triggerInstantReplay = useCallback((startSeconds: number) => {
+    setPlaybackSeconds(Math.max(0, startSeconds));
+    setReplayPaused(false);
+    setInstantReplayActive(true);
+  }, []);
+  const exitInstantReplay = useCallback(() => setInstantReplayActive(false), []);
+
   // Synchronize late joiners / reconnectors cleanly to shared server-authoritative broadcast position.
   useEffect(() => {
     if (acceptedLive || timedRecordedFrames.length === 0) return;
@@ -1419,14 +1584,16 @@ export default function MatchCenter() {
       const nowMs = typeof performance !== "undefined" ? performance.now() : Date.now();
       const deltaMs = Math.max(0, nowMs - lastTickMs);
       lastTickMs = nowMs;
+      if (canLocalReplay && replayPaused) return;
+      const localScale = canLocalReplay ? (instantReplayActive ? 0.75 : replaySpeed) : 1;
       setPlaybackSeconds((current) => {
-        const authoritativePos = deriveUniversalBroadcastPosition(broadcastSession, Date.now());
+        const authoritativePos = canLocalReplay ? null : deriveUniversalBroadcastPosition(broadcastSession, Date.now());
         if (authoritativePos !== null && Number.isFinite(authoritativePos)) {
           return Math.max(current, Math.min(replayDurationSeconds || authoritativePos, authoritativePos));
         }
         return stepReplayClock({
           currentTimeSeconds: current,
-          deltaMs,
+          deltaMs: deltaMs * localScale,
           durationSeconds: replayDurationSeconds,
         });
       });
@@ -1438,6 +1605,10 @@ export default function MatchCenter() {
     timedRecordedFrames.length,
     replayDurationSeconds,
     broadcastSession,
+    canLocalReplay,
+    replayPaused,
+    replaySpeed,
+    instantReplayActive,
   ]);
 
   const replayPair = useMemo(
@@ -1753,7 +1924,14 @@ export default function MatchCenter() {
   );
   const isScheduled =
     phaseName === "pre_match" && minute === 0;
-  const side = m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away";
+  const authorizedTacticalSide: "home" | "away" | null =
+    (appliedTactics as any)?.can_edit_tactics === true &&
+    ((appliedTactics as any)?.authorized_tactical_side === "home" || (appliedTactics as any)?.authorized_tactical_side === "away")
+      ? (appliedTactics as any).authorized_tactical_side
+      : null;
+  const side: "home" | "away" =
+    authorizedTacticalSide ??
+    (m.home_club_id === clubId ? "home" : m.away_club_id === clubId ? "away" : m.narrative?.home_owner_view ? "home" : "away");
 
   const sourceKind = pitchSource({
     matchId: id,
@@ -2329,6 +2507,9 @@ export default function MatchCenter() {
                 cardDetail={activeCardDetail}
                 isAutoVarReplay={Boolean(activeVarReview)}
                 tacticalBanner={tacticalBanner}
+                onWatchReplay={canLocalReplay ? triggerInstantReplay : undefined}
+                isInstantReplay={canLocalReplay && instantReplayActive}
+                onExitInstantReplay={canLocalReplay ? exitInstantReplay : undefined}
               />
               {recentSubstitution && (
                 <div
@@ -2376,7 +2557,40 @@ export default function MatchCenter() {
                   </div>
                 </div>
               )}
-              {isRecordedReplay && (<MatchTimelineScrubber model={timelineModel} currentSeconds={playbackSeconds} />)}
+              {isRecordedReplay && (
+                <MatchTimelineScrubber
+                  model={timelineModel}
+                  currentSeconds={playbackSeconds}
+                  readOnly={!canLocalReplay}
+                  onSeek={canLocalReplay ? (s) => { setInstantReplayActive(false); setPlaybackSeconds(s); } : undefined}
+                />
+              )}
+              {canLocalReplay && (
+                <div
+                  data-testid="recorded-replay-controls"
+                  className="mt-2 flex flex-wrap items-center gap-2 rounded-md border border-white/10 bg-slate-950/75 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-300"
+                >
+                  <span className="rounded border border-amber-400/40 bg-amber-500/10 px-1.5 py-0.5 font-black text-amber-300">
+                    RECORDED REPLAY ARCHIVE · LOCAL INSPECTION
+                  </span>
+                  <button
+                    type="button"
+                    data-testid="match-pause-toggle"
+                    onClick={() => setReplayPaused((v) => !v)}
+                    className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 hover:bg-slate-700"
+                  >
+                    {replayPaused ? "PLAY" : "PAUSE"}
+                  </button>
+                  <button
+                    type="button"
+                    data-testid="match-speed-toggle"
+                    onClick={() => setReplaySpeed((v) => (v === 1 ? 2 : v === 2 ? 0.5 : 1))}
+                    className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 hover:bg-slate-700"
+                  >
+                    {replaySpeed.toFixed(1)}x
+                  </button>
+                </div>
+              )}
                 <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                   {[
                     ["Shots", `${metricText(liveStats?.home_shots)} – ${metricText(liveStats?.away_shots)}`],
@@ -2442,6 +2656,11 @@ export default function MatchCenter() {
             side={side}
             bench={managerSide?.bench || []}
             starters={(managerSide?.players || []).filter(isPlayerActiveOnPitch)}
+            canEditTactics={authorizedTacticalSide !== null && isSharedLiveBroadcast}
+            completed={done}
+            onTacticsApplied={() => {
+              void refetchAppliedTactics();
+            }}
           />
         </div>
 

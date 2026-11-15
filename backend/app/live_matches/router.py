@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.auth.security import TokenError
-from app.auth.dependencies import get_current_match_user, get_current_social_user
+from app.auth.dependencies import get_current_match_user, get_current_social_user, get_optional_current_user
 from app.broadcast_network.commentary_service import CommentaryOrchestratorService
 from app.broadcast_rights.service import BroadcastRightsError, BroadcastRightsService
 from app.commentary.schemas import CommentaryStreamResponse
@@ -28,7 +28,8 @@ from app.live_matches.schemas import (
     UnityLiveAccessView,
     UnityLiveAccessRefreshRequest,
 )
-from app.live_matches.service import LiveMatchError, ensure_live_match_hub
+from app.live_matches.authority import resolve_match_tactical_authority
+from app.live_matches.service import LiveMatchError, LiveMatchPersistenceError, ensure_live_match_hub
 from app.live_matches.unity_access import (
     issue_unity_live_token_bundle,
     validate_unity_live_access_token,
@@ -1879,14 +1880,36 @@ class UpdateMatchTacticsRequest(BaseModel):
     pressing: int | float | None = None
     mentality: str | None = None
     formation: str | None = None
-    side: str | None = "home"
+    side: str | None = None
     substitutions: list[dict[str, Any]] | None = None
     instructions: list[str] | None = None
 
 
+def _resolve_match_tactical_authority_for_request(
+    *,
+    match_id: str,
+    request: Request,
+    current_user: User | None,
+    payload: dict[str, object],
+):
+    home = dict(payload.get("home") or {}) if isinstance(payload.get("home"), dict) else {}
+    away = dict(payload.get("away") or {}) if isinstance(payload.get("away"), dict) else {}
+    return resolve_match_tactical_authority(
+        match_id=match_id,
+        user=current_user,
+        session_factory=getattr(request.app.state, "session_factory", None),
+        home_team_id=str(home.get("team_id") or "") or None,
+        away_team_id=str(away.get("team_id") or "") or None,
+    )
+
+
 @api_router.get("/{match_id}/tactics")
 @legacy_router.get("/{match_id}/tactics")
-def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
+def read_match_v2_tactics(
+    match_id: str,
+    request: Request,
+    current_user: User | None = Depends(get_optional_current_user),
+) -> dict[str, object]:
     payload = _v2_match_state_payload(match_id, request.app)
     home = dict(payload["home"])
     away = dict(payload["away"])
@@ -1894,9 +1917,18 @@ def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
     tactics = hub.get_tactics(match_id)
     home_tactics = tactics.get("home", {})
     away_tactics = tactics.get("away", {})
+    authority = _resolve_match_tactical_authority_for_request(
+        match_id=match_id,
+        request=request,
+        current_user=current_user,
+        payload=payload,
+    )
     return {
         "match_id": payload["match_id"],
         **_strict_live_runtime_flags(),
+        "authorized_tactical_side": authority.authorized_side,
+        "authorized_sides": list(authority.authorized_sides),
+        "can_edit_tactics": bool(authority.authorized_sides),
         "home": {
             "team_id": home.get("team_id"),
             "formation": home_tactics.get("formation") or home.get("formation") or "4-3-3",
@@ -1905,6 +1937,7 @@ def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
             "tempo": home_tactics.get("tempo", 50),
             "risk_level": home_tactics.get("risk_level", 50),
             "mentality": home_tactics.get("mentality", "balanced"),
+            "substitution_count": home_tactics.get("substitution_count", 0),
         },
         "away": {
             "team_id": away.get("team_id"),
@@ -1914,6 +1947,7 @@ def read_match_v2_tactics(match_id: str, request: Request) -> dict[str, object]:
             "tempo": away_tactics.get("tempo", 50),
             "risk_level": away_tactics.get("risk_level", 50),
             "mentality": away_tactics.get("mentality", "balanced"),
+            "substitution_count": away_tactics.get("substitution_count", 0),
         },
     }
 
@@ -1930,11 +1964,65 @@ def update_match_v2_tactics(
     payload: UpdateMatchTacticsRequest = Body(default_factory=UpdateMatchTacticsRequest),
     current_user: User = Depends(get_current_match_user),
 ) -> dict[str, object]:
-    _load_strict_live_view_state(match_id, request.app)
-    raise HTTPException(
-        status_code=status.HTTP_403_FORBIDDEN,
-        detail="Club owners watch live matches; the appointed First-Team Manager holds exclusive matchday tactical and substitution authority.",
+    state_payload = _v2_match_state_payload(match_id, request.app)
+    authority = _resolve_match_tactical_authority_for_request(
+        match_id=match_id,
+        request=request,
+        current_user=current_user,
+        payload=state_payload,
     )
+    if not authority.authorized_sides:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Club owners watch live matches; the appointed First-Team Manager holds exclusive matchday tactical and substitution authority.",
+        )
+
+    if payload.side is not None and str(payload.side).strip():
+        target_side = str(payload.side).strip().lower()
+        if target_side not in {"home", "away"}:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="side must be 'home' or 'away'.",
+            )
+        if target_side not in authority.authorized_sides:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You can only change live matchday tactics and substitutions for your appointed club.",
+            )
+    else:
+        target_side = authority.authorized_sides[0]
+
+    hub = ensure_live_match_hub(request.app)
+    press_value = payload.press_intensity if payload.press_intensity is not None else payload.pressing
+    try:
+        updated = hub.set_tactics(
+            match_id,
+            side=target_side,
+            press_intensity=press_value,
+            defensive_line=payload.defensive_line,
+            tempo=payload.tempo,
+            risk_level=payload.risk_level,
+            mentality=payload.mentality,
+            formation=payload.formation,
+            substitutions=payload.substitutions,
+            instructions=payload.instructions,
+            require_live=True,
+        )
+    except LiveMatchPersistenceError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except (LiveMatchError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    all_tactics = hub.get_tactics(match_id)
+    return {
+        "status": "applied",
+        "match_id": match_id,
+        "side": target_side,
+        "tactics": updated,
+        "home": all_tactics.get("home", {}),
+        "away": all_tactics.get("away", {}),
+        **_strict_live_runtime_flags(),
+    }
 
 
 @api_router.post("/{match_id}/predictions")
@@ -2778,7 +2866,9 @@ async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str
                 if incoming.get("type") == "websocket.disconnect":
                     break
                 if str(incoming.get("text") or "").strip().lower() == "ping":
-                    await websocket.send_json({"channel": initial_state.channel, "kind": "pong", "payload": {}})
+                    await websocket.send_json(
+                        {"channel": initial_state.channel, "kind": "pong", "payload": {}, "type": "pong", "data": {}}
+                    )
             except asyncio.TimeoutError:
                 pass
             state = hub.get_state(match_id)
@@ -2893,7 +2983,7 @@ async def _stream_realtime_topics(
                 break
             text = (message.get("text") or "").strip().lower()
             if text == "ping":
-                await websocket.send_json({"type": "pong", "data": {}})
+                await websocket.send_json({"type": "pong", "data": {}, "kind": "pong", "payload": {}})
     except WebSocketDisconnect:
         return
     finally:

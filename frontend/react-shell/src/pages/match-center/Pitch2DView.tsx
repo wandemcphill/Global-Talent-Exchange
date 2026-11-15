@@ -158,6 +158,10 @@ export type Pitch2DViewProps = {
   cardDetail?: CardDetailSummary | null;
   isAutoVarReplay?: boolean;
   tacticalBanner?: string | null;
+  /** Recorded-replay archive only: jump local playback back to the start of the incident. */
+  onWatchReplay?: (startSeconds: number) => void;
+  isInstantReplay?: boolean;
+  onExitInstantReplay?: () => void;
 };
 
 function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
@@ -449,6 +453,9 @@ export function Pitch2DView({
   cardDetail = null,
   isAutoVarReplay = false,
   tacticalBanner = null,
+  onWatchReplay,
+  isInstantReplay = false,
+  onExitInstantReplay,
 }: Pitch2DViewProps) {
   const bufferRef = useRef(new LiveRenderBuffer());
   const lastGoodRef = useRef<SampledPitchFrame | null>(null);
@@ -883,6 +890,24 @@ export function Pitch2DView({
           </span>
         </div>
       )}
+      {isInstantReplay && onExitInstantReplay && (
+        <div
+          data-testid="instant-replay-banner"
+          className="flex items-center justify-between gap-2 rounded-lg border border-amber-400/60 bg-amber-500/15 px-3 py-1.5 text-xs text-amber-100"
+        >
+          <span className="font-mono text-[11px] font-black uppercase tracking-widest text-amber-300">
+            INSTANT REPLAY · 0.75x SLOW-MO · LOCAL ARCHIVE
+          </span>
+          <button
+            type="button"
+            data-testid="exit-instant-replay-btn"
+            onClick={onExitInstantReplay}
+            className="rounded border border-amber-300/50 bg-black/40 px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider text-amber-200 hover:bg-amber-400 hover:text-slate-950"
+          >
+            EXIT REPLAY · RESUME
+          </button>
+        </div>
+      )}
       {activeVarReview && (
         <div
           data-testid="pitch-var-monitor"
@@ -977,6 +1002,16 @@ export function Pitch2DView({
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2 whitespace-nowrap font-mono font-bold">
+            {(banner.kind === "goal" || banner.kind === "save") && onWatchReplay && !isInstantReplay ? (
+              <button
+                type="button"
+                data-testid="watch-instant-replay-btn"
+                onClick={() => onWatchReplay(Math.max(0, timeSeconds - 6))}
+                className="rounded border border-white/30 bg-black/45 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-white transition hover:border-emerald-300 hover:bg-emerald-500 hover:text-slate-950"
+              >
+                ↺ WATCH REPLAY
+              </button>
+            ) : null}
             {banner.scoreline ? <span>{banner.scoreline}</span> : null}
             <span>{banner.minuteLabel}</span>
           </div>

@@ -261,10 +261,12 @@ class LiveCommentaryEngine:
         *,
         settings: Settings | None = None,
         cache_backend: CacheBackend | None = None,
+        replace_llm_client: bool = False,
     ) -> None:
         if settings is not None:
             self.settings = settings
-            self.llm_client = RemoteCommentaryLLMClient.from_settings(settings)
+            if replace_llm_client or isinstance(self.llm_client, (NullCommentaryLLMClient, RemoteCommentaryLLMClient)):
+                self.llm_client = RemoteCommentaryLLMClient.from_settings(settings)
             self.memory_store.configure(
                 ttl_seconds=max(settings.live_commentary_memory_ttl_seconds, 60),
             )

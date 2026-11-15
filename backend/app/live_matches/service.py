@@ -711,6 +711,7 @@ class LiveMatchHub:
         formation: str | None = None,
         substitutions: list[dict[str, Any]] | None = None,
         instructions: list[str] | None = None,
+        require_live: bool = False,
     ) -> dict[str, Any]:
         side_norm = (side or "").strip().lower()
         if side_norm not in {"home", "away"}:
@@ -751,8 +752,43 @@ class LiveMatchHub:
                 else None
             )
             prior_event_count = len(prior_runtime.published_events) if prior_runtime is not None else 0
-            match_tactics = self._tactics.setdefault(match_id, {})
-            current = match_tactics.setdefault(
+
+            runtime = self._matches.get(match_id)
+            if match_id in self._halted_matches:
+                raise LiveMatchError("Match stream is halted; live tactics and substitutions are locked.")
+            if runtime is not None:
+                snapshot_status = (
+                    str(getattr(getattr(runtime, "last_snapshot", None), "status", "") or "").strip().lower()
+                )
+                if (
+                    not runtime.live
+                    or runtime.completed_at is not None
+                    or snapshot_status in {"completed", "full_time", "fulltime", "finished", "halted"}
+                ):
+                    raise LiveMatchError("Match has already completed; live tactics and substitutions are locked.")
+            elif require_live and self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+
+                    with self.session_factory() as session:
+                        persisted_match = session.get(CompetitionMatch, match_id)
+                        if persisted_match is None or (
+                            persisted_match.completed_at is not None
+                            or str(persisted_match.status or "").strip().lower()
+                            in {"completed", "full_time", "fulltime", "finished", "settled"}
+                        ):
+                            raise LiveMatchError(
+                                "Match has already completed; live tactics and substitutions are locked."
+                            )
+                except LiveMatchError:
+                    raise
+                except Exception:
+                    pass
+            elif require_live:
+                raise LiveMatchError("Match is not currently live; tactics cannot be modified.")
+
+            existing_match_tactics = self._tactics.get(match_id) or {}
+            base_tactics = existing_match_tactics.get(
                 side_norm,
                 {
                     "press_intensity": 50,
@@ -764,6 +800,8 @@ class LiveMatchHub:
                     "substitution_count": 0,
                 },
             )
+            current = dict(base_tactics)
+            resolved_mentality = mentality
             if press_intensity is not None:
                 current["press_intensity"] = max(0, min(100, int(round(float(press_intensity)))))
             if defensive_line is not None:
@@ -772,20 +810,19 @@ class LiveMatchHub:
                 current["tempo"] = max(0, min(100, int(round(float(tempo)))))
             if risk_level is not None:
                 current["risk_level"] = max(0, min(100, int(round(float(risk_level)))))
-                if mentality is None:
+                if resolved_mentality is None:
                     if current["risk_level"] >= 65:
-                        mentality = "attacking"
+                        resolved_mentality = "attacking"
                     elif current["risk_level"] <= 35:
-                        mentality = "defensive"
+                        resolved_mentality = "defensive"
                     else:
-                        mentality = "balanced"
-            if mentality is not None:
-                current["mentality"] = str(mentality).strip().lower()
+                        resolved_mentality = "balanced"
+            if resolved_mentality is not None:
+                current["mentality"] = str(resolved_mentality).strip().lower()
             if formation is not None:
                 current["formation"] = str(formation).strip()
 
-            # Substitution enforcement
-            runtime = self._matches.get(match_id)
+            # Resolve active frame before validating resimulation or substitutions
             active_frame = None
             active_minute = None
             active_index = 0
@@ -837,6 +874,8 @@ class LiveMatchHub:
                     "The original match simulation request is not stored, so the unplayed minutes cannot be resimulated."
                 )
 
+            bench_by_id: dict[str, Any] = {}
+            normalized_substitutions: list[dict[str, Any]] | None = None
             if substitutions:
                 if current_sub_count + len(substitutions) > 5:
                     raise LiveMatchError(
@@ -847,12 +886,21 @@ class LiveMatchHub:
                     raise LiveMatchError("Substitutions cannot be validated without an authoritative active lineup.")
                 if active_frame is None:
                     raise LiveMatchError("Substitutions cannot be validated without a current match frame.")
-                active_pitch_ids = {
-                    str(p.player_id)
+                side_players = [
+                    p
                     for p in active_frame.players
                     if str(getattr(getattr(p, "side", None), "value", getattr(p, "side", "")) or "").strip().lower()
                     == side_norm
+                ]
+                dismissed_pitch_ids = {
+                    str(p.player_id)
+                    for p in side_players
+                    if getattr(p, "active", True) is False
+                    or str(getattr(getattr(p, "state", None), "value", getattr(p, "state", "")) or "").strip().lower()
+                    == "sent_off"
                 }
+                side_players_by_id = {str(p.player_id): p for p in side_players}
+                active_pitch_ids = set(side_players_by_id) - dismissed_pitch_ids
                 presentation = getattr(runtime.viewer_state, "presentation_package", None)
                 presentation_team = getattr(presentation, side_norm, None) if presentation is not None else None
                 bench_players = list(getattr(presentation_team, "bench", None) or [])
@@ -862,20 +910,25 @@ class LiveMatchHub:
                     if str(getattr(player, "player_id", "") or "").strip()
                 }
                 available_bench_ids = set(bench_by_id)
-                for sub in substitutions:
+                normalized_substitutions = [dict(item) for item in substitutions]
+                for sub in normalized_substitutions:
                     out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
                     in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
                     if not out_id or not in_id:
                         raise LiveMatchError("Each substitution requires both 'out_player_id' and 'in_player_id'.")
                     if out_id == in_id:
                         raise LiveMatchError(f"Invalid substitution: player {out_id} cannot replace themselves.")
+                    if out_id in dismissed_pitch_ids:
+                        raise LiveMatchError(
+                            f"Substitution rejected: dismissed player '{out_id}' cannot be substituted."
+                        )
                     if out_id not in active_pitch_ids:
                         raise LiveMatchError(
                             f"Substitution rejected: player '{out_id}' is not currently on the pitch for {side_norm} team."
                         )
-                    if in_id in active_pitch_ids:
+                    if in_id in active_pitch_ids or in_id in dismissed_pitch_ids:
                         raise LiveMatchError(
-                            f"Substitution rejected: substitute '{in_id}' is already active on the pitch."
+                            f"Substitution rejected: substitute '{in_id}' is already on the match sheet."
                         )
                     if not bench_by_id:
                         raise LiveMatchError(
@@ -885,6 +938,11 @@ class LiveMatchHub:
                         raise LiveMatchError(
                             f"Substitution rejected: incoming player '{in_id}' is not on the authoritative {side_norm} bench."
                         )
+                    out_player = side_players_by_id.get(out_id)
+                    out_name = getattr(out_player, "label", None) if out_player is not None else None
+                    if out_name and not (sub.get("out_player_name") or sub.get("outPlayerName")):
+                        sub["out_player_name"] = str(out_name)
+                        sub["outPlayerName"] = str(out_name)
                     bench_player = bench_by_id[in_id]
                     trusted_name = getattr(bench_player, "player_name", None) or getattr(bench_player, "name", None)
                     if trusted_name:
@@ -897,28 +955,40 @@ class LiveMatchHub:
                     active_pitch_ids.add(in_id)
                     available_bench_ids.discard(in_id)
 
-                current["substitution_count"] = current_sub_count + len(substitutions)
-                current["substitutions"] = substitutions
+                current["substitution_count"] = current_sub_count + len(normalized_substitutions)
+                current["substitutions"] = normalized_substitutions
+
+            match_tactics = self._tactics.setdefault(match_id, {})
+            match_tactics[side_norm] = current
 
             if instructions is not None:
                 current["instructions"] = instructions
             current["updated_at"] = utcnow().isoformat()
             current["tactic_revision"] = int(current.get("tactic_revision") or 0) + 1
             current["effective_minute"] = int(round(active_minute)) if active_minute is not None else None
-            self._resimulate_remaining(
-                match_id,
-                side=side_norm,
-                minute=int(round(active_minute)) if active_minute is not None else None,
-                revision=int(current["tactic_revision"]),
-                formation=current.get("formation"),
-                mentality=current.get("mentality"),
-                press_intensity=current.get("press_intensity"),
-                tempo=current.get("tempo"),
-                defensive_line=current.get("defensive_line"),
-                changed=any(
-                    value is not None for value in (formation, mentality, press_intensity, tempo, defensive_line)
-                ),
-            )
+            try:
+                self._resimulate_remaining(
+                    match_id,
+                    side=side_norm,
+                    minute=int(round(active_minute)) if active_minute is not None else None,
+                    revision=int(current["tactic_revision"]),
+                    formation=current.get("formation"),
+                    mentality=current.get("mentality"),
+                    press_intensity=current.get("press_intensity"),
+                    tempo=current.get("tempo"),
+                    defensive_line=current.get("defensive_line"),
+                    changed=any(
+                        value is not None for value in (formation, mentality, press_intensity, tempo, defensive_line)
+                    ),
+                )
+            except Exception:
+                if prior_tactics is None:
+                    self._tactics.pop(match_id, None)
+                else:
+                    self._tactics[match_id] = prior_tactics
+                if prior_runtime is not None and prior_viewer_state is not None:
+                    prior_runtime.viewer_state = prior_viewer_state
+                raise
 
             events_to_broadcast = []
             channel = None
@@ -945,8 +1015,8 @@ class LiveMatchHub:
                         presentation_team_for_tactics.formation = formation
 
                     # Apply substitutions to active lineup and frame positions
-                    if substitutions:
-                        for sub in substitutions:
+                    if normalized_substitutions:
+                        for sub in normalized_substitutions:
                             out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "").strip()
                             in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "").strip()
                             out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
@@ -1023,8 +1093,8 @@ class LiveMatchHub:
                 runtime.published_events.append(live_event)
                 events_to_broadcast.append(live_event)
 
-                if substitutions:
-                    for sub in substitutions:
+                if normalized_substitutions:
+                    for sub in normalized_substitutions:
                         out_id = str(sub.get("out_player_id") or sub.get("outPlayerId") or "")
                         in_id = str(sub.get("in_player_id") or sub.get("inPlayerId") or "")
                         out_name = str(sub.get("out_player_name") or sub.get("outPlayerName") or "Player")
@@ -1053,7 +1123,7 @@ class LiveMatchHub:
                 channel = runtime.channel
 
             result = dict(current)
-            result["applied_substitutions"] = list(substitutions or [])
+            result["applied_substitutions"] = list(normalized_substitutions or [])
 
             # Persist tactics across restarts: Hot cache and database
             full_tactics = {
@@ -1746,39 +1816,77 @@ class LiveMatchHub:
             return
         self._hot_cache.publish_match_channel(channel, dict(payload))
 
+    def build_domain_event_payloads(
+        self,
+        match_id: str,
+        events: Sequence[LiveMatchStreamEventView],
+    ) -> list[dict[str, Any]]:
+        snapshot_payload: dict[str, Any] | None = None
+        with self._lock:
+            runtime = self._matches.get(match_id)
+            if runtime is not None and runtime.last_snapshot is not None:
+                snapshot_payload = runtime.last_snapshot.model_dump(mode="json")
+        if snapshot_payload is None:
+            cached_state = self.get_state(match_id)
+            if cached_state is not None and cached_state.snapshot is not None:
+                snapshot_payload = cached_state.snapshot.model_dump(mode="json")
+        win_probability = snapshot_payload.get("win_probability") if isinstance(snapshot_payload, dict) else None
+        market_pulse = snapshot_payload.get("market_pulse") if isinstance(snapshot_payload, dict) else None
+        payloads: list[dict[str, Any]] = []
+        for event in events:
+            experience_payload = event.experience.model_dump(mode="json") if event.experience is not None else None
+            commentary_cue = experience_payload.get("commentary") if isinstance(experience_payload, dict) else None
+            commentary = (
+                str(
+                    event.commentary
+                    or (commentary_cue.get("line") if isinstance(commentary_cue, dict) else "")
+                    or event.metadata.get("description")
+                    or ""
+                ).strip()
+                or None
+            )
+            payloads.append(
+                {
+                    "match_id": match_id,
+                    "event_id": event.event_id,
+                    "source_event_id": event.source_event_id or event.event_id,
+                    "sequence": event.sequence,
+                    "sequence_id": event.sequence_id or event.sequence,
+                    "event_type": event.event_type,
+                    "source_event_type": event.source_event_type or event.event_type,
+                    "minute": event.minute,
+                    "clock": event.clock_label,
+                    "team_id": event.team_id,
+                    "team": event.team,
+                    "team_side": event.team_side,
+                    "player_id": event.player_id,
+                    "player": event.player,
+                    "secondary_player_id": event.secondary_player_id,
+                    "secondary_player": event.secondary_player,
+                    "home_score": event.home_score,
+                    "away_score": event.away_score,
+                    "presentation_second": event.presentation_second,
+                    "tick": event.tick,
+                    "importance_score": event.importance_score,
+                    "highlight_eligible": event.highlight_eligible,
+                    "audio_stem_channels": list(event.audio_stem_channels),
+                    "commentary": commentary,
+                    "description": commentary,
+                    "line": commentary,
+                    "cue": commentary_cue,
+                    "experience": experience_payload,
+                    "win_probability": win_probability,
+                    "market_pulse": market_pulse,
+                    "snapshot": snapshot_payload,
+                    "metadata": event.metadata,
+                }
+            )
+        return payloads
+
     def _publish_domain_events(self, match_id: str, events: Sequence[LiveMatchStreamEventView]) -> None:
         if self.event_publisher is None:
             return
-        for event in events:
-            commentary = str(event.commentary or event.metadata.get("description") or "").strip() or None
-            payload = {
-                "match_id": match_id,
-                "event_id": event.event_id,
-                "source_event_id": event.source_event_id or event.event_id,
-                "sequence": event.sequence,
-                "sequence_id": event.sequence_id or event.sequence,
-                "event_type": event.event_type,
-                "source_event_type": event.source_event_type or event.event_type,
-                "minute": event.minute,
-                "clock": event.clock_label,
-                "team_id": event.team_id,
-                "team": event.team,
-                "team_side": event.team_side,
-                "player_id": event.player_id,
-                "player": event.player,
-                "secondary_player_id": event.secondary_player_id,
-                "secondary_player": event.secondary_player,
-                "home_score": event.home_score,
-                "away_score": event.away_score,
-                "presentation_second": event.presentation_second,
-                "tick": event.tick,
-                "importance_score": event.importance_score,
-                "highlight_eligible": event.highlight_eligible,
-                "audio_stem_channels": list(event.audio_stem_channels),
-                "commentary": commentary,
-                "description": commentary,
-                "metadata": event.metadata,
-            }
+        for payload in self.build_domain_event_payloads(match_id, events):
             self.event_publisher.publish(
                 DomainEvent(
                     name="match.events",
