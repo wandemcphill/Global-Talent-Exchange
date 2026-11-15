@@ -18,7 +18,7 @@ from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransact
 from app.wallets.service import COIN_TO_CREDIT_RATE, InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-# GTEX paid per 1 Fan Coin. 1 GTEX buys 100 Fan Coin, so the gift bridge pays 0.0100 GTEX.
+# GTEX paid per 1 Fan Coin. 1 GTEX buys 15 Fan Coin, so the gift bridge pays 0.0667 GTEX.
 GTEX_PER_FAN_COIN = (Decimal("1.0000") / COIN_TO_CREDIT_RATE).quantize(AMOUNT_QUANTUM)
 GIFT_CONVERSION_BRIDGE_COIN_CODE = "platform:coin:gift_conversion_bridge"
 FAN_GIFT_BRIDGE_CODE = "platform:credit:gift_conversion_bridge"
