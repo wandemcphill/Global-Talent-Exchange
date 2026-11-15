@@ -671,6 +671,15 @@ class CanonicalLiveExecutionService:
             },
         )
         self.session.flush()
+        logger.info(
+            "canonical_execution.started match_id=%s competition_id=%s execution_revision=%s minute=%s broadcast_category=%s assigned_duration_seconds=%s",
+            match.id,
+            match.competition_id,
+            int(execution.execution_revision),
+            int(execution.current_minute),
+            category_value,
+            max_duration_seconds,
+        )
         self._publish_stream_events(match, execution, list(checkpoint.committed_events), kind="kickoff")
         return match, execution
 
@@ -1078,7 +1087,7 @@ class CanonicalLiveExecutionService:
                 remaining_gks = active_goalkeepers - {out_id}
                 if incoming_player.role is PlayerRole.GOALKEEPER:
                     remaining_gks.add(in_id)
-                if not remaining_gks:
+                if out_id in active_goalkeepers and not remaining_gks:
                     raise CanonicalExecutionValidationError(
                         "Cannot substitute off the only active goalkeeper for an outfield player."
                     )
@@ -1239,6 +1248,17 @@ class CanonicalLiveExecutionService:
             },
         )
         self.session.flush()
+        logger.info(
+            "canonical_execution.tactical_command_applied match_id=%s competition_id=%s side=%s actor_user_id=%s execution_revision=%s current_minute=%s effective_minute=%s substitutions=%s",
+            match.id,
+            match.competition_id,
+            side_norm,
+            str(actor_user_id),
+            new_revision,
+            submitted_minute,
+            effective_minute,
+            len(applied_sub_records),
+        )
         self._publish_stream_events(match, execution, emitted_events, kind="tactics")
         return response_payload
 
@@ -1759,8 +1779,20 @@ class CanonicalLiveExecutionService:
         execution.metadata_json = {**dict(execution.metadata_json or {}), "admin_halt": halt_info}
         match.metadata_json = {**dict(match.metadata_json or {}), "admin_halt": halt_info}
         if self.hub is not None:
-            self.hub.halt_match(match.id, reason=reason, actor_user_id=actor_user_id)
+            try:
+                self.hub.halt_match(match.id, reason=reason, actor_user_id=actor_user_id)
+            except Exception:
+                logger.warning("canonical_execution.hub_halt_sync_failed match_id=%s", match.id, exc_info=True)
         self.session.flush()
+        logger.warning(
+            "canonical_execution.halted match_id=%s competition_id=%s execution_revision=%s minute=%s actor_user_id=%s reason=%s",
+            match.id,
+            match.competition_id,
+            int(execution.execution_revision),
+            int(execution.current_minute),
+            actor_user_id,
+            halt_info["reason"],
+        )
         return match, execution
 
     def resume_halted_execution(
@@ -1806,7 +1838,10 @@ class CanonicalLiveExecutionService:
         match_meta["admin_halt"] = exec_meta["admin_halt"]
         match.metadata_json = match_meta
         if self.hub is not None:
-            self.hub.clear_match_halt(match.id)
+            try:
+                self.hub.clear_match_halt(match.id)
+            except Exception:
+                logger.warning("canonical_execution.hub_clear_halt_failed match_id=%s", match.id, exc_info=True)
         self._sync_live_metadata(
             match,
             execution,
@@ -1815,6 +1850,15 @@ class CanonicalLiveExecutionService:
             refresh_viewer=True,
         )
         self.session.flush()
+        logger.info(
+            "canonical_execution.resumed match_id=%s competition_id=%s execution_revision=%s minute=%s actor_user_id=%s status=%s",
+            match.id,
+            match.competition_id,
+            int(execution.execution_revision),
+            int(execution.current_minute),
+            actor_user_id,
+            execution.execution_status,
+        )
         return match, execution
 
     def cancel_or_abandon_execution(
@@ -1855,8 +1899,21 @@ class CanonicalLiveExecutionService:
             execution.lease_expires_at = None
             execution.metadata_json = {**dict(execution.metadata_json or {}), "termination": cancel_meta}
         if self.hub is not None:
-            self.hub.halt_match(match.id, reason=reason or target_status, actor_user_id=actor_user_id)
+            try:
+                self.hub.halt_match(match.id, reason=reason or target_status, actor_user_id=actor_user_id)
+            except Exception:
+                logger.warning("canonical_execution.hub_termination_sync_failed match_id=%s", match.id, exc_info=True)
         self.session.flush()
+        logger.warning(
+            "canonical_execution.terminated match_id=%s competition_id=%s status=%s execution_revision=%s minute=%s actor_user_id=%s reason=%s",
+            match.id,
+            match.competition_id,
+            target_status,
+            int(execution.execution_revision) if execution is not None else None,
+            int(execution.current_minute) if execution is not None else None,
+            actor_user_id,
+            cancel_meta["reason"],
+        )
         return match
 
     def claim_and_advance_due_executions(
@@ -1908,6 +1965,7 @@ class CanonicalLiveExecutionService:
         advanced = 0
         settled = 0
         settled_match_ids: list[str] = []
+        recovered_leases = 0
         failed = 0
         errors: list[str] = []
 
@@ -1920,9 +1978,20 @@ class CanonicalLiveExecutionService:
                 and item.lease_expires_at is not None
                 and _as_utc(item.lease_expires_at) <= now
             ):
+                previous_owner = item.lease_owner
                 item.lease_owner = None
                 item.lease_expires_at = None
                 self.session.flush()
+                recovered_leases += 1
+                logger.warning(
+                    "canonical_execution.lease_recovered match_id=%s competition_id=%s previous_owner=%s lease_owner=%s execution_revision=%s minute=%s",
+                    match_id,
+                    item.competition_id,
+                    previous_owner,
+                    lease_owner,
+                    int(item.execution_revision),
+                    int(item.current_minute),
+                )
             try:
                 with self.session.begin_nested():
                     match, updated_exec, _ = self.step_execution(
@@ -1961,6 +2030,7 @@ class CanonicalLiveExecutionService:
             "advanced": advanced,
             "settled": settled,
             "settled_match_ids": settled_match_ids,
+            "recovered_leases": recovered_leases,
             "failed": failed,
             "errors": errors,
         }
