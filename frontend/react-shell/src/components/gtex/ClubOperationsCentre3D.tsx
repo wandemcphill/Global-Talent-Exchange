@@ -6,7 +6,11 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
-import { buildDepartmentInterior } from "./operationsRoomInteriors";
+import {
+  buildDepartmentInterior,
+  type DepartmentScreenHandle,
+  updateDepartmentScreens,
+} from "./operationsRoomInteriors";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
 import {
   Building2,
@@ -380,6 +384,9 @@ export function ClubOperationsCentre3D({
   const cameraGoalTargetRef = useRef<THREE.Vector3>(new THREE.Vector3(...OVERVIEW_CAMERA_TARGET));
   const isTransitioningRef = useRef<boolean>(true);
   const roomGroupsRef = useRef<Map<string, THREE.Group>>(new Map());
+  const roomScreensRef = useRef<DepartmentScreenHandle[]>([]);
+  const hubRef = useRef<ClubOperationsHubPayload | null | undefined>(hub);
+  hubRef.current = hub;
   const lightingObjectsRef = useRef<{
     scene: THREE.Scene;
     hemisphere: THREE.HemisphereLight;
@@ -537,6 +544,7 @@ export function ClubOperationsCentre3D({
     let mounted = true;
     let loadedModels = 0;
     roomGroupsRef.current.clear();
+    roomScreensRef.current = [];
 
     // Build each of the 6 Operational Destination Wings
     sceneDestinations.forEach((dest) => {
@@ -550,10 +558,11 @@ export function ClubOperationsCentre3D({
 
       // Build a department-specific, walk-in cutaway interior.
       // Each room has its own furniture, equipment, surfaces and named physical stations.
-      const interiorBuild = buildDepartmentInterior(dest);
+      const interiorBuild = buildDepartmentInterior(dest, hubRef.current);
       group.add(interiorBuild.group);
       pickables.push(...interiorBuild.pickables);
       animatedActors.push(...interiorBuild.animatedActors);
+      roomScreensRef.current.push(...interiorBuild.screens);
 
       // Corridor Light Path to Central Atrium
       const distToCenter = Math.hypot(rx, rz);
@@ -719,6 +728,7 @@ export function ClubOperationsCentre3D({
       (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__ = {
         scene,
         roomGroups: roomGroupsRef.current,
+        roomScreens: roomScreensRef.current,
         camera,
         renderer,
       };
@@ -841,11 +851,19 @@ export function ClubOperationsCentre3D({
       renderer.dispose();
       lightingObjectsRef.current = null;
       roomGroupsRef.current.clear();
+      roomScreensRef.current = [];
       if (typeof window !== "undefined") {
         delete (window as unknown as { __GTEX_OPERATIONS_3D__?: unknown }).__GTEX_OPERATIONS_3D__;
       }
     };
   }, [renderMode, sceneConfigurationKey]);
+
+  // Live operational hub metrics update all 3D wall and terminal CanvasTextures in-place
+  // without destroying or rebuilding the WebGLRenderer or Three.js scene graph.
+  useEffect(() => {
+    if (renderMode !== "3d" || roomScreensRef.current.length === 0) return;
+    updateDepartmentScreens(roomScreensRef.current, destinations, hub);
+  }, [renderMode, destinations, hub]);
 
   // Day/night is a light-rig change, not a reason to destroy and reload the entire scene.
   useEffect(() => {
