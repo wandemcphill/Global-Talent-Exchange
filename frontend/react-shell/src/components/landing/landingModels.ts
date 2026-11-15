@@ -367,6 +367,9 @@ export interface GtexLiveWorldPulse {
   clubsOnGtex: number;
   usersOnline: number;
   playersOnline: number;
+  visitorsToday: number;
+  pageViewsToday: number;
+  registeredUsers: number;
   usersOnlineWindowSeconds?: number;
   generatedAt?: string;
   labels?: Record<string, string>;
