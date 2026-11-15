@@ -1,6 +1,6 @@
 """Read-only reconciliation for the FanCoin -> GTEX Coin gift conversion bridge.
 
-A gift pays GTEX equal to the Fan Coin remainder divided by 100. That GTEX
+A gift pays GTEX equal to the Fan Coin remainder divided by the current Fan Coin-per-GTEX rate. That GTEX
 comes off the gift bridge, which is funded when a user spends GTEX to buy
 Fan Coin. The coin bridge stays at or above zero. A negative coin bridge
 means a gift was paid without backing.
@@ -34,7 +34,8 @@ from app.models.economic_conversion import (  # noqa: E402
     EconomicConversion,
     EconomicConversionStatus,
 )
-from app.models.wallet import LedgerAccount, LedgerEntry  # noqa: E402
+from app.models.wallet import LedgerAccount, LedgerEntry
+from app.wallets.service import COIN_TO_CREDIT_RATE  # noqa: E402
 
 QUANTUM = Decimal("0.0001")
 CREDIT_BRIDGE_CODE = "platform:credit:gift_conversion_bridge"
@@ -104,7 +105,7 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
             # Issued GTEX is the Fan Coin remainder divided by 100, so 100 times
             # issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
             gates["fee_and_destination_within_gross"] = (
-                platform_fee + (outstanding_coin * Decimal("100.0000"))
+                platform_fee + (outstanding_coin * COIN_TO_CREDIT_RATE)
             ) <= fancoin_consumed
 
             return {
