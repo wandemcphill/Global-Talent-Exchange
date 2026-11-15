@@ -7,7 +7,7 @@ from typing import Any
 from sqlalchemy import func, or_, select
 
 from app.core.events import DomainEvent
-from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
+from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService, GTEX_PER_FAN_COIN
 from app.economy.economic_policy import compute_gift_split
 from app.gift_engine.service import (
     MATCH_SCOPE_GIFT_MAX_COUNT,
@@ -484,7 +484,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             ledger_unit=LedgerUnit.COIN,
             source_ledger_unit=LedgerUnit.CREDIT,
             destination_ledger_unit=LedgerUnit.COIN,
-            conversion_rate=Decimal("0.0100"),
+            conversion_rate=GTEX_PER_FAN_COIN,
             animation_key=gift.animation_key,
             sound_key=gift.sound_key,
             note=kwargs.get("note"),
