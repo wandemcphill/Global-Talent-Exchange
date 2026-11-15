@@ -142,10 +142,10 @@ class DIDitVerificationAdapter(BaseIdentityVerificationAdapter):
         payload_bytes: bytes,
         headers: dict[str, str],
     ) -> bool:
+        webhook_secret = self._webhook_secret()
         try:
-            webhook_secret = self._webhook_secret()
             payload = json.loads(payload_bytes.decode("utf-8"))
-        except (IdentityProviderConfigurationError, UnicodeDecodeError, json.JSONDecodeError):
+        except (UnicodeDecodeError, json.JSONDecodeError):
             return False
         if not isinstance(payload, dict):
             return False
