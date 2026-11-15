@@ -745,6 +745,7 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
     _app, client = app_client
     secret = "production-turnstile-secret-key"  # pragma: allowlist secret
     monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", secret)
+    monkeypatch.setenv("GTE_TURNSTILE_SITE_KEY", "0x4AAAAAAA-test-site-key")
     monkeypatch.setenv("GTE_APP_ENV", "production")
 
     class SiteverifyResponse:
@@ -831,6 +832,29 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
     assert bootstrap["creator"] is None
     assert bootstrap["coin_trader"] is None
     assert bootstrap["account_type"] == "user"
+
+
+
+def test_signup_does_not_require_an_invisible_turnstile_widget(app_client, monkeypatch) -> None:
+    _app, client = app_client
+    monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", "configured-server-secret")
+    monkeypatch.delenv("GTE_TURNSTILE_SITE_KEY", raising=False)
+    monkeypatch.delenv("TURNSTILE_SITE_KEY", raising=False)
+    monkeypatch.setenv("GTE_APP_ENV", "production")
+
+    response = client.post(
+        "/auth/signup/user",
+        json={
+            "email": "turnstile-widget-missing@example.com",
+            "username": "turnstile_widget_missing",
+            "full_name": "Turnstile Widget Missing",
+            "password": TEST_PASSWORD,
+            "is_over_18": True,
+        },
+    )
+
+    assert response.status_code == 201, response.text
+    assert response.json()["user"]["email"] == "turnstile-widget-missing@example.com"
 
 
 def test_legacy_register_function_returns_gone(session) -> None:
@@ -1009,6 +1033,7 @@ def test_turnstile_fails_closed_in_production_without_secret(monkeypatch) -> Non
 
     monkeypatch.delenv("GTE_TURNSTILE_SECRET_KEY", raising=False)
     monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    monkeypatch.setenv("GTE_TURNSTILE_SITE_KEY", "0x4AAAAAAA-test-site-key")
     monkeypatch.setenv("GTE_APP_ENV", "production")
 
     with pytest.raises(AuthError, match="Security check is unavailable"):
@@ -1020,6 +1045,7 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
 
     _app, client = app_client
     monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", "dummy-secret-key")
+    monkeypatch.setenv("GTE_TURNSTILE_SITE_KEY", "0x4AAAAAAA-test-site-key")
     monkeypatch.setenv("GTE_APP_ENV", "production")
 
     class SiteverifyResponse:
