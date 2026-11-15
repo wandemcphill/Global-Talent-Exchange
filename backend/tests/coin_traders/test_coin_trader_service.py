@@ -116,8 +116,8 @@ def _approve_trader_with_rate(
         CoinTraderAdminDecisionRequest(tier="gold", note="verified liquidity"),
         admin=users["admin"],
     )
-    buy_rate = Decimal("860") if coin_unit == LedgerUnit.COIN else Decimal("0.90")
-    sell_rate = Decimal("920") if coin_unit == LedgerUnit.COIN else Decimal("1.05")
+    buy_rate = Decimal("50") if coin_unit == LedgerUnit.COIN else Decimal("2.50")
+    sell_rate = Decimal("56") if coin_unit == LedgerUnit.COIN else Decimal("3.00")
     service.upsert_rate(
         CoinTraderRateUpsertRequest(
             coin_unit=coin_unit,
@@ -289,8 +289,8 @@ def test_admin_liquidity_keeps_gtex_coin_and_fan_coin_balances_distinct(coin_tra
         CoinTraderRateUpsertRequest(
             coin_unit=LedgerUnit.CREDIT,
             fiat_currency="NGN",
-            buy_rate_fiat=Decimal("0.90"),
-            sell_rate_fiat=Decimal("1.05"),
+            buy_rate_fiat=Decimal("2.50"),
+            sell_rate_fiat=Decimal("3.00"),
             min_coin_amount=Decimal("100"),
             max_coin_amount=Decimal("50000"),
             available_liquidity=Decimal("9000"),
@@ -502,16 +502,16 @@ def test_coin_trader_rate_view_includes_governance_status(coin_trader_session: S
     assert profile_view.verification_level == "standard"
     assert profile_view.completed_volume_fiat == Decimal("0.0000")
     assert profile.id == rate_view.trader_profile_id
-    assert rate_view.buy_rate_fiat == Decimal("860")
-    assert rate_view.sell_rate_fiat == Decimal("920")
-    assert rate_view.spread_fiat == Decimal("60.0000")
-    assert rate_view.treasury_deposit_rate_fiat == Decimal("900.0000")
-    assert rate_view.treasury_withdrawal_rate_fiat == Decimal("880.0000")
-    assert rate_view.min_trader_buy_rate_fiat == Decimal("820.0000")
-    assert rate_view.max_trader_buy_rate_fiat == Decimal("890.0000")
-    assert rate_view.min_trader_sell_rate_fiat == Decimal("900.0000")
-    assert rate_view.max_trader_sell_rate_fiat == Decimal("980.0000")
-    assert rate_view.max_trader_spread_fiat == Decimal("120.0000")
+    assert rate_view.buy_rate_fiat == Decimal("50")
+    assert rate_view.sell_rate_fiat == Decimal("56")
+    assert rate_view.spread_fiat == Decimal("6.0000")
+    assert rate_view.treasury_deposit_rate_fiat == Decimal("60.0000")
+    assert rate_view.treasury_withdrawal_rate_fiat == Decimal("48.0000")
+    assert rate_view.min_trader_buy_rate_fiat == Decimal("48.0000")
+    assert rate_view.max_trader_buy_rate_fiat == Decimal("50.0000")
+    assert rate_view.min_trader_sell_rate_fiat == Decimal("53.0000")
+    assert rate_view.max_trader_sell_rate_fiat == Decimal("59.0000")
+    assert rate_view.max_trader_spread_fiat == Decimal("10.0000")
     assert rate_view.governance_status == "compliant"
     assert rate_view.governance_reasons == []
 
@@ -521,13 +521,13 @@ def test_coin_trader_invalid_sell_rate_is_blocked_and_risk_flagged(coin_trader_s
     service = CoinTraderService(coin_trader_session, wallet_service=WalletService())
     _approve_trader_with_rate(service, users)
 
-    with pytest.raises(CoinTraderValidationError, match="undercuts treasury deposit"):
+    with pytest.raises(CoinTraderValidationError, match="below the minimum"):
         service.upsert_rate(
             CoinTraderRateUpsertRequest(
                 coin_unit=LedgerUnit.COIN,
                 fiat_currency="NGN",
-                buy_rate_fiat=Decimal("860"),
-                sell_rate_fiat=Decimal("890"),
+                buy_rate_fiat=Decimal("50"),
+                sell_rate_fiat=Decimal("52"),
                 min_coin_amount=Decimal("1000"),
                 max_coin_amount=Decimal("50000"),
                 available_liquidity=Decimal("50000"),
@@ -542,7 +542,7 @@ def test_coin_trader_invalid_sell_rate_is_blocked_and_risk_flagged(coin_trader_s
     assert event.subject_type == "coin_trader_profile"
     assert event.metadata_json["action"] == "upsert"
     assert event.metadata_json["status"] == "arbitrage_risk"
-    assert "undercuts treasury deposit" in " ".join(event.metadata_json["reasons"])
+    assert "below the minimum" in " ".join(event.metadata_json["reasons"])
 
 
 def test_coin_trader_invalid_buy_rate_and_spread_are_blocked(coin_trader_session: Session) -> None:
