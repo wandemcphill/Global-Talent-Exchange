@@ -63,6 +63,7 @@ def treasury_rates(session: Session) -> dict[str, Any]:
         "deposit_direction": str(getattr(s.deposit_rate_direction, "value", s.deposit_rate_direction)),
         "withdrawal_rate": Decimal(s.withdrawal_rate_value),
         "withdrawal_direction": str(getattr(s.withdrawal_rate_direction, "value", s.withdrawal_rate_direction)),
+        "fan_coin_deposit_rate": Decimal(s.fan_coin_deposit_rate_value),
     }
 
 
@@ -78,7 +79,7 @@ def display_rates(session: Session) -> dict[str, str]:
     """Naira value of one GTEX Coin and one Fan Coin, from the treasury deposit rate."""
     rates = treasury_rates(session)
     per_gtex = coin_to_fiat(Decimal("1"), rates["deposit_rate"], rates["deposit_direction"])
-    per_fan = ledger.D(per_gtex / Decimal(FAN_COIN_PER_GTEX))
+    per_fan = ledger.D(rates["fan_coin_deposit_rate"])
     return {
         "naira_per_gtex": str(per_gtex),
         "naira_per_fan": str(per_fan),
