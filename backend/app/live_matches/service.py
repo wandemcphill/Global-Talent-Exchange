@@ -1017,6 +1017,9 @@ class LiveMatchHub:
         substitutions: list[dict[str, Any]] | None = None,
         instructions: list[str] | None = None,
         require_live: bool = False,
+        actor_user_id: str | None = None,
+        expected_revision: int | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         side_norm = (side or "").strip().lower()
         if side_norm not in {"home", "away"}:
@@ -1053,6 +1056,98 @@ class LiveMatchHub:
             # the canonical CompetitionMatch. The database lifecycle is checked first.
             if match_id in self._halted_matches:
                 raise LiveMatchError("Match stream is halted; live tactics and substitutions are locked.")
+
+            has_canonical_execution = False
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+                    from app.models.competition_match_execution import CompetitionMatchExecution
+
+                    with self.session_factory() as check_session:
+                        has_canonical_execution = (
+                            check_session.scalar(
+                                select(CompetitionMatchExecution.id).where(
+                                    CompetitionMatchExecution.match_id == match_id
+                                )
+                            )
+                            is not None
+                        )
+                except Exception as exc:
+                    if require_live:
+                        raise LiveMatchUnavailableError(
+                            f"Unable to verify canonical execution state for match '{match_id}'."
+                        ) from exc
+
+            if has_canonical_execution and self.session_factory is not None:
+                from app.services.canonical_live_execution_service import (
+                    CanonicalExecutionConflictError,
+                    CanonicalExecutionError,
+                    CanonicalExecutionHaltedError,
+                    CanonicalExecutionValidationError,
+                    CanonicalLiveExecutionService,
+                    CanonicalMatchNotFoundError,
+                    CanonicalMatchNotLiveError,
+                )
+
+                try:
+                    with self.session_factory() as session:
+                        exec_service = CanonicalLiveExecutionService(
+                            session,
+                            match_stream_service=getattr(self, "match_stream_service", None),
+                        )
+                        canonical_response = exec_service.apply_live_tactical_command(
+                            match_id,
+                            side=side_norm,
+                            actor_user_id=actor_user_id or "system",
+                            expected_revision=expected_revision,
+                            idempotency_key=idempotency_key,
+                            press_intensity=press_intensity,
+                            defensive_line=defensive_line,
+                            tempo=tempo,
+                            risk_level=risk_level,
+                            mentality=mentality,
+                            formation=formation,
+                            substitutions=substitutions,
+                            instructions=instructions,
+                        )
+                        session.commit()
+                        committed_match = session.get(CompetitionMatch, match_id)
+                        committed_exec = exec_service.get_execution(match_id)
+                        if committed_match is not None and committed_exec is not None:
+                            session.expunge(committed_match)
+                            session.expunge(committed_exec)
+                        else:
+                            committed_match = None
+                            committed_exec = None
+                except CanonicalMatchNotFoundError as exc:
+                    raise LiveMatchNotFoundError(str(exc)) from exc
+                except CanonicalMatchNotLiveError as exc:
+                    raise LiveMatchNotLiveError(str(exc)) from exc
+                except (CanonicalExecutionHaltedError, CanonicalExecutionConflictError) as exc:
+                    raise LiveMatchResimulationError(str(exc)) from exc
+                except CanonicalExecutionValidationError as exc:
+                    raise LiveMatchError(str(exc)) from exc
+                except CanonicalExecutionError as exc:
+                    raise LiveMatchResimulationError(str(exc)) from exc
+                except Exception as exc:
+                    logger.exception("Failed canonical live tactical command for %s", match_id)
+                    raise LiveMatchPersistenceError(f"Unable to persist tactics for match '{match_id}'.") from exc
+
+                if committed_match is not None and committed_exec is not None:
+                    self.sync_canonical_execution(match=committed_match, execution=committed_exec)
+                    try:
+                        self._hot_cache.set(
+                            f"match:{match_id}:tactics",
+                            {
+                                "home": dict(committed_exec.home_tactics_json or {}),
+                                "away": dict(committed_exec.away_tactics_json or {}),
+                            },
+                            ttl_seconds=86400,
+                        )
+                    except Exception:
+                        logger.debug("Failed updating canonical tactics cache for %s", match_id, exc_info=True)
+                return canonical_response
+
             if require_live:
                 self._require_live_competition_match(match_id)
 
@@ -1490,6 +1585,36 @@ class LiveMatchHub:
     def get_tactics(self, match_id: str) -> dict[str, dict[str, Any]]:
         with self._lock:
             match_tactics = self._tactics.get(match_id)
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match_execution import CompetitionMatchExecution
+
+                    with self.session_factory() as session:
+                        execution = session.scalar(
+                            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                        )
+                        if execution is not None and (execution.home_tactics_json or execution.away_tactics_json):
+                            cached_rev = max(
+                                int((match_tactics or {}).get("home", {}).get("execution_revision") or 0),
+                                int((match_tactics or {}).get("away", {}).get("execution_revision") or 0),
+                            )
+                            if not match_tactics or int(execution.execution_revision) >= cached_rev:
+                                self._tactics[match_id] = {
+                                    "home": {
+                                        **dict(execution.home_tactics_json or {}),
+                                        "execution_revision": int(execution.execution_revision),
+                                        "tactic_revision": int(execution.execution_revision),
+                                    },
+                                    "away": {
+                                        **dict(execution.away_tactics_json or {}),
+                                        "execution_revision": int(execution.execution_revision),
+                                        "tactic_revision": int(execution.execution_revision),
+                                    },
+                                }
+                                match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
             if not match_tactics:
                 try:
                     cached = self._hot_cache.get(f"match:{match_id}:tactics")
@@ -1505,28 +1630,17 @@ class LiveMatchHub:
             if not match_tactics and self.session_factory is not None:
                 try:
                     from app.models.competition_match import CompetitionMatch
-                    from app.models.competition_match_execution import CompetitionMatchExecution
 
                     with self.session_factory() as session:
-                        execution = session.scalar(
-                            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
-                        )
-                        if execution is not None and (execution.home_tactics_json or execution.away_tactics_json):
-                            self._tactics[match_id] = {
-                                "home": dict(execution.home_tactics_json or {}),
-                                "away": dict(execution.away_tactics_json or {}),
-                            }
-                            match_tactics = self._tactics[match_id]
-                        else:
-                            comp_match = session.get(CompetitionMatch, match_id)
-                            if comp_match is not None and comp_match.metadata_json:
-                                saved = comp_match.metadata_json.get("tactics")
-                                if isinstance(saved, dict) and ("home" in saved or "away" in saved):
-                                    self._tactics[match_id] = {
-                                        "home": dict(saved.get("home", {})),
-                                        "away": dict(saved.get("away", {})),
-                                    }
-                                    match_tactics = self._tactics[match_id]
+                        comp_match = session.get(CompetitionMatch, match_id)
+                        if comp_match is not None and comp_match.metadata_json:
+                            saved = comp_match.metadata_json.get("tactics")
+                            if isinstance(saved, dict) and ("home" in saved or "away" in saved):
+                                self._tactics[match_id] = {
+                                    "home": dict(saved.get("home", {})),
+                                    "away": dict(saved.get("away", {})),
+                                }
+                                match_tactics = self._tactics[match_id]
                 except Exception:
                     pass
 

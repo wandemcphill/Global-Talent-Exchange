@@ -8,7 +8,7 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.encoders import jsonable_encoder
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.auth.security import TokenError
@@ -1002,26 +1002,49 @@ def _load_strict_live_view_state(
     if playback_context is not None and playback_context.viewer_state is not None:
         view_state = playback_context.viewer_state
         is_live = bool(playback_context.is_live)
-    elif state is not None:
-        events, _cursor = hub.get_events_since(match_id, 0)
-        if any(_is_blocked_strict_live_source(_strict_live_event_source(event)) for event in events):
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
-        try:
-            view_state = MatchTimelineService().build_from_live_stream(
-                match_id=match_id,
-                source="live_match_hub",
-                home_team_id=None,
-                home_team_name=None,
-                away_team_id=None,
-                away_team_name=None,
-                events=events,
-                live_state=state,
-                allow_synthetic_visuals=False,
+    else:
+        bundle = hub._canonical_execution_bundle(match_id) if hasattr(hub, "_canonical_execution_bundle") else None
+        if bundle is not None:
+            comp_match, execution = bundle
+            is_live = bool(
+                execution.execution_status in {"in_progress", "paused"}
+                and comp_match.status in {"in_progress", "paused"}
+                and comp_match.completed_at is None
             )
-            is_live = bool(state.is_live)
-        except Exception:
-            logger.exception("Failed to build strict live V2 match state for %s", match_id)
-            view_state = None
+            view_state = _load_persisted_live_view_state(match_id, app)
+            if view_state is None and getattr(app.state, "session_factory", None) is not None:
+                try:
+                    from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
+
+                    with app.state.session_factory() as session:
+                        db_match = session.get(CompetitionMatch, match_id)
+                        exec_svc = CanonicalLiveExecutionService(session)
+                        db_exec = exec_svc.get_execution(match_id)
+                        if db_match is not None and db_exec is not None:
+                            view_state = exec_svc.build_live_viewer_state(db_match, db_exec)
+                except Exception:
+                    logger.exception("Failed building canonical live viewer state for %s", match_id)
+        elif state is not None:
+            events, _cursor = hub.get_events_since(match_id, 0)
+            if any(_is_blocked_strict_live_source(_strict_live_event_source(event)) for event in events):
+                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
+            try:
+                view_state = MatchTimelineService().build_from_live_stream(
+                    match_id=match_id,
+                    source="live_match_hub",
+                    home_team_id=None,
+                    home_team_name=None,
+                    away_team_id=None,
+                    away_team_name=None,
+                    events=events,
+                    live_state=state,
+                    allow_synthetic_visuals=False,
+                )
+                is_live = bool(state.is_live)
+            except Exception:
+                logger.exception("Failed to build strict live V2 match state for %s", match_id)
+                view_state = None
+                is_live = bool(state.is_live)
     if view_state is None:
         view_state = _load_persisted_live_view_state(match_id, app)
     if view_state is None:
@@ -1737,9 +1760,13 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     )
     active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
     tactics = ensure_live_match_hub(app).get_tactics(match_id)
-    tactic_revision = int((tactics.get("home") or {}).get("tactic_revision") or 0) + int(
-        (tactics.get("away") or {}).get("tactic_revision") or 0
+    home_rev = int((tactics.get("home") or {}).get("tactic_revision") or 0)
+    away_rev = int((tactics.get("away") or {}).get("tactic_revision") or 0)
+    execution_revision = max(
+        int((tactics.get("home") or {}).get("execution_revision") or 0),
+        int((tactics.get("away") or {}).get("execution_revision") or 0),
     )
+    tactic_revision = max(home_rev + away_rev, execution_revision)
     presentation = getattr(view_state, "presentation_package", None)
     home_sheet = getattr(presentation, "home", None) if presentation is not None else None
     away_sheet = getattr(presentation, "away", None) if presentation is not None else None
@@ -1784,6 +1811,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "time_seconds": round(float(frame.time_seconds), 2),
         "frame_id": frame.frame_id,
         "snapshot_version": int(frame_index) + (int(len(view_state.events)) * 100000) + (tactic_revision * 1000000000),
+        "execution_revision": execution_revision or None,
         "phase": _enum_value(frame.phase) or "LIVE",
         "home": _v2_team_payload(
             view_state.home_team,
@@ -1891,6 +1919,8 @@ class UpdateMatchTacticsRequest(BaseModel):
     side: str | None = None
     substitutions: list[dict[str, Any]] | None = None
     instructions: list[str] | None = None
+    expected_revision: int | None = Field(default=None, ge=1)
+    idempotency_key: str | None = Field(default=None, min_length=1, max_length=128)
 
 
 def _resolve_match_tactical_authority_for_request(
@@ -1931,9 +1961,15 @@ def read_match_v2_tactics(
         current_user=current_user,
         payload=payload,
     )
+    execution_revision = max(
+        int(home_tactics.get("execution_revision") or 0),
+        int(away_tactics.get("execution_revision") or 0),
+    ) or None
     return {
         "match_id": payload["match_id"],
         **_strict_live_runtime_flags(),
+        "execution_revision": execution_revision,
+        "current_minute": payload.get("minute"),
         "authorized_tactical_side": authority.authorized_side,
         "authorized_sides": list(authority.authorized_sides),
         "can_edit_tactics": bool(authority.authorized_sides),
@@ -1946,6 +1982,9 @@ def read_match_v2_tactics(
             "risk_level": home_tactics.get("risk_level", 50),
             "mentality": home_tactics.get("mentality", "balanced"),
             "substitution_count": home_tactics.get("substitution_count", 0),
+            "instructions": home_tactics.get("instructions", []),
+            "pending_substitutions": home_tactics.get("pending_substitutions", []),
+            "pending_effective_minute": home_tactics.get("pending_effective_minute"),
         },
         "away": {
             "team_id": away.get("team_id"),
@@ -1956,6 +1995,9 @@ def read_match_v2_tactics(
             "risk_level": away_tactics.get("risk_level", 50),
             "mentality": away_tactics.get("mentality", "balanced"),
             "substitution_count": away_tactics.get("substitution_count", 0),
+            "instructions": away_tactics.get("instructions", []),
+            "pending_substitutions": away_tactics.get("pending_substitutions", []),
+            "pending_effective_minute": away_tactics.get("pending_effective_minute"),
         },
     }
 
@@ -2015,6 +2057,9 @@ def update_match_v2_tactics(
             substitutions=payload.substitutions,
             instructions=payload.instructions,
             require_live=True,
+            actor_user_id=str(current_user.id),
+            expected_revision=payload.expected_revision,
+            idempotency_key=payload.idempotency_key,
         )
     except (LiveMatchUnavailableError, LiveMatchPersistenceError) as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -2030,6 +2075,13 @@ def update_match_v2_tactics(
         "status": "applied",
         "match_id": match_id,
         "side": target_side,
+        "execution_revision": updated.get("execution_revision"),
+        "effective_minute": updated.get("effective_minute"),
+        "applied_immediately": bool(updated.get("applied_immediately", False)),
+        "command_id": updated.get("command_id"),
+        "idempotency_key": updated.get("idempotency_key"),
+        "idempotent_replay": bool(updated.get("idempotent_replay", False)),
+        "applied_substitutions": updated.get("applied_substitutions", []),
         "tactics": updated,
         "home": all_tactics.get("home", {}),
         "away": all_tactics.get("away", {}),

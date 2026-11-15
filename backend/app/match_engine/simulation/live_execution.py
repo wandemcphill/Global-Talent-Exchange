@@ -632,8 +632,11 @@ def initialize_execution(
             for nested in entry:
                 record(nested)
             return
-        committed_events.append(entry)
-        generator.crowd_engine.react(event=entry, home_state=home_state, away_state=away_state)
+        meta = dict(entry.metadata or {})
+        meta.setdefault("execution_revision", int(revision))
+        stamped = replace(entry, metadata=meta)
+        committed_events.append(stamped)
+        generator.crowd_engine.react(event=stamped, home_state=home_state, away_state=away_state)
 
     record(
         generator._make_event(
@@ -742,11 +745,11 @@ def advance_checkpoint(
             for nested in entry:
                 record(nested)
             return
-        stamped = entry
+        meta = dict(entry.metadata or {})
+        meta.setdefault("execution_revision", int(checkpoint.execution_revision))
         if phase_stamp["value"]:
-            meta = dict(entry.metadata or {})
             meta["match_phase"] = phase_stamp["value"]
-            stamped = replace(entry, metadata=meta)
+        stamped = replace(entry, metadata=meta)
         committed.append(stamped)
         newly_emitted.append(stamped)
         generator.crowd_engine.react(event=stamped, home_state=home_state, away_state=away_state)
@@ -1250,13 +1253,45 @@ def apply_live_tactical_revision(
         return checkpoint, emitted
 
     # Scheduled for future open-play minute (> current_minute):
-    # Do NOT touch committed history or stats at <= current_minute; project post-change ratings for future chance mix.
+    # Do NOT touch committed history or stats at <= current_minute; project all pending
+    # + new changes onto disposable preview states so future chance mix reflects all active orders.
     preview_home = deepcopy(checkpoint.home_state)
     preview_away = deepcopy(checkpoint.away_state)
-    eff_state = preview_home if normalized_side == "home" else preview_away
-    eff_opp = preview_away if normalized_side == "home" else preview_home
     dummy_counter = count(1)
     dummy_stats = deepcopy(checkpoint.player_stats)
+
+    for queued in checkpoint.future_schedule:
+        if queued.kind not in {"tactical_change", "tactical_substitution"} or not queued.payload:
+            continue
+        q_state = preview_home if queued.team_side == "home" else preview_away
+        q_opp = preview_away if queued.team_side == "home" else preview_home
+        if queued.kind == "tactical_change":
+            generator._apply_tactical_change(
+                match_id=request.match_id,
+                event_counter=dummy_counter,
+                state=q_state,
+                opponent=q_opp,
+                minute=int(queued.minute),
+                payload=queued.payload,
+            )
+        elif queued.kind == "tactical_substitution":
+            sub_item = queued.payload.get("substitution")
+            q_out = q_state.players_by_id.get(sub_item.outgoing_player_id) if sub_item is not None else None
+            q_in = q_state.players_by_id.get(sub_item.incoming_player_id) if sub_item is not None else None
+            q_events = generator._apply_tactical_substitution(
+                match_id=request.match_id,
+                event_counter=dummy_counter,
+                state=q_state,
+                opponent=q_opp,
+                minute=int(queued.minute),
+                payload=queued.payload,
+                player_stats=dummy_stats,
+            )
+            if q_events and q_out is not None and q_in is not None:
+                _apply_substitution_strength_adjustment(q_state, q_out, q_in)
+
+    eff_state = preview_home if normalized_side == "home" else preview_away
+    eff_opp = preview_away if normalized_side == "home" else preview_home
 
     if adjustment is not None:
         next_idx += 1
@@ -1329,31 +1364,24 @@ def apply_live_tactical_revision(
     return checkpoint, []
 
 
-def finalize_checkpoint(
+def _assemble_simulation_result(
     generator: MatchEventGenerator,
     request: MatchSimulationRequest,
     checkpoint: MatchExecutionCheckpoint,
+    *,
+    home_state: TeamRuntimeState,
+    away_state: TeamRuntimeState,
+    player_stats: dict[str, PlayerMatchStats],
+    status: MatchStatus,
+    finalize_minutes: bool,
 ) -> SimulationResult:
-    """Complete any remaining play and emit the canonical SimulationResult."""
-
-    if checkpoint.clock_phase != "completed":
-        advance_checkpoint(
-            generator,
-            request,
-            checkpoint,
-            until_minute=_EXTRA_TIME_END_MINUTE,
-            stop_at_halftime=False,
-        )
-
-    home_state = checkpoint.home_state
-    away_state = checkpoint.away_state
-    player_stats = checkpoint.player_stats
     events = list(checkpoint.committed_events)
     narrative = checkpoint.narrative
     shootout = checkpoint.shootout
 
     generator._resolve_possession(home_state, away_state, narrative=narrative)
-    generator._finalize_player_minutes(player_stats)
+    if finalize_minutes:
+        generator._finalize_player_minutes(player_stats)
     winner_team_id, winner_team_name = generator._resolve_winner(home_state, away_state, shootout)
     upset = generator._resolve_upset(home_state, away_state, winner_team_id)
     ordered_player_stats = tuple(
@@ -1372,7 +1400,7 @@ def finalize_checkpoint(
     return SimulationResult(
         match_id=request.match_id,
         seed=checkpoint.seed,
-        status=MatchStatus.COMPLETED,
+        status=status,
         competition_type=request.competition.competition_type,
         stage=request.competition.stage,
         is_final=request.competition.is_final,
@@ -1429,6 +1457,54 @@ def finalize_checkpoint(
     )
 
 
+def build_partial_simulation_result(
+    generator: MatchEventGenerator,
+    request: MatchSimulationRequest,
+    checkpoint: MatchExecutionCheckpoint,
+) -> SimulationResult:
+    """Build a non-mutating SimulationResult containing strictly committed events up to current_minute."""
+
+    status = MatchStatus.PAUSED if checkpoint.clock_phase == "halftime" else MatchStatus.IN_PROGRESS
+    return _assemble_simulation_result(
+        generator,
+        request,
+        checkpoint,
+        home_state=deepcopy(checkpoint.home_state),
+        away_state=deepcopy(checkpoint.away_state),
+        player_stats=deepcopy(checkpoint.player_stats),
+        status=status,
+        finalize_minutes=False,
+    )
+
+
+def finalize_checkpoint(
+    generator: MatchEventGenerator,
+    request: MatchSimulationRequest,
+    checkpoint: MatchExecutionCheckpoint,
+) -> SimulationResult:
+    """Complete any remaining play and emit the canonical SimulationResult."""
+
+    if checkpoint.clock_phase != "completed":
+        advance_checkpoint(
+            generator,
+            request,
+            checkpoint,
+            until_minute=_EXTRA_TIME_END_MINUTE,
+            stop_at_halftime=False,
+        )
+
+    return _assemble_simulation_result(
+        generator,
+        request,
+        checkpoint,
+        home_state=checkpoint.home_state,
+        away_state=checkpoint.away_state,
+        player_stats=checkpoint.player_stats,
+        status=MatchStatus.COMPLETED,
+        finalize_minutes=True,
+    )
+
+
 def project_remaining_from_checkpoint(
     generator: MatchEventGenerator,
     request: MatchSimulationRequest,
@@ -1448,6 +1524,7 @@ __all__ = [
     "MatchExecutionCheckpoint",
     "advance_checkpoint",
     "apply_live_tactical_revision",
+    "build_partial_simulation_result",
     "deserialize_match_event",
     "finalize_checkpoint",
     "initialize_execution",
