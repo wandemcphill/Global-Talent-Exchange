@@ -237,11 +237,16 @@ jobs:
       - run: >
           python -m pytest
           backend/tests/live_matches/test_live_match_router.py
+          backend/tests/live_matches/test_live_match_tactical_integrity.py
           backend/tests/live_matches/test_live_match_hot_path_cache.py
           backend/tests/live_matches/test_live_match_sampling.py
           backend/tests/live_matches/test_u2a007_canonical_competition_and_durations.py
+          backend/tests/live_match/test_legacy_live_match_identity.py
+          backend/tests/live_match/test_live_match_manager_tactics.py
           backend/tests/owner_console/test_canonical_match_projection.py
           backend/tests/manager_duels/test_manager_duel_api.py
+          backend/tests/broadcast/test_spectator_gateway.py
+          backend/tests/test_matchday_broadcast_overhaul.py::test_multi_spectator_sync_and_red_card_player_remains_dismissed
           backend/tests/match_engine/test_live_match_experience_contract.py
           backend/tests/test_match_timeline_service.py
           -q

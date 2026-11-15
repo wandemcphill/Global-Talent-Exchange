@@ -721,7 +721,7 @@ def test_rewards_claim_idempotency() -> None:
     assert again_body["talent_coin"] == again_body["net_amount"]
 
 
-def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -> None:
+def test_live_match_appointed_first_team_manager_e2e_authority_and_safe_resimulation_rejection() -> None:
     from app.auth.dependencies import get_optional_current_user
     from app.owner_console.models import OwnerClubState
 
@@ -796,7 +796,7 @@ def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -
                 round_number=1,
                 home_club_id=home_club_id,
                 away_club_id=away_club_id,
-                status="live",
+                status="in_progress",
                 metadata_json={
                     "replay_payload": replay_payload.model_dump(mode="json"),
                     "simulation_request": sim_request.model_dump(mode="json"),
@@ -868,7 +868,9 @@ def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -
             res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "away", "formation": "4-4-2"})
             assert res.status_code == 403
 
-            # 9. Home FTM targeting home side with valid mutation -> 200
+            # 9. Manager authority is recognized, but the current replay-tail simulator
+            # cannot update the official competition result/event records transactionally.
+            # Reject the mutation rather than allow a different shared broadcast result.
             res = client.post(
                 f"/api/matches/{match_id}/tactics",
                 json={
@@ -880,19 +882,18 @@ def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -
                     "risk_level": 60,
                 },
             )
-            assert res.status_code == 200, res.text
-            body = res.json()
-            assert body["home"]["formation"] == "4-3-3"
-            assert body["home"]["press_intensity"] == 70
+            assert res.status_code == 409, res.text
+            assert "cannot safely reconcile" in res.json()["detail"]
 
-            # 10. Substitution rejection with invalid player ids -> 400
+            # 10. Substitutions are also rejected until the canonical event and
+            # appearance records can be updated from the same authoritative replay.
             res = client.post(
                 f"/api/matches/{match_id}/tactics",
                 json={"side": "home", "substitutions": [{"in_player_id": "ghost-in", "out_player_id": "ghost-out"}]},
             )
-            assert res.status_code == 400, res.text
+            assert res.status_code == 409, res.text
 
-            # 11. Valid substitution by the appointed manager -> 200, applied
+            # 11. Validly shaped substitution remains unapplied for integrity
             state = client.get(f"/api/matches/{match_id}/state").json()
             outgoing = [p for p in state["pitch_players"] if p["is_home"]][0]
             incoming = replay_payload.visual_identity.home_team.player_visuals[11]
@@ -911,19 +912,19 @@ def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -
                     ],
                 },
             )
-            assert res.status_code == 200, res.text
+            assert res.status_code == 409, res.text
             after = client.get(f"/api/matches/{match_id}/state").json()
             home_ids = [p["player_id"] for p in after["pitch_players"] if p["is_home"]]
-            assert incoming.player_id in home_ids
-            assert outgoing["player_id"] not in home_ids
+            assert outgoing["player_id"] in home_ids
+            assert incoming.player_id not in home_ids
 
-            # 12. Match without a live runtime (e.g. completed) rejects mutations -> 400
+            # 12. Completed canonical match is rejected even if a runtime once existed -> 409
             with session_factory() as session:
                 cm = session.get(CompetitionMatch, match_id)
                 cm.status = "completed"
                 session.commit()
             app.state.live_match_hub = LiveMatchHub(session_factory=session_factory)
             res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "home", "formation": "5-3-2"})
-            assert res.status_code == 400, res.text
+            assert res.status_code == 409, res.text
     finally:
         pass

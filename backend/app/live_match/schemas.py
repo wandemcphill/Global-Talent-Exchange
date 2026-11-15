@@ -39,10 +39,6 @@ class CreateLiveMatchRequest(BaseModel):
     away_overall: int = 70
     home_formation: str = "4-3-3"
     away_formation: str = "4-3-3"
-    home_user_id: str | None = None
-    away_user_id: str | None = None
-    home_manager_user_id: str | None = None
-    away_manager_user_id: str | None = None
 
 
 class SetLiveTacticsRequest(BaseModel):

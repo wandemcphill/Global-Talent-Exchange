@@ -55,10 +55,6 @@ def create_session(
         away_overall=payload.away_overall,
         home_formation=payload.home_formation,
         away_formation=payload.away_formation,
-        home_user_id=payload.home_user_id,
-        away_user_id=payload.away_user_id,
-        home_manager_user_id=payload.home_manager_user_id,
-        away_manager_user_id=payload.away_manager_user_id,
     )
     return _view(session, user_id=current_user.id)
 

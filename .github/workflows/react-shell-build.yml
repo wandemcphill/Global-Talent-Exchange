@@ -8,11 +8,23 @@ on:
       - "ops/render/publish-react-shell.sh"
       - "ops/render/verify-console-bundle.sh"
       - "render.yaml"
+      - "backend/app/live_match/**"
+      - "backend/app/live_matches/**"
+      - "backend/app/modules.py"
+      - "backend/tests/live_match/**"
+      - "backend/tests/live_matches/**"
+      - "backend/tests/broadcast/test_spectator_gateway.py"
       - ".github/workflows/react-shell-build.yml"
   push:
     branches: [main]
     paths:
       - "frontend/react-shell/**"
+      - "backend/app/live_match/**"
+      - "backend/app/live_matches/**"
+      - "backend/app/modules.py"
+      - "backend/tests/live_match/**"
+      - "backend/tests/live_matches/**"
+      - "backend/tests/broadcast/test_spectator_gateway.py"
       - "ops/render/build-frontend.sh"
       - "ops/render/publish-react-shell.sh"
       - "ops/render/verify-console-bundle.sh"
@@ -44,6 +56,8 @@ jobs:
         run: npm test -- --watchAll=false --runInBand
         env:
           CI: "true"
+      - name: TypeScript check
+        run: npx tsc --noEmit
       - name: Build React shell for /console
         run: npm run build
       - name: Verify /console asset prefix and canonical API origin
