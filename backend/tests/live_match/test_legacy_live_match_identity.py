@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from app.auth.dependencies import get_current_user
 from app.live_match.router import router as legacy_live_match_router
 from app.live_match.service import LiveMatchEngine, LiveMatchStore
-from app.live_matches.router import router as canonical_live_matches_router
+from app.live_matches.router import api_router as canonical_live_matches_api_router
 from app.modules import DOMAIN_MODULES
 
 
@@ -56,4 +56,4 @@ def test_legacy_create_payload_cannot_assign_its_own_manager_identity() -> None:
 
 
 def test_canonical_live_matches_router_is_the_registered_v2_surface() -> None:
-    assert canonical_live_matches_router.prefix == "/api/matches"
+    assert canonical_live_matches_api_router.prefix == "/api/matches"

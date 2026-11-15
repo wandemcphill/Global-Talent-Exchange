@@ -112,7 +112,7 @@ def test_live_status_whitelist_rejects_non_live_states(status: str) -> None:
 
         assert hub._tactics == {}
         assert hub._matches == {}
-        assert hub._hot_cache.get("match:canonical-match-1:tactics") is None
+        assert hub._hot_cache.backend.get("match:canonical-match-1:tactics") is None
         with session_factory() as session:
             match = session.get(CompetitionMatch, "canonical-match-1")
             assert match is not None
@@ -160,7 +160,7 @@ def test_database_lookup_failure_returns_unavailable_and_does_not_mutate_state()
 
     assert hub._tactics == {}
     assert hub._matches == {}
-    assert hub._hot_cache.get("match:canonical-match-1:tactics") is None
+    assert hub._hot_cache.backend.get("match:canonical-match-1:tactics") is None
 
 
 def test_live_runtime_cannot_resimulate_against_an_unreconciled_competition_result() -> None:
