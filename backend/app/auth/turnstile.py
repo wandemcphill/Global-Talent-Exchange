@@ -43,7 +43,7 @@ def verify_turnstile_token(
     secret = turnstile_secret()
     site_key = turnstile_site_key()
     app_env = (os.environ.get("GTE_APP_ENV") or "development").strip().lower()
-    if site_key is None:
+    if not candidate and site_key is None:
         return
     if secret is None:
         if app_env == "production":
