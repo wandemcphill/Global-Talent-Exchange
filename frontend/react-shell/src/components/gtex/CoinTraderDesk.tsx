@@ -128,56 +128,89 @@ function OrderForm({ traders }: any) {
 }
 
 function TraderVerificationCard({ profile, onVerified }: { profile: any; onVerified?: () => void }) {
-  const [provider, setProvider] = useState<"sandbox" | "didit" | "smile_id">("sandbox");
+  const [sessionUrl, setSessionUrl] = useState("");
   const [initiating, setInitiating] = useState(false);
   const qc = useQueryClient();
+  const statusQuery = useQuery({
+    queryKey: ["trader-kyc-status"],
+    queryFn: async () => (await api.get("/coin-traders/verification/status")).data,
+    retry: false,
+    refetchInterval: (query: any) => query.state.data?.status === "pending" ? 15000 : false,
+  });
 
   const handleInitiate = async () => {
     setInitiating(true);
+    setSessionUrl("");
     try {
       const { data } = await api.post("/coin-traders/verification/initiate", {
-        provider,
-        id_type: "bvn",
-        callback_url: `${window.location.origin}/trader/verification/callback`,
+        verification_type: "full_kyc",
       });
-      if (data.session_url) {
-        window.open(data.session_url, "_blank");
+      if (!data.handoff_url || !/^https:\/\/verify\.didit\.me\//.test(data.handoff_url)) {
+        throw new Error("The identity provider did not return a valid secure verification link.");
       }
-      toast.success(`Verification initiated with ${data.provider}. Trader desk activates automatically upon authoritative provider result.`);
-      qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
+      setSessionUrl(data.handoff_url);
+      await qc.invalidateQueries({ queryKey: ["trader-kyc-status"] });
+      toast.success("Your secure " + data.provider + " identity session is ready. Continue using the link below.");
       if (onVerified) onVerified();
     } catch (err: any) {
-      toast.error("Failed to initiate verification: " + errMsg(err));
+      toast.error("Could not start identity verification: " + errMsg(err));
     } finally {
       setInitiating(false);
     }
   };
+
+  const currentStatus = String(statusQuery.data?.status || "").toLowerCase();
+  const isPending = currentStatus === "pending";
+  const isRejected = currentStatus === "rejected";
 
   return (
     <div className="mb-6 rounded-xl border border-indigo-400/30 bg-indigo-500/[0.05] p-5" data-testid="trader-kyc-card">
       <div className="flex items-start gap-3">
         <ShieldCheck className="size-6 text-indigo-400 shrink-0 mt-0.5" />
         <div className="space-y-2">
-          <h3 className="gx-display text-base font-bold uppercase text-white">Full Trader Identity Verification Required</h3>
+          <h3 className="gx-display text-base font-bold uppercase text-white">Professional Trader Identity Verification</h3>
           <p className="text-xs leading-5 text-slate-300">
-            Coin Traders must complete authoritative identity verification before conducting marketplace trading, publishing rates, or buying desk liquidity. Supported verification methods include Government ID / Nigerian BVN or NIN with live selfie liveness detection.
+            Complete the GTEX-approved identity workflow. The verification provider checks the identity document and required selfie/liveness steps configured for GTEX. Your trader account is not activated until GTEX receives and validates the provider's signed final decision.
           </p>
+          {isPending && (
+            <div className="rounded-lg border border-amber-400/20 bg-amber-500/[0.06] p-3 text-xs text-amber-100" data-testid="trader-kyc-pending">
+              Your identity check has been submitted and is awaiting the provider's final decision. This screen checks for status updates automatically.
+            </div>
+          )}
+          {isRejected && (
+            <div className="rounded-lg border border-red-400/20 bg-red-500/[0.06] p-3 text-xs text-red-200" data-testid="trader-kyc-rejected">
+              Verification was not approved: {statusQuery.data?.rejection_reason || "The provider requires you to retry the identity check."}
+            </div>
+          )}
           <div className="pt-2 flex flex-wrap items-center gap-3">
-            <select className="gx-input max-w-[240px] py-1.5 text-xs" value={provider} onChange={(e) => setProvider(e.target.value as any)}>
-              <option value="sandbox">Sandbox Provider (Instant verification test)</option>
-              <option value="didit">DIDit (Government ID & Facial Comparison)</option>
-              <option value="smile_id">Smile ID (BVN/NIN & Liveness)</option>
-            </select>
             <Btn disabled={initiating} onClick={handleInitiate} data-testid="initiate-trader-kyc-btn">
-              {initiating ? "Starting session..." : "Verify Identity Now"}
+              {initiating ? "Starting secure session..." : isRejected ? "Retry identity verification" : "Verify identity now"}
             </Btn>
+            {sessionUrl && (
+              <a
+                href={sessionUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-testid="continue-trader-kyc-link"
+                className="inline-flex items-center rounded-lg border border-indigo-300/30 bg-indigo-400/10 px-4 py-2 text-sm font-semibold text-indigo-100 hover:bg-indigo-400/20"
+              >
+                Continue to secure identity check
+              </a>
+            )}
           </div>
+          {statusQuery.isError && Number((statusQuery.error as any)?.response?.status) !== 404 && (
+            <p className="text-xs text-amber-200" data-testid="trader-kyc-status-warning">
+              We could not refresh the verification status. Your submission and provider checks remain server-side.
+            </p>
+          )}
+          <p className="text-[11px] text-slate-500">
+            Provider: DIDit · Document verification and face/liveness checks depend on the GTEX workflow configured in the provider dashboard.
+          </p>
         </div>
       </div>
     </div>
   );
 }
-
 export function CoinTraderDesk() {
   const { user } = useAuth();
   const qc = useQueryClient();
