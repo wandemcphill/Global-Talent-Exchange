@@ -16,7 +16,7 @@ from app.gift_engine.router import admin_gifts_router
 from app.gift_engine.canonical_service import GiftEngineService
 from app.models import Base, GiftAbuseFlag, LedgerEntryReason, LedgerUnit
 from app.models.user import User, UserRole
-from app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import COIN_TO_CREDIT_RATE, LedgerPosting, WalletService
 from backend.tests.support.economic_policy import seed_economic_policy
 
 
@@ -60,7 +60,7 @@ def _fund_fan_coin(session: Session, user: User, amount: Decimal) -> None:
         allow_negative=False,
     )
     platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
-    gtex_backing = (amount / Decimal("100")).quantize(Decimal("0.0001"))
+    gtex_backing = (amount / COIN_TO_CREDIT_RATE).quantize(Decimal("0.0001"))
     wallet_service.append_transaction(
         session,
         postings=[
