@@ -51,7 +51,7 @@ async function hashTraderSecret(purpose: "recovery" | "pin", value: string): Pro
   const salt = window.crypto.getRandomValues(new Uint8Array(16));
   const key = await window.crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(value.normalize("NFKC")),
+    new TextEncoder().encode(value.trim()),
     "PBKDF2",
     false,
     ["deriveBits"],
@@ -486,7 +486,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <Field label="Recovery phrase (at least 8 words)">
-                  <input required minLength={32} autoComplete="off" data-testid="trader-recovery-input" type="password" className="gx-input" value={traderFields.recovery_phrase} onChange={updateTrader("recovery_phrase")} placeholder="Create a private recovery phrase" />
+                  <input required autoComplete="off" data-testid="trader-recovery-input" type="password" className="gx-input" value={traderFields.recovery_phrase} onChange={updateTrader("recovery_phrase")} placeholder="Create a private recovery phrase" />
                 </Field>
                 <Field label="Security PIN (6–12 digits)">
                   <input required inputMode="numeric" maxLength={12} autoComplete="new-password" data-testid="trader-pin-input" type="password" className="gx-input" value={traderFields.security_pin} onChange={updateTrader("security_pin")} placeholder="Create a private PIN" />
