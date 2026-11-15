@@ -337,10 +337,12 @@ function OwnerView({ view }: any) {
 // Touchline & Dugout Broadcast Monitor (Read-Only for Club Owner — Section 11 & 12)
 function TacticalHUD({
   formation,
+  mentality = "balanced",
   press,
   line,
   tempo,
   risk,
+  instructions = [],
   minute,
   homeScore,
   awayScore,
@@ -350,19 +352,20 @@ function TacticalHUD({
   canEditTactics = false,
   matchId,
   completed = false,
+  executionRevision = null,
+  pendingEffectiveMinute = null,
+  substitutionCount = 0,
+  maxSubstitutions = 5,
   onTacticsApplied,
+  onSyncRequired,
 }: {
   formation: string;
-  setFormation?: (f: string) => void;
+  mentality?: string;
   press: number;
-  setPress?: (v: number) => void;
   line: number;
-  setLine?: (v: number) => void;
   tempo: number;
-  setTempo?: (v: number) => void;
   risk: number;
-  setRisk?: (v: number) => void;
-  onApplyPreset?: (p: any) => void;
+  instructions?: string[];
   matchId: string;
   minute: number;
   homeScore: number;
@@ -373,43 +376,109 @@ function TacticalHUD({
   /** True only for the authenticated appointed First-Team Manager of `side` (server-resolved). */
   canEditTactics?: boolean;
   completed?: boolean;
+  executionRevision?: number | null;
+  pendingEffectiveMinute?: number | null;
+  substitutionCount?: number;
+  maxSubstitutions?: number;
   onTacticsApplied?: () => void;
+  onSyncRequired?: () => void;
 }) {
   const myScore = side === "away" ? awayScore : homeScore;
   const theirScore = side === "away" ? homeScore : awayScore;
   const editable = canEditTactics && !completed;
+  const subsRemaining = Math.max(0, maxSubstitutions - substitutionCount);
   const [draftFormation, setDraftFormation] = useState(formation);
+  const [draftMentality, setDraftMentality] = useState(mentality);
   const [draftPress, setDraftPress] = useState(press);
   const [draftLine, setDraftLine] = useState(line);
   const [draftTempo, setDraftTempo] = useState(tempo);
   const [draftRisk, setDraftRisk] = useState(risk);
+  const [draftInstructions, setDraftInstructions] = useState<string[]>(instructions);
   const [subOut, setSubOut] = useState("");
   const [subIn, setSubIn] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [tacticsError, setTacticsError] = useState<string | null>(null);
+  const [lastOrderReceipt, setLastOrderReceipt] = useState<{
+    revision: number | null;
+    effectiveMinute: number | null;
+    appliedImmediately: boolean;
+  } | null>(null);
 
-  const submitTactics = async (payload: Record<string, unknown>) => {
+  const instructionKey = instructions.join("|");
+  useEffect(() => {
+    setDraftFormation(formation);
+    setDraftMentality(mentality);
+    setDraftPress(press);
+    setDraftLine(line);
+    setDraftTempo(tempo);
+    setDraftRisk(risk);
+    setDraftInstructions(instructions);
+  }, [executionRevision, formation, mentality, press, line, tempo, risk, instructionKey]);
+
+  const toggleInstruction = (code: string) => {
+    setDraftInstructions((prev) =>
+      prev.includes(code) ? prev.filter((item) => item !== code) : [...prev, code],
+    );
+  };
+
+  const submitTactics = async (payload: Record<string, unknown>): Promise<boolean> => {
     setSubmitting(true);
     setTacticsError(null);
+    const generatedKey =
+      typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+        ? crypto.randomUUID()
+        : `${matchId}-${side}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const requestBody: Record<string, unknown> = {
+      side,
+      idempotency_key: generatedKey,
+      ...(executionRevision != null ? { expected_revision: executionRevision } : {}),
+      ...payload,
+    };
     try {
-      await api.post(`/matches/${matchId}/tactics`, { side, ...payload });
-      toast.success("Touchline order issued");
+      const response = await api.post(`/matches/${matchId}/tactics`, requestBody);
+      const data = response?.data || {};
+      const nextRevision =
+        typeof data.execution_revision === "number" ? data.execution_revision : executionRevision;
+      const effectiveMin =
+        typeof data.effective_minute === "number" ? data.effective_minute : null;
+      const appliedImmediately = Boolean(data.applied_immediately);
+      setLastOrderReceipt({
+        revision: nextRevision ?? null,
+        effectiveMinute: effectiveMin,
+        appliedImmediately,
+      });
+      toast.success(
+        effectiveMin !== null
+          ? `Touchline order accepted · effective ${effectiveMin}'`
+          : "Touchline order issued",
+      );
       onTacticsApplied?.();
+      return true;
     } catch (err: any) {
+      const statusCode = Number(err?.response?.status ?? 0);
       const detail = err?.response?.data?.detail;
-      const message = typeof detail === "string" ? detail : "Tactics update rejected by the match server.";
+      const message =
+        typeof detail === "string"
+          ? detail
+          : statusCode === 409
+            ? "Canonical match revision changed; refreshed latest match state."
+            : "Tactics update rejected by the match server.";
       setTacticsError(message);
       toast.error(message);
+      if (statusCode === 409) {
+        onSyncRequired?.();
+      }
+      return false;
     } finally {
       setSubmitting(false);
     }
   };
 
-  const submitSubstitution = () => {
+  const submitSubstitution = async () => {
     const outgoing = starters.find((p) => p.player_id === subOut);
     const incoming = bench.find((p) => p.player_id === subIn);
-    if (!outgoing || !incoming) return;
-    void submitTactics({
+    if (!outgoing || !incoming || subsRemaining <= 0) return;
+    const ok = await submitTactics({
       substitutions: [
         {
           out_player_id: outgoing.player_id,
@@ -419,10 +488,11 @@ function TacticalHUD({
           shirt_number: incoming.shirt_number,
         },
       ],
-    }).then(() => {
+    });
+    if (ok) {
       setSubOut("");
       setSubIn("");
-    });
+    }
   };
 
   // Autonomous Dugout Technical Area Telemetry (First-Team Manager + Assistant Coaches)
@@ -569,10 +639,36 @@ function TacticalHUD({
 
       {editable && (
         <div data-testid="manager-tactics-editor" className="mt-4 rounded-sm border border-emerald-500/30 bg-emerald-500/5 p-3">
-          <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-300">
-            Issue Live Touchline Orders ({side.toUpperCase()})
-          </span>
-          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+              Issue Live Touchline Orders ({side.toUpperCase()})
+            </span>
+            <div className="flex flex-wrap items-center gap-2 font-mono text-[10px]">
+              {executionRevision != null && (
+                <span
+                  data-testid="tactics-execution-revision"
+                  className="rounded border border-emerald-400/30 bg-slate-900 px-1.5 py-0.5 font-bold text-emerald-200"
+                >
+                  Rev #{executionRevision}
+                </span>
+              )}
+              {(pendingEffectiveMinute != null || lastOrderReceipt?.effectiveMinute != null) && (
+                <span
+                  data-testid="tactics-effective-minute"
+                  className="rounded border border-cyan-400/30 bg-cyan-500/10 px-1.5 py-0.5 font-bold text-cyan-200"
+                >
+                  Effective {pendingEffectiveMinute ?? lastOrderReceipt?.effectiveMinute}&apos;
+                </span>
+              )}
+              <span
+                data-testid="tactics-subs-remaining"
+                className="rounded border border-white/15 bg-slate-900 px-1.5 py-0.5 font-bold text-slate-200"
+              >
+                Subs: {substitutionCount}/{maxSubstitutions}
+              </span>
+            </div>
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-6">
             <select
               data-testid="tactics-formation-select"
               value={draftFormation}
@@ -581,6 +677,23 @@ function TacticalHUD({
             >
               {Array.from(new Set([formation, "4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-3-2"])).map((f) => (
                 <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+            <select
+              data-testid="tactics-mentality-select"
+              value={draftMentality}
+              onChange={(e) => setDraftMentality(e.target.value)}
+              className="rounded border border-white/15 bg-slate-900 px-2 py-1 text-xs text-white"
+            >
+              {[
+                ["balanced", "Balanced"],
+                ["attacking", "Attacking"],
+                ["defensive", "Defensive"],
+                ["ultra_attacking", "Ultra Attacking"],
+                ["ultra_defensive", "Ultra Defensive"],
+                ["cautious", "Cautious"],
+              ].map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
               ))}
             </select>
             {([
@@ -603,6 +716,33 @@ function TacticalHUD({
               </label>
             ))}
           </div>
+          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+            {[
+              ["high_press", "High Press"],
+              ["counter_attack", "Counter Attack"],
+              ["play_from_back", "Play From Back"],
+              ["slow_down_tempo", "Slow Down Tempo"],
+              ["protect_lead", "Protect Lead"],
+            ].map(([code, label]) => {
+              const active = draftInstructions.includes(code);
+              return (
+                <button
+                  key={code}
+                  type="button"
+                  data-testid={`tactics-instruction-${code}`}
+                  aria-pressed={active}
+                  onClick={() => toggleInstruction(code)}
+                  className={`rounded border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                    active
+                      ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-200"
+                      : "border-white/10 bg-slate-900 text-slate-400 hover:text-white"
+                  }`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
           <button
             type="button"
             data-testid="apply-tactics-btn"
@@ -610,10 +750,12 @@ function TacticalHUD({
             onClick={() =>
               void submitTactics({
                 formation: draftFormation,
+                mentality: draftMentality,
                 press_intensity: draftPress,
                 defensive_line: draftLine,
                 tempo: draftTempo,
                 risk_level: draftRisk,
+                instructions: draftInstructions,
               })
             }
             className="mt-2 rounded bg-emerald-500 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 disabled:opacity-50"
@@ -646,8 +788,10 @@ function TacticalHUD({
             <button
               type="button"
               data-testid="apply-substitution-btn"
-              disabled={submitting || !subOut || !subIn}
-              onClick={submitSubstitution}
+              disabled={submitting || !subOut || !subIn || subsRemaining <= 0}
+              onClick={() => {
+                void submitSubstitution();
+              }}
               className="rounded bg-sky-400 px-3 py-1 text-[10px] font-black uppercase tracking-wider text-slate-950 disabled:opacity-50"
             >
               Make Substitution
@@ -1333,7 +1477,7 @@ export default function MatchCenter() {
     enabled: !!id,
   });
 
-  const { data: liveState } = useQuery({
+  const { data: liveState, refetch: refetchLiveState } = useQuery({
     queryKey: ["match-live-state", id],
     queryFn: async () => {
       try {
@@ -1423,6 +1567,7 @@ export default function MatchCenter() {
   // Shared Universal Broadcast Clock (server-authoritative, non-controllable)
   const [playbackSeconds, setPlaybackSeconds] = useState(0);
   const snapshotVersionRef = useRef(-1);
+  const executionRevisionRef = useRef(-1);
   const initializedReplayRef = useRef<string>("");
   const [reconnectToken, setReconnectToken] = useState(0);
   const [acceptedLive, setAcceptedLive] = useState<any>(null);
@@ -1434,8 +1579,11 @@ export default function MatchCenter() {
     requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
     onResyncRequired: () => {
       snapshotVersionRef.current = -1;
+      executionRevisionRef.current = -1;
       setReconnectToken((value) => value + 1);
-      refetchViewerData();
+      void refetchViewerData();
+      void refetchLiveState();
+      void refetchAppliedTactics();
     },
     onGiftReceived: (g: any) => {
       enqueueGift(g);
@@ -1487,15 +1635,24 @@ export default function MatchCenter() {
   useEffect(() => {
     if (!liveState) return;
     const version = Number(liveState.snapshot_version ?? 0);
-    if (version < snapshotVersionRef.current) return;
+    const incomingRevision = Number((liveState as any).execution_revision ?? -1);
+    if (incomingRevision >= 0 && incomingRevision < executionRevisionRef.current) return;
+    if (incomingRevision <= executionRevisionRef.current && version < snapshotVersionRef.current) return;
+    const revisionAdvanced = incomingRevision > executionRevisionRef.current;
+    if (incomingRevision >= 0) {
+      executionRevisionRef.current = incomingRevision;
+    }
     snapshotVersionRef.current = version;
     setAcceptedLive(liveState);
+    if (revisionAdvanced) {
+      void refetchAppliedTactics();
+    }
     const sessionPos = deriveUniversalBroadcastPosition(liveState.broadcast_session);
     const candidateTime = sessionPos ?? Number(liveState.time_seconds);
     if (Number.isFinite(candidateTime)) {
       setPlaybackSeconds((prev) => Math.max(prev, candidateTime));
     }
-  }, [liveState]);
+  }, [liveState, refetchAppliedTactics]);
 
   useEffect(() => {
     const streamTime = Number(spectatorStream.lastFrame?.time_seconds);
@@ -1540,7 +1697,13 @@ export default function MatchCenter() {
   const isSharedLiveBroadcast = Boolean(
     acceptedLive ||
       spectatorStream.lastFrame ||
-      String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live",
+      broadcastSession?.pause_replay_enabled === false ||
+      (acceptedLive as any)?.pause_replay_enabled === false ||
+      (liveState as any)?.pause_replay_enabled === false ||
+      (viewerData as any)?.pause_replay_enabled === false ||
+      broadcastSession?.sync_strategy === "canonical_live_execution" ||
+      String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live" ||
+      (liveState && String(liveState.phase || "").toLowerCase() !== "completed"),
   );
   const canLocalReplay = !isSharedLiveBroadcast && timedRecordedFrames.length >= 2;
   const [replayPaused, setReplayPaused] = useState(false);
@@ -2645,10 +2808,12 @@ export default function MatchCenter() {
         <div className={`${activeTab === "tactics" ? "block" : "hidden"} order-4 max-md:block`}>
           <TacticalHUD
             formation={activeFormation}
+            mentality={String(myAppliedTactics?.mentality || "balanced")}
             press={press}
             line={line}
             tempo={tempo}
             risk={risk}
+            instructions={Array.isArray(myAppliedTactics?.instructions) ? myAppliedTactics.instructions : []}
             matchId={id || ""}
             minute={minute}
             homeScore={score.home}
@@ -2658,8 +2823,23 @@ export default function MatchCenter() {
             starters={(managerSide?.players || []).filter(isPlayerActiveOnPitch)}
             canEditTactics={authorizedTacticalSide !== null && isSharedLiveBroadcast}
             completed={done}
+            executionRevision={
+              (appliedTactics as any)?.execution_revision ??
+              (acceptedLive as any)?.execution_revision ??
+              (liveState as any)?.execution_revision ??
+              null
+            }
+            pendingEffectiveMinute={myAppliedTactics?.pending_effective_minute ?? null}
+            substitutionCount={Number(myAppliedTactics?.substitution_count ?? 0)}
             onTacticsApplied={() => {
               void refetchAppliedTactics();
+              void refetchLiveState();
+              void refetchViewerData();
+            }}
+            onSyncRequired={() => {
+              void refetchAppliedTactics();
+              void refetchLiveState();
+              void refetchViewerData();
             }}
           />
         </div>
