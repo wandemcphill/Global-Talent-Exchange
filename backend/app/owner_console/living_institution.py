@@ -544,16 +544,26 @@ def ensure_active_manager_tenure(
     return tenure
 
 
-
-def ensure_match_manager_tenure(session: Session, state: OwnerClubState, manager: dict[str, Any], *, world_day: int) -> OwnerClubManagerialTenure:
+def ensure_match_manager_tenure(
+    session: Session, state: OwnerClubState, manager: dict[str, Any], *, world_day: int
+) -> OwnerClubManagerialTenure:
     """Resolve a manager tenure by the identity captured for the match, not the current appointment."""
-    manager_id = str(manager.get("manager_id") or manager.get("id") or manager.get("market_manager_id") or manager.get("name") or manager.get("display_name") or "unidentified_manager")
+    manager_id = str(
+        manager.get("manager_id")
+        or manager.get("id")
+        or manager.get("market_manager_id")
+        or manager.get("name")
+        or manager.get("display_name")
+        or "unidentified_manager"
+    )
     manager_name = str(manager.get("name") or manager.get("display_name") or "First-Team Manager")
     style = str(manager.get("style") or manager.get("mentality") or manager.get("preferred_style") or "balanced")
-    existing = session.scalar(select(OwnerClubManagerialTenure).where(
-        OwnerClubManagerialTenure.club_id == state.club_id,
-        OwnerClubManagerialTenure.manager_id == manager_id,
-    ))
+    existing = session.scalar(
+        select(OwnerClubManagerialTenure).where(
+            OwnerClubManagerialTenure.club_id == state.club_id,
+            OwnerClubManagerialTenure.manager_id == manager_id,
+        )
+    )
     if existing is not None:
         return existing
     manager_source = str(manager.get("_manager_source") or "")
@@ -562,41 +572,61 @@ def ensure_match_manager_tenure(session: Session, state: OwnerClubState, manager
         from app.models.club_profile import ClubProfile
         from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerProfile
         club = session.get(ClubProfile, state.club_id)
-        contract = session.scalar(select(ManagerContract).where(
-            ManagerContract.club_user_id == (club.owner_user_id if club else ""),
-            ManagerContract.status == ManagerContractStatus.ACTIVE,
-        ))
-        active_profile = session.scalar(select(ManagerProfile).where(
-            ManagerProfile.manager_id == contract.manager_id
-        )) if contract is not None else None
+        contract = session.scalar(
+            select(ManagerContract).where(
+                ManagerContract.club_user_id == (club.owner_user_id if club else ""),
+                ManagerContract.status == ManagerContractStatus.ACTIVE,
+            )
+        )
+        active_profile = (
+            session.scalar(select(ManagerProfile).where(ManagerProfile.manager_id == contract.manager_id))
+            if contract is not None
+            else None
+        )
         same_manager = bool(active_profile and str(active_profile.manager_id) == manager_id)
     elif manager_source == "manager_market":
         from app.models.club_profile import ClubProfile
         from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
         club = session.get(ClubProfile, state.club_id)
-        assignment = session.scalar(select(ManagerTeamAssignment).where(
-            ManagerTeamAssignment.user_id == (club.owner_user_id if club else "")
-        ))
-        holding = session.scalar(select(ManagerHolding).where(
-            ManagerHolding.asset_id == assignment.main_manager_asset_id
-        )) if assignment is not None and assignment.main_manager_asset_id else None
-        catalog = session.scalar(select(ManagerCatalogEntry).where(
-            ManagerCatalogEntry.manager_id == holding.manager_id
-        )) if holding is not None else None
+        assignment = session.scalar(
+            select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == (club.owner_user_id if club else ""))
+        )
+        holding = (
+            session.scalar(select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id))
+            if assignment is not None and assignment.main_manager_asset_id
+            else None
+        )
+        catalog = (
+            session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id))
+            if holding is not None
+            else None
+        )
         same_manager = bool(catalog and str(catalog.manager_id) == manager_id)
     else:
         current = dict(state.manager_json or {})
         current_id = str(current.get("manager_id") or current.get("id") or "")
         current_name = str(current.get("name") or current.get("display_name") or "")
-        same_manager = bool((current_id and current_id == manager_id) or (current_name and current_name == manager_name))
+        same_manager = bool(
+            (current_id and current_id == manager_id) or (current_name and current_name == manager_name)
+        )
     day = max(1, int(world_day or 1))
     row = OwnerClubManagerialTenure(
-        club_id=state.club_id, manager_id=manager_id, manager_name=manager_name,
-        role="first_team_manager", tactical_style=style, appointed_world_day=day,
+        club_id=state.club_id,
+        manager_id=manager_id,
+        manager_name=manager_name,
+        role="first_team_manager",
+        tactical_style=style,
+        appointed_world_day=day,
         departed_world_day=None if same_manager else day,
         status="active" if same_manager else "departed",
-        matches_managed=0, wins=0, draws=0, losses=0, goals_for=0, goals_against=0,
-        trophies_won=0, departure_reason=None if same_manager else "succeeded_by_later_appointment",
+        matches_managed=0,
+        wins=0,
+        draws=0,
+        losses=0,
+        goals_for=0,
+        goals_against=0,
+        trophies_won=0,
+        departure_reason=None if same_manager else "succeeded_by_later_appointment",
         honors_json=[],
         tenure_summary=f"{manager_name} managed {state.club_name}; match-time identity is retained independently of later appointments.",
     )
@@ -1104,14 +1134,21 @@ def record_match_institutional_impact(
     prior_count = max(0, int(prior.get("matches_played") or 0))
     if rivalry is None and prior_count >= 2:
         rivalry = OwnerClubRivalry(
-            club_id=state.club_id, rival_club_id=opp_id, rival_club_name=opp_name,
+            club_id=state.club_id,
+            rival_club_id=opp_id,
+            rival_club_name=opp_name,
             rivalry_name=f"{state.club_name} vs {opp_name}",
             origin_reason="repeated_significant_encounters",
-            intensity_score=min(42, 18 + prior_count * 4), rivalry_tier="emerging",
-            matches_played=prior_count, wins=int(prior.get("wins") or 0),
-            draws=int(prior.get("draws") or 0), losses=int(prior.get("losses") or 0),
-            goals_for=int(prior.get("goals_for") or 0), goals_against=int(prior.get("goals_against") or 0),
-            last_meeting_world_day=world_day, notable_encounters_json=[],
+            intensity_score=min(42, 18 + prior_count * 4),
+            rivalry_tier="emerging",
+            matches_played=prior_count,
+            wins=int(prior.get("wins") or 0),
+            draws=int(prior.get("draws") or 0),
+            losses=int(prior.get("losses") or 0),
+            goals_for=int(prior.get("goals_for") or 0),
+            goals_against=int(prior.get("goals_against") or 0),
+            last_meeting_world_day=world_day,
+            notable_encounters_json=[],
         )
         session.add(rivalry)
         session.flush()
@@ -1141,27 +1178,44 @@ def record_match_institutional_impact(
         else:
             rivalry.rivalry_tier = "emerging"
         encounters = list(rivalry.notable_encounters_json or [])
-        encounters.insert(0, {
-            "match_id": match.id, "world_day": world_day, "competition_name": comp.name,
-            "round": match.round_number, "score": f"{gf}-{ga}", "result": result_str,
-        })
+        encounters.insert(
+            0,
+            {
+                "match_id": match.id,
+                "world_day": world_day,
+                "competition_name": comp.name,
+                "round": match.round_number,
+                "score": f"{gf}-{ga}",
+                "result": result_str,
+            },
+        )
         rivalry.notable_encounters_json = encounters[:10]
         flag_modified(rivalry, "notable_encounters_json")
         is_rivalry_match = rivalry.rivalry_tier in {"competitive", "fierce", "historic_derby"}
         if rivalry.matches_played == 3 or rivalry.rivalry_tier in {"fierce", "historic_derby"}:
             record_history_entry(
-                session, club_id=state.club_id, season_number=season_num, world_day=world_day,
-                category="historic_rivalry", event_type="rivalry_intensified",
+                session,
+                club_id=state.club_id,
+                season_number=season_num,
+                world_day=world_day,
+                category="historic_rivalry",
+                event_type="rivalry_intensified",
                 title=f"Rivalry Intensifies: {state.club_name} vs {opp_name} ({rivalry.rivalry_tier.replace('_', ' ').title()})",
                 narrative_summary=(
                     f"After {rivalry.matches_played} competitive meetings ({rivalry.wins}W-{rivalry.draws}D-{rivalry.losses}L), "
                     f"fixtures against {opp_name} have escalated into a {rivalry.rivalry_tier.replace('_', ' ')} rivalry."
                 ),
-                entity_type="rival_club", entity_id=opp_id, entity_name=opp_name,
+                entity_type="rival_club",
+                entity_id=opp_id,
+                entity_name=opp_name,
                 established_facts={
-                    "rival_club_name": opp_name, "matches_played": rivalry.matches_played,
-                    "wins": rivalry.wins, "draws": rivalry.draws, "losses": rivalry.losses,
-                    "intensity_score": rivalry.intensity_score, "source_match_id": match.id,
+                    "rival_club_name": opp_name,
+                    "matches_played": rivalry.matches_played,
+                    "wins": rivalry.wins,
+                    "draws": rivalry.draws,
+                    "losses": rivalry.losses,
+                    "intensity_score": rivalry.intensity_score,
+                    "source_match_id": match.id,
                 },
                 is_major_milestone=rivalry.rivalry_tier == "historic_derby",
                 idempotency_key=f"history:rivalry:{state.club_id}:{opp_id}:m{rivalry.matches_played}",
@@ -1171,7 +1225,11 @@ def record_match_institutional_impact(
     manager_snapshot_supplied = bool(side.get("manager_snapshot_supplied"))
     manager_snapshot = dict(side.get("manager_snapshot") or {})
     if manager_snapshot_supplied:
-        tenure = ensure_match_manager_tenure(session, state, manager_snapshot, world_day=world_day) if manager_snapshot else None
+        tenure = (
+            ensure_match_manager_tenure(session, state, manager_snapshot, world_day=world_day)
+            if manager_snapshot
+            else None
+        )
     elif side.get("projection_event_id"):
         # A canonical match without a persisted match-time manager identity must
         # not be attributed to whoever happens to be appointed when retried.
@@ -1179,8 +1237,10 @@ def record_match_institutional_impact(
     else:
         manager = dict(state.manager_json or {})
         tenure = ensure_active_manager_tenure(session, state, manager)
-    manager_name = tenure.manager_name if tenure is not None else str(
-        manager_snapshot.get("name") or manager_snapshot.get("display_name") or "the First-Team Manager"
+    manager_name = (
+        tenure.manager_name
+        if tenure is not None
+        else str(manager_snapshot.get("name") or manager_snapshot.get("display_name") or "the First-Team Manager")
     )
     if tenure is not None:
         tenure.matches_managed = int(tenure.matches_managed or 0) + 1
@@ -1212,7 +1272,8 @@ def record_match_institutional_impact(
     match_events = list(match.events_json or [])
     team_tag = "home" if is_home else "away"
     goal_texts = [
-        str(ev.get("text") or "") for ev in match_events
+        str(ev.get("text") or "")
+        for ev in match_events
         if ev.get("type") in {"goal", "penalty_goal", "penalty_scored"} and ev.get("team") == team_tag
     ]
 
@@ -1247,18 +1308,27 @@ def record_match_institutional_impact(
         flag_modified(sq_player, "personality_json")
 
         if sq_player.is_regen or pers.get("academy_graduate"):
-            grad = session.scalar(select(OwnerClubAcademyGraduate).where(
-                OwnerClubAcademyGraduate.club_id == state.club_id,
-                OwnerClubAcademyGraduate.player_id == str(sq_player.id),
-            ))
+            grad = session.scalar(
+                select(OwnerClubAcademyGraduate).where(
+                    OwnerClubAcademyGraduate.club_id == state.club_id,
+                    OwnerClubAcademyGraduate.player_id == str(sq_player.id),
+                )
+            )
             if grad is None:
                 grad = OwnerClubAcademyGraduate(
-                    club_id=state.club_id, player_id=str(sq_player.id),
-                    player_name=sq_player.name, position=sq_player.position,
-                    intake_world_day=max(1, world_day - 5), promoted_world_day=world_day,
-                    initial_rating=int(sq_player.rating), current_rating=int(sq_player.rating),
-                    potential_rating=int(sq_player.potential), first_team_appearances=0,
-                    first_team_minutes=0, first_team_goals=0, status="promoted",
+                    club_id=state.club_id,
+                    player_id=str(sq_player.id),
+                    player_name=sq_player.name,
+                    position=sq_player.position,
+                    intake_world_day=max(1, world_day - 5),
+                    promoted_world_day=world_day,
+                    initial_rating=int(sq_player.rating),
+                    current_rating=int(sq_player.rating),
+                    potential_rating=int(sq_player.potential),
+                    first_team_appearances=0,
+                    first_team_minutes=0,
+                    first_team_goals=0,
+                    status="promoted",
                     idempotency_key=f"academy_grad:{state.club_id}:{sq_player.id}",
                 )
                 session.add(grad)
@@ -1277,29 +1347,41 @@ def record_match_institutional_impact(
                     f"{minutes_played} minutes played."
                 )
                 debutants.append(grad)
-                debutant_records.append({
-                    "player_id": str(sq_player.id),
-                    "canonical_player_id": str(sq_player.player_ref or sq_player.id),
-                    "player_name": sq_player.name,
-                    "minutes_played": minutes_played,
-                    "goals": scored_in_match,
-                    "assists": assists_in_match,
-                })
+                debutant_records.append(
+                    {
+                        "player_id": str(sq_player.id),
+                        "canonical_player_id": str(sq_player.player_ref or sq_player.id),
+                        "player_name": sq_player.name,
+                        "minutes_played": minutes_played,
+                        "goals": scored_in_match,
+                        "assists": assists_in_match,
+                    }
+                )
                 record_history_entry(
-                    session, club_id=state.club_id, season_number=season_num, world_day=world_day,
-                    category="academy_debut", event_type="first_team_debut",
+                    session,
+                    club_id=state.club_id,
+                    season_number=season_num,
+                    world_day=world_day,
+                    category="academy_debut",
+                    event_type="first_team_debut",
                     title=f"Academy Debut: {sq_player.name} Makes First-Team Bow vs {opp_name}",
                     narrative_summary=(
                         f"Homegrown academy graduate {sq_player.name} ({sq_player.position}, {sq_player.rating} OVR) "
                         f"made their senior debut for {state.club_name} against {opp_name} in {comp.name}, playing "
                         f"{minutes_played} minutes."
                     ),
-                    entity_type="player", entity_id=sq_player.id, entity_name=sq_player.name,
+                    entity_type="player",
+                    entity_id=sq_player.id,
+                    entity_name=sq_player.name,
                     established_facts={
-                        "player_name": sq_player.name, "position": sq_player.position,
-                        "rating": int(sq_player.rating), "opponent_name": opp_name,
-                        "match_id": match.id, "minutes_played": minutes_played,
-                        "goals": scored_in_match, "assists": assists_in_match,
+                        "player_name": sq_player.name,
+                        "position": sq_player.position,
+                        "rating": int(sq_player.rating),
+                        "opponent_name": opp_name,
+                        "match_id": match.id,
+                        "minutes_played": minutes_played,
+                        "goals": scored_in_match,
+                        "assists": assists_in_match,
                     },
                     is_major_milestone=True,
                     idempotency_key=f"history:academy_debut:{state.club_id}:{sq_player.id}",
@@ -1321,17 +1403,28 @@ def record_match_institutional_impact(
         history_title = f"Heavy Defeat: {state.club_name} {gf}-{ga} {opp_name} in {comp.name}"
     if history_category and history_event_type and history_title:
         record_history_entry(
-            session, club_id=state.club_id, season_number=season_num, world_day=world_day,
-            category=history_category, event_type=history_event_type, title=history_title,
+            session,
+            club_id=state.club_id,
+            season_number=season_num,
+            world_day=world_day,
+            category=history_category,
+            event_type=history_event_type,
+            title=history_title,
             narrative_summary=(
                 f"{state.club_name} recorded a {gf}-{ga} {result_str} against {opp_name} "
                 f"in Round {match.round_number} of {comp.name} under {manager_name}."
             ),
-            entity_type="match", entity_id=match.id, entity_name=f"{state.club_name} vs {opp_name}",
+            entity_type="match",
+            entity_id=match.id,
+            entity_name=f"{state.club_name} vs {opp_name}",
             established_facts={
-                "match_id": match.id, "club_goals": gf, "opponent_goals": ga,
-                "opponent_name": opp_name, "competition_name": comp.name,
-                "round_number": int(match.round_number), "manager_name": manager_name,
+                "match_id": match.id,
+                "club_goals": gf,
+                "opponent_goals": ga,
+                "opponent_name": opp_name,
+                "competition_name": comp.name,
+                "round_number": int(match.round_number),
+                "manager_name": manager_name,
             },
             is_major_milestone=True,
             idempotency_key=f"{idem_prefix}:result",
@@ -1401,8 +1494,12 @@ def record_match_institutional_impact(
 
     # 6. Inject Matchday Atmosphere into OwnerMatch.narrative_json
     atmosphere = side.get("atmosphere_snapshot") or compute_matchday_atmosphere(
-        session, state, profile=profile, segments=segments,
-        opponent_club_id=opp_id, opponent_name=opp_name,
+        session,
+        state,
+        profile=profile,
+        segments=segments,
+        opponent_club_id=opp_id,
+        opponent_name=opp_name,
         is_knockout_or_decider=(comp.format == "knockout"),
     )
     narrative = dict(getattr(match, "narrative_json", {}) or {})
