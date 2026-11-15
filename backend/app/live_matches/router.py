@@ -2674,11 +2674,7 @@ async def stream_match(match_id: str, websocket: WebSocket, session_id: str) -> 
         await websocket.close(code=4404)
         return
 
-    await _stream_realtime_topics(
-        websocket,
-        user_id=None,
-        topics=(match_topic(match_id),),
-    )
+    await _stream_legacy_match_contract(websocket, hub, match_id, state)
 
 
 @legacy_router.websocket("/{match_id}/commentary/stream")
@@ -2699,10 +2695,13 @@ async def stream_match_commentary(match_id: str, websocket: WebSocket, session_i
         await websocket.close(code=4404)
         return
 
-    await _stream_realtime_topics(
+    await _stream_legacy_commentary_contract(
         websocket,
-        user_id=spectator_session.user_id,
-        topics=(commentary_topic(match_id),),
+        app,
+        hub,
+        match_id,
+        spectator_session.user_id,
+        state,
     )
 
 
@@ -2760,6 +2759,108 @@ router.include_router(legacy_router)
 router.include_router(api_router)
 router.include_router(match_router)
 router.include_router(api_match_router)
+
+
+async def _stream_legacy_match_contract(websocket: WebSocket, hub, match_id: str, initial_state) -> None:
+    """Serve the established channel/kind envelope from the canonical live-match hub."""
+    await websocket.accept()
+    cursor = 0
+    await websocket.send_json(
+        {
+            "channel": initial_state.channel,
+            "kind": "snapshot",
+            "payload": initial_state.snapshot.model_dump(mode="json"),
+        }
+    )
+    try:
+        while True:
+            state = hub.get_state(match_id)
+            if state is None:
+                break
+            events, next_cursor = hub.get_events_since(match_id, cursor)
+            if events:
+                await websocket.send_json(
+                    {
+                        "channel": state.channel,
+                        "kind": "events",
+                        "payload": [event.model_dump(mode="json") for event in events],
+                    }
+                )
+            cursor = next_cursor
+            if not state.is_live and cursor >= state.event_count:
+                break
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        return
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
+
+
+async def _stream_legacy_commentary_contract(
+    websocket: WebSocket,
+    app,
+    hub,
+    match_id: str,
+    user_id: str,
+    initial_state,
+) -> None:
+    """Serve the established commentary snapshot/event envelope without a second event source."""
+    await websocket.accept()
+    initial = _commentary_response(
+        app,
+        hub,
+        match_id=match_id,
+        user_id=user_id,
+        status=initial_state.snapshot.status,
+        events=[],
+        cursor=0,
+    )
+    await websocket.send_json(
+        {
+            "channel": initial_state.channel,
+            "kind": "commentary_snapshot",
+            "payload": initial.model_dump(mode="json") if initial is not None else {"match_id": match_id},
+        }
+    )
+    cursor = 0
+    try:
+        while True:
+            state = hub.get_state(match_id)
+            if state is None:
+                break
+            events, next_cursor = hub.get_events_since(match_id, cursor)
+            if events:
+                commentary = _commentary_response(
+                    app,
+                    hub,
+                    match_id=match_id,
+                    user_id=user_id,
+                    status=state.snapshot.status,
+                    events=list(events),
+                    cursor=next_cursor,
+                )
+                if commentary is not None and commentary.events:
+                    await websocket.send_json(
+                        {
+                            "channel": state.channel,
+                            "kind": "commentary",
+                            "payload": [event.model_dump(mode="json") for event in commentary.events],
+                        }
+                    )
+            cursor = next_cursor
+            if not state.is_live and cursor >= state.event_count:
+                break
+            await asyncio.sleep(0.1)
+    except WebSocketDisconnect:
+        return
+    finally:
+        try:
+            await websocket.close()
+        except Exception:
+            pass
 
 
 async def _stream_realtime_topics(
