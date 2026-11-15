@@ -104,7 +104,15 @@ def _prior_head_to_head(session: Session, match: CompetitionMatch, club_id: str,
             )
         ).all()
     )
-    summary = {"matches_played": 0, "wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
+    summary = {
+        "matches_played": 0,
+        "significant_encounters": 0,
+        "wins": 0,
+        "draws": 0,
+        "losses": 0,
+        "goals_for": 0,
+        "goals_against": 0,
+    }
     for previous in rows:
         home = previous.home_club_id == club_id
         gf = int(previous.home_score or 0) if home else int(previous.away_score or 0)
@@ -112,6 +120,13 @@ def _prior_head_to_head(session: Session, match: CompetitionMatch, club_id: str,
         summary["matches_played"] += 1
         summary["goals_for"] += gf
         summary["goals_against"] += ga
+        if (
+            bool(previous.requires_winner)
+            or str(previous.stage or "").lower() in {"knockout", "final", "semi_final", "quarter_final"}
+            or abs(gf - ga) >= 3
+            or gf + ga >= 5
+        ):
+            summary["significant_encounters"] += 1
         if gf > ga:
             summary["wins"] += 1
         elif gf == ga:
