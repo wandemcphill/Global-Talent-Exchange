@@ -231,142 +231,17 @@ class MatchEventGenerator:
                         away_state=away_state,
                     )
                 )
-            state = home_state if item.team_side == "home" else away_state
-            opponent = away_state if item.team_side == "home" else home_state
-            if item.kind == "yellow":
-                event = self._process_yellow_card(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                    player_stats=player_stats,
-                    rng=rng,
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "red":
-                event = self._process_red_card(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                    player_stats=player_stats,
-                    rng=rng,
-                    source="straight_red",
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "tactical_change":
-                if not self._change_condition_met(
-                    item.payload or {}, state=state, opponent=opponent, minute=item.minute
-                ):
-                    continue
-                event = self._apply_tactical_change(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                    payload=item.payload or {},
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "tactical_substitution":
-                if not self._change_condition_met(
-                    item.payload or {}, state=state, opponent=opponent, minute=item.minute
-                ):
-                    continue
-                record(
-                    self._apply_tactical_substitution(
-                        match_id=request.match_id,
-                        event_counter=event_counter,
-                        state=state,
-                        opponent=opponent,
-                        minute=item.minute,
-                        payload=item.payload or {},
-                        player_stats=player_stats,
-                    )
-                )
-            elif item.kind == "injury":
-                record(
-                    self._process_injury(
-                        match_id=request.match_id,
-                        event_counter=event_counter,
-                        state=state,
-                        opponent=opponent,
-                        minute=item.minute,
-                        player_stats=player_stats,
-                        rng=rng,
-                    )
-                )
-            elif item.kind == "tactical":
-                event = self._process_tactical_swing(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                    rng=rng,
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "foul":
-                event = self._process_tactical_foul(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                    rng=rng,
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "fatigue":
-                event = self._process_fatigue_event(
-                    match_id=request.match_id,
-                    event_counter=event_counter,
-                    state=state,
-                    opponent=opponent,
-                    minute=item.minute,
-                )
-                if event is not None:
-                    record(event)
-            elif item.kind == "chance":
-                record(
-                    self._process_chance(
-                        match_id=request.match_id,
-                        event_counter=event_counter,
-                        attacking=state,
-                        defending=opponent,
-                        minute=item.minute,
-                        player_stats=player_stats,
-                        rng=rng,
-                        narrative=narrative,
-                    )
-                )
-            elif item.kind == "window":
-                record(
-                    self._process_substitution_window(
-                        match_id=request.match_id,
-                        event_counter=event_counter,
-                        minute=item.minute,
-                        state=home_state,
-                        opponent=away_state,
-                        player_stats=player_stats,
-                    )
-                )
-                record(
-                    self._process_substitution_window(
-                        match_id=request.match_id,
-                        event_counter=event_counter,
-                        minute=item.minute,
-                        state=away_state,
-                        opponent=home_state,
-                        player_stats=player_stats,
-                    )
-                )
+            self._execute_scheduled_item(
+                request=request,
+                item=item,
+                home_state=home_state,
+                away_state=away_state,
+                player_stats=player_stats,
+                rng=rng,
+                narrative=narrative,
+                event_counter=event_counter,
+                record=record,
+            )
         if not halftime_added:
             self._apply_halftime_reset(home_state, away_state)
             record(
@@ -518,6 +393,156 @@ class MatchEventGenerator:
             ),
             atmosphere_summary=self._atmosphere_summary(home_state, away_state, narrative=narrative),
         )
+
+    def _execute_scheduled_item(
+        self,
+        *,
+        request: MatchSimulationRequest,
+        item: ScheduledItem,
+        home_state: TeamRuntimeState,
+        away_state: TeamRuntimeState,
+        player_stats: dict[str, PlayerMatchStats],
+        rng: Random,
+        narrative: MatchNarrativeContext,
+        event_counter,
+        record,
+    ) -> None:
+        state = home_state if item.team_side == "home" else away_state
+        opponent = away_state if item.team_side == "home" else home_state
+        if item.kind == "yellow":
+            event = self._process_yellow_card(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+                player_stats=player_stats,
+                rng=rng,
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "red":
+            event = self._process_red_card(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+                player_stats=player_stats,
+                rng=rng,
+                source="straight_red",
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "tactical_change":
+            if not self._change_condition_met(
+                item.payload or {}, state=state, opponent=opponent, minute=item.minute
+            ):
+                return
+            event = self._apply_tactical_change(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+                payload=item.payload or {},
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "tactical_substitution":
+            if not self._change_condition_met(
+                item.payload or {}, state=state, opponent=opponent, minute=item.minute
+            ):
+                return
+            record(
+                self._apply_tactical_substitution(
+                    match_id=request.match_id,
+                    event_counter=event_counter,
+                    state=state,
+                    opponent=opponent,
+                    minute=item.minute,
+                    payload=item.payload or {},
+                    player_stats=player_stats,
+                )
+            )
+        elif item.kind == "injury":
+            record(
+                self._process_injury(
+                    match_id=request.match_id,
+                    event_counter=event_counter,
+                    state=state,
+                    opponent=opponent,
+                    minute=item.minute,
+                    player_stats=player_stats,
+                    rng=rng,
+                )
+            )
+        elif item.kind == "tactical":
+            event = self._process_tactical_swing(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+                rng=rng,
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "foul":
+            event = self._process_tactical_foul(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+                rng=rng,
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "fatigue":
+            event = self._process_fatigue_event(
+                match_id=request.match_id,
+                event_counter=event_counter,
+                state=state,
+                opponent=opponent,
+                minute=item.minute,
+            )
+            if event is not None:
+                record(event)
+        elif item.kind == "chance":
+            record(
+                self._process_chance(
+                    match_id=request.match_id,
+                    event_counter=event_counter,
+                    attacking=state,
+                    defending=opponent,
+                    minute=item.minute,
+                    player_stats=player_stats,
+                    rng=rng,
+                    narrative=narrative,
+                )
+            )
+        elif item.kind == "window":
+            record(
+                self._process_substitution_window(
+                    match_id=request.match_id,
+                    event_counter=event_counter,
+                    minute=item.minute,
+                    state=home_state,
+                    opponent=away_state,
+                    player_stats=player_stats,
+                )
+            )
+            record(
+                self._process_substitution_window(
+                    match_id=request.match_id,
+                    event_counter=event_counter,
+                    minute=item.minute,
+                    state=away_state,
+                    opponent=home_state,
+                    player_stats=player_stats,
+                )
+            )
 
     def _build_team_profile(self, team) -> MatchTeamProfile:
         starters = tuple(self._build_player(player) for player in team.starters)

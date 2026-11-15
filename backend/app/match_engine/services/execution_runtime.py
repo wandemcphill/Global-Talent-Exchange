@@ -269,45 +269,50 @@ class LocalMatchExecutionWorker:
         )
         try:
             request = self.team_factory.build_request(job)
-            replay_payload = self.match_service.build_replay_payload(request)
-            self._persist_player_lifecycle_incidents(job, replay_payload)
-            self._persist_match_viewer_payload(job, replay_payload, simulation_request=request)
-            self._publish_match_lifecycle_event(
-                "competition.match.simulation.completed",
-                job,
-                replay_payload=replay_payload,
-                extra={"execution_mode": "local_worker"},
-            )
-            self._publish_match_lifecycle_event(
-                "competition.match.commentary.generated",
-                job,
-                replay_payload=replay_payload,
-                extra={
-                    "commentary_event_count": len(replay_payload.timeline.events),
-                    "key_moments": self._build_key_moment_breakdown(replay_payload),
-                },
-            )
-            live_templates = self._queue_live_notifications(job)
-            if live_templates:
+            canonical_replay = self._maybe_execute_canonical_live_match(job, request)
+            if canonical_replay is not None:
+                replay_payload = canonical_replay
+                self._persist_player_lifecycle_incidents(job, replay_payload)
+            else:
+                replay_payload = self.match_service.build_replay_payload(request)
+                self._persist_player_lifecycle_incidents(job, replay_payload)
+                self._persist_match_viewer_payload(job, replay_payload, simulation_request=request)
                 self._publish_match_lifecycle_event(
-                    "competition.match.notifications.dispatched",
+                    "competition.match.simulation.completed",
                     job,
+                    replay_payload=replay_payload,
+                    extra={"execution_mode": "local_worker"},
+                )
+                self._publish_match_lifecycle_event(
+                    "competition.match.commentary.generated",
+                    job,
+                    replay_payload=replay_payload,
                     extra={
-                        "notification_phase": "live",
-                        "notification_count": len(live_templates),
-                        "notification_templates": live_templates,
+                        "commentary_event_count": len(replay_payload.timeline.events),
+                        "key_moments": self._build_key_moment_breakdown(replay_payload),
                     },
                 )
-            self.event_publisher.publish(
-                DomainEvent(
-                    name="competition.match.live",
-                    payload={
-                        **self._countdown_payload(job, include_user_ids=True),
-                        "live": True,
-                    },
+                live_templates = self._queue_live_notifications(job)
+                if live_templates:
+                    self._publish_match_lifecycle_event(
+                        "competition.match.notifications.dispatched",
+                        job,
+                        extra={
+                            "notification_phase": "live",
+                            "notification_count": len(live_templates),
+                            "notification_templates": live_templates,
+                        },
+                    )
+                self.event_publisher.publish(
+                    DomainEvent(
+                        name="competition.match.live",
+                        payload={
+                            **self._countdown_payload(job, include_user_ids=True),
+                            "live": True,
+                        },
+                    )
                 )
-            )
-            self._stream_live_match(job, replay_payload)
+                self._stream_live_match(job, replay_payload)
             state = self._apply_competition_result(job, replay_payload)
             self._pay_champions_league_match_fees(job, replay_payload)
             self._publish_match_lifecycle_event(
@@ -715,6 +720,164 @@ class LocalMatchExecutionWorker:
             )
         finally:
             session.close()
+
+    def _maybe_execute_canonical_live_match(
+        self,
+        job: MatchSimulationJob,
+        request: Any,
+    ) -> MatchReplayPayloadView | None:
+        if self.stream_update_interval_seconds <= 0 or self.session_factory is None:
+            return None
+
+        from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
+
+        with self.session_factory() as session:
+            match = session.get(CompetitionMatch, job.fixture_id)
+            if match is None:
+                return None
+
+        live_templates = self._queue_live_notifications(job)
+        if live_templates:
+            self._publish_match_lifecycle_event(
+                "competition.match.notifications.dispatched",
+                job,
+                extra={
+                    "notification_phase": "live",
+                    "notification_count": len(live_templates),
+                    "notification_templates": live_templates,
+                },
+            )
+        self.event_publisher.publish(
+            DomainEvent(
+                name="competition.match.live",
+                payload={
+                    **self._countdown_payload(job, include_user_ids=True),
+                    "live": True,
+                },
+            )
+        )
+
+        cache = HotPathCache(self.cache_backend)
+        cache.clear_match_events(job.fixture_id)
+        home_team_name = job.home_club_name or job.home_club_id or "Home Club"
+        away_team_name = job.away_club_name or job.away_club_id or "Away Club"
+
+        with self.session_factory() as session:
+            service = CanonicalLiveExecutionService(
+                session,
+                match_service=self.match_service,
+                team_factory=self.team_factory,
+                match_stream_service=self.match_stream_service,
+            )
+            match, execution = service.start_live_execution(
+                job.fixture_id,
+                request=request,
+                step_interval_seconds=max(1, round(self.stream_update_interval_seconds)),
+                lease_owner="local-match-execution-worker",
+            )
+            meta = dict(match.metadata_json or {})
+            meta["simulation_idempotency_key"] = job.idempotency_key
+            meta["replay_id"] = f"replay:{job.fixture_id}"
+            match.metadata_json = meta
+            session.commit()
+
+        while True:
+            with self.session_factory() as session:
+                service = CanonicalLiveExecutionService(
+                    session,
+                    match_service=self.match_service,
+                    team_factory=self.team_factory,
+                    match_stream_service=self.match_stream_service,
+                )
+                match, execution, new_events = service.step_execution(
+                    job.fixture_id,
+                    step_minutes=15,
+                    stop_at_halftime=True,
+                    resume_halftime=True,
+                    settle_on_completion=True,
+                    step_interval_seconds=max(1, round(self.stream_update_interval_seconds)),
+                    halftime_pause_seconds=0,
+                    lease_owner="local-match-execution-worker",
+                )
+                session.commit()
+                execution_status = execution.execution_status
+                paused_reason = execution.paused_reason
+                current_minute = int(execution.current_minute)
+                home_score = int(match.home_score)
+                away_score = int(match.away_score)
+                event_count = len(execution.committed_events_json or [])
+                replay_raw = (match.metadata_json or {}).get("replay_payload") if execution_status == "completed" else None
+
+            for ev in new_events:
+                frame = {
+                    "sequence_id": int(ev.sequence),
+                    "minute": int(ev.minute),
+                    "event_type": ev.event_type.value,
+                    "team_id": ev.team_id,
+                    "home_score": int(ev.home_score),
+                    "away_score": int(ev.away_score),
+                }
+                self._publish_live_frame(
+                    match_id=job.fixture_id,
+                    home_team_name=home_team_name,
+                    away_team_name=away_team_name,
+                    frame=frame,
+                )
+                cache.append_match_events(
+                    job.fixture_id,
+                    [self._build_cached_live_event(match_id=job.fixture_id, frame=frame)],
+                    ttl_seconds=self.stream_cache_ttl_seconds,
+                )
+            cache.set_match_state(
+                job.fixture_id,
+                self._build_cached_match_state(
+                    match_id=job.fixture_id,
+                    home_team_name=home_team_name,
+                    away_team_name=away_team_name,
+                    frame={
+                        "minute": current_minute,
+                        "home_score": home_score,
+                        "away_score": away_score,
+                        "status": execution_status,
+                    },
+                    event_count=event_count,
+                ),
+                ttl_seconds=self.stream_cache_ttl_seconds,
+            )
+
+            if execution_status == "completed":
+                if not isinstance(replay_raw, dict):
+                    raise MatchResultPersistenceError(
+                        f"Canonical execution for '{job.fixture_id}' completed without replay payload."
+                    )
+                replay_payload = MatchReplayPayloadView.model_validate(replay_raw)
+                self._publish_match_lifecycle_event(
+                    "competition.match.simulation.completed",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={"execution_mode": "canonical_live_worker"},
+                )
+                self._publish_match_lifecycle_event(
+                    "competition.match.commentary.generated",
+                    job,
+                    replay_payload=replay_payload,
+                    extra={
+                        "commentary_event_count": len(replay_payload.timeline.events),
+                        "key_moments": self._build_key_moment_breakdown(replay_payload),
+                    },
+                )
+                return replay_payload
+
+            if execution_status in {"cancelled", "abandoned"}:
+                raise MatchResultPersistenceError(
+                    f"Canonical execution for '{job.fixture_id}' terminated with '{execution_status}'."
+                )
+
+            if execution_status == "halted" or paused_reason == "admin_halt":
+                time.sleep(max(0.05, self.stream_update_interval_seconds))
+                continue
+
+            time.sleep(self.stream_update_interval_seconds)
 
     def _persist_match_viewer_payload(
         self,

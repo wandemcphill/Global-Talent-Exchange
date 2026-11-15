@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String
+from sqlalchemy import Boolean, ForeignKey, Integer, JSON, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
@@ -10,6 +10,13 @@ from app.models.base import Base, CreatedAtMixin, UUIDPrimaryKeyMixin
 
 class CompetitionMatchEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
     __tablename__ = "competition_match_events"
+    __table_args__ = (
+        UniqueConstraint(
+            "match_id",
+            "event_key",
+            name="uq_competition_match_events_match_event_key",
+        ),
+    )
 
     competition_id: Mapped[str] = mapped_column(
         String(36),
@@ -23,6 +30,9 @@ class CompetitionMatchEvent(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         nullable=False,
         index=True,
     )
+    sequence: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    execution_revision: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    event_key: Mapped[str | None] = mapped_column(String(128), nullable=True)
     event_type: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     minute: Mapped[int | None] = mapped_column(Integer, nullable=True)
     added_time: Mapped[int | None] = mapped_column(Integer, nullable=True)

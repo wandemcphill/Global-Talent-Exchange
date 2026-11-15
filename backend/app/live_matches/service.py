@@ -479,11 +479,231 @@ class LiveMatchHub:
                 raise LiveMatchError("Spectator session was not found.")
             return item
 
+    def _canonical_execution_bundle(self, match_id: str) -> tuple[Any, Any] | None:
+        if self.session_factory is None:
+            return None
+        try:
+            from app.models.competition_match import CompetitionMatch
+            from app.models.competition_match_execution import CompetitionMatchExecution
+
+            with self.session_factory() as session:
+                execution = session.scalar(
+                    select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                )
+                if execution is None:
+                    return None
+                match = session.get(CompetitionMatch, match_id)
+                if match is None:
+                    return None
+                session.expunge(execution)
+                session.expunge(match)
+                return match, execution
+        except Exception:
+            logger.exception("live_match.canonical_execution_lookup_failed match_id=%s", match_id)
+            return None
+
+    def _build_canonical_stream_events(
+        self,
+        match: Any,
+        execution: Any,
+    ) -> list[LiveMatchStreamEventView]:
+        sim_req = dict(execution.simulation_request_json or {})
+        home_team = dict(sim_req.get("home_team") or {})
+        away_team = dict(sim_req.get("away_team") or {})
+        home_id = str(home_team.get("team_id") or match.home_club_id)
+        away_id = str(away_team.get("team_id") or match.away_club_id)
+        home_name = str(home_team.get("team_name") or home_id)
+        away_name = str(away_team.get("team_name") or away_id)
+        mapped: list[LiveMatchStreamEventView] = []
+        raw_events = list(execution.committed_events_json or [])
+        total_duration = max(1, int(execution.assigned_duration_seconds or 600))
+        target_end = max(90, int(execution.target_end_minute or 90))
+
+        for index, raw in enumerate(raw_events, start=1):
+            seq = int(raw.get("sequence", index) or index)
+            minute = int(raw.get("minute", 0) or 0)
+            event_type = str(raw.get("event_type") or "commentary")
+            team_id = raw.get("team_id")
+            team_side = "home" if team_id == home_id else ("away" if team_id == away_id else None)
+            meta = dict(raw.get("metadata") or {})
+            meta.setdefault("execution_revision", int(execution.execution_revision))
+            meta.setdefault("home_score", int(raw.get("home_score", 0) or 0))
+            meta.setdefault("away_score", int(raw.get("away_score", 0) or 0))
+            if team_side is not None:
+                meta.setdefault("team_side", team_side)
+            presentation_second = int(
+                meta.get(
+                    "presentation_second",
+                    min(total_duration, max(0, round((minute / target_end) * total_duration))),
+                )
+            )
+            meta["presentation_second"] = presentation_second
+            mapped.append(
+                LiveMatchStreamEventView(
+                    match_id=str(match.id),
+                    event_id=str(raw.get("event_id") or f"{match.id}:ev:{seq}"),
+                    source_event_id=str(raw.get("event_id") or f"{match.id}:ev:{seq}"),
+                    sequence=seq,
+                    sequence_id=seq,
+                    tick=seq,
+                    minute=minute,
+                    event_type=event_type,
+                    source_event_type=event_type,
+                    team_id=team_id,
+                    team=raw.get("team_name") or (home_name if team_side == "home" else (away_name if team_side == "away" else None)),
+                    team_side=team_side,
+                    player_id=raw.get("primary_player_id"),
+                    player=raw.get("primary_player_name"),
+                    secondary_player_id=raw.get("secondary_player_id"),
+                    secondary_player=raw.get("secondary_player_name"),
+                    commentary=str(meta.get("commentary") or f"{minute}' {event_type.replace('_', ' ')}"),
+                    home_score=int(raw.get("home_score", 0) or 0),
+                    away_score=int(raw.get("away_score", 0) or 0),
+                    clock_label=f"{minute}'",
+                    presentation_second=presentation_second,
+                    importance_score=int(meta.get("importance", 2) or 2),
+                    is_penalty=event_type in {"penalty_goal", "penalty_miss", "penalty_awarded", "penalty_scored", "penalty_missed"},
+                    highlight_eligible=event_type in {"goal", "penalty_goal", "red_card", "substitution", "tactical_change", "halftime", "fulltime"},
+                    meta=meta,
+                    metadata=meta,
+                )
+            )
+        return mapped
+
+    def _build_canonical_state_view(
+        self,
+        match: Any,
+        execution: Any,
+        events: list[LiveMatchStreamEventView],
+        *,
+        spectator_count: int = 0,
+    ) -> LiveMatchStateView:
+        sim_req = dict(execution.simulation_request_json or {})
+        home_team = dict(sim_req.get("home_team") or {})
+        away_team = dict(sim_req.get("away_team") or {})
+        home_name = str(home_team.get("team_name") or match.home_club_id)
+        away_name = str(away_team.get("team_name") or match.away_club_id)
+        status_str = str(execution.execution_status or "scheduled")
+        is_live = status_str in {"in_progress", "paused"}
+        minute = int(execution.current_minute or 0)
+        home_score = int(match.home_score or 0)
+        away_score = int(match.away_score or 0)
+        home_poss = 50
+        away_poss = 50
+        recent = events[-3:]
+        dramatic = any(
+            ev.event_type == "goal" or (ev.event_type in {"card", "red_card"} and ev.metadata.get("card_type") == "red")
+            for ev in recent
+        )
+        win_prob = _build_win_probability(
+            minute=minute,
+            home_score=home_score,
+            away_score=away_score,
+            home_possession=home_poss,
+            dramatic_event=dramatic,
+        )
+        snapshot_status = "halted" if status_str == "halted" else ("live" if is_live else "completed")
+        snapshot = LiveMatchSnapshotView(
+            score=LiveMatchScoreView(home=home_score, away=away_score),
+            possession_estimate=LiveMatchPossessionEstimateView(home=home_poss, away=away_poss),
+            current_minute=minute,
+            momentum_indicator="balanced",
+            win_probability=win_prob,
+            market_pulse=_build_market_pulse(
+                probability=win_prob,
+                minute=minute,
+                dramatic_event=dramatic,
+            ),
+            dramatic_event=dramatic,
+            status=snapshot_status,
+            read_only=True,
+        )
+        last_seq = events[-1].sequence if events else 0
+        return LiveMatchStateView(
+            match_id=str(match.id),
+            channel=f"match:{match.id}:events",
+            is_live=is_live,
+            read_only=True,
+            spectator_count=spectator_count,
+            event_count=len(events),
+            last_sequence=last_seq,
+            home_team_name=home_name,
+            away_team_name=away_name,
+            snapshot=snapshot,
+            crowd_state=MatchCrowdStateView(
+                profile="standard",
+                home_intensity=0.5,
+                away_intensity=0.5,
+                dominant_side="home",
+                chant_level=0.585,
+            ),
+            spectator_sync=MatchSpectatorSyncView(
+                room_id=f"match_{match.id}",
+                sync_strategy="canonical_live_execution",
+                shared_clock_second=int(execution.elapsed_broadcast_seconds or 0),
+                tick=last_seq,
+                max_latency_ms=320,
+                checkpoint_interval_seconds=10,
+                pause_replay_enabled=False,
+                reactions_enabled=True,
+            ),
+        )
+
+    def sync_canonical_execution(
+        self,
+        *,
+        match: Any,
+        execution: Any,
+        new_events: Sequence[Any] = (),
+    ) -> None:
+        events = self._build_canonical_stream_events(match, execution)
+        state = self._build_canonical_state_view(match, execution, events)
+        channel = state.channel
+        with self._lock:
+            self._tactics[match.id] = {
+                "home": dict(execution.home_tactics_json or {}),
+                "away": dict(execution.away_tactics_json or {}),
+            }
+            if execution.execution_status == "halted":
+                halt_meta = (execution.metadata_json or {}).get("admin_halt") or {}
+                self._halted_matches[match.id] = {
+                    "reason": halt_meta.get("reason"),
+                    "actor_user_id": halt_meta.get("actor_user_id"),
+                    "updated_at": halt_meta.get("halted_at") or utcnow().isoformat(),
+                }
+            else:
+                self._halted_matches.pop(match.id, None)
+        self._hot_cache.set_match_state(
+            match.id,
+            state.model_dump(mode="json"),
+            ttl_seconds=self.snapshot_ttl_seconds,
+        )
+        if events:
+            self._hot_cache.clear_match_events(match.id)
+            self._hot_cache.append_match_events(
+                match.id,
+                [ev.model_dump(mode="json") for ev in events],
+                ttl_seconds=self.snapshot_ttl_seconds,
+            )
+        self._publish_channel(
+            channel,
+            {
+                "kind": "canonical_state",
+                "execution_revision": int(execution.execution_revision),
+                "payload": state.model_dump(mode="json"),
+            },
+        )
+
     def get_state(self, match_id: str) -> LiveMatchStateView | None:
         with self._lock:
             runtime = self._matches.get(match_id)
             if runtime is not None and runtime.last_snapshot is not None:
                 return self._build_state_view(runtime)
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            match, execution = bundle
+            events = self._build_canonical_stream_events(match, execution)
+            return self._build_canonical_state_view(match, execution, events)
         cached_state = self._hot_cache.get_match_state(match_id)
         if not isinstance(cached_state, dict):
             return None
@@ -500,6 +720,11 @@ class LiveMatchHub:
             runtime = self._matches.get(match_id)
             if runtime is not None:
                 return list(runtime.published_events[cursor:]), len(runtime.published_events)
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            match, execution = bundle
+            canonical_events = self._build_canonical_stream_events(match, execution)
+            return list(canonical_events[cursor:]), len(canonical_events)
         cached_events = self._hot_cache.get_match_events(match_id, cursor=0)
         if not cached_events:
             return [], cursor
@@ -543,11 +768,26 @@ class LiveMatchHub:
         )
 
     def list_active_matches(self) -> list[str]:
+        active_set: set[str] = set()
         with self._lock:
-            active = sorted(runtime.match_id for runtime in self._matches.values() if runtime.live)
-        if active:
-            return active
-        return self._hot_cache.list_active_matches()
+            active_set.update(runtime.match_id for runtime in self._matches.values() if runtime.live)
+        if self.session_factory is not None:
+            try:
+                from app.models.competition_match_execution import CompetitionMatchExecution
+
+                with self.session_factory() as session:
+                    rows = list(
+                        session.scalars(
+                            select(CompetitionMatchExecution.match_id).where(
+                                CompetitionMatchExecution.execution_status.in_(["in_progress", "paused"])
+                            )
+                        ).all()
+                    )
+                    active_set.update(rows)
+            except Exception:
+                pass
+        active_set.update(self._hot_cache.list_active_matches())
+        return sorted(active_set)
 
     def halt_match(
         self,
@@ -591,14 +831,33 @@ class LiveMatchHub:
 
     def is_match_halted(self, match_id: str) -> bool:
         with self._lock:
-            return match_id in self._halted_matches
+            if match_id in self._halted_matches:
+                return True
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            _, execution = bundle
+            if execution.execution_status == "halted":
+                return True
+        return False
 
     def get_match_halt_state(self, match_id: str) -> dict[str, object] | None:
         with self._lock:
             state = self._halted_matches.get(match_id)
-            if state is None:
-                return None
-            return {"match_id": match_id, "enabled": True, **state}
+            if state is not None:
+                return {"match_id": match_id, "enabled": True, **state}
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            _, execution = bundle
+            if execution.execution_status == "halted":
+                halt_meta = (execution.metadata_json or {}).get("admin_halt") or {}
+                return {
+                    "match_id": match_id,
+                    "enabled": True,
+                    "reason": halt_meta.get("reason"),
+                    "actor_user_id": halt_meta.get("actor_user_id"),
+                    "updated_at": halt_meta.get("halted_at"),
+                }
+        return None
 
     def _remember_simulation_request(self, match_id: str, request: dict[str, Any] | None) -> None:
         if not request or self.session_factory is None:
@@ -1246,17 +1505,28 @@ class LiveMatchHub:
             if not match_tactics and self.session_factory is not None:
                 try:
                     from app.models.competition_match import CompetitionMatch
+                    from app.models.competition_match_execution import CompetitionMatchExecution
 
                     with self.session_factory() as session:
-                        comp_match = session.get(CompetitionMatch, match_id)
-                        if comp_match is not None and comp_match.metadata_json:
-                            saved = comp_match.metadata_json.get("tactics")
-                            if isinstance(saved, dict) and ("home" in saved or "away" in saved):
-                                self._tactics[match_id] = {
-                                    "home": dict(saved.get("home", {})),
-                                    "away": dict(saved.get("away", {})),
-                                }
-                                match_tactics = self._tactics[match_id]
+                        execution = session.scalar(
+                            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                        )
+                        if execution is not None and (execution.home_tactics_json or execution.away_tactics_json):
+                            self._tactics[match_id] = {
+                                "home": dict(execution.home_tactics_json or {}),
+                                "away": dict(execution.away_tactics_json or {}),
+                            }
+                            match_tactics = self._tactics[match_id]
+                        else:
+                            comp_match = session.get(CompetitionMatch, match_id)
+                            if comp_match is not None and comp_match.metadata_json:
+                                saved = comp_match.metadata_json.get("tactics")
+                                if isinstance(saved, dict) and ("home" in saved or "away" in saved):
+                                    self._tactics[match_id] = {
+                                        "home": dict(saved.get("home", {})),
+                                        "away": dict(saved.get("away", {})),
+                                    }
+                                    match_tactics = self._tactics[match_id]
                 except Exception:
                     pass
 

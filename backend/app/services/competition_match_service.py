@@ -35,10 +35,25 @@ class CompetitionMatchService:
         card_type: str | None,
         highlight: bool,
         metadata_json: dict,
+        sequence: int | None = None,
+        execution_revision: int = 1,
+        event_key: str | None = None,
     ) -> CompetitionMatchEvent:
+        if event_key is not None:
+            existing = self.session.scalar(
+                select(CompetitionMatchEvent).where(
+                    CompetitionMatchEvent.match_id == match_id,
+                    CompetitionMatchEvent.event_key == event_key,
+                )
+            )
+            if existing is not None:
+                return existing
         event = CompetitionMatchEvent(
             competition_id=competition_id,
             match_id=match_id,
+            sequence=sequence,
+            execution_revision=execution_revision,
+            event_key=event_key,
             event_type=event_type,
             minute=minute,
             added_time=added_time,

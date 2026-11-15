@@ -90,6 +90,13 @@ class MatchSimulationService:
                 tail_rng_xor=tail_rng_xor,
                 tail_adjustment=tail_adjustment,
             )
+        return self.build_replay_payload_from_result(request, result)
+
+    def build_replay_payload_from_result(
+        self,
+        request: MatchSimulationRequest,
+        result: SimulationResult,
+    ) -> MatchReplayPayloadView:
         timeline = self.commentary_generator.build(result)
         highlight_bundle = self.highlight_builder.build(result)
         halftime_analytics = self.halftime_builder.build(
