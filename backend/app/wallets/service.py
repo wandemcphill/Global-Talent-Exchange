@@ -40,7 +40,7 @@ from app.models.wallet import (
 from app.wallets.providers.registry import provider_runtime_statuses
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-COIN_TO_CREDIT_RATE = Decimal("100.0000")
+COIN_TO_CREDIT_RATE = Decimal("15.0000")
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
 DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
 TRADE_BUY_SOURCE_TAGS = frozenset(
