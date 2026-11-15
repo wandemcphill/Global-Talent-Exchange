@@ -68,19 +68,21 @@ def normalize_authoritative_appearances(
         minutes = max(0, int(raw.get("minutes_played") or 0))
         if minutes <= 0:
             continue
-        output.append({
-            "player_id": str(raw.get("player_id") or ""),
-            "player_name": str(raw.get("player_name") or ""),
-            "team_id": str(raw.get("team_id") or ""),
-            "started": bool(raw.get("started")),
-            "minutes_played": minutes,
-            "substituted_in_minute": raw.get("substituted_in_minute"),
-            "substituted_out_minute": raw.get("substituted_out_minute"),
-            "goals": max(0, int(raw.get("goals") or 0)),
-            "assists": max(0, int(raw.get("assists") or 0)),
-            "yellow_cards": max(0, int(raw.get("yellow_cards") or 0)),
-            "red_card": bool(raw.get("red_card")),
-        })
+        output.append(
+            {
+                "player_id": str(raw.get("player_id") or ""),
+                "player_name": str(raw.get("player_name") or ""),
+                "team_id": str(raw.get("team_id") or ""),
+                "started": bool(raw.get("started")),
+                "minutes_played": minutes,
+                "substituted_in_minute": raw.get("substituted_in_minute"),
+                "substituted_out_minute": raw.get("substituted_out_minute"),
+                "goals": max(0, int(raw.get("goals") or 0)),
+                "assists": max(0, int(raw.get("assists") or 0)),
+                "yellow_cards": max(0, int(raw.get("yellow_cards") or 0)),
+                "red_card": bool(raw.get("red_card")),
+            }
+        )
     return output
 
 
@@ -90,16 +92,18 @@ def _club_name(session: Session, club_id: str) -> str:
 
 
 def _prior_head_to_head(session: Session, match: CompetitionMatch, club_id: str, opponent_id: str) -> dict[str, int]:
-    rows = list(session.scalars(
-        select(CompetitionMatch).where(
-            CompetitionMatch.status == MatchStatus.COMPLETED.value,
-            CompetitionMatch.id != match.id,
-            or_(
-                and_(CompetitionMatch.home_club_id == club_id, CompetitionMatch.away_club_id == opponent_id),
-                and_(CompetitionMatch.home_club_id == opponent_id, CompetitionMatch.away_club_id == club_id),
-            ),
-        )
-    ).all())
+    rows = list(
+        session.scalars(
+            select(CompetitionMatch).where(
+                CompetitionMatch.status == MatchStatus.COMPLETED.value,
+                CompetitionMatch.id != match.id,
+                or_(
+                    and_(CompetitionMatch.home_club_id == club_id, CompetitionMatch.away_club_id == opponent_id),
+                    and_(CompetitionMatch.home_club_id == opponent_id, CompetitionMatch.away_club_id == club_id),
+                ),
+            )
+        ).all()
+    )
     summary = {"matches_played": 0, "wins": 0, "draws": 0, "losses": 0, "goals_for": 0, "goals_against": 0}
     for previous in rows:
         home = previous.home_club_id == club_id
@@ -122,21 +126,23 @@ def _event_dicts(rows: list[CompetitionMatchEvent], home_id: str, away_id: str) 
     for row in rows:
         metadata = dict(row.metadata_json or {})
         side = "home" if row.club_id == home_id else "away" if row.club_id == away_id else None
-        output.append({
-            "id": str(row.id),
-            "event_id": str(row.id),
-            "type": str(row.event_type or "").lower(),
-            "team": side,
-            "team_id": row.club_id,
-            "player_id": row.player_id,
-            "secondary_player_id": row.secondary_player_id,
-            "minute": row.minute,
-            "added_time": row.added_time,
-            "card_type": row.card_type,
-            "text": str(metadata.get("commentary") or metadata.get("description") or row.event_type),
-            "metadata": metadata,
-            "metadata_json": metadata,
-        })
+        output.append(
+            {
+                "id": str(row.id),
+                "event_id": str(row.id),
+                "type": str(row.event_type or "").lower(),
+                "team": side,
+                "team_id": row.club_id,
+                "player_id": row.player_id,
+                "secondary_player_id": row.secondary_player_id,
+                "minute": row.minute,
+                "added_time": row.added_time,
+                "card_type": row.card_type,
+                "text": str(metadata.get("commentary") or metadata.get("description") or row.event_type),
+                "metadata": metadata,
+                "metadata_json": metadata,
+            }
+        )
     return output
 
 
@@ -158,8 +164,18 @@ def _source_event(
     if anchor is None:
         raise ValueError("Neither participating club has an OwnerClubState.")
     participants = [
-        {"participant_type": "club", "club_id": str(match.home_club_id), "club_name": _club_name(session, match.home_club_id), "side": "home"},
-        {"participant_type": "club", "club_id": str(match.away_club_id), "club_name": _club_name(session, match.away_club_id), "side": "away"},
+        {
+            "participant_type": "club",
+            "club_id": str(match.home_club_id),
+            "club_name": _club_name(session, match.home_club_id),
+            "side": "home",
+        },
+        {
+            "participant_type": "club",
+            "club_id": str(match.away_club_id),
+            "club_name": _club_name(session, match.away_club_id),
+            "side": "away",
+        },
     ]
     event, _ = living_club_world.emit_canonical_club_event(
         session,
@@ -173,9 +189,7 @@ def _source_event(
             f"Round {match.round_number}. Persisted events and replay statistics are authoritative."
         ),
         participants=participants,
-        required_projections=[
-            f"club:{club_id}:institutional_consequences" for club_id in sorted(states)
-        ],
+        required_projections=[f"club:{club_id}:institutional_consequences" for club_id in sorted(states)],
     )
     return event
 
@@ -241,7 +255,9 @@ def _project_one_club(
             )
         return {"club_id": state.club_id, "status": "projected", "impact": impact}
     except Exception as exc:
-        logger.exception("canonical_match.institutional_projection_failed match_id=%s club_id=%s", match.id, state.club_id)
+        logger.exception(
+            "canonical_match.institutional_projection_failed match_id=%s club_id=%s", match.id, state.club_id
+        )
         try:
             session.refresh(source_event)
             consequences = dict(source_event.consequences_json or {})
@@ -256,15 +272,19 @@ def _project_one_club(
             source_event.status = "active"
             session.flush()
         except Exception:
-            logger.exception("canonical_match.projection_failure_marker_failed match_id=%s club_id=%s", match.id, state.club_id)
+            logger.exception(
+                "canonical_match.projection_failure_marker_failed match_id=%s club_id=%s", match.id, state.club_id
+            )
         return {"club_id": state.club_id, "status": "pending_retry", "error": type(exc).__name__}
 
 
 def project_completed_canonical_match(session: Session, match_id: str) -> dict[str, Any]:
     """Project a completed canonical match; this function never calls the simulator."""
     match = session.scalar(
-        select(CompetitionMatch).where(CompetitionMatch.id == str(match_id))
-        .with_for_update().execution_options(populate_existing=True)
+        select(CompetitionMatch)
+        .where(CompetitionMatch.id == str(match_id))
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
     if match is None:
         return {"match_id": str(match_id), "status": "not_found"}
@@ -275,9 +295,9 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
         return {"match_id": match.id, "status": "competition_not_found"}
     states = {
         str(row.club_id): row
-        for row in session.scalars(select(OwnerClubState).where(
-            OwnerClubState.club_id.in_({str(match.home_club_id), str(match.away_club_id)})
-        )).all()
+        for row in session.scalars(
+            select(OwnerClubState).where(OwnerClubState.club_id.in_({str(match.home_club_id), str(match.away_club_id)}))
+        ).all()
     }
     if not states:
         return {"match_id": match.id, "status": "no_living_clubs"}
@@ -287,15 +307,17 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
     if not isinstance(raw_stats, list):
         raise ValueError(f"Completed match {match.id} has no persisted player_stats appearance summary.")
     player_stats = [dict(row) for row in raw_stats if isinstance(row, dict)]
-    event_rows = list(session.scalars(
-        select(CompetitionMatchEvent)
-        .where(CompetitionMatchEvent.match_id == match.id)
-        .order_by(
-            CompetitionMatchEvent.minute.asc().nullsfirst(),
-            CompetitionMatchEvent.created_at.asc(),
-            CompetitionMatchEvent.id.asc(),
-        )
-    ).all())
+    event_rows = list(
+        session.scalars(
+            select(CompetitionMatchEvent)
+            .where(CompetitionMatchEvent.match_id == match.id)
+            .order_by(
+                CompetitionMatchEvent.minute.asc().nullsfirst(),
+                CompetitionMatchEvent.created_at.asc(),
+                CompetitionMatchEvent.id.asc(),
+            )
+        ).all()
+    )
     events = _event_dicts(event_rows, match.home_club_id, match.away_club_id)
     metadata = dict(match.metadata_json or {})
     raw_context = metadata.get("institutional_match_context")
@@ -303,9 +325,15 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
     home_name = _club_name(session, match.home_club_id)
     away_name = _club_name(session, match.away_club_id)
     match_view = CanonicalInstitutionalMatch(
-        id=match.id, home_club_id=match.home_club_id, away_club_id=match.away_club_id,
-        home_name=home_name, away_name=away_name, round_number=int(match.round_number),
-        events_json=events, narrative_json={}, completed_at=match.completed_at,
+        id=match.id,
+        home_club_id=match.home_club_id,
+        away_club_id=match.away_club_id,
+        home_name=home_name,
+        away_name=away_name,
+        round_number=int(match.round_number),
+        events_json=events,
+        narrative_json={},
+        completed_at=match.completed_at,
     )
     is_knockout = bool(
         match.requires_winner
@@ -320,17 +348,35 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
     outcomes: dict[str, Any] = {"match_id": match.id, "status": "projected", "clubs": {}}
     if str(match.home_club_id) in states:
         outcomes["clubs"]["home"] = _project_one_club(
-            session, source_event=source_event, match=match, competition=competition,
-            match_view=match_view, competition_view=competition_view, state=states[str(match.home_club_id)],
-            side_key="home", opponent_id=str(match.away_club_id), opponent_name=away_name,
-            player_stats=player_stats, events=events, context=context,
+            session,
+            source_event=source_event,
+            match=match,
+            competition=competition,
+            match_view=match_view,
+            competition_view=competition_view,
+            state=states[str(match.home_club_id)],
+            side_key="home",
+            opponent_id=str(match.away_club_id),
+            opponent_name=away_name,
+            player_stats=player_stats,
+            events=events,
+            context=context,
         )
     if str(match.away_club_id) in states:
         outcomes["clubs"]["away"] = _project_one_club(
-            session, source_event=source_event, match=match, competition=competition,
-            match_view=match_view, competition_view=competition_view, state=states[str(match.away_club_id)],
-            side_key="away", opponent_id=str(match.home_club_id), opponent_name=home_name,
-            player_stats=player_stats, events=events, context=context,
+            session,
+            source_event=source_event,
+            match=match,
+            competition=competition,
+            match_view=match_view,
+            competition_view=competition_view,
+            state=states[str(match.away_club_id)],
+            side_key="away",
+            opponent_id=str(match.home_club_id),
+            opponent_name=home_name,
+            player_stats=player_stats,
+            events=events,
+            context=context,
         )
     if any(item.get("status") == "pending_retry" for item in outcomes["clubs"].values()):
         outcomes["status"] = "pending_retry"
@@ -339,19 +385,27 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
 
 def reconcile_pending_canonical_match_projections(session: Session, *, limit: int = 100) -> dict[str, int]:
     """Retry durable pending events and backfill recently completed fixtures."""
-    pending_ids = list(session.scalars(
-        select(OwnerClubEvent.source_id).where(
-            OwnerClubEvent.source_type == "canonical_match",
-            OwnerClubEvent.event_type == "canonical_match_completed",
-            OwnerClubEvent.status != "resolved",
-            OwnerClubEvent.source_id.is_not(None),
-        ).order_by(OwnerClubEvent.created_at.asc()).limit(max(1, int(limit)))
-    ).all())
-    recent_ids = list(session.scalars(
-        select(CompetitionMatch.id).where(
-            CompetitionMatch.status == MatchStatus.COMPLETED.value
-        ).order_by(CompetitionMatch.completed_at.desc().nullslast()).limit(max(1, int(limit)))
-    ).all())
+    pending_ids = list(
+        session.scalars(
+            select(OwnerClubEvent.source_id)
+            .where(
+                OwnerClubEvent.source_type == "canonical_match",
+                OwnerClubEvent.event_type == "canonical_match_completed",
+                OwnerClubEvent.status != "resolved",
+                OwnerClubEvent.source_id.is_not(None),
+            )
+            .order_by(OwnerClubEvent.created_at.asc())
+            .limit(max(1, int(limit)))
+        ).all()
+    )
+    recent_ids = list(
+        session.scalars(
+            select(CompetitionMatch.id)
+            .where(CompetitionMatch.status == MatchStatus.COMPLETED.value)
+            .order_by(CompetitionMatch.completed_at.desc().nullslast())
+            .limit(max(1, int(limit)))
+        ).all()
+    )
     match_ids = list(dict.fromkeys(str(value) for value in pending_ids + recent_ids if value))
     projected = pending = considered = 0
     for match_id in match_ids:
