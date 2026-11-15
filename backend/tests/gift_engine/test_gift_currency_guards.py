@@ -21,7 +21,7 @@ from app.models import (
     LedgerUnit,
 )
 from app.models.user import User
-from app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import COIN_TO_CREDIT_RATE, LedgerPosting, WalletService
 
 
 @pytest.fixture()
@@ -76,7 +76,7 @@ def _fund_fancoin(session: Session, user: User, amount: Decimal) -> None:
         allow_negative=False,
     )
     platform_coin = wallet.ensure_platform_account(session, LedgerUnit.COIN)
-    gtex_backing = (amount / Decimal("100")).quantize(Decimal("0.0001"))
+    gtex_backing = (amount / COIN_TO_CREDIT_RATE).quantize(Decimal("0.0001"))
     wallet.append_transaction(
         session,
         postings=[
