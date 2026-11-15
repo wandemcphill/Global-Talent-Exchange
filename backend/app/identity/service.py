@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 import json
 from uuid import uuid4
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.identity.providers import get_identity_provider
@@ -169,11 +169,7 @@ class IdentityVerificationService:
             select(IdentityVerificationRecord).where(
                 IdentityVerificationRecord.provider == adapter.provider_name,
                 IdentityVerificationRecord.verification_domain == "coin_trader",
-                *([match_conditions[0] | match_conditions[1] | match_conditions[2]]
-                  if len(match_conditions) == 3 else
-                  [match_conditions[0] | match_conditions[1]]
-                  if len(match_conditions) == 2 else
-                  [match_conditions[0]])
+                or_(*match_conditions),
             )
         )
         if record is None:
