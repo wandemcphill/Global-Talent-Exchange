@@ -2833,16 +2833,14 @@ def hire_executive_staff(
         )
 
     years = max(1, min(int(contract_years or 3), 5))
-    base_fee = int(candidate.get("signing_fee_gtex") or candidate.get("salary") or 2000)
-    annual_salary = int(
-        candidate.get("salary_fan_coin")
-        or candidate.get("salary_fancoin")
-        or candidate.get("salary")
-        or max(400, base_fee // 3)
+    # Every staff contract is priced and settled in Fan Coin. Legacy GTEX
+    # signing-fee fields are intentionally ignored for contract pricing.
+    annual_salary_fan_coin = int(
+        candidate.get("salary_fan_coin") or candidate.get("salary_fancoin") or candidate.get("salary") or 2000
     )
-    signing_fee = annual_salary * years if years != 3 else base_fee
+    signing_fee_fan_coin = annual_salary_fan_coin * years
     if marquee_wage_premium:
-        signing_fee = int(signing_fee * 1.5)
+        signing_fee_fan_coin = int(signing_fee_fan_coin * 1.5)
 
     user_fan_acct = ledger.user_account(user_id)
     club_fan_acct = ledger.club_account(club_id)
@@ -2850,17 +2848,17 @@ def hire_executive_staff(
     user_fan_bal = ledger.balance(session, user_fan_acct, ledger.FAN)
     club_fan_bal = ledger.balance(session, club_fan_acct, ledger.FAN)
 
-    if user_fan_bal >= signing_fee:
+    if user_fan_bal >= signing_fee_fan_coin:
         pay_source = user_fan_acct
         pay_currency = ledger.FAN
-    elif club_fan_bal >= signing_fee:
+    elif club_fan_bal >= signing_fee_fan_coin:
         pay_source = club_fan_acct
         pay_currency = ledger.FAN
     else:
         raise OwnerError(
             "insufficient_fan_coin",
             400,
-            f"Staff salaries are paid in Fan Coin. This {years}-year contract needs {signing_fee} Fan Coin. "
+            f"Staff contracts are settled in Fan Coin. This {years}-year contract needs {signing_fee_fan_coin} Fan Coin. "
             f"Available Fan Coin is {max(user_fan_bal, club_fan_bal)}.",
         )
 
@@ -2871,12 +2869,12 @@ def hire_executive_staff(
             source=pay_source,
             destination=ledger.WORLD_CLUBS,
             currency=pay_currency,
-            gross=signing_fee,
+            gross=signing_fee_fan_coin,
             club_id=club_id,
             user_id=user_id,
             related_type="staff",
             related_id=staff_id,
-            memo=f"Upfront {years}-year contract salary for {candidate['name']} ({candidate.get('role_label', target_role)})",
+            memo=f"Upfront {years}-year staff contract settled in Fan Coin for {candidate['name']} ({candidate.get('role_label', target_role)})",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
@@ -2894,7 +2892,9 @@ def hire_executive_staff(
         "loyalty": int(candidate.get("loyalty", 12)),
         "marquee_wage_premium": marquee_wage_premium,
         "contract_years": years,
-        "upfront_salary_paid": signing_fee,
+        "salary_fan_coin": annual_salary_fan_coin,
+        "upfront_salary_paid_fan_coin": signing_fee_fan_coin,
+        "upfront_salary_paid": signing_fee_fan_coin,
         "salary_currency": pay_currency,
         "upfront_paid": True,
     }
@@ -2954,7 +2954,8 @@ def hire_executive_staff(
                     "role": target_role,
                     "staff_name": str(candidate.get("name", "Executive")),
                     "contract_years": years,
-                    "signing_fee": int(signing_fee),
+                    "signing_fee_fan_coin": int(signing_fee_fan_coin),
+                    "currency": ledger.FAN,
                 },
                 is_major_milestone=True,
                 idempotency_key=f"history:exec_hire:{club_id}:{target_role}:{staff_id}:d{state.world_day}",
@@ -2997,7 +2998,8 @@ def hire_executive_staff(
         "status": "hired",
         "staff": appointed_record,
         "appointed": appointed_record,
-        "signing_fee_paid": signing_fee,
+        "signing_fee_paid_fan_coin": signing_fee_fan_coin,
+        "currency": ledger.FAN,
         "marquee_wage_premium": marquee_wage_premium,
     }
 
@@ -3014,20 +3016,20 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
     if not current or current.get("is_default"):
         raise OwnerError("no_appointed_staff", 400, f"No appointed staff member for role {role}.")
 
-    compensation = 1_500 + int(current.get("loyalty", 10)) * 75
+    compensation_fan_coin = 1_500 + int(current.get("loyalty", 10)) * 75
     try:
         ledger.record(
             session,
             event_type="staff_compensation",
             source=ledger.club_account(club_id),
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
-            gross=compensation,
+            currency=ledger.FAN,
+            gross=compensation_fan_coin,
             club_id=club_id,
             user_id=user_id,
             related_type="staff",
             related_id=current.get("id") or current.get("staff_id"),
-            memo=f"Severance compensation for {current.get('name')}",
+            memo=f"Severance compensation for {current.get('name')} (Fan Coin)",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
@@ -3051,7 +3053,7 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 new_manager=default_mgr,
                 previous_manager=current,
                 reason="dismissed_by_owner",
-                severance_gtex=compensation,
+                severance_fan_coin=compensation_fan_coin,
             )
         except Exception as mgr_err:
             logger.warning("record_managerial_change staff fire failed: %s", mgr_err)
@@ -3069,12 +3071,16 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
                 title=f"Executive Departure: {current.get('name', 'Executive')} Relieved of {role.replace('_', ' ').title()} Duties",
                 narrative_summary=(
                     f"{current.get('name', 'Executive')} departed {state.club_name} ({role.replace('_', ' ')}) "
-                    f"with {compensation:,} GTX severance."
+                    f"with {compensation_fan_coin:,} Fan Coin severance."
                 ),
                 entity_type="staff",
                 entity_id=str(current.get("id") or role),
                 entity_name=str(current.get("name", "Executive")),
-                established_facts={"role": role, "severance_paid": int(compensation)},
+                established_facts={
+                    "role": role,
+                    "severance_paid_fan_coin": int(compensation_fan_coin),
+                    "currency": ledger.FAN,
+                },
                 is_major_milestone=False,
                 idempotency_key=f"history:exec_fire:{club_id}:{role}:d{state.world_day}",
             )
@@ -3085,7 +3091,7 @@ def fire_executive_staff(session: Session, user_id: str, club_id: str, role: str
         "status": "dismissed",
         "role": role,
         "staff_name": current.get("name"),
-        "severance_paid": compensation,
+        "severance_paid": compensation_fan_coin,
     }
 
 
@@ -3130,12 +3136,14 @@ def academy_contract(session: Session, user_id: str, club_id: str, player_id: st
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
 
-    cost = 1_000
+    cost_fan_coin = 1_000
     club_acct = ledger.club_account(club_id)
-    bal = ledger.balance(session, club_acct, ledger.GTEX)
-    if bal < cost:
+    fan_balance = ledger.balance(session, club_acct, ledger.FAN)
+    if fan_balance < cost_fan_coin:
         raise OwnerError(
-            "insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {cost} GTX contract upgrade."
+            "insufficient_fan_coin",
+            400,
+            f"Club balance {fan_balance} Fan Coin is insufficient for the {cost_fan_coin} Fan Coin academy contract upgrade.",
         )
 
     try:
@@ -3144,13 +3152,13 @@ def academy_contract(session: Session, user_id: str, club_id: str, player_id: st
             event_type="academy_contract_spend",
             source=club_acct,
             destination=ledger.WORLD_CLUBS,
-            currency=ledger.GTEX,
-            gross=cost,
+            currency=ledger.FAN,
+            gross=cost_fan_coin,
             club_id=club_id,
             user_id=user_id,
             related_type="player",
             related_id=player_id,
-            memo=f"Improved academy contract for {player.name}",
+            memo=f"Improved academy player contract for {player.name} (Fan Coin)",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
@@ -3166,7 +3174,7 @@ def academy_contract(session: Session, user_id: str, club_id: str, player_id: st
     return {
         "status": "contract_extended",
         "player": player_dict(player, session),
-        "cost_gtex": cost,
+        "cost_fan_coin": cost_fan_coin,
         "morale_boost": 12,
         "loyalty_boost": 2,
     }

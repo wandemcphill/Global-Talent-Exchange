@@ -735,8 +735,9 @@ export interface StaffMarketCandidate {
   style: string;
   ambition: number;
   loyalty: number;
-  expected_salary_gtex: number;
-  expected_salary_fan_coin?: number;
+  expected_salary_fan_coin: number;
+  /** @deprecated Legacy alias. Numeric value is Fan Coin, not GTEX. */
+  expected_salary_gtex?: number;
   portrait_url?: string | null;
   min_prestige: number;
   employment_status: "employed" | "unemployed" | "retired" | string;
@@ -787,6 +788,8 @@ export interface StaffVacanciesResponse {
 export interface StaffOfferSubmitPayload {
   profile_id: string;
   role?: string;
+  offered_salary_fan_coin?: number;
+  /** @deprecated Legacy alias. Value is Fan Coin, not GTEX. */
   offered_salary_gtex?: number;
   contract_years: number;
   marquee_wage_premium?: boolean;
@@ -800,8 +803,12 @@ export interface StaffOfferResponse {
   contract_id?: string;
   assignment_id?: string;
   appointed_staff?: Record<string, any>;
+  total_contract_fee_fan_coin?: number;
+  /** @deprecated Legacy aliases. Values are Fan Coin. */
   total_contract_fee?: number;
   reason?: string;
+  counter_salary_fan_coin?: number;
+  required_salary_fan_coin?: number;
   counter_salary_gtex?: number;
   required_salary_gtex?: number;
   cinematic_event?: CinematicEventPayload | null;

@@ -122,7 +122,14 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
 
         raw_role = str(item.get("role") or "first_team_manager")
         canon_role = normalise_staff_role(raw_role)
-        salary_minor = _safe_int(item.get("salary") or item.get("salary_gtex") or 600) * 100
+        salary_fan_coin = _safe_int(
+            item.get("salary_fan_coin")
+            or item.get("salary_fancoin")
+            or item.get("salary")
+            or item.get("salary_gtex")
+            or 600
+        )
+        salary_minor = salary_fan_coin * 100
         rating = _safe_int(item.get("rating"), 0) or _safe_int(
             item.get("tactical_flexibility") or item.get("youth_development") or 72
         )
@@ -356,8 +363,8 @@ def list_staff_market_candidates(
         if employment_status and status != employment_status and employment_status != "all":
             continue
 
-        annual_salary_gtex = p.salary_minor // 100 if p.salary_minor else 600
-        if wage_max is not None and annual_salary_gtex > int(wage_max):
+        annual_salary_fan_coin = p.salary_minor // 100 if p.salary_minor else 600
+        if wage_max is not None and annual_salary_fan_coin > int(wage_max):
             continue
         candidate_style = str(meta.get("style") or "")
         candidate_temperament = str(meta.get("temperament") or "")
@@ -412,8 +419,8 @@ def list_staff_market_candidates(
                 "style": meta.get("style", "Balanced"),
                 "ambition": _safe_int(meta.get("ambition"), 10),
                 "loyalty": _safe_int(meta.get("loyalty"), 12),
-                "expected_salary_gtex": annual_salary_gtex,
-                "expected_salary_fan_coin": annual_salary_gtex,
+                "expected_salary_fan_coin": annual_salary_fan_coin,
+                "expected_salary_gtex": annual_salary_fan_coin,  # Legacy alias; value is Fan Coin.
                 "min_prestige": min_p,
                 "employment_status": status,
                 "current_club_id": meta.get("current_club_id"),
@@ -452,8 +459,9 @@ def list_staff_market_candidates(
 def evaluate_staff_contract_offer(
     club_prestige: int,
     candidate_profile: ClubStaffProfile,
-    offered_salary_gtex: int,
-    contract_years: int,
+    offered_salary_fan_coin: int | None = None,
+    offered_salary_gtex: int | None = None,
+    contract_years: int = 3,
     marquee_premium: bool = False,
     past_sentiment: str | None = None,
     showroom_wage_bonus_pct: float = 0.0,
@@ -466,6 +474,11 @@ def evaluate_staff_contract_offer(
     meta = dict(candidate_profile.metadata_json or {})
     min_prestige = _safe_int(meta.get("min_prestige"), 15)
     expected_salary = candidate_profile.salary_minor // 100 if candidate_profile.salary_minor else 600
+    salary_offer_fan_coin = int(
+        offered_salary_fan_coin
+        if offered_salary_fan_coin is not None
+        else (offered_salary_gtex if offered_salary_gtex is not None else expected_salary)
+    )
     ambition = _safe_int(meta.get("ambition"), 10)
     loyalty = _safe_int(meta.get("loyalty"), 12)
     name = candidate_profile.display_name
@@ -488,24 +501,26 @@ def evaluate_staff_contract_offer(
     prestige_gap = min_prestige - (club_prestige + prestige_perk_offset)
     if prestige_gap > 0 and not marquee_premium:
         # Candidate requires higher prestige unless compensated with a wage premium
-        wage_ratio = (offered_salary_gtex / max(1, expected_salary)) + showroom_bonus_ratio
+        wage_ratio = (salary_offer_fan_coin / max(1, expected_salary)) + showroom_bonus_ratio
         if wage_ratio < 1.4:
             return {
                 "accepted": False,
                 "outcome": "rejected",
                 "reason": "insufficient_prestige",
                 "message": f"{name} requires at least {min_prestige} club prestige (current: {club_prestige}). A 40%+ marquee wage premium is required to consider this appointment.",
+                "required_salary_fan_coin": int(expected_salary * 1.4),
                 "required_salary_gtex": int(expected_salary * 1.4),
             }
 
     # 3. Wage Competitiveness Check
-    wage_ratio = (offered_salary_gtex / max(1, expected_salary)) + loyalty_stability_bonus + showroom_bonus_ratio
+    wage_ratio = (salary_offer_fan_coin / max(1, expected_salary)) + loyalty_stability_bonus + showroom_bonus_ratio
     if wage_ratio < 0.75:
         return {
             "accepted": False,
             "outcome": "rejected",
             "reason": "insufficient_wage",
-            "message": f"Offer rejected. The proposed salary of {offered_salary_gtex:,} Fan Coin is substantially below {name}'s market expectation of {expected_salary:,} Fan Coin.",
+            "message": f"Offer rejected. The proposed salary of {salary_offer_fan_coin:,} Fan Coin is substantially below {name}'s market expectation of {expected_salary:,} Fan Coin.",
+            "counter_salary_fan_coin": expected_salary,
             "counter_salary_gtex": expected_salary,
         }
     elif wage_ratio < 0.95:
@@ -516,6 +531,7 @@ def evaluate_staff_contract_offer(
             "outcome": "counter_offer",
             "reason": "salary_below_market",
             "message": f"{name} is intrigued by the project but requests {counter_wage:,} Fan Coin per year.",
+            "counter_salary_fan_coin": counter_wage,
             "counter_salary_gtex": counter_wage,
             "counter_years": contract_years,
         }
@@ -534,7 +550,8 @@ def evaluate_staff_contract_offer(
         "accepted": True,
         "outcome": "accepted",
         "message": f"{name} has accepted the offer and agreed terms as your new {candidate_profile.staff_type}!",
-        "agreed_salary_gtex": offered_salary_gtex,
+        "agreed_salary_fan_coin": salary_offer_fan_coin,
+        "agreed_salary_gtex": salary_offer_fan_coin,
         "contract_years": contract_years,
         "showroom_wage_bonus_pct": round(float(showroom_wage_bonus_pct or 0.0), 1),
     }
@@ -546,6 +563,7 @@ def hire_staff_from_market(
     club_id: str,
     profile_id: str,
     role: str | None = None,
+    offered_salary_fan_coin: int | None = None,
     offered_salary_gtex: int | None = None,
     contract_years: int = 3,
     marquee_wage_premium: bool = False,
@@ -567,8 +585,12 @@ def hire_staff_from_market(
         raise service.OwnerError("staff_profile_not_found", 404, f"Staff profile {profile_id} not found.")
 
     target_role = normalise_staff_role(role or profile.staff_type)
-    expected_salary = profile.salary_minor // 100 if profile.salary_minor else 600
-    salary = int(offered_salary_gtex or expected_salary)
+    expected_salary_fan_coin = profile.salary_minor // 100 if profile.salary_minor else 600
+    salary_fan_coin = int(
+        offered_salary_fan_coin
+        if offered_salary_fan_coin is not None
+        else (offered_salary_gtex if offered_salary_gtex is not None else expected_salary_fan_coin)
+    )
     years = max(1, min(int(contract_years or 3), 5))
 
     meta = dict(profile.metadata_json or {})
@@ -580,7 +602,7 @@ def hire_staff_from_market(
     evaluation = evaluate_staff_contract_offer(
         club_prestige=state.prestige,
         candidate_profile=profile,
-        offered_salary_gtex=salary,
+        offered_salary_fan_coin=salary_fan_coin,
         contract_years=years,
         marquee_premium=marquee_wage_premium,
         past_sentiment=past_sentiment,
@@ -593,15 +615,20 @@ def hire_staff_from_market(
             "success": False,
             "reason": evaluation.get("reason"),
             "message": evaluation.get("message"),
-            "counter_salary_gtex": evaluation.get("counter_salary_gtex"),
-            "required_salary_gtex": evaluation.get("required_salary_gtex"),
+            "counter_salary_fan_coin": evaluation.get("counter_salary_fan_coin"),
+            "required_salary_fan_coin": evaluation.get("required_salary_fan_coin"),
+            "counter_salary_gtex": evaluation.get("counter_salary_fan_coin") or evaluation.get("counter_salary_gtex"),
+            "required_salary_gtex": evaluation.get("required_salary_fan_coin")
+            or evaluation.get("required_salary_gtex"),
             "cinematic_event": None,
         }
 
     # Total upfront contract fee or annual budget
-    total_contract_fee = salary * years if years != 3 else max(salary, int(expected_salary * 1.5))
+    total_contract_fee_fan_coin = (
+        salary_fan_coin * years if years != 3 else max(salary_fan_coin, int(expected_salary_fan_coin * 1.5))
+    )
     if marquee_wage_premium:
-        total_contract_fee = int(total_contract_fee * 1.4)
+        total_contract_fee_fan_coin = int(total_contract_fee_fan_coin * 1.4)
 
     # Financial settlement is a hard precondition for an appointment. Never create
     # a contract or change employment state when the club cannot fund the upfront fee.
@@ -609,23 +636,24 @@ def hire_staff_from_market(
     user_acct = ledger.user_account(user_id)
     club_fan = ledger.balance(session, club_acct, ledger.FAN)
     user_fan = ledger.balance(session, user_acct, ledger.FAN)
-    if user_fan >= total_contract_fee:
+    if user_fan >= total_contract_fee_fan_coin:
         pay_source = user_acct
         pay_balance = user_fan
     else:
         pay_source = club_acct
         pay_balance = club_fan
     logger.info("Executing staff appointment for club %s; Fan Coin available: %s", club_id, pay_balance)
-    if pay_balance < total_contract_fee:
+    if pay_balance < total_contract_fee_fan_coin:
         return {
             "status": "rejected",
             "success": False,
             "reason": "insufficient_funds",
             "message": (
                 f"Appointment not completed: staff salaries are paid in Fan Coin. "
-                f"Available Fan Coin is {max(user_fan, club_fan)}, and the upfront contract is {total_contract_fee} Fan Coin."
+                f"Available Fan Coin is {max(user_fan, club_fan)}, and the upfront contract is {total_contract_fee_fan_coin} Fan Coin."
             ),
-            "required_salary_gtex": salary,
+            "required_salary_fan_coin": salary_fan_coin,
+            "required_salary_gtex": salary_fan_coin,
         }
 
     # The ledger must successfully settle before any contract or assignment is written.
@@ -635,7 +663,7 @@ def hire_staff_from_market(
         source=pay_source,
         destination=ledger.WORLD_CLUBS,
         currency=ledger.FAN,
-        gross=total_contract_fee,
+        gross=total_contract_fee_fan_coin,
         club_id=club_id,
         user_id=user_id,
         related_type="staff",
@@ -666,7 +694,7 @@ def hire_staff_from_market(
         club_id=club_id,
         staff_profile_id=profile.id,
         status="active",
-        salary_minor=salary * 100,
+        salary_minor=salary_fan_coin * 100,
         commission_bps=profile.commission_bps or 0,
         duration_days=years * 365,
         role_scope=target_role,
@@ -676,7 +704,7 @@ def hire_staff_from_market(
         accepted_at=now,
         metadata_json={
             "source": "living_staff_market_stage4",
-            "upfront_fee_gtex": total_contract_fee,
+            "upfront_fee_fan_coin": total_contract_fee_fan_coin,
             "marquee_wage_premium": marquee_wage_premium,
             "pitch_note": pitch_note,
         },
@@ -711,10 +739,10 @@ def hire_staff_from_market(
         "temperament": meta.get("temperament", "pragmatic"),
         "ambition": meta.get("ambition", 10),
         "loyalty": meta.get("loyalty", 12),
-        "salary": salary,
-        "salary_fan_coin": salary,
-        "salary_fancoin": salary,
-        "salary_gtex": salary,
+        "salary": salary_fan_coin,
+        "salary_fan_coin": salary_fan_coin,
+        "salary_fancoin": salary_fan_coin,
+        "salary_gtex": salary_fan_coin,  # Legacy alias; value is Fan Coin.
         "appointed_at": now.isoformat(),
         "mood": 85,
         "contract_years": years,
@@ -737,7 +765,8 @@ def hire_staff_from_market(
         "role": target_role,
         "started_at": now.strftime("%Y-%m-%d"),
         "contract_years": years,
-        "salary_gtex": salary,
+        "salary_fan_coin": salary_fan_coin,
+        "salary_gtex": salary_fan_coin,  # Legacy alias; value is Fan Coin.
         "status": "ongoing",
     }
     career_history.append(career_entry)
@@ -756,7 +785,7 @@ def hire_staff_from_market(
         club_id=club_id,
         appointed_staff=appointed_dict,
         contract_id=new_contract.id,
-        total_contract_fee=total_contract_fee,
+        total_contract_fee=total_contract_fee_fan_coin,
     )
 
     return {
@@ -766,7 +795,8 @@ def hire_staff_from_market(
         "contract_id": new_contract.id,
         "assignment_id": new_assignment.id,
         "appointed_staff": appointed_dict,
-        "total_contract_fee": total_contract_fee,
+        "total_contract_fee_fan_coin": total_contract_fee_fan_coin,
+        "currency": ledger.FAN,
         "cinematic_event": cinematic_event,
     }
 
@@ -931,12 +961,12 @@ def get_candidate_career_dossier(
 
     meta = dict(profile.metadata_json or {})
     min_p = _safe_int(meta.get("min_prestige"), 15)
-    salary_gtex = profile.salary_minor // 100 if profile.salary_minor else 600
+    salary_fan_coin = profile.salary_minor // 100 if profile.salary_minor else 600
 
     evaluation = evaluate_staff_contract_offer(
         club_prestige=state.prestige,
         candidate_profile=profile,
-        offered_salary_gtex=salary_gtex,
+        offered_salary_fan_coin=salary_fan_coin,
         contract_years=3,
     )
 
@@ -955,7 +985,8 @@ def get_candidate_career_dossier(
         "style": meta.get("style", "Balanced"),
         "ambition": _safe_int(meta.get("ambition"), 10),
         "loyalty": _safe_int(meta.get("loyalty"), 12),
-        "expected_salary_gtex": salary_gtex,
+        "expected_salary_fan_coin": salary_fan_coin,
+        "expected_salary_gtex": salary_fan_coin,  # Deprecated alias; value is Fan Coin.
         "min_prestige": min_p,
         "employment_status": meta.get("employment_status", "unemployed"),
         "current_club_id": meta.get("current_club_id"),
@@ -990,9 +1021,20 @@ def evaluate_external_poaching_approach(
 
     staff_name = str(slot.get("name") or "Appointed Executive")
     role_label = ROLE_DISPLAY_LABELS.get(target_role, target_role.replace("_", " ").title())
-    current_salary = max(600, int(slot.get("salary_gtex") or (state.manager_json or {}).get("salary_gtex") or 1200))
-    rival_salary = int(round(current_salary * 1.35))
-    buyout_clause_gtex = max(1800, int(round(current_salary * 2.5)))
+    current_salary_fan_coin = max(
+        600,
+        int(
+            slot.get("salary_fan_coin")
+            or slot.get("salary")
+            or slot.get("salary_gtex")
+            or (state.manager_json or {}).get("salary_fan_coin")
+            or (state.manager_json or {}).get("salary")
+            or (state.manager_json or {}).get("salary_gtex")
+            or 1200
+        ),
+    )
+    rival_salary_fan_coin = int(round(current_salary_fan_coin * 1.35))
+    buyout_clause_fan_coin = max(1800, int(round(current_salary_fan_coin * 2.5)))
 
     rel = session.scalar(
         select(OwnerClubRelationship).where(
@@ -1014,7 +1056,7 @@ def evaluate_external_poaching_approach(
         title=f"Rival Poaching Approach: {rival_club_name} Target {staff_name}",
         description=(
             f"{rival_club_name} have formally approached {staff_name} ({role_label}) with a "
-            f"{rival_salary:,} GTEX/yr contract and a {buyout_clause_gtex:,} GTEX buyout clause offer."
+            f"{rival_salary_fan_coin:,} Fan Coin/yr contract and a {buyout_clause_fan_coin:,} Fan Coin buyout clause offer."
         ),
         participants_json=[
             {"role": target_role, "name": staff_name, "loyalty": loyalty_val, "trust": trust_val},
@@ -1024,7 +1066,7 @@ def evaluate_external_poaching_approach(
         actions_json=[
             {
                 "choice": "match_rival_offer",
-                "label": f"Match Wage ({rival_salary:,} GTEX/yr) & Pay Loyalty Bonus",
+                "label": f"Match Wage ({rival_salary_fan_coin:,} Fan Coin/yr) & Pay Loyalty Bonus",
             },
             {
                 "choice": "promise_facility_upgrade",
@@ -1032,7 +1074,7 @@ def evaluate_external_poaching_approach(
             },
             {
                 "choice": "accept_buyout_release",
-                "label": f"Accept {buyout_clause_gtex:,} GTEX Buyout & Release to {rival_club_name}",
+                "label": f"Accept {buyout_clause_fan_coin:,} Fan Coin Buyout & Release to {rival_club_name}",
             },
         ],
         consequences_json={
@@ -1040,9 +1082,13 @@ def evaluate_external_poaching_approach(
             "role_label": role_label,
             "staff_name": staff_name,
             "rival_club_name": rival_club_name,
-            "current_salary_gtex": current_salary,
-            "rival_offered_salary_gtex": rival_salary,
-            "buyout_clause_gtex": buyout_clause_gtex,
+            "current_salary_fan_coin": current_salary_fan_coin,
+            "rival_offered_salary_fan_coin": rival_salary_fan_coin,
+            "buyout_clause_fan_coin": buyout_clause_fan_coin,
+            # Deprecated aliases: the values are Fan Coin, never GTEX.
+            "current_salary_gtex": current_salary_fan_coin,
+            "rival_offered_salary_gtex": rival_salary_fan_coin,
+            "buyout_clause_gtex": buyout_clause_fan_coin,
             "loyalty_before": loyalty_val,
             "trust_before": trust_val,
         },
@@ -1058,9 +1104,12 @@ def evaluate_external_poaching_approach(
         "role_label": role_label,
         "staff_name": staff_name,
         "rival_club_name": rival_club_name,
-        "current_salary_gtex": current_salary,
-        "rival_offered_salary_gtex": rival_salary,
-        "buyout_clause_gtex": buyout_clause_gtex,
+        "current_salary_fan_coin": current_salary_fan_coin,
+        "rival_offered_salary_fan_coin": rival_salary_fan_coin,
+        "buyout_clause_fan_coin": buyout_clause_fan_coin,
+        "current_salary_gtex": current_salary_fan_coin,
+        "rival_offered_salary_gtex": rival_salary_fan_coin,
+        "buyout_clause_gtex": buyout_clause_fan_coin,
         "options": ev.actions_json,
     }
 
@@ -1106,22 +1155,26 @@ def resolve_external_poaching_approach(
     target_role = str(meta.get("role") or ROLE_FIRST_TEAM_MANAGER)
     staff_name = str(meta.get("staff_name") or "Appointed Executive")
     rival_club = str(meta.get("rival_club_name") or "Continental Sporting FC")
-    current_salary = int(meta.get("current_salary_gtex") or 1000)
-    rival_salary = int(meta.get("rival_offered_salary_gtex") or int(current_salary * 1.35))
-    buyout_gtex = int(meta.get("buyout_clause_gtex") or 2500)
+    current_salary_fan_coin = int(meta.get("current_salary_fan_coin") or meta.get("current_salary_gtex") or 1000)
+    rival_salary_fan_coin = int(
+        meta.get("rival_offered_salary_fan_coin")
+        or meta.get("rival_offered_salary_gtex")
+        or int(current_salary_fan_coin * 1.35)
+    )
+    buyout_fan_coin = int(meta.get("buyout_clause_fan_coin") or meta.get("buyout_clause_gtex") or 2500)
 
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
 
     if choice == "match_rival_offer":
-        retention_bonus = max(250, int(round(current_salary * 0.4)))
+        retention_bonus_fan_coin = max(250, int(round(current_salary_fan_coin * 0.4)))
         ledger.record(
             session,
             event_type="staff_retention_bonus",
             source=ledger.club_account(club_id),
             destination=ledger.WORLD_CLUBS,
             currency=ledger.FAN,
-            gross=Decimal(str(retention_bonus)),
+            gross=Decimal(str(retention_bonus_fan_coin)),
             club_id=club_id,
             user_id=user_id,
             related_type="staff_poaching",
@@ -1130,13 +1183,15 @@ def resolve_external_poaching_approach(
             check_funds=True,
         )
         if target_role in exec_staff and isinstance(exec_staff[target_role], dict):
-            exec_staff[target_role]["salary_gtex"] = rival_salary
+            exec_staff[target_role]["salary_fan_coin"] = rival_salary_fan_coin
+            exec_staff[target_role]["salary_gtex"] = rival_salary_fan_coin  # Deprecated alias; value is Fan Coin.
             facs["_executive_staff"] = exec_staff
             state.facilities_json = facs
             flag_modified(state, "facilities_json")
         if target_role == ROLE_FIRST_TEAM_MANAGER and isinstance(state.manager_json, dict):
             mgr = dict(state.manager_json)
-            mgr["salary_gtex"] = rival_salary
+            mgr["salary_fan_coin"] = rival_salary_fan_coin
+            mgr["salary_gtex"] = rival_salary_fan_coin  # Deprecated alias; value is Fan Coin.
             state.manager_json = mgr
             flag_modified(state, "manager_json")
 
@@ -1152,13 +1207,16 @@ def resolve_external_poaching_approach(
             delta_loyalty=10,
             delta_trust=8,
             delta_tension=-6,
-            reason=f"Matched rival offer from {rival_club} ({rival_salary:,} GTEX/yr)",
+            reason=f"Matched rival offer from {rival_club} ({rival_salary_fan_coin:,} Fan Coin/yr)",
         )
         outcome_payload = {
             "choice": choice,
             "retained": True,
-            "new_salary_gtex": rival_salary,
-            "retention_bonus_paid_gtex": retention_bonus,
+            "new_salary_fan_coin": rival_salary_fan_coin,
+            "retention_bonus_paid_fan_coin": retention_bonus_fan_coin,
+            "buyout_credited_fan_coin": 0,
+            "new_salary_gtex": rival_salary_fan_coin,
+            "retention_bonus_paid_gtex": retention_bonus_fan_coin,
             "buyout_credited_gtex": 0,
             "loyalty_after": rel.loyalty,
             "trust_after": rel.trust,
@@ -1183,7 +1241,10 @@ def resolve_external_poaching_approach(
         outcome_payload = {
             "choice": choice,
             "retained": True,
-            "new_salary_gtex": current_salary,
+            "new_salary_fan_coin": current_salary_fan_coin,
+            "retention_bonus_paid_fan_coin": 0,
+            "buyout_credited_fan_coin": 0,
+            "new_salary_gtex": current_salary_fan_coin,
             "retention_bonus_paid_gtex": 0,
             "buyout_credited_gtex": 0,
             "alignment_after": rel.alignment,
@@ -1197,13 +1258,13 @@ def resolve_external_poaching_approach(
             event_type="staff_buyout_compensation",
             source=ledger.WORLD_CLUBS,
             destination=ledger.club_account(club_id),
-            currency=ledger.GTEX,
-            gross=Decimal(str(buyout_gtex)),
+            currency=ledger.FAN,
+            gross=Decimal(str(buyout_fan_coin)),
             club_id=club_id,
             user_id=user_id,
             related_type="staff_poaching",
             related_id=ev.id,
-            memo=f"Buyout clause compensation from {rival_club} for {staff_name}",
+            memo=f"Buyout clause compensation from {rival_club} for {staff_name} (Fan Coin)",
             check_funds=False,
         )
 
@@ -1231,7 +1292,8 @@ def resolve_external_poaching_approach(
                             "from_club_id": club_id,
                             "to_club_name": rival_club,
                             "role": target_role,
-                            "buyout_clause_gtex": buyout_gtex,
+                            "buyout_clause_fan_coin": buyout_fan_coin,
+                            "buyout_clause_gtex": buyout_fan_coin,
                             "world_day": state.world_day or 1,
                         }
                     )
@@ -1254,7 +1316,8 @@ def resolve_external_poaching_approach(
             "retained": False,
             "released_to": rival_club,
             "role_vacated": target_role,
-            "buyout_credited_gtex": buyout_gtex,
+            "buyout_credited_fan_coin": buyout_fan_coin,
+            "buyout_credited_gtex": buyout_fan_coin,
             "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
         }
 
