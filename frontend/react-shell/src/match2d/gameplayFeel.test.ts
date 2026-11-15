@@ -189,6 +189,17 @@ describe("gameplay feel: momentum crowd & woodwork/tackle audio", () => {
     expect(surging.freq).toBeGreaterThan(calm.freq);
   });
 
+  test("crowdTargetFor reflects the persisted institutional crowd intensity and mood", () => {
+    const subdued = crowdTargetFor({ ballX: 0.5, crowdIntensity: 20, dominantMood: "anxious_scrutiny" });
+    const electric = crowdTargetFor({
+      ballX: 0.5,
+      crowdIntensity: 95,
+      dominantMood: "ferocious_derby_cauldron",
+    });
+    expect(electric.gain).toBeGreaterThan(subdued.gain);
+    expect(electric.freq).toBeGreaterThan(subdued.freq);
+  });
+
   test("MatchAudioEngine safely handles woodwork and clatter cues", () => {
     const engine = new MatchAudioEngine();
     engine.setEnabled(true);
