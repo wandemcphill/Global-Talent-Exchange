@@ -23,7 +23,8 @@ from app.coin_traders.schemas import (
     CoinTraderRateUpsertRequest,
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
-from app.identity.providers import DIDitAdapter, SandboxAdapter, SmileIdAdapter, get_identity_provider
+from app.identity.providers import DIDitAdapter, SandboxAdapter, get_identity_provider
+from app.identity.providers.didit import IdentityProviderConfigurationError
 from app.identity.service import (
     IdentityVerificationService,
     IdentityWebhookSignatureError,
@@ -370,7 +371,7 @@ def test_coin_trader_cannot_trade_without_verification(db_session: Session) -> N
     assert "pending identity verification" in str(exc.value).lower() or "must complete" in str(exc.value).lower()
 
 
-def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Session) -> None:
+def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Session, monkeypatch) -> None:
     """Authoritative provider webhook automatically activates trader with idempotency."""
     user = _make_user(
         db_session,
@@ -391,13 +392,17 @@ def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Sessio
     )
     db_session.commit()
 
-    # 1. Test supported provider adapters
+    # 1. Production provider selection must be explicit; sandbox is test-only.
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "test")
     didit_adapter = get_identity_provider("didit")
-    smile_adapter = get_identity_provider("smile_id")
     sandbox_adapter = get_identity_provider("sandbox")
     assert isinstance(didit_adapter, DIDitAdapter)
-    assert isinstance(smile_adapter, SmileIdAdapter)
     assert isinstance(sandbox_adapter, SandboxAdapter)
+    with pytest.raises(IdentityProviderConfigurationError):
+        get_identity_provider("smile_id")
+    with pytest.raises(IdentityProviderConfigurationError):
+        get_identity_provider("sandbox") if monkeypatch.delenv("GTE_STARTUP_PROFILE", raising=False) else None
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "test")
 
     # 2. Initiate trader verification session
     identity_service = IdentityVerificationService(db_session)
@@ -413,7 +418,7 @@ def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Sessio
     webhook_payload = {
         "event": "verification.completed",
         "session_id": init_res.provider_session_id,
-        "reference": "PROV-REF-9999",
+        "reference": init_res.provider_reference,
         "status": "approved",
         "checks": {
             "document": "pass",
@@ -433,14 +438,14 @@ def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Sessio
         headers=headers,
     )
     assert result_dict["status"] in {"success", "verified"}
-    assert result_dict["reference"] == "PROV-REF-9999"
+    assert result_dict["reference"] == init_res.provider_reference
 
     # Profile automatically activated
     profile = db_session.get(CoinTraderProfile, profile_view.id)
     assert profile.status == CoinTraderProfileStatus.APPROVED.value
     assert profile.verified_at is not None
     assert profile.verification_provider == "sandbox"
-    assert profile.verification_reference == "PROV-REF-9999"
+    assert profile.verification_reference == init_res.provider_reference
 
     # Trader is now eligible to operate
     AccountEligibilityService.assert_can_operate_coin_trader(user, db_session)
