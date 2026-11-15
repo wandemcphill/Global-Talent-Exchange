@@ -1037,7 +1037,6 @@ def create_club_event(
     return event, True
 
 
-
 def emit_canonical_club_event(
     session: Session,
     *,
@@ -1053,9 +1052,7 @@ def emit_canonical_club_event(
     """Create one source event for a completed canonical CompetitionMatch."""
     match_key = str(match_id).strip()
     idempotency_key = f"canonical_match:{match_key}"
-    existing = session.scalar(
-        select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == idempotency_key)
-    )
+    existing = session.scalar(select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == idempotency_key))
     if existing is not None:
         return existing, False
     required = list(required_projections or [])
@@ -1104,8 +1101,7 @@ def record_canonical_projection(
     event.consequences_json = consequences
     required = set(consequences.get("required_projections") or [])
     completed = {
-        name for name, value in statuses.items()
-        if isinstance(value, dict) and value.get("status") == "complete"
+        name for name, value in statuses.items() if isinstance(value, dict) and value.get("status") == "complete"
     }
     if required and required.issubset(completed):
         event.status = "resolved"
