@@ -17,6 +17,7 @@ import { HowItWorksSection } from "@/components/landing/HowItWorksSection";
 import { TrustAndIntegritySection } from "@/components/landing/TrustAndIntegritySection";
 import { ConversionAndFooterSection } from "@/components/landing/ConversionAndFooterSection";
 import { GtexTopAdvertisingRail, GtexHomepageAdvertising } from "@/components/advertising/GtexAdvertising";
+import { PublicTrafficStatsStrip } from "@/components/landing/PublicTrafficStatsStrip";
 
 export default function Landing() {
   const [pulse, setPulse] = useState<GtexLiveWorldPulse | null>(null);
@@ -30,10 +31,13 @@ export default function Landing() {
       const data = res.data?.data || res.data;
       if (data) {
         setPulse({
-          clubsOnGtex: data.clubs_on_gtex ?? data.clubsOnGtex ?? 1240,
-          usersOnline: data.users_online ?? data.usersOnline ?? 384,
-          playersOnline: data.players_online ?? data.playersOnline ?? 17200,
-          usersOnlineWindowSeconds: data.users_online_window_seconds ?? 300,
+          clubsOnGtex: data.clubs_on_gtex ?? data.clubsOnGtex ?? 0,
+          usersOnline: data.users_online ?? data.usersOnline ?? 0,
+          playersOnline: data.players_online ?? data.playersOnline ?? 0,
+          visitorsToday: data.visitors_today ?? data.visitorsToday ?? 0,
+          pageViewsToday: data.page_views_today ?? data.pageViewsToday ?? 0,
+          registeredUsers: data.registered_users ?? data.registeredUsers ?? 0,
+          usersOnlineWindowSeconds: data.users_online_window_seconds ?? 90,
           generatedAt: data.generated_at,
           labels: data.labels,
         });
@@ -117,7 +121,7 @@ export default function Landing() {
     const interval = setInterval(() => {
       loadPulse();
       loadJackpot();
-    }, 45000);
+    }, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -144,6 +148,7 @@ export default function Landing() {
         pulse={pulse}
         onExplore={() => scrollToSection("platform")}
       />
+      <PublicTrafficStatsStrip pulse={pulse} />
 
       {/* 3. Premium brand placement */}
       <GtexHomepageAdvertising />
