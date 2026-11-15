@@ -16,9 +16,11 @@ from app.common.enums.contract_status import ContractStatus
 from app.common.enums.injury_severity import InjurySeverity
 from app.common.enums.transfer_window_status import TransferWindowStatus
 from app.club_identity.models.reputation import ClubReputationProfile
+from app.core.database import load_model_modules
 from app.ingestion.models import Club as IngestionClub
 from app.ingestion.models import Competition, Match, Player, PlayerSeasonStat, Season
 from app.models.base import Base
+from app.owner_console import ledger as club_ledger
 from app.models.club_infra import ClubFacility
 from app.models.club_profile import ClubProfile
 from app.models.notification_center import PlatformAnnouncement
@@ -78,6 +80,7 @@ from tests.support.club_treasury import fund_club_treasury
 
 @pytest.fixture()
 def lifecycle_session() -> Session:
+    load_model_modules()
     engine = create_engine(
         "sqlite+pysqlite:///:memory:",
         connect_args={"check_same_thread": False},
@@ -297,25 +300,17 @@ def fund_wallet(
     assert user is not None
     wallet_service = WalletService()
     if coin > Decimal("0.0000"):
-        wallet_service.append_transaction(
+        club_ledger.record(
             session,
-            postings=[
-                LedgerPosting(
-                    account=wallet_service.ensure_platform_account(session, LedgerUnit.COIN),
-                    amount=-coin,
-                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-                ),
-                LedgerPosting(
-                    account=wallet_service.get_user_account(session, user, LedgerUnit.COIN),
-                    amount=coin,
-                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-                ),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
-            reference=f"test-fund:{user.id}:coin",
-            description="Test GTex Coin funding",
-            actor=user,
+            event_type="deposit",
+            source=club_ledger.PAYSTACK,
+            destination=club_ledger.user_account(user.id),
+            currency=club_ledger.GTEX,
+            gross=coin,
+            balance_class="deposited",
+            user_id=user.id,
+            memo="Test deposited GTEX Coin funding",
+            check_funds=False,
         )
     if credit > Decimal("0.0000"):
         wallet_service.append_transaction(
@@ -1207,7 +1202,7 @@ def test_regen_bid_resolution_prefers_hometown_fit_over_highest_salary(
         lifecycle_session,
         user_id="user-owner",
         coin=Decimal("5000.0000"),
-        credit=Decimal("200000.0000"),
+        credit=Decimal("300000.0000"),
     )
     lifecycle_service.create_bid(
         window.id,
@@ -2125,13 +2120,16 @@ def test_contract_agency_decisions_are_explainable(
     context = seed_base_context(lifecycle_session)
     player = lifecycle_session.get(Player, context["player_id"])
     assert player is not None
-    if label == "veteran_stability":
+    if label == "wonderkid_development":
+        player.date_of_birth = date(2008, 1, 1)
+    elif label == "veteran_stability":
         player.date_of_birth = date(1988, 4, 10)
     seed_regen_context(
         lifecycle_session,
         player_id=context["player_id"],
         generated_for_club_id=context["club_profile_id"],
         generated_at=generated_at,
+        potential_max=82 if label == "wonderkid_development" else 74,
         decision_traits=trait_overrides,
     )
     _seed_agency_supporting_data(lifecycle_session, context)

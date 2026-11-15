@@ -41,10 +41,13 @@ def _assessment_payload(context: Any) -> dict[str, Any]:
         "retirement_policy": "phase6_dynamic",
         "retirement_policy_status": "assessed",
         "virtual_age_months": assessment.virtual_age_months,
+        "lifecycle_age_months": assessment.virtual_age_months,
         "career_stage": assessment.career_stage,
         "retirement_pressure": assessment.retirement_pressure,
         "retirement_pressure_band": assessment.pressure_band.value,
+        "pressure_band": assessment.pressure_band.value,
         "expected_longevity_months": assessment.expected_longevity_months,
+        "longevity_months": assessment.expected_longevity_months,
         "retirement_watch": assessment.should_enter_retirement_watch,
         "retirement_decision_eligible": assessment.eligible_for_retirement_decision,
         "retirement_drivers": list(assessment.drivers),
@@ -109,6 +112,10 @@ def _policy_sync(
 
     original_settings = self.settings
     original_generated_at = regen.generated_at
+    original_career_state = self._regen_career_state(regen)
+    already_retired_before = bool(
+        original_career_state.get("retired", False) or original_career_state.get("career_stage") == "retired"
+    )
     try:
         if policy_context is None:
             regen_config = replace(self.settings.regen_generation, regen_lifecycle_retirement_months=10**9)
@@ -121,6 +128,17 @@ def _policy_sync(
             else:
                 regen_date = _subtract_months(reference_on, age_months)
                 regen.generated_at = datetime.combine(regen_date, original_generated_at.timetz())
+                self._set_regen_career_state(
+                    regen,
+                    {
+                        **original_career_state,
+                        "virtual_age_months": age_months,
+                        "retirement_policy_status": "assessed",
+                        "career_stage": (
+                            "retired" if already_retired_before else policy_context.assessment.career_stage
+                        ),
+                    },
+                )
                 regen_config = replace(
                     self.settings.regen_generation,
                     regen_lifecycle_retirement_months=(
@@ -143,10 +161,8 @@ def _policy_sync(
 
     already_retired = (
         bool(state.get("retired", False))
-        or bool(regen.metadata_json and (regen.metadata_json.get("career_state") or {}).get("retired"))
-        or bool(
-            regen.metadata_json and (regen.metadata_json.get("career_state") or {}).get("career_stage") == "retired"
-        )
+        or bool(original_career_state.get("retired"))
+        or bool(original_career_state.get("career_stage") == "retired")
     )
 
     if policy_context is None or policy_context.assessment.virtual_age_months is None:
