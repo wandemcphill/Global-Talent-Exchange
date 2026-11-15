@@ -4,6 +4,7 @@ Revision ID: 20261115_0250_academy_first_team_minutes
 Revises: 20261114_0249_merge_institution_and_fan_coin_revisions
 Create Date: 2026-11-15 07:30:00
 """
+
 from __future__ import annotations
 
 from alembic import op
