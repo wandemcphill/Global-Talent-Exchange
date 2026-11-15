@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from datetime import timedelta
 import hashlib
 import hmac
+from dataclasses import dataclass
+from datetime import timedelta
 from urllib.parse import urlsplit
 from uuid import UUID
 
