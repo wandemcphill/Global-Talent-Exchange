@@ -1132,7 +1132,8 @@ def record_match_institutional_impact(
     )
     prior = dict(side.get("prior_head_to_head") or {})
     prior_count = max(0, int(prior.get("matches_played") or 0))
-    if rivalry is None and prior_count >= 2:
+    significant_prior_count = max(0, int(prior.get("significant_encounters") or 0))
+    if rivalry is None and significant_prior_count >= 2:
         rivalry = OwnerClubRivalry(
             club_id=state.club_id,
             rival_club_id=opp_id,
