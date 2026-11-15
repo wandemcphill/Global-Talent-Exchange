@@ -313,10 +313,10 @@ def _build_withdrawal_quote(
         blocked_reason = eligibility.policy_block_reason or "Withdrawal policy requirements are not satisfied."
     elif gross_amount > eligibility.withdrawable_now:
         blocked_reason = "Withdrawal amount exceeds available withdrawable balance."
-    rate_value = Decimal(settings.withdrawal_rate_value)
+    rate_value, rate_direction = treasury.withdrawal_rate_for_user(settings, current_user)
     estimated_fiat = (
         gross_amount * rate_value
-        if settings.withdrawal_rate_direction.value == "fiat_per_coin"
+        if rate_direction.value == "fiat_per_coin"
         else gross_amount / rate_value
     )
     processor_fee = Decimal("0.0000")
@@ -338,8 +338,8 @@ def _build_withdrawal_quote(
         total_debit=total_debit,
         source_scope=source_scope,
         currency_code=settings.currency_code,
-        rate_value=Decimal(settings.withdrawal_rate_value),
-        rate_direction=settings.withdrawal_rate_direction,
+        rate_value=rate_value,
+        rate_direction=rate_direction,
         estimated_fiat_payout=_normalize_amount(estimated_fiat),
         processor_mode=processor_mode,
         payout_channel=payout_channel,
