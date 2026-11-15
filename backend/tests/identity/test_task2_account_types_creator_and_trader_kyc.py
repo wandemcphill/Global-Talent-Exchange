@@ -758,3 +758,94 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
     )
     assert sell_order.id is not None
     assert sell_order.fiat_total == Decimal("43000")
+
+
+def test_didit_adapter_creates_real_provider_session_and_verifies_signed_status_webhook(monkeypatch) -> None:
+    """DIDit must return a session created by its API and accept only fresh signed webhooks."""
+    import time
+
+    from app.identity.providers.didit import DIDitVerificationAdapter
+
+    monkeypatch.setenv("GTE_DIDIT_API_KEY", "test-api-key")
+    monkeypatch.setenv("GTE_DIDIT_WORKFLOW_ID", "workflow-gtex-full-kyc")
+    monkeypatch.setenv("GTE_DIDIT_WEBHOOK_SECRET", "test-webhook-secret")
+
+    captured: dict[str, object] = {}
+
+    class FakeResponse:
+        status_code = 201
+
+        def raise_for_status(self) -> None:
+            return None
+
+        def json(self) -> dict[str, str]:
+            return {
+                "session_id": "didit-session-123",
+                "url": "https://verify.didit.me/session/didit-session-123",
+                "workflow_id": "workflow-gtex-full-kyc",
+                "status": "Not Started",
+            }
+
+    def fake_post(url: str, **kwargs):
+        captured["url"] = url
+        captured["kwargs"] = kwargs
+        return FakeResponse()
+
+    monkeypatch.setattr("app.identity.providers.didit.httpx.post", fake_post)
+    adapter = DIDitVerificationAdapter()
+    session = adapter.initiate_session(
+        user_id="user-kyc-1",
+        reference="gtex-kyc-reference-1",
+        verification_type="full_kyc",
+        metadata={"trader_profile_id": "profile-kyc-1", "email": "trader@example.com"},
+    )
+    assert captured["url"] == "https://verification.didit.me/v3/session/"
+    request_payload = captured["kwargs"]["json"]
+    assert request_payload["workflow_id"] == "workflow-gtex-full-kyc"
+    assert request_payload["vendor_data"] == "gtex-kyc-reference-1"
+    assert request_payload["contact_details"]["email"] == "trader@example.com"
+    assert session.session_id == "didit-session-123"
+    assert session.handoff_url == "https://verify.didit.me/session/didit-session-123"
+
+    webhook_payload = {
+        "webhook_type": "status.updated",
+        "session_id": session.session_id,
+        "vendor_data": session.reference,
+        "status": "Approved",
+        "decision": {"id_verification": "Approved", "face_match": "Approved", "liveness": "Approved"},
+    }
+    canonical = json.dumps(
+        adapter._shorten_floats(webhook_payload),
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    signature = hmac.new(b"test-webhook-secret", canonical, sha256).hexdigest()
+    headers = {
+        "X-Timestamp": str(int(time.time())),
+        "X-Signature-V2": signature,
+    }
+    raw_payload = json.dumps(webhook_payload).encode("utf-8")
+    assert adapter.verify_webhook_signature(payload_bytes=raw_payload, headers=headers)
+    parsed = adapter.parse_webhook_payload(payload=webhook_payload)
+    assert parsed.decision == "verified"
+    assert parsed.reference == session.reference
+    assert parsed.session_id == session.session_id
+
+    stale_headers = {**headers, "X-Timestamp": str(int(time.time()) - 600)}
+    assert not adapter.verify_webhook_signature(payload_bytes=raw_payload, headers=stale_headers)
+
+
+def test_didit_adapter_fails_closed_without_live_credentials(monkeypatch) -> None:
+    from app.identity.providers.didit import DIDitVerificationAdapter, IdentityProviderConfigurationError
+
+    monkeypatch.delenv("GTE_DIDIT_API_KEY", raising=False)
+    monkeypatch.delenv("DIDIT_API_KEY", raising=False)
+    monkeypatch.delenv("GTE_DIDIT_WORKFLOW_ID", raising=False)
+    monkeypatch.delenv("DIDIT_WORKFLOW_ID", raising=False)
+    with pytest.raises(IdentityProviderConfigurationError):
+        DIDitVerificationAdapter().initiate_session(
+            user_id="user-missing-configuration",
+            reference="gtex-kyc-missing-config",
+        )
