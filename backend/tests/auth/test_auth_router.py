@@ -834,7 +834,6 @@ def test_issue_274_signup_model_and_turnstile_security_regression(app_client, mo
     assert bootstrap["account_type"] == "user"
 
 
-
 def test_signup_does_not_require_an_invisible_turnstile_widget(app_client, monkeypatch) -> None:
     _app, client = app_client
     monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", "configured-server-secret")
