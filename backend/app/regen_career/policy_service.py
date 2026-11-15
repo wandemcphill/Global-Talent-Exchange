@@ -133,23 +133,31 @@ class RegenCareerPolicyService:
         effective_date = reference_on or (world.now_virtual().date() if world is not None else date.today())
         active_contract = self._active_contract(player_id=player_id, reference_on=effective_date)
         active_injuries = self._active_injury_count(player_id=player_id, reference_on=effective_date)
+        computed_injury_burden = self._injury_burden_from_cases(player_id=player_id, reference_on=effective_date)
+        sidelined = computed_injury_burden >= 0.8
+
+        effective_playing_time = 0.0 if sidelined else playing_time
+        effective_willingness = 0.0 if sidelined else willingness
+        effective_market_demand = 0.0 if sidelined else market_demand
+        effective_trajectory = 0.0 if sidelined else performance_trajectory
+        effective_contract_security = 0.0 if sidelined else (contract_security if active_contract is not None else 0.0)
 
         assessment = self.clock.assess(
             RegenRetirementInputs(
                 virtual_age_months=virtual_age_months,
                 position=player.normalized_position or player.position or "midfielder",
-                injury_burden=max(float(injury_burden), min(1.0, active_injuries / 3.0)),
-                playing_time=playing_time,
-                performance_trajectory=performance_trajectory,
-                contract_security=contract_security if active_contract is not None else 0.0,
-                market_demand=market_demand,
+                injury_burden=max(float(injury_burden), computed_injury_burden, min(1.0, active_injuries / 3.0)),
+                playing_time=effective_playing_time,
+                performance_trajectory=effective_trajectory,
+                contract_security=effective_contract_security,
+                market_demand=effective_market_demand,
                 salary_burden=salary_burden,
-                willingness_to_continue=willingness,
+                willingness_to_continue=effective_willingness,
                 ambition=personality.get("ambition", 0.5),
                 resilience=personality.get("resilience", 0.5),
                 loyalty=personality.get("loyalty", 0.5),
                 achievements=0.0,
-                club_opportunity=playing_time,
+                club_opportunity=effective_playing_time,
                 retirement_threshold=retirement_threshold,
             )
         )
@@ -243,6 +251,36 @@ class RegenCareerPolicyService:
             if injury.occurred_on <= reference_on
             and injury.expected_return_on is not None
             and injury.expected_return_on >= reference_on
+        )
+
+    def _injury_burden_from_cases(self, *, player_id: str, reference_on: date) -> float:
+        """Compute severity-weighted injury burden from active injury cases."""
+        injuries = list(
+            self.session.scalars(select(PlayerInjuryCase).where(PlayerInjuryCase.player_id == player_id)).all()
+        )
+        active = [
+            injury
+            for injury in injuries
+            if injury.occurred_on <= reference_on
+            and (injury.expected_return_on is None or injury.expected_return_on >= reference_on)
+        ]
+        if not active:
+            return 0.0
+        burden_weights = {
+            "season_ending": 1.0,
+            "major": 0.67,
+            "moderate": 0.33,
+            "minor": 0.15,
+        }
+        return min(
+            1.0,
+            max(
+                (
+                    burden_weights.get(str(getattr(injury.severity, "value", injury.severity)).lower(), 0.33)
+                    for injury in active
+                ),
+                default=0.0,
+            ),
         )
 
     def retire_eligible(self, *, limit: int = 80) -> int:
