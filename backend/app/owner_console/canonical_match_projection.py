@@ -361,7 +361,14 @@ def project_completed_canonical_match(session: Session, match_id: str) -> dict[s
     summary = _replay_summary(match)
     raw_stats = summary.get("player_stats")
     if not isinstance(raw_stats, list):
-        raise ValueError(f"Completed match {match.id} has no persisted player_stats appearance summary.")
+        # Older or partially persisted fixtures may not have their authoritative
+        # appearance ledger yet. Leave them eligible for a later reconciliation
+        # pass instead of aborting the entire owner-world tick.
+        logger.warning(
+            "canonical_match_projection.awaiting_player_stats match_id=%s",
+            match.id,
+        )
+        return {"match_id": match.id, "status": "awaiting_replay_statistics"}
     player_stats = [dict(row) for row in raw_stats if isinstance(row, dict)]
     event_rows = list(
         session.scalars(
@@ -466,10 +473,12 @@ def reconcile_pending_canonical_match_projections(session: Session, *, limit: in
     projected = pending = considered = 0
     for match_id in match_ids:
         result = project_completed_canonical_match(session, match_id)
-        if result.get("status") in {"projected", "pending_retry"}:
+        if result.get("status") in {"projected", "pending_retry", "awaiting_replay_statistics"}:
             considered += 1
         club_results = result.get("clubs") or {}
-        if any(item.get("status") == "pending_retry" for item in club_results.values()):
+        if result.get("status") in {"pending_retry", "awaiting_replay_statistics"} or any(
+            item.get("status") == "pending_retry" for item in club_results.values()
+        ):
             pending += 1
         elif club_results:
             projected += 1
