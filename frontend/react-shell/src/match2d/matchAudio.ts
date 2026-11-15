@@ -35,6 +35,8 @@ export function crowdTargetFor(input: {
   dangerZone?: string | null;
   eventType?: string | null;
   momentum?: number | null;
+  crowdIntensity?: number | null;
+  dominantMood?: string | null;
 }): { gain: number; freq: number } {
   const bx = typeof input.ballX === "number" && Number.isFinite(input.ballX) ? input.ballX : 0.5;
   const distFromCenter = Math.min(1, Math.abs(bx - 0.5) * 2);
@@ -47,9 +49,21 @@ export function crowdTargetFor(input: {
   if (isGoal) return { gain: 0.22, freq: 1150 };
   const baseGain = isBox ? 0.11 : 0.045 + distFromCenter * 0.045;
   const baseFreq = isBox ? 820 : 480 + distFromCenter * 240;
+  const intensity =
+    typeof input.crowdIntensity === "number" && Number.isFinite(input.crowdIntensity)
+      ? Math.max(0, Math.min(100, input.crowdIntensity)) / 100
+      : 0.65;
+  const mood = String(input.dominantMood || "").toLowerCase();
+  const moodFactor =
+    mood === "hostile_protest" || mood === "anxious_scrutiny"
+      ? 0.88
+      : mood === "ferocious_derby_cauldron" || mood === "electric_belief"
+        ? 1.1
+        : 1;
+  const atmosphereFactor = (0.7 + intensity * 0.45) * moodFactor;
   return {
-    gain: Math.min(0.16, baseGain + m * 0.04),
-    freq: Math.min(1000, baseFreq + m * 160),
+    gain: Math.min(0.18, (baseGain + m * 0.04) * atmosphereFactor),
+    freq: Math.min(1080, baseFreq + m * 160 + intensity * 45),
   };
 }
 
@@ -175,6 +189,8 @@ export class MatchAudioEngine {
     eventType?: string | null;
     minute?: number;
     momentum?: number | null;
+    crowdIntensity?: number | null;
+    dominantMood?: string | null;
   }): void {
     if (!this.enabled) return;
     const ctx = this.ensureContext();

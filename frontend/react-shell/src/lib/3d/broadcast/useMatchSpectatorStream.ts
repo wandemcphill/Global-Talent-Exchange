@@ -69,6 +69,7 @@ export interface UseMatchSpectatorStreamOptions {
 export interface UseMatchSpectatorStreamResult {
   connectionStatus: SpectatorConnectionStatus;
   viewerCount: number;
+  matchMetadata: Record<string, unknown>;
   lastFrame: SpectatorSafeFrameView | null;
   recentEvents: SpectatorSafeEventView[];
   latestScore: SpectatorScoreUpdate | null;
@@ -121,6 +122,7 @@ export function useMatchSpectatorStream(
 
   const [connectionStatus, setConnectionStatus] = useState<SpectatorConnectionStatus>("disconnected");
   const [viewerCount, setViewerCount] = useState<number>(0);
+  const [matchMetadata, setMatchMetadata] = useState<Record<string, unknown>>({});
   const [lastFrame, setLastFrame] = useState<SpectatorSafeFrameView | null>(null);
   const [recentEvents, setRecentEvents] = useState<SpectatorSafeEventView[]>([]);
   const [latestScore, setLatestScore] = useState<SpectatorScoreUpdate | null>(null);
@@ -357,6 +359,12 @@ export function useMatchSpectatorStream(
             }
 
             if (data.type === "snapshot" && data.snapshot) {
+              const snapshotMetadata = data.snapshot.metadata;
+              setMatchMetadata(
+                snapshotMetadata && typeof snapshotMetadata === "object"
+                  ? (snapshotMetadata as Record<string, unknown>)
+                  : {}
+              );
               const count = Number(data.snapshot.viewer_count) || 0;
               setViewerCount(count);
               if (onViewerCountRef.current) {
@@ -534,6 +542,7 @@ export function useMatchSpectatorStream(
   return {
     connectionStatus,
     viewerCount,
+    matchMetadata,
     lastFrame,
     recentEvents,
     latestScore,

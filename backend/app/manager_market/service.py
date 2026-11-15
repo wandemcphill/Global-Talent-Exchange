@@ -1283,7 +1283,8 @@ class ManagerMarketService:
             "popular": Decimal("3500.0000"),
         }.get(str(manager.rarity or "").strip().lower(), Decimal("3500.0000"))
 
-    def _manager_impact_score(self, manager: ManagerCatalogEntry) -> int:
+    @staticmethod
+    def _manager_impact_score(manager: ManagerCatalogEntry) -> int:
         """1–99 plate: why an owner pays for this dugout identity."""
         rarity_base = {
             "legendary": 88,
