@@ -1,6 +1,7 @@
+import axios from "axios";
 import { useCallback, useEffect, useRef } from "react";
 import { useLocation } from "react-router-dom";
-import { api } from "@/lib/api";
+import { API, api, tokens } from "@/lib/api";
 
 const VISITOR_STORAGE_KEY = "gtex_public_visitor_v1";
 const HEARTBEAT_INTERVAL_MS = 30_000;
@@ -60,17 +61,24 @@ export function PublicTrafficTracker() {
   const sendHeartbeat = useCallback(
     (pageView: boolean) => {
       if (typeof document === "undefined" || document.visibilityState === "hidden") return;
+      // Anonymous browsers only need to report navigations. Signed-in users also
+      // send interval heartbeats so their session remains live while interacting.
+      if (!pageView && !tokens.get()) return;
+      const payload = {
+        visitor_id: getVisitorId(),
+        path: location.pathname || "/",
+        page_view: pageView,
+      };
       void api
-        .post(
-          "/public/traffic/heartbeat",
-          {
-            visitor_id: getVisitorId(),
-            path: location.pathname || "/",
-            page_view: pageView,
-          },
-          { timeout: 4_000 },
-        )
-        .catch(() => {
+        .post("/public/traffic/heartbeat", payload, { timeout: 4_000 })
+        .catch((error: any) => {
+          // An expired stored token must not cause an otherwise valid anonymous
+          // page view to disappear from public visitor totals.
+          if (pageView && error?.response?.status === 401) {
+            void axios
+              .post(`${API}/public/traffic/heartbeat`, payload, { timeout: 4_000 })
+              .catch(() => undefined);
+          }
           // Public telemetry must never block navigation or the application shell.
         });
     },
