@@ -556,10 +556,39 @@ def ensure_match_manager_tenure(session: Session, state: OwnerClubState, manager
     ))
     if existing is not None:
         return existing
-    current = dict(state.manager_json or {})
-    current_id = str(current.get("manager_id") or current.get("id") or "")
-    current_name = str(current.get("name") or current.get("display_name") or "")
-    same_manager = bool((current_id and current_id == manager_id) or (current_name and current_name == manager_name))
+    manager_source = str(manager.get("_manager_source") or "")
+    same_manager = False
+    if manager_source == "manager_marketplace":
+        from app.models.club_profile import ClubProfile
+        from app.models.manager_marketplace import ManagerContract, ManagerContractStatus, ManagerProfile
+        club = session.get(ClubProfile, state.club_id)
+        contract = session.scalar(select(ManagerContract).where(
+            ManagerContract.club_user_id == (club.owner_user_id if club else ""),
+            ManagerContract.status == ManagerContractStatus.ACTIVE,
+        ))
+        active_profile = session.scalar(select(ManagerProfile).where(
+            ManagerProfile.manager_id == contract.manager_id
+        )) if contract is not None else None
+        same_manager = bool(active_profile and str(active_profile.manager_id) == manager_id)
+    elif manager_source == "manager_market":
+        from app.models.club_profile import ClubProfile
+        from app.models.manager_market import ManagerCatalogEntry, ManagerHolding, ManagerTeamAssignment
+        club = session.get(ClubProfile, state.club_id)
+        assignment = session.scalar(select(ManagerTeamAssignment).where(
+            ManagerTeamAssignment.user_id == (club.owner_user_id if club else "")
+        ))
+        holding = session.scalar(select(ManagerHolding).where(
+            ManagerHolding.asset_id == assignment.main_manager_asset_id
+        )) if assignment is not None and assignment.main_manager_asset_id else None
+        catalog = session.scalar(select(ManagerCatalogEntry).where(
+            ManagerCatalogEntry.manager_id == holding.manager_id
+        )) if holding is not None else None
+        same_manager = bool(catalog and str(catalog.manager_id) == manager_id)
+    else:
+        current = dict(state.manager_json or {})
+        current_id = str(current.get("manager_id") or current.get("id") or "")
+        current_name = str(current.get("name") or current.get("display_name") or "")
+        same_manager = bool((current_id and current_id == manager_id) or (current_name and current_name == manager_name))
     day = max(1, int(world_day or 1))
     row = OwnerClubManagerialTenure(
         club_id=state.club_id, manager_id=manager_id, manager_name=manager_name,
