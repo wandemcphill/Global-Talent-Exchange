@@ -1,17 +1,24 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from uuid import uuid4
 
 import app.models  # noqa: F401
 import pytest
-from sqlalchemy import create_engine
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.auth.dependencies import get_optional_current_user, get_session
+from app.models.analytics_event import AnalyticsEvent
+from app.models.auth_session import AuthSession
 from app.models.base import Base, utcnow
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.user import User
-from app.public_pulse.service import PublicPulseService
+from app.public_pulse.router import router as public_pulse_router
+from app.public_pulse.service import PUBLIC_PAGE_VIEW_EVENT, PublicPulseService
 
 
 @pytest.fixture()
@@ -27,22 +34,38 @@ def session():
         yield db_session
 
 
-def test_live_world_pulse_counts_clubs_and_recent_logins(session) -> None:
+def test_live_world_pulse_counts_active_sessions_and_unique_daily_visitors(session) -> None:
     now = utcnow()
     active = User(
         email="online@gtex.test",
         username="online_user",
         password_hash="x",
-        last_login_at=now,
+        last_login_at=now - timedelta(days=2),
     )
     stale = User(
         email="stale@gtex.test",
         username="stale_user",
         password_hash="x",
-        last_login_at=now - timedelta(minutes=30),
+        last_login_at=now,
     )
     session.add_all([active, stale])
     session.flush()
+    session.add_all(
+        [
+            AuthSession(
+                user_id=active.id,
+                refresh_token_hash="active-hash",
+                expires_at=now + timedelta(hours=1),
+                last_used_at=now,
+            ),
+            AuthSession(
+                user_id=stale.id,
+                refresh_token_hash="stale-hash",
+                expires_at=now + timedelta(hours=1),
+                last_used_at=now - timedelta(minutes=30),
+            ),
+        ]
+    )
     session.add(
         ClubProfile(
             owner_user_id=active.id,
@@ -57,10 +80,86 @@ def test_live_world_pulse_counts_clubs_and_recent_logins(session) -> None:
             accent_color="#333333",
         )
     )
+    session.add_all(
+        [
+            AnalyticsEvent(
+                name=PUBLIC_PAGE_VIEW_EVENT,
+                user_id=None,
+                metadata_json={"visitor_key": "visitor-a", "path": "/"},
+            ),
+            AnalyticsEvent(
+                name=PUBLIC_PAGE_VIEW_EVENT,
+                user_id=active.id,
+                metadata_json={"visitor_key": "visitor-a", "path": "/market"},
+            ),
+            AnalyticsEvent(
+                name=PUBLIC_PAGE_VIEW_EVENT,
+                user_id=None,
+                metadata_json={"visitor_key": "visitor-b", "path": "/"},
+            ),
+        ]
+    )
     session.commit()
 
     pulse = PublicPulseService(session).live_world_pulse()
     assert pulse.clubs_on_gtex == 1
+    # Recent login alone must not count; only a recently active, valid session does.
     assert pulse.users_online == 1
+    assert pulse.registered_users == 2
+    assert pulse.visitors_today == 2
+    assert pulse.page_views_today == 3
     assert pulse.players_online == 0
-    assert pulse.labels["clubs_on_gtex"]
+    assert pulse.labels["visitors_today"] == "Unique visitors today"
+
+
+def test_anonymous_heartbeat_records_private_visitor_hash_and_safe_path(session) -> None:
+    app = FastAPI()
+    app.include_router(public_pulse_router)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_optional_current_user] = lambda: None
+
+    visitor_id = str(uuid4())
+    with TestClient(app) as client:
+        response = client.post(
+            "/public/traffic/heartbeat",
+            json={
+                "visitor_id": visitor_id,
+                "path": "/market?access_token=must-not-be-stored",
+                "page_view": True,
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["accepted"] is True
+    assert response.json()["recorded_page_view"] is True
+    event = session.scalar(select(AnalyticsEvent).where(AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT))
+    assert event is not None
+    assert event.user_id is None
+    assert event.metadata_json["path"] == "/market"
+    assert event.metadata_json["visitor_key"] != visitor_id
+    assert "access_token" not in str(event.metadata_json)
+
+
+def test_heartbeat_without_page_view_does_not_create_visit_event(session) -> None:
+    app = FastAPI()
+    app.include_router(public_pulse_router)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_optional_current_user] = lambda: None
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/public/traffic/heartbeat",
+            json={"visitor_id": str(uuid4()), "path": "/", "page_view": False},
+        )
+
+    assert response.status_code == 200
+    assert response.json()["recorded_page_view"] is False
+    assert session.scalar(select(AnalyticsEvent.id).where(AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT)) is None
