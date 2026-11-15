@@ -788,19 +788,26 @@ def _side(
     xi = [p for p in players if p["id"] in strength["xi"]]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
 
-    mgr_json = (state.manager_json if state else None) or {}
-    mgr_personality = dict(mgr_json.get("personality_profile") or {})
-    mgr_independence = int(mgr_personality.get("professional_independence", 75))
-    mgr_tolerance = int(mgr_personality.get("tolerance_for_owner_interference", 45))
-    authoritative_mentality = strength.get("manager_mentality") or (state.mentality if state else "balanced")
-    if mentality and mgr_independence < 70 and mgr_tolerance >= 60:
-        authoritative_mentality = mentality
+    from app.owner_console import autonomous_staff_engine
+
+    requested_ment = mentality or (state.mentality if state else "balanced")
+    if state is not None:
+        mentality_authority = autonomous_staff_engine.evaluate_manager_mentality_authority(
+            session, state, requested_mentality=requested_ment
+        )
+    else:
+        mentality_authority = autonomous_staff_engine.resolve_manager_mentality_decision(
+            None, requested_mentality=requested_ment
+        )
+    authoritative_mentality = str(mentality_authority["effective_mentality"])
 
     return {
         "name": entry.club_name,
         "strength": value,
         "mentality": authoritative_mentality,
-        "owner_requested_mentality": mentality,
+        "owner_requested_mentality": mentality_authority["owner_requested_mentality"],
+        "manager_decision_status": mentality_authority["decision_status"],
+        "manager_decision_reasoning": mentality_authority["reasoning"],
         "formation": strength.get("formation", "4-3-3"),
         "scorers": scorers,
         "manager": state.manager_json if state else None,

@@ -50,6 +50,16 @@ def test_curated_player_profiles_include_calibrated_and_icon_players() -> None:
     assert wael[0] == "Advanced Playmaker"
     assert "Technical Dribbler" in wael[1]
 
+    odegbami = CURATED_PLAYER_PROFILES["segun odegbami"]
+    assert odegbami[0] == "Inside Forward"
+    assert "Mathematical Dribbling" in odegbami[1]
+    assert "Goal Sense" in odegbami[1]
+
+    ozhianvuna = CURATED_PLAYER_PROFILES["victor ozhianvuna"]
+    assert ozhianvuna[0] == "Advanced Playmaker"
+    assert "Technical Dribbler" in ozhianvuna[1]
+    assert "Slides Into Tackles" not in ozhianvuna[1]
+
     maldini = CURATED_PLAYER_PROFILES["paolo maldini"]
     assert any(t.startswith("Slides Into Tackles") for t in maldini[1])
 
