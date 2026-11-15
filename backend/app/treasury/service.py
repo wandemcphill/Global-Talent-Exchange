@@ -140,17 +140,21 @@ class TreasuryService:
             settings = TreasurySettings(
                 settings_key="default",
                 currency_code="NGN",
-                deposit_rate_value=Decimal("900.0000"),
-                withdrawal_rate_value=Decimal("880.0000"),
+                deposit_rate_value=Decimal("60.0000"),
+                withdrawal_rate_value=Decimal("48.0000"),
                 deposit_rate_direction=RateDirection.FIAT_PER_COIN,
                 withdrawal_rate_direction=RateDirection.FIAT_PER_COIN,
-                min_trader_buy_rate_fiat=Decimal("820.0000"),
-                max_trader_buy_rate_fiat=Decimal("890.0000"),
-                min_trader_sell_rate_fiat=Decimal("900.0000"),
-                max_trader_sell_rate_fiat=Decimal("980.0000"),
-                max_trader_spread_fiat=Decimal("120.0000"),
-                max_buy_above_withdrawal_fiat=Decimal("10.0000"),
-                max_sell_below_deposit_fiat=Decimal("0.0000"),
+                fan_coin_deposit_rate_value=Decimal("4.0000"),
+                trader_coin_purchase_rate_value=Decimal("50.0000"),
+                trader_fan_coin_purchase_rate_value=Decimal("2.5000"),
+                trader_withdrawal_rate_value=Decimal("50.0000"),
+                min_trader_buy_rate_fiat=Decimal("48.0000"),
+                max_trader_buy_rate_fiat=Decimal("50.0000"),
+                min_trader_sell_rate_fiat=Decimal("53.0000"),
+                max_trader_sell_rate_fiat=Decimal("59.0000"),
+                max_trader_spread_fiat=Decimal("10.0000"),
+                max_buy_above_withdrawal_fiat=Decimal("2.0000"),
+                max_sell_below_deposit_fiat=Decimal("7.0000"),
                 min_deposit=Decimal("5.0000"),
                 max_deposit=Decimal("500000.0000"),
                 min_withdrawal=Decimal("10.0000"),
@@ -531,13 +535,24 @@ class TreasuryService:
     def platform_positioning() -> str:
         return GTEX_PLATFORM_POSITIONING
 
-    def _coin_limit_from_fiat_limit(self, *, settings: TreasurySettings, fiat_limit: Decimal | None) -> Decimal | None:
+    def withdrawal_rate_for_user(self, settings: TreasurySettings, user: User) -> tuple[Decimal, RateDirection]:
+        """Return the cash-out price that applies to this account class."""
+        if getattr(user, "account_type", None) == PublicAccountType.COIN_TRADER:
+            return Decimal(settings.trader_withdrawal_rate_value), RateDirection.FIAT_PER_COIN
+        return Decimal(settings.withdrawal_rate_value), settings.withdrawal_rate_direction
+
+    def _coin_limit_from_fiat_limit(
+        self, *, settings: TreasurySettings, fiat_limit: Decimal | None, user: User | None = None
+    ) -> Decimal | None:
         if fiat_limit is None:
             return None
-        rate_value = Decimal(settings.withdrawal_rate_value or 0)
+        if user is None:
+            rate_value, rate_direction = Decimal(settings.withdrawal_rate_value or 0), settings.withdrawal_rate_direction
+        else:
+            rate_value, rate_direction = self.withdrawal_rate_for_user(settings, user)
         if rate_value <= Decimal("0.0000"):
             return None
-        if settings.withdrawal_rate_direction == RateDirection.FIAT_PER_COIN:
+        if rate_direction == RateDirection.FIAT_PER_COIN:
             return (fiat_limit / rate_value).quantize(AMOUNT_QUANTUM)
         return (fiat_limit * rate_value).quantize(AMOUNT_QUANTUM)
 
@@ -562,6 +577,7 @@ class TreasuryService:
         per_request_limit_coin = self._coin_limit_from_fiat_limit(
             settings=settings,
             fiat_limit=per_request_limit_fiat,
+            user=user,
         )
         if country_code is None or country_withdrawals_enabled is None or missing_required_policies is None:
             country_code, country_withdrawals_enabled, missing_required_policies = self._resolve_user_policy_state(
@@ -693,14 +709,14 @@ class TreasuryService:
         bank_account = self._resolve_user_bank_account(session, user, bank_account_id)
         self._assert_withdrawal_policy(session, user, source_scope)
         self._enforce_withdrawal_limits(settings, amount_coin)
-        rate_value = Decimal(settings.withdrawal_rate_value)
+        rate_value, rate_direction = self.withdrawal_rate_for_user(settings, user)
         if rate_value <= Decimal("0.0000"):
             raise TreasuryError("Withdrawal rate is not configured.")
         amount_fiat, amount_coin = self._compute_amounts(
             amount=amount_coin,
             input_unit="coin",
             rate_value=rate_value,
-            rate_direction=settings.withdrawal_rate_direction,
+            rate_direction=rate_direction,
         )
         commission_policy = resolve_commission_policy(session)
         try:
@@ -784,7 +800,7 @@ class TreasuryService:
             net_amount=result.payout_request.amount,
             currency_code=settings.currency_code,
             rate_value=rate_value,
-            rate_direction=settings.withdrawal_rate_direction,
+            rate_direction=rate_direction,
             bank_name=bank_account.bank_name,
             bank_account_number=bank_account.account_number,
             bank_account_name=bank_account.account_name,
