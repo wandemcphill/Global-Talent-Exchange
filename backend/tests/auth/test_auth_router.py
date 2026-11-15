@@ -1033,6 +1033,7 @@ def test_turnstile_fails_closed_in_production_without_secret(monkeypatch) -> Non
 
     monkeypatch.delenv("GTE_TURNSTILE_SECRET_KEY", raising=False)
     monkeypatch.delenv("TURNSTILE_SECRET_KEY", raising=False)
+    monkeypatch.setenv("GTE_TURNSTILE_SITE_KEY", "0x4AAAAAAA-test-site-key")
     monkeypatch.setenv("GTE_APP_ENV", "production")
 
     with pytest.raises(AuthError, match="Security check is unavailable"):
@@ -1044,6 +1045,7 @@ def test_turnstile_enforced_on_all_signup_routes(app_client, monkeypatch) -> Non
 
     _app, client = app_client
     monkeypatch.setenv("GTE_TURNSTILE_SECRET_KEY", "dummy-secret-key")
+    monkeypatch.setenv("GTE_TURNSTILE_SITE_KEY", "0x4AAAAAAA-test-site-key")
     monkeypatch.setenv("GTE_APP_ENV", "production")
 
     class SiteverifyResponse:
