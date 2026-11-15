@@ -166,6 +166,7 @@ jobs:
           backend/tests/wallets/test_wallet_event_backbone.py
           -q
       - name: Verify public traffic analytics
+        if: always()
         run: python -m pytest backend/tests/public_pulse/test_live_world_pulse.py -q
 
   broadcast-redis-integration:
