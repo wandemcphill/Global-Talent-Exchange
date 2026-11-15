@@ -2437,6 +2437,33 @@ def post_execute_operational_decision(
     )
 
 
+class MedicalRecoveryProtocolRequest(BaseModel):
+    cost_gtex: int = Field(default=800, ge=200, le=5000)
+    note: str = Field(default="", max_length=500)
+
+
+@router.post("/clubs/{club_id}/medical/recovery-protocol")
+def post_run_medical_recovery_protocol(
+    club_id: str,
+    payload: MedicalRecoveryProtocolRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    from app.owner_console import daily_operations_hub
+
+    cost_gtex = payload.cost_gtex if payload else 800
+    note = payload.note if payload else ""
+    return _run(
+        session,
+        daily_operations_hub.run_medical_recovery_protocol,
+        session,
+        user.id,
+        club_id,
+        cost_gtex=cost_gtex,
+        note=note,
+    )
+
+
 # ---------- Living Club World (Phase 2.4 Events, Relationships & Social Simulation) ----------
 
 

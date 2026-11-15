@@ -259,15 +259,30 @@ function addTerminal(
   screen.rotation.y = 0;
   root.add(screen);
 
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(0.56, 0.72, 24),
+    new THREE.MeshStandardMaterial({
+      color: accent,
+      emissive: accent,
+      emissiveIntensity: 0.45,
+      roughness: 0.35,
+      side: THREE.DoubleSide,
+    }),
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.set(x, 0.07, z);
+  root.add(ring);
+
   const actionData = {
     destinationKey: destination.destination_key,
     hotspotId: hotspot.id,
     hotspotLabel: hotspot.label,
     hotspotAction: hotspot.action,
   };
-  [base, top, stem, screen].forEach((object) => {
+  [base, top, stem, screen, ring].forEach((object) => {
     object.userData = { ...object.userData, ...actionData };
   });
+  ring.userData.isStationRing = true;
   pickables.push(base, top, screen);
 }
 

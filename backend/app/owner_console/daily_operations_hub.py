@@ -611,6 +611,7 @@ def _build_or_sync_daily_operational_decisions(
     injured_count = sum(1 for p in squad_players if _safe_int(p.injured_days, 0) > 0)
     low_fit_count = sum(1 for p in squad_players if _safe_int((p.personality_json or {}).get("fitness", 95), 95) < 90)
     protocol_cost = 800
+    already_run_today = _safe_int(facs.get("_last_medical_protocol_day"), 0) == world_day
     decisions.append(
         {
             "decision_id": f"op_med_protocol_d{world_day}",
@@ -633,20 +634,21 @@ def _build_or_sync_daily_operational_decisions(
             ),
             "cost_gtex": protocol_cost,
             "priority": "high" if injured_count > 0 or low_fit_count >= 3 else "normal",
-            "status": "open",
+            "status": "approved" if already_run_today else "open",
             "actions": [
                 {"key": "approve", "label": f"Authorize {protocol_cost:,} GTX Protocol", "style": "primary"},
                 {"key": "reject", "label": "Standard Recovery Only", "style": "ghost"},
             ],
             "payload": {"cost_gtex": protocol_cost},
             "created_at": now_iso,
-            "resolved_at": None,
-            "resolution": None,
-            "outcome": None,
+            "resolved_at": now_iso if already_run_today else None,
+            "resolution": "approved" if already_run_today else None,
+            "outcome": "Executed via Medical Department Hydro & Cryo station today." if already_run_today else None,
         }
     )
 
     # 5. Finance & Commercial Office Recommendation: Sign Unlocked Commercial Sponsor Offer
+    fin_dir = staff["finance_commercial_director"]
     unlocked_offers = [o for o in (sponsor_info.get("offers") or []) if not o.get("locked")]
     active_deals_count = len([d for d in (sponsor_info.get("active_deals") or []) if d.get("status") == "active"])
     if unlocked_offers and active_deals_count < 4:
@@ -658,13 +660,13 @@ def _build_or_sync_daily_operational_decisions(
                 "source_type": "department_recommendation",
                 "department": "finance_commercial_office",
                 "department_label": "Finance & Commercial Office",
-                "proposer_role": "general_manager",
-                "proposer_name": gm["name"],
-                "proposer_portrait_url": gm["portrait_url"],
+                "proposer_role": "finance_commercial_director",
+                "proposer_name": fin_dir["name"],
+                "proposer_portrait_url": fin_dir["portrait_url"],
                 "operation_key": "sign_sponsor_offer",
                 "title": f"Ratify Commercial Partnership: {best_offer['sponsor_name']} ({best_offer['slot']})",
                 "what": (
-                    f"{gm['name']} has finalized terms with {best_offer['sponsor_name']} for the {best_offer['slot']} package: "
+                    f"{fin_dir['name']} has finalized terms with {best_offer['sponsor_name']} for the {best_offer['slot']} package: "
                     f"+{best_offer['upfront_signing_bonus_gtex']:,} GTX immediate signing bonus and "
                     f"{best_offer['per_match_gross_gtex']:,} GTX/match over {best_offer.get('matches_duration', 10)} matches."
                 ),
@@ -1300,6 +1302,7 @@ def build_authoritative_daily_briefing(
             )
 
     med_recommendations = [d for d in dept_decisions if d.get("department") == "medical_department"]
+    last_protocol_world_day = _safe_int(facs.get("_last_medical_protocol_day"), 0)
 
     medical_directors_report = {
         "section_key": "medical_directors_report",
@@ -1316,6 +1319,9 @@ def build_authoritative_daily_briefing(
             "active_rehab_count": len(injured_dossiers),
             "daily_injury_heal_days": daily_injury_heal_days,
             "campus_rehab_daily_bonus_days": rehab_campus_bonus,
+            "last_protocol_world_day": last_protocol_world_day or None,
+            "protocol_executed_today": last_protocol_world_day == world_day,
+            "protocol_cost_gtex": 800,
         },
         "medical_facility_performance": {
             "medical_facility_level": medical_facility_level,
@@ -1366,8 +1372,8 @@ def build_authoritative_daily_briefing(
     financial_commercial_report = {
         "section_key": "financial_commercial_report",
         "role": "Finance & Commercial Directorate",
-        "sender": staff["general_manager"]["name"],
-        "staff_profile": staff["general_manager"],
+        "sender": staff["finance_commercial_director"]["name"],
+        "staff_profile": staff["finance_commercial_director"],
         "title": "Treasury Balance, Ledger Cashflow, Sponsorships & Matchday Economics",
         "summary": (
             f"Club treasury holds {cash_bal:,} GTX ({distributable_gtex:,} GTX distributable) with "
@@ -2511,52 +2517,19 @@ def execute_owner_operational_decision(
                 names = ", ".join(f"{r.name} ({r.position}, OVR {r.rating}/POT {r.potential})" for r in regens)
                 outcome_text = f"Commissioned Academy Intake: inducted {len(regens)} new prospect(s) ({names})."
             elif op_key == "medical_conditioning_protocol":
-                cost = _safe_int(payload.get("cost_gtex"), 800)
-                club_acct = ledger.club_account(club_id)
-                bal = ledger.balance(session, club_acct, ledger.GTEX)
-                if bal < cost:
-                    raise OwnerError(
-                        "insufficient_club_cash",
-                        400,
-                        f"Club balance ({bal} GTX) is insufficient for {cost} GTX medical conditioning protocol.",
-                    )
-                leg = ledger.record(
+                med_result = _apply_medical_recovery_protocol(
                     session,
-                    event_type="medical_conditioning_protocol",
-                    source=club_acct,
-                    destination=ledger.WORLD_CLUBS,
-                    currency=ledger.GTEX,
-                    gross=cost,
-                    club_id=club_id,
                     user_id=user_id,
-                    related_type="medical_protocol",
+                    club_id=club_id,
+                    state=state,
+                    facs=facs,
+                    world_day=world_day,
+                    cost=_safe_int(payload.get("cost_gtex"), 800),
                     related_id=decision_id,
-                    memo=f"Sports-science hydro & cryo recovery protocol (World Day {world_day})",
+                    now_iso=now_iso,
                 )
-                ledger_event_id = leg.id
-                squad_rows = list(
-                    session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
-                )
-                rehab_accelerated = 0
-                for p in squad_rows:
-                    pers = dict(p.personality_json or {})
-                    cur_fit = _safe_int(pers.get("fitness", 95), 95)
-                    pers["fitness"] = int(engine.clamp(cur_fit + 6, 0, 100))
-                    p.personality_json = pers
-                    flag_modified(p, "personality_json")
-                    if _safe_int(p.injured_days, 0) > 0:
-                        p.injured_days = max(0, int(p.injured_days) - 1)
-                        rehab_accelerated += 1
-                exec_staff = dict(facs.get("_executive_staff") or {})
-                if "medical_director" in exec_staff and isinstance(exec_staff["medical_director"], dict):
-                    med_st = dict(exec_staff["medical_director"])
-                    med_st["mood"] = int(engine.clamp(_safe_int(med_st.get("mood"), 84) + 6, 0, 100))
-                    exec_staff["medical_director"] = med_st
-                    facs["_executive_staff"] = exec_staff
-                outcome_text = (
-                    f"Executed Hydro & Cryo Conditioning Protocol ({cost:,} GTX): +6% squad fitness restored "
-                    f"and {rehab_accelerated} injured player(s) accelerated by 1 rehab day."
-                )
+                ledger_event_id = med_result["ledger_event_id"]
+                outcome_text = med_result["outcome"]
             elif op_key == "sign_sponsor_offer":
                 offer_id = str(payload.get("offer_id") or "")
                 res = service.sign_sponsor_offer(session, user_id, club_id, offer_id)
@@ -2715,3 +2688,185 @@ def execute_owner_operational_decision(
         }
 
     raise OwnerError("decision_not_found", 404, f"Operational decision '{decision_id}' not found for club '{club_id}'.")
+
+
+def _apply_medical_recovery_protocol(
+    session: Session,
+    *,
+    user_id: str,
+    club_id: str,
+    state: OwnerClubState,
+    facs: dict[str, Any],
+    world_day: int,
+    cost: int,
+    related_id: str,
+    now_iso: str,
+) -> dict[str, Any]:
+    """Shared authoritative executor for Hydro & Cryo Conditioning Protocols."""
+    if _safe_int(facs.get("_last_medical_protocol_day"), 0) == world_day:
+        raise OwnerError(
+            "medical_protocol_already_run",
+            409,
+            f"Hydro & Cryo conditioning protocol has already been completed on World Day {world_day}.",
+        )
+
+    club_acct = ledger.club_account(club_id)
+    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    if bal < cost:
+        raise OwnerError(
+            "insufficient_club_cash",
+            400,
+            f"Club balance ({bal} GTX) is insufficient for {cost} GTX medical conditioning protocol.",
+        )
+
+    leg = ledger.record(
+        session,
+        event_type="medical_conditioning_protocol",
+        source=club_acct,
+        destination=ledger.WORLD_CLUBS,
+        currency=ledger.GTEX,
+        gross=cost,
+        club_id=club_id,
+        user_id=user_id,
+        related_type="medical_protocol",
+        related_id=related_id,
+        memo=f"Sports-science hydro & cryo recovery protocol (World Day {world_day})",
+    )
+    squad_rows = list(
+        session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+    )
+    rehab_accelerated = 0
+    for p in squad_rows:
+        pers = dict(p.personality_json or {})
+        cur_fit = _safe_int(pers.get("fitness", 95), 95)
+        pers["fitness"] = int(engine.clamp(cur_fit + 6, 0, 100))
+        p.personality_json = pers
+        flag_modified(p, "personality_json")
+        if _safe_int(p.injured_days, 0) > 0:
+            p.injured_days = max(0, int(p.injured_days) - 1)
+            rehab_accelerated += 1
+
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    appointed_med = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else None
+    if appointed_med:
+        med_st = dict(appointed_med)
+        med_st["mood"] = int(engine.clamp(_safe_int(med_st.get("mood"), 84) + 6, 0, 100))
+        exec_staff["medical_director"] = med_st
+        facs["_executive_staff"] = exec_staff
+
+    facs["_last_medical_protocol_day"] = world_day
+    facs["_last_medical_protocol_at"] = now_iso
+    outcome_text = (
+        f"Executed Hydro & Cryo Conditioning Protocol ({cost:,} GTX): +6% squad fitness restored "
+        f"and {rehab_accelerated} injured player(s) accelerated by 1 rehab day."
+    )
+    return {
+        "ledger_event_id": leg.id,
+        "cost_gtex": cost,
+        "world_day": world_day,
+        "squad_updated": len(squad_rows),
+        "rehab_accelerated": rehab_accelerated,
+        "medical_director_appointed": bool(appointed_med),
+        "medical_director_name": str(appointed_med.get("name")) if appointed_med else None,
+        "outcome": outcome_text,
+    }
+
+
+def run_medical_recovery_protocol(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    *,
+    cost_gtex: int = 800,
+    note: str = "",
+) -> dict[str, Any]:
+    """Execute the daily Hydro & Cryo medical recovery protocol directly from Medical Department."""
+    from app.owner_console import living_club_world
+
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    world_day = int(state.world_day or 1)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    protocol_id = f"med_protocol_d{world_day}_{secrets.token_hex(3)}"
+
+    med_res = _apply_medical_recovery_protocol(
+        session,
+        user_id=user_id,
+        club_id=club_id,
+        state=state,
+        facs=facs,
+        world_day=world_day,
+        cost=int(cost_gtex or 800),
+        related_id=protocol_id,
+        now_iso=now_iso,
+    )
+
+    if med_res["medical_director_appointed"] and med_res["medical_director_name"]:
+        living_club_world.apply_relationship_delta(
+            session,
+            club_id,
+            "owner",
+            "owner",
+            "Club Owner",
+            "staff",
+            "medical_director",
+            med_res["medical_director_name"],
+            delta_trust=5,
+            delta_respect=4,
+            delta_tension=-4,
+            reason=f"Authorized Hydro & Cryo recovery protocol (World Day {world_day})",
+            source_event_id=protocol_id,
+            world_day=world_day,
+        )
+
+    # Synchronize any open op_med_protocol_d{world_day} operational recommendation
+    dept_store = dict(facs.get("_daily_operational_decisions") or {})
+    dept_items = list(dept_store.get("items") or [])
+    daily_dec_id = f"op_med_protocol_d{world_day}"
+    for item in dept_items:
+        if item.get("decision_id") == daily_dec_id and item.get("status") == "open":
+            item["status"] = "approved"
+            item["resolution"] = "approved"
+            item["outcome"] = med_res["outcome"]
+            item["resolved_at"] = now_iso
+            item["ledger_event_id"] = med_res["ledger_event_id"]
+            if note:
+                item["decision_note"] = note
+    if dept_items:
+        facs["_daily_operational_decisions"] = {
+            "world_day": world_day,
+            "club_id": club_id,
+            "items": dept_items,
+        }
+
+    hist = list(facs.get("_operational_decision_history") or [])
+    hist.insert(
+        0,
+        {
+            "decision_id": protocol_id,
+            "world_day": world_day,
+            "source_type": "medical_station",
+            "department": "medical_department",
+            "department_label": "Medical Department",
+            "proposer_name": med_res["medical_director_name"] or "Club Owner",
+            "title": f"Hydro & Cryo Recovery Protocol ({med_res['cost_gtex']:,} GTX)",
+            "status": "approved",
+            "resolution": "executed",
+            "outcome": med_res["outcome"],
+            "ledger_event_id": med_res["ledger_event_id"],
+            "note": note,
+            "resolved_at": now_iso,
+        },
+    )
+    facs["_operational_decision_history"] = hist[:50]
+
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    session.flush()
+
+    hub = get_club_operations_hub(session, user_id, club_id, force_refresh=True)
+    return {
+        "status": "executed",
+        **med_res,
+        "operations_hub": hub,
+    }

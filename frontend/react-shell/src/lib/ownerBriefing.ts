@@ -570,6 +570,8 @@ export const clubOperationsHubEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/operations-hub`;
 export const clubExecuteOperationalDecisionEndpoint = (clubId: string, decisionId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/operations/decisions/${encodeURIComponent(decisionId)}/execute`;
+export const clubMedicalRecoveryProtocolEndpoint = (clubId: string) =>
+  `/owner/clubs/${encodeURIComponent(clubId)}/medical/recovery-protocol`;
 export const clubLivingWorldTimelineEndpoint = (clubId: string) =>
   `/owner/clubs/${encodeURIComponent(clubId)}/living-world/timeline`;
 export const clubLivingWorldRelationshipsEndpoint = (clubId: string) =>
