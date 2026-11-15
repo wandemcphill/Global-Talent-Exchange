@@ -46,11 +46,13 @@ def _safe_path(raw_path: str) -> str:
 class PublicPulseService:
     session: Session
 
-    def record_page_view(self, *, visitor_id: UUID, path: str, user_id: str | None) -> None:
+    def record_page_view(self, *, visitor_id: UUID, path: str) -> None:
+        # Keep browsing telemetry separate from account identity. Authenticated
+        # presence is measured from AuthSession heartbeats, not page-view joins.
         self.session.add(
             AnalyticsEvent(
                 name=PUBLIC_PAGE_VIEW_EVENT,
-                user_id=user_id,
+                user_id=None,
                 metadata_json={
                     "visitor_key": _visitor_key(visitor_id),
                     "path": _safe_path(path),
