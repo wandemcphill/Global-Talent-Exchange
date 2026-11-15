@@ -294,7 +294,7 @@ def _project_one_club(
                         "assists": int(debut.get("assists") or 0),
                         "confidentiality": "staff_intelligence",
                     },
-                    idempotency_key=f"canonical_match_academy_debut:{match.id}:{state.club_id}:{player_id}",
+                    idempotency_key=f"cma:{match.id}:{state.club_id}:{player_id}",
                     status="active",
                 )
             living_club_world.record_canonical_projection(
