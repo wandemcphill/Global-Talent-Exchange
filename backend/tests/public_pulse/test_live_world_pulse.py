@@ -89,7 +89,7 @@ def test_live_world_pulse_counts_active_sessions_and_unique_daily_visitors(sessi
             ),
             AnalyticsEvent(
                 name=PUBLIC_PAGE_VIEW_EVENT,
-                user_id=active.id,
+                user_id=None,
                 metadata_json={"visitor_key": "visitor-a", "path": "/market"},
             ),
             AnalyticsEvent(
@@ -142,6 +142,41 @@ def test_anonymous_heartbeat_records_private_visitor_hash_and_safe_path(session)
     assert event.metadata_json["path"] == "/market"
     assert event.metadata_json["visitor_key"] != visitor_id
     assert "access_token" not in str(event.metadata_json)
+
+
+def test_authenticated_page_view_does_not_store_account_identity(session) -> None:
+    user = User(
+        email="private-view@gtex.test",
+        username="private_view_user",
+        password_hash="x",
+    )
+    session.add(user)
+    session.commit()
+
+    app = FastAPI()
+    app.include_router(public_pulse_router)
+
+    def override_session():
+        yield session
+
+    app.dependency_overrides[get_session] = override_session
+    app.dependency_overrides[get_optional_current_user] = lambda: user
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/public/traffic/heartbeat",
+            json={
+                "visitor_id": str(uuid4()),
+                "path": "/app/market",
+                "page_view": True,
+            },
+        )
+
+    assert response.status_code == 200, response.text
+    event = session.scalar(select(AnalyticsEvent).where(AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT))
+    assert event is not None
+    assert event.user_id is None
+    assert event.metadata_json["path"] == "/app/market"
 
 
 def test_heartbeat_without_page_view_does_not_create_visit_event(session) -> None:
