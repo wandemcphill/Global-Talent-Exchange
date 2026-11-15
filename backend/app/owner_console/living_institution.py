@@ -1433,7 +1433,7 @@ def record_match_institutional_impact(
             f"In Round {match.round_number} of {comp.name}, {state.club_name} finished {gf}-{ga} against {opp_name}. "
             f"Manager {manager_name} has now overseen {tenure.matches_managed if tenure else 0} matches "
             f"({tenure.wins if tenure else 0} wins, {tenure.draws if tenure else 0} draws, {tenure.losses if tenure else 0} losses). "
-            f"Overall supporter sentiment stands at {profile.overall_sentiment} 
+            f"Overall supporter sentiment stands at {profile.overall_sentiment} "
             f"following a {sup_event.overall_sentiment_delta:+d} shift."
         ),
         source_type="match",
