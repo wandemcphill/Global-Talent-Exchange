@@ -164,3 +164,25 @@ def test_wonderkids_shortlist_calibration() -> None:
         player = DummyPlayer(full_name=name)
         cur, pot = resolve_player_gsi(player)
         assert (cur, pot) == (exp_ovr, exp_pot), f"Resolution failed for {name}"
+
+
+def test_abdelkarim_ozhianvuna_camara_and_odegbami_calibration() -> None:
+    expected = [
+        ("Hamza Abdelkarim", "2002053682", "ST", 73, 84),
+        ("Victor Ozhianvuna", "37917642", "CM", 74, 86),
+        ("Lamine Camara", "12093439", "M C", 83, 90),
+        ("Lamine Camara", "37642676", "M C", 83, 90),
+        ("Segun Odegbami", "segun-odegbami-legend", "RW", 84, 84),
+    ]
+    for name, ext_id, pos, exp_cur, exp_pot in expected:
+        assert CANONICAL_GSI_OVERRIDES[name.lower()] == (exp_cur, exp_pot)
+        if ext_id != "segun-odegbami-legend":
+            assert PROVIDER_ID_GSI_OVERRIDES[ext_id] == (exp_cur, exp_pot)
+        cur, pot = resolve_player_gsi(
+            DummyPlayer(
+                full_name=name,
+                provider_external_id=ext_id,
+                position=pos,
+            )
+        )
+        assert (cur, pot) == (exp_cur, exp_pot)
