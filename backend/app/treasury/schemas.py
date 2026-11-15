@@ -87,6 +87,10 @@ class TreasurySettingsUpdate(BaseModel):
     active_bank_account_id: str | None = None
 
     @field_validator(
+        "fan_coin_deposit_rate_value",
+        "trader_coin_purchase_rate_value",
+        "trader_fan_coin_purchase_rate_value",
+        "trader_withdrawal_rate_value",
         "min_trader_buy_rate_fiat",
         "max_trader_buy_rate_fiat",
         "min_trader_sell_rate_fiat",
