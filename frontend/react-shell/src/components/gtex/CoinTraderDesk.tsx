@@ -10,8 +10,8 @@ import { Btn, Chip, Empty, Panel } from "@/components/gtex/ui";
 const ACTIVE = ["payment_pending", "escrow_locked", "accepted"];
 const DONE_TONE: any = { released: "emerald", admin_released: "emerald", cancelled: "slate", refunded: "slate", admin_refunded: "slate", disputed: "red" };
 
-function rateOf(t: any) {
-  return (t.rates || []).find((r: any) => r.coin_unit === "coin" && r.is_active !== false) || null;
+function rateOf(t: any, unit = "coin") {
+  return (t.rates || []).find((r: any) => r.coin_unit === unit && r.is_active !== false) || null;
 }
 
 function useOrderActions() {
@@ -41,8 +41,8 @@ function OrderRow({ o, asTrader, traders }: any) {
     <div data-testid={`coin-order-${o.id}`} className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4 text-sm shadow-md">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-white">
-          {buys ? (asTrader ? "Client buys" : "Buy") : asTrader ? "Client sells" : "Sell"} <b>{fmt(o.coin_amount)} GTX</b> for ₦{fmt(o.fiat_total)}
-          <span className="ml-2 text-xs text-slate-500">{asTrader ? "" : `via ${trader?.display_name || "trader"}`} · ₦{fmt(o.quoted_rate_fiat)}/coin</span>
+          {buys ? (asTrader ? "Client buys" : "Buy") : asTrader ? "Client sells" : "Sell"} <b>{fmt(o.coin_amount)} {o.coin_unit === "credit" ? "FAN" : "GTX"}</b> for ₦{fmt(o.fiat_total)}
+          <span className="ml-2 text-xs text-slate-500">{asTrader ? "" : `via ${trader?.display_name || "trader"}`} · ₦{fmt(o.quoted_rate_fiat)}/{o.coin_unit === "credit" ? "FAN" : "GTX"}</span>
         </p>
         <Chip tone={DONE_TONE[o.status] || "gold"}>{label(o.status)}</Chip>
       </div>
@@ -69,16 +69,20 @@ function OrderForm({ traders }: any) {
   const act = useOrderActions();
   const [traderId, setTraderId] = useState("");
   const [direction, setDirection] = useState("user_buys");
+  const [unit, setUnit] = useState("coin");
   const [amount, setAmount] = useState("250");
   const trader = traders.find((t: any) => t.id === traderId);
-  const rate = trader ? rateOf(trader) : null;
+  const rate = trader ? rateOf(trader, unit) : null;
+  const unitLabel = unit === "credit" ? "Fan Coin" : "GTEX Coin";
+  const unitShort = unit === "credit" ? "FAN" : "GTX";
+  const minimumFiat = unit === "credit" ? 50000 : 200000;
   const unitPrice = rate ? Number(direction === "user_buys" ? rate.sell_rate_fiat : rate.buy_rate_fiat) : 0;
   const fiatTotal = unitPrice * Number(amount || 0);
-  const isBelowMinBuyerOrder = direction === "user_buys" && fiatTotal < 200000;
+  const isBelowMinBuyerOrder = direction === "user_buys" && fiatTotal < minimumFiat;
 
   const submit = () => {
     if (isBelowMinBuyerOrder) {
-      toast.error("Minimum buyer order value for GTEX Coin purchases is ₦200,000.");
+      toast.error(`Minimum buyer order value for ${unitLabel} purchases is ₦${fmt(minimumFiat)}.`);
       return;
     }
     act(
@@ -86,7 +90,7 @@ function OrderForm({ traders }: any) {
       {
         trader_profile_id: traderId,
         direction,
-        coin_unit: "coin",
+        coin_unit: unit,
         coin_amount: Number(amount),
         fiat_currency: "NGN",
         idempotency_key: `web-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -97,29 +101,33 @@ function OrderForm({ traders }: any) {
 
   return (
     <div className="grid gap-3 md:grid-cols-5" data-testid="coin-order-form">
+      <select data-testid="coin-unit-select" className="gx-input" value={unit} onChange={(e) => setUnit(e.target.value)}>
+        <option value="coin">GTEX Coin (GTX)</option>
+        <option value="credit">Fan Coin (FAN)</option>
+      </select>
       <select data-testid="coin-trader-select" className="gx-input md:col-span-2" value={traderId} onChange={(e) => setTraderId(e.target.value)}>
         <option value="">Choose a verified trader</option>
         {traders.map((t: any) => {
-          const r = rateOf(t);
+          const r = rateOf(t, unit);
           return <option key={t.id} value={t.id} disabled={!r}>{t.display_name} · {t.tier}{r ? ` · buy ₦${fmt(r.sell_rate_fiat)} / sell ₦${fmt(r.buy_rate_fiat)}` : " · no rate"}</option>;
         })}
       </select>
       <div className="flex gap-1">
-        {[["user_buys", "Buy"], ["user_sells", "Sell"]].map(([v, l]) => <button key={v} data-testid={`coin-direction-${v}`} onClick={() => setDirection(v)} className={`gx-btn flex-1 ${direction === v ? "gx-btn-primary" : "gx-btn-secondary"}`}>{l}</button>)}
+        {([["user_buys", "Buy"], ["user_sells", "Sell"]] as const).map(([v, l]) => <button key={v} data-testid={`coin-direction-${v}`} onClick={() => setDirection(v)} className={`gx-btn flex-1 ${direction === v ? "gx-btn-primary" : "gx-btn-secondary"}`}>{l}</button>)}
       </div>
       <input data-testid="coin-amount-input" className="gx-input" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
-      <Btn disabled={!rate || Number(amount) <= 0 || isBelowMinBuyerOrder} onClick={submit} data-testid="coin-order-submit">{direction === "user_buys" ? "Buy" : "Sell"} GTX</Btn>
+      <Btn disabled={!rate || Number(amount) <= 0 || isBelowMinBuyerOrder} onClick={submit} data-testid="coin-order-submit">{direction === "user_buys" ? "Buy" : "Sell"} {unitShort}</Btn>
 
       {isBelowMinBuyerOrder && rate && (
         <p className="text-xs text-amber-400 md:col-span-5 flex items-center gap-1.5" data-testid="min-buyer-order-warning">
           <AlertTriangle size={14} />
-          ₦200,000 minimum buyer order required. Current total: ₦{fmt(fiatTotal, 2)} (Set coin amount to at least {Math.ceil(200000 / (unitPrice || 1))} GTX).
+          ₦{fmt(minimumFiat)} minimum {unitLabel} buyer order. Current total: ₦{fmt(fiatTotal, 2)} (at least {Math.ceil(minimumFiat / (unitPrice || 1))} {unitShort}).
         </p>
       )}
 
       {rate && !isBelowMinBuyerOrder && (
         <p className="text-xs text-slate-400 md:col-span-5" data-testid="coin-order-preview">
-          {direction === "user_buys" ? "You pay" : "You receive"} <b className="text-white">₦{fmt(unitPrice * Number(amount || 0), 2)}</b> at ₦{fmt(unitPrice, 2)} per GTEX Coin · limits {fmt(rate.min_coin_amount)}–{fmt(rate.max_coin_amount) || "∞"} GTX.{" "}
+          {direction === "user_buys" ? "You pay" : "You receive"} <b className="text-white">₦{fmt(unitPrice * Number(amount || 0), 2)}</b> at ₦{fmt(unitPrice, 2)} per {unitLabel} · limits {fmt(rate.min_coin_amount)}–{fmt(rate.max_coin_amount) || "∞"} {unitShort}.{" "}
           {direction === "user_sells" ? "Your coins are locked in escrow until you confirm the Naira arrived." : "The trader's coins are locked in escrow until they confirm your payment."}
         </p>
       )}
@@ -329,33 +337,39 @@ export function CoinTraderDesk() {
 }
 
 function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) {
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("4000");
+  const [unit, setUnit] = useState("coin");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const [submitting, setSubmitting] = useState(false);
   const qc = useQueryClient();
+  const unitLabel = unit === "credit" ? "Fan Coin" : "GTEX Coin";
+  const unitShort = unit === "credit" ? "FAN" : "GTX";
+  const minimumFiat = unit === "credit" ? 50000 : 200000;
 
   const { data: quote, isLoading: quoteLoading } = useQuery({
-    queryKey: ["liquidity-quote", amount, provider],
+    queryKey: ["liquidity-quote", amount, provider, unit],
     queryFn: async () => {
       if (!Number(amount) || Number(amount) <= 0) return null;
       const { data } = await api.post("/coin-traders/me/liquidity/quote", {
         amount: Number(amount),
         provider,
-        coin_unit: "coin",
+        coin_unit: unit,
       });
       return data;
     },
     enabled: Number(amount) > 0,
   });
 
+  const belowMinimum = Boolean(quote && Number(quote.amount_fiat) < minimumFiat);
+
   const handlePurchase = async () => {
-    if (!Number(amount) || Number(amount) <= 0) return;
+    if (!Number(amount) || Number(amount) <= 0 || belowMinimum) return;
     setSubmitting(true);
     try {
       const { data } = await api.post("/coin-traders/me/liquidity/purchase", {
         amount: Number(amount),
         provider,
-        coin_unit: "coin",
+        coin_unit: unit,
         callback_url: `${window.location.origin}/payment/callback`,
       });
       if (data.checkout_url) {
@@ -378,7 +392,7 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
     <div className="mt-4 rounded-xl border border-white/10 bg-white/[0.02] p-4" data-testid="trader-liquidity-purchase-panel">
       <h4 className="gx-label text-slate-300">Add Trading Liquidity / Buy Inventory</h4>
       <p className="mt-1 text-xs text-slate-400">
-        Acquire GTEX Coin inventory to back your desk orders. Purchased coins automatically update your trading liquidity and available balance upon verified payment.
+        Buy GTEX Coin at ₦50 or Fan Coin at ₦2.50 per unit. GTEX Coin inventory has a ₦200,000 minimum purchase; Fan Coin has a ₦50,000 minimum.
       </p>
       <div className="mt-3 grid gap-3 md:grid-cols-4">
         <div>
@@ -398,7 +412,14 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
           </div>
         </div>
         <div>
-          <label className="gx-label">Amount (GTX)</label>
+          <label className="gx-label">Currency</label>
+          <select data-testid="trader-liquidity-unit" className="gx-input mt-1" value={unit} onChange={(e) => setUnit(e.target.value)}>
+            <option value="coin">GTEX Coin (GTX)</option>
+            <option value="credit">Fan Coin (FAN)</option>
+          </select>
+        </div>
+        <div>
+          <label className="gx-label">Amount ({unitShort})</label>
           <input
             data-testid="trader-liquidity-amount-input"
             className="gx-input mt-1"
@@ -408,17 +429,22 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
             onChange={(e) => setAmount(e.target.value)}
           />
         </div>
-        <div className="md:col-span-2 flex flex-col justify-end">
+        <div className="md:col-span-1 flex flex-col justify-end">
           {quote && (
             <div className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4" data-testid="trader-liquidity-quote">
               <span>Fiat: <b className="text-white">₦{fmt(quote.amount_fiat)}</b></span>
-              <span>Platform fee: <b className="text-white">{fmt(quote.fee_amount)} GTX</b></span>
-              <span>Processor fee: <b className="text-white">{fmt(quote.processor_fee)} GTX</b></span>
-              <span>Net: <b className="text-emerald-400">{fmt(quote.net_amount)} GTX</b></span>
+              <span>Platform fee: <b className="text-white">{fmt(quote.fee_amount)} {unitShort}</b></span>
+              <span>Processor fee: <b className="text-white">{fmt(quote.processor_fee)} {unitShort}</b></span>
+              <span>Net: <b className="text-emerald-400">{fmt(quote.net_amount)} {unitShort}</b></span>
             </div>
           )}
+          {belowMinimum && (
+            <p className="mb-2 text-xs text-amber-300" data-testid="trader-liquidity-minimum-warning">
+              Minimum purchase is ₦{fmt(minimumFiat)} for {unitLabel}.
+            </p>
+          )}
           <Btn
-            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0}
+            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0 || !quote || belowMinimum}
             onClick={handlePurchase}
             data-testid="trader-liquidity-submit"
           >
