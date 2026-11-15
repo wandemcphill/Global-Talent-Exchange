@@ -488,3 +488,252 @@ def test_u2a007_canonical_competition_match_and_exact_durations(request):
             ),
             encoding="utf-8",
         )
+
+
+
+def test_canonical_competition_completion_projects_both_living_clubs_once():
+    """A real CompetitionAutoRunner completion must project to both clubs idempotently."""
+    from sqlalchemy import select
+
+    from app.models.manager_market import (
+        ManagerCatalogEntry,
+        ManagerHolding,
+        ManagerTeamAssignment,
+    )
+    from app.owner_console.models import OwnerClubEvent, OwnerClubState, OwnerSquadPlayer
+    from app.owner_console.institutional_models import (
+        OwnerClubAcademyGraduate,
+        OwnerClubManagerialTenure,
+        OwnerClubRivalry,
+        OwnerMediaStory,
+        OwnerSupporterEvent,
+    )
+    from app.owner_console.canonical_match_projection import project_completed_canonical_match
+
+    canonical_data = _build_synthetic_canonical_entities()
+    app, session_factory = _build_canonical_competition_test_env()
+    try:
+        with session_factory() as session:
+            competition, fixture = _seed_canonical_competition_fixture(session, canonical_data)
+            club_rows = canonical_data["clubs"]
+
+            for side, club_data, manager_suffix in (
+                ("home", club_rows[0], "home"),
+                ("away", club_rows[1], "away"),
+            ):
+                club_id = str(club_data["id"])
+                owner_user_id = str(club_data["owner_user_id"])
+                manager_id = f"canonical-{manager_suffix}-manager"
+                asset_id = f"canonical-{manager_suffix}-manager-asset"
+                session.add(
+                    OwnerClubState(
+                        club_id=club_id,
+                        owner_user_id=owner_user_id,
+                        club_name=str(club_data["club_name"]),
+                        stage="active",
+                        world_day=25,
+                        manager_json={},
+                    )
+                )
+                session.add(
+                    ManagerCatalogEntry(
+                        manager_id=manager_id,
+                        display_name=f"{manager_suffix.title()} Manager",
+                        rarity="elite",
+                        mentality="balanced",
+                        tactics=["possession_control"],
+                        traits=["tactical_flexibility"],
+                        substitution_tendency="balanced_rotation",
+                        philosophy_summary="Balanced, possession-oriented football.",
+                        club_associations=[club_id],
+                        supply_total=1,
+                        supply_available=0,
+                    )
+                )
+                session.flush()
+                session.add(
+                    ManagerHolding(
+                        asset_id=asset_id,
+                        manager_id=manager_id,
+                        owner_user_id=owner_user_id,
+                        status="owned",
+                        acquired_at="2026-11-15T00:00:00+00:00",
+                    )
+                )
+                session.add(
+                    ManagerTeamAssignment(
+                        user_id=owner_user_id,
+                        main_manager_asset_id=asset_id,
+                    )
+                )
+
+                canonical_players = list(
+                    session.scalars(
+                        select(Player).where(Player.current_club_profile_id == club_id)
+                    ).all()
+                )
+                assert len(canonical_players) >= 18
+                for player in canonical_players:
+                    session.add(
+                        OwnerSquadPlayer(
+                            club_id=club_id,
+                            player_ref=player.id,
+                            name=player.full_name,
+                            position=player.position or "MID",
+                            age=21,
+                            rating=78,
+                            potential=88,
+                            is_regen=True,
+                            personality_json={"academy_graduate": True},
+                        )
+                    )
+
+            session.commit()
+
+            completed = CompetitionAutoRunner(session)._simulate_match(competition, fixture)
+            session.commit()
+            session.refresh(completed)
+
+            assert completed.status == MatchStatus.COMPLETED.value
+            assert completed.completed_at is not None
+            summary = completed.metadata_json["simulation_summary"]
+            player_stats = summary["player_stats"]
+
+            source_events = list(
+                session.scalars(
+                    select(OwnerClubEvent).where(
+                        OwnerClubEvent.source_type == "canonical_match",
+                        OwnerClubEvent.source_id == completed.id,
+                    )
+                ).all()
+            )
+            assert len(source_events) == 1
+            source_event = source_events[0]
+            assert source_event.status == "resolved"
+            projection_status = source_event.consequences_json["projection_status"]
+            for club_data in club_rows:
+                key = f"club:{club_data['id']}:institutional_consequences"
+                assert projection_status[key]["status"] == "complete"
+
+            for club_data in club_rows:
+                club_id = str(club_data["id"])
+                tenure = session.scalar(
+                    select(OwnerClubManagerialTenure).where(
+                        OwnerClubManagerialTenure.club_id == club_id,
+                        OwnerClubManagerialTenure.manager_id == f"canonical-{('home' if club_id == club_rows[0]['id'] else 'away')}-manager",
+                    )
+                )
+                assert tenure is not None
+                assert tenure.status == "active"
+                assert tenure.matches_managed == 1
+                assert tenure.wins + tenure.draws + tenure.losses == 1
+
+                supporter_events = list(
+                    session.scalars(
+                        select(OwnerSupporterEvent).where(
+                            OwnerSupporterEvent.club_id == club_id,
+                            OwnerSupporterEvent.trigger_source_type == "match",
+                            OwnerSupporterEvent.trigger_source_id == completed.id,
+                        )
+                    ).all()
+                )
+                assert len(supporter_events) == 1
+
+                stories = list(
+                    session.scalars(
+                        select(OwnerMediaStory).where(
+                            OwnerMediaStory.club_id == club_id,
+                            OwnerMediaStory.source_type == "match",
+                            OwnerMediaStory.source_id == completed.id,
+                        )
+                    ).all()
+                )
+                assert len(stories) == 1
+                assert stories[0].classification == "verified_event"
+
+                graduates = list(
+                    session.scalars(
+                        select(OwnerClubAcademyGraduate).where(
+                            OwnerClubAcademyGraduate.club_id == club_id
+                        )
+                    ).all()
+                )
+                assert graduates
+                owner_players = {
+                    row.id: row
+                    for row in session.scalars(
+                        select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)
+                    ).all()
+                }
+                played_player_ids = {
+                    str(row["player_id"])
+                    for row in player_stats
+                    if row["team_id"] == club_id and int(row["minutes_played"] or 0) > 0
+                }
+                for graduate in graduates:
+                    squad_player = owner_players[graduate.player_id]
+                    assert str(squad_player.player_ref) in played_player_ids
+                    assert graduate.first_team_appearances >= 1
+                    assert graduate.first_team_minutes > 0
+
+                unused_players = [
+                    row for row in owner_players.values()
+                    if str(row.player_ref) not in played_player_ids
+                ]
+                for unused in unused_players:
+                    assert session.scalar(
+                        select(OwnerClubAcademyGraduate.id).where(
+                            OwnerClubAcademyGraduate.club_id == club_id,
+                            OwnerClubAcademyGraduate.player_id == unused.id,
+                        )
+                    ) is None
+
+            # The first encounter is ordinary head-to-head history, not an automatic rivalry.
+            assert session.scalar(
+                select(OwnerClubRivalry.id).where(
+                    OwnerClubRivalry.club_id == str(club_rows[0]["id"]),
+                    OwnerClubRivalry.rival_club_id == str(club_rows[1]["id"]),
+                )
+            ) is None
+            assert session.scalar(
+                select(OwnerClubRivalry.id).where(
+                    OwnerClubRivalry.club_id == str(club_rows[1]["id"]),
+                    OwnerClubRivalry.rival_club_id == str(club_rows[0]["id"]),
+                )
+            ) is None
+
+            before = {
+                str(club_data["id"]): (
+                    session.scalar(
+                        select(OwnerClubManagerialTenure.matches_managed).where(
+                            OwnerClubManagerialTenure.club_id == str(club_data["id"])
+                        )
+                    ),
+                    session.scalar(
+                        select(OwnerSupporterEvent.id).where(
+                            OwnerSupporterEvent.club_id == str(club_data["id"]),
+                            OwnerSupporterEvent.trigger_source_id == completed.id,
+                        )
+                    ),
+                )
+                for club_data in club_rows
+            }
+            replayed = project_completed_canonical_match(session, completed.id)
+            session.commit()
+            assert replayed["status"] == "projected"
+            for club_data in club_rows:
+                club_id = str(club_data["id"])
+                assert replayed["clubs"]["home" if club_id == str(club_rows[0]["id"]) else "away"]["status"] == "already_projected"
+                assert session.scalar(
+                    select(OwnerClubManagerialTenure.matches_managed).where(
+                        OwnerClubManagerialTenure.club_id == club_id
+                    )
+                ) == before[club_id][0]
+                assert session.scalar(
+                    select(OwnerSupporterEvent.id).where(
+                        OwnerSupporterEvent.club_id == club_id,
+                        OwnerSupporterEvent.trigger_source_id == completed.id,
+                    )
+                ) == before[club_id][1]
+    finally:
+        app.state.cleanup_test_environment()
