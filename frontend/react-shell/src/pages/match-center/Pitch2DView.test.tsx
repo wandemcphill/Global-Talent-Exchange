@@ -369,4 +369,34 @@ describe("Pitch2DView broadcast HUD, honesty states, and live frame ingestion", 
     expect((lastPitchProps as any)?.shotMarkers[0]?.outcome).toBe("goal");
     expect((lastPitchProps as any)?.varReview?.final_decision).toBe("DISALLOWED - OFFSIDE");
   });
+
+  it("shows instant-replay controls only when the recorded-archive callbacks are provided", () => {
+    const onWatchReplay = jest.fn();
+    const onExit = jest.fn();
+    const goalFrames = [
+      { frame_id: "r1", time_seconds: 100, clock_minute: 20, players: [{ player_id: "h9", side: "home", name: "V. Osimhen", shirt_number: 9, role: "ST", x: 82, y: 48 } as any], ball: { x: 82, y: 48, z: 0 } },
+      { frame_id: "r2", time_seconds: 120, clock_minute: 24, event_type: "goal", players: [{ player_id: "h9", side: "home", name: "V. Osimhen", shirt_number: 9, role: "ST", x: 88, y: 48 } as any], ball: { x: 99, y: 50, z: 0.4 } },
+    ];
+    const goalEvents = [{ event_id: "g-1", type: "goal", time_seconds: 120, minute: 24, team: "home", player_id: "h9", player_name: "V. Osimhen", x: 88, y: 48 } as any];
+    act(() => {
+      root.render(
+        <Pitch2DView
+          matchId="replay-1"
+          timeSeconds={120}
+          frames={goalFrames as any}
+          events={goalEvents}
+          activeEventType="goal"
+          homeName="Home"
+          awayName="Away"
+          onWatchReplay={onWatchReplay}
+          isInstantReplay={true}
+          onExitInstantReplay={onExit}
+        />,
+      );
+    });
+    const exitBtn = container.querySelector('[data-testid="exit-instant-replay-btn"]') as HTMLButtonElement | null;
+    expect(exitBtn).not.toBeNull();
+    act(() => exitBtn?.click());
+    expect(onExit).toHaveBeenCalledTimes(1);
+  });
 });

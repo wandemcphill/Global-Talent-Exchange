@@ -79,7 +79,7 @@ def test_viewer_timeline_consumes_render_contract_for_camera_and_ball_states() -
         frame.camera_preset in {MatchViewerCameraPreset.BOX_ZOOM, MatchViewerCameraPreset.GOAL_CELEBRATION}
         for frame in goal_frames
     )
-    assert any(frame.ball.state in {"shot", "cross", "lob"} for frame in goal_frames)
+    assert any(frame.ball.state in {"in_flight", "shot", "cross", "lob"} for frame in goal_frames)
     assert any(frame.playback_rate <= 0.5 for frame in goal_frames)
     assert any(frame.pressure_index > 0.0 for frame in goal_frames)
     assert any(

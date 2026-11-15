@@ -101,4 +101,38 @@ describe("match timeline scrubber", () => {
     act(() => root.unmount());
     host.remove();
   });
+
+  test("recorded replay archive (readOnly=false) exposes slider, pin seek and prev/next key", () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const onSeek = jest.fn();
+    const model = buildTimelineModel(
+      frames,
+      [
+        { event_id: "g1", type: "goal", time_seconds: 60, team: "home" },
+        { event_id: "s1", type: "save", time_seconds: 300, team: "away" },
+      ],
+      400,
+    );
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(<MatchTimelineScrubber model={model} currentSeconds={120} onSeek={onSeek} readOnly={false} />);
+    });
+    expect(host.querySelector("[data-testid='match-timeline-range']")).not.toBeNull();
+    act(() => {
+      (host.querySelector("[data-testid='timeline-next-event']") as HTMLElement).click();
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(294);
+    act(() => {
+      (host.querySelector("[data-testid='timeline-prev-event']") as HTMLElement).click();
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(54);
+    act(() => {
+      (host.querySelectorAll("[data-testid='match-timeline-pin']")[1] as HTMLElement).click();
+    });
+    expect(onSeek).toHaveBeenLastCalledWith(294);
+    act(() => root.unmount());
+    host.remove();
+  });
 });

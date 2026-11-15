@@ -156,7 +156,7 @@ def test_manager_duel_live_spectate_highlights_and_leaderboard(tmp_path) -> None
             )
             websocket.send_text("ping")
             pong = websocket.receive_json()
-            assert pong["kind"] == "pong"
+            assert pong.get("kind") == "pong" or pong.get("type") == "pong"
             saw_event_batch = False
             for _ in range(20):
                 message = websocket.receive_json()

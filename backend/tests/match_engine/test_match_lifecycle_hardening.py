@@ -75,7 +75,7 @@ def _seed_match(factory: sessionmaker[Session], *, status: str = "queued", **ove
 class _ExplodingPersistenceWorker(LocalMatchExecutionWorker):
     """Worker whose result persistence always fails."""
 
-    def _persist_match_viewer_payload(self, job, replay_payload) -> None:  # type: ignore[override]
+    def _persist_match_viewer_payload(self, job, replay_payload, simulation_request=None) -> None:  # type: ignore[override]
         raise RuntimeError("database is gone")
 
 
@@ -85,11 +85,11 @@ class _FlakyPersistenceWorker(LocalMatchExecutionWorker):
 
     attempts: int = 0
 
-    def _persist_match_viewer_payload(self, job, replay_payload) -> None:  # type: ignore[override]
+    def _persist_match_viewer_payload(self, job, replay_payload, simulation_request=None) -> None:  # type: ignore[override]
         self.attempts += 1
         if self.attempts == 1:
             raise RuntimeError("transient write failure")
-        super()._persist_match_viewer_payload(job, replay_payload)
+        super()._persist_match_viewer_payload(job, replay_payload, simulation_request=simulation_request)
 
 
 @dataclass(slots=True)

@@ -719,3 +719,211 @@ def test_rewards_claim_idempotency() -> None:
     assert again_body["status"] == "already_claimed"
     assert "xp" not in again_body
     assert again_body["talent_coin"] == again_body["net_amount"]
+
+
+def test_live_match_appointed_first_team_manager_e2e_authority_and_mutations() -> None:
+    from app.auth.dependencies import get_optional_current_user
+    from app.owner_console.models import OwnerClubState
+
+    app, session_factory = _build_app()
+    sim_request = build_request(seed=101)
+    sim_service = MatchSimulationService()
+    replay_payload = sim_service.build_replay_payload(sim_request)
+    match_id = replay_payload.match_id
+    home_club_id = replay_payload.summary.home_stats.team_id
+    away_club_id = replay_payload.summary.away_stats.team_id
+
+    # Create users
+    home_ftm = User(
+        id="user-home-ftm",
+        email="homeftm@test.com",
+        username="homeftm",
+        password_hash="hash",  # pragma: allowlist secret
+        is_active=True,
+    )
+    away_ftm = User(
+        id="user-away-ftm",
+        email="awayftm@test.com",
+        username="awayftm",
+        password_hash="hash",  # pragma: allowlist secret
+        is_active=True,
+    )
+    plain_owner = User(
+        id="user-plain-owner",
+        email="owner@test.com",
+        username="owner",
+        password_hash="hash",  # pragma: allowlist secret
+        is_active=True,
+    )
+    spectator = User(
+        id="user-spectator",
+        email="spec@test.com",
+        username="spec",
+        password_hash="hash",  # pragma: allowlist secret
+        is_active=True,
+    )
+
+    with session_factory() as session:
+        session.add_all([home_ftm, away_ftm, plain_owner, spectator])
+
+        # Home club state with manager_json pointing to home_ftm
+        session.add(
+            OwnerClubState(
+                club_id=home_club_id,
+                club_name="Home Club",
+                owner_user_id=plain_owner.id,
+                manager_json={"user_id": home_ftm.id, "delegate_user_id": None},
+                facilities_json={},
+            )
+        )
+
+        # Away club state with executive_staff first_team_manager pointing to away_ftm
+        session.add(
+            OwnerClubState(
+                club_id=away_club_id,
+                club_name="Away Club",
+                owner_user_id=plain_owner.id,
+                manager_json={},
+                facilities_json={"_executive_staff": {"first_team_manager": {"user_id": away_ftm.id}}},
+            )
+        )
+
+        session.add(
+            CompetitionMatch(
+                id=match_id,
+                competition_id="comp-e2e-1",
+                round_id="round-e2e-1",
+                round_number=1,
+                home_club_id=home_club_id,
+                away_club_id=away_club_id,
+                status="live",
+                metadata_json={
+                    "replay_payload": replay_payload.model_dump(mode="json"),
+                    "simulation_request": sim_request.model_dump(mode="json"),
+                },
+            )
+        )
+        session.commit()
+
+    hub = LiveMatchHub(session_factory=session_factory)
+    app.state.live_match_hub = hub
+    hub.start_stream(
+        match_id,
+        replay_payload,
+        simulation_request=sim_request.model_dump(mode="json"),
+    )
+
+    try:
+        with TestClient(app) as client:
+            # 1. Anonymous GET tactics -> can_edit_tactics is False
+            res = client.get(f"/api/matches/{match_id}/tactics")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["can_edit_tactics"] is False
+            assert data["authorized_tactical_side"] is None
+
+            # 2. Plain owner GET tactics -> can_edit_tactics is False
+            app.dependency_overrides[get_optional_current_user] = lambda: plain_owner
+            res = client.get(f"/api/matches/{match_id}/tactics")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["can_edit_tactics"] is False
+            assert data["authorized_tactical_side"] is None
+
+            # 3. Home FTM GET tactics -> can_edit_tactics is True, side is "home"
+            app.dependency_overrides[get_optional_current_user] = lambda: home_ftm
+            res = client.get(f"/api/matches/{match_id}/tactics")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["can_edit_tactics"] is True
+            assert data["authorized_tactical_side"] == "home"
+
+            # 4. Away FTM GET tactics -> can_edit_tactics is True, side is "away"
+            app.dependency_overrides[get_optional_current_user] = lambda: away_ftm
+            res = client.get(f"/api/matches/{match_id}/tactics")
+            assert res.status_code == 200
+            data = res.json()
+            assert data["can_edit_tactics"] is True
+            assert data["authorized_tactical_side"] == "away"
+
+            # 5. Anonymous POST tactics -> 401
+            app.dependency_overrides.pop(get_optional_current_user, None)
+            res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "home", "formation": "4-4-2"})
+            assert res.status_code == 401
+
+            # 6. Spectator POST tactics -> 403
+            app.dependency_overrides[get_current_match_user] = lambda: spectator
+            res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "home", "formation": "4-4-2"})
+            assert res.status_code == 403
+            assert "First-Team Manager" in res.json()["detail"]
+
+            # 7. Plain owner POST tactics -> 403
+            app.dependency_overrides[get_current_match_user] = lambda: plain_owner
+            res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "home", "formation": "4-4-2"})
+            assert res.status_code == 403
+            assert "First-Team Manager" in res.json()["detail"]
+
+            # 8. Home FTM targeting away side -> 403
+            app.dependency_overrides[get_current_match_user] = lambda: home_ftm
+            res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "away", "formation": "4-4-2"})
+            assert res.status_code == 403
+
+            # 9. Home FTM targeting home side with valid mutation -> 200
+            res = client.post(
+                f"/api/matches/{match_id}/tactics",
+                json={
+                    "side": "home",
+                    "formation": "4-3-3",
+                    "press_intensity": 70,
+                    "defensive_line": 55,
+                    "tempo": 75,
+                    "risk_level": 60,
+                },
+            )
+            assert res.status_code == 200, res.text
+            body = res.json()
+            assert body["home"]["formation"] == "4-3-3"
+            assert body["home"]["press_intensity"] == 70
+
+            # 10. Substitution rejection with invalid player ids -> 400
+            res = client.post(
+                f"/api/matches/{match_id}/tactics",
+                json={"side": "home", "substitutions": [{"in_player_id": "ghost-in", "out_player_id": "ghost-out"}]},
+            )
+            assert res.status_code == 400, res.text
+
+            # 11. Valid substitution by the appointed manager -> 200, applied
+            state = client.get(f"/api/matches/{match_id}/state").json()
+            outgoing = [p for p in state["pitch_players"] if p["is_home"]][0]
+            incoming = replay_payload.visual_identity.home_team.player_visuals[11]
+            res = client.post(
+                f"/api/matches/{match_id}/tactics",
+                json={
+                    "side": "home",
+                    "substitutions": [
+                        {
+                            "out_player_id": outgoing["player_id"],
+                            "in_player_id": incoming.player_id,
+                            "out_player_name": outgoing["name"],
+                            "in_player_name": incoming.display_name,
+                            "shirt_number": incoming.shirt_number or 14,
+                        }
+                    ],
+                },
+            )
+            assert res.status_code == 200, res.text
+            after = client.get(f"/api/matches/{match_id}/state").json()
+            home_ids = [p["player_id"] for p in after["pitch_players"] if p["is_home"]]
+            assert incoming.player_id in home_ids
+            assert outgoing["player_id"] not in home_ids
+
+            # 12. Match without a live runtime (e.g. completed) rejects mutations -> 400
+            with session_factory() as session:
+                cm = session.get(CompetitionMatch, match_id)
+                cm.status = "completed"
+                session.commit()
+            app.state.live_match_hub = LiveMatchHub(session_factory=session_factory)
+            res = client.post(f"/api/matches/{match_id}/tactics", json={"side": "home", "formation": "5-3-2"})
+            assert res.status_code == 400, res.text
+    finally:
+        pass
