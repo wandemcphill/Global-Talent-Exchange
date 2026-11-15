@@ -95,16 +95,33 @@ class WalletRailService:
             raise WalletRailError("Input unit must be fiat or coin.")
         if Decimal(amount) <= Decimal("0.0000"):
             raise WalletRailError("Purchase amount must be positive.")
-        rate_value = Decimal(settings.deposit_rate_value)
+        if source_scope == "trader_liquidity":
+            rate_value = Decimal(
+                settings.trader_coin_purchase_rate_value
+                if unit == LedgerUnit.COIN
+                else settings.trader_fan_coin_purchase_rate_value
+            )
+            rate_direction = RateDirection.FIAT_PER_COIN
+        elif unit == LedgerUnit.CREDIT:
+            rate_value = Decimal(settings.fan_coin_deposit_rate_value)
+            rate_direction = RateDirection.FIAT_PER_COIN
+        else:
+            rate_value = Decimal(settings.deposit_rate_value)
+            rate_direction = settings.deposit_rate_direction
         if rate_value <= Decimal("0.0000"):
             raise WalletRailError("Deposit rate is not configured.")
         amount_fiat, amount_coin = self._compute_amounts(
             amount=Decimal(amount),
             input_unit=input_unit,
             rate_value=rate_value,
-            rate_direction=settings.deposit_rate_direction,
+            rate_direction=rate_direction,
         )
         self._enforce_deposit_limits(settings, amount_coin)
+        if source_scope == "trader_liquidity":
+            minimum_fiat = Decimal("200000.00") if unit == LedgerUnit.COIN else Decimal("50000.00")
+            if amount_fiat < minimum_fiat:
+                label = "GTEX Coin" if unit == LedgerUnit.COIN else "Fan Coin"
+                raise WalletRailError(f"Minimum {label} trader inventory purchase is ₦{minimum_fiat:,.0f}.")
         fee_bps = int(self._commission_settings().get("buy_commission_bps", 0) or 0)
         fee_amount = self._normalize_amount(amount_coin * Decimal(fee_bps) / Decimal(10_000))
         net_amount = self._normalize_amount(amount_coin - fee_amount)
@@ -131,7 +148,7 @@ class WalletRailService:
             net_amount=net_amount,
             currency_code=settings.currency_code,
             rate_value=rate_value,
-            rate_direction=settings.deposit_rate_direction,
+            rate_direction=rate_direction,
             unit=unit,
             processor_mode=processor_mode,
             payout_channel=payout_channel,
