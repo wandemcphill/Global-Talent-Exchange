@@ -10,7 +10,6 @@ from app.common.enums.club_identity_visibility import ClubIdentityVisibility
 from app.common.enums.jersey_slot_type import JerseySlotType
 from app.common.schemas.base import CommonSchema
 
-
 MAX_CREST_ASSET_REF_LENGTH = 100_000
 
 
