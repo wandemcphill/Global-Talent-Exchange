@@ -832,7 +832,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       toast.error("Enter a club name with at least 3 characters.");
       return;
     }
-    if (!location.valid) {
+    if ("error" in location) {
       toast.error(location.error);
       return;
     }
