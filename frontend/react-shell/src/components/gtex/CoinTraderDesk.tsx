@@ -207,7 +207,7 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
   const gtexOrders = (orders || []).filter(
     (order: any) => String(order.coin_unit || "coin").toLowerCase() === "coin"
   );
-  const firstTraderRate = Number(rateOf(approved[0], "coin")?.sell_rate_fiat || 0);
+  const firstTraderRate = Number((approved[0] ? rateOf(approved[0], "coin") : null)?.sell_rate_fiat || 0);
   const minimumCoinAmount = firstTraderRate > 0 ? Math.ceil(200000 / firstTraderRate) : 1;
   const suggestedCoinAmount = Math.max(1, Math.ceil(Number(initialAmount) || 0), minimumCoinAmount);
 
