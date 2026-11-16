@@ -336,9 +336,9 @@ class TraderSignupRequest(BaseModel):
     interests: list[str] = Field(default_factory=list, max_length=4)
     wallet_label: str = Field(default="GTEX Trading Wallet", max_length=120)
     totp_secret: str = Field(min_length=16, max_length=128)
-    recovery_phrase_hash: str = Field(min_length=16, max_length=255)
-    security_pin_hash: str = Field(min_length=16, max_length=255)
-    totp_code: str = Field(min_length=6, max_length=12)
+    recovery_phrase_hash: str | None = Field(default=None, min_length=16, max_length=255)
+    security_pin_hash: str | None = Field(default=None, min_length=16, max_length=255)
+    totp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
     # KYC is no longer collected at signup (only required when a trader withdraws).
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
@@ -364,13 +364,13 @@ class TraderSignupRequest(BaseModel):
 
     @field_validator("recovery_phrase_hash")
     @classmethod
-    def validate_recovery_phrase_hash(cls, value: str) -> str:
-        return validate_trader_credential_hash(value, "recovery")
+    def validate_recovery_phrase_hash(cls, value: str | None) -> str | None:
+        return validate_trader_credential_hash(value, "recovery") if value is not None else None
 
     @field_validator("security_pin_hash")
     @classmethod
-    def validate_security_pin_hash(cls, value: str) -> str:
-        return validate_trader_credential_hash(value, "pin")
+    def validate_security_pin_hash(cls, value: str | None) -> str | None:
+        return validate_trader_credential_hash(value, "pin") if value is not None else None
 
 
 class LoginRequest(BaseModel):
