@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowRight, Check, Dna, ShoppingCart, Sparkles, Sprout, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { publicUrl } from "@/lib/publicPath";
 import { clubCreateErrorMessage } from "./clubLocationCatalog";
 import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { useAuth } from "@/lib/auth";
@@ -12,6 +13,7 @@ import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
 import { MarketTable } from "@/components/gtex/MarketTable";
 import { posShort } from "@/components/gtex/PlayerCard";
 import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { ClubCoinTraderFundingPanel } from "@/components/gtex/CoinTraderDesk";
 
 const STEPS = [
   { key: "identity", label: "Club identity" },
@@ -72,14 +74,14 @@ function IdentityStep({ club, onDone }: any) {
           subjectName={club.club_name}
           quote="A new era begins under your executive stewardship."
           stats={[
-            { label: "Launch Grant", value: "100,000 GTX", accent: "#00E676" },
+            { label: "Founding Squad Grant", value: "2,500 GTX", accent: "#00E676" },
             { label: "Fan Reserve", value: "1,000 FAN", accent: "#F5B83D" },
           ]}
         />
       </div>
       <p className="max-w-xl text-sm text-slate-300">
         Your club identity is registered. Activating it unlocks a{" "}
-        <b className="text-white">100,000 GTEX Coin launch grant</b> in the club treasury (promotional: usable for signings and facilities, not withdrawable) plus 1,000 Fan Coin for gifting.
+        <b className="text-white">2,500 GTX squad-signing grant</b> if you are among the first 500 eligible club owners, plus 1,000 FAN for gifting. The GTX grant is ring-fenced for eligible player signings.
       </p>
       <Btn className="mt-6" onClick={activate} disabled={busy} data-testid="onboarding-activate-button">
         {busy ? "Activating…" : "Activate club"}
@@ -94,7 +96,7 @@ function SquadStep({ clubId, onDone }: any) {
   const [autopicking, setAutopicking] = useState(false);
   const [tactic, setTactic] = useState("tiki_taka");
   const [formation, setFormation] = useState("4-3-3");
-  const [budgetCap, setBudgetCap] = useState("85000");
+  const [budgetCap, setBudgetCap] = useState("2500");
   const [targetSquadSize, setTargetSquadSize] = useState("22");
   const [appointingMgr, setAppointingMgr] = useState<string | null>(null);
 
@@ -173,7 +175,7 @@ function SquadStep({ clubId, onDone }: any) {
         budget_gtex: Number(budgetCap) > 0 ? Number(budgetCap) : undefined,
         tactic,
         formation,
-        target_squad_size: Number(targetSquadSize) || 11,
+        target_squad_size: Number(targetSquadSize) || 22,
       });
       const count = data?.signed?.length ?? data?.signed_count ?? 0;
       toast.success(
@@ -339,7 +341,7 @@ function SquadStep({ clubId, onDone }: any) {
           <div>
             <p className="font-semibold text-amber-300">Low Treasury Balance ({fmt(clubCash)} GTX remaining)</p>
             <p className="mt-0.5 text-slate-300">
-              You need {11 - squad.length} more player(s){!hasGk ? " including a goalkeeper" : ""}, but minimum transfer fees start around 800 GTX.
+              You need {Math.max(0, 22 - squad.length)} more player(s){!hasGk ? " including a goalkeeper" : ""}, but minimum transfer fees start around 800 GTX.
               Remove any signed player below to receive a full refund, or use <b>Auto-Pick</b> to sign affordable talent.
             </p>
           </div>
@@ -352,7 +354,7 @@ function SquadStep({ clubId, onDone }: any) {
           <div className="flex items-center gap-2">
             <ShoppingCart size={16} className="text-emerald-400" />
             <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
-              Player Basket <span className="text-xs font-normal text-slate-400">({squad.length} / 11 signed)</span>
+              Player Basket <span className="text-xs font-normal text-slate-400">({squad.length} / 22 signed)</span>
             </h3>
           </div>
           {squad.length > 0 && (
@@ -367,8 +369,7 @@ function SquadStep({ clubId, onDone }: any) {
 
         {squad.length === 0 ? (
           <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-500">
-            Your player basket is empty. Browse the transfer market below or click{" "}
-            <b className="text-slate-300">"⚡ Auto-Pick within Budget"</b> above to assemble your starting 11 automatically.
+            Your player basket is empty. Browse the transfer market below or use Auto-Pick to assemble your 22-player starting squad.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -1403,7 +1404,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
               <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
                 <span className="font-semibold text-emerald-400">Owner Activation Package:</span>
                 <p className="mt-0.5 text-slate-400">
-                  Unlocks <b>100,000 GTX</b> launch grant in the club treasury plus <b>1,000 FAN</b> Fan Coin for gifting.
+                  The first 500 eligible club owners receive <b>2,500 GTX</b> ring-fenced for player signings, plus <b>1,000 FAN</b> for gifting.
                 </p>
               </div>
             </div>
