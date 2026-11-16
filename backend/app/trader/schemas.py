@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from app.auth.schemas import validate_trader_credential_hash, validate_trader_totp_secret
 
 from app.models.trader import TraderExperience, TraderOrderSide, TraderOrderStatus, TraderP2PStatus
 
@@ -117,6 +119,21 @@ class TotpVerifyRequest(BaseModel):
     code: str = Field(min_length=6, max_length=12)
     recovery_phrase_hash: str = Field(min_length=16, max_length=255)
     security_pin_hash: str = Field(min_length=16, max_length=255)
+
+    @field_validator("secret")
+    @classmethod
+    def validate_secret(cls, value: str) -> str:
+        return validate_trader_totp_secret(value)
+
+    @field_validator("recovery_phrase_hash")
+    @classmethod
+    def validate_recovery_phrase_hash(cls, value: str) -> str:
+        return validate_trader_credential_hash(value, "recovery")
+
+    @field_validator("security_pin_hash")
+    @classmethod
+    def validate_security_pin_hash(cls, value: str) -> str:
+        return validate_trader_credential_hash(value, "pin")
 
 
 class TraderSecurityEventView(BaseModel):

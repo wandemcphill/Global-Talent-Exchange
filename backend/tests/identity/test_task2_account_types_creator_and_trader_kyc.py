@@ -5,13 +5,17 @@ from decimal import Decimal
 import hmac
 from hashlib import sha256
 import json
+import httpx
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 from pydantic import ValidationError
 
 import app.models  # noqa: F401
+from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.auth.eligibility import (
     AccountEligibilityService,
     AccountTypeConflictError,
@@ -23,9 +27,12 @@ from app.coin_traders.schemas import (
     CoinTraderRateUpsertRequest,
 )
 from app.coin_traders.service import CoinTraderPermissionError, CoinTraderService, CoinTraderValidationError
-from app.identity.providers import DIDitAdapter, SandboxAdapter, SmileIdAdapter, get_identity_provider
+from app.identity.providers import DIDitAdapter, SandboxAdapter, get_identity_provider
+from app.identity.providers.didit import IdentityProviderConfigurationError
+from app.identity.router import admin_router as identity_admin_router, router as identity_router
 from app.identity.service import (
     IdentityVerificationService,
+    IdentityVerificationValidationError,
     IdentityWebhookSignatureError,
 )
 from app.models.base import Base
@@ -370,8 +377,36 @@ def test_coin_trader_cannot_trade_without_verification(db_session: Session) -> N
     assert "pending identity verification" in str(exc.value).lower() or "must complete" in str(exc.value).lower()
 
 
-def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Session) -> None:
-    """Authoritative provider webhook automatically activates trader with idempotency."""
+def _sign_didit_v2(
+    payload: dict[str, object], secret: str, timestamp: int | None = None
+) -> tuple[bytes, dict[str, str]]:
+    ts = int(datetime.now(timezone.utc).timestamp()) if timestamp is None else timestamp
+    raw_bytes = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+    canonical = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=False,
+        allow_nan=False,
+    ).encode("utf-8")
+    signature = hmac.new(secret.encode("utf-8"), canonical, sha256).hexdigest()
+    return raw_bytes, {
+        "X-Signature-V2": signature,
+        "X-Timestamp": str(ts),
+        "Content-Type": "application/json",
+    }
+
+
+def test_coin_trader_provider_adapters_and_webhook_activation(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DIDit is live-wired, Smile ID/sandbox fail closed outside dev/test, and DIDit webhook activates trader."""
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "production")
+    monkeypatch.delenv("GTE_KYC_ALLOW_SANDBOX", raising=False)
+    monkeypatch.setenv("GTE_DIDIT_API_KEY", "didit-live-test-key")
+    monkeypatch.setenv("GTE_DIDIT_WORKFLOW_ID", "wf_didit_ng_kyc")
+    monkeypatch.setenv("GTE_DIDIT_WEBHOOK_SECRET", "didit-webhook-secret-123")
+
     user = _make_user(
         db_session,
         user_id="trader-verify-1",
@@ -391,75 +426,255 @@ def test_coin_trader_provider_adapters_and_webhook_activation(db_session: Sessio
     )
     db_session.commit()
 
-    # 1. Test supported provider adapters
+    # 1. Production registry allows DIDit, rejects Smile ID, and rejects sandbox outside dev/test
     didit_adapter = get_identity_provider("didit")
-    smile_adapter = get_identity_provider("smile_id")
-    sandbox_adapter = get_identity_provider("sandbox")
     assert isinstance(didit_adapter, DIDitAdapter)
-    assert isinstance(smile_adapter, SmileIdAdapter)
-    assert isinstance(sandbox_adapter, SandboxAdapter)
+    with pytest.raises(IdentityProviderConfigurationError, match="Smile ID"):
+        get_identity_provider("smile_id")
+    with pytest.raises(IdentityProviderConfigurationError, match="sandbox"):
+        get_identity_provider("sandbox")
 
-    # 2. Initiate trader verification session
+    # Test/dev explicitly allows sandbox when needed in non-prod suites
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "test")
+    assert isinstance(get_identity_provider("sandbox"), SandboxAdapter)
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "production")
+
+    # 2. Initiate live DIDit trader verification session via httpx boundary
+    captured_requests: list[tuple[str, dict[str, str], dict[str, object]]] = []
+
+    def fake_httpx_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        captured_requests.append((url, headers, json))
+        request = httpx.Request("POST", url)
+        return httpx.Response(
+            201,
+            request=request,
+            json={
+                "session_id": "didit-sess-live-001",
+                "workflow_id": json["workflow_id"],
+                "url": "https://verify.didit.me/session/didit-sess-live-001",
+                "status": "Not Started",
+            },
+        )
+
+    monkeypatch.setattr("app.identity.providers.didit.httpx.post", fake_httpx_post)
+
     identity_service = IdentityVerificationService(db_session)
     init_res = identity_service.initiate_trader_verification(
         actor=user,
-        provider_name="sandbox",
-        verification_type="government_id",
+        provider_name="didit",
+        verification_type="full_kyc",
+        callback_url="https://gtex.example/trader/verification/callback",
     )
-    assert init_res.provider_session_id is not None
-    assert init_res.status in {"initiated", "pending"}
+    assert init_res.provider == "didit"
+    assert init_res.provider_session_id == "didit-sess-live-001"
+    assert init_res.status == "pending"
+    assert init_res.metadata_json["handoff_url"] == "https://verify.didit.me/session/didit-sess-live-001"
+    assert captured_requests[0][0] == "https://verification.didit.me/v3/session/"
+    assert captured_requests[0][1]["x-api-key"] == "didit-live-test-key"
+    assert captured_requests[0][2]["vendor_data"] == init_res.provider_reference
+    assert captured_requests[0][2]["metadata"]["gtex_user_id"] == user.id
 
-    # 3. Simulate authoritative successful provider webhook
-    webhook_payload = {
-        "event": "verification.completed",
+    # 3. Provider "In Review" remains pending and does NOT activate trader
+    review_payload = {
         "session_id": init_res.provider_session_id,
-        "reference": "PROV-REF-9999",
-        "status": "approved",
-        "checks": {
-            "document": "pass",
-            "face_match": "pass",
-            "liveness": "pass",
+        "vendor_data": init_res.provider_reference,
+        "status": "In Review",
+        "metadata": {"gtex_user_id": user.id, "gtex_verification_type": "full_kyc"},
+        "decision": {"id_verification": {"status": "In Review"}},
+    }
+    review_bytes, review_headers = _sign_didit_v2(review_payload, "didit-webhook-secret-123")
+    review_result = identity_service.process_provider_webhook(
+        provider_name="didit",
+        payload_bytes=review_bytes,
+        headers=review_headers,
+    )
+    assert review_result["status"] == "pending"
+    profile_pending = db_session.get(CoinTraderProfile, profile_view.id)
+    assert profile_pending.status != CoinTraderProfileStatus.APPROVED.value
+    assert profile_pending.verified_at is None
+
+    # 4. Cross-account webhook mismatch must be rejected
+    mismatch_payload = {
+        "session_id": init_res.provider_session_id,
+        "vendor_data": init_res.provider_reference,
+        "status": "Approved",
+        "metadata": {"gtex_user_id": "someone-else-999", "gtex_verification_type": "full_kyc"},
+    }
+    mismatch_bytes, mismatch_headers = _sign_didit_v2(mismatch_payload, "didit-webhook-secret-123")
+    with pytest.raises(IdentityVerificationValidationError, match="user binding"):
+        identity_service.process_provider_webhook(
+            provider_name="didit",
+            payload_bytes=mismatch_bytes,
+            headers=mismatch_headers,
+        )
+
+    # 5. Stale timestamp (> 300s) and invalid signature rejected
+    stale_payload = {
+        "session_id": init_res.provider_session_id,
+        "vendor_data": init_res.provider_reference,
+        "status": "Approved",
+        "metadata": {"gtex_user_id": user.id},
+    }
+    stale_bytes, stale_headers = _sign_didit_v2(
+        stale_payload,
+        "didit-webhook-secret-123",
+        timestamp=int(datetime.now(timezone.utc).timestamp()) - 400,
+    )
+    with pytest.raises(IdentityWebhookSignatureError):
+        identity_service.process_provider_webhook(
+            provider_name="didit",
+            payload_bytes=stale_bytes,
+            headers=stale_headers,
+        )
+
+    # 6. Authoritative DIDit "Approved" webhook activates trader & sanitizes PII checks summary
+    approved_payload = {
+        "session_id": init_res.provider_session_id,
+        "vendor_data": init_res.provider_reference,
+        "status": "Approved",
+        "created_at": int(datetime.now(timezone.utc).timestamp()),
+        "metadata": {"gtex_user_id": user.id, "gtex_verification_type": "full_kyc"},
+        "decision": {
+            "id_verification": {
+                "status": "Approved",
+                "document_type": "Passport",
+                "document_number": "A12345678-SECRET-PII",
+                "date_of_birth": "1990-01-01",
+            },
+            "face_match": {"status": "Approved", "selfie": "base64-biometric-image"},
+            "liveness": {"status": "Approved"},
         },
     }
-    raw_payload = json.dumps(webhook_payload).encode("utf-8")
-    secret = b"sandbox-secret"
-    signature = hmac.new(secret, raw_payload, sha256).hexdigest()
-    headers = {"X-Sandbox-Signature": signature}
+    raw_payload, headers = _sign_didit_v2(approved_payload, "didit-webhook-secret-123")
 
-    # Process authoritative webhook
     result_dict = identity_service.process_provider_webhook(
-        provider_name="sandbox",
+        provider_name="didit",
         payload_bytes=raw_payload,
         headers=headers,
     )
-    assert result_dict["status"] in {"success", "verified"}
-    assert result_dict["reference"] == "PROV-REF-9999"
+    assert result_dict["status"] == "success"
+    assert result_dict["reference"] == init_res.provider_reference
 
-    # Profile automatically activated
     profile = db_session.get(CoinTraderProfile, profile_view.id)
     assert profile.status == CoinTraderProfileStatus.APPROVED.value
     assert profile.verified_at is not None
-    assert profile.verification_provider == "sandbox"
-    assert profile.verification_reference == "PROV-REF-9999"
+    assert profile.verification_provider == "didit"
+    assert profile.verification_reference == init_res.provider_reference
+
+    # PII stripped from stored checks summary
+    db_session.refresh(init_res)
+    checks_serialized = json.dumps(init_res.checks_summary_json)
+    assert "A12345678-SECRET-PII" not in checks_serialized
+    assert "1990-01-01" not in checks_serialized
+    assert "base64-biometric-image" not in checks_serialized
+    assert init_res.checks_summary_json["id_verification"]["status"] == "Approved"
 
     # Trader is now eligible to operate
     AccountEligibilityService.assert_can_operate_coin_trader(user, db_session)
 
-    # 4. Idempotency test: repeating the same webhook does not fail or duplicate
+    # 7. Idempotency test: repeating the same webhook does not fail or duplicate
     dup_dict = identity_service.process_provider_webhook(
-        provider_name="sandbox",
+        provider_name="didit",
         payload_bytes=raw_payload,
         headers=headers,
     )
     assert dup_dict["status"] == "idempotent_duplicate"
 
-    # 5. Invalid signature rejected
+    # 8. Invalid signature rejected
     with pytest.raises(IdentityWebhookSignatureError):
         identity_service.process_provider_webhook(
-            provider_name="sandbox",
+            provider_name="didit",
             payload_bytes=raw_payload,
-            headers={"X-Sandbox-Signature": "invalid-fake-signature"},
+            headers={**headers, "X-Signature-V2": "invalid-fake-signature"},
         )
+
+
+def test_didit_missing_credentials_fails_closed_http_503(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Missing DIDit credentials must fail closed with HTTP 503 instead of creating fake sessions."""
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "production")
+    monkeypatch.delenv("GTE_DIDIT_API_KEY", raising=False)
+    monkeypatch.delenv("DIDIT_API_KEY", raising=False)
+    monkeypatch.delenv("GTE_DIDIT_WORKFLOW_ID", raising=False)
+    monkeypatch.delenv("DIDIT_WORKFLOW_ID", raising=False)
+
+    trader = _make_user(
+        db_session,
+        user_id="trader-noconf-1",
+        email="noconf@example.com",
+        account_type=PublicAccountType.COIN_TRADER,
+    )
+    app = FastAPI()
+    app.include_router(identity_router)
+    app.include_router(identity_admin_router)
+    app.dependency_overrides[get_session] = lambda: db_session
+    app.dependency_overrides[get_current_user] = lambda: trader
+
+    with TestClient(app) as client:
+        resp = client.post(
+            "/api/coin-traders/verification/initiate",
+            json={"verification_type": "full_kyc"},
+        )
+    assert resp.status_code == 503
+    assert "DIDit live KYC is not configured" in resp.json()["detail"]
+
+
+def test_admin_kyc_records_hydrate_metadata_without_leaking_pii(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Admin KYC inspection endpoint exposes non-PII status and trader metadata cleanly."""
+    monkeypatch.setenv("GTE_STARTUP_PROFILE", "test")
+    monkeypatch.setenv("GTE_DIDIT_API_KEY", "didit-live-test-key")
+    monkeypatch.setenv("GTE_DIDIT_WORKFLOW_ID", "wf_didit_ng_kyc")
+    monkeypatch.setenv("GTE_DIDIT_WEBHOOK_SECRET", "didit-webhook-secret-123")
+
+    def fake_httpx_post(url: str, *, headers: dict[str, str], json: dict[str, object], timeout: float):
+        return httpx.Response(
+            201,
+            request=httpx.Request("POST", url),
+            json={
+                "session_id": "didit-sess-admin-001",
+                "workflow_id": json["workflow_id"],
+                "url": "https://verify.didit.me/session/didit-sess-admin-001",
+                "status": "Not Started",
+            },
+        )
+
+    monkeypatch.setattr("app.identity.providers.didit.httpx.post", fake_httpx_post)
+
+    trader = _make_user(
+        db_session,
+        user_id="trader-admin-kyc-1",
+        email="kyc_trader@example.com",
+        account_type=PublicAccountType.COIN_TRADER,
+    )
+    admin = _make_user(
+        db_session,
+        user_id="admin-kyc-viewer-1",
+        email="kyc_admin@example.com",
+        role=UserRole.ADMIN,
+    )
+    service = IdentityVerificationService(db_session)
+    record = service.initiate_trader_verification(actor=trader, verification_type="full_kyc")
+    assert record.trader_profile_id is not None
+
+    profile = db_session.get(CoinTraderProfile, record.trader_profile_id)
+    assert profile is not None
+    assert profile.terms_json.get("kyc_required") is not True
+
+    app = FastAPI()
+    app.include_router(identity_admin_router)
+    app.dependency_overrides[get_session] = lambda: db_session
+    app.dependency_overrides[get_current_admin] = lambda: admin
+
+    with TestClient(app) as client:
+        resp = client.get("/api/admin/kyc/records")
+
+    assert resp.status_code == 200
+    rows = resp.json()
+    assert len(rows) == 1
+    assert rows[0]["user_email"] == "kyc_trader@example.com"
+    assert rows[0]["trader_display_name"] == profile.display_name
+    assert rows[0]["provider"] == "didit"
 
 
 def test_verified_coin_trader_withdrawal_no_repeat_kyc(db_session: Session) -> None:

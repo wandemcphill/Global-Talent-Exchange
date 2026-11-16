@@ -3,24 +3,37 @@ from __future__ import annotations
 import os
 
 from app.identity.providers.base import BaseIdentityVerificationAdapter
-from app.identity.providers.didit import DIDitVerificationAdapter
+from app.identity.providers.didit import DIDitVerificationAdapter, IdentityProviderConfigurationError
 from app.identity.providers.sandbox import SandboxVerificationAdapter
-from app.identity.providers.smile_id import SmileIDVerificationAdapter
-
-_PROVIDERS: dict[str, type[BaseIdentityVerificationAdapter]] = {
-    "didit": DIDitVerificationAdapter,
-    "smile_id": SmileIDVerificationAdapter,
-    "smileid": SmileIDVerificationAdapter,
-    "sandbox": SandboxVerificationAdapter,
-}
 
 
 def get_identity_provider(name: str | None = None) -> BaseIdentityVerificationAdapter:
+    """Return the explicitly configured provider without silently downgrading to a fake provider.
+
+    DIDit is the only live integration. Sandbox is available only in test/dev or
+    when explicitly enabled for a controlled non-production environment.
+    Smile ID must not be advertised as available until its real API and webhook
+    verification implementations have been added.
+    """
     chosen = (name or os.environ.get("GTE_DEFAULT_IDENTITY_PROVIDER") or "didit").strip().lower()
-    adapter_cls = _PROVIDERS.get(chosen)
-    if adapter_cls is None:
-        # Fallback to sandbox if requested or unknown in non-strict mode
-        if "test" in os.environ.get("GTE_STARTUP_PROFILE", ""):
-            return SandboxVerificationAdapter()
+    startup_profile = os.environ.get("GTE_STARTUP_PROFILE", "").strip().lower()
+    sandbox_allowed = startup_profile in {"test", "testing", "development", "dev"} or os.environ.get(
+        "GTE_KYC_ALLOW_SANDBOX", ""
+    ).strip().lower() in {"1", "true", "yes"}
+
+    if chosen in {"sandbox", "test"}:
+        if not sandbox_allowed:
+            raise IdentityProviderConfigurationError(
+                "The sandbox identity provider is disabled outside test/development. "
+                "Configure DIDit for production KYC."
+            )
+        return SandboxVerificationAdapter()
+    if chosen in {"didit", "did.it"}:
         return DIDitVerificationAdapter()
-    return adapter_cls()
+    if chosen in {"smile_id", "smileid", "smile-id"}:
+        raise IdentityProviderConfigurationError(
+            "Smile ID has not been connected to its live API. Select DIDit for production verification."
+        )
+    raise IdentityProviderConfigurationError(
+        f"Unsupported identity verification provider '{chosen}'. Configure GTE_DEFAULT_IDENTITY_PROVIDER as didit."
+    )

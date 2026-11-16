@@ -1,9 +1,14 @@
+import 'dart:convert';
 import 'dart:math' as math;
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/app/gte_app_config.dart';
+import 'package:gte_frontend/core/app_feedback.dart';
+import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/data/gte_exchange_api_client.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/providers/gte_exchange_controller.dart';
@@ -28,6 +33,53 @@ String _generateTotpSetupSecret({int length = 32}) {
       ),
     ),
   );
+}
+
+String _deriveTraderCredentialHash(String purpose, String value) {
+  const int iterations = 210000;
+  final math.Random random = math.Random.secure();
+  final Uint8List salt = Uint8List.fromList(
+    List<int>.generate(16, (_) => random.nextInt(256)),
+  );
+  final crypto.Hmac hmac = crypto.Hmac(
+    crypto.sha256,
+    utf8.encode(value.trim()),
+  );
+  final Uint8List block = Uint8List(20)..setRange(0, 16, salt);
+  block[19] = 1;
+
+  List<int> u = hmac.convert(block).bytes;
+  final Uint8List derived = Uint8List.fromList(u);
+  for (int iteration = 1; iteration < iterations; iteration += 1) {
+    u = hmac.convert(u).bytes;
+    for (int index = 0; index < derived.length; index += 1) {
+      derived[index] ^= u[index];
+    }
+  }
+
+  String hex(List<int> bytes) =>
+      bytes.map((int byte) => byte.toRadixString(16).padLeft(2, '0')).join();
+  final String separator = String.fromCharCode(36);
+  return 'pbkdf2-sha256' +
+      separator +
+      iterations.toString() +
+      separator +
+      purpose +
+      separator +
+      hex(salt) +
+      separator +
+      hex(derived);
+}
+
+String _formatSignupApiError(Object error) {
+  if (error is GteApiException) {
+    final String message = error.message.trim();
+    if (message.isNotEmpty && !message.startsWith('[')) {
+      return message;
+    }
+    return 'Please check all highlighted details and try again.';
+  }
+  return AppFeedback.messageFor(error);
 }
 
 class GtexAccountSelectorScreen extends StatelessWidget {
@@ -394,7 +446,7 @@ class _GtexUserSignupScreenState extends State<GtexUserSignupScreen> {
       widget.controller.syncSession(session);
       if (mounted) context.go('/app/home');
     } catch (error) {
-      setState(() => _error = error.toString());
+      setState(() => _error = _formatSignupApiError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -511,7 +563,7 @@ class _GtexCreatorSignupScreenState extends State<GtexCreatorSignupScreen> {
       widget.controller.syncSession(session);
       if (mounted) context.go('/app/hub');
     } catch (error) {
-      setState(() => _error = error.toString());
+      setState(() => _error = _formatSignupApiError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -540,11 +592,31 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   final _country = TextEditingController(text: 'NG');
   final _currency = TextEditingController(text: 'USD');
   final _totpCode = TextEditingController();
+  final _recoveryPhrase = TextEditingController();
+  final _securityPin = TextEditingController();
+  final _walletLabel = TextEditingController(text: 'GTEX Trading Wallet');
   String _experience = 'beginner';
   bool _submitting = false;
   String? _error;
   String? _turnstileToken;
   late final String _setupSecret = _generateTotpSetupSecret();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _alias.dispose();
+    _email.dispose();
+    _password.dispose();
+    _phone.dispose();
+    _country.dispose();
+    _currency.dispose();
+    _totpCode.dispose();
+    _recoveryPhrase.dispose();
+    _securityPin.dispose();
+    _walletLabel.dispose();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Trader',
@@ -576,7 +648,48 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         'Authenticator setup secret: $_setupSecret',
         style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 11),
       ),
-      _field(_totpCode, '2FA Authenticator Code'),
+      _field(
+        _totpCode,
+        '2FA Authenticator Code',
+        keyboardType: TextInputType.number,
+        validator: (String? value) {
+          final String code = (value ?? '').trim();
+          final bool validDigits = code.codeUnits.every(
+            (int unit) => unit >= 48 && unit <= 57,
+          );
+          return code.length >= 6 && code.length <= 12 && validDigits
+              ? null
+              : 'Enter the current 6–12 digit authenticator code';
+        },
+      ),
+      _field(
+        _recoveryPhrase,
+        'Recovery Phrase (at least 8 words)',
+        obscure: true,
+        validator: (String? value) {
+          final List<String> words =
+              (value ?? '').trim().split(RegExp(r'\s+'));
+          return words.where((String word) => word.isNotEmpty).length >= 8
+              ? null
+              : 'Use a recovery phrase containing at least 8 words';
+        },
+      ),
+      _field(
+        _securityPin,
+        'Security PIN (6–12 digits)',
+        obscure: true,
+        keyboardType: TextInputType.number,
+        validator: (String? value) {
+          final String pin = (value ?? '').trim();
+          final bool validDigits = pin.codeUnits.every(
+            (int unit) => unit >= 48 && unit <= 57,
+          );
+          return pin.length >= 6 && pin.length <= 12 && validDigits
+              ? null
+              : 'Use a security PIN containing 6–12 digits';
+        },
+      ),
+      _field(_walletLabel, 'Wallet Label'),
       const SizedBox(height: 8),
       TurnstileChallenge(
         siteKey: _gtexTurnstileSiteKey,
@@ -612,17 +725,26 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
           preferredCurrency: _currency.text,
           tradingExperience: _experience,
           interests: const <String>['GTEX Coin', 'Fan Coins', 'P2P'],
+          walletLabel: _walletLabel.text.trim().isEmpty
+              ? 'GTEX Trading Wallet'
+              : _walletLabel.text.trim(),
           totpSecret: _setupSecret,
-          totpCode: _totpCode.text,
-          recoveryPhraseHash: 'client-confirmed-recovery-phrase-hash',
-          securityPinHash: 'client-confirmed-security-pin-hash',
+          totpCode: _totpCode.text.trim(),
+          recoveryPhraseHash: _deriveTraderCredentialHash(
+            'recovery',
+            _recoveryPhrase.text.trim(),
+          ),
+          securityPinHash: _deriveTraderCredentialHash(
+            'pin',
+            _securityPin.text.trim(),
+          ),
           turnstileToken: _turnstileToken,
         ),
       );
       widget.controller.syncSession(session);
       if (mounted) context.go('/trader');
     } catch (error) {
-      setState(() => _error = error.toString());
+      setState(() => _error = _formatSignupApiError(error));
     } finally {
       if (mounted) setState(() => _submitting = false);
     }
@@ -799,9 +921,12 @@ Widget _field(
   String label, {
   bool obscure = false,
   bool required = true,
+  TextInputType? keyboardType,
+  String? Function(String?)? validator,
 }) => TextFormField(
   controller: controller,
   obscureText: obscure,
+  keyboardType: keyboardType,
   style: const TextStyle(color: Color(0xFFF4F7F8), fontSize: 13),
   decoration: InputDecoration(
     labelText: label,
@@ -821,9 +946,15 @@ Widget _field(
       borderSide: const BorderSide(color: Color(0xFF36E38A)),
     ),
   ),
-  validator:
-      (String? value) =>
-          required && (value == null || value.trim().isEmpty) ? '$label is required' : null,
+  validator: (String? value) {
+    if (required && (value == null || value.trim().isEmpty)) {
+      return '$label is required';
+    }
+    if (validator != null) {
+      return validator(value);
+    }
+    return null;
+  },
 );
 
 Widget _sectionLabel(BuildContext context, String label, String title) =>

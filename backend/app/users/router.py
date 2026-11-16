@@ -7,11 +7,13 @@ from app.auth.dependencies import IdentityContext, get_current_user, get_session
 from app.models.user import User
 from app.users.affinity_service import UserAffinityService
 from app.users.follow_service import FollowGraphError, FollowGraphNotFoundError, build_follow_graph_service
+from app.users.points import build_user_point_balance_view
 from app.users.schemas import (
     FollowListResponse,
     FollowMutationView,
     SuggestedFollowResponse,
     UserAffinityProfileView,
+    UserPointBalanceView,
     UserPublic,
 )
 
@@ -40,6 +42,15 @@ def _raise_follow_graph_error(exc: FollowGraphError) -> None:
 @users_router.get("/me", response_model=UserPublic)
 def read_current_user(current_user: User = Depends(get_current_user)) -> UserPublic:
     return UserPublic.model_validate(current_user)
+
+
+@users_router.get("/me/points", response_model=UserPointBalanceView)
+def read_current_user_points(
+    limit: int = Query(default=20, ge=1, le=100),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> UserPointBalanceView:
+    return build_user_point_balance_view(session, user_id=current_user.id, recent_limit=limit)
 
 
 @users_router.get("/me/profile", response_model=UserAffinityProfileView)

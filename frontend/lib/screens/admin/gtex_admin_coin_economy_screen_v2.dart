@@ -65,9 +65,9 @@ class GtexAdminCoinEconomyScreenV2 extends StatelessWidget {
                       subtitle:
                           'Every balance-impacting action must go through ledger/audit APIs.',
                     ),
-                    SizedBox(height: 12),
-                    Text(
-                      'Codex must not directly mutate displayed balances from the frontend. The frontend should request an admin action, backend validates permissions, writes a ledger record, and returns a new balance snapshot.',
+                    const SizedBox(height: 12),
+                    const Text(
+                      'Wallet and personal reward balances are governed exclusively by audited ledger APIs. Every credit, transfer, or point grant validates admin capabilities server-side and returns the committed balance snapshot.',
                       style: TextStyle(color: Colors.white70, height: 1.45),
                     ),
                   ],

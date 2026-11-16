@@ -9,7 +9,9 @@ from app.common.schemas.base import CommonSchema
 
 
 class CoinTraderVerificationInitiateRequest(CommonSchema):
-    verification_type: str = Field(default="full_kyc")
+    provider: str | None = Field(default=None, max_length=32)
+    verification_type: str = Field(default="full_kyc", max_length=64)
+    id_type: str | None = Field(default=None, max_length=32)
     callback_url: str | None = Field(default=None, max_length=512)
 
 
@@ -19,7 +21,7 @@ class CoinTraderVerificationSessionView(CommonSchema):
     reference: str
     handoff_url: str | None = None
     verification_type: str
-    status: str = "pending"
+    status: str
     expires_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
@@ -39,7 +41,7 @@ class CoinTraderVerificationStatusView(CommonSchema):
     verified_at: datetime | None = None
 
 
-class AdminTraderVerificationRecordView(CommonSchema):
+class IdentityVerificationRecordAdminView(CommonSchema):
     id: str
     user_id: str
     user_email: str | None = None
@@ -59,9 +61,9 @@ class AdminTraderVerificationRecordView(CommonSchema):
     history: list[dict[str, Any]] = Field(default_factory=list)
 
 
-IdentityVerificationRecordAdminView = AdminTraderVerificationRecordView
+AdminTraderVerificationRecordView = IdentityVerificationRecordAdminView
 
 
 class CoinTraderAdminActionRequest(CommonSchema):
-    reason: str | None = None
-    note: str | None = None
+    reason: str = Field(min_length=4, max_length=500)
+    notes: str | None = Field(default=None, max_length=1000)

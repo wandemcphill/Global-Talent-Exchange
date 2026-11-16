@@ -247,6 +247,81 @@ class GtexCoinTraderApi {
     }, () async => const <GtexCoinTradeOrder>[]);
   }
 
+  Future<GtexTraderVerificationSession> initiateTraderVerification({
+    String verificationType = 'full_kyc',
+    String? callbackUrl,
+  }) async {
+    final Object? payload = await client.post(
+      _path('/api/coin-traders/verification/initiate'),
+      body: <String, Object?>{
+        'provider': 'didit',
+        'verification_type': verificationType,
+        if (_notBlank(callbackUrl)) 'callback_url': callbackUrl,
+      },
+    );
+    return GtexTraderVerificationSession.fromJson(payload);
+  }
+
+  Future<GtexTraderVerificationStatus?> fetchTraderVerificationStatus() async {
+    try {
+      final Map<String, dynamic> payload = await client.getMap(
+        _path('/api/coin-traders/verification/status'),
+      );
+      return GtexTraderVerificationStatus.fromJson(payload);
+    } on GteApiException catch (error) {
+      if (error.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> adminIssueLiquidity({
+    required String profileId,
+    required String coinUnit,
+    required double amount,
+    String? reference,
+    String? note,
+  }) async {
+    final Object? payload = await client.post(
+      _path('/api/admin/coin-traders/$profileId/liquidity/issue'),
+      body: <String, Object?>{
+        'coin_unit': _ledgerUnit(coinUnit),
+        'amount': amount,
+        if (_notBlank(reference)) 'reference': reference!.trim(),
+        if (_notBlank(note)) 'note': note!.trim(),
+      },
+    );
+    return payload is Map<String, dynamic>
+        ? payload
+        : payload is Map
+        ? Map<String, dynamic>.from(payload)
+        : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> adminRedeemLiquidity({
+    required String profileId,
+    required String coinUnit,
+    required double amount,
+    String? reference,
+    String? note,
+  }) async {
+    final Object? payload = await client.post(
+      _path('/api/admin/coin-traders/$profileId/liquidity/redeem'),
+      body: <String, Object?>{
+        'coin_unit': _ledgerUnit(coinUnit),
+        'amount': amount,
+        if (_notBlank(reference)) 'reference': reference!.trim(),
+        if (_notBlank(note)) 'note': note!.trim(),
+      },
+    );
+    return payload is Map<String, dynamic>
+        ? payload
+        : payload is Map
+        ? Map<String, dynamic>.from(payload)
+        : <String, dynamic>{};
+  }
+
   Future<GtexCoinTraderProfile> adminApproveTrader(
     String profileId, {
     String tier = 'bronze',

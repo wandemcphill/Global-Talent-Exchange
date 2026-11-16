@@ -33,6 +33,39 @@ PROTECTED_PROFILE_FIELDS = frozenset(
     }
 )
 
+_HEX_CHARS = frozenset("0123456789abcdef")
+_BASE32_CHARS = frozenset("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+
+
+def validate_trader_totp_secret(value: str) -> str:
+    cleaned = "".join(str(value or "").split()).upper()
+    if len(cleaned) < 16 or len(cleaned) > 128 or any(ch not in _BASE32_CHARS for ch in cleaned):
+        raise ValueError("Authenticator setup secret must be a valid Base32 key.")
+    return cleaned
+
+
+def validate_trader_credential_hash(value: str, expected_purpose: str) -> str:
+    cleaned = str(value or "").strip()
+    parts = cleaned.split("$")
+    if len(parts) != 5:
+        raise ValueError(f"{expected_purpose} credential must use the GTEX PBKDF2 format.")
+    algorithm, iterations, purpose, salt_hex, digest_hex = parts
+    try:
+        iteration_count = int(iterations)
+    except ValueError as exc:
+        raise ValueError(f"{expected_purpose} credential hash iterations are invalid.") from exc
+    if (
+        algorithm != "pbkdf2-sha256"
+        or iteration_count < 210_000
+        or purpose != expected_purpose
+        or len(salt_hex) < 32
+        or len(digest_hex) != 64
+        or any(character not in _HEX_CHARS for character in salt_hex.lower())
+        or any(character not in _HEX_CHARS for character in digest_hex.lower())
+    ):
+        raise ValueError(f"{expected_purpose} credential hash is invalid; create a new PIN or recovery phrase.")
+    return f"{algorithm}${iteration_count}${purpose}${salt_hex.lower()}${digest_hex.lower()}"
+
 
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -323,6 +356,21 @@ class TraderSignupRequest(BaseModel):
         if candidate not in {"beginner", "intermediate", "professional"}:
             raise ValueError("trading_experience must be beginner, intermediate, or professional.")
         return candidate
+
+    @field_validator("totp_secret")
+    @classmethod
+    def validate_totp_secret(cls, value: str) -> str:
+        return validate_trader_totp_secret(value)
+
+    @field_validator("recovery_phrase_hash")
+    @classmethod
+    def validate_recovery_phrase_hash(cls, value: str) -> str:
+        return validate_trader_credential_hash(value, "recovery")
+
+    @field_validator("security_pin_hash")
+    @classmethod
+    def validate_security_pin_hash(cls, value: str) -> str:
+        return validate_trader_credential_hash(value, "pin")
 
 
 class LoginRequest(BaseModel):

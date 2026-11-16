@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/app_feedback.dart';
 import 'gtex_admin_clock_and_prize.dart';
 import '../../data/admin_command_center_api.dart';
+import '../../features/admin_command_redesign/widgets/gtex_admin_economy_operations_panel.dart';
 import '../../data/gte_api_repository.dart';
 import '../../data/gte_authed_api.dart';
 import '../../data/gte_models.dart';
@@ -1984,6 +1985,12 @@ class _AdminCommandCenterScreenState extends State<AdminCommandCenterScreen> {
                     _buildDepositQueuePanel(context),
                     const SizedBox(height: 18),
                     _buildWalletCreditPanel(context),
+                    const SizedBox(height: 18),
+                    if (_can(GtexAdminCapabilities.managePaymentRails))
+                      GtexAdminEconomyOperationsPanel(
+                        api: _api,
+                        onCompleted: _load,
+                      ),
                   ],
                 ),
               ),

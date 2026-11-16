@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
+import { Navigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Activity, Coins, Lock, RefreshCw, ShieldCheck, Sliders, Trophy } from "lucide-react";
@@ -276,15 +276,24 @@ function GodModeControlDesk() {
 const ADMIN_TABS = [
   { id: "overview", label: "Fees and prizes" },
   { id: "rails", label: "Bank and payouts" },
-  { id: "queues", label: "Money in, ID checks, disputes" },
+  { id: "queues", label: "Coin traders, KYC & queues" },
   { id: "players", label: "Players and photos" },
   { id: "competitions", label: "Competitions and jackpot" },
-  { id: "economy", label: "Coin supply and switches" },
+  { id: "economy", label: "Give coin, transfers & points" },
   { id: "users", label: "People and admin log" },
 ] as const;
 
 export default function Admin() {
-  const [tab, setTab] = useState<(typeof ADMIN_TABS)[number]["id"]>("overview");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialTab = searchParams.get("tab");
+  const resolvedInitialTab = ADMIN_TABS.some((item) => item.id === initialTab)
+    ? (initialTab as (typeof ADMIN_TABS)[number]["id"])
+    : "overview";
+  const [tab, setTabState] = useState<(typeof ADMIN_TABS)[number]["id"]>(resolvedInitialTab);
+  const setTab = (nextTab: (typeof ADMIN_TABS)[number]["id"]) => {
+    setTabState(nextTab);
+    setSearchParams({ tab: nextTab }, { replace: true });
+  };
   const { user } = useAuth();
   const qc = useQueryClient();
   const isAdmin = ["admin", "super_admin"].includes(String(user?.role).toLowerCase());
@@ -311,7 +320,15 @@ export default function Admin() {
           </div>
           <div>
             <p className="font-bold text-white">How to create coin</p>
-            <p className="mt-1">This page does not print coin. On the admin desk, use Give someone coin. That creates the coin and puts it in their wallet. Coin is also created when a prize or the jackpot is paid. The number on this page is coin already in wallets, or coin the platform still holds.</p>
+            <p className="mt-1">This page does not print coin. Open Give coin, transfers &amp; points to give GTEX Coin or Fan Coin, transfer coin between users, or grant personal user points.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Btn variant="secondary" onClick={() => setTab("economy")} data-testid="admin-shortcut-economy-btn">
+                Give coin, transfers &amp; points →
+              </Btn>
+              <Btn variant="secondary" onClick={() => setTab("queues")} data-testid="admin-shortcut-traders-btn">
+                Coin traders, KYC &amp; liquidity →
+              </Btn>
+            </div>
           </div>
           <div>
             <p className="font-bold text-white">Put money in the jackpot</p>
