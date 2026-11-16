@@ -324,7 +324,9 @@ class CoinTraderService:
             if advert.status != CoinAdvertStatus.ACTIVE.value:
                 raise CoinTraderValidationError("Selected coin trader advert is paused or unavailable.")
             expected_side = (
-                CoinAdvertSide.SELL.value if direction == CoinTradeDirection.USER_BUYS.value else CoinAdvertSide.BUY.value
+                CoinAdvertSide.SELL.value
+                if direction == CoinTradeDirection.USER_BUYS.value
+                else CoinAdvertSide.BUY.value
             )
             if (
                 advert.side != expected_side
@@ -333,7 +335,9 @@ class CoinTraderService:
             ):
                 raise CoinTraderValidationError("Order details do not match the selected advert.")
             quoted_rate, _, _ = self.marketplace.resolve_advert_price(advert)
-            if payload.expected_rate_fiat is not None and abs(Decimal(payload.expected_rate_fiat) - quoted_rate) > Decimal("0.0001"):
+            if payload.expected_rate_fiat is not None and abs(
+                Decimal(payload.expected_rate_fiat) - quoted_rate
+            ) > Decimal("0.0001"):
                 raise CoinTraderValidationError(
                     "Advert price changed since your quote was generated. Please refresh and place the order again."
                 )
@@ -357,8 +361,10 @@ class CoinTraderService:
             ):
                 raise CoinTraderValidationError("Trader liquidity is below requested amount.")
             advert_methods = list(advert.payment_methods_json or [])
-            if payload.payment_method and advert_methods and not any(
-                m.lower() == payload.payment_method.strip().lower() for m in advert_methods
+            if (
+                payload.payment_method
+                and advert_methods
+                and not any(m.lower() == payload.payment_method.strip().lower() for m in advert_methods)
             ):
                 raise CoinTraderValidationError("Selected payment method is not accepted on this advert.")
             terms_snapshot = {
@@ -388,7 +394,9 @@ class CoinTraderService:
             except ValueError as exc:
                 raise CoinTraderValidationError(str(exc)) from exc
             quoted_rate = rate.sell_rate_fiat if direction == CoinTradeDirection.USER_BUYS.value else rate.buy_rate_fiat
-            if payload.expected_rate_fiat is not None and abs(Decimal(payload.expected_rate_fiat) - quoted_rate) > Decimal("0.0001"):
+            if payload.expected_rate_fiat is not None and abs(
+                Decimal(payload.expected_rate_fiat) - quoted_rate
+            ) > Decimal("0.0001"):
                 raise CoinTraderValidationError("Trader rate changed since your quote. Please refresh and try again.")
             if quoted_rate <= Decimal("0"):
                 raise CoinTraderValidationError("Coin trader rate is not available.")
@@ -1245,7 +1253,12 @@ class CoinTraderService:
             resource_type="coin_trader_profile",
             resource_id=profile.id,
             detail=f"Admin {flow}d {amount} {payload.coin_unit.value} for {profile.display_name}.",
-            metadata={"flow": flow, "coin_unit": payload.coin_unit.value, "amount": str(amount), "reference": reference},
+            metadata={
+                "flow": flow,
+                "coin_unit": payload.coin_unit.value,
+                "amount": str(amount),
+                "reference": reference,
+            },
         )
         self.session.commit()
         self.session.refresh(profile)

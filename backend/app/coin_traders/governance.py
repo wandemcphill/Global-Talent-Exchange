@@ -177,7 +177,9 @@ class CoinTraderPricingGovernanceService:
                 settings = self.treasury_service.ensure_settings(self.session)
                 floor = result.treasury_deposit_rate_fiat - self._amount(settings.max_sell_below_deposit_fiat)
                 if price < floor:
-                    reasons.append(f"Selling price {price} undercuts the treasury deposit reference {result.treasury_deposit_rate_fiat}.")
+                    reasons.append(
+                        f"Selling price {price} undercuts the treasury deposit reference {result.treasury_deposit_rate_fiat}."
+                    )
         else:
             low, high = result.min_trader_buy_rate_fiat, result.max_trader_buy_rate_fiat
             if low is not None and price < low:
@@ -188,7 +190,9 @@ class CoinTraderPricingGovernanceService:
                 settings = self.treasury_service.ensure_settings(self.session)
                 ceiling = result.treasury_withdrawal_rate_fiat + self._amount(settings.max_buy_above_withdrawal_fiat)
                 if price > ceiling:
-                    reasons.append(f"Buying price {price} exceeds the treasury withdrawal reference {result.treasury_withdrawal_rate_fiat}.")
+                    reasons.append(
+                        f"Buying price {price} exceeds the treasury withdrawal reference {result.treasury_withdrawal_rate_fiat}."
+                    )
         return tuple(reasons)
 
     def _normalized(self, unit: LedgerUnit | str) -> LedgerUnit:

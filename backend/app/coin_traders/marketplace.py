@@ -69,10 +69,7 @@ def _as_utc(dt: datetime | None) -> datetime | None:
 
 
 def _is_didit_verified(profile: CoinTraderProfile) -> bool:
-    return bool(
-        profile.verified_at is not None
-        and (profile.verification_provider or "").strip().lower() == "didit"
-    )
+    return bool(profile.verified_at is not None and (profile.verification_provider or "").strip().lower() == "didit")
 
 
 def _verification_badge_label(profile: CoinTraderProfile) -> str:
@@ -156,7 +153,9 @@ class CoinTraderMarketplaceHelper:
         settings = settings or TreasuryService().ensure_settings(self.session)
         if advert.coin_unit == LedgerUnit.COIN:
             ref_rate = _q4(
-                settings.deposit_rate_value if advert.side == CoinAdvertSide.SELL.value else settings.withdrawal_rate_value
+                settings.deposit_rate_value
+                if advert.side == CoinAdvertSide.SELL.value
+                else settings.withdrawal_rate_value
             )
         else:
             ref_rate = _q4(
@@ -564,7 +563,11 @@ class CoinTraderMarketplaceHelper:
                 CoinTraderAdvert.side == side,
             )
         )
-        if advert is not None and advert.status == CoinAdvertStatus.ADMIN_PAUSED.value and status_val == CoinAdvertStatus.ACTIVE.value:
+        if (
+            advert is not None
+            and advert.status == CoinAdvertStatus.ADMIN_PAUSED.value
+            and status_val == CoinAdvertStatus.ACTIVE.value
+        ):
             raise CoinTraderValidationError(
                 "This advert was paused by an administrator and cannot be resumed by the merchant."
             )
@@ -614,7 +617,11 @@ class CoinTraderMarketplaceHelper:
     def update_my_advert_status(
         self, advert_id: str, payload: CoinTraderAdvertStatusUpdateRequest, *, actor: User
     ) -> CoinTraderAdvertView:
-        from app.coin_traders.service import CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError
+        from app.coin_traders.service import (
+            CoinTraderNotFoundError,
+            CoinTraderPermissionError,
+            CoinTraderValidationError,
+        )
 
         profile = self.service._require_approved_profile_for_user(actor)
         advert = self.session.get(CoinTraderAdvert, advert_id)
@@ -638,7 +645,9 @@ class CoinTraderMarketplaceHelper:
                 if wallet_avail <= Decimal("0") or (
                     advert.min_coin_amount > Decimal("0") and wallet_avail < advert.min_coin_amount
                 ):
-                    raise CoinTraderValidationError("Insufficient available wallet inventory to activate this sell advert.")
+                    raise CoinTraderValidationError(
+                        "Insufficient available wallet inventory to activate this sell advert."
+                    )
 
         advert.status = payload.status
         profile.last_active_at = utcnow()
@@ -734,8 +743,14 @@ class CoinTraderMarketplaceHelper:
         profit_total = Decimal("0.0000")
         matched_any = False
         for unit in (LedgerUnit.COIN, LedgerUnit.CREDIT):
-            buys = [o for o in completed_orders if o.coin_unit == unit and o.direction == CoinTradeDirection.USER_SELLS.value]
-            sells = [o for o in completed_orders if o.coin_unit == unit and o.direction == CoinTradeDirection.USER_BUYS.value]
+            buys = [
+                o
+                for o in completed_orders
+                if o.coin_unit == unit and o.direction == CoinTradeDirection.USER_SELLS.value
+            ]
+            sells = [
+                o for o in completed_orders if o.coin_unit == unit and o.direction == CoinTradeDirection.USER_BUYS.value
+            ]
             bought_qty = sum((Decimal(o.coin_amount) for o in buys), Decimal("0"))
             sold_qty = sum((Decimal(o.coin_amount) for o in sells), Decimal("0"))
             if bought_qty > Decimal("0") and sold_qty > Decimal("0"):

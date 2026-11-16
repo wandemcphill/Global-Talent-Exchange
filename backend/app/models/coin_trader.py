@@ -4,7 +4,19 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -198,7 +210,11 @@ class CoinTraderAdvert(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "coin_trader_adverts"
     __table_args__ = (
         UniqueConstraint(
-            "trader_profile_id", "coin_unit", "fiat_currency", "side", name="uq_coin_trader_adverts_profile_unit_fiat_side"
+            "trader_profile_id",
+            "coin_unit",
+            "fiat_currency",
+            "side",
+            name="uq_coin_trader_adverts_profile_unit_fiat_side",
         ),
         Index("ix_coin_trader_adverts_market", "coin_unit", "fiat_currency", "side", "status"),
     )
@@ -222,7 +238,9 @@ class CoinTraderAdvert(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     payment_window_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15, server_default="15")
     payment_methods_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
     terms_text: Mapped[str | None] = mapped_column(String(1000), nullable=True)
-    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active", index=True)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="active", server_default="active", index=True
+    )
     admin_paused_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 

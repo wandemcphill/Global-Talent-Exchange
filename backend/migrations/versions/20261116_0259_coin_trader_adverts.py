@@ -1,7 +1,7 @@
 """Add coin trader adverts, order chat messages, ratings, and profile/order fields.
 
-Revision ID: 20261116_0257_coin_trader_adverts
-Revises: 20261116_0256_remove_test_accounts_and_seeded_owner_competitions
+Revision ID: 20261116_0259_coin_trader_adverts
+Revises: 20261116_0258_owner_console_crest_urls_text
 
 Additive only:
 - Creates ``coin_trader_adverts``, ``coin_trade_messages``, ``coin_trade_ratings``.
@@ -19,8 +19,8 @@ from uuid import uuid4
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261116_0257_coin_trader_adverts"
-down_revision = "20261116_0256_remove_test_accounts_and_seeded_owner_competitions"
+revision = "20261116_0259_coin_trader_adverts"
+down_revision = "20261116_0258_owner_console_crest_urls_text"
 branch_labels = None
 depends_on = None
 

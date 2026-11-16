@@ -344,7 +344,9 @@ def test_advert_lifecycle_four_markets_filters_sorting_quote_and_ratings(
     assert overview.json()["total_traders"] >= 2
 
     # Scenario H: Customer opens dispute on accepted sell order -> prevents release -> admin resolves refund
-    accepted_sell = client.post(f"/api/coin-traders/orders/{sell_order.json()['id']}/accept", headers=trader1["headers"])
+    accepted_sell = client.post(
+        f"/api/coin-traders/orders/{sell_order.json()['id']}/accept", headers=trader1["headers"]
+    )
     assert accepted_sell.status_code == 200, accepted_sell.text
     disputed = client.post(
         f"/api/coin-traders/orders/{sell_order.json()['id']}/dispute",
