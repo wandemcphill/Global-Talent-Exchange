@@ -910,8 +910,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
               </p>
             </section>
           )}
-            </section>
-          )}
 
           <Field label="Email" error={fieldErrors.email}>
             <input
