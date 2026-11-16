@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from datetime import date, datetime, timedelta, timezone
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.models.club_profile import ClubProfile
 from app.models.player_contract import PlayerContract
@@ -18,12 +18,43 @@ PREFIX = "full-journey-20260915"
 def _fund_gift_bridge(app_session_factory, actor_user_id: str) -> None:
     from app.models import LedgerEntryReason, LedgerUnit
     from app.models.user import User
+    from app.models.wallet import (
+        LedgerAccount,
+        LedgerAccountKind,
+        LedgerEntry,
+        LedgerTransaction,
+        LedgerTransactionStatus,
+    )
     from app.wallets.service import LedgerPosting, WalletService
 
     with app_session_factory() as session:
         actor = session.get(User, actor_user_id)
         assert actor is not None
         wallet = WalletService()
+        user_fan_balances = (
+            select(
+                LedgerEntry.account_id.label("account_id"),
+                func.sum(LedgerEntry.amount).label("balance"),
+            )
+            .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+            .join(LedgerAccount, LedgerAccount.id == LedgerEntry.account_id)
+            .where(
+                LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+                LedgerAccount.owner_user_id.is_not(None),
+                LedgerAccount.kind == LedgerAccountKind.USER,
+                LedgerAccount.unit == LedgerUnit.CREDIT,
+                LedgerEntry.unit == LedgerUnit.CREDIT,
+            )
+            .group_by(LedgerEntry.account_id)
+            .having(func.sum(LedgerEntry.amount) > 0)
+            .subquery()
+        )
+        outstanding_fan = Decimal(
+            str(session.scalar(select(func.coalesce(func.sum(user_fan_balances.c.balance), 0))) or 0)
+        )
+        bridge_reserve = (outstanding_fan / Decimal("15.0000")).quantize(
+            Decimal("0.0001"), rounding=ROUND_UP
+        )
         bridge = wallet.ensure_named_system_account(
             session,
             code="platform:coin:gift_conversion_bridge",
@@ -35,8 +66,8 @@ def _fund_gift_bridge(app_session_factory, actor_user_id: str) -> None:
         wallet.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=bridge, amount=Decimal("100.0000")),
-                LedgerPosting(account=platform_coin, amount=Decimal("-100.0000")),
+                LedgerPosting(account=bridge, amount=bridge_reserve),
+                LedgerPosting(account=platform_coin, amount=-bridge_reserve),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             reference=f"{PREFIX}-gift-bridge",
