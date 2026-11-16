@@ -30,8 +30,7 @@ def downgrade() -> None:
     bind = op.get_bind()
     oversized_count = bind.execute(
         sa.text(
-            "SELECT COUNT(*) FROM club_profiles "
-            "WHERE crest_asset_ref IS NOT NULL AND length(crest_asset_ref) > 255"
+            "SELECT COUNT(*) FROM club_profiles " "WHERE crest_asset_ref IS NOT NULL AND length(crest_asset_ref) > 255"
         )
     ).scalar_one()
     if oversized_count:
