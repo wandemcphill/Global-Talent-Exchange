@@ -123,9 +123,15 @@ from app.models.club_sale import (
     ClubValuationSnapshot,
 )
 from app.models.coin_trader import (
+    CoinAdvertPricingMode,
+    CoinAdvertSide,
+    CoinAdvertStatus,
     CoinTradeDirection,
+    CoinTradeMessage,
     CoinTradeOrder,
     CoinTradeOrderStatus,
+    CoinTradeRating,
+    CoinTraderAdvert,
     CoinTraderProfile,
     CoinTraderProfileStatus,
     CoinTraderRate,

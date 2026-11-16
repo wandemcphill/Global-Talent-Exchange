@@ -9,18 +9,25 @@ from datetime import datetime, timedelta, timezone
 logger = logging.getLogger(__name__)
 from decimal import Decimal
 
-from sqlalchemy import inspect, select
+from sqlalchemy import and_, inspect, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.base import generate_uuid, utcnow
+from app.models.base import utcnow
 from app.models.coin_trader import (
+    CoinAdvertPricingMode,
+    CoinAdvertSide,
+    CoinAdvertStatus,
     CoinTradeDirection,
+    CoinTradeMessage,
     CoinTradeOrder,
     CoinTradeOrderStatus,
+    CoinTradeRating,
+    CoinTraderAdvert,
     CoinTraderProfile,
     CoinTraderProfileStatus,
     CoinTraderRate,
 )
+from app.models.risk_ops import AuditLog
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
 from app.models.wallet import (
     LedgerAccount,
@@ -33,6 +40,11 @@ from app.models.wallet import (
 from app.notifications.service import NotificationEventMatrixService
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
 from app.coin_traders.governance import CoinTraderPricingGovernanceService
+from app.coin_traders.marketplace import (
+    CoinTraderMarketplaceHelper,
+    _is_didit_verified,
+    _verification_badge_label,
+)
 from app.coin_traders.schemas import (
     CoinTraderAdminLiquidityRequest,
     CoinTraderAdminLiquidityTransferView,
@@ -48,6 +60,7 @@ from app.coin_traders.schemas import (
     CoinTraderProfileCreateRequest,
     CoinTraderProfileUpdateRequest,
     CoinTraderProfileView,
+    CoinTraderPublicProfileView,
     CoinTraderRateUpsertRequest,
     CoinTraderRateView,
 )
@@ -74,13 +87,17 @@ class CoinTraderService:
     session: Session
     wallet_service: WalletService = field(default_factory=WalletService)
 
+    @property
+    def marketplace(self) -> CoinTraderMarketplaceHelper:
+        return CoinTraderMarketplaceHelper(self)
+
     def list_traders(
         self,
         *,
         country_code: str | None = None,
         coin_unit: LedgerUnit | None = None,
         approved_only: bool = True,
-    ) -> list[CoinTraderProfileView]:
+    ) -> list[CoinTraderPublicProfileView]:
         statement = (
             select(CoinTraderProfile)
             .join(User, User.id == CoinTraderProfile.user_id)
@@ -92,7 +109,11 @@ class CoinTraderService:
             )
         )
         if approved_only:
-            statement = statement.where(CoinTraderProfile.status == CoinTraderProfileStatus.APPROVED.value)
+            statement = statement.where(
+                CoinTraderProfile.status == CoinTraderProfileStatus.APPROVED.value,
+                CoinTraderProfile.verified_at.is_not(None),
+                CoinTraderProfile.suspended_at.is_(None),
+            )
         if country_code:
             statement = statement.where(CoinTraderProfile.country_code == country_code.upper())
         profiles = list(self.session.scalars(statement).all())
@@ -102,16 +123,16 @@ class CoinTraderService:
                 for profile in profiles
                 if any(rate.coin_unit == coin_unit and rate.is_active for rate in self._rates_for_profile(profile.id))
             ]
-        return [self.to_profile_view(profile) for profile in profiles]
+        return [self.to_public_profile_view(profile) for profile in profiles]
 
-    def get_profile(self, profile_id: str) -> CoinTraderProfileView:
+    def get_profile(self, profile_id: str) -> CoinTraderPublicProfileView:
         profile = self._require_profile(profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
         trader = self._require_user(profile.user_id)
         if trader.account_type != PublicAccountType.COIN_TRADER:
             raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
-        return self.to_profile_view(profile)
+        return self.to_public_profile_view(profile)
 
     def get_my_profile(self, actor: User) -> CoinTraderProfileView:
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
@@ -211,10 +232,51 @@ class CoinTraderService:
         rate.is_active = payload.is_active
         rate.metadata_json = dict(payload.metadata_json)
         self.session.flush()
+        self._sync_adverts_from_rate(rate, profile)
+        profile.last_active_at = utcnow()
         profile.liquidity_snapshot_json = self._liquidity_snapshot(profile.id)
         self.session.commit()
         self.session.refresh(rate)
         return self.to_rate_view(rate)
+
+    def _sync_adverts_from_rate(self, rate: CoinTraderRate, profile: CoinTraderProfile) -> None:
+        """Keep coin_trader_adverts synchronized when legacy /me/rates is used."""
+        methods = self._public_payment_method_labels(list(profile.payment_methods_json or []))
+        for side, price in (
+            (CoinAdvertSide.BUY.value, rate.buy_rate_fiat),
+            (CoinAdvertSide.SELL.value, rate.sell_rate_fiat),
+        ):
+            if price is None or Decimal(price) <= Decimal("0"):
+                continue
+            advert = self.session.scalar(
+                select(CoinTraderAdvert).where(
+                    CoinTraderAdvert.trader_profile_id == profile.id,
+                    CoinTraderAdvert.coin_unit == rate.coin_unit,
+                    CoinTraderAdvert.fiat_currency == rate.fiat_currency,
+                    CoinTraderAdvert.side == side,
+                )
+            )
+            if advert is None:
+                advert = CoinTraderAdvert(
+                    trader_profile_id=profile.id,
+                    coin_unit=rate.coin_unit,
+                    fiat_currency=rate.fiat_currency,
+                    side=side,
+                    pricing_mode=CoinAdvertPricingMode.FIXED.value,
+                    price_fiat=price,
+                    payment_window_minutes=45,
+                    payment_methods_json=methods,
+                )
+                self.session.add(advert)
+            else:
+                advert.pricing_mode = CoinAdvertPricingMode.FIXED.value
+                advert.price_fiat = price
+                if methods and not advert.payment_methods_json:
+                    advert.payment_methods_json = methods
+            advert.min_coin_amount = rate.min_coin_amount
+            advert.max_coin_amount = rate.max_coin_amount
+            if advert.status != CoinAdvertStatus.ADMIN_PAUSED.value:
+                advert.status = CoinAdvertStatus.ACTIVE.value if rate.is_active else CoinAdvertStatus.PAUSED.value
 
     def create_order(self, payload: CoinTradeOrderCreateRequest, *, actor: User) -> CoinTradeOrderView:
         if payload.idempotency_key:
@@ -232,6 +294,8 @@ class CoinTraderService:
             raise CoinTraderValidationError("Coin trader has not completed identity verification.")
         if profile.suspended_at is not None or profile.status == CoinTraderProfileStatus.SUSPENDED.value:
             raise CoinTraderValidationError("Coin trader is currently suspended.")
+        if profile.frozen_at is not None or profile.status == CoinTraderProfileStatus.FROZEN.value:
+            raise CoinTraderValidationError("Coin trader desk is currently frozen.")
         if profile.user_id == actor.id:
             raise CoinTraderValidationError("Traders cannot create orders against their own desk.")
         # COMP-001: Enforce KYC verification if trader terms specify kyc_required
@@ -249,37 +313,104 @@ class CoinTraderService:
                     "Please complete your KYC verification in Wallet Settings."
                 )
         direction = self._direction_value(payload.direction)
-        rate = self._active_rate(profile.id, payload.coin_unit, payload.fiat_currency)
-        governance = CoinTraderPricingGovernanceService(self.session)
-        result = governance.evaluate_rate(rate)
-        try:
-            governance.block_if_invalid(
-                result=result,
-                actor=actor,
-                trader_profile=profile,
-                proposed_rate_payload={
-                    "coin_unit": rate.coin_unit.value if hasattr(rate.coin_unit, "value") else str(rate.coin_unit),
-                    "fiat_currency": rate.fiat_currency,
-                    "buy_rate_fiat": str(rate.buy_rate_fiat),
-                    "sell_rate_fiat": str(rate.sell_rate_fiat),
-                    "order_coin_amount": str(payload.coin_amount),
-                },
-                action="order",
+        advert: CoinTraderAdvert | None = None
+        if payload.advert_id:
+            stmt_ad = select(CoinTraderAdvert).where(CoinTraderAdvert.id == payload.advert_id)
+            if self._supports_row_locks(self.session):
+                stmt_ad = stmt_ad.with_for_update()
+            advert = self.session.scalar(stmt_ad)
+            if advert is None or advert.trader_profile_id != profile.id:
+                raise CoinTraderNotFoundError("Selected coin trader advert was not found.")
+            if advert.status != CoinAdvertStatus.ACTIVE.value:
+                raise CoinTraderValidationError("Selected coin trader advert is paused or unavailable.")
+            expected_side = (
+                CoinAdvertSide.SELL.value
+                if direction == CoinTradeDirection.USER_BUYS.value
+                else CoinAdvertSide.BUY.value
             )
-        except ValueError as exc:
-            raise CoinTraderValidationError(str(exc)) from exc
-        quoted_rate = rate.sell_rate_fiat if direction == CoinTradeDirection.USER_BUYS.value else rate.buy_rate_fiat
-        if quoted_rate <= Decimal("0"):
-            raise CoinTraderValidationError("Coin trader rate is not available.")
-        if payload.coin_amount < rate.min_coin_amount:
-            raise CoinTraderValidationError("Order is below the trader minimum.")
-        if rate.max_coin_amount > Decimal("0") and payload.coin_amount > rate.max_coin_amount:
-            raise CoinTraderValidationError("Order exceeds the trader maximum.")
-        if (
-            direction == CoinTradeDirection.USER_BUYS.value
-            and self._effective_available_liquidity(rate) < payload.coin_amount
-        ):
-            raise CoinTraderValidationError("Trader liquidity is below requested amount.")
+            if (
+                advert.side != expected_side
+                or advert.coin_unit != payload.coin_unit
+                or advert.fiat_currency.upper() != payload.fiat_currency.upper()
+            ):
+                raise CoinTraderValidationError("Order details do not match the selected advert.")
+            quoted_rate, _, _ = self.marketplace.resolve_advert_price(advert)
+            if payload.expected_rate_fiat is not None and abs(
+                Decimal(payload.expected_rate_fiat) - quoted_rate
+            ) > Decimal("0.0001"):
+                raise CoinTraderValidationError(
+                    "Advert price changed since your quote was generated. Please refresh and place the order again."
+                )
+            reasons = CoinTraderPricingGovernanceService(self.session).evaluate_side(
+                coin_unit=advert.coin_unit, side=advert.side, price=quoted_rate
+            )
+            if reasons:
+                raise CoinTraderValidationError("; ".join(reasons))
+            if quoted_rate <= Decimal("0"):
+                raise CoinTraderValidationError("Coin trader advert price is not available.")
+            if payload.coin_amount < advert.min_coin_amount:
+                raise CoinTraderValidationError("Order is below the trader minimum.")
+            if advert.max_coin_amount > Decimal("0") and payload.coin_amount > advert.max_coin_amount:
+                raise CoinTraderValidationError("Order exceeds the trader maximum.")
+            daily_rem = self.marketplace.daily_remaining_coin(advert)
+            if daily_rem is not None and payload.coin_amount > daily_rem:
+                raise CoinTraderValidationError("Order exceeds the advert's remaining daily trading limit.")
+            if (
+                direction == CoinTradeDirection.USER_BUYS.value
+                and self.marketplace.effective_advert_available_coin(advert, profile) < payload.coin_amount
+            ):
+                raise CoinTraderValidationError("Trader liquidity is below requested amount.")
+            advert_methods = list(advert.payment_methods_json or [])
+            if (
+                payload.payment_method
+                and advert_methods
+                and not any(m.lower() == payload.payment_method.strip().lower() for m in advert_methods)
+            ):
+                raise CoinTraderValidationError("Selected payment method is not accepted on this advert.")
+            terms_snapshot = {
+                **dict(profile.terms_json or {}),
+                **({"advert_terms": advert.terms_text} if advert.terms_text else {}),
+                "payment_window_minutes": advert.payment_window_minutes,
+            }
+            payment_window_minutes = advert.payment_window_minutes
+        else:
+            rate = self._active_rate(profile.id, payload.coin_unit, payload.fiat_currency)
+            governance = CoinTraderPricingGovernanceService(self.session)
+            result = governance.evaluate_rate(rate)
+            try:
+                governance.block_if_invalid(
+                    result=result,
+                    actor=actor,
+                    trader_profile=profile,
+                    proposed_rate_payload={
+                        "coin_unit": rate.coin_unit.value if hasattr(rate.coin_unit, "value") else str(rate.coin_unit),
+                        "fiat_currency": rate.fiat_currency,
+                        "buy_rate_fiat": str(rate.buy_rate_fiat),
+                        "sell_rate_fiat": str(rate.sell_rate_fiat),
+                        "order_coin_amount": str(payload.coin_amount),
+                    },
+                    action="order",
+                )
+            except ValueError as exc:
+                raise CoinTraderValidationError(str(exc)) from exc
+            quoted_rate = rate.sell_rate_fiat if direction == CoinTradeDirection.USER_BUYS.value else rate.buy_rate_fiat
+            if payload.expected_rate_fiat is not None and abs(
+                Decimal(payload.expected_rate_fiat) - quoted_rate
+            ) > Decimal("0.0001"):
+                raise CoinTraderValidationError("Trader rate changed since your quote. Please refresh and try again.")
+            if quoted_rate <= Decimal("0"):
+                raise CoinTraderValidationError("Coin trader rate is not available.")
+            if payload.coin_amount < rate.min_coin_amount:
+                raise CoinTraderValidationError("Order is below the trader minimum.")
+            if rate.max_coin_amount > Decimal("0") and payload.coin_amount > rate.max_coin_amount:
+                raise CoinTraderValidationError("Order exceeds the trader maximum.")
+            if (
+                direction == CoinTradeDirection.USER_BUYS.value
+                and self._effective_available_liquidity(rate) < payload.coin_amount
+            ):
+                raise CoinTraderValidationError("Trader liquidity is below requested amount.")
+            terms_snapshot = dict(profile.terms_json or {})
+            payment_window_minutes = 45
         fiat_total = payload.coin_amount * quoted_rate
         if direction == CoinTradeDirection.USER_BUYS.value and payload.fiat_currency.upper() == "NGN":
             minimum_fiat = Decimal("200000.00") if payload.coin_unit == LedgerUnit.COIN else Decimal("50000.00")
@@ -288,6 +419,9 @@ class CoinTraderService:
                 raise CoinTraderValidationError(
                     f"Minimum buyer order value for {unit_label} purchases is ₦{minimum_fiat:,.0f}."
                 )
+        order_meta: dict[str, object] = {}
+        if direction == CoinTradeDirection.USER_SELLS.value and payload.customer_payout_details:
+            order_meta["customer_payout_details"] = dict(payload.customer_payout_details)
         order = CoinTradeOrder(
             trader_profile_id=profile.id,
             user_id=actor.id,
@@ -299,10 +433,36 @@ class CoinTraderService:
             fiat_currency=payload.fiat_currency.upper(),
             status=CoinTradeOrderStatus.CREATED.value,
             payment_method=payload.payment_method,
+            advert_id=advert.id if advert is not None else None,
+            payment_window_minutes=payment_window_minutes,
+            quote_expires_at=utcnow() + timedelta(seconds=60),
+            fee_coin=Decimal("0.0000"),
+            fee_fiat=Decimal("0.0000"),
             idempotency_key=payload.idempotency_key,
-            terms_snapshot_json=dict(profile.terms_json or {}),
+            terms_snapshot_json=terms_snapshot,
+            metadata_json=order_meta,
         )
         self.session.add(order)
+        self.session.flush()
+        # Escrow is locked atomically with order creation: no order exists without locked coins.
+        escrow_owner = self._require_user(profile.user_id) if direction == CoinTradeDirection.USER_BUYS.value else actor
+        try:
+            entries = self.wallet_service.reserve_order_funds(
+                self.session,
+                user=escrow_owner,
+                amount=order.coin_amount,
+                unit=order.coin_unit,
+                reference=f"coin-trade:{order.id}:escrow",
+                description="Coin trader order escrow lock",
+                source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
+                idempotency_key=f"coin-trade:{order.id}:escrow",
+            )
+        except InsufficientBalanceError as exc:
+            self.session.rollback()
+            who = "Trader inventory" if escrow_owner.id == profile.user_id else "Your available balance"
+            raise CoinTraderValidationError(f"{who} is insufficient to escrow this order.") from exc
+        order.escrow_owner_user_id = escrow_owner.id
+        order.ledger_refs_json = {"escrow_lock_entry_ids": [entry.id for entry in entries]}
         self.session.commit()
         self.session.refresh(order)
         return self.to_order_view(order)
@@ -317,7 +477,7 @@ class CoinTraderService:
         return [self.to_order_view(order) for order in self.session.scalars(statement).all()]
 
     def accept_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_order(order_id)
+        order = self._require_order(order_id, for_update=True)
         profile = self._require_approved_profile(order.trader_profile_id)
         if profile.user_id != actor.id:
             raise CoinTraderPermissionError("Only the selected trader can accept this order.")
@@ -325,25 +485,33 @@ class CoinTraderService:
             raise CoinTraderValidationError("Only created orders can be accepted.")
         trader_user = self._require_user(profile.user_id)
         order_user = self._require_user(order.user_id)
-        escrow_owner = trader_user if order.direction == CoinTradeDirection.USER_BUYS.value else order_user
-        entries = self.wallet_service.reserve_order_funds(
-            self.session,
-            user=escrow_owner,
-            amount=order.coin_amount,
-            unit=order.coin_unit,
-            reference=f"coin-trade:{order.id}:escrow",
-            description="Coin trader order escrow lock",
-            source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
-        )
+        if order.escrow_owner_user_id is None:
+            # Legacy orders created before escrow-at-creation: lock now (idempotent).
+            escrow_owner = trader_user if order.direction == CoinTradeDirection.USER_BUYS.value else order_user
+            try:
+                entries = self.wallet_service.reserve_order_funds(
+                    self.session,
+                    user=escrow_owner,
+                    amount=order.coin_amount,
+                    unit=order.coin_unit,
+                    reference=f"coin-trade:{order.id}:escrow",
+                    description="Coin trader order escrow lock",
+                    source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
+                    idempotency_key=f"coin-trade:{order.id}:escrow",
+                )
+            except InsufficientBalanceError as exc:
+                raise CoinTraderValidationError("Escrow owner balance is insufficient for this order.") from exc
+            order.escrow_owner_user_id = escrow_owner.id
+            order.ledger_refs_json = {
+                **dict(order.ledger_refs_json or {}),
+                "escrow_lock_entry_ids": [entry.id for entry in entries],
+            }
         now = utcnow()
-        order.escrow_owner_user_id = escrow_owner.id
+        window_minutes = order.payment_window_minutes or 45
         order.status = CoinTradeOrderStatus.PAYMENT_PENDING.value
         order.accepted_at = now
-        order.payment_window_expires_at = now + timedelta(minutes=45)
-        order.ledger_refs_json = {
-            **dict(order.ledger_refs_json or {}),
-            "escrow_lock_entry_ids": [entry.id for entry in entries],
-        }
+        order.payment_window_expires_at = now + timedelta(minutes=window_minutes)
+        profile.last_active_at = now
         self.session.commit()
         self.session.refresh(order)
         self._publish_order_matrix_notifications(
@@ -362,7 +530,7 @@ class CoinTraderService:
 
     def submit_proof(self, order_id: str, payload: CoinTradeProofRequest, *, actor: User) -> CoinTradeOrderView:
         order = self._require_participating_order(order_id, actor)
-        profile = self._require_approved_profile(order.trader_profile_id)
+        profile = self._require_profile(order.trader_profile_id)
         proof_submitter_user_id = (
             order.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else profile.user_id
         )
@@ -370,6 +538,15 @@ class CoinTraderService:
             raise CoinTraderPermissionError("Payment proof must be submitted by the fiat sender.")
         if order.status not in {CoinTradeOrderStatus.PAYMENT_PENDING.value, CoinTradeOrderStatus.PROOF_SUBMITTED.value}:
             raise CoinTraderValidationError("Payment proof can only be added while payment is pending.")
+        if order.payment_window_expires_at is not None:
+            now = utcnow()
+            expires_at = order.payment_window_expires_at
+            if expires_at.tzinfo is None:
+                expires_at = expires_at.replace(tzinfo=timezone.utc)
+            if now.tzinfo is None:
+                now = now.replace(tzinfo=timezone.utc)
+            if now > expires_at:
+                raise CoinTraderValidationError("Payment window has expired for this order.")
         order.status = CoinTradeOrderStatus.PROOF_SUBMITTED.value
         order.proof_submitted_at = utcnow()
         order.proof_json = {
@@ -384,7 +561,7 @@ class CoinTraderService:
 
     def confirm_and_release(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
         order = self._require_order(order_id, for_update=True)
-        profile = self._require_approved_profile(order.trader_profile_id)
+        profile = self._require_profile(order.trader_profile_id)
         confirmer_user_id = profile.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else order.user_id
         if actor.id != confirmer_user_id:
             raise CoinTraderPermissionError("This order requires confirmation from the fiat receiver.")
@@ -402,6 +579,7 @@ class CoinTraderService:
     def cancel_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
         order = self._require_participating_order(order_id, actor, for_update=True)
         if order.status == CoinTradeOrderStatus.CREATED.value:
+            self._release_locked_escrow(order)
             order.status = CoinTradeOrderStatus.CANCELLED.value
             order.cancelled_at = utcnow()
             self.session.commit()
@@ -483,6 +661,14 @@ class CoinTraderService:
         profile.rejected_at = None
         profile.frozen_at = None
         profile.metadata_json = {**dict(profile.metadata_json or {}), "approval_note": payload.note or ""}
+        self._write_audit_log(
+            actor=admin,
+            action_key="coin_trader.approve",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Approved coin trader {profile.display_name} at tier {profile.tier}.",
+            metadata={"tier": profile.tier, "note": payload.note or ""},
+        )
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
@@ -494,27 +680,40 @@ class CoinTraderService:
         *,
         admin: User,
     ) -> CoinTraderProfileView:
-        del admin
         profile = self._require_profile(profile_id)
         profile.status = CoinTraderProfileStatus.REJECTED.value
         profile.rejected_at = utcnow()
         profile.metadata_json = {**dict(profile.metadata_json or {}), "rejection_note": payload.note or ""}
+        self._write_audit_log(
+            actor=admin,
+            action_key="coin_trader.reject",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Rejected coin trader {profile.display_name}.",
+            metadata={"note": payload.note or ""},
+        )
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
 
     def freeze_trader(self, profile_id: str, *, admin: User, note: str | None = None) -> CoinTraderProfileView:
-        del admin
         profile = self._require_profile(profile_id)
         profile.status = CoinTraderProfileStatus.FROZEN.value
         profile.frozen_at = utcnow()
         profile.metadata_json = {**dict(profile.metadata_json or {}), "freeze_note": note or ""}
+        self._write_audit_log(
+            actor=admin,
+            action_key="coin_trader.freeze",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Froze coin trader {profile.display_name}.",
+            metadata={"note": note or ""},
+        )
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
 
     def suspend_trader(self, profile_id: str, *, admin: User, note: str | None = None) -> CoinTraderProfileView:
-        del admin
         profile = self._require_profile(profile_id)
         now = utcnow()
         profile.status = CoinTraderProfileStatus.SUSPENDED.value
@@ -524,23 +723,39 @@ class CoinTraderService:
             "suspension_note": note or "",
             "suspended_at": now.isoformat(),
         }
+        self._write_audit_log(
+            actor=admin,
+            action_key="coin_trader.suspend",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Suspended coin trader {profile.display_name}.",
+            metadata={"note": note or ""},
+        )
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
 
     def reinstate_trader(self, profile_id: str, *, admin: User, note: str | None = None) -> CoinTraderProfileView:
-        del admin
         profile = self._require_profile(profile_id)
         if profile.verified_at is None:
             raise CoinTraderValidationError("Cannot reinstate unverified trader.")
         now = utcnow()
         profile.status = CoinTraderProfileStatus.APPROVED.value
         profile.suspended_at = None
+        profile.frozen_at = None
         profile.metadata_json = {
             **dict(profile.metadata_json or {}),
             "reinstate_note": note or "",
             "reinstated_at": now.isoformat(),
         }
+        self._write_audit_log(
+            actor=admin,
+            action_key="coin_trader.reinstate",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Reinstated coin trader {profile.display_name}.",
+            metadata={"note": note or ""},
+        )
         self.session.commit()
         self.session.refresh(profile)
         return self.to_profile_view(profile)
@@ -705,51 +920,59 @@ class CoinTraderService:
             view = self._refund_order(order, actor=admin, admin=True)
             order.status = CoinTradeOrderStatus.ADMIN_REFUNDED.value
         order.metadata_json = {**dict(order.metadata_json or {}), "admin_resolution_note": payload.note or ""}
+        self._write_audit_log(
+            actor=admin,
+            action_key=f"coin_trader.order.{payload.resolution}",
+            resource_type="coin_trade_order",
+            resource_id=order.id,
+            detail=f"Admin resolved order {order.id} via {payload.resolution}.",
+            metadata={"resolution": payload.resolution, "note": payload.note or ""},
+        )
         self.session.commit()
         self.session.refresh(order)
         return self.to_order_view(order) if view.id == order.id else view
 
+    UNACCEPTED_ORDER_TTL_MINUTES = 30
+
     def expire_stale_orders(self, *, now: datetime | None = None) -> list[CoinTradeOrderView]:
         current_time = now or utcnow()
+        unaccepted_cutoff = current_time - timedelta(minutes=self.UNACCEPTED_ORDER_TTL_MINUTES)
         statement = select(CoinTradeOrder).where(
-            CoinTradeOrder.status == CoinTradeOrderStatus.PAYMENT_PENDING.value,
-            CoinTradeOrder.payment_window_expires_at.is_not(None),
-            CoinTradeOrder.payment_window_expires_at <= current_time,
+            or_(
+                and_(
+                    CoinTradeOrder.status == CoinTradeOrderStatus.PAYMENT_PENDING.value,
+                    CoinTradeOrder.payment_window_expires_at.is_not(None),
+                    CoinTradeOrder.payment_window_expires_at <= current_time,
+                ),
+                and_(
+                    CoinTradeOrder.status == CoinTradeOrderStatus.CREATED.value,
+                    CoinTradeOrder.created_at <= unaccepted_cutoff,
+                ),
+            )
         )
         if self._supports_row_locks(self.session):
             statement = statement.with_for_update()
         stale_orders = list(self.session.scalars(statement).all())
         expired_views: list[CoinTradeOrderView] = []
         for order in stale_orders:
-            order.status = CoinTradeOrderStatus.CANCELLED.value
-            order.cancelled_at = current_time
-            order.metadata_json = {
-                **dict(order.metadata_json or {}),
-                "cancellation_reason": "payment_window_expired",
-            }
-            escrow_owner = self._require_user(order.escrow_owner_user_id or "")
-            entries = self.wallet_service.release_reserved_funds(
-                self.session,
-                user=escrow_owner,
-                amount=order.coin_amount,
-                unit=order.coin_unit,
-                reference=f"coin-trade:{order.id}:expire-refund",
-                description="Coin trader order payment window expired escrow refund",
-                source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_REFUND,
-                idempotency_key=f"coin-trade:{order.id}:refund",
+            reason = (
+                "payment_window_expired"
+                if order.status == CoinTradeOrderStatus.PAYMENT_PENDING.value
+                else "not_accepted_in_time"
             )
-            order.ledger_refs_json = {
-                **dict(order.ledger_refs_json or {}),
-                "refund_entry_ids": [entry.id for entry in entries],
-            }
+            order.status = CoinTradeOrderStatus.EXPIRED.value
+            order.cancelled_at = current_time
+            order.metadata_json = {**dict(order.metadata_json or {}), "cancellation_reason": reason}
+            self._release_locked_escrow(order, reference_suffix="expire-refund")
             profile = self._require_profile(order.trader_profile_id)
+            self.session.flush()
             self._refresh_profile_metrics(profile)
             self._publish_order_matrix_notifications(
                 order,
                 event_key="order_expired",
                 target_user_ids=[order.user_id, profile.user_id],
-                message="Coin trader order has expired due to payment timeout and escrow has been refunded.",
-                metadata={"reason": "payment_window_expired"},
+                message="Coin trader order has expired and escrow has been returned.",
+                metadata={"reason": reason},
             )
             expired_views.append(self.to_order_view(order))
         if stale_orders:
@@ -768,33 +991,34 @@ class CoinTraderService:
         if not is_participant:
             raise CoinTraderPermissionError("Only trade participants or admins can post messages to this order.")
 
-        now = utcnow()
-        msg_id = generate_uuid()
-        msg_dict = {
-            "id": msg_id,
-            "order_id": order.id,
-            "sender_user_id": actor.id,
-            "sender_name": actor.display_name or actor.username or "Participant",
-            "message": payload.message.strip(),
-            "created_at": now.isoformat(),
-        }
-        meta = dict(order.metadata_json or {})
-        messages = list(meta.get("messages", []))
-        messages.append(msg_dict)
-        meta["messages"] = messages
-        order.metadata_json = meta
+        sender_name = actor.display_name or actor.username or "Participant"
+        msg_row = CoinTradeMessage(
+            order_id=order.id,
+            sender_user_id=actor.id,
+            sender_name=sender_name,
+            message=payload.message.strip(),
+        )
+        self.session.add(msg_row)
+        profile.last_active_at = utcnow()
         self.session.commit()
-        self.session.refresh(order)
+        self.session.refresh(msg_row)
 
         recipient_id = profile.user_id if actor.id == order.user_id else order.user_id
         self._publish_order_matrix_notifications(
             order,
             event_key="coin_trader_order_message",
             target_user_ids=[recipient_id],
-            message=f"New message from {msg_dict['sender_name']} on your trade order.",
-            metadata={"message_id": msg_id},
+            message=f"New message from {sender_name} on your trade order.",
+            metadata={"message_id": msg_row.id},
         )
-        return CoinTradeMessageView.model_validate(msg_dict)
+        return CoinTradeMessageView(
+            id=msg_row.id,
+            order_id=msg_row.order_id,
+            sender_user_id=msg_row.sender_user_id,
+            sender_name=msg_row.sender_name,
+            message=msg_row.message,
+            created_at=msg_row.created_at,
+        )
 
     def list_order_messages(self, order_id: str, *, actor: User) -> list[CoinTradeMessageView]:
         order = self._require_order(order_id)
@@ -805,8 +1029,33 @@ class CoinTraderService:
         }
         if not is_participant:
             raise CoinTraderPermissionError("Only trade participants or admins can view order messages.")
-        raw_messages = (order.metadata_json or {}).get("messages", [])
-        return [CoinTradeMessageView.model_validate(m) for m in raw_messages]
+        return self._messages_for_order(order)
+
+    def _messages_for_order(self, order: CoinTradeOrder) -> list[CoinTradeMessageView]:
+        rows = list(
+            self.session.scalars(
+                select(CoinTradeMessage)
+                .where(CoinTradeMessage.order_id == order.id)
+                .order_by(CoinTradeMessage.created_at.asc())
+            ).all()
+        )
+        views = [
+            CoinTradeMessageView(
+                id=row.id,
+                order_id=row.order_id,
+                sender_user_id=row.sender_user_id,
+                sender_name=row.sender_name,
+                message=row.message,
+                created_at=row.created_at,
+            )
+            for row in rows
+        ]
+        seen_ids = {v.id for v in views}
+        for legacy in (order.metadata_json or {}).get("messages", []):
+            item = CoinTradeMessageView.model_validate(legacy)
+            if item.id not in seen_ids:
+                views.append(item)
+        return views
 
     def _release_order(
         self,
@@ -858,6 +1107,27 @@ class CoinTraderService:
             message="Coin trader escrow has been released.",
         )
         return self.to_order_view(order)
+
+    def _release_locked_escrow(self, order: CoinTradeOrder, *, reference_suffix: str = "refund") -> list[LedgerEntry]:
+        """Return locked escrow to its owner. Idempotent per order via the shared refund key."""
+        if not order.escrow_owner_user_id:
+            return []
+        owner = self._require_user(order.escrow_owner_user_id)
+        entries = self.wallet_service.release_reserved_funds(
+            self.session,
+            user=owner,
+            amount=order.coin_amount,
+            unit=order.coin_unit,
+            reference=f"coin-trade:{order.id}:{reference_suffix}",
+            description="Coin trader escrow refund",
+            source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_REFUND,
+            idempotency_key=f"coin-trade:{order.id}:refund",
+        )
+        order.ledger_refs_json = {
+            **dict(order.ledger_refs_json or {}),
+            "refund_entry_ids": [entry.id for entry in entries],
+        }
+        return entries
 
     def _refund_order(self, order: CoinTradeOrder, *, actor: User, admin: bool) -> CoinTradeOrderView:
         escrow_owner = self._require_user(order.escrow_owner_user_id or "")
@@ -977,6 +1247,19 @@ class CoinTraderService:
                 "admin_user_id": admin.id,
             },
         }
+        self._write_audit_log(
+            actor=admin,
+            action_key=f"coin_trader.liquidity.{flow}",
+            resource_type="coin_trader_profile",
+            resource_id=profile.id,
+            detail=f"Admin {flow}d {amount} {payload.coin_unit.value} for {profile.display_name}.",
+            metadata={
+                "flow": flow,
+                "coin_unit": payload.coin_unit.value,
+                "amount": str(amount),
+                "reference": reference,
+            },
+        )
         self.session.commit()
         self.session.refresh(profile)
         return CoinTraderAdminLiquidityTransferView(
@@ -1029,9 +1312,9 @@ class CoinTraderService:
         if actor.id not in {order.user_id, profile.user_id}:
             raise CoinTraderPermissionError("Only order participants can perform this action.")
         if actor.id == profile.user_id:
+            # Existing orders may always be settled/cancelled/disputed, even if the trader
+            # was later frozen or suspended (new orders and adverts are blocked separately).
             self._require_dedicated_trader_account(actor)
-            if profile.status != CoinTraderProfileStatus.APPROVED.value:
-                raise CoinTraderPermissionError("Approved coin trader access is required.")
         return order
 
     def _publish_order_matrix_notifications(
@@ -1190,6 +1473,7 @@ class CoinTraderService:
             CoinTradeOrderStatus.REFUNDED.value,
             CoinTradeOrderStatus.ADMIN_REFUNDED.value,
             CoinTradeOrderStatus.CANCELLED.value,
+            CoinTradeOrderStatus.EXPIRED.value,
         }
         completed_orders = [order for order in orders if order.status in completed_statuses]
         terminal_orders = [order for order in orders if order.status in terminal_statuses]
@@ -1219,12 +1503,87 @@ class CoinTraderService:
         profile.dispute_score = (
             float((Decimal(len(disputed_orders)) / Decimal(len(orders))) * Decimal("100")) if orders else 0.0
         )
+        profile.completed_orders_count = len(completed_orders)
+        profile.total_orders_count = len(orders)
+        profile.last_active_at = utcnow()
+        ratings = list(
+            self.session.scalars(select(CoinTradeRating).where(CoinTradeRating.trader_profile_id == profile.id)).all()
+        )
+        profile.rating_count = len(ratings)
+        profile.rating = round(sum(r.score for r in ratings) / len(ratings), 2) if ratings else 0.0
         profile.liquidity_snapshot_json = self._liquidity_snapshot(profile.id)
+
+    def _write_audit_log(
+        self,
+        *,
+        actor: User | None,
+        action_key: str,
+        resource_type: str,
+        resource_id: str | None,
+        detail: str,
+        metadata: dict[str, Any] | None = None,
+        outcome: str = "success",
+    ) -> None:
+        self.session.add(
+            AuditLog(
+                actor_user_id=actor.id if actor is not None else None,
+                action_key=action_key,
+                resource_type=resource_type,
+                resource_id=resource_id,
+                outcome=outcome,
+                detail=detail,
+                metadata_json=dict(metadata or {}),
+            )
+        )
 
     def _direction_value(self, direction: CoinTradeDirection | str) -> str:
         return direction.value if hasattr(direction, "value") else str(direction)
 
+    @staticmethod
+    def _public_payment_method_labels(methods: list[object]) -> list[str]:
+        labels: list[str] = []
+        for item in methods or []:
+            label: object | None = None
+            if isinstance(item, str):
+                label = item
+            elif isinstance(item, dict):
+                for key in ("label", "name", "method", "bank", "type"):
+                    if isinstance(item.get(key), str) and item[key].strip():
+                        label = item[key]
+                        break
+            if isinstance(label, str) and label.strip() and label.strip() not in labels:
+                labels.append(label.strip()[:60])
+        return labels
+
+    def to_public_profile_view(self, profile: CoinTraderProfile) -> CoinTraderPublicProfileView:
+        completed_count = profile.completed_orders_count or 0
+        return CoinTraderPublicProfileView(
+            id=profile.id,
+            display_name=profile.display_name,
+            country_code=profile.country_code,
+            status=profile.status,
+            tier=profile.tier,
+            verification_level=profile.verification_level,
+            verified_at=profile.verified_at,
+            is_didit_verified=_is_didit_verified(profile),
+            verification_badge_label=_verification_badge_label(profile),
+            is_new_merchant=completed_count < 3,
+            completion_rate=profile.completion_rate,
+            average_release_minutes=profile.average_release_minutes,
+            rating=profile.rating,
+            rating_count=profile.rating_count or 0,
+            completed_orders_count=completed_count,
+            total_orders_count=profile.total_orders_count or 0,
+            last_active_at=profile.last_active_at,
+            completed_volume_fiat=profile.completed_volume_fiat,
+            dispute_score=profile.dispute_score,
+            terms=dict(profile.terms_json or {}),
+            payment_methods=self._public_payment_method_labels(list(profile.payment_methods_json or [])),
+            rates=[self.to_rate_view(rate) for rate in self._rates_for_profile(profile.id)],
+        )
+
     def to_profile_view(self, profile: CoinTraderProfile) -> CoinTraderProfileView:
+        completed_count = profile.completed_orders_count or 0
         return CoinTraderProfileView(
             id=profile.id,
             user_id=profile.user_id,
@@ -1240,6 +1599,13 @@ class CoinTraderService:
             completion_rate=profile.completion_rate,
             average_release_minutes=profile.average_release_minutes,
             rating=profile.rating,
+            rating_count=profile.rating_count or 0,
+            completed_orders_count=completed_count,
+            total_orders_count=profile.total_orders_count or 0,
+            last_active_at=profile.last_active_at,
+            is_didit_verified=_is_didit_verified(profile),
+            verification_badge_label=_verification_badge_label(profile),
+            is_new_merchant=completed_count < 3,
             completed_volume_fiat=profile.completed_volume_fiat,
             dispute_score=profile.dispute_score,
             terms=dict(profile.terms_json or {}),
@@ -1277,8 +1643,39 @@ class CoinTraderService:
         )
 
     def to_order_view(self, order: CoinTradeOrder) -> CoinTradeOrderView:
-        raw_messages = (order.metadata_json or {}).get("messages", [])
-        messages = [CoinTradeMessageView.model_validate(m) for m in raw_messages]
+        messages = self._messages_for_order(order)
+        profile = self.session.get(CoinTraderProfile, order.trader_profile_id)
+        customer = self.session.get(User, order.user_id)
+        active_payment_statuses = {
+            CoinTradeOrderStatus.PAYMENT_PENDING.value,
+            CoinTradeOrderStatus.PROOF_SUBMITTED.value,
+            CoinTradeOrderStatus.DISPUTED.value,
+        }
+        counterparty_payment_details: list[dict[str, Any]] = []
+        if (
+            profile is not None
+            and order.direction == CoinTradeDirection.USER_BUYS.value
+            and order.status in active_payment_statuses
+        ):
+            counterparty_payment_details = list(profile.bank_accounts_json or [])
+        customer_payout_details: dict[str, Any] | None = None
+        if order.direction == CoinTradeDirection.USER_SELLS.value and order.status in (
+            active_payment_statuses | {CoinTradeOrderStatus.CREATED.value}
+        ):
+            raw_payout = (order.metadata_json or {}).get("customer_payout_details")
+            if isinstance(raw_payout, dict):
+                customer_payout_details = dict(raw_payout)
+        rating_row = self.session.scalar(select(CoinTradeRating).where(CoinTradeRating.order_id == order.id))
+        my_rating = (
+            {
+                "id": rating_row.id,
+                "score": rating_row.score,
+                "comment": rating_row.comment,
+                "created_at": rating_row.created_at.isoformat(),
+            }
+            if rating_row is not None
+            else None
+        )
         return CoinTradeOrderView(
             id=order.id,
             trader_profile_id=order.trader_profile_id,
@@ -1293,6 +1690,11 @@ class CoinTraderService:
             escrow_owner_user_id=order.escrow_owner_user_id,
             idempotency_key=order.idempotency_key,
             payment_method=order.payment_method,
+            advert_id=order.advert_id,
+            payment_window_minutes=order.payment_window_minutes,
+            quote_expires_at=order.quote_expires_at,
+            fee_coin=Decimal(order.fee_coin or 0),
+            fee_fiat=Decimal(order.fee_fiat or 0),
             payment_window_expires_at=order.payment_window_expires_at,
             accepted_at=order.accepted_at,
             proof_submitted_at=order.proof_submitted_at,
@@ -1303,6 +1705,11 @@ class CoinTraderService:
             terms_snapshot=dict(order.terms_snapshot_json or {}),
             ledger_refs=dict(order.ledger_refs_json or {}),
             messages=messages,
+            counterparty_payment_details=counterparty_payment_details,
+            customer_payout_details=customer_payout_details,
+            trader_display_name=profile.display_name if profile is not None else None,
+            customer_display_name=(customer.display_name or customer.username) if customer is not None else None,
+            my_rating=my_rating,
             metadata_json=dict(order.metadata_json or {}),
         )
 

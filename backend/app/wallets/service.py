@@ -1788,6 +1788,7 @@ class WalletService:
         description: str,
         unit: LedgerUnit = LedgerUnit.COIN,
         source_tag: LedgerSourceTag | None = None,
+        idempotency_key: str | None = None,
     ) -> list[LedgerEntry]:
         reserved_amount = self._normalize_amount(amount)
         if reserved_amount <= Decimal("0.0000"):
@@ -1806,6 +1807,7 @@ class WalletService:
             reference=reference,
             description=description,
             actor=user,
+            idempotency_key=idempotency_key,
         )
 
     def release_reserved_funds(
