@@ -20,7 +20,10 @@ interface Props {
   onOrderCreated?: () => void;
 }
 
-export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, onOrderCreated }: Props) {
+export function CoinTraderMarketplaceView({
+  isDedicatedTraderAccount = false,
+  onOrderCreated,
+}: Props) {
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
   const [side, setSide] = useState<MarketSide>("sell"); // sell = trader sells -> customer buys
   const [fiatAmount, setFiatAmount] = useState("");
@@ -53,7 +56,16 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
     if (Number(minCompletionRate) > 0) p.min_completion_rate = Number(minCompletionRate);
     if (Number(minAvailableCoin) > 0) p.min_available_coin = Number(minAvailableCoin);
     return p;
-  }, [coinUnit, side, sortBy, fiatAmount, paymentMethod, verifiedOnly, minCompletionRate, minAvailableCoin]);
+  }, [
+    coinUnit,
+    side,
+    sortBy,
+    fiatAmount,
+    paymentMethod,
+    verifiedOnly,
+    minCompletionRate,
+    minAvailableCoin,
+  ]);
 
   const { data: market, isLoading } = useQuery<MarketplaceResponse | null>({
     queryKey: ["coin-trader-marketplace", params],
@@ -70,7 +82,7 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
   const offers = market?.offers || [];
   const refInfo = market?.market_reference;
   const hasFilters = Boolean(
-    fiatAmount || paymentMethod || verifiedOnly || minCompletionRate || minAvailableCoin
+    fiatAmount || paymentMethod || verifiedOnly || minCompletionRate || minAvailableCoin,
   );
 
   const clearFilters = () => {
@@ -82,7 +94,10 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
   };
 
   const sortOptions: Array<{ id: SortByOption; label: string }> = [
-    { id: side === "sell" ? "price_asc" : "price_desc", label: side === "sell" ? "Lowest Price" : "Highest Price" },
+    {
+      id: side === "sell" ? "price_asc" : "price_desc",
+      label: side === "sell" ? "Lowest Price" : "Highest Price",
+    },
     { id: "most_orders", label: "Completed Orders" },
     { id: "completion_rate", label: "Completion Rate" },
     { id: "fastest", label: "Fastest Release" },
@@ -94,7 +109,10 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#0B1018] p-3.5">
         <div className="flex flex-wrap items-center gap-3">
           {/* Buy / Sell Segmented Pill */}
-          <div className="inline-flex rounded-xl bg-black/50 p-1 border border-white/10" role="tablist">
+          <div
+            className="inline-flex rounded-xl bg-black/50 p-1 border border-white/10"
+            role="tablist"
+          >
             <button
               type="button"
               data-testid="market-side-buy"
@@ -112,9 +130,7 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
               data-testid="market-side-sell"
               onClick={() => switchSide("buy")}
               className={`rounded-lg px-4 py-1.5 text-xs font-bold uppercase tracking-wider transition ${
-                side === "buy"
-                  ? "bg-rose-500 text-white shadow"
-                  : "text-slate-400 hover:text-white"
+                side === "buy" ? "bg-rose-500 text-white shadow" : "text-slate-400 hover:text-white"
               }`}
             >
               Sell
@@ -156,11 +172,15 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
           data-testid="market-reference-banner"
         >
           <div>
-            <b className="text-amber-300">{refInfo.name} ({refInfo.code}) Market Reference:</b>{" "}
-            Direct platform buy <b className="text-white">₦{fmt(refInfo.direct_buy_rate_fiat, 2)}</b>
+            <b className="text-amber-300">
+              {refInfo.name} ({refInfo.code}) Market Reference:
+            </b>{" "}
+            Direct platform buy{" "}
+            <b className="text-white">₦{fmt(refInfo.direct_buy_rate_fiat, 2)}</b>
             {refInfo.direct_sell_rate_fiat ? (
               <>
-                {" · "}Direct withdrawal <b className="text-white">₦{fmt(refInfo.direct_sell_rate_fiat, 2)}</b>
+                {" · "}Direct withdrawal{" "}
+                <b className="text-white">₦{fmt(refInfo.direct_sell_rate_fiat, 2)}</b>
               </>
             ) : null}
             {" · "}Min P2P buy order <b className="text-white">₦{fmt(refInfo.min_p2p_buy_fiat)}</b>
@@ -213,7 +233,11 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
             <Filter size={14} /> More Filters
           </button>
           {hasFilters ? (
-            <button type="button" onClick={clearFilters} className="gx-btn gx-btn-ghost justify-center text-xs">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="gx-btn gx-btn-ghost justify-center text-xs"
+            >
               Reset Filters
             </button>
           ) : (
@@ -281,7 +305,9 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
             {side === "sell" ? `Buy ${unitInfo.name}` : `Sell ${unitInfo.name}`} · NGN
           </p>
           <h3 className="gx-display text-xl font-black text-white">
-            {hasFilters ? "No offers match your current filters" : `No active ${unitInfo.name} offers right now`}
+            {hasFilters
+              ? "No offers match your current filters"
+              : `No active ${unitInfo.name} offers right now`}
           </h3>
           <p className="mx-auto max-w-xl text-sm leading-6 text-slate-400">
             {hasFilters
@@ -295,7 +321,10 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
               </Btn>
             )}
             {!isDedicatedTraderAccount && (
-              <Link to="/auth?role=coin_trader" className="gx-btn gx-btn-primary inline-flex items-center gap-1.5">
+              <Link
+                to="/auth?role=coin_trader"
+                className="gx-btn gx-btn-primary inline-flex items-center gap-1.5"
+              >
                 Become a Coin Trader <ArrowRight size={14} />
               </Link>
             )}
@@ -335,11 +364,15 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
                   <div className="flex flex-wrap items-center gap-3 text-xs text-slate-300">
                     <span>
                       {offer.completed_orders_count} Orders
-                      {offer.total_orders_count > 0 ? ` (${offer.completion_rate.toFixed(1)}%)` : ""}
+                      {offer.total_orders_count > 0
+                        ? ` (${offer.completion_rate.toFixed(1)}%)`
+                        : ""}
                     </span>
                     <span className="inline-flex items-center gap-1 text-amber-300">
                       <Star size={12} fill={offer.rating_count > 0 ? "currentColor" : "none"} />
-                      {offer.rating_count > 0 ? `${offer.rating.toFixed(1)} (${offer.rating_count})` : "No ratings yet"}
+                      {offer.rating_count > 0
+                        ? `${offer.rating.toFixed(1)} (${offer.rating_count})`
+                        : "No ratings yet"}
                     </span>
                   </div>
                 </div>
@@ -348,7 +381,9 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div className="space-y-1.5">
                     <div className="flex flex-wrap items-baseline gap-2.5">
-                      <span className="text-2xl font-black text-white">₦{fmt(offer.price_fiat, 2)}</span>
+                      <span className="text-2xl font-black text-white">
+                        ₦{fmt(offer.price_fiat, 2)}
+                      </span>
                       <span className="text-xs text-slate-400">/ {unitInfo.code}</span>
                       {offer.savings_vs_direct_pct !== null &&
                         offer.savings_vs_direct_pct !== undefined &&
@@ -366,7 +401,9 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
                         Limits:{" "}
                         <b className="text-slate-200">
                           ₦{fmt(offer.min_fiat_amount)} –{" "}
-                          {Number(offer.max_fiat_amount) > 0 ? `₦${fmt(offer.max_fiat_amount)}` : "Open"}
+                          {Number(offer.max_fiat_amount) > 0
+                            ? `₦${fmt(offer.max_fiat_amount)}`
+                            : "Open"}
                         </b>
                       </span>
                       <span>
@@ -377,13 +414,18 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
                       </span>
                       <span className="inline-flex items-center gap-1">
                         <Clock size={12} /> {offer.payment_window_minutes}m window
-                        {offer.average_release_minutes > 0 ? ` · ~${Math.round(offer.average_release_minutes)}m avg` : ""}
+                        {offer.average_release_minutes > 0
+                          ? ` · ~${Math.round(offer.average_release_minutes)}m avg`
+                          : ""}
                       </span>
                     </div>
 
                     {/* Payment method pills */}
                     <div className="flex flex-wrap items-center gap-2 pt-0.5">
-                      {(offer.payment_methods.length > 0 ? offer.payment_methods : ["Bank Transfer"]).map((pm, idx) => (
+                      {(offer.payment_methods.length > 0
+                        ? offer.payment_methods
+                        : ["Bank Transfer"]
+                      ).map((pm, idx) => (
                         <span
                           key={pm}
                           className="inline-flex items-center gap-1.5 rounded bg-white/[0.04] px-2 py-0.5 text-[11px] text-slate-300"
@@ -395,7 +437,9 @@ export function CoinTraderMarketplaceView({ isDedicatedTraderAccount = false, on
                         </span>
                       ))}
                       {offer.terms_text && (
-                        <span className="text-[11px] text-slate-500 truncate max-w-xs">· {offer.terms_text}</span>
+                        <span className="text-[11px] text-slate-500 truncate max-w-xs">
+                          · {offer.terms_text}
+                        </span>
                       )}
                     </div>
                   </div>

@@ -38,7 +38,7 @@ function TraderVerificationCard({ onVerified }: { onVerified?: () => void }) {
         setHandoffUrl(candidateUrl);
         window.open(candidateUrl, "_blank", "noopener,noreferrer");
         toast.success(
-          "DIDit verification session started. Complete checks in the DIDit window; activation occurs after provider confirmation."
+          "DIDit verification session started. Complete checks in the DIDit window; activation occurs after provider confirmation.",
         );
       } else {
         setHandoffUrl(null);
@@ -71,7 +71,11 @@ function TraderVerificationCard({ onVerified }: { onVerified?: () => void }) {
             {kycStatus?.status && (
               <Chip
                 tone={
-                  kycStatus.status === "verified" ? "emerald" : kycStatus.status === "rejected" ? "red" : "gold"
+                  kycStatus.status === "verified"
+                    ? "emerald"
+                    : kycStatus.status === "rejected"
+                      ? "red"
+                      : "gold"
                 }
               >
                 {label(kycStatus.decision || kycStatus.status)}
@@ -79,15 +83,17 @@ function TraderVerificationCard({ onVerified }: { onVerified?: () => void }) {
             )}
           </div>
           <p className="text-xs leading-5 text-slate-300">
-            Coin Traders complete DIDit identity verification (Government ID, Nigerian BVN/NIN where configured in
-            workflow, selfie comparison, and liveness) to earn the ID Verified badge and activate merchant operations.
+            Coin Traders complete DIDit identity verification (Government ID, Nigerian BVN/NIN where
+            configured in workflow, selfie comparison, and liveness) to earn the ID Verified badge
+            and activate merchant operations.
           </p>
           {kycStatus && (
             <div
               className="rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-xs text-slate-300"
               data-testid="trader-kyc-status-summary"
             >
-              Provider: <b>{kycStatus.provider}</b> · Ref: <b>{kycStatus.provider_reference || "--"}</b> · Decision:{" "}
+              Provider: <b>{kycStatus.provider}</b> · Ref:{" "}
+              <b>{kycStatus.provider_reference || "--"}</b> · Decision:{" "}
               <b>{label(kycStatus.decision || kycStatus.status)}</b>
               {kycStatus.rejection_reason ? ` · Reason: ${kycStatus.rejection_reason}` : ""}
             </div>
@@ -105,7 +111,11 @@ function TraderVerificationCard({ onVerified }: { onVerified?: () => void }) {
               <option value="bvn_nin">Nigeria BVN / NIN + Liveness</option>
               <option value="liveness">Live Liveness Re-check</option>
             </select>
-            <Btn disabled={initiating} onClick={handleInitiate} data-testid="initiate-trader-kyc-btn">
+            <Btn
+              disabled={initiating}
+              onClick={handleInitiate}
+              data-testid="initiate-trader-kyc-btn"
+            >
               {initiating ? "Connecting to DIDit..." : "Start DIDit Verification"}
             </Btn>
             <Btn
@@ -143,7 +153,7 @@ export function CoinTraderDesk() {
   const isDedicatedTraderAccount = accountType === "coin_trader";
 
   const [section, setSection] = useState<"marketplace" | "orders" | "merchant">(
-    isDedicatedTraderAccount ? "merchant" : "marketplace"
+    isDedicatedTraderAccount ? "merchant" : "marketplace",
   );
 
   const { data: traders = [] } = useQuery<any[]>({
@@ -166,15 +176,20 @@ export function CoinTraderDesk() {
   const isVerified = Boolean(me?.verified_at);
   const isSuspended = Boolean(me?.suspended_at) || status === "suspended";
   const isFrozen = status === "frozen";
-  const isTrader = isDedicatedTraderAccount && me && status === "approved" && isVerified && !isSuspended;
-  const canViewDeskOrders = isDedicatedTraderAccount && Boolean(me) && (isTrader || isFrozen || isSuspended);
+  const isTrader =
+    isDedicatedTraderAccount && me && status === "approved" && isVerified && !isSuspended;
+  const canViewDeskOrders =
+    isDedicatedTraderAccount && Boolean(me) && (isTrader || isFrozen || isSuspended);
   const missingProfile =
-    !meQuery.isLoading && !me && [403, 404].includes(Number((meQuery.error as any)?.response?.status));
+    !meQuery.isLoading &&
+    !me &&
+    [403, 404].includes(Number((meQuery.error as any)?.response?.status));
   const showApplication = isDedicatedTraderAccount && (missingProfile || status === "rejected");
 
   const { data: deskOrders = [] } = useQuery<TradeOrder[]>({
     queryKey: ["coin-orders", "desk"],
-    queryFn: async () => (await api.get("/coin-traders/orders", { params: { as_trader: true } })).data || [],
+    queryFn: async () =>
+      (await api.get("/coin-traders/orders", { params: { as_trader: true } })).data || [],
     enabled: canViewDeskOrders,
   });
 
@@ -206,7 +221,9 @@ export function CoinTraderDesk() {
       });
       await qc.invalidateQueries({ queryKey: ["coin-trader-me"] });
       await qc.invalidateQueries({ queryKey: ["coin-traders"] });
-      toast.success("Coin Trader application submitted. Complete identity verification to activate your desk.");
+      toast.success(
+        "Coin Trader application submitted. Complete identity verification to activate your desk.",
+      );
     } catch (error: any) {
       setApplyError(errMsg(error));
     } finally {
@@ -215,7 +232,7 @@ export function CoinTraderDesk() {
   };
 
   const activeOrderCount = orders.filter((o) =>
-    ["created", "payment_pending", "proof_submitted", "disputed"].includes(o.status)
+    ["created", "payment_pending", "proof_submitted", "disputed"].includes(o.status),
   ).length;
 
   return (
@@ -226,8 +243,9 @@ export function CoinTraderDesk() {
       className="lg:col-span-12"
     >
       <p className="mb-4 text-sm text-slate-400">
-        Buy or sell GTEX Coin (GTC, min buyer order ₦200,000) and Fan Coin (FNC, min buyer order ₦50,000) directly with
-        verified Naira merchants through canonical GTEX escrow protection and zero P2P platform fees.
+        Buy or sell GTEX Coin (GTC, min buyer order ₦200,000) and Fan Coin (FNC, min buyer order
+        ₦50,000) directly with verified Naira merchants through canonical GTEX escrow protection and
+        zero P2P platform fees.
       </p>
 
       {/* Top Section Tabs */}
@@ -276,10 +294,12 @@ export function CoinTraderDesk() {
               <p className="gx-label text-amber-300">
                 {status === "rejected" ? "Resubmit desk application" : "Set up trader desk"}
               </p>
-              <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Set up your trader desk</h3>
+              <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">
+                Set up your trader desk
+              </h3>
               <p className="mt-2 max-w-3xl text-sm leading-5 text-slate-400">
-                Your dedicated Coin Trader account needs a registered desk profile followed by identity verification
-                before publishing adverts or accepting client orders.
+                Your dedicated Coin Trader account needs a registered desk profile followed by
+                identity verification before publishing adverts or accepting client orders.
               </p>
               <form onSubmit={submitTraderApplication} className="mt-4 grid gap-3 md:grid-cols-3">
                 <label className="block">
@@ -318,7 +338,9 @@ export function CoinTraderDesk() {
             </div>
           )}
 
-          {meQuery.isLoading && <p className="mb-4 text-sm text-slate-500">Checking your trader application...</p>}
+          {meQuery.isLoading && (
+            <p className="mb-4 text-sm text-slate-500">Checking your trader application...</p>
+          )}
           {meQuery.isError && !missingProfile && (
             <div
               className="mb-4 rounded border border-red-500/20 bg-red-950/20 p-3 text-sm text-red-200"
@@ -338,14 +360,16 @@ export function CoinTraderDesk() {
                 <span>Trader Desk Suspended</span>
               </div>
               <p className="mt-1 text-xs text-red-300">
-                This trader desk has been suspended by GTEX Compliance. New adverts and orders are disabled; existing
-                escrow orders can still be completed or resolved safely below.
+                This trader desk has been suspended by GTEX Compliance. New adverts and orders are
+                disabled; existing escrow orders can still be completed or resolved safely below.
               </p>
             </div>
           )}
 
           {me && !me.is_didit_verified && me.verification_provider !== "didit" && !isSuspended && (
-            <TraderVerificationCard onVerified={() => qc.invalidateQueries({ queryKey: ["coin-trader-me"] })} />
+            <TraderVerificationCard
+              onVerified={() => qc.invalidateQueries({ queryKey: ["coin-trader-me"] })}
+            />
           )}
 
           {me && status !== "approved" && !isSuspended && !isFrozen && (
@@ -379,7 +403,9 @@ export function CoinTraderDesk() {
       {section === "orders" && (
         <div className="space-y-3" data-testid="my-coin-orders">
           {orders.length === 0 ? (
-            <p className="text-sm text-slate-500">No coin trades yet. Browse the P2P Marketplace to get started.</p>
+            <p className="text-sm text-slate-500">
+              No coin trades yet. Browse the P2P Marketplace to get started.
+            </p>
           ) : (
             orders.map((o) => <CoinTraderOrderRoom key={o.id} order={o} traders={traders} />)
           )}

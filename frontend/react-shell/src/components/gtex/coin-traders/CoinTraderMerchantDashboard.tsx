@@ -63,7 +63,9 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
     awaiting_payment: deskOrders.filter((o) => o.status === "payment_pending").length,
     payment_submitted: deskOrders.filter((o) => o.status === "proof_submitted").length,
     completed: deskOrders.filter((o) => ["released", "admin_released"].includes(o.status)).length,
-    cancelled: deskOrders.filter((o) => ["cancelled", "refunded", "admin_refunded"].includes(o.status)).length,
+    cancelled: deskOrders.filter((o) =>
+      ["cancelled", "refunded", "admin_refunded"].includes(o.status),
+    ).length,
     expired: deskOrders.filter((o) => o.status === "expired").length,
     disputed: deskOrders.filter((o) => o.status === "disputed").length,
   };
@@ -89,7 +91,9 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
     if (orderFilter === "completed")
       return deskOrders.filter((o) => ["released", "admin_released"].includes(o.status));
     if (orderFilter === "cancelled")
-      return deskOrders.filter((o) => ["cancelled", "refunded", "admin_refunded", "expired"].includes(o.status));
+      return deskOrders.filter((o) =>
+        ["cancelled", "refunded", "admin_refunded", "expired"].includes(o.status),
+      );
     if (orderFilter === "disputed") return deskOrders.filter((o) => o.status === "disputed");
     return deskOrders;
   }, [deskOrders, orderFilter]);
@@ -113,7 +117,10 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
   ];
 
   return (
-    <div className="space-y-4 rounded-2xl border border-amber-400/20 bg-[#0A0E17] p-5" data-testid="merchant-dashboard">
+    <div
+      className="space-y-4 rounded-2xl border border-amber-400/20 bg-[#0A0E17] p-5"
+      data-testid="merchant-dashboard"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="gx-label text-amber-300">Merchant Business Desk</p>
@@ -123,9 +130,12 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Chip tone={profile.is_didit_verified ? "emerald" : "gold"}>
-            {profile.verification_badge_label || (profile.verified_at ? "Approved by GTEX" : "Pending")}
+            {profile.verification_badge_label ||
+              (profile.verified_at ? "Approved by GTEX" : "Pending")}
           </Chip>
-          <Chip tone={profile.status === "approved" ? "emerald" : "red"}>{label(profile.status)}</Chip>
+          <Chip tone={profile.status === "approved" ? "emerald" : "red"}>
+            {label(profile.status)}
+          </Chip>
         </div>
       </div>
 
@@ -152,23 +162,51 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
       {tab === "overview" && (
         <div className="space-y-4" data-testid="merchant-overview-panel">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="GTEX Coin Available" value={`${fmt(balances.coin_available, 2)} GTC`} accent="text-emerald-400" />
-            <StatCard label="GTEX Coin Reserved (Escrow)" value={`${fmt(balances.coin_reserved, 2)} GTC`} accent="text-amber-300" />
-            <StatCard label="Fan Coin Available" value={`${fmt(balances.credit_available, 2)} FNC`} accent="text-emerald-400" />
-            <StatCard label="Fan Coin Reserved (Escrow)" value={`${fmt(balances.credit_reserved, 2)} FNC`} accent="text-amber-300" />
+            <StatCard
+              label="GTEX Coin Available"
+              value={`${fmt(balances.coin_available, 2)} GTC`}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="GTEX Coin Reserved (Escrow)"
+              value={`${fmt(balances.coin_reserved, 2)} GTC`}
+              accent="text-amber-300"
+            />
+            <StatCard
+              label="Fan Coin Available"
+              value={`${fmt(balances.credit_available, 2)} FNC`}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="Fan Coin Reserved (Escrow)"
+              value={`${fmt(balances.credit_reserved, 2)} FNC`}
+              accent="text-amber-300"
+            />
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard label="Total Volume" value={`₦${fmt(perf.total_volume_fiat, 2)}`} />
-            <StatCard label="Completed Orders" value={`${perf.completed_orders}`} sub={`${perf.completion_rate.toFixed(1)}% completion`} />
+            <StatCard
+              label="Completed Orders"
+              value={`${perf.completed_orders}`}
+              sub={`${perf.completion_rate.toFixed(1)}% completion`}
+            />
             <StatCard
               label="Customer Rating"
               value={perf.rating_count > 0 ? `${perf.rating.toFixed(1)} / 5` : "No ratings yet"}
-              sub={perf.rating_count > 0 ? `${perf.rating_count} verified reviews` : "Earns after completed orders"}
+              sub={
+                perf.rating_count > 0
+                  ? `${perf.rating_count} verified reviews`
+                  : "Earns after completed orders"
+              }
             />
             <StatCard
               label="Realised P2P Profit"
-              value={perf.realised_profit_fiat !== null && perf.realised_profit_fiat !== undefined ? `₦${fmt(perf.realised_profit_fiat, 2)}` : "N/A"}
+              value={
+                perf.realised_profit_fiat !== null && perf.realised_profit_fiat !== undefined
+                  ? `₦${fmt(perf.realised_profit_fiat, 2)}`
+                  : "N/A"
+              }
               sub={perf.realised_profit_note}
             />
           </div>
@@ -235,10 +273,26 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
       {tab === "inventory" && (
         <div className="space-y-4" data-testid="merchant-inventory-panel">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="GTEX Coin Available" value={`${fmt(balances.coin_available, 4)} GTC`} accent="text-emerald-400" />
-            <StatCard label="GTEX Coin Reserved" value={`${fmt(balances.coin_reserved, 4)} GTC`} accent="text-amber-300" />
-            <StatCard label="Fan Coin Available" value={`${fmt(balances.credit_available, 4)} FNC`} accent="text-emerald-400" />
-            <StatCard label="Fan Coin Reserved" value={`${fmt(balances.credit_reserved, 4)} FNC`} accent="text-amber-300" />
+            <StatCard
+              label="GTEX Coin Available"
+              value={`${fmt(balances.coin_available, 4)} GTC`}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="GTEX Coin Reserved"
+              value={`${fmt(balances.coin_reserved, 4)} GTC`}
+              accent="text-amber-300"
+            />
+            <StatCard
+              label="Fan Coin Available"
+              value={`${fmt(balances.credit_available, 4)} FNC`}
+              accent="text-emerald-400"
+            />
+            <StatCard
+              label="Fan Coin Reserved"
+              value={`${fmt(balances.credit_reserved, 4)} FNC`}
+              accent="text-amber-300"
+            />
           </div>
           <TraderLiquidityPurchase onPurchased={invalidateAll} />
         </div>
@@ -254,16 +308,33 @@ export function CoinTraderMerchantDashboard({ profile, deskOrders }: Props) {
             <StatCard label="Completion Rate" value={`${perf.completion_rate.toFixed(1)}%`} />
             <StatCard
               label="Avg Release Time"
-              value={perf.average_release_minutes > 0 ? `${Math.round(perf.average_release_minutes)} mins` : "N/A"}
+              value={
+                perf.average_release_minutes > 0
+                  ? `${Math.round(perf.average_release_minutes)} mins`
+                  : "N/A"
+              }
             />
             <StatCard label="Dispute Rate" value={`${perf.dispute_score.toFixed(1)}%`} />
-            <StatCard label="Account Standing" value={label(profile.status)} sub={`Tier: ${label(profile.tier)}`} />
+            <StatCard
+              label="Account Standing"
+              value={label(profile.status)}
+              sub={`Tier: ${label(profile.tier)}`}
+            />
           </div>
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4 text-xs text-slate-300 space-y-1.5">
             <p className="font-bold text-white">How to rank higher on GTEX P2P</p>
-            <p>1. Complete DIDit identity verification so customers see the "ID Verified" shield badge and your offers appear under "ID Verified Only".</p>
-            <p>2. Keep competitive Naira rates below the direct platform buy price (₦60/GTC, ₦4/FNC) and accept incoming orders quickly.</p>
-            <p>3. Release escrowed coins promptly after confirming Naira receipt to improve your average release time and 5-star customer rating.</p>
+            <p>
+              1. Complete DIDit identity verification so customers see the "ID Verified" shield
+              badge and your offers appear under "ID Verified Only".
+            </p>
+            <p>
+              2. Keep competitive Naira rates below the direct platform buy price (₦60/GTC, ₦4/FNC)
+              and accept incoming orders quickly.
+            </p>
+            <p>
+              3. Release escrowed coins promptly after confirming Naira receipt to improve your
+              average release time and 5-star customer rating.
+            </p>
           </div>
         </div>
       )}
@@ -305,7 +376,10 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
   const [saving, setSaving] = useState(false);
 
   const unitInfo = coinUnitMeta(coinUnit);
-  const availWallet = coinUnit === "coin" ? Number(balances.coin_available || 0) : Number(balances.credit_available || 0);
+  const availWallet =
+    coinUnit === "coin"
+      ? Number(balances.coin_available || 0)
+      : Number(balances.credit_available || 0);
 
   const loadIntoForm = (ad: TraderAdvert) => {
     setCoinUnit(ad.coin_unit);
@@ -365,8 +439,10 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
   const availableMethodChoices = Array.from(
     new Set([
       ...PAYMENT_OPTIONS,
-      ...profilePaymentMethods.map((m: any) => (typeof m === "string" ? m : m?.label || m?.name || m?.type)).filter(Boolean),
-    ])
+      ...profilePaymentMethods
+        .map((m: any) => (typeof m === "string" ? m : m?.label || m?.name || m?.type))
+        .filter(Boolean),
+    ]),
   );
 
   return (
@@ -403,9 +479,13 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
                     </Chip>
                   </div>
                   <p className="text-slate-400">
-                    Limits: {fmt(ad.min_coin_amount)} – {fmt(ad.max_coin_amount) || "Open"} {meta.code} ·
-                    Available: <b className="text-white">{fmt(ad.available_coin)} {meta.code}</b> ·
-                    Window: {ad.payment_window_minutes}m · Methods: {ad.payment_methods.join(", ") || "—"}
+                    Limits: {fmt(ad.min_coin_amount)} – {fmt(ad.max_coin_amount) || "Open"}{" "}
+                    {meta.code} · Available:{" "}
+                    <b className="text-white">
+                      {fmt(ad.available_coin)} {meta.code}
+                    </b>{" "}
+                    · Window: {ad.payment_window_minutes}m · Methods:{" "}
+                    {ad.payment_methods.join(", ") || "—"}
                   </p>
                   {ad.admin_paused_reason && (
                     <p className="text-rose-300">Admin pause reason: {ad.admin_paused_reason}</p>
@@ -417,12 +497,19 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
                     Edit
                   </Btn>
                   {ad.status === "active" && (
-                    <Btn variant="ghost" onClick={() => setStatus(ad.id, "paused")} data-testid={`pause-advert-${ad.id}`}>
+                    <Btn
+                      variant="ghost"
+                      onClick={() => setStatus(ad.id, "paused")}
+                      data-testid={`pause-advert-${ad.id}`}
+                    >
                       <Pause size={13} /> Pause
                     </Btn>
                   )}
                   {(ad.status === "paused" || ad.status === "draft") && (
-                    <Btn onClick={() => setStatus(ad.id, "active")} data-testid={`resume-advert-${ad.id}`}>
+                    <Btn
+                      onClick={() => setStatus(ad.id, "active")}
+                      data-testid={`resume-advert-${ad.id}`}
+                    >
                       <Play size={13} /> Resume
                     </Btn>
                   )}
@@ -444,7 +531,10 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
           <div>
             <p className="gx-label text-amber-300">Create or Edit Advert</p>
             <p className="text-xs text-slate-400">
-              Wallet available for {unitInfo.code}: <b className="text-white">{fmt(availWallet, 2)} {unitInfo.code}</b>
+              Wallet available for {unitInfo.code}:{" "}
+              <b className="text-white">
+                {fmt(availWallet, 2)} {unitInfo.code}
+              </b>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -454,7 +544,15 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
                 type="button"
                 onClick={() => {
                   setCoinUnit(u);
-                  setPriceFiat(u === "coin" ? (side === "sell" ? "56" : "49") : side === "sell" ? "3.2" : "2.5");
+                  setPriceFiat(
+                    u === "coin"
+                      ? side === "sell"
+                        ? "56"
+                        : "49"
+                      : side === "sell"
+                        ? "3.2"
+                        : "2.5",
+                  );
                   setMinCoin(u === "coin" ? "4000" : "20000");
                 }}
                 className={`gx-btn py-1 px-3 text-xs ${coinUnit === u ? "gx-btn-primary" : "gx-btn-secondary"}`}
@@ -468,11 +566,21 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
                 type="button"
                 onClick={() => {
                   setSide(s);
-                  setPriceFiat(coinUnit === "coin" ? (s === "sell" ? "56" : "49") : s === "sell" ? "3.2" : "2.5");
+                  setPriceFiat(
+                    coinUnit === "coin"
+                      ? s === "sell"
+                        ? "56"
+                        : "49"
+                      : s === "sell"
+                        ? "3.2"
+                        : "2.5",
+                  );
                 }}
                 className={`gx-btn py-1 px-3 text-xs ${side === s ? "gx-btn-primary" : "gx-btn-secondary"}`}
               >
-                {s === "sell" ? `Sell ${unitInfo.code} (to buyers)` : `Buy ${unitInfo.code} (from sellers)`}
+                {s === "sell"
+                  ? `Sell ${unitInfo.code} (to buyers)`
+                  : `Buy ${unitInfo.code} (from sellers)`}
               </button>
             ))}
           </div>
@@ -493,33 +601,73 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
           {pricingMode === "fixed" ? (
             <label className="block">
               <span className="gx-label">Price (₦ / {unitInfo.code})</span>
-              <input className="gx-input mt-1 text-xs" type="number" step="0.01" value={priceFiat} onChange={(e) => setPriceFiat(e.target.value)} />
+              <input
+                className="gx-input mt-1 text-xs"
+                type="number"
+                step="0.01"
+                value={priceFiat}
+                onChange={(e) => setPriceFiat(e.target.value)}
+              />
             </label>
           ) : (
             <label className="block">
               <span className="gx-label">Spread vs Reference (₦)</span>
-              <input className="gx-input mt-1 text-xs" type="number" step="0.01" value={spreadFiat} onChange={(e) => setSpreadFiat(e.target.value)} />
+              <input
+                className="gx-input mt-1 text-xs"
+                type="number"
+                step="0.01"
+                value={spreadFiat}
+                onChange={(e) => setSpreadFiat(e.target.value)}
+              />
             </label>
           )}
           <label className="block">
             <span className="gx-label">Min Order ({unitInfo.code})</span>
-            <input className="gx-input mt-1 text-xs" type="number" value={minCoin} onChange={(e) => setMinCoin(e.target.value)} />
+            <input
+              className="gx-input mt-1 text-xs"
+              type="number"
+              value={minCoin}
+              onChange={(e) => setMinCoin(e.target.value)}
+            />
           </label>
           <label className="block">
             <span className="gx-label">Max Order ({unitInfo.code})</span>
-            <input className="gx-input mt-1 text-xs" type="number" value={maxCoin} onChange={(e) => setMaxCoin(e.target.value)} />
+            <input
+              className="gx-input mt-1 text-xs"
+              type="number"
+              value={maxCoin}
+              onChange={(e) => setMaxCoin(e.target.value)}
+            />
           </label>
           <label className="block">
             <span className="gx-label">Daily Limit ({unitInfo.code}, optional)</span>
-            <input className="gx-input mt-1 text-xs" type="number" placeholder="No daily cap" value={dailyLimit} onChange={(e) => setDailyLimit(e.target.value)} />
+            <input
+              className="gx-input mt-1 text-xs"
+              type="number"
+              placeholder="No daily cap"
+              value={dailyLimit}
+              onChange={(e) => setDailyLimit(e.target.value)}
+            />
           </label>
           <label className="block">
             <span className="gx-label">Payment Window (mins)</span>
-            <input className="gx-input mt-1 text-xs" type="number" min={5} max={120} value={windowMins} onChange={(e) => setWindowMins(e.target.value)} />
+            <input
+              className="gx-input mt-1 text-xs"
+              type="number"
+              min={5}
+              max={120}
+              value={windowMins}
+              onChange={(e) => setWindowMins(e.target.value)}
+            />
           </label>
           <label className="block sm:col-span-2">
             <span className="gx-label">Merchant Terms</span>
-            <input className="gx-input mt-1 text-xs" placeholder="e.g. Same-name transfers only, upload receipt" value={termsText} onChange={(e) => setTermsText(e.target.value)} />
+            <input
+              className="gx-input mt-1 text-xs"
+              placeholder="e.g. Same-name transfers only, upload receipt"
+              value={termsText}
+              onChange={(e) => setTermsText(e.target.value)}
+            />
           </label>
         </div>
 
@@ -544,7 +692,11 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
         </div>
 
         <div className="flex flex-wrap gap-2 pt-1">
-          <Btn disabled={saving} onClick={() => publishAdvert("active")} data-testid="advert-publish-btn">
+          <Btn
+            disabled={saving}
+            onClick={() => publishAdvert("active")}
+            data-testid="advert-publish-btn"
+          >
             {saving ? "Saving..." : "Publish Active Advert"}
           </Btn>
           <Btn variant="secondary" disabled={saving} onClick={() => publishAdvert("draft")}>
@@ -556,16 +708,26 @@ function AdvertManagerSection({ adverts, balances, profilePaymentMethods, onChan
   );
 }
 
-function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: () => Promise<void> }) {
-  const [bankAccounts, setBankAccounts] = useState<Array<{ bank_name: string; account_number: string; account_name: string }>>(
-    () => (profile.bank_accounts || []).map((b: any) => ({
+function PaymentMethodsManager({
+  profile,
+  onSaved,
+}: {
+  profile: any;
+  onSaved: () => Promise<void>;
+}) {
+  const [bankAccounts, setBankAccounts] = useState<
+    Array<{ bank_name: string; account_number: string; account_name: string }>
+  >(() =>
+    (profile.bank_accounts || []).map((b: any) => ({
       bank_name: b.bank_name || b.bank || "",
       account_number: b.account_number || "",
       account_name: b.account_name || "",
-    }))
+    })),
   );
   const [methods, setMethods] = useState<string[]>(() =>
-    (profile.payment_methods || []).map((m: any) => (typeof m === "string" ? m : m?.label || m?.name || m?.type)).filter(Boolean)
+    (profile.payment_methods || [])
+      .map((m: any) => (typeof m === "string" ? m : m?.label || m?.name || m?.type))
+      .filter(Boolean),
   );
   const [newBank, setNewBank] = useState({ bank_name: "", account_number: "", account_name: "" });
   const [saving, setSaving] = useState(false);
@@ -576,12 +738,16 @@ function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: ()
         bank_name: b.bank_name || b.bank || "",
         account_number: b.account_number || "",
         account_name: b.account_name || "",
-      }))
+      })),
     );
   }, [profile]);
 
   const addBank = () => {
-    if (!newBank.bank_name.trim() || newBank.account_number.trim().length < 6 || !newBank.account_name.trim()) {
+    if (
+      !newBank.bank_name.trim() ||
+      newBank.account_number.trim().length < 6 ||
+      !newBank.account_name.trim()
+    ) {
       toast.error("Enter bank name, valid account number, and account name.");
       return;
     }
@@ -596,7 +762,10 @@ function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: ()
     setSaving(true);
     try {
       await api.put("/coin-traders/me", {
-        payment_methods: methods.map((m) => ({ label: m, type: m.toLowerCase().replace(/\s+/g, "_") })),
+        payment_methods: methods.map((m) => ({
+          label: m,
+          type: m.toLowerCase().replace(/\s+/g, "_"),
+        })),
         bank_accounts: bankAccounts,
       });
       toast.success("Merchant payment methods & receiving accounts updated.");
@@ -611,7 +780,8 @@ function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: ()
   return (
     <div className="space-y-4" data-testid="merchant-payments-panel">
       <div className="rounded-xl border border-sky-400/25 bg-sky-500/[0.05] p-3 text-xs text-sky-200">
-        Your bank account numbers are <b>never shown publicly</b> on marketplace adverts. They are revealed only to a customer inside an active accepted order.
+        Your bank account numbers are <b>never shown publicly</b> on marketplace adverts. They are
+        revealed only to a customer inside an active accepted order.
       </div>
 
       <div className="space-y-2">
@@ -620,7 +790,10 @@ function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: ()
           <p className="text-xs text-slate-500">No receiving bank accounts saved yet.</p>
         ) : (
           bankAccounts.map((b, i) => (
-            <div key={i} className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs">
+            <div
+              key={i}
+              className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2 text-xs"
+            >
               <span className="gx-mono text-white">
                 {b.bank_name} · {b.account_number} · {b.account_name}
               </span>
@@ -668,7 +841,9 @@ function PaymentMethodsManager({ profile, onSaved }: { profile: any; onSaved: ()
               key={m}
               type="button"
               onClick={() =>
-                setMethods((curr) => (curr.includes(m) ? curr.filter((x) => x !== m) : [...curr, m]))
+                setMethods((curr) =>
+                  curr.includes(m) ? curr.filter((x) => x !== m) : [...curr, m],
+                )
               }
               className={`rounded-lg px-3 py-1 text-xs border ${
                 methods.includes(m)
@@ -741,12 +916,16 @@ export function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => v
   const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4" data-testid="trader-liquidity-purchase-panel">
+    <div
+      className="rounded-xl border border-white/10 bg-white/[0.02] p-4"
+      data-testid="trader-liquidity-purchase-panel"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="gx-label text-slate-300">Acquire Wholesale Trading Inventory</h4>
           <p className="mt-1 text-xs text-slate-400">
-            Buy GTEX Coin (₦50/GTC, ₦200,000 minimum) or Fan Coin (₦2.50/FNC, ₦50,000 minimum) inventory to back sell adverts.
+            Buy GTEX Coin (₦50/GTC, ₦200,000 minimum) or Fan Coin (₦2.50/FNC, ₦50,000 minimum)
+            inventory to back sell adverts.
           </p>
         </div>
         <div className="flex gap-2">
@@ -797,20 +976,45 @@ export function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => v
         </div>
         <div className="md:col-span-2 flex flex-col justify-end">
           {quote && (
-            <div className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4" data-testid="trader-liquidity-quote">
-              <span>Fiat: <b className="text-white">₦{fmt(quote.amount_fiat)}</b></span>
-              <span>Platform fee: <b className="text-white">{fmt(quote.fee_amount)} {unitInfo.code}</b></span>
-              <span>Processor fee: <b className="text-white">{fmt(quote.processor_fee)} {unitInfo.code}</b></span>
-              <span>Net: <b className="text-emerald-400">{fmt(quote.net_amount)} {unitInfo.code}</b></span>
+            <div
+              className="mb-2 text-xs text-slate-400 flex flex-wrap gap-x-4"
+              data-testid="trader-liquidity-quote"
+            >
+              <span>
+                Fiat: <b className="text-white">₦{fmt(quote.amount_fiat)}</b>
+              </span>
+              <span>
+                Platform fee:{" "}
+                <b className="text-white">
+                  {fmt(quote.fee_amount)} {unitInfo.code}
+                </b>
+              </span>
+              <span>
+                Processor fee:{" "}
+                <b className="text-white">
+                  {fmt(quote.processor_fee)} {unitInfo.code}
+                </b>
+              </span>
+              <span>
+                Net:{" "}
+                <b className="text-emerald-400">
+                  {fmt(quote.net_amount)} {unitInfo.code}
+                </b>
+              </span>
             </div>
           )}
           {belowMinimum && (
-            <p className="mb-2 text-xs text-amber-300" data-testid="trader-liquidity-minimum-warning">
+            <p
+              className="mb-2 text-xs text-amber-300"
+              data-testid="trader-liquidity-minimum-warning"
+            >
               Minimum purchase is ₦{fmt(unitInfo.minBuyerNgn)} for {unitInfo.name}.
             </p>
           )}
           <Btn
-            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0 || belowMinimum}
+            disabled={
+              submitting || quoteLoading || !Number(amount) || Number(amount) <= 0 || belowMinimum
+            }
             onClick={handlePurchase}
             data-testid="trader-liquidity-submit"
           >

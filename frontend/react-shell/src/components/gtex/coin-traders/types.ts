@@ -1,7 +1,12 @@
 export type CoinUnit = "coin" | "credit";
 export type MarketSide = "sell" | "buy"; // sell = trader sells (customer buys), buy = trader buys (customer sells)
 export type TradeDirection = "user_buys" | "user_sells";
-export type SortByOption = "price_asc" | "price_desc" | "completion_rate" | "fastest" | "most_orders";
+export type SortByOption =
+  | "price_asc"
+  | "price_desc"
+  | "completion_rate"
+  | "fastest"
+  | "most_orders";
 
 export const DIDIT_HANDOFF_HOSTS = new Set(["verify.didit.me", "verification.didit.me"]);
 

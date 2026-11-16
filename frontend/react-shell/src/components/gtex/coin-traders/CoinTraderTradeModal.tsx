@@ -25,11 +25,15 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
 
   const [inputMode, setInputMode] = useState<"fiat" | "coin">("fiat");
   const [fiatInput, setFiatInput] = useState(() => {
-    const start = isUserBuying ? Math.max(minFiat, unitInfo.minBuyerNgn) : Math.max(minFiat, Math.round(1000 * price));
+    const start = isUserBuying
+      ? Math.max(minFiat, unitInfo.minBuyerNgn)
+      : Math.max(minFiat, Math.round(1000 * price));
     return String(Math.round(start));
   });
   const [coinInput, setCoinInput] = useState(() => {
-    const startFiat = isUserBuying ? Math.max(minFiat, unitInfo.minBuyerNgn) : Math.max(minFiat, Math.round(1000 * price));
+    const startFiat = isUserBuying
+      ? Math.max(minFiat, unitInfo.minBuyerNgn)
+      : Math.max(minFiat, Math.round(1000 * price));
     return price > 0 ? String(Math.ceil(startFiat / price)) : "0";
   });
   const [paymentMethod, setPaymentMethod] = useState(offer.payment_methods[0] || "Bank Transfer");
@@ -69,8 +73,10 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
   const coinNum = Number(coinInput || 0);
   const fiatNum = Number(fiatInput || 0);
   const belowMinBuyer = isUserBuying && fiatNum < unitInfo.minBuyerNgn;
-  const belowAdvertMin = Number(offer.min_coin_amount) > 0 && coinNum < Number(offer.min_coin_amount);
-  const aboveAdvertMax = Number(offer.max_coin_amount) > 0 && coinNum > Number(offer.max_coin_amount);
+  const belowAdvertMin =
+    Number(offer.min_coin_amount) > 0 && coinNum < Number(offer.min_coin_amount);
+  const aboveAdvertMax =
+    Number(offer.max_coin_amount) > 0 && coinNum > Number(offer.max_coin_amount);
   const aboveLiquidity = isUserBuying && coinNum > availableCoin;
   const missingSellBank =
     !isUserBuying && (!bankName.trim() || accountNumber.trim().length < 6 || !accountName.trim());
@@ -88,7 +94,8 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
             : null;
 
   const deviationPct = offer.price_deviation_pct;
-  const showDeviationWarning = deviationPct !== null && deviationPct !== undefined && Math.abs(deviationPct) >= 3;
+  const showDeviationWarning =
+    deviationPct !== null && deviationPct !== undefined && Math.abs(deviationPct) >= 3;
 
   const submitOrder = async () => {
     if (validationMessage || coinNum <= 0) {
@@ -141,7 +148,9 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
         {/* Header */}
         <div className="flex items-center justify-between gap-3">
           <div>
-            <p className="gx-label text-amber-300">{isUserBuying ? "Buy from Coin Trader" : "Sell to Coin Trader"}</p>
+            <p className="gx-label text-amber-300">
+              {isUserBuying ? "Buy from Coin Trader" : "Sell to Coin Trader"}
+            </p>
             <h3 className="gx-display text-xl font-black text-white">
               {isUserBuying ? "Buy" : "Sell"} {unitInfo.name} ({unitInfo.code})
             </h3>
@@ -164,13 +173,18 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
         {/* Price + quote timer */}
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-2.5">
           <div className="flex items-baseline gap-2">
-            <span className="text-xs text-slate-400">{isUserBuying ? "Selling Rate" : "Buying Rate"}</span>
-            <span className={`text-lg font-bold ${isUserBuying ? "text-emerald-400" : "text-rose-400"}`}>
+            <span className="text-xs text-slate-400">
+              {isUserBuying ? "Selling Rate" : "Buying Rate"}
+            </span>
+            <span
+              className={`text-lg font-bold ${isUserBuying ? "text-emerald-400" : "text-rose-400"}`}
+            >
               ₦{fmt(price, 2)} / {unitInfo.code}
             </span>
           </div>
           <span className="inline-flex items-center gap-1 text-xs text-slate-400">
-            <Clock size={12} /> {quoteSecs > 0 ? `Quote valid ${quoteSecs}s` : "Rate verified on submit"}
+            <Clock size={12} />{" "}
+            {quoteSecs > 0 ? `Quote valid ${quoteSecs}s` : "Rate verified on submit"}
           </span>
         </div>
 
@@ -178,7 +192,8 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
           <div className="flex items-start gap-2 rounded-xl border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
             <span>
-              This price is {Math.abs(deviationPct!).toFixed(2)}% {deviationPct! > 0 ? "higher" : "lower"} than the GTEX reference rate
+              This price is {Math.abs(deviationPct!).toFixed(2)}%{" "}
+              {deviationPct! > 0 ? "higher" : "lower"} than the GTEX reference rate
               {offer.reference_rate_fiat ? ` (₦${fmt(offer.reference_rate_fiat, 2)})` : ""}.
             </span>
           </div>
@@ -191,14 +206,22 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
               <button
                 type="button"
                 onClick={() => setInputMode("fiat")}
-                className={inputMode === "fiat" ? "border-b-2 border-amber-400 pb-1 font-semibold text-white" : "pb-1"}
+                className={
+                  inputMode === "fiat"
+                    ? "border-b-2 border-amber-400 pb-1 font-semibold text-white"
+                    : "pb-1"
+                }
               >
                 By Naira (NGN)
               </button>
               <button
                 type="button"
                 onClick={() => setInputMode("coin")}
-                className={inputMode === "coin" ? "border-b-2 border-amber-400 pb-1 font-semibold text-white" : "pb-1"}
+                className={
+                  inputMode === "coin"
+                    ? "border-b-2 border-amber-400 pb-1 font-semibold text-white"
+                    : "pb-1"
+                }
               >
                 By {unitInfo.code} Quantity
               </button>
@@ -216,16 +239,26 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
               step="any"
               className="w-full bg-transparent text-2xl font-bold text-white outline-none"
               value={inputMode === "fiat" ? fiatInput : coinInput}
-              onChange={(e) => (inputMode === "fiat" ? handleFiatChange(e.target.value) : handleCoinChange(e.target.value))}
+              onChange={(e) =>
+                inputMode === "fiat"
+                  ? handleFiatChange(e.target.value)
+                  : handleCoinChange(e.target.value)
+              }
             />
-            <span className="text-xs font-bold text-slate-300">{inputMode === "fiat" ? "NGN" : unitInfo.code}</span>
+            <span className="text-xs font-bold text-slate-300">
+              {inputMode === "fiat" ? "NGN" : unitInfo.code}
+            </span>
             {maxFiat > 0 && (
               <button
                 type="button"
                 onClick={() =>
                   inputMode === "fiat"
                     ? handleFiatChange(String(Math.floor(maxFiat)))
-                    : handleCoinChange(String(Math.min(Number(offer.max_coin_amount || availableCoin), availableCoin)))
+                    : handleCoinChange(
+                        String(
+                          Math.min(Number(offer.max_coin_amount || availableCoin), availableCoin),
+                        ),
+                      )
                 }
                 className="text-xs font-bold text-amber-400 hover:text-amber-300 pl-2 border-l border-white/15"
               >
@@ -236,11 +269,16 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
 
           <div className="flex flex-wrap justify-between gap-2 text-xs text-slate-400">
             <span>
-              Limits: <b className="text-slate-200">₦{fmt(minFiat)} – {maxFiat > 0 ? `₦${fmt(maxFiat)}` : "Open"}</b>
+              Limits:{" "}
+              <b className="text-slate-200">
+                ₦{fmt(minFiat)} – {maxFiat > 0 ? `₦${fmt(maxFiat)}` : "Open"}
+              </b>
             </span>
             <span>
               {isUserBuying ? "Available" : "Merchant Cap"}:{" "}
-              <b className="text-slate-200">{fmt(availableCoin)} {unitInfo.code}</b>
+              <b className="text-slate-200">
+                {fmt(availableCoin)} {unitInfo.code}
+              </b>
             </span>
           </div>
 
@@ -257,7 +295,9 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
                 {isUserBuying ? `${fmt(coinNum, 4)} ${unitInfo.code}` : `₦${fmt(fiatNum, 2)}`}
               </b>
             </span>
-            <span className="text-slate-400">Fee: <b className="text-white">₦0</b></span>
+            <span className="text-slate-400">
+              Fee: <b className="text-white">₦0</b>
+            </span>
           </div>
         </div>
 
@@ -270,18 +310,22 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
             onChange={(e) => setPaymentMethod(e.target.value)}
             data-testid="modal-payment-method"
           >
-            {(offer.payment_methods.length > 0 ? offer.payment_methods : ["Bank Transfer"]).map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
+            {(offer.payment_methods.length > 0 ? offer.payment_methods : ["Bank Transfer"]).map(
+              (m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ),
+            )}
           </select>
         </div>
 
         {/* Customer payout details when selling coins */}
         {!isUserBuying && (
           <div className="rounded-xl border border-white/10 bg-white/[0.02] p-3 space-y-2">
-            <p className="gx-label text-amber-300">Your Naira Payout Account (shared only with this merchant)</p>
+            <p className="gx-label text-amber-300">
+              Your Naira Payout Account (shared only with this merchant)
+            </p>
             <div className="grid gap-2 sm:grid-cols-3">
               <input
                 className="gx-input text-xs"
@@ -313,30 +357,46 @@ export function CoinTraderTradeModal({ offer, onClose, onOrderCreated }: Props) 
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <span className="font-bold text-white">{offer.trader_display_name}</span>
-              <Chip tone={offer.is_didit_verified ? "emerald" : "gold"}>{offer.verification_badge_label}</Chip>
+              <Chip tone={offer.is_didit_verified ? "emerald" : "gold"}>
+                {offer.verification_badge_label}
+              </Chip>
               {offer.is_new_merchant && <Chip tone="slate">New Merchant</Chip>}
             </div>
             <div className="text-xs text-slate-300 flex items-center gap-1">
-              <Star size={13} className="text-amber-400" fill={offer.rating_count > 0 ? "currentColor" : "none"} />
-              {offer.rating_count > 0 ? `${offer.rating.toFixed(1)} (${offer.rating_count})` : "No ratings yet"}
+              <Star
+                size={13}
+                className="text-amber-400"
+                fill={offer.rating_count > 0 ? "currentColor" : "none"}
+              />
+              {offer.rating_count > 0
+                ? `${offer.rating.toFixed(1)} (${offer.rating_count})`
+                : "No ratings yet"}
             </div>
           </div>
           <p className="text-xs text-slate-400">
             {offer.completed_orders_count} Completed Orders ·{" "}
-            {offer.total_orders_count > 0 ? `${offer.completion_rate.toFixed(1)}% Completion` : "First trades in progress"}
-            {offer.average_release_minutes > 0 ? ` · ~${Math.round(offer.average_release_minutes)}m avg release` : ""}
+            {offer.total_orders_count > 0
+              ? `${offer.completion_rate.toFixed(1)}% Completion`
+              : "First trades in progress"}
+            {offer.average_release_minutes > 0
+              ? ` · ~${Math.round(offer.average_release_minutes)}m avg release`
+              : ""}
           </p>
           <div className="border-t border-white/10 pt-2 text-xs text-slate-400 space-y-1">
             <p className="font-semibold text-slate-300">Advertiser Terms & Escrow Rules</p>
             <p className="text-[11px] leading-5">
-              Coins are escrowed in the canonical GTEX ledger upon order creation. Never release or pay outside this order room.
+              Coins are escrowed in the canonical GTEX ledger upon order creation. Never release or
+              pay outside this order room.
             </p>
             {offer.terms_text && <p className="text-slate-200">{offer.terms_text}</p>}
           </div>
         </div>
 
         {validationMessage && (
-          <p className="text-xs text-amber-300 flex items-center gap-1.5" data-testid="modal-validation-warning">
+          <p
+            className="text-xs text-amber-300 flex items-center gap-1.5"
+            data-testid="modal-validation-warning"
+          >
             <AlertTriangle size={14} /> {validationMessage}
           </p>
         )}

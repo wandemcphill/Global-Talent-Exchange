@@ -160,7 +160,8 @@ export function CoinTraderAdminExtras() {
           <div>
             <span className="text-slate-400">Active / Disputed Orders</span>
             <p className="text-base font-bold text-amber-300">
-              {overview.active_escrow_orders} / <span className="text-rose-400">{overview.disputed_orders}</span>
+              {overview.active_escrow_orders} /{" "}
+              <span className="text-rose-400">{overview.disputed_orders}</span>
             </p>
           </div>
           <div>
@@ -171,7 +172,9 @@ export function CoinTraderAdminExtras() {
           </div>
           <div>
             <span className="text-slate-400">Completed Volume</span>
-            <p className="text-base font-bold text-emerald-400">₦{fmt(overview.completed_volume_fiat, 2)}</p>
+            <p className="text-base font-bold text-emerald-400">
+              ₦{fmt(overview.completed_volume_fiat, 2)}
+            </p>
           </div>
         </div>
       )}
@@ -201,16 +204,29 @@ export function CoinTraderAdminExtras() {
               <p className="text-xs text-slate-400">No adverts published yet.</p>
             ) : (
               adverts.map((a) => (
-                <div key={a.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 p-2.5 text-xs">
+                <div
+                  key={a.id}
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 p-2.5 text-xs"
+                >
                   <div>
-                    <Chip tone={a.status === "active" ? "emerald" : a.status === "admin_paused" ? "red" : "slate"}>
+                    <Chip
+                      tone={
+                        a.status === "active"
+                          ? "emerald"
+                          : a.status === "admin_paused"
+                            ? "red"
+                            : "slate"
+                      }
+                    >
                       {label(a.status)}
                     </Chip>{" "}
                     <b className="text-white">
                       {a.side.toUpperCase()} {a.coin_unit === "coin" ? "GTC" : "FNC"}
                     </b>{" "}
                     @ ₦{fmt(a.effective_price_fiat, 2)} · Avail {fmt(a.available_coin)} · Trader{" "}
-                    <span className="gx-mono text-slate-400">{a.trader_profile_id.slice(0, 8)}</span>
+                    <span className="gx-mono text-slate-400">
+                      {a.trader_profile_id.slice(0, 8)}
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     {a.status !== "admin_paused" ? (
@@ -219,7 +235,9 @@ export function CoinTraderAdminExtras() {
                           className="gx-input py-1 text-xs max-w-[180px]"
                           placeholder="Pause reason"
                           value={pauseReasons[a.id] || ""}
-                          onChange={(e) => setPauseReasons((p) => ({ ...p, [a.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setPauseReasons((p) => ({ ...p, [a.id]: e.target.value }))
+                          }
                         />
                         <Btn
                           variant="danger"
@@ -260,22 +278,39 @@ export function CoinTraderAdminExtras() {
               <p className="text-xs text-slate-400">No orders matching filter.</p>
             ) : (
               visibleOrders.map((o) => {
-                const canResolve = ["payment_pending", "proof_submitted", "disputed"].includes(o.status);
+                const canResolve = ["payment_pending", "proof_submitted", "disputed"].includes(
+                  o.status,
+                );
                 return (
-                  <div key={o.id} className="rounded-lg border border-white/10 p-3 text-xs space-y-2">
+                  <div
+                    key={o.id}
+                    className="rounded-lg border border-white/10 p-3 text-xs space-y-2"
+                  >
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span>
                         <b className="text-white">
-                          {o.direction} · {fmt(o.coin_amount)} {o.coin_unit === "coin" ? "GTC" : "FNC"}
+                          {o.direction} · {fmt(o.coin_amount)}{" "}
+                          {o.coin_unit === "coin" ? "GTC" : "FNC"}
                         </b>{" "}
-                        (₦{fmt(o.fiat_total, 2)}) · Order <span className="gx-mono">{o.id.slice(0, 8)}</span>
+                        (₦{fmt(o.fiat_total, 2)}) · Order{" "}
+                        <span className="gx-mono">{o.id.slice(0, 8)}</span>
                       </span>
-                      <Chip tone={o.status === "disputed" ? "red" : o.status === "released" ? "emerald" : "gold"}>
+                      <Chip
+                        tone={
+                          o.status === "disputed"
+                            ? "red"
+                            : o.status === "released"
+                              ? "emerald"
+                              : "gold"
+                        }
+                      >
                         {label(o.status)}
                       </Chip>
                     </div>
                     {o.metadata_json?.dispute && (
-                      <p className="text-rose-300">Dispute reason: {o.metadata_json.dispute.reason}</p>
+                      <p className="text-rose-300">
+                        Dispute reason: {o.metadata_json.dispute.reason}
+                      </p>
                     )}
                     {o.proof?.proof_reference && (
                       <p className="text-slate-300">Proof Ref: {o.proof.proof_reference}</p>
@@ -286,9 +321,14 @@ export function CoinTraderAdminExtras() {
                           className="gx-input py-1 text-xs max-w-[220px]"
                           placeholder="Resolution note"
                           value={resolveNote[o.id] || ""}
-                          onChange={(e) => setResolveNote((p) => ({ ...p, [o.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setResolveNote((p) => ({ ...p, [o.id]: e.target.value }))
+                          }
                         />
-                        <Btn disabled={busy !== null} onClick={() => handleResolveOrder(o.id, "release")}>
+                        <Btn
+                          disabled={busy !== null}
+                          onClick={() => handleResolveOrder(o.id, "release")}
+                        >
                           Release Escrow
                         </Btn>
                         <Btn
@@ -335,7 +375,10 @@ export function CoinTraderAdminExtras() {
               <p className="text-slate-400">No audit entries yet.</p>
             ) : (
               audits.map((a) => (
-                <div key={a.id} className="flex flex-wrap justify-between gap-2 rounded border border-white/10 p-2">
+                <div
+                  key={a.id}
+                  className="flex flex-wrap justify-between gap-2 rounded border border-white/10 p-2"
+                >
                   <div>
                     <span className="gx-mono text-amber-300">{a.action_key}</span> ·{" "}
                     <span className="text-slate-200">{a.detail}</span>

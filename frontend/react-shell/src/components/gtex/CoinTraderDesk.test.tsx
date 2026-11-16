@@ -81,7 +81,8 @@ async function flush() {
 }
 
 function setInputValue(el: HTMLInputElement | HTMLSelectElement, value: string) {
-  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  const proto =
+    el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
   setter?.call(el, value);
   el.dispatchEvent(new Event("input", { bubbles: true }));
@@ -124,14 +125,19 @@ describe("CoinTraderDesk", () => {
       root.render(
         <QueryClientProvider client={qc}>
           <CoinTraderDesk />
-        </QueryClientProvider>
+        </QueryClientProvider>,
       );
     });
     await flush();
   };
 
   it("renders truthful empty state with Become a Coin Trader CTA when zero active offers exist", async () => {
-    mockUser = { id: "buyer-0", username: "buyer0", display_name: "Buyer Zero", account_type: "user" };
+    mockUser = {
+      id: "buyer-0",
+      username: "buyer0",
+      display_name: "Buyer Zero",
+      account_type: "user",
+    };
     mockedApi.get.mockImplementation(async (url: string) => {
       if (url === "/coin-traders/marketplace") {
         return {
@@ -222,12 +228,16 @@ describe("CoinTraderDesk", () => {
     expect(kycCard).not.toBeNull();
     expect(kycCard?.textContent).not.toContain("Sandbox");
 
-    const select = container.querySelector('[data-testid="trader-kyc-type-select"]') as HTMLSelectElement;
+    const select = container.querySelector(
+      '[data-testid="trader-kyc-type-select"]',
+    ) as HTMLSelectElement;
     await act(async () => {
       setInputValue(select, "bvn_nin");
     });
 
-    const btn = container.querySelector('[data-testid="initiate-trader-kyc-btn"]') as HTMLButtonElement;
+    const btn = container.querySelector(
+      '[data-testid="initiate-trader-kyc-btn"]',
+    ) as HTMLButtonElement;
     await act(async () => {
       btn.click();
     });
@@ -241,14 +251,21 @@ describe("CoinTraderDesk", () => {
     expect(window.open).toHaveBeenCalledWith(
       "https://verify.didit.me/session/didit-sess-123",
       "_blank",
-      "noopener,noreferrer"
+      "noopener,noreferrer",
     );
-    const link = container.querySelector('[data-testid="trader-kyc-handoff-link"]') as HTMLAnchorElement;
+    const link = container.querySelector(
+      '[data-testid="trader-kyc-handoff-link"]',
+    ) as HTMLAnchorElement;
     expect(link?.getAttribute("href")).toBe("https://verify.didit.me/session/didit-sess-123");
   });
 
   it("enforces NGN 200,000 GTC / NGN 50,000 FNC buyer minimums in Trade Modal and places advert orders", async () => {
-    mockUser = { id: "buyer-1", username: "buyer1", display_name: "Buyer One", account_type: "user" };
+    mockUser = {
+      id: "buyer-1",
+      username: "buyer1",
+      display_name: "Buyer One",
+      account_type: "user",
+    };
 
     const makeMarket = (unit: "coin" | "credit") => ({
       coin_unit: unit,
@@ -317,16 +334,25 @@ describe("CoinTraderDesk", () => {
 
     // Open GTC trade modal
     await act(async () => {
-      (container.querySelector('[data-testid="select-offer-adv-coin"]') as HTMLButtonElement).click();
+      (
+        container.querySelector('[data-testid="select-offer-adv-coin"]') as HTMLButtonElement
+      ).click();
     });
     await flush();
 
     // Enter 100,000 NGN (< 200,000 minimum)
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "100000");
+      setInputValue(
+        container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement,
+        "100000",
+      );
     });
-    expect(container.querySelector('[data-testid="modal-validation-warning"]')?.textContent).toContain("200,000");
-    expect((container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      container.querySelector('[data-testid="modal-validation-warning"]')?.textContent,
+    ).toContain("200,000");
+    expect(
+      (container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement).disabled,
+    ).toBe(true);
 
     // Close and switch to Fan Coin (credit)
     await act(async () => {
@@ -338,19 +364,31 @@ describe("CoinTraderDesk", () => {
     await flush();
 
     await act(async () => {
-      (container.querySelector('[data-testid="select-offer-adv-credit"]') as HTMLButtonElement).click();
+      (
+        container.querySelector('[data-testid="select-offer-adv-credit"]') as HTMLButtonElement
+      ).click();
     });
     await flush();
 
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "40000");
+      setInputValue(
+        container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement,
+        "40000",
+      );
     });
-    expect(container.querySelector('[data-testid="modal-validation-warning"]')?.textContent).toContain("50,000");
+    expect(
+      container.querySelector('[data-testid="modal-validation-warning"]')?.textContent,
+    ).toContain("50,000");
 
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "64000");
+      setInputValue(
+        container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement,
+        "64000",
+      );
     });
-    const submitBtn = container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement;
+    const submitBtn = container.querySelector(
+      '[data-testid="modal-submit-order"]',
+    ) as HTMLButtonElement;
     expect(submitBtn.disabled).toBe(false);
 
     await act(async () => {
@@ -367,7 +405,7 @@ describe("CoinTraderDesk", () => {
         coin_unit: "credit",
         coin_amount: 20000,
         fiat_currency: "NGN",
-      })
+      }),
     );
   });
 
@@ -393,14 +431,21 @@ describe("CoinTraderDesk", () => {
             verification_provider: "didit",
             verification_badge_label: "ID Verified",
             payment_methods: [{ label: "Bank Transfer", type: "bank_transfer" }],
-            bank_accounts: [{ bank_name: "GTBank", account_number: "0123456789", account_name: "Verified Desk" }],
+            bank_accounts: [
+              { bank_name: "GTBank", account_number: "0123456789", account_name: "Verified Desk" },
+            ],
           },
         };
       }
       if (url === "/coin-traders/me/dashboard") {
         return {
           data: {
-            profile: { id: "prof-2", display_name: "Verified Desk", tier: "gold", status: "approved" },
+            profile: {
+              id: "prof-2",
+              display_name: "Verified Desk",
+              tier: "gold",
+              status: "approved",
+            },
             balances: {
               coin_available: "12000",
               coin_reserved: "3000",
@@ -446,7 +491,9 @@ describe("CoinTraderDesk", () => {
 
     // Switch to Adverts tab and publish
     await act(async () => {
-      (container.querySelector('[data-testid="merchant-tab-adverts"]') as HTMLButtonElement).click();
+      (
+        container.querySelector('[data-testid="merchant-tab-adverts"]') as HTMLButtonElement
+      ).click();
     });
     await flush();
 
@@ -461,7 +508,7 @@ describe("CoinTraderDesk", () => {
         coin_unit: "coin",
         side: "sell",
         status: "active",
-      })
+      }),
     );
   });
 });

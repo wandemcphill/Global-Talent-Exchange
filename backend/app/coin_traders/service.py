@@ -12,7 +12,7 @@ from decimal import Decimal
 from sqlalchemy import and_, inspect, or_, select
 from sqlalchemy.orm import Session
 
-from app.models.base import generate_uuid, utcnow
+from app.models.base import utcnow
 from app.models.coin_trader import (
     CoinAdvertPricingMode,
     CoinAdvertSide,

@@ -36,7 +36,9 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
   const [ratingScore, setRatingScore] = useState(5);
   const [ratingComment, setRatingComment] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState<string | null>(() => formatRemainingTime(order.payment_window_expires_at));
+  const [countdown, setCountdown] = useState<string | null>(() =>
+    formatRemainingTime(order.payment_window_expires_at),
+  );
 
   useEffect(() => {
     setCountdown(formatRemainingTime(order.payment_window_expires_at));
@@ -143,36 +145,49 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
       </div>
 
       {/* Protected payment details (revealed only in active payment stages) */}
-      {iSendFiat && ACTIVE_PAYMENT.has(order.status) && buys && (bankDetails.length > 0 || order.terms_snapshot?.payment_instructions) && (
-        <div className="rounded-lg border border-sky-400/25 bg-sky-500/[0.06] p-3 text-xs text-sky-100">
-          <p className="font-semibold text-sky-200">Merchant Payment Details (Protected · Active Order Only)</p>
-          {order.terms_snapshot?.payment_instructions && (
-            <p className="mt-1">{order.terms_snapshot.payment_instructions}</p>
-          )}
-          {bankDetails.map((b: any, i: number) => (
-            <p key={i} className="mt-1 gx-mono">
-              {b.bank_name || b.bank || "Bank"} · {b.account_number || ""} · {b.account_name || ""}
+      {iSendFiat &&
+        ACTIVE_PAYMENT.has(order.status) &&
+        buys &&
+        (bankDetails.length > 0 || order.terms_snapshot?.payment_instructions) && (
+          <div className="rounded-lg border border-sky-400/25 bg-sky-500/[0.06] p-3 text-xs text-sky-100">
+            <p className="font-semibold text-sky-200">
+              Merchant Payment Details (Protected · Active Order Only)
             </p>
-          ))}
-        </div>
-      )}
+            {order.terms_snapshot?.payment_instructions && (
+              <p className="mt-1">{order.terms_snapshot.payment_instructions}</p>
+            )}
+            {bankDetails.map((b: any, i: number) => (
+              <p key={i} className="mt-1 gx-mono">
+                {b.bank_name || b.bank || "Bank"} · {b.account_number || ""} ·{" "}
+                {b.account_name || ""}
+              </p>
+            ))}
+          </div>
+        )}
 
-      {!buys && order.customer_payout_details && (ACTIVE_PAYMENT.has(order.status) || order.status === "created" || order.status === "proof_submitted") && (
-        <div className="rounded-lg border border-sky-400/25 bg-sky-500/[0.06] p-3 text-xs text-sky-100">
-          <p className="font-semibold text-sky-200">Customer Naira Payout Account</p>
-          <p className="mt-1 gx-mono">
-            {order.customer_payout_details.bank_name || ""} · {order.customer_payout_details.account_number || ""} ·{" "}
-            {order.customer_payout_details.account_name || ""}
-          </p>
-        </div>
-      )}
+      {!buys &&
+        order.customer_payout_details &&
+        (ACTIVE_PAYMENT.has(order.status) ||
+          order.status === "created" ||
+          order.status === "proof_submitted") && (
+          <div className="rounded-lg border border-sky-400/25 bg-sky-500/[0.06] p-3 text-xs text-sky-100">
+            <p className="font-semibold text-sky-200">Customer Naira Payout Account</p>
+            <p className="mt-1 gx-mono">
+              {order.customer_payout_details.bank_name || ""} ·{" "}
+              {order.customer_payout_details.account_number || ""} ·{" "}
+              {order.customer_payout_details.account_name || ""}
+            </p>
+          </div>
+        )}
 
       {/* Action controls */}
       <div className="flex flex-wrap items-center gap-2">
         {asTrader && order.status === "created" && (
           <Btn
             disabled={busy !== null}
-            onClick={() => runAction("accept", `${base}/accept`, {}, "Order accepted. Payment window started.")}
+            onClick={() =>
+              runAction("accept", `${base}/accept`, {}, "Order accepted. Payment window started.")
+            }
             data-testid={`accept-order-${order.id}`}
           >
             {busy === "accept" ? "Accepting..." : "Accept Order"}
@@ -202,7 +217,7 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
                   "proof",
                   `${base}/proof`,
                   { proof_reference: proofRef.trim(), note: proofNote.trim() || undefined },
-                  "Payment proof submitted."
+                  "Payment proof submitted.",
                 )
               }
               data-testid={`submit-proof-${order.id}`}
@@ -216,7 +231,12 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
           <Btn
             disabled={busy !== null}
             onClick={() =>
-              runAction("confirm", `${base}/confirm`, {}, "Payment confirmed and escrowed coins released.")
+              runAction(
+                "confirm",
+                `${base}/confirm`,
+                {},
+                "Payment confirmed and escrowed coins released.",
+              )
             }
             data-testid={`confirm-order-${order.id}`}
           >
@@ -228,7 +248,9 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
           <Btn
             variant="ghost"
             disabled={busy !== null}
-            onClick={() => runAction("cancel", `${base}/cancel`, {}, "Order cancelled and escrow refunded.")}
+            onClick={() =>
+              runAction("cancel", `${base}/cancel`, {}, "Order cancelled and escrow refunded.")
+            }
             data-testid={`cancel-order-${order.id}`}
           >
             {asTrader && order.status === "created" ? "Decline" : "Cancel Order"}
@@ -246,7 +268,11 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
           </Btn>
         )}
 
-        <Btn variant="ghost" onClick={() => setShowChat((v) => !v)} data-testid={`toggle-chat-${order.id}`}>
+        <Btn
+          variant="ghost"
+          onClick={() => setShowChat((v) => !v)}
+          data-testid={`toggle-chat-${order.id}`}
+        >
           <MessageSquare size={14} /> Chat ({messages.length})
         </Btn>
       </div>
@@ -267,7 +293,12 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
               variant="danger"
               disabled={disputeReason.trim().length < 3 || busy !== null}
               onClick={() =>
-                runAction("dispute", `${base}/dispute`, { reason: disputeReason.trim() }, "Dispute opened.")
+                runAction(
+                  "dispute",
+                  `${base}/dispute`,
+                  { reason: disputeReason.trim() },
+                  "Dispute opened.",
+                )
               }
             >
               Submit Dispute
@@ -278,7 +309,10 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
 
       {/* Order chat thread */}
       {showChat && (
-        <div className="rounded-lg border border-white/10 bg-black/30 p-3 space-y-2" data-testid={`order-chat-${order.id}`}>
+        <div
+          className="rounded-lg border border-white/10 bg-black/30 p-3 space-y-2"
+          data-testid={`order-chat-${order.id}`}
+        >
           <div className="max-h-40 space-y-1.5 overflow-y-auto text-xs">
             {messages.length === 0 ? (
               <p className="text-slate-500">No messages yet. Coordinate transfer details here.</p>
@@ -315,9 +349,13 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
 
       {/* Customer rating for completed transactions */}
       {!asTrader && isCompleted && !order.my_rating && (
-        <div className="rounded-lg border border-amber-400/25 bg-amber-500/[0.05] p-3 space-y-2" data-testid={`rate-order-${order.id}`}>
+        <div
+          className="rounded-lg border border-amber-400/25 bg-amber-500/[0.05] p-3 space-y-2"
+          data-testid={`rate-order-${order.id}`}
+        >
           <p className="text-xs font-semibold text-amber-200 flex items-center gap-1.5">
-            <CheckCircle2 size={14} className="text-emerald-400" /> Trade Completed · Rate this merchant
+            <CheckCircle2 size={14} className="text-emerald-400" /> Trade Completed · Rate this
+            merchant
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1">
@@ -347,7 +385,7 @@ export function CoinTraderOrderRoom({ order, asTrader = false, traders = [] }: P
                   "rate",
                   `${base}/rating`,
                   { score: ratingScore, comment: ratingComment.trim() || undefined },
-                  "Rating submitted. Thank you!"
+                  "Rating submitted. Thank you!",
                 )
               }
             >
