@@ -547,6 +547,9 @@ class CompetitionLifecycleService:
         card_type: str | None,
         highlight: bool,
         metadata_json: dict,
+        sequence: int | None = None,
+        execution_revision: int = 1,
+        event_key: str | None = None,
     ):
         return self.match_service.record_event(
             competition_id=match.competition_id,
@@ -560,6 +563,9 @@ class CompetitionLifecycleService:
             card_type=card_type,
             highlight=highlight,
             metadata_json=metadata_json,
+            sequence=sequence,
+            execution_revision=execution_revision,
+            event_key=event_key,
         )
 
     def complete_match(

@@ -14,6 +14,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.cache import HotPathCache
+from app.config.competition_constants import (
+    KNOCKOUT_BROADCAST_MAX_SECONDS,
+    STANDARD_BROADCAST_MAX_SECONDS,
+)
 from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher
 from app.broadcast_network.stadium_service import StadiumImmersionProfile, StadiumImmersionService
@@ -479,12 +483,295 @@ class LiveMatchHub:
                 raise LiveMatchError("Spectator session was not found.")
             return item
 
+    def _canonical_execution_bundle(self, match_id: str) -> tuple[Any, Any] | None:
+        if self.session_factory is None:
+            return None
+        try:
+            from app.models.competition_match import CompetitionMatch
+            from app.models.competition_match_execution import CompetitionMatchExecution
+
+            with self.session_factory() as session:
+                execution = session.scalar(
+                    select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                )
+                if execution is None:
+                    return None
+                match = session.get(CompetitionMatch, match_id)
+                if match is None:
+                    return None
+                session.expunge(execution)
+                session.expunge(match)
+                return match, execution
+        except Exception:
+            logger.exception("live_match.canonical_execution_lookup_failed match_id=%s", match_id)
+            return None
+
+    def _build_canonical_stream_events(
+        self,
+        match: Any,
+        execution: Any,
+    ) -> list[LiveMatchStreamEventView]:
+        sim_req = dict(execution.simulation_request_json or {})
+        home_team = dict(sim_req.get("home_team") or {})
+        away_team = dict(sim_req.get("away_team") or {})
+        home_id = str(home_team.get("team_id") or match.home_club_id)
+        away_id = str(away_team.get("team_id") or match.away_club_id)
+        home_name = str(home_team.get("team_name") or home_id)
+        away_name = str(away_team.get("team_name") or away_id)
+        mapped: list[LiveMatchStreamEventView] = []
+        raw_events = list(execution.committed_events_json or [])
+        total_duration = max(1, int(execution.assigned_duration_seconds or 600))
+        target_end = max(90, int(execution.target_end_minute or 90))
+
+        for index, raw in enumerate(raw_events, start=1):
+            seq = int(raw.get("sequence", index) or index)
+            minute = int(raw.get("minute", 0) or 0)
+            event_type = str(raw.get("event_type") or "commentary")
+            team_id = raw.get("team_id")
+            team_side = "home" if team_id == home_id else ("away" if team_id == away_id else None)
+            meta = dict(raw.get("metadata") or {})
+            event_revision = int(meta.get("execution_revision") or execution.execution_revision)
+            effective_from = (
+                int(meta["effective_from_minute"]) if meta.get("effective_from_minute") is not None else None
+            )
+            meta["execution_revision"] = event_revision
+            meta["commit_cursor"] = index
+            meta.setdefault("home_score", int(raw.get("home_score", 0) or 0))
+            meta.setdefault("away_score", int(raw.get("away_score", 0) or 0))
+            if team_side is not None:
+                meta.setdefault("team_side", team_side)
+            presentation_second = int(
+                meta.get(
+                    "presentation_second",
+                    min(total_duration, max(0, round((minute / target_end) * total_duration))),
+                )
+            )
+            meta["presentation_second"] = presentation_second
+            mapped.append(
+                LiveMatchStreamEventView(
+                    match_id=str(match.id),
+                    event_id=str(raw.get("event_id") or f"{match.id}:ev:{seq}"),
+                    source_event_id=str(raw.get("event_id") or f"{match.id}:ev:{seq}"),
+                    sequence=seq,
+                    sequence_id=seq,
+                    tick=seq,
+                    minute=minute,
+                    event_type=event_type,
+                    source_event_type=event_type,
+                    team_id=team_id,
+                    team=raw.get("team_name")
+                    or (home_name if team_side == "home" else (away_name if team_side == "away" else None)),
+                    team_side=team_side,
+                    player_id=raw.get("primary_player_id"),
+                    player=raw.get("primary_player_name"),
+                    secondary_player_id=raw.get("secondary_player_id"),
+                    secondary_player=raw.get("secondary_player_name"),
+                    commentary=str(meta.get("commentary") or f"{minute}' {event_type.replace('_', ' ')}"),
+                    home_score=int(raw.get("home_score", 0) or 0),
+                    away_score=int(raw.get("away_score", 0) or 0),
+                    clock_label=f"{minute}'",
+                    presentation_second=presentation_second,
+                    importance_score=int(meta.get("importance", 2) or 2),
+                    is_penalty=event_type
+                    in {"penalty_goal", "penalty_miss", "penalty_awarded", "penalty_scored", "penalty_missed"},
+                    highlight_eligible=event_type
+                    in {"goal", "penalty_goal", "red_card", "substitution", "tactical_change", "halftime", "fulltime"},
+                    meta=meta,
+                    metadata=meta,
+                    execution_revision=event_revision,
+                    effective_from_minute=effective_from,
+                    commit_cursor=index,
+                )
+            )
+        return mapped
+
+    def _build_canonical_state_view(
+        self,
+        match: Any,
+        execution: Any,
+        events: list[LiveMatchStreamEventView],
+        *,
+        spectator_count: int = 0,
+    ) -> LiveMatchStateView:
+        sim_req = dict(execution.simulation_request_json or {})
+        home_team = dict(sim_req.get("home_team") or {})
+        away_team = dict(sim_req.get("away_team") or {})
+        home_name = str(home_team.get("team_name") or match.home_club_id)
+        away_name = str(away_team.get("team_name") or match.away_club_id)
+        status_str = str(execution.execution_status or "scheduled")
+        is_live = status_str in {"in_progress", "paused"}
+        minute = int(execution.current_minute or 0)
+        home_score = int(match.home_score or 0)
+        away_score = int(match.away_score or 0)
+        home_poss = 50
+        away_poss = 50
+        recent = events[-3:]
+        dramatic = any(
+            ev.event_type == "goal" or (ev.event_type in {"card", "red_card"} and ev.metadata.get("card_type") == "red")
+            for ev in recent
+        )
+        win_prob = _build_win_probability(
+            minute=minute,
+            home_score=home_score,
+            away_score=away_score,
+            home_possession=home_poss,
+            dramatic_event=dramatic,
+        )
+        snapshot_status = "halted" if status_str == "halted" else ("live" if is_live else "completed")
+        snapshot = LiveMatchSnapshotView(
+            score=LiveMatchScoreView(home=home_score, away=away_score),
+            possession_estimate=LiveMatchPossessionEstimateView(home=home_poss, away=away_poss),
+            current_minute=minute,
+            momentum_indicator="balanced",
+            win_probability=win_prob,
+            market_pulse=_build_market_pulse(
+                probability=win_prob,
+                minute=minute,
+                dramatic_event=dramatic,
+            ),
+            dramatic_event=dramatic,
+            status=snapshot_status,
+            read_only=True,
+        )
+        last_seq = events[-1].sequence if events else 0
+        broadcast_category = str(getattr(execution, "broadcast_category", None) or "").strip().lower()
+        comp_type = (
+            str(getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or "")
+            .strip()
+            .lower()
+        )
+        stage = str(getattr(match, "stage", None) or "").strip().lower()
+        is_major_knockout = bool(
+            broadcast_category == "major_knockout"
+            or getattr(match, "requires_winner", False)
+            or comp_type in {"champions_league", "world_cup", "knockout", "cup", "final"}
+            or stage in {"final", "semi_final", "quarter_final", "knockout"}
+        )
+        max_duration = KNOCKOUT_BROADCAST_MAX_SECONDS if is_major_knockout else STANDARD_BROADCAST_MAX_SECONDS
+        raw_duration = getattr(execution, "assigned_duration_seconds", None)
+        assigned_duration = min(max_duration, max(1, int(raw_duration or max_duration)))
+        shared_clock_second = min(assigned_duration, max(0, int(execution.elapsed_broadcast_seconds or 0)))
+        revision = int(execution.execution_revision)
+        commit_cursor = len(events)
+        return LiveMatchStateView(
+            match_id=str(match.id),
+            channel=f"match:{match.id}:events",
+            is_live=is_live,
+            read_only=True,
+            spectator_count=spectator_count,
+            event_count=commit_cursor,
+            last_sequence=last_seq,
+            home_team_name=home_name,
+            away_team_name=away_name,
+            snapshot=snapshot,
+            crowd_state=MatchCrowdStateView(
+                profile="standard",
+                home_intensity=0.5,
+                away_intensity=0.5,
+                dominant_side="home",
+                chant_level=0.585,
+            ),
+            spectator_sync=MatchSpectatorSyncView(
+                room_id=f"match_{match.id}",
+                sync_strategy="canonical_live_execution",
+                shared_clock_second=shared_clock_second,
+                tick=last_seq,
+                max_latency_ms=320,
+                checkpoint_interval_seconds=10,
+                pause_replay_enabled=False,
+                reactions_enabled=True,
+            ),
+            execution_revision=revision,
+            commit_cursor=commit_cursor,
+            pause_replay_enabled=False,
+            assigned_duration_seconds=assigned_duration,
+        )
+
+    def _safe_hot_cache_call(self, operation: str, fn: Callable[[], Any], default: Any = None) -> Any:
+        try:
+            return fn()
+        except Exception:
+            logger.warning("live_match.hot_cache_degraded operation=%s", operation, exc_info=True)
+            return default
+
+    def sync_canonical_execution(
+        self,
+        *,
+        match: Any,
+        execution: Any,
+        new_events: Sequence[Any] = (),
+    ) -> None:
+        events = self._build_canonical_stream_events(match, execution)
+        state = self._build_canonical_state_view(match, execution, events)
+        channel = state.channel
+        revision = int(execution.execution_revision)
+        with self._lock:
+            self._tactics[match.id] = {
+                "home": {
+                    **dict(execution.home_tactics_json or {}),
+                    "execution_revision": revision,
+                    "tactic_revision": revision,
+                },
+                "away": {
+                    **dict(execution.away_tactics_json or {}),
+                    "execution_revision": revision,
+                    "tactic_revision": revision,
+                },
+            }
+            if execution.execution_status == "halted":
+                halt_meta = (execution.metadata_json or {}).get("admin_halt") or {}
+                self._halted_matches[match.id] = {
+                    "reason": halt_meta.get("reason"),
+                    "actor_user_id": halt_meta.get("actor_user_id"),
+                    "updated_at": halt_meta.get("halted_at") or utcnow().isoformat(),
+                }
+            else:
+                self._halted_matches.pop(match.id, None)
+        self._safe_hot_cache_call(
+            "set_match_state",
+            lambda: self._hot_cache.set_match_state(
+                match.id,
+                state.model_dump(mode="json"),
+                ttl_seconds=self.snapshot_ttl_seconds,
+            ),
+        )
+        self._safe_hot_cache_call(
+            "clear_match_events",
+            lambda: self._hot_cache.clear_match_events(match.id),
+        )
+        if events:
+            self._safe_hot_cache_call(
+                "append_match_events",
+                lambda: self._hot_cache.append_match_events(
+                    match.id,
+                    [ev.model_dump(mode="json") for ev in events],
+                    ttl_seconds=self.snapshot_ttl_seconds,
+                ),
+            )
+        self._publish_channel(
+            channel,
+            {
+                "kind": "canonical_state",
+                "execution_revision": revision,
+                "commit_cursor": len(events),
+                "payload": state.model_dump(mode="json"),
+            },
+        )
+
     def get_state(self, match_id: str) -> LiveMatchStateView | None:
         with self._lock:
             runtime = self._matches.get(match_id)
             if runtime is not None and runtime.last_snapshot is not None:
                 return self._build_state_view(runtime)
-        cached_state = self._hot_cache.get_match_state(match_id)
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            match, execution = bundle
+            events = self._build_canonical_stream_events(match, execution)
+            return self._build_canonical_state_view(match, execution, events)
+        cached_state = self._safe_hot_cache_call(
+            "get_match_state",
+            lambda: self._hot_cache.get_match_state(match_id),
+        )
         if not isinstance(cached_state, dict):
             return None
         try:
@@ -500,7 +787,16 @@ class LiveMatchHub:
             runtime = self._matches.get(match_id)
             if runtime is not None:
                 return list(runtime.published_events[cursor:]), len(runtime.published_events)
-        cached_events = self._hot_cache.get_match_events(match_id, cursor=0)
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            match, execution = bundle
+            canonical_events = self._build_canonical_stream_events(match, execution)
+            return list(canonical_events[cursor:]), len(canonical_events)
+        cached_events = self._safe_hot_cache_call(
+            "get_match_events",
+            lambda: self._hot_cache.get_match_events(match_id, cursor=0),
+            default=[],
+        )
         if not cached_events:
             return [], cursor
         events: list[LiveMatchStreamEventView] = []
@@ -543,11 +839,28 @@ class LiveMatchHub:
         )
 
     def list_active_matches(self) -> list[str]:
+        active_set: set[str] = set()
         with self._lock:
-            active = sorted(runtime.match_id for runtime in self._matches.values() if runtime.live)
-        if active:
-            return active
-        return self._hot_cache.list_active_matches()
+            active_set.update(runtime.match_id for runtime in self._matches.values() if runtime.live)
+        if self.session_factory is not None:
+            try:
+                from app.models.competition_match_execution import CompetitionMatchExecution
+
+                with self.session_factory() as session:
+                    rows = list(
+                        session.scalars(
+                            select(CompetitionMatchExecution.match_id).where(
+                                CompetitionMatchExecution.execution_status.in_(["in_progress", "paused"])
+                            )
+                        ).all()
+                    )
+                    active_set.update(rows)
+            except Exception:
+                pass
+        active_set.update(
+            self._safe_hot_cache_call("list_active_matches", self._hot_cache.list_active_matches, default=()) or ()
+        )
+        return sorted(active_set)
 
     def halt_match(
         self,
@@ -564,7 +877,7 @@ class LiveMatchHub:
             }
             runtime = self._matches.get(match_id)
             if runtime is None:
-                self._hot_cache.clear_match_state(match_id)
+                self._safe_hot_cache_call("clear_match_state", lambda: self._hot_cache.clear_match_state(match_id))
                 return {"match_id": match_id, "enabled": True, **self._halted_matches[match_id]}
             runtime.live = False
             runtime.completed_at = utcnow()
@@ -589,16 +902,37 @@ class LiveMatchHub:
             "updated_at": None if removed is None else removed.get("updated_at"),
         }
 
-    def is_match_halted(self, match_id: str) -> bool:
+    def is_match_halted(self, match_id: str, *, include_db: bool = True) -> bool:
         with self._lock:
-            return match_id in self._halted_matches
+            if match_id in self._halted_matches:
+                return True
+        if not include_db:
+            return False
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            _, execution = bundle
+            if execution.execution_status == "halted":
+                return True
+        return False
 
     def get_match_halt_state(self, match_id: str) -> dict[str, object] | None:
         with self._lock:
             state = self._halted_matches.get(match_id)
-            if state is None:
-                return None
-            return {"match_id": match_id, "enabled": True, **state}
+            if state is not None:
+                return {"match_id": match_id, "enabled": True, **state}
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            _, execution = bundle
+            if execution.execution_status == "halted":
+                halt_meta = (execution.metadata_json or {}).get("admin_halt") or {}
+                return {
+                    "match_id": match_id,
+                    "enabled": True,
+                    "reason": halt_meta.get("reason"),
+                    "actor_user_id": halt_meta.get("actor_user_id"),
+                    "updated_at": halt_meta.get("halted_at"),
+                }
+        return None
 
     def _remember_simulation_request(self, match_id: str, request: dict[str, Any] | None) -> None:
         if not request or self.session_factory is None:
@@ -758,6 +1092,9 @@ class LiveMatchHub:
         substitutions: list[dict[str, Any]] | None = None,
         instructions: list[str] | None = None,
         require_live: bool = False,
+        actor_user_id: str | None = None,
+        expected_revision: int | None = None,
+        idempotency_key: str | None = None,
     ) -> dict[str, Any]:
         side_norm = (side or "").strip().lower()
         if side_norm not in {"home", "away"}:
@@ -794,6 +1131,98 @@ class LiveMatchHub:
             # the canonical CompetitionMatch. The database lifecycle is checked first.
             if match_id in self._halted_matches:
                 raise LiveMatchError("Match stream is halted; live tactics and substitutions are locked.")
+
+            has_canonical_execution = False
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match import CompetitionMatch
+                    from app.models.competition_match_execution import CompetitionMatchExecution
+
+                    with self.session_factory() as check_session:
+                        has_canonical_execution = (
+                            check_session.scalar(
+                                select(CompetitionMatchExecution.id).where(
+                                    CompetitionMatchExecution.match_id == match_id
+                                )
+                            )
+                            is not None
+                        )
+                except Exception as exc:
+                    if require_live:
+                        raise LiveMatchUnavailableError(
+                            f"Unable to verify canonical execution state for match '{match_id}'."
+                        ) from exc
+
+            if has_canonical_execution and self.session_factory is not None:
+                from app.services.canonical_live_execution_service import (
+                    CanonicalExecutionConflictError,
+                    CanonicalExecutionError,
+                    CanonicalExecutionHaltedError,
+                    CanonicalExecutionValidationError,
+                    CanonicalLiveExecutionService,
+                    CanonicalMatchNotFoundError,
+                    CanonicalMatchNotLiveError,
+                )
+
+                try:
+                    with self.session_factory() as session:
+                        exec_service = CanonicalLiveExecutionService(
+                            session,
+                            match_stream_service=getattr(self, "match_stream_service", None),
+                        )
+                        canonical_response = exec_service.apply_live_tactical_command(
+                            match_id,
+                            side=side_norm,
+                            actor_user_id=actor_user_id or "system",
+                            expected_revision=expected_revision,
+                            idempotency_key=idempotency_key,
+                            press_intensity=press_intensity,
+                            defensive_line=defensive_line,
+                            tempo=tempo,
+                            risk_level=risk_level,
+                            mentality=mentality,
+                            formation=formation,
+                            substitutions=substitutions,
+                            instructions=instructions,
+                        )
+                        session.commit()
+                        committed_match = session.get(CompetitionMatch, match_id)
+                        committed_exec = exec_service.get_execution(match_id)
+                        if committed_match is not None and committed_exec is not None:
+                            session.expunge(committed_match)
+                            session.expunge(committed_exec)
+                        else:
+                            committed_match = None
+                            committed_exec = None
+                except CanonicalMatchNotFoundError as exc:
+                    raise LiveMatchNotFoundError(str(exc)) from exc
+                except CanonicalMatchNotLiveError as exc:
+                    raise LiveMatchNotLiveError(str(exc)) from exc
+                except (CanonicalExecutionHaltedError, CanonicalExecutionConflictError) as exc:
+                    raise LiveMatchResimulationError(str(exc)) from exc
+                except CanonicalExecutionValidationError as exc:
+                    raise LiveMatchError(str(exc)) from exc
+                except CanonicalExecutionError as exc:
+                    raise LiveMatchResimulationError(str(exc)) from exc
+                except Exception as exc:
+                    logger.exception("Failed canonical live tactical command for %s", match_id)
+                    raise LiveMatchPersistenceError(f"Unable to persist tactics for match '{match_id}'.") from exc
+
+                if committed_match is not None and committed_exec is not None:
+                    self.sync_canonical_execution(match=committed_match, execution=committed_exec)
+                    try:
+                        self._hot_cache.set(
+                            f"match:{match_id}:tactics",
+                            {
+                                "home": dict(committed_exec.home_tactics_json or {}),
+                                "away": dict(committed_exec.away_tactics_json or {}),
+                            },
+                            ttl_seconds=86400,
+                        )
+                    except Exception:
+                        logger.debug("Failed updating canonical tactics cache for %s", match_id, exc_info=True)
+                return canonical_response
+
             if require_live:
                 self._require_live_competition_match(match_id)
 
@@ -1231,6 +1660,36 @@ class LiveMatchHub:
     def get_tactics(self, match_id: str) -> dict[str, dict[str, Any]]:
         with self._lock:
             match_tactics = self._tactics.get(match_id)
+            if self.session_factory is not None:
+                try:
+                    from app.models.competition_match_execution import CompetitionMatchExecution
+
+                    with self.session_factory() as session:
+                        execution = session.scalar(
+                            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                        )
+                        if execution is not None and (execution.home_tactics_json or execution.away_tactics_json):
+                            cached_rev = max(
+                                int((match_tactics or {}).get("home", {}).get("execution_revision") or 0),
+                                int((match_tactics or {}).get("away", {}).get("execution_revision") or 0),
+                            )
+                            if not match_tactics or int(execution.execution_revision) >= cached_rev:
+                                self._tactics[match_id] = {
+                                    "home": {
+                                        **dict(execution.home_tactics_json or {}),
+                                        "execution_revision": int(execution.execution_revision),
+                                        "tactic_revision": int(execution.execution_revision),
+                                    },
+                                    "away": {
+                                        **dict(execution.away_tactics_json or {}),
+                                        "execution_revision": int(execution.execution_revision),
+                                        "tactic_revision": int(execution.execution_revision),
+                                    },
+                                }
+                                match_tactics = self._tactics[match_id]
+                except Exception:
+                    pass
+
             if not match_tactics:
                 try:
                     cached = self._hot_cache.get(f"match:{match_id}:tactics")
@@ -1350,10 +1809,13 @@ class LiveMatchHub:
                 batch_callback = runtime.on_batch
                 channel = runtime.channel
             self._cache_snapshot(runtime)
-            self._hot_cache.append_match_events(
-                match_id,
-                [event.model_dump(mode="json") for event in next_batch.events],
-                ttl_seconds=self.snapshot_ttl_seconds,
+            self._safe_hot_cache_call(
+                "append_match_events",
+                lambda: self._hot_cache.append_match_events(
+                    match_id,
+                    [event.model_dump(mode="json") for event in next_batch.events],
+                    ttl_seconds=self.snapshot_ttl_seconds,
+                ),
             )
             self._publish_channel(
                 channel,
@@ -1533,7 +1995,7 @@ class LiveMatchHub:
         match_id = runtime.match_id
         with self._lock:
             self._matches[match_id] = runtime
-        self._hot_cache.clear_match_events(match_id)
+        self._safe_hot_cache_call("clear_match_events", lambda: self._hot_cache.clear_match_events(match_id))
         self._cache_snapshot(runtime)
         self._publish_channel(
             runtime.channel,
@@ -1853,16 +2315,22 @@ class LiveMatchHub:
     def _cache_snapshot(self, runtime: _LiveMatchRuntime) -> None:
         if runtime.last_snapshot is None:
             return
-        self._hot_cache.set_match_state(
-            runtime.match_id,
-            self._build_state_view(runtime).model_dump(mode="json"),
-            ttl_seconds=self.snapshot_ttl_seconds,
+        self._safe_hot_cache_call(
+            "set_match_state",
+            lambda: self._hot_cache.set_match_state(
+                runtime.match_id,
+                self._build_state_view(runtime).model_dump(mode="json"),
+                ttl_seconds=self.snapshot_ttl_seconds,
+            ),
         )
 
     def _publish_channel(self, channel: str, payload: dict[str, object]) -> None:
         if not channel.startswith("match:"):
             return
-        self._hot_cache.publish_match_channel(channel, dict(payload))
+        self._safe_hot_cache_call(
+            "publish_match_channel",
+            lambda: self._hot_cache.publish_match_channel(channel, dict(payload)),
+        )
 
     def build_domain_event_payloads(
         self,
