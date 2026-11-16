@@ -68,8 +68,8 @@ class TraderSecurity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     totp_secret_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     two_factor_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     backup_codes_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    recovery_phrase_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    security_pin_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    recovery_phrase_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    security_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class TraderMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
