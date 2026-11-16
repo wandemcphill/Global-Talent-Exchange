@@ -29,7 +29,7 @@ class FirstClubEntitlement(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     gtex_grant_amount: Mapped[Decimal] = mapped_column(
         Numeric(18, 4),
         nullable=False,
-        default=Decimal("100000.0000"),
+        default=Decimal("2500.0000"),
     )
     fan_grant_amount: Mapped[Decimal] = mapped_column(
         Numeric(18, 4),
