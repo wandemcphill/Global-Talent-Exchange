@@ -358,9 +358,7 @@ class FanCoinGiftConversionService:
         cache values. The row lock serializes concurrent gift conversions.
         """
         locked_bridge = self.session.scalar(
-            select(LedgerAccount)
-            .where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE)
-            .with_for_update()
+            select(LedgerAccount).where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE).with_for_update()
         )
         user_balances = (
             select(
@@ -396,9 +394,7 @@ class FanCoinGiftConversionService:
                 )
                 or 0
             )
-        required_reserve = (outstanding_fancoin / COIN_TO_CREDIT_RATE).quantize(
-            AMOUNT_QUANTUM, rounding=ROUND_UP
-        )
+        required_reserve = (outstanding_fancoin / COIN_TO_CREDIT_RATE).quantize(AMOUNT_QUANTUM, rounding=ROUND_UP)
         if locked_bridge is None or bridge_balance < required_reserve:
             shortfall = required_reserve - bridge_balance
             raise EconomicConversionError(
