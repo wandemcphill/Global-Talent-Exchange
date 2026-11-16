@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 logger = logging.getLogger(__name__)
 from decimal import Decimal
 
-from sqlalchemy import inspect, select
+from sqlalchemy import and_, inspect, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
@@ -308,6 +308,26 @@ class CoinTraderService:
             terms_snapshot_json=dict(profile.terms_json or {}),
         )
         self.session.add(order)
+        self.session.flush()
+        # Escrow is locked atomically with order creation: no order exists without locked coins.
+        escrow_owner = self._require_user(profile.user_id) if direction == CoinTradeDirection.USER_BUYS.value else actor
+        try:
+            entries = self.wallet_service.reserve_order_funds(
+                self.session,
+                user=escrow_owner,
+                amount=order.coin_amount,
+                unit=order.coin_unit,
+                reference=f"coin-trade:{order.id}:escrow",
+                description="Coin trader order escrow lock",
+                source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
+                idempotency_key=f"coin-trade:{order.id}:escrow",
+            )
+        except InsufficientBalanceError as exc:
+            self.session.rollback()
+            who = "Trader inventory" if escrow_owner.id == profile.user_id else "Your available balance"
+            raise CoinTraderValidationError(f"{who} is insufficient to escrow this order.") from exc
+        order.escrow_owner_user_id = escrow_owner.id
+        order.ledger_refs_json = {"escrow_lock_entry_ids": [entry.id for entry in entries]}
         self.session.commit()
         self.session.refresh(order)
         return self.to_order_view(order)
@@ -322,7 +342,7 @@ class CoinTraderService:
         return [self.to_order_view(order) for order in self.session.scalars(statement).all()]
 
     def accept_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_order(order_id)
+        order = self._require_order(order_id, for_update=True)
         profile = self._require_approved_profile(order.trader_profile_id)
         if profile.user_id != actor.id:
             raise CoinTraderPermissionError("Only the selected trader can accept this order.")
@@ -330,25 +350,31 @@ class CoinTraderService:
             raise CoinTraderValidationError("Only created orders can be accepted.")
         trader_user = self._require_user(profile.user_id)
         order_user = self._require_user(order.user_id)
-        escrow_owner = trader_user if order.direction == CoinTradeDirection.USER_BUYS.value else order_user
-        entries = self.wallet_service.reserve_order_funds(
-            self.session,
-            user=escrow_owner,
-            amount=order.coin_amount,
-            unit=order.coin_unit,
-            reference=f"coin-trade:{order.id}:escrow",
-            description="Coin trader order escrow lock",
-            source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
-        )
+        if order.escrow_owner_user_id is None:
+            # Legacy orders created before escrow-at-creation: lock now (idempotent).
+            escrow_owner = trader_user if order.direction == CoinTradeDirection.USER_BUYS.value else order_user
+            try:
+                entries = self.wallet_service.reserve_order_funds(
+                    self.session,
+                    user=escrow_owner,
+                    amount=order.coin_amount,
+                    unit=order.coin_unit,
+                    reference=f"coin-trade:{order.id}:escrow",
+                    description="Coin trader order escrow lock",
+                    source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_LOCK,
+                    idempotency_key=f"coin-trade:{order.id}:escrow",
+                )
+            except InsufficientBalanceError as exc:
+                raise CoinTraderValidationError("Escrow owner balance is insufficient for this order.") from exc
+            order.escrow_owner_user_id = escrow_owner.id
+            order.ledger_refs_json = {
+                **dict(order.ledger_refs_json or {}),
+                "escrow_lock_entry_ids": [entry.id for entry in entries],
+            }
         now = utcnow()
-        order.escrow_owner_user_id = escrow_owner.id
         order.status = CoinTradeOrderStatus.PAYMENT_PENDING.value
         order.accepted_at = now
         order.payment_window_expires_at = now + timedelta(minutes=45)
-        order.ledger_refs_json = {
-            **dict(order.ledger_refs_json or {}),
-            "escrow_lock_entry_ids": [entry.id for entry in entries],
-        }
         self.session.commit()
         self.session.refresh(order)
         self._publish_order_matrix_notifications(
@@ -367,7 +393,7 @@ class CoinTraderService:
 
     def submit_proof(self, order_id: str, payload: CoinTradeProofRequest, *, actor: User) -> CoinTradeOrderView:
         order = self._require_participating_order(order_id, actor)
-        profile = self._require_approved_profile(order.trader_profile_id)
+        profile = self._require_profile(order.trader_profile_id)
         proof_submitter_user_id = (
             order.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else profile.user_id
         )
@@ -389,7 +415,7 @@ class CoinTraderService:
 
     def confirm_and_release(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
         order = self._require_order(order_id, for_update=True)
-        profile = self._require_approved_profile(order.trader_profile_id)
+        profile = self._require_profile(order.trader_profile_id)
         confirmer_user_id = profile.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else order.user_id
         if actor.id != confirmer_user_id:
             raise CoinTraderPermissionError("This order requires confirmation from the fiat receiver.")
@@ -407,6 +433,7 @@ class CoinTraderService:
     def cancel_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
         order = self._require_participating_order(order_id, actor, for_update=True)
         if order.status == CoinTradeOrderStatus.CREATED.value:
+            self._release_locked_escrow(order)
             order.status = CoinTradeOrderStatus.CANCELLED.value
             order.cancelled_at = utcnow()
             self.session.commit()
@@ -714,47 +741,47 @@ class CoinTraderService:
         self.session.refresh(order)
         return self.to_order_view(order) if view.id == order.id else view
 
+    UNACCEPTED_ORDER_TTL_MINUTES = 30
+
     def expire_stale_orders(self, *, now: datetime | None = None) -> list[CoinTradeOrderView]:
         current_time = now or utcnow()
+        unaccepted_cutoff = current_time - timedelta(minutes=self.UNACCEPTED_ORDER_TTL_MINUTES)
         statement = select(CoinTradeOrder).where(
-            CoinTradeOrder.status == CoinTradeOrderStatus.PAYMENT_PENDING.value,
-            CoinTradeOrder.payment_window_expires_at.is_not(None),
-            CoinTradeOrder.payment_window_expires_at <= current_time,
+            or_(
+                and_(
+                    CoinTradeOrder.status == CoinTradeOrderStatus.PAYMENT_PENDING.value,
+                    CoinTradeOrder.payment_window_expires_at.is_not(None),
+                    CoinTradeOrder.payment_window_expires_at <= current_time,
+                ),
+                and_(
+                    CoinTradeOrder.status == CoinTradeOrderStatus.CREATED.value,
+                    CoinTradeOrder.created_at <= unaccepted_cutoff,
+                ),
+            )
         )
         if self._supports_row_locks(self.session):
             statement = statement.with_for_update()
         stale_orders = list(self.session.scalars(statement).all())
         expired_views: list[CoinTradeOrderView] = []
         for order in stale_orders:
-            order.status = CoinTradeOrderStatus.CANCELLED.value
-            order.cancelled_at = current_time
-            order.metadata_json = {
-                **dict(order.metadata_json or {}),
-                "cancellation_reason": "payment_window_expired",
-            }
-            escrow_owner = self._require_user(order.escrow_owner_user_id or "")
-            entries = self.wallet_service.release_reserved_funds(
-                self.session,
-                user=escrow_owner,
-                amount=order.coin_amount,
-                unit=order.coin_unit,
-                reference=f"coin-trade:{order.id}:expire-refund",
-                description="Coin trader order payment window expired escrow refund",
-                source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_REFUND,
-                idempotency_key=f"coin-trade:{order.id}:refund",
+            reason = (
+                "payment_window_expired"
+                if order.status == CoinTradeOrderStatus.PAYMENT_PENDING.value
+                else "not_accepted_in_time"
             )
-            order.ledger_refs_json = {
-                **dict(order.ledger_refs_json or {}),
-                "refund_entry_ids": [entry.id for entry in entries],
-            }
+            order.status = CoinTradeOrderStatus.EXPIRED.value
+            order.cancelled_at = current_time
+            order.metadata_json = {**dict(order.metadata_json or {}), "cancellation_reason": reason}
+            self._release_locked_escrow(order, reference_suffix="expire-refund")
             profile = self._require_profile(order.trader_profile_id)
+            self.session.flush()
             self._refresh_profile_metrics(profile)
             self._publish_order_matrix_notifications(
                 order,
                 event_key="order_expired",
                 target_user_ids=[order.user_id, profile.user_id],
-                message="Coin trader order has expired due to payment timeout and escrow has been refunded.",
-                metadata={"reason": "payment_window_expired"},
+                message="Coin trader order has expired and escrow has been returned.",
+                metadata={"reason": reason},
             )
             expired_views.append(self.to_order_view(order))
         if stale_orders:
@@ -863,6 +890,27 @@ class CoinTraderService:
             message="Coin trader escrow has been released.",
         )
         return self.to_order_view(order)
+
+    def _release_locked_escrow(self, order: CoinTradeOrder, *, reference_suffix: str = "refund") -> list[LedgerEntry]:
+        """Return locked escrow to its owner. Idempotent per order via the shared refund key."""
+        if not order.escrow_owner_user_id:
+            return []
+        owner = self._require_user(order.escrow_owner_user_id)
+        entries = self.wallet_service.release_reserved_funds(
+            self.session,
+            user=owner,
+            amount=order.coin_amount,
+            unit=order.coin_unit,
+            reference=f"coin-trade:{order.id}:{reference_suffix}",
+            description="Coin trader escrow refund",
+            source_tag=LedgerSourceTag.COIN_TRADER_ESCROW_REFUND,
+            idempotency_key=f"coin-trade:{order.id}:refund",
+        )
+        order.ledger_refs_json = {
+            **dict(order.ledger_refs_json or {}),
+            "refund_entry_ids": [entry.id for entry in entries],
+        }
+        return entries
 
     def _refund_order(self, order: CoinTradeOrder, *, actor: User, admin: bool) -> CoinTradeOrderView:
         escrow_owner = self._require_user(order.escrow_owner_user_id or "")
@@ -1034,9 +1082,9 @@ class CoinTraderService:
         if actor.id not in {order.user_id, profile.user_id}:
             raise CoinTraderPermissionError("Only order participants can perform this action.")
         if actor.id == profile.user_id:
+            # Existing orders may always be settled/cancelled/disputed, even if the trader
+            # was later frozen or suspended (new orders and adverts are blocked separately).
             self._require_dedicated_trader_account(actor)
-            if profile.status != CoinTraderProfileStatus.APPROVED.value:
-                raise CoinTraderPermissionError("Approved coin trader access is required.")
         return order
 
     def _publish_order_matrix_notifications(
@@ -1195,6 +1243,7 @@ class CoinTraderService:
             CoinTradeOrderStatus.REFUNDED.value,
             CoinTradeOrderStatus.ADMIN_REFUNDED.value,
             CoinTradeOrderStatus.CANCELLED.value,
+            CoinTradeOrderStatus.EXPIRED.value,
         }
         completed_orders = [order for order in orders if order.status in completed_statuses]
         terminal_orders = [order for order in orders if order.status in terminal_statuses]

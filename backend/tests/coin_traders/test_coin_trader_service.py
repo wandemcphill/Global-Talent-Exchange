@@ -1026,7 +1026,7 @@ def test_expire_stale_orders_sweeps_and_refunds_escrow(
     expired = service.expire_stale_orders()
     assert len(expired) == 1
     assert expired[0].id == order.id
-    assert expired[0].status == CoinTradeOrderStatus.CANCELLED.value
+    assert expired[0].status == CoinTradeOrderStatus.EXPIRED.value
 
     # Verify escrow was refunded back to trader
     trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)

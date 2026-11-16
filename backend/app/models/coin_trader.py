@@ -40,6 +40,7 @@ class CoinTradeOrderStatus(StrEnum):
     RELEASED = "released"
     REFUNDED = "refunded"
     CANCELLED = "cancelled"
+    EXPIRED = "expired"
     DISPUTED = "disputed"
     ADMIN_RELEASED = "admin_released"
     ADMIN_REFUNDED = "admin_refunded"
