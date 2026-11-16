@@ -176,7 +176,7 @@ void main() {
       expect(users, hasLength(1));
       expect(users.single.username, 'fan_one');
       expect(transport.requests[0].method, 'GET');
-      expect(transport.requests[0].uri.path, '/api/admin/finance/users');
+      expect(transport.requests[0].uri.path, '/api/v2/admin/finance/users');
       expect(transport.requests[0].uri.queryParameters['search'], 'fan');
 
       final AdminGodModeWalletCreditResult creditResult = await api
@@ -192,7 +192,7 @@ void main() {
       expect(transport.requests[1].method, 'POST');
       expect(
         transport.requests[1].uri.path,
-        '/api/admin/god-mode/wallets/credit',
+        '/api/v2/admin/god-mode/wallets/credit',
       );
       expect(
         (transport.requests[1].body as Map<String, Object?>)['unit'],
@@ -213,7 +213,7 @@ void main() {
       expect(transferResult.toBalanceAfter, 60);
       expect(
         transport.requests[2].uri.path,
-        '/api/admin/god-mode/wallets/transfer',
+        '/api/v2/admin/god-mode/wallets/transfer',
       );
 
       final AdminPointGrantResult pointGrant = await api.adminGrantUserPoints(
@@ -226,7 +226,7 @@ void main() {
       expect(pointGrant.balanceAfter, 300);
       expect(
         transport.requests[3].uri.path,
-        '/api/admin/god-mode/points/grant',
+        '/api/v2/admin/god-mode/points/grant',
       );
 
       final AdminUserPointsBalance balance = await api.fetchUserPoints('usr-1');
@@ -234,7 +234,7 @@ void main() {
       expect(balance.balance, 300);
       expect(
         transport.requests[4].uri.path,
-        '/api/admin/god-mode/users/usr-1/points',
+        '/api/v2/admin/god-mode/users/usr-1/points',
       );
     },
   );
