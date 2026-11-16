@@ -11,6 +11,9 @@ from app.common.enums.jersey_slot_type import JerseySlotType
 from app.common.schemas.base import CommonSchema
 
 
+MAX_CREST_ASSET_REF_LENGTH = 100_000
+
+
 class ClubCreateRequest(CommonSchema):
     club_name: str = Field(min_length=2, max_length=120)
     short_name: str | None = Field(default=None, max_length=40)
