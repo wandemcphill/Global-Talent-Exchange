@@ -383,9 +383,10 @@ def test_unbacked_gift_fails_and_self_gift_stays_blocked() -> None:
         assert wallet.get_balance(session, wallet.get_user_account(session, sender, LedgerUnit.CREDIT)) == Decimal(
             "100.0000"
         )
-        assert session.scalar(
-            select(LedgerAccount).where(LedgerAccount.code == "platform:coin:gift_conversion_bridge")
-        ) is None
+        assert (
+            session.scalar(select(LedgerAccount).where(LedgerAccount.code == "platform:coin:gift_conversion_bridge"))
+            is None
+        )
         assert wallet.get_balance(session, wallet.get_user_account(session, recipient, LedgerUnit.COIN)) == Decimal(
             "0.0000"
         )
