@@ -193,11 +193,11 @@ function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount =
 export function ClubCoinTraderFundingPanel() {
   const { user } = useAuth();
   const { data: traders, isLoading: tradersLoading } = useQuery({
-    queryKey: ["club-funding-coin-traders"],
+    queryKey: ["coin-traders"],
     queryFn: async () => (await api.get("/coin-traders")).data,
   });
   const { data: orders, isLoading: ordersLoading } = useQuery({
-    queryKey: ["club-funding-coin-orders"],
+    queryKey: ["coin-orders", "me"],
     queryFn: async () => (await api.get("/coin-traders/orders")).data,
   });
   const approved = (traders || []).filter(
@@ -212,7 +212,7 @@ export function ClubCoinTraderFundingPanel() {
       <p className="gx-label text-cyan-300">Option 2 · Verified Coin Traders</p>
       <h4 className="gx-display mt-1 text-lg font-bold uppercase text-white">Buy GTX from a Coin Trader</h4>
       <p className="mt-2 text-xs leading-relaxed text-slate-400">
-        Choose an approved, identity-verified trader. Orders are escrow-protected: the trader accepts, you submit Naira payment proof, and GTX is released to your wallet after confirmation.
+        Choose an approved, identity-verified trader. Orders are escrow-protected: the trader accepts, you submit Naira payment proof, and GTX is released to your wallet after confirmation. GTEX Coin buyer orders have a ₦200,000 minimum; any surplus stays in your wallet for later use.
       </p>
       {tradersLoading ? (
         <p className="mt-3 text-xs text-slate-500">Loading verified GTEX Coin traders…</p>
