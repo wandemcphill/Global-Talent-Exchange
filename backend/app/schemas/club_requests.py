@@ -10,12 +10,14 @@ from app.common.enums.club_identity_visibility import ClubIdentityVisibility
 from app.common.enums.jersey_slot_type import JerseySlotType
 from app.common.schemas.base import CommonSchema
 
+MAX_CREST_ASSET_REF_LENGTH = 100_000
+
 
 class ClubCreateRequest(CommonSchema):
     club_name: str = Field(min_length=2, max_length=120)
     short_name: str | None = Field(default=None, max_length=40)
     slug: str = Field(min_length=2, max_length=120)
-    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    crest_asset_ref: str | None = Field(default=None, max_length=MAX_CREST_ASSET_REF_LENGTH)
     primary_color: str = Field(min_length=3, max_length=16)
     secondary_color: str = Field(min_length=3, max_length=16)
     accent_color: str = Field(min_length=3, max_length=16)
@@ -41,7 +43,7 @@ class ClubCreateRequest(CommonSchema):
 class ClubUpdateRequest(CommonSchema):
     club_name: str | None = Field(default=None, min_length=2, max_length=120)
     short_name: str | None = Field(default=None, max_length=40)
-    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    crest_asset_ref: str | None = Field(default=None, max_length=MAX_CREST_ASSET_REF_LENGTH)
     primary_color: str | None = Field(default=None, min_length=3, max_length=16)
     secondary_color: str | None = Field(default=None, min_length=3, max_length=16)
     accent_color: str | None = Field(default=None, min_length=3, max_length=16)

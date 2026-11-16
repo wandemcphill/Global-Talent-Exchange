@@ -15,13 +15,15 @@ from app.ingestion.models import Player
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile, ClubType
 from app.models.player_token_market import PlayerShareHolding, PlayerShareMarket, PlayerSharePriceSnapshot
 from app.models.user import PublicAccountType, User
-from app.owner_console import alerts
+from app.owner_console import alerts, storytelling
 from app.owner_console.models import (
     LedgerEvent,
+    OwnerBroadcastEvent,
     OwnerClubState,
     OwnerCompetition,
     OwnerCompetitionEntry,
     OwnerInboxItem,
+    OwnerNewsroomArticle,
     OwnerSponsorDeal,
     OwnerSquadPlayer,
 )
@@ -52,7 +54,7 @@ def test_public_showroom_allowlist_for_logged_out_caller(client, app):
         user = User(
             email="public-card@gte.local",
             username="public_card",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Public Card",
             account_type=PublicAccountType.USER,
         )
@@ -179,13 +181,75 @@ def test_public_showroom_allowlist_for_logged_out_caller(client, app):
     assert client.get(f"/api/owner/legacy/{club_id}/showroom").status_code == 401
 
 
+def test_resolve_club_crest_url_preserves_data_uri_and_external_urls(app):
+    long_data_uri = "data:image/svg+xml;charset=utf-8," + ("A" * 3000)
+    with app.state.session_factory() as session:
+        user = User(
+            email="crest-resolver@test.gtex.local",
+            username="crestresolver",
+            password_hash="x",  # pragma: allowlist secret
+            display_name="Crest Resolver",
+            account_type=PublicAccountType.USER,
+        )
+        session.add(user)
+        session.flush()
+        specs = [
+            ("data-club", long_data_uri, long_data_uri),
+            ("https-club", "https://cdn.example/crest.png", "https://cdn.example/crest.png"),
+            ("media-club", "clubs/crest-1.png", "/api/media/clubs/crest-1.png"),
+        ]
+        for idx, (slug, stored_ref, expected) in enumerate(specs):
+            club = ClubProfile(
+                owner_user_id=user.id,
+                club_name=f"Club {idx}",
+                short_name=f"C{idx}",
+                club_type=ClubType.COMMUNITY,
+                lifecycle_status=ClubLifecycleStatus.ACTIVE,
+                slug=slug,
+                primary_color="#0F766E",
+                secondary_color="#F8FAFC",
+                accent_color="#F59E0B",
+                crest_asset_ref=stored_ref,
+            )
+            session.add(club)
+            session.flush()
+            resolved = storytelling.resolve_club_crest_url(session, club.id, club.club_name)
+            assert resolved == expected
+
+        broadcast = OwnerBroadcastEvent(
+            save_context_id="ctx-1",
+            club_id=club.id,
+            club_name="Data Crest Club",
+            club_crest_url=long_data_uri,
+            owner_user_id=user.id,
+            owner_display_name="Crest Resolver",
+            event_type="facility_upgrade",
+            item_name="Stadium",
+            headline="Upgrade Complete",
+            summary="Done",
+        )
+        article = OwnerNewsroomArticle(
+            save_context_id="ctx-1",
+            club_id=club.id,
+            headline="Club Crest Persisted",
+            hero_image_url=long_data_uri,
+            club_crest_url=long_data_uri,
+            editorial_narration="Verified long crest URL persistence.",
+        )
+        session.add_all([broadcast, article])
+        session.commit()
+        assert len(broadcast.club_crest_url) > 255
+        assert len(article.hero_image_url) > 255
+        assert len(article.club_crest_url) > 255
+
+
 def test_decision_expiry_applies_safe_default_and_warns_once(app):
     created = alerts.CLOCK_START + timedelta(hours=2)
     with app.state.session_factory() as session:
         user = User(
             email="deadline-owner@gte.local",
             username="deadline_owner",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Deadline Owner",
             account_type=PublicAccountType.USER,
         )
@@ -246,7 +310,7 @@ def test_wonderkid_price_jump_uses_share_history_and_skips_missing_readings(app)
         user = User(
             email="wonderkid-alert@gte.local",
             username="wonderkid_alert",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Wonderkid Alert",
             account_type=PublicAccountType.USER,
         )

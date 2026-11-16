@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import { AlertTriangle, ArrowRight, Check, Dna, ShoppingCart, Sparkles, Sprout, Trash2 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { clubCreateErrorMessage } from "./clubLocationCatalog";
+import { buildClubDNA, buildCrestLibrary, buildKitSet, clubShortCode, KIT_PRESETS, kitSwatchDataUri } from "./clubIdentityDefaults";
 import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { useAuth } from "@/lib/auth";
 import { fmt, useClub } from "@/lib/owner";
@@ -809,86 +810,57 @@ function CreateFirstClub({ onDone, onCancel }: any) {
   const [name, setName] = useState("");
   const loc = useClubLocation();
   const [busy, setBusy] = useState(false);
-  const [aiGenerating, setAiGenerating] = useState(false);
 
-  // Philosophy & DNA settings
+  // Club DNA plus deterministic, ready-made visual choices. No AI services are called.
   const [recruitmentFocus, setRecruitmentFocus] = useState("youth");
   const [preferredAgeBracket, setPreferredAgeBracket] = useState("U23");
   const [nationalityFocus, setNationalityFocus] = useState("preferred");
   const [preferredStyle, setPreferredStyle] = useState("traditional");
-
-  // AI Studio recommendations
   const [recommendation, setRecommendation] = useState<any>(null);
   const [selectedCrestIdx, setSelectedCrestIdx] = useState(0);
+  const [crestFilter, setCrestFilter] = useState<"all" | "heritage" | "modern" | "royal">("all");
   const [selectedKitTab, setSelectedKitTab] = useState<"home" | "away" | "third" | "goalkeeper">("home");
+  const [selectedKitPresetId, setSelectedKitPresetId] = useState(KIT_PRESETS[0].id);
   const [kitSet, setKitSet] = useState<any>(null);
-  const [conversationalPrompt, setConversationalPrompt] = useState("");
-  const [aiEditSummary, setAiEditSummary] = useState("");
 
   const location = loc.validation;
   const clubName = name.trim();
 
-  // Call AI Studio Recommendation API
-  const handleGenerateIdentity = async () => {
+  // Build crest and uniform previews from GTEX's bundled design library.
+  const handleGenerateIdentity = () => {
     if (clubName.length < 3) {
       toast.error("Enter a club name with at least 3 characters.");
       return;
     }
-    setAiGenerating(true);
-    try {
-      const countryCode = "countryCode" in location ? location.countryCode : "FRA";
-      const cityName = "cityName" in location ? location.cityName : "Paris";
-      const { data } = await api.post("/clubs/studio/recommend", {
-        club_name: clubName,
-        country_code: countryCode,
-        city_name: cityName,
-        preferred_style: preferredStyle,
-        recruitment_focus: recruitmentFocus,
-        preferred_age_bracket: preferredAgeBracket,
-        nationality_focus: nationalityFocus,
-      });
-      setRecommendation(data);
-      setKitSet(data.kit_concepts);
-      setSelectedCrestIdx(0);
-      setWizardStep("studio");
-      toast.success("AI Club Identity & DNA Studio generated concepts!");
-    } catch (e) {
-      toast.error(errMsg(e));
-      setWizardStep("review");
-    } finally {
-      setAiGenerating(false);
+    if ("error" in location) {
+      toast.error(location.error);
+      return;
     }
-  };
 
-  // Conversational AI edit
-  const handleConversationalEdit = async () => {
-    if (!conversationalPrompt.trim() || !kitSet || !recommendation) return;
-    setAiGenerating(true);
-    try {
-      const currentKit = kitSet[selectedKitTab];
-      const currentCrest = recommendation.crest_concepts[selectedCrestIdx];
-      const { data } = await api.post("/clubs/studio/edit", {
-        current_kit: currentKit,
-        current_crest: currentCrest,
-        instruction: conversationalPrompt.trim(),
-      });
-      setKitSet((prev: any) => ({
-        ...prev,
-        [selectedKitTab]: { ...prev[selectedKitTab], ...data.kit },
-      }));
-      setRecommendation((prev: any) => {
-        const nextCrests = [...prev.crest_concepts];
-        nextCrests[selectedCrestIdx] = { ...nextCrests[selectedCrestIdx], ...data.crest };
-        return { ...prev, crest_concepts: nextCrests };
-      });
-      setAiEditSummary(data.summary);
-      setConversationalPrompt("");
-      toast.success(data.summary || "Design updated!");
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setAiGenerating(false);
-    }
+    const shortCode = clubShortCode(clubName);
+    const dna = buildClubDNA(
+      clubName,
+      location.cityName,
+      location.countryCode,
+      recruitmentFocus,
+      preferredAgeBracket,
+      nationalityFocus,
+    );
+    const crestConcepts = buildCrestLibrary(clubName);
+    const initialCrestIndex = preferredStyle === "modern" ? 19 : preferredStyle === "metallic" ? 38 : 0;
+    const firstKitPreset = KIT_PRESETS[0];
+
+    setRecommendation({
+      short_code: shortCode,
+      crest_concepts: crestConcepts,
+      ...dna,
+    });
+    setSelectedCrestIdx(initialCrestIndex);
+    setSelectedKitPresetId(firstKitPreset.id);
+    setKitSet(buildKitSet(firstKitPreset.id, shortCode));
+    setSelectedKitTab("home");
+    setWizardStep("studio");
+    toast.success("Design library ready: 72 crest designs and 16 complete uniform collections.");
   };
 
   const create = async () => {
@@ -927,7 +899,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
         primary_philosophy: recruitmentFocus === "academy" ? "academy_first" : recruitmentFocus === "selling" ? "selling_club" : "youth_development",
         secondary_philosophies: ["financially_sustainable"],
         nationality_mode: nationalityFocus,
-        target_nationalities: [],
+        target_nationalities: nationalityFocus === "none" ? [] : [validatedLocation.countryCode],
         allow_dual_nationality: true,
         age_mode: preferredAgeBracket === "none" ? "none" : "preferred",
         preferred_max_age: preferredAgeBracket === "none" ? null : parseInt(preferredAgeBracket.replace("U", ""), 10),
@@ -1216,11 +1188,11 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                 ← Back
               </Btn>
               <Btn
-                disabled={aiGenerating}
+                disabled={clubName.length < 3 || !location.valid}
                 onClick={handleGenerateIdentity}
-                data-testid="generate-ai-studio-proposal"
+                data-testid="open-club-design-library"
               >
-                {aiGenerating ? "Generating 3D Studio Concepts…" : "✨ Generate AI Studio Concepts →"}
+                Browse Ready-Made Crests & Uniforms →
               </Btn>
             </div>
           </Panel>
@@ -1228,12 +1200,12 @@ function CreateFirstClub({ onDone, onCancel }: any) {
 
         {/* Wizard Step 4: AI Crest & Kit Studio */}
         {wizardStep === "studio" && recommendation && (
-          <Panel eyebrow="Step 4 of 5 · Studio Proposals" title="Select your club badge & uniforms" className="w-full">
+          <Panel eyebrow="Step 4 of 5 · Club Design Library" title="Choose your club crest & uniforms" className="w-full">
             {/* Vision Narrative Card */}
             <div className="mb-5 rounded border border-emerald-500/30 bg-emerald-950/20 p-3.5 text-xs">
               <div className="flex items-center gap-2 font-semibold text-emerald-300">
                 <Sparkles size={14} />
-                <span>AI Vision Charter</span>
+                <span>Club Identity Brief</span>
               </div>
               <p className="mt-1 text-slate-300 italic">{recommendation.vision_narrative}</p>
             </div>
@@ -1241,26 +1213,131 @@ function CreateFirstClub({ onDone, onCancel }: any) {
             {/* 3 Crest Concepts */}
             <div className="mb-6">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Choose Primary Club Crest (Vector SVG)
+                Choose Primary Club Crest · 72 Ready-Made Designs
               </label>
-              <div className="mt-2.5 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                {recommendation.crest_concepts.map((concept: any, idx: number) => (
-                  <div
-                    key={concept.concept_id}
-                    onClick={() => setSelectedCrestIdx(idx)}
-                    className={`cursor-pointer rounded border p-3 text-center transition-all ${
-                      selectedCrestIdx === idx
-                        ? "border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30"
-                        : "border-white/10 bg-slate-900/40 hover:border-white/25"
-                    }`}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["all", "All 72"],
+                    ["heritage", "Heritage"],
+                    ["modern", "Modern"],
+                    ["royal", "Royal"],
+                  ] as const).map(([filter, label]) => (
+                    <button
+                      type="button"
+                      key={filter}
+                      onClick={() => setCrestFilter(filter)}
+                      aria-pressed={crestFilter === filter}
+                      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        crestFilter === filter
+                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
+                          : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {recommendation.crest_concepts?.[selectedCrestIdx] && (
+                  <button
+                    type="button"
+                    onClick={() => setCrestFilter("all")}
+                    className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-500/20"
                   >
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
-                      <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
-                    </div>
-                    <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style} {concept.shape}</p>
-                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
-                  </div>
-                ))}
+                    Selected: {recommendation.crest_concepts[selectedCrestIdx].style} ·{" "}
+                    {recommendation.crest_concepts[selectedCrestIdx].icon_family}
+                  </button>
+                )}
+              </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {recommendation.crest_concepts.map((concept: any, idx: number) => ({ concept, idx }))
+                  .filter(({ concept }: any) => crestFilter === "all" || String(concept.style).toLowerCase().startsWith(crestFilter))
+                  .map(({ concept, idx }: any) => (
+                    <button
+                      type="button"
+                      key={concept.concept_id}
+                      onClick={() => setSelectedCrestIdx(idx)}
+                      aria-pressed={selectedCrestIdx === idx}
+                      data-testid={`club-crest-option-${concept.concept_id}`}
+                      className={`rounded border p-3 text-center transition-all ${
+                        selectedCrestIdx === idx
+                          ? "border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30"
+                          : "border-white/10 bg-slate-900/40 hover:border-white/25"
+                      }`}
+                    >
+                      <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
+                        <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
+                      </div>
+                      <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style}</p>
+                      <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
+                    </button>
+                  ))}
+              </div>
+            </div>
+
+            {/* Ready-made uniform collections */}
+            <div className="mb-6">
+              <div className="flex flex-wrap items-end justify-between gap-2">
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
+                    Ready-Made Uniform Collections · 16 Sets
+                  </label>
+                  <p className="mt-1 text-[11px] text-slate-500">
+                    Every collection includes home, away, third and goalkeeper kits.
+                  </p>
+                </div>
+                <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-300">
+                  Fixed design library
+                </span>
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {KIT_PRESETS.map((preset) => {
+                  const previewSet = buildKitSet(preset.id, recommendation.short_code || clubShortCode(clubName));
+                  const selected = selectedKitPresetId === preset.id;
+                  return (
+                    <button
+                      type="button"
+                      key={preset.id}
+                      onClick={() => {
+                        setSelectedKitPresetId(preset.id);
+                        setKitSet(previewSet);
+                      }}
+                      aria-pressed={selected}
+                      data-testid={`club-kit-preset-${preset.id}`}
+                      className={`rounded border p-2 text-left transition-all ${
+                        selected
+                          ? "border-emerald-400 bg-emerald-500/10 ring-1 ring-emerald-500/30"
+                          : "border-white/10 bg-slate-900/50 hover:border-white/25"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <img
+                          src={kitSwatchDataUri(previewSet.home)}
+                          alt=""
+                          className="h-20 w-16 shrink-0 object-contain"
+                        />
+                        <div className="min-w-0">
+                          <p className="truncate text-[11px] font-bold uppercase text-white">{preset.name}</p>
+                          <p className="mt-1 line-clamp-3 text-[10px] leading-relaxed text-slate-400">{preset.description}</p>
+                          <div className="mt-2 flex gap-1">
+                            {preset.home.map((color) => (
+                              <span
+                                key={color}
+                                className="h-3 w-3 rounded-full border border-white/20"
+                                style={{ backgroundColor: color }}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                      {selected && (
+                        <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
+                          Selected set ✓
+                        </p>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -1291,20 +1368,11 @@ function CreateFirstClub({ onDone, onCancel }: any) {
 
                 {kitSet[selectedKitTab] && (
                   <div className="mt-2.5 flex items-center gap-4 rounded border border-white/10 bg-slate-900/60 p-4">
-                    <div
-                      className="flex h-20 w-20 shrink-0 items-center justify-center rounded-sm border border-white/20 shadow-inner"
-                      style={{
-                        backgroundColor: kitSet[selectedKitTab].primary_color,
-                        borderColor: kitSet[selectedKitTab].accent_color,
-                      }}
-                    >
-                      <span
-                        className="text-lg font-black tracking-widest"
-                        style={{ color: kitSet[selectedKitTab].secondary_color }}
-                      >
-                        {recommendation.short_code}
-                      </span>
-                    </div>
+                    <img
+                      src={kitSwatchDataUri(kitSet[selectedKitTab])}
+                      alt={`${selectedKitTab} uniform preview`}
+                      className="h-28 w-24 shrink-0 object-contain"
+                    />
 
                     <div className="min-w-0 flex-1 text-xs">
                       <div className="flex items-center gap-2">
@@ -1327,32 +1395,6 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                 )}
               </div>
             )}
-
-            {/* Conversational Design Assistant */}
-            <div className="mb-4 rounded border border-white/10 bg-slate-950/50 p-3">
-              <label className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-                💬 Conversational AI Design Assistant
-              </label>
-              <div className="mt-2 flex gap-2">
-                <input
-                  className="gx-input flex-1 text-xs"
-                  placeholder="e.g., make the home kit vertical stripes and navy blue with gold trims"
-                  value={conversationalPrompt}
-                  onChange={(e) => setConversationalPrompt(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleConversationalEdit()}
-                />
-                <Btn
-                  variant="secondary"
-                  disabled={aiGenerating || !conversationalPrompt.trim()}
-                  onClick={handleConversationalEdit}
-                >
-                  Apply
-                </Btn>
-              </div>
-              {aiEditSummary && (
-                <p className="mt-1.5 text-[11px] text-emerald-400">✓ {aiEditSummary}</p>
-              )}
-            </div>
 
             <div className="mt-6 flex items-center justify-between">
               <Btn variant="ghost" onClick={() => setWizardStep("roster")}>
@@ -1419,9 +1461,9 @@ function CreateFirstClub({ onDone, onCancel }: any) {
               </Btn>
               <Btn
                 variant="ghost"
-                onClick={() => setWizardStep(recommendation ? "studio" : "name")}
+                onClick={() => setWizardStep("studio")}
               >
-                ← Back to Studio Editor
+                ← Back to Design Library
               </Btn>
             </div>
           </Panel>

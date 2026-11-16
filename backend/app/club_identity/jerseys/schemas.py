@@ -96,7 +96,7 @@ class BadgeProfilePatch(BaseModel):
     primary_color: str | None = None
     secondary_color: str | None = None
     accent_color: str | None = None
-    badge_url: str | None = None
+    badge_url: str | None = Field(default=None, max_length=100_000)
     trophy_star_count: int | None = Field(default=None, ge=0, le=10)
     commemorative_patch: str | None = Field(default=None, max_length=32)
 
