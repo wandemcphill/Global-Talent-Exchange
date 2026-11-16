@@ -120,7 +120,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: amount,
         provider,
-        callback_url: window.location.origin + publicUrl("/payment/callback"),
+        callback_url: window.location.origin + publicUrl("/payment/callback?return_to=%2Fonboarding"),
       });
       window.location.href = data.authorization_url;
     } catch (error) {
