@@ -277,7 +277,7 @@ def test_concurrent_first_club_claims_award_grant_exactly_once(client, auth_user
 
         # Verify treasury only credited 2,500 GTX once
         funding = ledger.get_club_funding(session, club.id)
-        assert funding["total_cash"] == Decimal("100000")
+        assert funding["total_cash"] == Decimal("2500")
 
 
 def test_first_club_entitlement_recorded_with_ledger_tx_ids(client, auth_user_factory, app_session_factory):
@@ -301,7 +301,7 @@ def test_first_club_entitlement_recorded_with_ledger_tx_ids(client, auth_user_fa
         gtex_tx = session.get(LedgerEvent, entitlement.gtex_ledger_event_id)
         assert gtex_tx is not None
         assert gtex_tx.currency == ledger.GTEX
-        assert gtex_tx.balance_class == "promotional"
+        assert gtex_tx.balance_class == "squad_grant"
 
         fan_tx = session.get(LedgerEvent, entitlement.fan_ledger_event_id)
         assert fan_tx is not None
@@ -602,8 +602,8 @@ def test_mixed_promotional_and_deposited_insufficient_deposited_fails(client, au
         assert exc_info.value.code == "restricted_player_requires_deposited_funds"
 
 
-def test_eligible_purchase_consumes_promotional_before_deposited(client, auth_user_factory, app_session_factory):
-    """Test 21: Purchasing an eligible player (GSI <= 79) consumes promotional credit first."""
+def test_eligible_purchase_consumes_squad_grant_before_deposited(client, auth_user_factory, app_session_factory):
+    """Test 21: Purchasing an eligible player (GSI <= 79) consumes squad grant first."""
     user = auth_user_factory(suffix="promo-priority")
     claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
     assert claimed.status_code == 200, claimed.text
@@ -625,7 +625,7 @@ def test_eligible_purchase_consumes_promotional_before_deposited(client, auth_us
         session.commit()
 
         funding_before = ledger.get_club_funding(session, club_id)
-        assert funding_before["available_promotional"] == Decimal("100000")
+        assert funding_before["available_squad_grant"] == Decimal("2500")
         assert funding_before["available_deposited"] == Decimal("20000")
 
         # Sign eligible GSI 75 player
@@ -634,8 +634,8 @@ def test_eligible_purchase_consumes_promotional_before_deposited(client, auth_us
         assert signed is not None
 
         funding_after = ledger.get_club_funding(session, club_id)
-        # Promotional balance decreased
-        assert funding_after["available_promotional"] < Decimal("100000")
+        # Squad grant balance decreased
+        assert funding_after["available_squad_grant"] < Decimal("2500")
         # Deposited balance remains completely intact!
         assert funding_after["available_deposited"] == Decimal("20000")
 
