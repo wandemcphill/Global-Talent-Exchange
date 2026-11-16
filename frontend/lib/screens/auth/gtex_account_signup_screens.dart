@@ -36,7 +36,7 @@ String _generateTotpSetupSecret({int length = 32}) {
 }
 
 Uint8List _decodeBase32Secret(String input) {
-  const String alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+  const String alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; // pragma: allowlist secret
   final List<int> bytes = <int>[];
   int buffer = 0;
   int bits = 0;
