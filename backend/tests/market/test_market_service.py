@@ -1215,6 +1215,37 @@ def test_list_players_uses_cached_records_across_sessions(monkeypatch) -> None:
         engine.dispose()
 
 
+def test_player_records_cache_drops_previous_graph_before_reload(session, monkeypatch) -> None:
+    monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "10")
+    clear_market_records_cache()
+    clock = {"now": 1_000.0}
+    collections = {"count": 0}
+
+    def monotonic() -> float:
+        return clock["now"]
+
+    def collect() -> int:
+        collections["count"] += 1
+        return 0
+
+    monkeypatch.setattr("app.market.repositories.time.monotonic", monotonic)
+    monkeypatch.setattr("gc.collect", collect)
+    try:
+        _seed_market_player_catalog(session)
+        session.commit()
+        repository = SqlAlchemyMarketPlayerRepository(session)
+        first = repository.list_player_records()
+        assert collections["count"] == 0
+
+        clock["now"] = 1_020.0
+        second = repository.list_player_records()
+        assert second is not first
+        assert len(second) == len(first) == 4
+        assert collections["count"] == 1
+    finally:
+        clear_market_records_cache()
+
+
 def test_player_candidates_cache_serves_within_ttl(session, monkeypatch) -> None:
     monkeypatch.setenv("GTE_MARKET_RECORDS_CACHE_TTL_SECONDS", "300")
     clear_market_records_cache()
