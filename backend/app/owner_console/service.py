@@ -706,71 +706,40 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
         except ledger.LedgerError as exc:
             raise OwnerError(str(exc), 402) from exc
     else:
-        # Eligible player: prefer consuming promotional funds first
+        # Apply the ring-fenced founding grant to eligible player signings first.
+        # Remaining cost is funded from any legacy promotional, earned, or
+        # deposited balances. The grant cannot be spent by non-player actions.
+        remaining_price = gross_price
+        funding_pools = (
+            ("squad_grant", funding.get("available_squad_grant", Decimal("0"))),
+            ("promotional", funding["available_promotional"]),
+            ("earned", funding["available_earned"]),
+            ("deposited", funding["available_deposited"]),
+        )
         try:
-            if funding["available_promotional"] >= gross_price:
+            for balance_class, available_amount in funding_pools:
+                if remaining_price <= 0:
+                    break
+                portion = min(ledger.D(available_amount), remaining_price)
+                if portion <= 0:
+                    continue
                 ledger.record(
                     session,
                     event_type="transfer_purchase",
                     source=ledger.club_account(club_id),
                     destination=ledger.WORLD_MARKET,
                     currency=ledger.GTEX,
-                    gross=gross_price,
-                    balance_class="promotional",
+                    gross=portion,
+                    balance_class=balance_class,
                     club_id=club_id,
                     user_id=user_id,
                     related_type="player",
                     related_id=player_id,
-                    memo=f"Signed {player.full_name} (promotional funds)",
+                    memo=f"Signed {player.full_name} ({balance_class} funding)",
                 )
-            elif funding["available_promotional"] > 0:
-                promo_portion = funding["available_promotional"]
-                rem_portion = gross_price - promo_portion
-                ledger.record(
-                    session,
-                    event_type="transfer_purchase",
-                    source=ledger.club_account(club_id),
-                    destination=ledger.WORLD_MARKET,
-                    currency=ledger.GTEX,
-                    gross=promo_portion,
-                    balance_class="promotional",
-                    club_id=club_id,
-                    user_id=user_id,
-                    related_type="player",
-                    related_id=player_id,
-                    memo=f"Signed {player.full_name} (promo portion)",
-                )
-                rem_class = "earned" if funding["available_earned"] >= rem_portion else "deposited"
-                ledger.record(
-                    session,
-                    event_type="transfer_purchase",
-                    source=ledger.club_account(club_id),
-                    destination=ledger.WORLD_MARKET,
-                    currency=ledger.GTEX,
-                    gross=rem_portion,
-                    balance_class=rem_class,
-                    club_id=club_id,
-                    user_id=user_id,
-                    related_type="player",
-                    related_id=player_id,
-                    memo=f"Signed {player.full_name} ({rem_class} remainder)",
-                )
-            else:
-                rem_class = "earned" if funding["available_earned"] >= gross_price else "deposited"
-                ledger.record(
-                    session,
-                    event_type="transfer_purchase",
-                    source=ledger.club_account(club_id),
-                    destination=ledger.WORLD_MARKET,
-                    currency=ledger.GTEX,
-                    gross=gross_price,
-                    balance_class=rem_class,
-                    club_id=club_id,
-                    user_id=user_id,
-                    related_type="player",
-                    related_id=player_id,
-                    memo=f"Signed {player.full_name}",
-                )
+                remaining_price -= portion
+            if remaining_price > 0:
+                raise ledger.LedgerError("insufficient_club_treasury")
         except ledger.LedgerError as exc:
             raise OwnerError(str(exc), 402) from exc
     age = 24
