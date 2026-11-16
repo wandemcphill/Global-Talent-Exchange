@@ -329,7 +329,9 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[TreasuryWithdrawalStatus] = mapped_column(
-        Enum(TreasuryWithdrawalStatus, name="treasury_withdrawal_status", native_enum=False, values_callable=_enum_values),
+        Enum(
+            TreasuryWithdrawalStatus, name="treasury_withdrawal_status", native_enum=False, values_callable=_enum_values
+        ),
         nullable=False,
         default=TreasuryWithdrawalStatus.PENDING_REVIEW,
     )
