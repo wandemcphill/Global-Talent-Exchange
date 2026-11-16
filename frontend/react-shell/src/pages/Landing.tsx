@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "@/lib/api";
+import { Link } from "react-router-dom";
 import { GtexLiveWorldPulse } from "@/components/landing/landingModels";
 import { GtexHomeNav } from "@/components/landing/GtexHomeNav";
 import { HeroSection } from "@/components/landing/HeroSection";
@@ -149,6 +150,34 @@ export default function Landing() {
         onExplore={() => scrollToSection("platform")}
       />
       <PublicTrafficStatsStrip pulse={pulse} />
+
+      <section
+        className="mx-auto my-6 max-w-7xl px-4 sm:px-6 lg:px-8"
+        data-testid="first-500-founding-club-banner"
+        aria-labelledby="first-500-founding-club-title"
+      >
+        <div className="flex flex-col gap-5 rounded-2xl border border-emerald-400/30 bg-gradient-to-r from-emerald-500/15 via-slate-900 to-cyan-500/10 p-5 shadow-xl md:flex-row md:items-center md:justify-between md:p-7">
+          <div className="max-w-3xl">
+            <p className="text-xs font-black uppercase tracking-[0.22em] text-emerald-300">Limited founding-owner campaign · First 500 clubs</p>
+            <h2 id="first-500-founding-club-title" className="mt-2 text-2xl font-black uppercase tracking-tight text-white md:text-3xl">
+              Start your club with 2,500 GTX
+            </h2>
+            <p className="mt-2 text-sm leading-relaxed text-slate-300">
+              The first 500 eligible club owners receive a 2,500 GTX squad-signing grant plus 1,000 FAN for gifting. Build a minimum 22-player squad. At an average 200 GTX per player, plan for about 4,400 GTX; you can buy the balance from GTEX or verified Coin Traders during squad setup.
+            </p>
+            <p className="mt-2 text-xs text-slate-400">
+              The launch grant is promotional, non-withdrawable and reserved for eligible player signings.
+            </p>
+          </div>
+          <Link
+            to="/signup"
+            className="inline-flex shrink-0 items-center justify-center rounded-lg bg-emerald-400 px-6 py-3 text-sm font-black uppercase tracking-wider text-slate-950 transition hover:bg-emerald-300"
+            data-testid="first-500-founding-club-cta"
+          >
+            Create your club
+          </Link>
+        </div>
+      </section>
 
       {/* 3. Premium brand placement */}
       <GtexHomepageAdvertising />
