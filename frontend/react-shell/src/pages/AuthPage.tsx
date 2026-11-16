@@ -55,7 +55,7 @@ function generateBase32Secret(): string {
 }
 
 function decodeBase32Secret(secret: string): Uint8Array {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret
   const output: number[] = [];
   let buffer = 0;
   let bits = 0;
