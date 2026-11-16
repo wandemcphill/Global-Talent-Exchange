@@ -177,6 +177,48 @@ def _matches_nationality(
     return False
 
 
+_CHARTER_FIELDS = frozenset(
+    {
+        "primary_philosophy",
+        "secondary_philosophies",
+        "nationality_mode",
+        "target_nationalities",
+        "allow_dual_nationality",
+        "age_mode",
+        "preferred_max_age",
+        "allow_age_exceptions",
+        "transfer_strategy",
+        "financial_philosophy",
+        "club_vision_narrative",
+        "metadata_json",
+    }
+)
+_CHARTER_ALIASES = {
+    "vision_narrative": "club_vision_narrative",
+    "philosophy": "primary_philosophy",
+    "transfer": "transfer_strategy",
+    "finance": "financial_philosophy",
+}
+
+
+def _charter_updates(payload: Mapping[str, Any]) -> dict[str, Any]:
+    updates: dict[str, Any] = {}
+    extras: dict[str, Any] = {}
+    for key, value in payload.items():
+        if key == "club_id":
+            continue
+        canonical = _CHARTER_ALIASES.get(str(key), str(key))
+        if canonical in _CHARTER_FIELDS:
+            updates[canonical] = value
+        else:
+            extras[str(key)] = value
+    if extras:
+        metadata = dict(updates.get("metadata_json") or {})
+        metadata["charter"] = extras
+        updates["metadata_json"] = metadata
+    return updates
+
+
 @dataclass(slots=True)
 class ClubGovernancePolicyService:
     session: Session
@@ -225,6 +267,27 @@ class ClubGovernancePolicyService:
         self.session.add(policy)
         self.session.flush()
         return policy
+
+    def create_policy(
+        self,
+        club_id: str,
+        charter: Mapping[str, Any] | None = None,
+        **fields: Any,
+    ) -> ClubDNAPolicy:
+        """Persist the whole founding charter, including fields the owner did not change.
+
+        Onboarding sends one charter document. Every policy column in that
+        document is written, including empty nationality lists and a null age
+        cap. Aliases such as vision_narrative are stored on the policy column.
+        Anything else on the charter is kept in metadata so it is not dropped.
+        """
+        payload: dict[str, Any] = {}
+        if charter:
+            payload.update(charter)
+        payload.update(fields)
+        updates = _charter_updates(payload)
+        self.get_or_create_policy(club_id)
+        return self.update_policy(club_id, updates)
 
     def update_policy(self, club_id: str, updates: dict[str, Any]) -> ClubDNAPolicy:
         policy = self.get_or_create_policy(club_id)

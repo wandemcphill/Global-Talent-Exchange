@@ -62,6 +62,42 @@ def test_club(session: Session, owner: User) -> ClubProfile:
     return club
 
 
+def test_create_policy_saves_the_whole_founding_charter(session: Session, test_club: ClubProfile) -> None:
+    policy = ClubGovernancePolicyService(session).create_policy(
+        test_club.id,
+        {
+            "primary_philosophy": "balanced",
+            "secondary_philosophies": ["financially_sustainable"],
+            "nationality_mode": "preferred",
+            "target_nationalities": ["NGA"],
+            "allow_dual_nationality": True,
+            "age_mode": "preferred",
+            "preferred_max_age": 23,
+            "allow_age_exceptions": False,
+            "transfer_strategy": "buy_undervalued",
+            "financial_philosophy": "balanced",
+            "vision_narrative": (
+                "VIDA FC is based in Ikorodu. Its club identity is centred on "
+                "balancing promising young players with experienced professionals."
+            ),
+            "recruitment_focus": "balanced",
+        },
+    )
+
+    assert policy.primary_philosophy == "balanced"
+    assert policy.secondary_philosophies == ["financially_sustainable"]
+    assert policy.nationality_mode == "preferred"
+    assert policy.target_nationalities == ["NGA"]
+    assert policy.allow_dual_nationality is True
+    assert policy.age_mode == "preferred"
+    assert policy.preferred_max_age == 23
+    assert policy.allow_age_exceptions is False
+    assert policy.transfer_strategy == "buy_undervalued"
+    assert policy.financial_philosophy == "balanced"
+    assert policy.club_vision_narrative.startswith("VIDA FC is based in Ikorodu.")
+    assert policy.metadata_json["charter"]["recruitment_focus"] == "balanced"
+
+
 def test_default_club_dna_policy(session: Session, test_club: ClubProfile) -> None:
     service = ClubGovernancePolicyService(session)
     policy = service.get_or_create_policy(test_club.id)
