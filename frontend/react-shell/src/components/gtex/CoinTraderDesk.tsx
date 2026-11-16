@@ -96,7 +96,7 @@ function OrderForm({ traders }: any) {
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
   const [traderId, setTraderId] = useState("");
   const [direction, setDirection] = useState("user_buys");
-  const [amount, setAmount] = useState("250");
+  const [amount, setAmount] = useState("4000");
   const unitInfo = coinUnitMeta(coinUnit);
   const trader = traders.find((t: any) => t.id === traderId);
   const rate = trader ? rateOf(trader, coinUnit) : null;
@@ -138,6 +138,11 @@ function OrderForm({ traders }: any) {
               onClick={() => {
                 setCoinUnit(unitOption);
                 setTraderId("");
+                if (unitOption === "credit" && amount === "4000") {
+                  setAmount("20000");
+                } else if (unitOption === "coin" && amount === "20000") {
+                  setAmount("4000");
+                }
               }}
               className={`gx-btn py-1.5 px-3 text-xs ${coinUnit === unitOption ? "gx-btn-primary" : "gx-btn-secondary"}`}
             >
@@ -449,9 +454,9 @@ function TraderRatePublisher({ profile, onSaved }: { profile: any; onSaved?: () 
   const existing = (profile?.rates || []).find(
     (r: any) => String(r.coin_unit || "coin").toLowerCase() === coinUnit
   );
-  const [buyRate, setBuyRate] = useState(String(existing?.buy_rate_fiat ?? (coinUnit === "credit" ? 18 : 860)));
-  const [sellRate, setSellRate] = useState(String(existing?.sell_rate_fiat ?? (coinUnit === "credit" ? 20 : 920)));
-  const [minAmount, setMinAmount] = useState(String(existing?.min_coin_amount ?? (coinUnit === "credit" ? 2500 : 250)));
+  const [buyRate, setBuyRate] = useState(String(existing?.buy_rate_fiat ?? (coinUnit === "credit" ? 2.5 : 50)));
+  const [sellRate, setSellRate] = useState(String(existing?.sell_rate_fiat ?? (coinUnit === "credit" ? 3 : 56)));
+  const [minAmount, setMinAmount] = useState(String(existing?.min_coin_amount ?? (coinUnit === "credit" ? 20000 : 4000)));
   const [maxAmount, setMaxAmount] = useState(String(existing?.max_coin_amount ?? 100000));
   const [liquidity, setLiquidity] = useState(String(existing?.available_liquidity ?? 50000));
   const [isActive, setIsActive] = useState(existing?.is_active ?? true);
@@ -462,9 +467,9 @@ function TraderRatePublisher({ profile, onSaved }: { profile: any; onSaved?: () 
     const rate = (profile?.rates || []).find(
       (r: any) => String(r.coin_unit || "coin").toLowerCase() === nextUnit
     );
-    setBuyRate(String(rate?.buy_rate_fiat ?? (nextUnit === "credit" ? 18 : 860)));
-    setSellRate(String(rate?.sell_rate_fiat ?? (nextUnit === "credit" ? 20 : 920)));
-    setMinAmount(String(rate?.min_coin_amount ?? (nextUnit === "credit" ? 2500 : 250)));
+    setBuyRate(String(rate?.buy_rate_fiat ?? (nextUnit === "credit" ? 2.5 : 50)));
+    setSellRate(String(rate?.sell_rate_fiat ?? (nextUnit === "credit" ? 3 : 56)));
+    setMinAmount(String(rate?.min_coin_amount ?? (nextUnit === "credit" ? 20000 : 4000)));
     setMaxAmount(String(rate?.max_coin_amount ?? 100000));
     setLiquidity(String(rate?.available_liquidity ?? 50000));
     setIsActive(rate?.is_active ?? true);
@@ -564,7 +569,7 @@ function TraderRatePublisher({ profile, onSaved }: { profile: any; onSaved?: () 
 
 function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) {
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
-  const [amount, setAmount] = useState("1000");
+  const [amount, setAmount] = useState("4000");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const [submitting, setSubmitting] = useState(false);
   const qc = useQueryClient();
@@ -584,8 +589,10 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
     enabled: Number(amount) > 0,
   });
 
+  const belowMinimum = Boolean(quote && Number(quote.amount_fiat) < unitInfo.minBuyerNgn);
+
   const handlePurchase = async () => {
-    if (!Number(amount) || Number(amount) <= 0) return;
+    if (!Number(amount) || Number(amount) <= 0 || belowMinimum) return;
     setSubmitting(true);
     try {
       const { data } = await api.post("/coin-traders/me/liquidity/purchase", {
@@ -616,7 +623,7 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
         <div>
           <h4 className="gx-label text-slate-300">Add Trading Liquidity / Buy Inventory</h4>
           <p className="mt-1 text-xs text-slate-400">
-            Acquire GTEX Coin (GTC) or Fan Coin (FNC) inventory to back your desk orders. Purchased coins automatically update your trading liquidity and available balance upon verified payment.
+            Acquire GTEX Coin (GTC, ₦50/unit, ₦200,000 minimum) or Fan Coin (FNC, ₦2.50/unit, ₦50,000 minimum) inventory to back your desk orders.
           </p>
         </div>
         <div className="flex gap-2">
@@ -625,7 +632,14 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
               key={unit}
               type="button"
               data-testid={`trader-liquidity-unit-${unit}`}
-              onClick={() => setCoinUnit(unit)}
+              onClick={() => {
+                setCoinUnit(unit);
+                if (unit === "credit" && amount === "4000") {
+                  setAmount("20000");
+                } else if (unit === "coin" && amount === "20000") {
+                  setAmount("4000");
+                }
+              }}
               className={`gx-btn py-1.5 px-3 text-xs ${coinUnit === unit ? "gx-btn-primary" : "gx-btn-secondary"}`}
             >
               {coinUnitMeta(unit).code}
@@ -670,8 +684,13 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
               <span>Net: <b className="text-emerald-400">{fmt(quote.net_amount)} {unitInfo.code}</b></span>
             </div>
           )}
+          {belowMinimum && (
+            <p className="mb-2 text-xs text-amber-300" data-testid="trader-liquidity-minimum-warning">
+              Minimum purchase is ₦{fmt(unitInfo.minBuyerNgn)} for {unitInfo.name}.
+            </p>
+          )}
           <Btn
-            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0}
+            disabled={submitting || quoteLoading || !Number(amount) || Number(amount) <= 0 || belowMinimum}
             onClick={handlePurchase}
             data-testid="trader-liquidity-submit"
           >

@@ -3084,31 +3084,31 @@ class GteTreasurySettings {
       minTraderBuyRateFiat: GteJson.number(json, <String>[
         'min_trader_buy_rate_fiat',
         'minTraderBuyRateFiat',
-      ], fallback: 820),
+      ], fallback: 48),
       maxTraderBuyRateFiat: GteJson.number(json, <String>[
         'max_trader_buy_rate_fiat',
         'maxTraderBuyRateFiat',
-      ], fallback: 890),
+      ], fallback: 50),
       minTraderSellRateFiat: GteJson.number(json, <String>[
         'min_trader_sell_rate_fiat',
         'minTraderSellRateFiat',
-      ], fallback: 900),
+      ], fallback: 53),
       maxTraderSellRateFiat: GteJson.number(json, <String>[
         'max_trader_sell_rate_fiat',
         'maxTraderSellRateFiat',
-      ], fallback: 980),
+      ], fallback: 59),
       maxTraderSpreadFiat: GteJson.number(json, <String>[
         'max_trader_spread_fiat',
         'maxTraderSpreadFiat',
-      ], fallback: 120),
+      ], fallback: 10),
       maxBuyAboveWithdrawalFiat: GteJson.number(json, <String>[
         'max_buy_above_withdrawal_fiat',
         'maxBuyAboveWithdrawalFiat',
-      ], fallback: 10),
+      ], fallback: 2),
       maxSellBelowDepositFiat: GteJson.number(json, <String>[
         'max_sell_below_deposit_fiat',
         'maxSellBelowDepositFiat',
-      ], fallback: 0),
+      ], fallback: 7),
       minDeposit: GteJson.number(json, <String>['min_deposit', 'minDeposit']),
       maxDeposit: GteJson.number(json, <String>['max_deposit', 'maxDeposit']),
       minWithdrawal: GteJson.number(json, <String>[

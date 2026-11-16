@@ -1,7 +1,7 @@
 """Add personal user_point_accounts and user_point_ledger_entries tables.
 
 Revision ID: 20261116_0252_user_point_accounts_and_ledger
-Revises: 20261115_0252_canonical_live_match_execution
+Revises: 20261116_0253_gtex_coin_fiat_rate_rebalance
 Create Date: 2026-11-16 00:58:00.000000
 """
 
@@ -11,7 +11,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20261116_0252_user_point_accounts_and_ledger"
-down_revision = "20261115_0252_canonical_live_match_execution"
+down_revision = "20261116_0253_gtex_coin_fiat_rate_rebalance"
 branch_labels = None
 depends_on = None
 

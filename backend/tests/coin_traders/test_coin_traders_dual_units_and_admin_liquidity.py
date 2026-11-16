@@ -32,11 +32,11 @@ def _apply_and_approve_dual_desk(client, *, trader_headers: dict[str, str], admi
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "50",
+            "sell_rate_fiat": "56",
             "min_coin_amount": "1",
             "max_coin_amount": "50000",
-            "available_liquidity": "2000",
+            "available_liquidity": "25000",
             "is_active": True,
         },
     )
@@ -48,11 +48,11 @@ def _apply_and_approve_dual_desk(client, *, trader_headers: dict[str, str], admi
         json={
             "coin_unit": "credit",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "2.50",
+            "sell_rate_fiat": "3.00",
             "min_coin_amount": "1",
             "max_coin_amount": "50000",
-            "available_liquidity": "2000",
+            "available_liquidity": "25000",
             "is_active": True,
         },
     )
@@ -67,8 +67,8 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
 ) -> None:
     trader = auth_user_factory(
         suffix="dual-desk-trader",
-        funded_coin="5000",
-        funded_credit="5000",
+        funded_coin="10000",
+        funded_credit="25000",
         account_type="coin_trader",
     )
     buyer = auth_user_factory(suffix="dual-desk-buyer")
@@ -84,7 +84,7 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
         admin_headers=bootstrap_admin_headers,
     )
 
-    # GTEX Coin (coin): rate=920 NGN/GTC, NGN minimum is 200,000 => 100 GTC (92,000 NGN) fails, 250 GTC (230,000 NGN) succeeds
+    # GTEX Coin (coin): rate=56 NGN/GTC, NGN minimum is 200,000 => 100 GTC (5,600 NGN) fails, 4000 GTC (224,000 NGN) succeeds
     too_small_coin = client.post(
         "/api/coin-traders/orders",
         headers=buyer["headers"],
@@ -108,7 +108,7 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "250",
+            "coin_amount": "4000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "dual-coin-valid-001",
@@ -118,7 +118,7 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
     coin_order_id = valid_coin.json()["id"]
     assert valid_coin.json()["coin_unit"] == "coin"
 
-    # Fan Coin (credit): rate=920 NGN/FNC, NGN minimum is 50,000 => 40 FNC (36,800 NGN) fails, 60 FNC (55,200 NGN) succeeds
+    # Fan Coin (credit): rate=3.00 NGN/FNC, NGN minimum is 50,000 => 10000 FNC (30,000 NGN) fails, 20000 FNC (60,000 NGN) succeeds
     too_small_credit = client.post(
         "/api/coin-traders/orders",
         headers=buyer["headers"],
@@ -126,7 +126,7 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "credit",
-            "coin_amount": "40",
+            "coin_amount": "10000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "dual-credit-too-small-001",
@@ -142,7 +142,7 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "credit",
-            "coin_amount": "60",
+            "coin_amount": "20000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "dual-credit-valid-001",
@@ -169,8 +169,8 @@ def test_dual_unit_ngn_buyer_minimums_and_separate_balances(
     credit_wallet = client.get("/api/wallets/summary?currency=credit", headers=buyer["headers"])
     assert coin_wallet.status_code == 200, coin_wallet.text
     assert credit_wallet.status_code == 200, credit_wallet.text
-    assert Decimal(str(coin_wallet.json()["available_balance"])) > buyer_coin_before + Decimal("200")
-    assert Decimal(str(credit_wallet.json()["available_balance"])) > buyer_credit_before + Decimal("50")
+    assert Decimal(str(coin_wallet.json()["available_balance"])) > buyer_coin_before + Decimal("3900")
+    assert Decimal(str(credit_wallet.json()["available_balance"])) > buyer_credit_before + Decimal("19000")
 
 
 def test_admin_liquidity_issue_and_redeem_for_both_units_and_idempotency(

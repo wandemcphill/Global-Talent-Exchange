@@ -881,8 +881,8 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
         trader_profile_id=profile.id,
         coin_unit=LedgerUnit.COIN,
         fiat_currency="NGN",
-        buy_rate_fiat=Decimal("860"),  # Desk buys coin from user at ₦860
-        sell_rate_fiat=Decimal("920"),  # Desk sells coin to user at ₦920
+        buy_rate_fiat=Decimal("49"),  # Desk buys coin from user at ₦49
+        sell_rate_fiat=Decimal("56"),  # Desk sells coin to user at ₦56
         min_coin_amount=Decimal("10"),
         max_coin_amount=Decimal("50000"),
         available_liquidity=Decimal("100000"),
@@ -917,7 +917,7 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
 
     trader_service = CoinTraderService(db_session, wallet_service=wallet_service)
 
-    # 1. Buyer order below ₦200,000: 100 coin * ₦1,000 = ₦100,000 -> REJECTED
+    # 1. Buyer order below ₦200,000: 100 coin * ₦56 = ₦5,600 -> REJECTED
     with pytest.raises(CoinTraderValidationError) as exc:
         trader_service.create_order(
             CoinTradeOrderCreateRequest(
@@ -934,13 +934,13 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
     # ₦200,000 threshold enforced
     assert "200,000" in str(exc.value)
 
-    # 2. Buyer order at or above ₦200,000: 250 coin * ₦920 = ₦230,000 -> ACCEPTED
+    # 2. Buyer order at or above ₦200,000: 4,000 coin * ₦56 = ₦224,000 -> ACCEPTED
     order_ok = trader_service.create_order(
         CoinTradeOrderCreateRequest(
             trader_profile_id=profile.id,
             direction="user_buys",
             coin_unit=LedgerUnit.COIN,
-            coin_amount=Decimal("250"),
+            coin_amount=Decimal("4000"),
             fiat_currency="NGN",
             payment_method="bank_transfer",
             idempotency_key="order-key-ok-001",
@@ -948,10 +948,10 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
         actor=buyer_user,
     )
     assert order_ok.id is not None
-    assert order_ok.fiat_total == Decimal("230000")
+    assert order_ok.fiat_total == Decimal("224000")
     assert order_ok.status == CoinTradeOrderStatus.CREATED.value
 
-    # 3. User sells coin to desk: 50 coin * ₦860 = ₦43,000 -> ACCEPTED (limit only applies to buyer orders)
+    # 3. User sells coin to desk: 50 coin * ₦49 = ₦2,450 -> ACCEPTED (limit only applies to buyer orders)
     sell_order = trader_service.create_order(
         CoinTradeOrderCreateRequest(
             trader_profile_id=profile.id,
@@ -965,4 +965,4 @@ def test_coin_trader_200k_minimum_buyer_order_enforced(db_session: Session) -> N
         actor=seller_user,
     )
     assert sell_order.id is not None
-    assert sell_order.fiat_total == Decimal("43000")
+    assert sell_order.fiat_total == Decimal("2450")

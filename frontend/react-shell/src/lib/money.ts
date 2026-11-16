@@ -10,9 +10,9 @@ type MoneyRates = {
 };
 
 const DEFAULT_RATES: MoneyRates = {
-  nairaPerGtex: 900,
-  nairaPerFan: 9,
-  fanPerGtex: 100,
+  nairaPerGtex: 60,
+  nairaPerFan: 4,
+  fanPerGtex: 15,
 };
 
 let rates: MoneyRates = { ...DEFAULT_RATES };

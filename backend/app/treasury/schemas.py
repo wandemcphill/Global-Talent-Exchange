@@ -34,6 +34,10 @@ class TreasurySettingsView(BaseModel):
     deposit_rate_direction: RateDirection
     withdrawal_rate_value: Decimal
     withdrawal_rate_direction: RateDirection
+    fan_coin_deposit_rate_value: Decimal
+    trader_coin_purchase_rate_value: Decimal
+    trader_fan_coin_purchase_rate_value: Decimal
+    trader_withdrawal_rate_value: Decimal
     min_trader_buy_rate_fiat: Decimal
     max_trader_buy_rate_fiat: Decimal
     min_trader_sell_rate_fiat: Decimal
@@ -61,6 +65,10 @@ class TreasurySettingsUpdate(BaseModel):
     deposit_rate_direction: RateDirection | None = None
     withdrawal_rate_value: Decimal | None = None
     withdrawal_rate_direction: RateDirection | None = None
+    fan_coin_deposit_rate_value: Decimal | None = None
+    trader_coin_purchase_rate_value: Decimal | None = None
+    trader_fan_coin_purchase_rate_value: Decimal | None = None
+    trader_withdrawal_rate_value: Decimal | None = None
     min_trader_buy_rate_fiat: Decimal | None = None
     max_trader_buy_rate_fiat: Decimal | None = None
     min_trader_sell_rate_fiat: Decimal | None = None
@@ -77,6 +85,21 @@ class TreasurySettingsUpdate(BaseModel):
     maintenance_message: str | None = Field(default=None, max_length=255)
     whatsapp_number: str | None = Field(default=None, max_length=32)
     active_bank_account_id: str | None = None
+
+    @field_validator(
+        "deposit_rate_value",
+        "withdrawal_rate_value",
+        "fan_coin_deposit_rate_value",
+        "trader_coin_purchase_rate_value",
+        "trader_fan_coin_purchase_rate_value",
+        "trader_withdrawal_rate_value",
+        mode="after",
+    )
+    @classmethod
+    def validate_positive_rate(cls, value: Decimal | None) -> Decimal | None:
+        if value is not None and value <= 0:
+            raise ValueError("Treasury exchange rates must be greater than zero.")
+        return value
 
     @field_validator(
         "min_trader_buy_rate_fiat",
