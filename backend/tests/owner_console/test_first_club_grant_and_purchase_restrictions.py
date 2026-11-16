@@ -938,6 +938,31 @@ def test_squad_grant_cannot_be_spent_by_unrelated_transfer_purchase(client, auth
         session.rollback()
 
 
+def test_squad_grant_cannot_fund_unclassified_staff_recruitment(client, auth_user_factory, app_session_factory):
+    """Autonomous recruitment cannot bypass the deposited-funds classification with a generic purchase event."""
+    user = auth_user_factory(suffix="squad-grant-staff-recruitment")
+    claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert claimed.status_code == 200, claimed.text
+    club_id = claimed.json()["club_id"]
+
+    with app_session_factory() as session:
+        with pytest.raises(ledger.LedgerError, match="insufficient_funds"):
+            ledger.record(
+                session,
+                event_type="transfer_purchase",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_MARKET,
+                currency=ledger.GTEX,
+                gross=Decimal("1"),
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user["user_id"],
+                related_type="recruitment_assignment",
+                related_id="staff-recruitment-test",
+            )
+        session.rollback()
+
+
 def test_first_500_campaign_stops_at_owner_500(app_session_factory):
     """The 501st eligible first-club owner receives no GTX or Fan Coin campaign grant."""
     with app_session_factory() as session:
