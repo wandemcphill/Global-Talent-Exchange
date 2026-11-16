@@ -28,8 +28,8 @@ function installFakeServer(posted: any[], store: Record<string, any>) {
       store[id] = { club_id: id, ...body };
       return ok(201, { club_id: id });
     }
-    const match = /^\\/clubs\\/(.+)$/.exec(config.url);
-    if (config.method === "get" && match && store[match[1]]) return ok(200, store[match[1]]);
+    const clubId = config.url.startsWith("/clubs/") ? config.url.slice("/clubs/".length) : "";
+    if (config.method === "get" && clubId && store[clubId]) return ok(200, store[clubId]);
     throw new Error(`unexpected ${config.method} ${config.url}`);
   };
 }
