@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_wallet_user, get_session
+from app.auth.schemas import TraderSignupRequest
 from app.auth.service import AuthService
 from app.models import Base
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
