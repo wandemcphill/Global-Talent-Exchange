@@ -220,7 +220,12 @@ def record(
     if check_funds and not source.startswith(("platform:", "world:", "external:")):
         available_balance = balance(session, source, currency)
         # Preserve the first-500 founding allocation for player signings only.
-        if source.startswith("club:") and currency == GTEX and event_type != "transfer_purchase":
+        is_player_purchase = event_type == "transfer_purchase" and related_type in {
+            "player",
+            "transfer_bid",
+            "recruitment_assignment",
+        }
+        if source.startswith("club:") and currency == GTEX and not is_player_purchase:
             grant_credits = _sum(
                 session,
                 LedgerEvent.destination_account == source,
