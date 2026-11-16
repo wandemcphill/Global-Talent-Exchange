@@ -91,12 +91,12 @@ function OrderRow({ o, asTrader, traders }: any) {
   );
 }
 
-function OrderForm({ traders }: any) {
+function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount = "4000" }: any) {
   const act = useOrderActions();
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
   const [traderId, setTraderId] = useState("");
   const [direction, setDirection] = useState("user_buys");
-  const [amount, setAmount] = useState("4000");
+  const [amount, setAmount] = useState(initialAmount);
   const unitInfo = coinUnitMeta(coinUnit);
   const trader = traders.find((t: any) => t.id === traderId);
   const rate = trader ? rateOf(trader, coinUnit) : null;
@@ -126,7 +126,7 @@ function OrderForm({ traders }: any) {
 
   return (
     <div className="space-y-3" data-testid="coin-order-form">
-      <div className="flex flex-wrap items-center gap-2">
+      {!coinOnly && <div className="flex flex-wrap items-center gap-2">
         <span className="gx-label mr-1">Asset lane</span>
         {(["coin", "credit"] as const).map((unitOption) => {
           const meta = coinUnitMeta(unitOption);
@@ -150,7 +150,7 @@ function OrderForm({ traders }: any) {
             </button>
           );
         })}
-      </div>
+      </div>}
 
       <div className="grid gap-3 md:grid-cols-5">
         <select data-testid="coin-trader-select" className="gx-input md:col-span-2" value={traderId} onChange={(e) => setTraderId(e.target.value)}>
@@ -164,9 +164,9 @@ function OrderForm({ traders }: any) {
             );
           })}
         </select>
-        <div className="flex gap-1">
+        {!buyOnly && <div className="flex gap-1">
           {[["user_buys", "Buy"], ["user_sells", "Sell"]].map(([v, l]) => <button key={v} type="button" data-testid={`coin-direction-${v}`} onClick={() => setDirection(v)} className={`gx-btn flex-1 ${direction === v ? "gx-btn-primary" : "gx-btn-secondary"}`}>{l}</button>)}
-        </div>
+        </div>}
         <input data-testid="coin-amount-input" className="gx-input" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
         <Btn disabled={!rate || Number(amount) <= 0 || isBelowMinBuyerOrder} onClick={submit} data-testid="coin-order-submit">
           {direction === "user_buys" ? "Buy" : "Sell"} {unitInfo.code}
