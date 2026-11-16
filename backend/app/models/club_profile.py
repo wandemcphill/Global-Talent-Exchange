@@ -25,9 +25,7 @@ class ClubLifecycleStatus(StrEnum):
 
 class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_profiles"
-    __table_args__ = (
-        UniqueConstraint("slug", name="uq_club_profiles_slug"),
-    )
+    __table_args__ = (UniqueConstraint("slug", name="uq_club_profiles_slug"),)
 
     owner_user_id: Mapped[str] = mapped_column(
         String(36),
