@@ -195,6 +195,36 @@ def backfill_wallet_postings(session: Session) -> int:
     return len(events)
 
 
+_SQUAD_GRANT_CREDIT_EVENT_TYPES = ("launch_grant", "transfer_refund")
+
+
+def _net_squad_grant(session: Session, acct: str) -> Decimal:
+    """Return unspent ring-fenced squad grant balance from grant/refund credits."""
+    squad_grant_credits = _sum(
+        session,
+        LedgerEvent.destination_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "squad_grant",
+        LedgerEvent.event_type.in_(_SQUAD_GRANT_CREDIT_EVENT_TYPES),
+    )
+    squad_grant_debits = _sum(
+        session,
+        LedgerEvent.source_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status.in_(LIVE_STATUSES),
+        LedgerEvent.balance_class == "squad_grant",
+        column=LedgerEvent.gross_amount,
+    )
+    return max(Decimal("0"), squad_grant_credits - squad_grant_debits)
+
+
+def spendable_club_balance(session: Session, club_id: str) -> Decimal:
+    """Return club GTEX balance excluding ring-fenced squad grant credits."""
+    acct = club_account(club_id)
+    return max(Decimal("0"), balance(session, acct, GTEX) - _net_squad_grant(session, acct))
+
+
 def record(
     session: Session,
     *,
@@ -218,7 +248,21 @@ def record(
     if gross_amount <= 0:
         raise LedgerError("amount_must_be_positive")
     if check_funds and not source.startswith(("platform:", "world:", "external:")):
-        if balance(session, source, currency) < gross_amount:
+        available_balance = balance(session, source, currency)
+        # Preserve the first-500 allocation unless this debit is explicitly tagged to an eligible player signing.
+        is_player_purchase = (
+            event_type == "transfer_purchase"
+            and balance_class == "squad_grant"
+            and related_type in {"player", "transfer_bid"}
+        )
+        if source.startswith("club:") and currency == GTEX:
+            protected_grant = _net_squad_grant(session, source)
+            if is_player_purchase:
+                if protected_grant < gross_amount:
+                    raise LedgerError("insufficient_funds")
+            else:
+                available_balance = max(Decimal("0"), available_balance - protected_grant)
+        if available_balance < gross_amount:
             raise LedgerError("insufficient_funds")
     fee = D(gross_amount * Decimal(fee_bps) / Decimal(10000))
     event = LedgerEvent(
@@ -288,6 +332,10 @@ def get_club_funding(session: Session, club_id: str) -> dict[str, Any]:
     )
     net_promotional = max(Decimal("0"), promo_credits - promo_debits)
 
+    # Ring-fenced first-500 launch credit is tracked separately from
+    # ordinary promotional funds so only player purchases can consume it.
+    net_squad_grant = _net_squad_grant(session, acct)
+
     # Earned: gameplay rewards, match gate receipts, player sales, sponsor income
     earned_credits = _sum(
         session,
@@ -309,12 +357,20 @@ def get_club_funding(session: Session, club_id: str) -> dict[str, Any]:
     # Conservative available allocation (historical or untraceable funds stay non-deposited)
     available_deposited = min(net_deposited, total_cash)
     available_promotional = min(net_promotional, max(Decimal("0"), total_cash - available_deposited))
-    available_earned = max(Decimal("0"), total_cash - available_deposited - available_promotional)
+    available_squad_grant = min(
+        net_squad_grant,
+        max(Decimal("0"), total_cash - available_deposited - available_promotional),
+    )
+    available_earned = max(
+        Decimal("0"),
+        total_cash - available_deposited - available_promotional - available_squad_grant,
+    )
 
     return {
         "total_cash": total_cash,
         "available_deposited": available_deposited,
         "available_promotional": available_promotional,
+        "available_squad_grant": available_squad_grant,
         "available_earned": available_earned,
         "net_deposited": net_deposited,
         "net_promotional": net_promotional,
@@ -330,12 +386,13 @@ def assert_club_can_fund_player(session: Session, club_id: str, amount, player_o
         return None
 
     funding = get_club_funding(session, club_id)
-    if funding["total_cash"] < gross_amount:
-        raise LedgerError("insufficient_club_treasury")
-
     classification = classify_player_for_acquisition(session, player_or_id)
     if classification.requires_deposited_funds and funding["available_deposited"] < gross_amount:
-        raise LedgerError("restricted_player_requires_deposited_funds")
+        if funding["total_cash"] > funding["available_deposited"] or funding["total_cash"] >= gross_amount:
+            raise LedgerError("restricted_player_requires_deposited_funds")
+        raise LedgerError("insufficient_club_treasury")
+    if funding["total_cash"] < gross_amount:
+        raise LedgerError("insufficient_club_treasury")
 
     return classification
 
@@ -376,8 +433,6 @@ def settle_club_transfer(
         return existing
 
     funding = get_club_funding(session, buying_club_id)
-    if funding["total_cash"] < gross_amount:
-        raise LedgerError("insufficient_club_treasury")
 
     is_restricted = False
     if player_or_id is not None:
@@ -397,31 +452,49 @@ def settle_club_transfer(
 
     if is_restricted:
         if funding["available_deposited"] < gross_amount:
-            raise LedgerError("restricted_player_requires_deposited_funds")
-        balance_class = "deposited"
+            if funding["total_cash"] > funding["available_deposited"] or funding["total_cash"] >= gross_amount:
+                raise LedgerError("restricted_player_requires_deposited_funds")
+            raise LedgerError("insufficient_club_treasury")
+        funding_pools = (("deposited", funding["available_deposited"]),)
     else:
-        # Prefer consuming promotional first, then earned, then deposited
-        if funding["available_promotional"] >= gross_amount:
-            balance_class = "promotional"
-        elif funding["available_earned"] >= gross_amount:
-            balance_class = "earned"
-        else:
-            balance_class = "deposited"
+        if funding["total_cash"] < gross_amount:
+            raise LedgerError("insufficient_club_treasury")
+        funding_pools = (
+            ("squad_grant", funding.get("available_squad_grant", Decimal("0"))),
+            ("promotional", funding["available_promotional"]),
+            ("earned", funding["available_earned"]),
+            ("deposited", funding["available_deposited"]),
+        )
 
-    return record(
-        session,
-        event_type="transfer_purchase",
-        source=club_account(buying_club_id),
-        destination=club_account(selling_club_id),
-        currency=GTEX,
-        gross=gross_amount,
-        fee_bps=TRANSFER_PLATFORM_FEE_BPS,
-        balance_class=balance_class,
-        club_id=buying_club_id,
-        related_type="transfer_bid",
-        related_id=transfer_bid_id,
-        memo=memo[:255],
-    )
+    remaining = gross_amount
+    events: list[LedgerEvent] = []
+    for balance_class, available_amount in funding_pools:
+        if remaining <= 0:
+            break
+        portion = min(D(available_amount), remaining)
+        if portion <= 0:
+            continue
+        events.append(
+            record(
+                session,
+                event_type="transfer_purchase",
+                source=club_account(buying_club_id),
+                destination=club_account(selling_club_id),
+                currency=GTEX,
+                gross=portion,
+                fee_bps=TRANSFER_PLATFORM_FEE_BPS,
+                balance_class=balance_class,
+                club_id=buying_club_id,
+                related_type="transfer_bid",
+                related_id=transfer_bid_id,
+                memo=memo[:255],
+            )
+        )
+        remaining -= portion
+
+    if remaining > 0:
+        raise LedgerError("insufficient_club_treasury")
+    return events[0] if events else None
 
 
 def balance(session: Session, account: str, currency: str) -> Decimal:
@@ -526,10 +599,12 @@ def club_economy(session: Session, club_id: str) -> dict[str, object]:
         "total_spend": str(spend),
         "deposited": str(funding["available_deposited"]),
         "promotional": str(funding["available_promotional"]),
+        "squad_grant": str(funding["available_squad_grant"]),
         "earned": str(funding["available_earned"]),
         "funding_breakdown": {
             "deposited": str(funding["available_deposited"]),
             "promotional": str(funding["available_promotional"]),
+            "squad_grant": str(funding["available_squad_grant"]),
             "earned": str(funding["available_earned"]),
         },
     }

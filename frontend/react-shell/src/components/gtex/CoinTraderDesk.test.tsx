@@ -8,7 +8,7 @@ declare const jest: any;
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CoinTraderDesk } from "./CoinTraderDesk";
+import { CoinTraderDesk, ClubCoinTraderFundingPanel } from "./CoinTraderDesk";
 
 let mockUser: any = {
   id: "user-1",
@@ -508,6 +508,96 @@ describe("CoinTraderDesk", () => {
         coin_unit: "coin",
         side: "sell",
         status: "active",
+      }),
+    );
+  });
+
+  it("renders ClubCoinTraderFundingPanel marketplace GTC adverts and opens CoinTraderTradeModal", async () => {
+    mockUser = {
+      id: "buyer-club-1",
+      username: "clubowner",
+      display_name: "Club Owner",
+      account_type: "user",
+    };
+
+    const gtcOffer = {
+      advert_id: "adv-gtc-fund",
+      trader_profile_id: "prof-gtc-1",
+      trader_display_name: "Lagos Verified Desk",
+      trader_tier: "gold",
+      is_approved: true,
+      is_didit_verified: true,
+      verification_badge_label: "ID Verified",
+      is_new_merchant: false,
+      completed_orders_count: 10,
+      total_orders_count: 10,
+      completion_rate: 100,
+      average_release_minutes: 4,
+      rating: 4.9,
+      rating_count: 8,
+      dispute_score: 0,
+      coin_unit: "coin",
+      fiat_currency: "NGN",
+      side: "sell",
+      pricing_mode: "fixed",
+      price_fiat: "1000",
+      min_coin_amount: "1",
+      max_coin_amount: "50000",
+      min_fiat_amount: "200000",
+      max_fiat_amount: "50000000",
+      available_coin: "10000",
+      payment_window_minutes: 15,
+      payment_methods: ["Bank Transfer"],
+      platform_fee_fiat: "0",
+      updated_at: "2026-11-16T10:00:00Z",
+    };
+
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === "/coin-traders/marketplace") {
+        return { data: { offers: [gtcOffer] } };
+      }
+      if (url === "/coin-traders" || url === "/coin-traders/orders") {
+        return { data: [] };
+      }
+      return { data: null };
+    });
+    mockedApi.post.mockResolvedValue({ data: { id: "ord-club-1" } });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={qc}>
+          <ClubCoinTraderFundingPanel initialAmount="100" />
+        </QueryClientProvider>,
+      );
+    });
+    await flush();
+    await flush();
+
+    const listText = container.querySelector('[data-testid="club-funding-offers-list"]')?.textContent;
+    expect(listText).toContain("Lagos Verified Desk");
+    expect(listText).toContain("200 GTC");
+
+    await act(async () => {
+      (
+        container.querySelector('[data-testid="club-funding-select-adv-gtc-fund"]') as HTMLButtonElement
+      ).click();
+    });
+    await flush();
+
+    await act(async () => {
+      (container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement).click();
+    });
+    await flush();
+
+    expect(mockedApi.post).toHaveBeenCalledWith(
+      "/coin-traders/orders",
+      expect.objectContaining({
+        trader_profile_id: "prof-gtc-1",
+        advert_id: "adv-gtc-fund",
+        direction: "user_buys",
+        coin_unit: "coin",
+        fiat_currency: "NGN",
       }),
     );
   });

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -50,6 +50,17 @@ function Balances({ w, rates }: any) {
 function Deposit({ configured, rates, mode }: any) {
   const [amount, setAmount] = useState("5000");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
+  const [providerTouched, setProviderTouched] = useState(false);
+
+  useEffect(() => {
+    if (providerTouched || !configured || configured === true) return;
+    if (!configured.korapay && configured.paystack) {
+      setProvider("paystack");
+    } else if (!configured.paystack && configured.korapay) {
+      setProvider("korapay");
+    }
+  }, [configured, providerTouched]);
+
   const rate = Number(rates?.deposit_rate || 0);
   const coins = rates?.deposit_direction === "coin_per_fiat" ? Number(amount || 0) * rate : Number(amount || 0) / (rate || 1);
   const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
@@ -58,7 +69,7 @@ function Deposit({ configured, rates, mode }: any) {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: Number(amount),
         provider,
-        callback_url: `${window.location.origin}${publicUrl("/payment/callback")}`,
+        callback_url: `${window.location.origin}${publicUrl(`/payment/callback?provider=${provider}`)}`,
       });
       window.location.href = data.authorization_url;
     } catch (e) {
@@ -73,7 +84,10 @@ function Deposit({ configured, rates, mode }: any) {
             key={p}
             type="button"
             data-testid={`deposit-provider-${p}`}
-            onClick={() => setProvider(p)}
+            onClick={() => {
+              setProviderTouched(true);
+              setProvider(p);
+            }}
             className={`gx-btn flex-1 py-1 text-xs ${provider === p ? "gx-btn-primary" : "gx-btn-secondary"}`}
           >
             {p === "korapay" ? "KoraPay" : "Paystack"}
@@ -83,8 +97,8 @@ function Deposit({ configured, rates, mode }: any) {
       <label className="gx-label">Amount (₦)</label>
       <input data-testid="deposit-amount-input" className="gx-input" type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} />
       <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦{fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}</p>
-      <Btn className="mt-3 w-full" disabled={!configured} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
-      {!configured && <p className="mt-2 text-xs text-amber-300" data-testid="paystack-not-configured">Payment provider keys are not connected yet, so Naira deposits are switched off.</p>}
+      <Btn className="mt-3 w-full" disabled={!configured?.[provider] && configured !== true} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
+      {!configured?.[provider] && configured !== true && <p className="mt-2 text-xs text-amber-300" data-testid="payment-provider-not-configured">{providerLabel} is not configured for live deposits. Select an enabled provider or use a verified Coin Trader.</p>}
       <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.</p>
     </Panel>
   );
@@ -794,7 +808,7 @@ export default function Finance() {
         ))}
         <SponsorNegotiationDesk clubs={data.clubs} />
         <ClubShareholderDesk clubs={data.clubs} />
-        <Deposit configured={data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
+        <Deposit configured={data.payment_providers || data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
         <Withdraw rates={data.treasury_rates} />
         {data.withdrawals.length > 0 && (
           <Panel eyebrow="History" title="Withdrawals" className="lg:col-span-12" testid="withdrawals-history">

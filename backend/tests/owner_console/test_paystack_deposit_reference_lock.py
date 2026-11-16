@@ -125,9 +125,7 @@ def test_one_reference_credits_the_initiating_user_once(monkeypatch) -> None:
 
         assert first["status"] == "success"
         assert second["ledger_event"]["id"] == first["ledger_event"]["id"]
-        events = list(
-            session.scalars(select(LedgerEvent).where(LedgerEvent.related_object_id == reference)).all()
-        )
+        events = list(session.scalars(select(LedgerEvent).where(LedgerEvent.related_object_id == reference)).all())
         assert len(events) == 1
         assert events[0].user_id == owner.id
         assert Decimal(events[0].gross_amount) == Decimal("2.50")
@@ -141,5 +139,91 @@ def test_one_reference_credits_the_initiating_user_once(monkeypatch) -> None:
         )
         assert ledger.balance(session, ledger.user_account(owner.id), ledger.GTEX) == Decimal("2.50")
         assert ledger.balance(session, ledger.user_account(other.id), ledger.GTEX) == Decimal("0.00")
+    finally:
+        session.close()
+
+
+def test_korapay_webhook_and_providerless_verify(monkeypatch) -> None:
+    import hashlib
+    import hmac
+    import json
+    from app.wallets.providers.korapay import KoraPayProviderAdapter, _js_json_stringify
+
+    class _KoraStub(KoraPayProviderAdapter):
+        def initialize_checkout(self, **kwargs):
+            return CheckoutSession(
+                reference=kwargs["order_reference"],
+                checkout_url="https://korapay.test/checkout",
+                provider="korapay",
+                amount=kwargs["amount"],
+                currency="NGN",
+            )
+
+        def verify_payment(self, *, reference: str) -> PaymentVerification:
+            return PaymentVerification(
+                reference=reference,
+                provider_reference=reference,
+                status="success",
+                amount=Decimal("5000.00"),
+                currency="NGN",
+            )
+
+    monkeypatch.setenv("GTE_KORAPAY_WEBHOOK_SECRET", "korapay-test-webhook-secret")
+    adapter = _KoraStub()
+    monkeypatch.setattr("app.wallets.providers.registry.get_live_provider_adapter", lambda _provider: adapter)
+    monkeypatch.setattr("app.wallets.providers.registry.get_provider_adapter", lambda _provider: adapter)
+
+    session = _session()
+    try:
+        owner = _user(session, email="korapay-owner@example.com", username="korapay-owner")
+        settings = TreasuryService().ensure_settings(session)
+        settings.deposit_rate_value = Decimal("100")
+        settings.deposit_rate_direction = RateDirection.FIAT_PER_COIN
+        session.commit()
+
+        with pytest.raises(OwnerError) as bad_provider:
+            money.paystack_init(session, owner, 5000, "https://app.test/callback", provider="paypal")
+        assert bad_provider.value.code == "unsupported_deposit_provider"
+
+        started = money.paystack_init(session, owner, 5000, "https://app.test/callback", provider="korapay")
+        session.commit()
+        ref = started["reference"]
+
+        webhook_data = {
+            "reference": ref,
+            "amount": 5000,
+            "currency": "NGN",
+            "status": "success",
+        }
+        payload = {"event": "charge.success", "data": webhook_data}
+        raw_body = json.dumps(payload).encode("utf-8")
+        good_sig = hmac.new(
+            b"korapay-test-webhook-secret",
+            _js_json_stringify(webhook_data).encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+
+        with pytest.raises(OwnerError) as bad_sig:
+            money.korapay_webhook(session, raw_body, "bad-signature", payload)
+        assert bad_sig.value.code == "invalid_signature"
+
+        money.korapay_webhook(session, raw_body, good_sig, payload)
+        session.commit()
+        verified = money.paystack_verify(session, owner, ref)
+        session.commit()
+
+        assert verified["status"] == "success"
+        assert ledger.balance(session, ledger.user_account(owner.id), ledger.GTEX) == Decimal("50.00")
+        intent = session.scalar(select(OwnerDepositIntent).where(OwnerDepositIntent.reference == ref))
+        assert intent is not None and intent.credited_amount_kobo == 500000
+
+        # Verify-first path without provider parameter resolves korapay intent cleanly.
+        started_two = money.paystack_init(session, owner, 5000, "https://app.test/callback", provider="korapay")
+        session.commit()
+        ref_two = started_two["reference"]
+        verified_two = money.paystack_verify(session, owner, ref_two)
+        session.commit()
+        assert verified_two["status"] == "success"
+        assert ledger.balance(session, ledger.user_account(owner.id), ledger.GTEX) == Decimal("100.00")
     finally:
         session.close()

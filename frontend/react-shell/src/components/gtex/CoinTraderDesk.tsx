@@ -4,12 +4,18 @@ import { ExternalLink, RefreshCw, ShieldAlert, ShieldCheck } from "lucide-react"
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { label } from "@/lib/owner";
+import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Panel } from "@/components/gtex/ui";
 import { CoinTraderMarketplaceView } from "./coin-traders/CoinTraderMarketplaceView";
 import { CoinTraderMerchantDashboard } from "./coin-traders/CoinTraderMerchantDashboard";
 import { CoinTraderOrderRoom } from "./coin-traders/CoinTraderOrderRoom";
-import { isTrustedDiditHandoffUrl, type TradeOrder } from "./coin-traders/types";
+import { CoinTraderTradeModal } from "./coin-traders/CoinTraderTradeModal";
+import {
+  isTrustedDiditHandoffUrl,
+  type MarketplaceOffer,
+  type MarketplaceResponse,
+  type TradeOrder,
+} from "./coin-traders/types";
 
 function TraderVerificationCard({ onVerified }: { onVerified?: () => void }) {
   const [verificationType, setVerificationType] = useState<
@@ -417,5 +423,142 @@ export function CoinTraderDesk() {
         <CoinTraderMerchantDashboard profile={me} deskOrders={deskOrders} />
       )}
     </Panel>
+  );
+}
+
+export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: { initialAmount?: string }) {
+  const { user } = useAuth();
+  const qc = useQueryClient();
+  const [selectedOffer, setSelectedOffer] = useState<MarketplaceOffer | null>(null);
+
+  const { data: traders = [] } = useQuery<any[]>({
+    queryKey: ["coin-traders"],
+    queryFn: async () => (await api.get("/coin-traders")).data || [],
+  });
+  const { data: market, isLoading: marketLoading } = useQuery<MarketplaceResponse | null>({
+    queryKey: ["coin-trader-marketplace", "club-funding-gtex"],
+    queryFn: async () => {
+      try {
+        const res = await api.get("/coin-traders/marketplace", {
+          params: {
+            coin_unit: "coin",
+            side: "sell",
+            fiat_currency: "NGN",
+            sort_by: "price_asc",
+          },
+        });
+        return res?.data ?? null;
+      } catch {
+        return null;
+      }
+    },
+  });
+  const { data: orders = [], isLoading: ordersLoading } = useQuery<TradeOrder[]>({
+    queryKey: ["coin-orders", "me"],
+    queryFn: async () => (await api.get("/coin-traders/orders")).data || [],
+  });
+
+  const ownProfileIds = new Set(
+    traders.filter((t) => user?.id && t.user_id === user.id).map((t) => String(t.id)),
+  );
+  const offers = (market?.offers || []).filter(
+    (offer) =>
+      offer.coin_unit === "coin" &&
+      offer.side === "sell" &&
+      !ownProfileIds.has(String(offer.trader_profile_id)),
+  );
+  const gtexOrders = orders.filter(
+    (order) => String(order.coin_unit || "coin").toLowerCase() === "coin",
+  );
+  const requestedCoins = Math.max(0, Math.ceil(Number(initialAmount) || 0));
+
+  return (
+    <div
+      className="rounded-xl border border-cyan-500/20 bg-slate-950/60 p-4"
+      data-testid="club-funding-coin-traders"
+    >
+      <p className="gx-label text-cyan-300">Option 2 · Verified Coin Traders</p>
+      <h4 className="gx-display mt-1 text-lg font-bold uppercase text-white">
+        Buy GTX from a Coin Trader
+      </h4>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">
+        Choose an approved, identity-verified merchant advert. Orders are escrow-protected through the
+        GTEX order room with zero P2P platform fees. GTEX Coin buyer orders have a ₦200,000 minimum;
+        any surplus stays in your wallet for later use.
+      </p>
+
+      {marketLoading ? (
+        <p className="mt-3 text-xs text-slate-500">Loading verified GTEX Coin trader offers…</p>
+      ) : offers.length ? (
+        <div className="mt-4 space-y-2.5" data-testid="club-funding-offers-list">
+          {offers.map((offer) => {
+            const unitRate = Number(offer.price_fiat || 0);
+            const minFiat = Math.max(200000, Number(offer.min_fiat_amount || 0));
+            const minOrderCoins = unitRate > 0 ? Math.ceil(minFiat / unitRate) : 1;
+            const suggestedCoins = Math.max(1, requestedCoins, minOrderCoins);
+            return (
+              <div
+                key={offer.advert_id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 bg-black/30 p-3 text-xs"
+              >
+                <div className="space-y-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-white">{offer.trader_display_name}</span>
+                    {offer.verification_badge_label && (
+                      <Chip tone={offer.is_didit_verified ? "emerald" : "gold"}>
+                        {offer.verification_badge_label}
+                      </Chip>
+                    )}
+                  </div>
+                  <p className="text-slate-400">
+                    Rate: <b className="text-white">₦{fmt(unitRate, 2)}</b> / GTC · Available:{" "}
+                    <b className="text-slate-200">{fmt(offer.available_coin)} GTC</b> · Suggested gap
+                    order: <b className="text-cyan-300">{fmt(suggestedCoins)} GTC</b>
+                  </p>
+                </div>
+                <Btn
+                  variant="primary"
+                  onClick={() => setSelectedOffer(offer)}
+                  data-testid={`club-funding-select-${offer.advert_id}`}
+                >
+                  Buy GTC
+                </Btn>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-3 rounded border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">
+          No approved and verified GTEX Coin trader offers are currently available. Use the platform
+          purchase option or check back later.
+        </p>
+      )}
+
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <p className="gx-label">Your GTEX Coin trader orders</p>
+        {ordersLoading ? (
+          <p className="mt-2 text-xs text-slate-500">Loading orders…</p>
+        ) : gtexOrders.length ? (
+          <div className="mt-2 space-y-2">
+            {gtexOrders.map((order) => (
+              <CoinTraderOrderRoom key={order.id} order={order} traders={traders} />
+            ))}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-slate-500">No GTEX Coin trader orders yet.</p>
+        )}
+      </div>
+
+      {selectedOffer && (
+        <CoinTraderTradeModal
+          offer={selectedOffer}
+          onClose={() => setSelectedOffer(null)}
+          onOrderCreated={() => {
+            qc.invalidateQueries({ queryKey: ["coin-orders"] });
+            qc.invalidateQueries({ queryKey: ["coin-trader-marketplace"] });
+          }}
+        />
+      )}
+    </div>
   );
 }
