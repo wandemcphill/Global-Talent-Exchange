@@ -39,11 +39,12 @@ def _raise_http_error(exc: Exception) -> None:
 
 @router.get("/request-son/options", response_model=RequestSonOptionsView)
 def request_son_options(
+    club_id: str | None = Query(default=None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> RequestSonOptionsView:
     try:
-        return _service(session).request_son_options(current_user)
+        return _service(session).request_son_options(current_user, club_id=club_id)
     except Exception as exc:  # pragma: no cover - mapped below
         _raise_http_error(exc)
 

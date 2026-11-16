@@ -12,6 +12,7 @@ _POSITIONS = {"GK", "CB", "RB", "LB", "DM", "CM", "AM", "RW", "LW", "ST"}
 
 class RequestSonCreateRequest(CommonSchema):
     parent_player_id: str
+    club_id: str | None = Field(default=None, max_length=64)
     requested_name: str | None = Field(default=None, max_length=160)
     requested_country_code: str | None = Field(default=None, max_length=8)
     requested_position: str | None = Field(default=None, max_length=32)

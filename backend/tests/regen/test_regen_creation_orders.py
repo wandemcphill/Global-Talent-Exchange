@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import FastAPI
@@ -182,6 +183,62 @@ def test_request_son_options_list_owned_parent_players(session) -> None:
     assert payload["club_id"] == club.id
     assert payload["eligible_parents"][0]["player_id"] == player.id
     assert payload["pricing"]["base_cost_coin"] is not None
+
+
+def test_request_son_uses_the_selected_club_not_the_newest(session) -> None:
+    user = _create_user(session, email="multi@example.com", username="multiowner", full_name="Multi Owner")
+    first = _create_club(session, owner=user, slug="first-fc", name="First FC")
+    second = _create_club(session, owner=user, slug="second-fc", name="Second FC")
+    first.created_at = datetime.now(timezone.utc) - timedelta(days=2)
+    second.created_at = datetime.now(timezone.utc) - timedelta(days=1)
+    session.commit()
+    country = _create_country(session)
+    first_parent = _create_player(
+        session,
+        club=first,
+        country=country,
+        external_id="first-parent",
+        full_name="Chinedu Okafor",
+    )
+    second_parent = _create_player(
+        session,
+        club=second,
+        country=country,
+        external_id="second-parent",
+        full_name="Tunde Lawal",
+    )
+
+    client = _client(session, current_user=user)
+    default_options = client.get("/api/regens/request-son/options")
+    assert default_options.status_code == 200
+    assert default_options.json()["club_id"] == first.id
+    assert default_options.json()["eligible_parents"][0]["player_id"] == first_parent.id
+
+    selected = client.get("/api/regens/request-son/options", params={"club_id": second.id})
+    assert selected.status_code == 200
+    assert selected.json()["club_id"] == second.id
+    assert selected.json()["eligible_parents"][0]["player_id"] == second_parent.id
+
+    created = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": second_parent.id,
+            "club_id": second.id,
+            "payment_method": "wallet",
+        },
+    )
+    assert created.status_code == 201
+    assert created.json()["club_id"] == second.id
+
+    rejected = client.post(
+        "/api/regens/request-son",
+        json={
+            "parent_player_id": second_parent.id,
+            "club_id": first.id,
+            "payment_method": "wallet",
+        },
+    )
+    assert rejected.status_code == 403
 
 
 def test_user_cannot_request_son_for_someone_elses_club(session) -> None:

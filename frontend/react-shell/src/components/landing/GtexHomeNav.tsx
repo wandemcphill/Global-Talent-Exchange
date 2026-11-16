@@ -148,6 +148,13 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
         {/* Direct Advertiser Access & Auth Affordances */}
         <div className="flex items-center gap-3">
           <Link
+            to="/nigeria"
+            data-testid="landing-nav-nigeria"
+            className="hidden md:inline-flex items-center rounded-md px-2 py-1.5 text-xs font-bold uppercase tracking-wider text-[#36E38A] transition hover:text-white"
+          >
+            Nigeria
+          </Link>
+          <Link
             to="/advertise"
             data-testid="landing-nav-advertise"
             className="hidden sm:inline-flex items-center gap-1.5 rounded-md border border-[#D4AF37]/50 bg-[#D4AF37]/10 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-[#D4AF37] transition hover:bg-[#D4AF37]/20 hover:text-[#F6E3A1]"
@@ -191,6 +198,15 @@ export const GtexHomeNav: React.FC<GtexHomeNavProps> = ({
           <p className="mt-2 text-[13px] leading-snug text-[#9AA7BD]">
             Your football world, one destination at a time.
           </p>
+          <Link
+            to="/nigeria"
+            onClick={() => setMobileMenuOpen(false)}
+            data-testid="mobile-nav-nigeria"
+            className="mt-4 flex items-center justify-between rounded-lg border border-[#36E38A]/30 bg-[#36E38A]/10 px-3 py-2 text-sm font-bold text-[#36E38A]"
+          >
+            Play GTEX in Nigeria
+            <ArrowRight size={14} />
+          </Link>
           <div className="mt-4 divide-y divide-[#22385A] border-t border-[#22385A]">
             {mobileNavItems.map(({ id, Icon, title, subtitle }) => (
               <button

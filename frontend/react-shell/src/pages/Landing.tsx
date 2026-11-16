@@ -18,6 +18,8 @@ import { TrustAndIntegritySection } from "@/components/landing/TrustAndIntegrity
 import { ConversionAndFooterSection } from "@/components/landing/ConversionAndFooterSection";
 import { GtexTopAdvertisingRail, GtexHomepageAdvertising } from "@/components/advertising/GtexAdvertising";
 import { PublicTrafficStatsStrip } from "@/components/landing/PublicTrafficStatsStrip";
+import { NigeriaPlaySection } from "@/components/landing/NigeriaPlaySection";
+import { DocumentHead } from "@/components/seo/DocumentHead";
 
 export default function Landing() {
   const [pulse, setPulse] = useState<GtexLiveWorldPulse | null>(null);
@@ -134,6 +136,11 @@ export default function Landing() {
 
   return (
     <div data-testid="landing-page" className="min-h-screen bg-[#0B1626] text-[#F2F4F8] selection:bg-emerald-500/30 selection:text-white">
+      <DocumentHead
+        title="GTEX Nigeria | Create a club, trade coins in naira, play football"
+        description="GTEX is the Lagos football universe. Create a club in foundation, buy and sell coins in naira, run a 3D operations centre, develop academy regens, and enter national team competitions for free."
+        path="/"
+      />
       {/* 1. World-Class Sticky Nav */}
       <GtexHomeNav
         pulse={pulse}
@@ -149,6 +156,7 @@ export default function Landing() {
         onExplore={() => scrollToSection("platform")}
       />
       <PublicTrafficStatsStrip pulse={pulse} />
+      <NigeriaPlaySection />
 
       {/* 3. Premium brand placement */}
       <GtexHomepageAdvertising />

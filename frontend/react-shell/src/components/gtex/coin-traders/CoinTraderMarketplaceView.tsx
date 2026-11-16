@@ -28,6 +28,7 @@ export function CoinTraderMarketplaceView({
   const [side, setSide] = useState<MarketSide>("sell"); // sell = trader sells -> customer buys
   const [fiatAmount, setFiatAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [countryCode, setCountryCode] = useState("");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [minCompletionRate, setMinCompletionRate] = useState("");
   const [minAvailableCoin, setMinAvailableCoin] = useState("");
@@ -50,6 +51,7 @@ export function CoinTraderMarketplaceView({
       fiat_currency: "NGN",
       sort_by: sortBy,
     };
+    if (countryCode) p.country_code = countryCode;
     if (Number(fiatAmount) > 0) p.fiat_amount = Number(fiatAmount);
     if (paymentMethod.trim()) p.payment_method = paymentMethod.trim();
     if (verifiedOnly) p.verified_only = true;
@@ -60,6 +62,7 @@ export function CoinTraderMarketplaceView({
     coinUnit,
     side,
     sortBy,
+    countryCode,
     fiatAmount,
     paymentMethod,
     verifiedOnly,
@@ -82,10 +85,11 @@ export function CoinTraderMarketplaceView({
   const offers = market?.offers || [];
   const refInfo = market?.market_reference;
   const hasFilters = Boolean(
-    fiatAmount || paymentMethod || verifiedOnly || minCompletionRate || minAvailableCoin,
+    countryCode || fiatAmount || paymentMethod || verifiedOnly || minCompletionRate || minAvailableCoin,
   );
 
   const clearFilters = () => {
+    setCountryCode("");
     setFiatAmount("");
     setPaymentMethod("");
     setVerifiedOnly(false);
@@ -205,6 +209,20 @@ export function CoinTraderMarketplaceView({
             value={fiatAmount}
             onChange={(e) => setFiatAmount(e.target.value)}
           />
+          <select
+            data-testid="filter-country"
+            className="gx-input text-xs"
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value)}
+            aria-label="Trader country"
+          >
+            <option value="">All NGN desks</option>
+            <option value="NG">Nigeria</option>
+            <option value="GH">Ghana</option>
+            <option value="KE">Kenya</option>
+            <option value="ZA">South Africa</option>
+            <option value="GB">United Kingdom</option>
+          </select>
           <select
             data-testid="filter-payment-method"
             className="gx-input text-xs"

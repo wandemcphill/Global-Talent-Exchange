@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import AppShell from "@/components/gtex/AppShell";
 import Landing from "@/pages/Landing";
+import NigeriaPlay from "@/pages/NigeriaPlay";
 import AuthPage from "@/pages/AuthPage";
 import Onboarding from "@/pages/Onboarding";
 import ControlCenter from "@/pages/ControlCenter";
@@ -89,6 +90,8 @@ export default function App() {
               <Route path="/visual-review" element={<VisualReviewPage />} />
               <Route path="/gift-capture" element={<GiftCapturePage />} />
               <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
+              <Route path="/nigeria" element={<NigeriaPlay />} />
+              <Route path="/play-in-nigeria" element={<Navigate to="/nigeria" replace />} />
               <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
               <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />
               <Route path="/onboarding" element={<Onboarding />} />

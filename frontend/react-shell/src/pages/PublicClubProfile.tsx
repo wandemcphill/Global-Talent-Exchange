@@ -33,6 +33,7 @@ import {
   StadiumPerimeterLEDShowcase,
   StadiumMatchdaySoundscape,
 } from "@/components/advertising/GtexMatchBroadcastAds";
+import { DocumentHead } from "@/components/seo/DocumentHead";
 
 export type PublicPlayerSummary = {
   id: string;
@@ -286,13 +287,31 @@ export default function PublicClubProfile() {
     }
   };
 
+  const clubTitle = data?.club?.name
+    ? `${data.club.name}${data.club.city_name ? ` · ${data.club.city_name}` : ""} | GTEX club`
+    : "GTEX club profile";
+  const clubDescription = data?.club?.name
+    ? `Public profile for ${data.club.name}${data.club.city_name ? ` in ${data.club.city_name}` : ""}${data.club.country_code ? `, ${data.club.country_code}` : ""}. Squad, academy, and stadium on GTEX.`
+    : "Public GTEX club profile. Squad, academy, and stadium.";
+  const clubHead = (
+    <DocumentHead
+      title={clubTitle}
+      description={clubDescription}
+      path={clubSlug ? `/club/${clubSlug}` : "/"}
+      noindex={isError || !data}
+    />
+  );
+
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-[#070B11] px-5 py-28 text-center text-slate-400" data-testid="public-club-loading">
-        <div className="mx-auto mb-4 size-10 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
-        <p className="gx-eyebrow text-emerald-400">GTEX Club Profile Archive</p>
-        <p className="mt-2 text-sm text-slate-300">Loading verified public club dossier…</p>
-      </main>
+      <>
+        {clubHead}
+        <main className="min-h-screen bg-[#070B11] px-5 py-28 text-center text-slate-400" data-testid="public-club-loading">
+          <div className="mx-auto mb-4 size-10 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
+          <p className="gx-eyebrow text-emerald-400">GTEX Club Profile Archive</p>
+          <p className="mt-2 text-sm text-slate-300">Loading verified public club dossier…</p>
+        </main>
+      </>
     );
   }
 
@@ -305,6 +324,7 @@ export default function PublicClubProfile() {
       : "The public profile service did not return a usable dossier. No simulated data has been substituted.";
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#070B11] px-5 py-16" data-testid="public-club-error">
+        {clubHead}
         <section className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900/80 p-8 text-center shadow-2xl backdrop-blur-md">
           {isPrivate ? (
             <Lock className="mx-auto mb-4 text-amber-400" size={38} />
@@ -342,6 +362,7 @@ export default function PublicClubProfile() {
 
   return (
     <main className="min-h-screen bg-[#070B11] text-slate-200" data-testid="public-club-profile-view">
+      {clubHead}
       {/* 1. HERO & IDENTITY */}
       <header className="relative isolate overflow-hidden border-b border-white/10">
         <img
