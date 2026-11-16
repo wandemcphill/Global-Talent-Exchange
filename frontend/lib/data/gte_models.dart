@@ -701,8 +701,8 @@ class GteTraderSignupRequest {
     this.walletLabel = 'GTEX Trading Wallet',
     required this.totpSecret,
     required this.totpCode,
-    required this.recoveryPhraseHash,
-    required this.securityPinHash,
+    this.recoveryPhraseHash,
+    this.securityPinHash,
     this.turnstileToken,
     this.compliance,
   });
@@ -719,8 +719,8 @@ class GteTraderSignupRequest {
   final String walletLabel;
   final String totpSecret;
   final String totpCode;
-  final String recoveryPhraseHash;
-  final String securityPinHash;
+  final String? recoveryPhraseHash;
+  final String? securityPinHash;
   final String? turnstileToken;
   final GteComplianceSignupPayload? compliance;
 
@@ -737,8 +737,8 @@ class GteTraderSignupRequest {
     'wallet_label': walletLabel,
     'totp_secret': totpSecret,
     'totp_code': totpCode,
-    'recovery_phrase_hash': recoveryPhraseHash,
-    'security_pin_hash': securityPinHash,
+    if (recoveryPhraseHash != null) 'recovery_phrase_hash': recoveryPhraseHash,
+    if (securityPinHash != null) 'security_pin_hash': securityPinHash,
     if (turnstileToken != null) 'turnstile_token': turnstileToken,
     if (compliance != null) 'compliance': compliance!.toJson(),
   };
