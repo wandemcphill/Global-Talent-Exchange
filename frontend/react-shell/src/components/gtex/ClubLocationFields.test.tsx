@@ -146,6 +146,18 @@ describe("club location dropdowns", () => {
     });
   });
 
+  test("offers Ikorodu and other cities under the selected Lagos state", () => {
+    act(() => root.render(<Form prefix="t" onDone={() => {}} />));
+    act(() => setSelectValue(q("t-country-input"), "Nigeria (NG)"));
+    act(() => setSelectValue(q("t-region-input"), "Lagos"));
+
+    const cityOptions = Array.from(q("t-city-input").options).map((option) => option.value);
+    expect(cityOptions).toContain("Ikorodu");
+    expect(cityOptions).toContain("Ikeja");
+    expect(cityOptions).toContain("Lagos");
+    expect(cityOptions).not.toContain("Port Harcourt");
+  });
+
   test("selecting a city automatically selects its region/state", () => {
     act(() => root.render(<Form prefix="t" onDone={() => {}} />));
     act(() => setSelectValue(q("t-country-input"), "Ghana (GH)"));
