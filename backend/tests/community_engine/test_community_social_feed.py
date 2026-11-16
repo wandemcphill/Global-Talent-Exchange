@@ -17,6 +17,7 @@ from app.auth.dependencies import (
     get_session,
 )
 from app.community_engine.social_feed_router import social_feed_router
+from app.community_engine.social_feed_service import CommunitySocialService
 from app.models.base import Base
 from app.models.community_engine import CommunityReaction, CommunityUserBlock
 from app.models.community_social import (
@@ -194,3 +195,40 @@ def test_only_admin_can_hide_and_non_admin_cannot_pin(client: TestClient, actor_
     )
     assert resolved.status_code == 200
     assert client.get("/community/channels/matchday/messages").json()["messages"] == []
+
+
+def test_listing_channels_keeps_existing_lounge_when_insert_races(session: Session) -> None:
+    session.add(
+        CommunityChannel(
+            slug="global-lounge",
+            name="Already there",
+            category="general",
+            description="kept",
+            icon="globe",
+            is_official=True,
+            is_archived=False,
+            is_read_only=False,
+            last_message_seq=4,
+        )
+    )
+    session.commit()
+    real_scalars = session.scalars
+    state = {"skipped_initial_load": False}
+
+    def scalars(statement):
+        result = real_scalars(statement)
+        if not state["skipped_initial_load"]:
+            state["skipped_initial_load"] = True
+
+            class _Empty:
+                def all(self) -> list[object]:
+                    return []
+
+            return _Empty()
+        return result
+
+    session.scalars = scalars  # type: ignore[method-assign]
+    channels = CommunitySocialService(session).ensure_default_channels()
+    lounge = next(channel for channel in channels if channel.slug == "global-lounge")
+    assert lounge.name == "Already there"
+    assert lounge.last_message_seq == 4

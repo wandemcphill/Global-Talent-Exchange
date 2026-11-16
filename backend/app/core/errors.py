@@ -7,6 +7,7 @@ from typing import Any
 from fastapi import HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
+from starlette.requests import ClientDisconnect
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +112,16 @@ async def handle_validation_error(_request: Request, exc: RequestValidationError
     )
 
 
+def _client_disconnected(exc: BaseException) -> bool:
+    if isinstance(exc, ClientDisconnect):
+        return True
+    nested = getattr(exc, "exceptions", None)
+    return bool(nested) and all(_client_disconnected(item) for item in nested)
+
+
 async def handle_unexpected_exception(request: Request, exc: Exception) -> Response:
+    if _client_disconnected(exc):
+        return Response(status_code=499)
     logger.exception("api.unhandled_exception path=%s", request.url.path)
     return error_response(
         status.HTTP_500_INTERNAL_SERVER_ERROR,

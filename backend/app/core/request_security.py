@@ -9,6 +9,8 @@ from urllib.parse import parse_qsl, urlencode
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import ClientDisconnect
+from starlette.responses import Response
 
 from app.auth.security import TokenError, decode_access_token
 from app.core.errors import error_response
@@ -173,6 +175,8 @@ class RequestHardeningMiddleware(BaseHTTPMiddleware):
             self._sanitize_query_string(request)
             self._sanitize_headers(request)
             await self._sanitize_body(request)
+        except ClientDisconnect:
+            return Response(status_code=499)
         except SuspiciousInputError as exc:
             self._audit_blocked_request(request, exc)
             return error_response(
@@ -180,7 +184,10 @@ class RequestHardeningMiddleware(BaseHTTPMiddleware):
                 message=exc.detail(),
                 code="validation_error",
             )
-        return await call_next(request)
+        try:
+            return await call_next(request)
+        except ClientDisconnect:
+            return Response(status_code=499)
 
     def _sanitize_path(self, request: Request) -> None:
         path = request.url.path or "/"

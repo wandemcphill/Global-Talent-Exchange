@@ -87,6 +87,27 @@ def clear_market_records_cache() -> None:
         _CANDIDATES_CACHE.clear()
 
 
+def _release_unreferenced_player_graph() -> None:
+    """Return the previous player graph to the OS before the next scan.
+
+    A refresh used to keep the old list alive while SQLAlchemy built the new
+    one. On Render that overlap pushed the process through its 2 GB limit.
+    Collecting first, then asking glibc to trim, lets the next load reuse the
+    same resident memory instead of stacking a second copy on top.
+    """
+    import gc
+
+    gc.collect()
+    if os.name != "posix":
+        return
+    try:
+        import ctypes
+
+        ctypes.CDLL("libc.so.6").malloc_trim(0)
+    except (OSError, AttributeError):
+        return
+
+
 class MarketRepository(Protocol):
     def save_listing(self, listing: Listing) -> Listing: ...
 
@@ -422,30 +443,11 @@ class SqlAlchemyMarketPlayerRepository:
     session: Session
 
     def list_player_records(self) -> list[MarketPlayerRecord]:
-        ttl = _records_cache_ttl_seconds()
-        if ttl <= 0:
-            return self._load_player_records()
-
-        bind = self.session.get_bind()
-        if not isinstance(bind, Engine):
-            # Connection-bound sessions (e.g. nested transactions) skip the
-            # process cache; correctness over the marginal speedup.
-            return self._load_player_records()
-
-        # The load below scans every tradable player, so the lock is held
-        # across the whole check-and-populate sequence (single-flight): on a
-        # cache miss, concurrent callers queue behind the first instead of
-        # each independently re-running the full scan in parallel, which is
-        # what turned a slow query into a memory-spike/crash under load.
-        with _RECORDS_CACHE_LOCK:
-            now = time.monotonic()
-            cached = _RECORDS_CACHE.get(bind)
-            if cached is not None and (now - cached[0]) < ttl:
-                return cached[1]
-
-            records = self._load_player_records()
-            _RECORDS_CACHE[bind] = (time.monotonic(), records)
-            return records
+        return self._cached_player_records(
+            _RECORDS_CACHE,
+            _RECORDS_CACHE_LOCK,
+            self._load_player_records,
+        )
 
     def _load_player_records(self) -> list[MarketPlayerRecord]:
         players = list(
@@ -474,23 +476,44 @@ class SqlAlchemyMarketPlayerRepository:
         predicates read, but omits image_metadata/supply_tier/liquidity_band,
         which neither caller touches. See the module-level comment above
         _RECORDS_CACHE for the full rationale."""
+        return self._cached_player_records(
+            _CANDIDATES_CACHE,
+            _CANDIDATES_CACHE_LOCK,
+            self._load_player_candidates,
+        )
+
+    def _cached_player_records(
+        self,
+        cache: "WeakKeyDictionary[Engine, tuple[float, list[MarketPlayerRecord]]]",
+        lock: RLock,
+        loader,
+    ) -> list[MarketPlayerRecord]:
         ttl = _records_cache_ttl_seconds()
         if ttl <= 0:
-            return self._load_player_candidates()
+            return loader()
 
         bind = self.session.get_bind()
         if not isinstance(bind, Engine):
-            return self._load_player_candidates()
+            # Connection-bound sessions (e.g. nested transactions) skip the
+            # process cache; correctness over the marginal speedup.
+            return loader()
 
-        # Single-flight: see the matching comment in list_player_records().
-        with _CANDIDATES_CACHE_LOCK:
+        # The load scans every tradable player, so the lock is held across the
+        # whole check-and-populate sequence (single-flight). Concurrent callers
+        # queue behind the first instead of each running the scan in parallel.
+        # On a refresh the previous graph is dropped and collected before the
+        # next scan allocates, so the process does not hold two full copies.
+        with lock:
             now = time.monotonic()
-            cached = _CANDIDATES_CACHE.get(bind)
+            cached = cache.get(bind)
             if cached is not None and (now - cached[0]) < ttl:
                 return cached[1]
-
-            records = self._load_player_candidates()
-            _CANDIDATES_CACHE[bind] = (time.monotonic(), records)
+            if cached is not None:
+                cache.pop(bind, None)
+                del cached
+                _release_unreferenced_player_graph()
+            records = loader()
+            cache[bind] = (time.monotonic(), records)
             return records
 
     def _load_player_candidates(self) -> list[MarketPlayerRecord]:

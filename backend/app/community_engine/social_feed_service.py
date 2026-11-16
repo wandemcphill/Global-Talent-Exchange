@@ -6,6 +6,7 @@ import re
 from typing import Any
 
 from sqlalchemy import func, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.hosted_competition_engine.coin_aware_service import (
@@ -306,7 +307,6 @@ class CommunitySocialService:
 
     def ensure_default_channels(self) -> list[CommunityChannel]:
         existing = {ch.slug: ch for ch in self.session.scalars(select(CommunityChannel)).all()}
-        created_any = False
         for item in CANONICAL_CHANNELS:
             if item["slug"] in existing:
                 continue
@@ -321,11 +321,17 @@ class CommunitySocialService:
                 is_read_only=False,
                 last_message_seq=0,
             )
-            self.session.add(ch)
-            existing[item["slug"]] = ch
-            created_any = True
-        if created_any:
-            self.session.flush()
+            try:
+                with self.session.begin_nested():
+                    self.session.add(ch)
+                    self.session.flush()
+            except IntegrityError:
+                winner = self.session.scalar(select(CommunityChannel).where(CommunityChannel.slug == item["slug"]))
+                if winner is None:
+                    raise
+                existing[item["slug"]] = winner
+            else:
+                existing[item["slug"]] = ch
         return [existing[item["slug"]] for item in CANONICAL_CHANNELS if item["slug"] in existing]
 
     def list_channels(self) -> list[dict[str, Any]]:
