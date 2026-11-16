@@ -1146,18 +1146,23 @@ def withdraw(
 def deposit_init(
     body: DepositInitRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
-    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, body.provider)
+    provider = (body.provider or "paystack").strip().lower()
+    if provider not in {"paystack", "korapay"}:
+        raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
+    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, provider)
 
 
 @router.get("/deposits/verify/{reference}")
 def deposit_verify(
     reference: str,
-    provider: str = "paystack",
+    provider: str | None = None,
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    if provider not in {"paystack", "korapay"}:
-        raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
+    if provider is not None:
+        provider = provider.strip().lower()
+        if provider not in {"paystack", "korapay"}:
+            raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
     return _run(session, money.paystack_verify, session, user, reference, provider)
 
 
@@ -1165,7 +1170,20 @@ def deposit_verify(
 async def deposit_webhook(request: Request, session: Session = Depends(get_session)) -> JSONResponse:
     raw = await request.body()
     payload = await request.json()
-    _run(session, money.paystack_webhook, session, raw, request.headers.get("x-paystack-signature"), payload)
+    korapay_sig = request.headers.get("x-korapay-signature")
+    paystack_sig = request.headers.get("x-paystack-signature")
+    if korapay_sig and not paystack_sig:
+        _run(session, money.korapay_webhook, session, raw, korapay_sig, payload)
+    else:
+        _run(session, money.paystack_webhook, session, raw, paystack_sig, payload)
+    return JSONResponse({"status": "ok"})
+
+
+@router.post("/deposits/webhook/korapay")
+async def korapay_deposit_webhook(request: Request, session: Session = Depends(get_session)) -> JSONResponse:
+    raw = await request.body()
+    payload = await request.json()
+    _run(session, money.korapay_webhook, session, raw, request.headers.get("x-korapay-signature"), payload)
     return JSONResponse({"status": "ok"})
 
 

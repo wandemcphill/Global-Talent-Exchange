@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ShieldCheck, ShieldAlert, AlertTriangle, ExternalLink, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
@@ -92,12 +92,38 @@ function OrderRow({ o, asTrader, traders }: any) {
   );
 }
 
-function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount = "4000" }: any) {
+function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount = "4000", onTraderChange }: any) {
   const act = useOrderActions();
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
   const [traderId, setTraderId] = useState(traders?.[0]?.id || "");
   const [direction, setDirection] = useState("user_buys");
   const [amount, setAmount] = useState(initialAmount);
+  const [amountDirty, setAmountDirty] = useState(false);
+
+  useEffect(() => {
+    if (!traders?.length) {
+      setTraderId("");
+      return;
+    }
+    setTraderId((prev: string) => {
+      if (prev && traders.some((t: any) => t.id === prev && Boolean(rateOf(t, coinUnit)))) {
+        return prev;
+      }
+      const firstMatching = traders.find((t: any) => Boolean(rateOf(t, coinUnit)));
+      return firstMatching?.id || "";
+    });
+  }, [traders, coinUnit]);
+
+  useEffect(() => {
+    if (!amountDirty) {
+      setAmount(String(initialAmount));
+    }
+  }, [initialAmount, amountDirty]);
+
+  useEffect(() => {
+    onTraderChange?.(traderId);
+  }, [traderId, onTraderChange]);
+
   const unitInfo = coinUnitMeta(coinUnit);
   const trader = traders.find((t: any) => t.id === traderId);
   const rate = trader ? rateOf(trader, coinUnit) : null;
@@ -168,7 +194,7 @@ function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount =
         {!buyOnly && <div className="flex gap-1">
           {[["user_buys", "Buy"], ["user_sells", "Sell"]].map(([v, l]) => <button key={v} type="button" data-testid={`coin-direction-${v}`} onClick={() => setDirection(v)} className={`gx-btn flex-1 ${direction === v ? "gx-btn-primary" : "gx-btn-secondary"}`}>{l}</button>)}
         </div>}
-        <input data-testid="coin-amount-input" className="gx-input" type="number" min={1} value={amount} onChange={(e) => setAmount(e.target.value)} />
+        <input data-testid="coin-amount-input" className="gx-input" type="number" min={1} value={amount} onChange={(e) => { setAmountDirty(true); setAmount(e.target.value); }} />
         <Btn disabled={!rate || Number(amount) <= 0 || isBelowMinBuyerOrder} onClick={submit} data-testid="coin-order-submit">
           {direction === "user_buys" ? "Buy" : "Sell"} {unitInfo.code}
         </Btn>
@@ -193,6 +219,7 @@ function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount =
 
 export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
   const { user } = useAuth();
+  const [selectedTraderId, setSelectedTraderId] = useState("");
   const { data: traders, isLoading: tradersLoading } = useQuery({
     queryKey: ["coin-traders"],
     queryFn: async () => (await api.get("/coin-traders")).data,
@@ -210,8 +237,9 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
   const gtexOrders = (orders || []).filter(
     (order: any) => String(order.coin_unit || "coin").toLowerCase() === "coin"
   );
-  const firstTraderRate = Number((approved[0] ? rateOf(approved[0], "coin") : null)?.sell_rate_fiat || 0);
-  const minimumCoinAmount = firstTraderRate > 0 ? Math.ceil(200000 / firstTraderRate) : 1;
+  const selectedTrader = approved.find((trader: any) => trader.id === selectedTraderId) || approved[0];
+  const selectedTraderRate = Number((selectedTrader ? rateOf(selectedTrader, "coin") : null)?.sell_rate_fiat || 0);
+  const minimumCoinAmount = selectedTraderRate > 0 ? Math.ceil(200000 / selectedTraderRate) : 1;
   const suggestedCoinAmount = Math.max(1, Math.ceil(Number(initialAmount) || 0), minimumCoinAmount);
 
   return (
@@ -225,7 +253,13 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
         <p className="mt-3 text-xs text-slate-500">Loading verified GTEX Coin traders…</p>
       ) : approved.length ? (
         <div className="mt-4">
-          <OrderForm traders={approved} coinOnly buyOnly initialAmount={String(suggestedCoinAmount)} />
+          <OrderForm
+            traders={approved}
+            coinOnly
+            buyOnly
+            initialAmount={String(suggestedCoinAmount)}
+            onTraderChange={setSelectedTraderId}
+          />
         </div>
       ) : (
         <p className="mt-3 rounded border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">

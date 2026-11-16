@@ -752,8 +752,13 @@ def test_club_formation_fails_with_21_distinct_players(client, auth_user_factory
         assert formation["is_formed"] is False
         assert formation["remaining_to_form"] == 1
 
-        # Attempt to enter competition must fail
-        comp = session.scalar(select(OwnerCompetition).where(OwnerCompetition.status == "open"))
+        # Attempt to enter a community competition must fail due to 21 players
+        comp = session.scalar(
+            select(OwnerCompetition).where(
+                OwnerCompetition.status == "open",
+                OwnerCompetition.host_type != "gtex",
+            )
+        )
         if not comp:
             comp = OwnerCompetition(
                 id="test_open_comp_21",
@@ -762,7 +767,7 @@ def test_club_formation_fails_with_21_distinct_players(client, auth_user_factory
                 status="open",
                 max_clubs=16,
                 entry_fee=0,
-                prize_pool=1000,
+                sponsored_pool=Decimal("1000"),
             )
             session.add(comp)
             session.flush()
@@ -1044,3 +1049,249 @@ def test_first_500_campaign_stops_at_owner_500(app_session_factory):
 
         # The 500 seeded campaign claims must not affect other tests or fixtures.
         session.rollback()
+
+
+def test_unsign_squad_grant_player_preserves_provenance_and_blocks_starter_refund(
+    client, auth_user_factory, app_session_factory
+):
+    """Unsigning a grant-funded player restores squad_grant rather than minting earned cash."""
+    user = auth_user_factory(suffix="unsign-provenance")
+    claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert claimed.status_code == 200, claimed.text
+    club_id = claimed.json()["club_id"]
+
+    with app_session_factory() as session:
+        starter_regen = OwnerSquadPlayer(
+            club_id=club_id,
+            player_ref=f"regen-starter-{uuid4().hex[:6]}",
+            name="Starter Regen",
+            position="midfielder",
+            age=18,
+            rating=62,
+            potential=74,
+            value_coin=Decimal("400"),
+            is_regen=True,
+            acquired_via="academy",
+        )
+        session.add(starter_regen)
+        session.flush()
+
+        with pytest.raises(OwnerError) as starter_exc:
+            service.unsign_market_player(session, user["user_id"], club_id, starter_regen.player_ref)
+        assert starter_exc.value.code == "player_not_market_signing"
+
+        player_75 = _create_player(session, name="Market Grant Refund", overall=75, is_real=True)
+        signed = service.sign_market_player(session, user["user_id"], club_id, player_75.id)
+        mid_funding = ledger.get_club_funding(session, club_id)
+        assert mid_funding["available_squad_grant"] < Decimal("2500")
+        assert mid_funding["available_earned"] == Decimal("0")
+
+        service.unsign_market_player(session, user["user_id"], club_id, signed.player_ref)
+        after_funding = ledger.get_club_funding(session, club_id)
+        assert after_funding["available_squad_grant"] == Decimal("2500")
+        assert after_funding["available_earned"] == Decimal("0")
+        assert ledger.spendable_club_balance(session, club_id) == Decimal("0")
+
+
+def test_settle_club_transfer_with_squad_grant_keeps_seller_proceeds_earned(
+    client, auth_user_factory, app_session_factory
+):
+    """Spending buyer squad_grant on an inter-club transfer leaves seller proceeds spendable."""
+    buyer = auth_user_factory(suffix="buyer-grant-transfer")
+    seller = auth_user_factory(suffix="seller-grant-transfer")
+    buyer_claim = client.post("/api/owner/clubs/claim", headers=buyer["headers"])
+    seller_claim = client.post("/api/owner/clubs/claim", headers=seller["headers"])
+    assert buyer_claim.status_code == 200 and seller_claim.status_code == 200
+    buyer_club_id = buyer_claim.json()["club_id"]
+    seller_club_id = seller_claim.json()["club_id"]
+
+    with app_session_factory() as session:
+        player_74 = _create_player(session, name="Eligible Sale", overall=74, is_real=True)
+        event = ledger.settle_club_transfer(
+            session,
+            buying_club_id=buyer_club_id,
+            selling_club_id=seller_club_id,
+            amount=Decimal("500"),
+            transfer_bid_id=f"bid-{uuid4().hex[:8]}",
+            memo="Inter-club grant signing",
+            player_or_id=player_74,
+        )
+        assert event is not None
+        assert event.balance_class == "squad_grant"
+
+        buyer_funding = ledger.get_club_funding(session, buyer_club_id)
+        seller_funding = ledger.get_club_funding(session, seller_club_id)
+        assert buyer_funding["available_squad_grant"] == Decimal("2000")
+        assert seller_funding["available_squad_grant"] == Decimal("2500")
+        assert seller_funding["available_earned"] == Decimal("400")
+
+        ledger.record(
+            session,
+            event_type="operating_expense",
+            source=ledger.club_account(seller_club_id),
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.GTEX,
+            gross=Decimal("400"),
+            club_id=seller_club_id,
+            user_id=seller["user_id"],
+            memo="Seller uses earned sale proceeds",
+        )
+
+
+def test_squad_grant_blocked_from_bonuses_sister_capital_and_overdebit(client, auth_user_factory, app_session_factory):
+    """Squad grant cannot back win bonuses, sister-club caps, or over-allocated squad_grant debits."""
+    user = auth_user_factory(suffix="grant-non-spendable")
+    first_claim = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert first_claim.status_code == 200, first_claim.text
+    club_a = first_claim.json()["club_id"]
+
+    with app_session_factory() as session:
+        club_b_profile = _create_club_profile(session, user["user_id"], club_name="Sister Club B")
+        service.start_activation(session, user["user_id"], club_b_profile.id)
+        club_b = club_b_profile.id
+
+        with pytest.raises(OwnerError) as bonus_exc:
+            service.pledge_win_bonus(session, user["user_id"], club_a, 500)
+        assert bonus_exc.value.code == "insufficient_club_cash"
+
+        with pytest.raises(OwnerError) as sister_exc:
+            money.sister_capital(session, user["user_id"], club_a, club_b, Decimal("500"))
+        assert sister_exc.value.code == "sister_capital_cap_exceeded"
+
+        ledger.record(
+            session,
+            event_type="owner_capital_injection",
+            source=ledger.WORLD_MARKET,
+            destination=ledger.club_account(club_a),
+            currency=ledger.GTEX,
+            gross=Decimal("1000"),
+            balance_class="deposited",
+            club_id=club_a,
+            user_id=user["user_id"],
+        )
+        with pytest.raises(ledger.LedgerError, match="insufficient_funds"):
+            ledger.record(
+                session,
+                event_type="transfer_purchase",
+                source=ledger.club_account(club_a),
+                destination=ledger.WORLD_MARKET,
+                currency=ledger.GTEX,
+                gross=Decimal("3000"),
+                balance_class="squad_grant",
+                club_id=club_a,
+                user_id=user["user_id"],
+                related_type="player",
+                related_id="over-debit-player",
+            )
+
+
+def test_autopick_tracks_deposited_budget_across_multiple_restricted_players(
+    client, auth_user_factory, app_session_factory
+):
+    """Autopick tracks remaining deposited funds per pick so restricted players never overdraft deposited cash."""
+    from app.models.base import utcnow
+    from app.models.player_token_market import PlayerShareMarket
+    from app.players.read_models import PlayerSummaryReadModel
+
+    user = auth_user_factory(suffix="autopick-deposited-cap")
+    claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert claimed.status_code == 200, claimed.text
+    club_id = claimed.json()["club_id"]
+
+    with app_session_factory() as session:
+        session.query(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id).delete()
+        session.flush()
+
+        ledger.record(
+            session,
+            event_type="owner_capital_injection",
+            source=ledger.WORLD_MARKET,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=Decimal("500"),
+            balance_class="deposited",
+            club_id=club_id,
+            user_id=user["user_id"],
+        )
+
+        # Seed 2 expensive restricted forwards (400 GTX each, total 800 > 500 deposited)
+        restricted_ids: set[str] = set()
+        for idx in range(2):
+            pid = f"auto-rest-{idx}-{uuid4().hex[:6]}"
+            restricted_ids.add(pid)
+            p = _create_player(
+                session,
+                player_id=pid,
+                name=f"Star Forward {idx}",
+                overall=85,
+                position="ST",
+                is_real=True,
+            )
+            session.add(
+                PlayerSummaryReadModel(
+                    player_id=p.id,
+                    player_name=p.full_name,
+                    last_snapshot_at=utcnow(),
+                    current_value_credits=1.0,
+                    previous_value_credits=1.0,
+                    movement_pct=0.0,
+                    average_rating=8.5,
+                    summary_json={},
+                )
+            )
+            session.add(
+                PlayerShareMarket(
+                    player_id=p.id,
+                    total_shares=100,
+                    circulating_shares=100,
+                    share_price_coin=Decimal("400"),
+                    status="active",
+                )
+            )
+
+        # Seed 22 eligible players funded by squad_grant
+        positions = (
+            ["GK", "GK"]
+            + ["CB", "CB", "RB", "LB", "CB", "CB", "RB", "LB"]
+            + ["CM", "CM", "DM", "AM", "CM", "RM", "LM"]
+            + ["ST", "RW", "LW", "ST", "RW"]
+        )
+        for idx, pos in enumerate(positions):
+            pid = f"auto-elig-{idx}-{uuid4().hex[:6]}"
+            p = _create_player(
+                session,
+                player_id=pid,
+                name=f"Eligible {pos} {idx}",
+                overall=72,
+                position=pos,
+                is_real=True,
+            )
+            session.add(
+                PlayerSummaryReadModel(
+                    player_id=p.id,
+                    player_name=p.full_name,
+                    last_snapshot_at=utcnow(),
+                    current_value_credits=100.0 + idx,
+                    previous_value_credits=100.0,
+                    movement_pct=0.0,
+                    average_rating=7.0,
+                    summary_json={},
+                )
+            )
+            session.add(
+                PlayerShareMarket(
+                    player_id=p.id,
+                    total_shares=100,
+                    circulating_shares=100,
+                    share_price_coin=Decimal("100"),
+                    status="active",
+                )
+            )
+        session.flush()
+
+        result = service.autopick_squad(session, user["user_id"], club_id, target_squad_size=22)
+        assert result["signed_count"] == 22
+        funding_after = ledger.get_club_funding(session, club_id)
+        assert funding_after["available_deposited"] >= Decimal("100")
+        signed_restricted = [s for s in result["signed"] if s["player_ref"] in restricted_ids]
+        assert len(signed_restricted) <= 1

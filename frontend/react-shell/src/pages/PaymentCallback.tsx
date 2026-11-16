@@ -13,8 +13,9 @@ export default function PaymentCallback() {
       setMsg("Missing payment reference.");
       return;
     }
+    const provider = params.get("provider");
     api
-      .get(`/owner/deposits/verify/${ref}`, { params: { provider: params.get("provider") || "paystack" } })
+      .get(`/owner/deposits/verify/${ref}`, provider ? { params: { provider } } : undefined)
       .then(({ data }) => {
         if (data.status === "success") {
           const returnTo = params.get("return_to");

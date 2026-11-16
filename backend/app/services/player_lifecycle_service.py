@@ -2168,7 +2168,7 @@ class PlayerLifecycleService:
             except club_ledger.LedgerError as exc:
                 if "restricted" in str(exc):
                     raise PlayerLifecycleValidationError(
-                        "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used."
+                        "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. The founding squad grant cannot be used."
                     ) from exc
                 raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
         else:
@@ -2548,7 +2548,7 @@ class PlayerLifecycleService:
         except club_ledger.LedgerError as exc:
             if "restricted" in str(exc):
                 raise PlayerLifecycleValidationError(
-                    "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used."
+                    "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. The founding squad grant cannot be used."
                 ) from exc
             raise PlayerLifecycleValidationError("Buying club treasury cannot cover this transfer fee") from exc
 
@@ -3121,7 +3121,7 @@ class PlayerLifecycleService:
             if deposited_available < offer.training_fee_gtex_coin:
                 raise PlayerLifecycleValidationError(
                     "Regens are restricted players and require deposited GTEX Coin for the separate training fee. "
-                    "Promotional launch credit cannot be used."
+                    "The founding squad grant cannot be used."
                 )
         if gtex_summary.available_balance < offer.training_fee_gtex_coin:
             raise PlayerLifecycleValidationError(

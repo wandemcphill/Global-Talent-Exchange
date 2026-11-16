@@ -48,8 +48,10 @@ function Stepper({ index }: any) {
   );
 }
 
-function IdentityStep({ club, onDone }: any) {
+function IdentityStep({ club, onboarding, onDone }: any) {
   const [busy, setBusy] = useState(false);
+  const launchGrant = Number(onboarding?.launch_grant ?? 2500);
+  const launchGrantLimit = Number(onboarding?.launch_grant_owner_limit ?? 500);
   const activate = async () => {
     setBusy(true);
     try {
@@ -74,14 +76,14 @@ function IdentityStep({ club, onDone }: any) {
           subjectName={club.club_name}
           quote="A new era begins under your executive stewardship."
           stats={[
-            { label: "Founding Squad Grant", value: "2,500 GTX", accent: "#00E676" },
+            { label: "Founding Squad Grant", value: `${fmt(launchGrant)} GTX`, accent: "#00E676" },
             { label: "Fan Reserve", value: "1,000 FAN", accent: "#F5B83D" },
           ]}
         />
       </div>
       <p className="max-w-xl text-sm text-slate-300">
         Your club identity is registered. Activating it unlocks a{" "}
-        <b className="text-white">2,500 GTX squad-signing grant</b> if you are among the first 500 eligible club owners, plus 1,000 FAN for gifting. The GTX grant is ring-fenced for eligible player signings.
+        <b className="text-white">{fmt(launchGrant)} GTX squad-signing grant</b> if you are among the first {fmt(launchGrantLimit)} eligible club owners, plus 1,000 FAN for gifting. The GTX grant is ring-fenced for eligible player signings.
       </p>
       <Btn className="mt-6" onClick={activate} disabled={busy} data-testid="onboarding-activate-button">
         {busy ? "Activating…" : "Activate club"}
@@ -96,11 +98,20 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const [coinsToMove, setCoinsToMove] = useState("");
   const [nairaAmount, setNairaAmount] = useState("");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
+  const [providerTouched, setProviderTouched] = useState(false);
   const financeQuery = useQuery({
     queryKey: ["club-squad-funding-finance"],
     queryFn: async () => (await api.get("/owner/finance")).data,
   });
   const finance = financeQuery.data;
+  useEffect(() => {
+    if (providerTouched || !finance?.payment_providers) return;
+    if (!finance.payment_providers.korapay && finance.payment_providers.paystack) {
+      setProvider("paystack");
+    } else if (!finance.payment_providers.paystack && finance.payment_providers.korapay) {
+      setProvider("korapay");
+    }
+  }, [finance?.payment_providers, providerTouched]);
   const rates = finance?.treasury_rates || {};
   const rate = Number(rates.deposit_rate || 0);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
@@ -108,18 +119,21 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const registeredPlayers = Number(club?.formation?.total_registered_players ?? club?.squad?.length ?? 0);
   const playersRemaining = Math.max(0, 22 - registeredPlayers);
   const estimatedCoinsNeeded = Math.max(0, playersRemaining * 200 - clubCoins - walletCoins);
-  const suggestedNaira = Math.max(
-    100,
-    Math.ceil(
-      rates.deposit_direction === "fiat_per_coin"
-        ? estimatedCoinsNeeded * rate
-        : estimatedCoinsNeeded / (rate || 1)
-    )
-  );
-  const amountToPay = Number(nairaAmount || suggestedNaira);
-  const previewCoins = rates.deposit_direction === "coin_per_fiat"
-    ? amountToPay * rate
-    : amountToPay / (rate || 1);
+  const suggestedNaira = rate > 0
+    ? Math.max(
+        100,
+        Math.ceil(
+          rates.deposit_direction === "fiat_per_coin"
+            ? estimatedCoinsNeeded * rate
+            : estimatedCoinsNeeded / rate
+        )
+      )
+    : "";
+  const parsedAmount = Number(nairaAmount || suggestedNaira || 0);
+  const amountToPay = Number.isFinite(parsedAmount) ? parsedAmount : 0;
+  const previewCoins = rate > 0
+    ? (rates.deposit_direction === "coin_per_fiat" ? amountToPay * rate : amountToPay / rate)
+    : 0;
   const platformReady = Boolean(finance?.payment_providers?.[provider]);
 
   const buyFromPlatform = async () => {
@@ -169,7 +183,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
           <p className="gx-eyebrow text-emerald-300">Complete your 22-player squad</p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Squad funding and top-up</h3>
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
-            Your club needs 22 registered players across the First Team, Reserves and Academy, including at least one goalkeeper. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: {fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for eligible player signings; any remaining grant balance is shown above. Actual transfer prices vary.
+            Your club needs 22 registered players across the First Team, Reserves and Academy, including at least one goalkeeper. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: {fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for eligible player signings; any remaining grant balance is shown alongside the club treasury balance. Actual transfer prices vary.
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend player signings require deposited GTX under GTEX acquisition rules.
@@ -191,7 +205,10 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
               <button
                 key={item}
                 type="button"
-                onClick={() => setProvider(item)}
+                onClick={() => {
+                  setProviderTouched(true);
+                  setProvider(item);
+                }}
                 className={"gx-btn flex-1 py-1.5 text-xs " + (provider === item ? "gx-btn-primary" : "gx-btn-secondary")}
               >
                 {item === "korapay" ? "KoraPay" : "Paystack"}
@@ -199,9 +216,9 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
             ))}
           </div>
           <label className="gx-label mt-3 block">Amount to pay (₦)</label>
-          <input className="gx-input mt-1" type="number" min={100} step={1} value={nairaAmount || String(suggestedNaira)} onChange={(event) => setNairaAmount(event.target.value)} data-testid="squad-platform-amount" />
+          <input className="gx-input mt-1" type="number" min={100} step={1} value={nairaAmount || (suggestedNaira === "" ? "" : String(suggestedNaira))} onChange={(event) => setNairaAmount(event.target.value)} data-testid="squad-platform-amount" />
           <p className="mt-2 text-xs text-slate-400">Estimated wallet credit: <b className="text-white">{fmt(previewCoins, 2)} GTX</b></p>
-          <Btn className="mt-3 w-full" disabled={!platformReady || financeQuery.isLoading} onClick={buyFromPlatform} data-testid="squad-platform-buy">
+          <Btn className="mt-3 w-full" disabled={!rate || !platformReady || financeQuery.isLoading} onClick={buyFromPlatform} data-testid="squad-platform-buy">
             Buy GTX from platform
           </Btn>
           {!platformReady && <p className="mt-2 text-[11px] text-amber-300">Platform payment is not currently enabled. You can use a verified Coin Trader below.</p>}
@@ -222,7 +239,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
         </div>
       </div>
       <div className="mt-4">
-        <ClubCoinTraderFundingPanel key={String(estimatedCoinsNeeded)} initialAmount={String(estimatedCoinsNeeded)} />
+        <ClubCoinTraderFundingPanel initialAmount={String(estimatedCoinsNeeded)} />
       </div>
     </div>
   );
@@ -510,7 +527,9 @@ function SquadStep({ clubId, onDone }: any) {
 
         {squad.length === 0 ? (
           <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-500">
-            Your 22-player starter squad is already registered. Browse the transfer market below to sign additional players and strengthen your club.
+            {isMatchEligible
+              ? "Your 22-player starter squad is already registered. Browse the transfer market below to sign additional players and strengthen your club."
+              : `No additional market signings yet (${registeredCount} of 22 players registered${hasGk ? "" : ", goalkeeper still needed"}). Use Auto-Pick or browse the transfer market below to complete your squad.`}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
@@ -1611,7 +1630,7 @@ export default function Onboarding() {
     index = 2;
   } else if (club.stage === "competition") {
     index = academyAcknowledged ? 4 : 3;
-  } else {
+  } else if (club.stage === "active") {
     index = 4;
   }
   const next = () => refetch();
@@ -1625,7 +1644,7 @@ export default function Onboarding() {
         <p className="gx-eyebrow mb-2">First-club activation</p>
         <h1 className="gx-h2 mb-8">{club.club_name}: from paperwork to matchday</h1>
         <Stepper index={index} />
-        {index === 0 && <IdentityStep club={club} onDone={next} />}
+        {index === 0 && <IdentityStep club={club} onboarding={data} onDone={next} />}
         {index === 1 && <SquadStep clubId={club.club_id} onDone={next} />}
         {index === 2 && <ManagerStep clubId={club.club_id} onDone={next} />}
         {index === 3 && (

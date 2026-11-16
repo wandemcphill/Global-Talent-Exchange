@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -50,6 +50,17 @@ function Balances({ w, rates }: any) {
 function Deposit({ configured, rates, mode }: any) {
   const [amount, setAmount] = useState("5000");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
+  const [providerTouched, setProviderTouched] = useState(false);
+
+  useEffect(() => {
+    if (providerTouched || !configured || configured === true) return;
+    if (!configured.korapay && configured.paystack) {
+      setProvider("paystack");
+    } else if (!configured.paystack && configured.korapay) {
+      setProvider("korapay");
+    }
+  }, [configured, providerTouched]);
+
   const rate = Number(rates?.deposit_rate || 0);
   const coins = rates?.deposit_direction === "coin_per_fiat" ? Number(amount || 0) * rate : Number(amount || 0) / (rate || 1);
   const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
@@ -73,7 +84,10 @@ function Deposit({ configured, rates, mode }: any) {
             key={p}
             type="button"
             data-testid={`deposit-provider-${p}`}
-            onClick={() => setProvider(p)}
+            onClick={() => {
+              setProviderTouched(true);
+              setProvider(p);
+            }}
             className={`gx-btn flex-1 py-1 text-xs ${provider === p ? "gx-btn-primary" : "gx-btn-secondary"}`}
           >
             {p === "korapay" ? "KoraPay" : "Paystack"}

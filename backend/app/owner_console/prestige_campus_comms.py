@@ -1421,7 +1421,7 @@ def start_campus_construction(
         target = None
 
     club_acct = ledger.club_account(club_id)
-    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    bal = ledger.spendable_club_balance(session, club_id)
     if bal < cost_dec:
         raise OwnerError(
             "insufficient_club_cash",

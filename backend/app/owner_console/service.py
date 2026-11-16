@@ -15,6 +15,7 @@ from app.owner_console import engine, ledger
 from app.owner_console.ai import inbox_body
 from app.owner_console.models import (
     IntegrityFlag,
+    LedgerEvent,
     OwnerClubState,
     OwnerCompetition,
     OwnerCompetitionEntry,
@@ -794,22 +795,97 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
     )
     if target is None:
         raise OwnerError("player_not_in_squad", 404)
+    if target.acquired_via != "market":
+        raise OwnerError(
+            "player_not_market_signing",
+            400,
+            "Starter and academy players cannot be unsigned for a refund.",
+        )
 
     refund_amount = int(target.value_coin or 0)
     if refund_amount > 0:
-        ledger.record(
-            session,
-            event_type="transfer_refund",
-            source=ledger.WORLD_MARKET,
-            destination=ledger.club_account(club_id),
-            currency=ledger.GTEX,
-            gross=refund_amount,
-            club_id=club_id,
-            user_id=user_id,
-            related_type="player",
-            related_id=target.player_ref or target.id,
-            memo=f"Released {target.name} (refund)",
+        club_acct = ledger.club_account(club_id)
+        related_id = target.player_ref or target.id
+        # Restore exact balance classes spent on signing so squad_grant returns to
+        # squad_grant rather than becoming unrestricted earned cash.
+        purchase_events = list(
+            session.scalars(
+                select(LedgerEvent)
+                .where(
+                    LedgerEvent.event_type == "transfer_purchase",
+                    LedgerEvent.source_account == club_acct,
+                    LedgerEvent.currency == ledger.GTEX,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.related_object_type == "player",
+                    LedgerEvent.related_object_id == related_id,
+                )
+                .order_by(LedgerEvent.created_at.desc())
+            ).all()
         )
+        refund_events = list(
+            session.scalars(
+                select(LedgerEvent)
+                .where(
+                    LedgerEvent.event_type == "transfer_refund",
+                    LedgerEvent.destination_account == club_acct,
+                    LedgerEvent.currency == ledger.GTEX,
+                    LedgerEvent.status == "completed",
+                    LedgerEvent.related_object_type == "player",
+                    LedgerEvent.related_object_id == related_id,
+                )
+                .order_by(LedgerEvent.created_at.desc())
+            ).all()
+        )
+        purchased_by_class: dict[str, Decimal] = {}
+        class_order: list[str] = []
+        for ev in purchase_events:
+            cls = ev.balance_class or "earned"
+            if cls not in purchased_by_class:
+                purchased_by_class[cls] = Decimal("0")
+                class_order.append(cls)
+            purchased_by_class[cls] += ledger.D(ev.gross_amount)
+        for ev in refund_events:
+            cls = ev.balance_class or "earned"
+            if cls in purchased_by_class:
+                purchased_by_class[cls] = max(Decimal("0"), purchased_by_class[cls] - ledger.D(ev.gross_amount))
+
+        remaining_refund = ledger.D(refund_amount)
+        for cls in class_order:
+            if remaining_refund <= 0:
+                break
+            portion = min(purchased_by_class.get(cls, Decimal("0")), remaining_refund)
+            if portion <= 0:
+                continue
+            ledger.record(
+                session,
+                event_type="transfer_refund",
+                source=ledger.WORLD_MARKET,
+                destination=club_acct,
+                currency=ledger.GTEX,
+                gross=portion,
+                balance_class=cls,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="player",
+                related_id=related_id,
+                memo=f"Released {target.name} (refund · {cls})",
+            )
+            remaining_refund -= portion
+        if remaining_refund > 0 and not purchase_events:
+            ledger.record(
+                session,
+                event_type="transfer_refund",
+                source=ledger.WORLD_MARKET,
+                destination=club_acct,
+                currency=ledger.GTEX,
+                gross=remaining_refund,
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="player",
+                related_id=related_id,
+                memo=f"Released {target.name} (refund)",
+            )
 
     try:
         from app.owner_console import living_institution
@@ -912,7 +988,7 @@ def autopick_squad(
     current = squad(session, club_id)
     non_regens = [p for p in current if not p.is_regen]
     desired_total = max(MIN_SQUAD, min(int(target_squad_size), 25)) if target_squad_size is not None else MIN_SQUAD
-    slots_needed = desired_total - len(non_regens)
+    slots_needed = min(desired_total - len(non_regens), max(0, MAX_SQUAD - len(current)))
     if slots_needed <= 0:
         return {
             "signed": [],
@@ -957,6 +1033,13 @@ def autopick_squad(
     from app.owner_console.player_classification import classify_player_for_acquisition
 
     funding = ledger.get_club_funding(session, club_id)
+    classification_map: dict[str, Any] = {}
+    remaining_non_deposited = (
+        funding.get("available_squad_grant", Decimal("0"))
+        + funding["available_promotional"]
+        + funding["available_earned"]
+    )
+    remaining_deposited = funding["available_deposited"]
 
     def _is_player_eligible_for_autopick(c: Player) -> bool:
         if c.id in rival_refs:
@@ -965,6 +1048,7 @@ def autopick_squad(
         if price <= 0:
             return False
         classification = classify_player_for_acquisition(session, c)
+        classification_map[c.id] = classification
         if classification.requires_deposited_funds:
             return funding["available_deposited"] >= price
         return funding["total_cash"] >= price
@@ -988,8 +1072,30 @@ def autopick_squad(
     remaining_budget = effective_budget
     total_spent = 0
 
+    def _reserve_pick(cand: Player) -> bool:
+        nonlocal remaining_budget, remaining_non_deposited, remaining_deposited, total_spent
+        cost_int = quotes_map[cand.id][0]
+        cost_dec = Decimal(cost_int)
+        if cost_int > remaining_budget:
+            return False
+        classification = classification_map[cand.id]
+        if classification.requires_deposited_funds:
+            if remaining_deposited < cost_dec:
+                return False
+            remaining_deposited -= cost_dec
+        else:
+            if remaining_non_deposited + remaining_deposited < cost_dec:
+                return False
+            from_non_deposited = min(remaining_non_deposited, cost_dec)
+            remaining_non_deposited -= from_non_deposited
+            remaining_deposited -= cost_dec - from_non_deposited
+        selected_players.append(cand)
+        selected_ids.add(cand.id)
+        remaining_budget -= cost_int
+        total_spent += cost_int
+        return True
+
     def _try_pick(pos_prefix: str, count_needed: int) -> None:
-        nonlocal remaining_budget, total_spent
         picked = 0
         for cand in eligible_sorted:
             if picked >= count_needed or len(selected_players) >= slots_needed:
@@ -999,12 +1105,7 @@ def autopick_squad(
             norm_pos = engine.normalize_position(cand.normalized_position or cand.position)
             if not norm_pos.startswith(pos_prefix):
                 continue
-            cost = quotes_map[cand.id][0]
-            if cost <= remaining_budget:
-                selected_players.append(cand)
-                selected_ids.add(cand.id)
-                remaining_budget -= cost
-                total_spent += cost
+            if _reserve_pick(cand):
                 picked += 1
 
     if not has_keeper:
@@ -1022,12 +1123,7 @@ def autopick_squad(
             break
         if cand.id in selected_ids:
             continue
-        cost = quotes_map[cand.id][0]
-        if cost <= remaining_budget:
-            selected_players.append(cand)
-            selected_ids.add(cand.id)
-            remaining_budget -= cost
-            total_spent += cost
+        _reserve_pick(cand)
 
     signed_results = []
     for player in selected_players:
@@ -3352,8 +3448,7 @@ def pledge_win_bonus(session: Session, user_id: str, club_id: str, amount_gtex: 
     if amt < 100 or amt > 25_000:
         raise OwnerError("invalid_bonus_amount", 400, "Win bonus must be between 100 and 25,000 GTEX Coin.")
 
-    club_acct = ledger.club_account(club_id)
-    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    bal = ledger.spendable_club_balance(session, club_id)
     if bal < amt:
         raise OwnerError(
             "insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient to pledge {amt} GTX bonus."
@@ -3763,7 +3858,7 @@ def distribute_shareholder_dividend(
     pool_to_pay = max(100, min(pool_to_pay, 25_000))
 
     club_acct = ledger.club_account(club_id)
-    bal = ledger.balance(session, club_acct, ledger.GTEX)
+    bal = ledger.spendable_club_balance(session, club_id)
     if bal < pool_to_pay:
         raise OwnerError(
             "insufficient_club_cash", 400, f"Club balance {bal} GTX is insufficient for {pool_to_pay} GTX dividend."

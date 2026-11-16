@@ -8,7 +8,7 @@ declare const jest: any;
 import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { CoinTraderDesk } from "./CoinTraderDesk";
+import { CoinTraderDesk, ClubCoinTraderFundingPanel } from "./CoinTraderDesk";
 import { api } from "@/lib/api";
 
 let mockUser: any = {
@@ -369,5 +369,94 @@ describe("CoinTraderDesk", () => {
         sell_rate_fiat: 21,
       })
     );
+  });
+
+  it("syncs suggested buyer minimum when switching traders without clobbering manual input", async () => {
+    mockUser = {
+      id: "buyer-2",
+      username: "buyer2",
+      display_name: "Buyer Two",
+      account_type: "user",
+    };
+
+    const traderOne = {
+      id: "prof-one",
+      user_id: "u-one",
+      display_name: "Rate One Desk",
+      tier: "gold",
+      status: "approved",
+      verified_at: "2026-11-15T10:00:00Z",
+      rates: [
+        {
+          id: "r-1",
+          coin_unit: "coin",
+          fiat_currency: "NGN",
+          buy_rate_fiat: "900",
+          sell_rate_fiat: "1000",
+          min_coin_amount: "1",
+          max_coin_amount: "100000",
+          available_liquidity: "50000",
+          is_active: true,
+        },
+      ],
+    };
+    const traderTwo = {
+      id: "prof-two",
+      user_id: "u-two",
+      display_name: "Rate Two Desk",
+      tier: "gold",
+      status: "approved",
+      verified_at: "2026-11-15T10:00:00Z",
+      rates: [
+        {
+          id: "r-2",
+          coin_unit: "coin",
+          fiat_currency: "NGN",
+          buy_rate_fiat: "450",
+          sell_rate_fiat: "500",
+          min_coin_amount: "1",
+          max_coin_amount: "100000",
+          available_liquidity: "50000",
+          is_active: true,
+        },
+      ],
+    };
+
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === "/coin-traders") return { data: [traderOne, traderTwo] };
+      if (url === "/coin-traders/orders") return { data: [] };
+      return { data: null };
+    });
+
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={qc}>
+          <ClubCoinTraderFundingPanel initialAmount="100" />
+        </QueryClientProvider>
+      );
+    });
+    await flush();
+    await flush();
+
+    const select = container.querySelector('[data-testid="coin-trader-select"]') as HTMLSelectElement;
+    const amountInput = container.querySelector('[data-testid="coin-amount-input"]') as HTMLInputElement;
+    expect(select.value).toBe("prof-one");
+    expect(amountInput.value).toBe("200");
+
+    // Switching to second trader (500 NGN/GTX) recalculates suggested buyer min (400 GTX)
+    await act(async () => {
+      setInputValue(select, "prof-two");
+    });
+    await flush();
+    expect(amountInput.value).toBe("400");
+
+    // Manual user edits remain preserved across prop updates
+    await act(async () => {
+      setInputValue(amountInput, "750");
+      setInputValue(select, "prof-one");
+    });
+    await flush();
+    expect(amountInput.value).toBe("750");
   });
 });
