@@ -69,21 +69,7 @@ class ClubBrandingService:
         if getattr(payload, "dna_policy", None):
             from app.services.club_governance_policy import ClubGovernancePolicyService
 
-            dna = payload.dna_policy
-            ClubGovernancePolicyService(self.session).create_policy(
-                club_id=club.id,
-                primary_philosophy=dna.get("primary_philosophy"),
-                secondary_philosophies=dna.get("secondary_philosophies"),
-                nationality_mode=dna.get("nationality_mode"),
-                target_nationalities=dna.get("target_nationalities"),
-                allow_dual_nationality=dna.get("allow_dual_nationality", True),
-                age_mode=dna.get("age_mode"),
-                preferred_max_age=dna.get("preferred_max_age"),
-                allow_age_exceptions=dna.get("allow_age_exceptions", True),
-                transfer_strategy=dna.get("transfer_strategy"),
-                financial_philosophy=dna.get("financial_philosophy"),
-                club_vision_narrative=dna.get("club_vision_narrative"),
-            )
+            ClubGovernancePolicyService(self.session).create_policy(club.id, payload.dna_policy)
         if getattr(payload, "badge_profile", None) or getattr(payload, "jersey_set", None):
             from app.club_identity.jerseys.service import ClubIdentityService
             from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
