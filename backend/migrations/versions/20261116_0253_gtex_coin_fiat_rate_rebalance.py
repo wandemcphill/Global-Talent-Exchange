@@ -10,7 +10,6 @@ from decimal import Decimal, ROUND_UP
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20261116_0253_gtex_coin_fiat_rate_rebalance"
 down_revision = "20261115_0252_canonical_live_match_execution"
 branch_labels = None
@@ -22,9 +21,7 @@ def upgrade() -> None:
     # terms than the historical 100:1 backing. Never activate it unless the
     # existing gift bridge can cover every outstanding user Fan Coin balance.
     connection = op.get_bind()
-    outstanding_fan_coin = connection.execute(
-        sa.text(
-            """
+    outstanding_fan_coin = connection.execute(sa.text("""
             SELECT COALESCE(SUM(balance), 0)
             FROM (
                 SELECT w.id, SUM(le.amount) AS balance
@@ -38,24 +35,18 @@ def upgrade() -> None:
                 GROUP BY w.id
                 HAVING SUM(le.amount) > 0
             ) AS outstanding_user_fan_coin
-            """
-        )
-    ).scalar_one()
-    bridge_coin_balance = connection.execute(
-        sa.text(
-            """
+            """)).scalar_one()
+    bridge_coin_balance = connection.execute(sa.text("""
             SELECT COALESCE(SUM(le.amount), 0)
             FROM wallets AS w
             JOIN ledger_entries AS le ON le.account_id = w.id
             JOIN transactions AS t ON t.id = le.transaction_id
             WHERE w.code = 'platform:coin:gift_conversion_bridge'
               AND LOWER(t.status) = 'committed'
-            """
-        )
-    ).scalar_one()
-    required_bridge_coin = (
-        Decimal(str(outstanding_fan_coin or 0)) / Decimal("15")
-    ).quantize(Decimal("0.0001"), rounding=ROUND_UP)
+            """)).scalar_one()
+    required_bridge_coin = (Decimal(str(outstanding_fan_coin or 0)) / Decimal("15")).quantize(
+        Decimal("0.0001"), rounding=ROUND_UP
+    )
     available_bridge_coin = Decimal(str(bridge_coin_balance or 0))
     if available_bridge_coin < required_bridge_coin:
         shortfall = required_bridge_coin - available_bridge_coin
@@ -88,9 +79,7 @@ def upgrade() -> None:
     # Legacy active trader quotes cannot be left visible after the new
     # governance limits take effect. Deactivate only NGN quotes that fail the
     # new limits; traders can republish compliant rates.
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE coin_trader_rates
             SET is_active = FALSE
             WHERE UPPER(fiat_currency) = 'NGN'
@@ -116,9 +105,7 @@ def upgrade() -> None:
                   )
                 )
               )
-            """
-        )
-    )
+            """))
 
     op.execute(sa.text("""
             UPDATE treasury_settings
