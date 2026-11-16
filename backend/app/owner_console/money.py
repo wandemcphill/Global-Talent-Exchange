@@ -238,11 +238,17 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
 # ---------- Paystack deposits ----------
 
 
+SUPPORTED_DEPOSIT_PROVIDERS = {"paystack", "korapay"}
+
+
 def paystack_init(
     session: Session, user, amount_ngn: int, callback_url: str, provider: str = "paystack"
 ) -> dict[str, Any]:
     from app.wallets.providers.registry import get_live_provider_adapter
 
+    provider = str(provider or "paystack").strip().lower()
+    if provider not in SUPPORTED_DEPOSIT_PROVIDERS:
+        raise OwnerError("unsupported_deposit_provider", 400)
     if amount_ngn < 100:
         raise OwnerError("minimum_deposit_100_ngn")
     reference = f"gtex_{uuid.uuid4().hex[:18]}"
@@ -273,11 +279,12 @@ def paystack_init(
         raise OwnerError(f"{provider}_init_failed", 502, str(exc)) from exc
 
 
-def _load_deposit_intent(session: Session, provider: str, reference: str) -> OwnerDepositIntent | None:
-    statement = select(OwnerDepositIntent).where(
-        OwnerDepositIntent.provider == provider,
-        OwnerDepositIntent.reference == reference,
-    )
+def _load_deposit_intent(session: Session, provider: str | None, reference: str) -> OwnerDepositIntent | None:
+    statement = select(OwnerDepositIntent).where(OwnerDepositIntent.reference == reference)
+    if provider is not None:
+        statement = statement.where(OwnerDepositIntent.provider == provider)
+    else:
+        statement = statement.order_by(OwnerDepositIntent.created_at.desc())
     bind = session.get_bind()
     if bind is not None and bind.dialect.name != "sqlite":
         statement = statement.with_for_update()
@@ -328,7 +335,7 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
     event = ledger.record(
         session,
         event_type="deposit",
-        source=ledger.PAYSTACK,
+        source=f"platform:{provider}",
         destination=ledger.user_account(intent.user_id),
         currency=ledger.GTEX,
         gross=coins,
@@ -336,7 +343,7 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
         user_id=intent.user_id,
         related_type=provider,
         related_id=intent.reference,
-        memo=f"Paystack deposit NGN {ngn:,.2f}",
+        memo=f"GTEX {provider.title()} deposit NGN {ngn:,.2f}",
         wallet_idempotency_key=_deposit_wallet_key(provider, intent.reference),
     )
     intent.status = "credited"
@@ -361,27 +368,34 @@ def _verification_succeeded(verification: Any) -> bool:
     return str(getattr(verification, "status", "") or "").strip().lower() == "success"
 
 
-def paystack_verify(session: Session, user, reference: str, provider: str = "paystack") -> dict[str, Any]:
+def paystack_verify(session: Session, user, reference: str, provider: str | None = None) -> dict[str, Any]:
     from app.wallets.providers.registry import get_provider_adapter
 
+    if provider is not None:
+        provider = str(provider).strip().lower()
+        if provider not in SUPPORTED_DEPOSIT_PROVIDERS:
+            raise OwnerError("unsupported_deposit_provider", 400)
     intent = _load_deposit_intent(session, provider, reference)
     if intent is None:
         raise OwnerError("deposit_not_found", 404)
     if intent.user_id != user.id:
         raise OwnerError("deposit_user_conflict", 409)
+    resolved_provider = intent.provider
+    if resolved_provider not in SUPPORTED_DEPOSIT_PROVIDERS:
+        raise OwnerError("unsupported_deposit_provider", 400)
     if intent.status == "credited" and intent.ledger_event_id:
         existing = session.get(LedgerEvent, intent.ledger_event_id)
         if existing is not None:
             return {"status": "success", "ledger_event": ledger.serialize(existing)}
     try:
-        adapter = get_provider_adapter(provider)
+        adapter = get_provider_adapter(resolved_provider)
         verification = adapter.verify_payment(reference=reference)
     except Exception as exc:
         return {"status": "failed", "message": str(exc)}
     if not _verification_succeeded(verification):
         message = getattr(verification, "gateway_response", None) or "Payment not verified"
         return {"status": "failed", "message": message}
-    event = _credit_deposit(session, intent, _verification_amount_kobo(verification), provider)
+    event = _credit_deposit(session, intent, _verification_amount_kobo(verification), resolved_provider)
     return {"status": "success", "ledger_event": ledger.serialize(event)}
 
 
@@ -408,6 +422,44 @@ def paystack_webhook(session: Session, raw: bytes, signature: str | None, event:
         raise OwnerError("deposit_not_found", 404)
     # Credit the user who started checkout. Webhook metadata is not an authority.
     _credit_deposit(session, intent, int(tx.get("amount") or 0), "paystack")
+
+
+def korapay_webhook(session: Session, raw: bytes, signature: str | None, event: dict[str, Any]) -> None:
+    from app.wallets.providers.base import ProviderEventType
+    from app.wallets.providers.registry import get_provider_adapter
+
+    adapter = get_provider_adapter("korapay")
+    try:
+        signature_ok = adapter.verify_webhook_signature(
+            payload=event, raw_body=raw, headers={"x-korapay-signature": signature or ""}
+        )
+    except Exception as exc:
+        raise OwnerError("invalid_signature", 401) from exc
+    if not signature_ok:
+        raise OwnerError("invalid_signature", 401)
+
+    parsed = adapter.parse_webhook(event, headers={"x-korapay-signature": signature or ""})
+    if parsed is None or parsed.is_payout or parsed.event_type != ProviderEventType.SETTLED:
+        return
+    if parsed.currency and parsed.currency.upper() != "NGN":
+        raise OwnerError("unsupported_currency", 400)
+
+    candidates = [ref for ref in (parsed.provider_reference, parsed.purchase_order_reference) if ref]
+    if not candidates:
+        raise OwnerError("deposit_reference_missing", 400)
+
+    intent: OwnerDepositIntent | None = None
+    for candidate_ref in candidates:
+        intent = _load_deposit_intent(session, "korapay", str(candidate_ref))
+        if intent is not None:
+            break
+    if intent is None:
+        raise OwnerError("deposit_not_found", 404)
+
+    if parsed.amount is None:
+        raise OwnerError("deposit_amount_missing", 400)
+    amount_kobo = int((Decimal(str(parsed.amount)) * Decimal(100)).to_integral_value())
+    _credit_deposit(session, intent, amount_kobo, "korapay")
 
 
 # ---------- capital moves ----------
@@ -564,9 +616,7 @@ def sister_capital(session: Session, user_id: str, from_club: str, to_club: str,
     require_state(session, from_club, user_id)
     require_state(session, to_club, user_id)
     amount = ledger.D(amount)
-    cap = ledger.D(
-        ledger.balance(session, ledger.club_account(from_club), ledger.GTEX) * Decimal(SISTER_CAPITAL_CAP_BPS) / 10000
-    )
+    cap = ledger.D(ledger.spendable_club_balance(session, from_club) * Decimal(SISTER_CAPITAL_CAP_BPS) / 10000)
     if amount > cap:
         raise OwnerError(
             "sister_capital_cap_exceeded", 409, f"Inter-club moves are capped at 25% of the source club's cash ({cap})."

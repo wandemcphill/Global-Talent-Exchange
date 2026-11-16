@@ -3544,7 +3544,7 @@ def simulate_autonomous_staff_decisions(
                             related_type="delegated_decision",
                             related_id=spec["activity_key"],
                             memo=f"Autonomous action expense: {spec['title']}",
-                            check_funds=False,
+                            check_funds=True,
                         )
                     except Exception as e:
                         logger.warning("Failed to record autonomous expense for %s: %s", club_id, e)
@@ -3903,7 +3903,7 @@ def resolve_living_boardroom_dilemma(
                 related_type="boardroom_dilemma",
                 related_id=dilemma_id,
                 memo=f"Boardroom dilemma execution: {chosen['label']}",
-                check_funds=False,
+                check_funds=True,
             )
         except Exception as e:
             logger.warning("Failed to record dilemma expense for %s: %s", club_id, e)

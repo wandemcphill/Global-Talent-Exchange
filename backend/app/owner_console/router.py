@@ -309,6 +309,7 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
         "max_clubs": service.MAX_CLUBS,
         "min_squad": service.MIN_SQUAD,
         "launch_grant": service.LAUNCH_GRANT_GTEX,
+        "launch_grant_owner_limit": service.LAUNCH_GRANT_OWNER_LIMIT,
     }
 
 
@@ -1092,6 +1093,8 @@ def forfeit(
 
 @router.get("/finance")
 def finance(user=Depends(get_current_user), session: Session = Depends(get_session)) -> dict[str, Any]:
+    from app.wallets.providers.registry import korapay_enabled, paystack_enabled
+
     states = service.user_states(session, user.id)
     events = ledger.events_for(session, user_id=user.id, club_ids=[s.club_id for s in states], limit=150)
     return {
@@ -1113,6 +1116,10 @@ def finance(user=Depends(get_current_user), session: Session = Depends(get_sessi
         "fan_coin_per_gtex": money.FAN_COIN_PER_GTEX,
         **money.display_rates(session),
         "paystack_configured": bool(money.paystack_secret()),
+        "payment_providers": {
+            "korapay": korapay_enabled(),
+            "paystack": paystack_enabled(),
+        },
         "paystack_mode": "live" if (money.paystack_secret() or "").startswith("sk_live_") else "test",
         "treasury_rates": {k: str(v) for k, v in money.treasury_rates(session).items()},
         "withdrawal_processor_mode": "manual_bank_transfer",
@@ -1139,21 +1146,44 @@ def withdraw(
 def deposit_init(
     body: DepositInitRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
-    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, body.provider)
+    provider = (body.provider or "paystack").strip().lower()
+    if provider not in {"paystack", "korapay"}:
+        raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
+    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, provider)
 
 
 @router.get("/deposits/verify/{reference}")
 def deposit_verify(
-    reference: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+    reference: str,
+    provider: str | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
 ) -> dict[str, Any]:
-    return _run(session, money.paystack_verify, session, user, reference)
+    if provider is not None:
+        provider = provider.strip().lower()
+        if provider not in {"paystack", "korapay"}:
+            raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
+    return _run(session, money.paystack_verify, session, user, reference, provider)
 
 
 @router.post("/deposits/webhook")
 async def deposit_webhook(request: Request, session: Session = Depends(get_session)) -> JSONResponse:
     raw = await request.body()
     payload = await request.json()
-    _run(session, money.paystack_webhook, session, raw, request.headers.get("x-paystack-signature"), payload)
+    korapay_sig = request.headers.get("x-korapay-signature")
+    paystack_sig = request.headers.get("x-paystack-signature")
+    if korapay_sig and not paystack_sig:
+        _run(session, money.korapay_webhook, session, raw, korapay_sig, payload)
+    else:
+        _run(session, money.paystack_webhook, session, raw, paystack_sig, payload)
+    return JSONResponse({"status": "ok"})
+
+
+@router.post("/deposits/webhook/korapay")
+async def korapay_deposit_webhook(request: Request, session: Session = Depends(get_session)) -> JSONResponse:
+    raw = await request.body()
+    payload = await request.json()
+    _run(session, money.korapay_webhook, session, raw, request.headers.get("x-korapay-signature"), payload)
     return JSONResponse({"status": "ok"})
 
 

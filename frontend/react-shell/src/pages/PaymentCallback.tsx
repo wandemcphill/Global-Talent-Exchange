@@ -6,18 +6,24 @@ import { Loading } from "@/components/gtex/ui";
 
 export default function PaymentCallback() {
   const [params] = useSearchParams();
-  const [msg, setMsg] = useState("Verifying your Paystack payment");
+  const [msg, setMsg] = useState("Verifying your GTEX Coin payment");
   useEffect(() => {
     const ref = params.get("reference") || params.get("trxref");
     if (!ref) {
       setMsg("Missing payment reference.");
       return;
     }
+    const provider = params.get("provider");
     api
-      .get(`/owner/deposits/verify/${ref}`)
+      .get(`/owner/deposits/verify/${ref}`, provider ? { params: { provider } } : undefined)
       .then(({ data }) => {
-        if (data.status === "success") window.location.href = publicUrl("/app/finance?deposit=success");
-        else setMsg("Payment was not successful. No coins were credited.");
+        if (data.status === "success") {
+          const returnTo = params.get("return_to");
+          const destination = returnTo === "/onboarding"
+            ? "/onboarding?deposit=success"
+            : "/app/finance?deposit=success";
+          window.location.href = publicUrl(destination);
+        } else setMsg("Payment was not successful. No coins were credited.");
       })
       .catch(() => setMsg("We could not verify this payment. If you were charged, contact support with your reference."));
   }, [params]);
