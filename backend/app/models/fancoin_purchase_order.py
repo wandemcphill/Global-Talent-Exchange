@@ -47,7 +47,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[PurchaseOrderStatus] = mapped_column(
-        Enum(PurchaseOrderStatus, name="purchase_order_status", native_enum=False),
+        Enum(PurchaseOrderStatus, name="purchase_order_status", native_enum=False, values_callable=lambda enum: [item.value for item in enum]),
         nullable=False,
         default=PurchaseOrderStatus.REQUESTED,
     )
@@ -56,7 +56,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     provider_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False),
+        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=lambda enum: [item.value for item in enum]),
         nullable=False,
         default=LedgerUnit.CREDIT,
     )
@@ -72,7 +72,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False),
+        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=lambda enum: [item.value for item in enum]),
         nullable=False,
     )
     processor_mode: Mapped[str] = mapped_column(
