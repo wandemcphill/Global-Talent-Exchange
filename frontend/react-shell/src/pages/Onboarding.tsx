@@ -90,13 +90,138 @@ function IdentityStep({ club, onDone }: any) {
   );
 }
 
+
+function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
+  const queryClient = useQueryClient();
+  const [coinsToMove, setCoinsToMove] = useState("");
+  const [nairaAmount, setNairaAmount] = useState("5000");
+  const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
+  const financeQuery = useQuery({
+    queryKey: ["club-squad-funding-finance"],
+    queryFn: async () => (await api.get("/owner/finance")).data,
+  });
+  const finance = financeQuery.data;
+  const rates = finance?.treasury_rates || {};
+  const rate = Number(rates.deposit_rate || 0);
+  const estimatedCoins = rates.deposit_direction === "coin_per_fiat"
+    ? Number(nairaAmount || 0) * rate
+    : Number(nairaAmount || 0) / (rate || 1);
+  const walletCoins = Number(finance?.wallet?.gtex_total || 0);
+  const clubCoins = Number(club?.economy?.cash_gtex || 0);
+  const platformReady = Boolean(finance?.paystack_configured);
+
+  const buyFromPlatform = async () => {
+    const amount = Math.trunc(Number(nairaAmount));
+    if (!Number.isFinite(amount) || amount < 100) {
+      toast.error("Enter at least ₦100 to buy GTEX Coin.");
+      return;
+    }
+    try {
+      const { data } = await api.post("/owner/deposits/init", {
+        amount_ngn: amount,
+        provider,
+        callback_url: window.location.origin + publicUrl("/payment/callback"),
+      });
+      window.location.href = data.authorization_url;
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
+
+  const moveToClub = async () => {
+    const amount = Number(coinsToMove);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter a valid GTX amount to add to the club treasury.");
+      return;
+    }
+    if (amount > walletCoins) {
+      toast.error("Your wallet does not have enough GTEX Coin for this top-up.");
+      return;
+    }
+    try {
+      await api.post("/owner/capital/inject", { club_id: clubId, amount });
+      toast.success("GTEX Coin moved to your club treasury.");
+      setCoinsToMove("");
+      await queryClient.invalidateQueries({ queryKey: ["club-squad-funding-finance"] });
+      await queryClient.invalidateQueries({ queryKey: ["finance"] });
+      await onClubFunded?.();
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
+
+  return (
+    <div className="mb-8 rounded-xl border border-emerald-500/25 bg-slate-950/70 p-4" data-testid="squad-funding-panel">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="gx-eyebrow text-emerald-300">Build your 22-player squad</p>
+          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Top up your player basket</h3>
+          <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
+            Your 2,500 GTX founding grant is reserved for eligible player signings. At the planning average of 200 GTX per player, 22 players cost about 4,400 GTX, leaving an estimated 1,900 GTX to cover. Actual transfer prices vary.
+          </p>
+          <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
+            The grant is for the first 500 eligible club owners. Some premium, regen, and legend player signings require deposited GTX under GTEX acquisition rules.
+          </p>
+        </div>
+        <div className="rounded-lg border border-emerald-500/25 bg-black/25 px-4 py-3 text-right">
+          <p className="text-[10px] uppercase tracking-widest text-slate-400">Club treasury</p>
+          <p className="gx-mono text-xl font-bold text-emerald-300">{fmt(clubCoins)} GTX</p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 lg:grid-cols-2">
+        <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+          <p className="gx-label text-slate-300">Option 1 · Buy from GTEX</p>
+          <p className="mt-1 text-xs text-slate-400">Pay through the platform. Verified payment credits your personal GTEX wallet first.</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["korapay", "paystack"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setProvider(item)}
+                className={"gx-btn flex-1 py-1.5 text-xs " + (provider === item ? "gx-btn-primary" : "gx-btn-secondary")}
+              >
+                {item === "korapay" ? "KoraPay" : "Paystack"}
+              </button>
+            ))}
+          </div>
+          <label className="gx-label mt-3 block">Amount to pay (₦)</label>
+          <input className="gx-input mt-1" type="number" min={100} step={1} value={nairaAmount} onChange={(event) => setNairaAmount(event.target.value)} data-testid="squad-platform-amount" />
+          <p className="mt-2 text-xs text-slate-400">Estimated wallet credit: <b className="text-white">{fmt(estimatedCoins, 2)} GTX</b></p>
+          <Btn className="mt-3 w-full" disabled={!platformReady || financeQuery.isLoading} onClick={buyFromPlatform} data-testid="squad-platform-buy">
+            Buy GTX from platform
+          </Btn>
+          {!platformReady && <p className="mt-2 text-[11px] text-amber-300">Platform payment is not currently enabled. You can use a verified Coin Trader below.</p>}
+        </div>
+
+        <div className="rounded-lg border border-white/10 bg-black/20 p-4">
+          <p className="gx-label text-slate-300">Move wallet coins into your club</p>
+          <p className="mt-1 text-xs text-slate-400">After a platform purchase or completed Coin Trader order, move the amount you need into this club treasury.</p>
+          <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+            <span>Available in your wallet</span><b className="gx-mono text-white">{fmt(walletCoins)} GTX</b>
+          </div>
+          <label className="gx-label mt-3 block">GTX to add to club treasury</label>
+          <input className="gx-input mt-1" type="number" min={1} max={walletCoins} step="0.01" value={coinsToMove} onChange={(event) => setCoinsToMove(event.target.value)} placeholder="Enter amount" data-testid="squad-wallet-inject-amount" />
+          <Btn className="mt-3 w-full" disabled={!coinsToMove || Number(coinsToMove) <= 0 || Number(coinsToMove) > walletCoins} onClick={moveToClub} data-testid="squad-wallet-inject">
+            Add coins to club treasury
+          </Btn>
+          <p className="mt-2 text-[11px] text-slate-500">The grant is already in your club treasury; it cannot be withdrawn or used for facilities.</p>
+        </div>
+      </div>
+      <div className="mt-4">
+        <ClubCoinTraderFundingPanel />
+      </div>
+    </div>
+  );
+}
+
 function SquadStep({ clubId, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
   const [unsigningId, setUnsigningId] = useState<string | null>(null);
   const [autopicking, setAutopicking] = useState(false);
   const [tactic, setTactic] = useState("tiki_taka");
   const [formation, setFormation] = useState("4-3-3");
-  const [budgetCap, setBudgetCap] = useState("2500");
+  const [budgetCap, setBudgetCap] = useState("0");
   const [targetSquadSize, setTargetSquadSize] = useState("22");
   const [appointingMgr, setAppointingMgr] = useState<string | null>(null);
 
@@ -431,6 +556,8 @@ function SquadStep({ clubId, onDone }: any) {
           </div>
         )}
       </div>
+
+      <SquadFundingPanel clubId={clubId} club={club} onClubFunded={refetch} />
 
       {/* Transfer Market Explorer */}
       <div className="space-y-3">
