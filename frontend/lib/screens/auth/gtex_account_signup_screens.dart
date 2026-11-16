@@ -35,40 +35,43 @@ String _generateTotpSetupSecret({int length = 32}) {
   );
 }
 
-String _deriveTraderCredentialHash(String purpose, String value) {
-  const int iterations = 210000;
-  final math.Random random = math.Random.secure();
-  final Uint8List salt = Uint8List.fromList(
-    List<int>.generate(16, (_) => random.nextInt(256)),
-  );
-  final crypto.Hmac hmac = crypto.Hmac(
-    crypto.sha256,
-    utf8.encode(value.trim()),
-  );
-  final Uint8List block = Uint8List(20)..setRange(0, 16, salt);
-  block[19] = 1;
-
-  List<int> u = hmac.convert(block).bytes;
-  final Uint8List derived = Uint8List.fromList(u);
-  for (int iteration = 1; iteration < iterations; iteration += 1) {
-    u = hmac.convert(u).bytes;
-    for (int index = 0; index < derived.length; index += 1) {
-      derived[index] ^= u[index];
+Uint8List _decodeBase32Secret(String input) {
+  const String alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; // pragma: allowlist secret
+  final List<int> bytes = <int>[];
+  int buffer = 0;
+  int bits = 0;
+  for (final String character in input.replaceAll('=', '').toUpperCase().split('')) {
+    final int value = alphabet.indexOf(character);
+    if (value < 0) throw const FormatException('Invalid authenticator setup key.');
+    buffer = (buffer << 5) | value;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      bytes.add((buffer >> bits) & 0xff);
     }
   }
+  return Uint8List.fromList(bytes);
+}
 
-  String hex(List<int> bytes) =>
-      bytes.map((int byte) => byte.toRadixString(16).padLeft(2, '0')).join();
-  final String separator = String.fromCharCode(36);
-  return 'pbkdf2-sha256' +
-      separator +
-      iterations.toString() +
-      separator +
-      purpose +
-      separator +
-      hex(salt) +
-      separator +
-      hex(derived);
+bool _verifyTraderTotp(String secret, String code, {DateTime? now}) {
+  final String candidate = code.trim();
+  if (!RegExp(r'^\d{6}$').hasMatch(candidate)) return false;
+  final Uint8List key = _decodeBase32Secret(secret);
+  final int counter = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 30000;
+  for (int drift = -1; drift <= 1; drift += 1) {
+    final ByteData counterBytes = ByteData(8)..setUint64(0, counter + drift, Endian.big);
+    final List<int> digest = crypto.Hmac(crypto.sha1, key)
+        .convert(counterBytes.buffer.asUint8List())
+        .bytes;
+    final int offset = digest.last & 0x0f;
+    final int binary = ((digest[offset] & 0x7f) << 24) |
+        ((digest[offset + 1] & 0xff) << 16) |
+        ((digest[offset + 2] & 0xff) << 8) |
+        (digest[offset + 3] & 0xff);
+    final String expected = (binary % 1000000).toString().padLeft(6, '0');
+    if (expected == candidate) return true;
+  }
+  return false;
 }
 
 String _formatSignupApiError(Object error) {
@@ -578,6 +581,7 @@ class GtexTraderSignupScreen extends StatefulWidget {
   });
   final GteExchangeController controller;
   final GteAppConfig config;
+
   @override
   State<GtexTraderSignupScreen> createState() => _GtexTraderSignupScreenState();
 }
@@ -590,16 +594,29 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   final _password = TextEditingController();
   final _phone = TextEditingController();
   final _country = TextEditingController(text: 'NG');
-  final _currency = TextEditingController(text: 'USD');
+  final _currency = TextEditingController(text: 'NGN');
   final _totpCode = TextEditingController();
-  final _recoveryPhrase = TextEditingController();
-  final _securityPin = TextEditingController();
   final _walletLabel = TextEditingController(text: 'GTEX Trading Wallet');
   String _experience = 'beginner';
   bool _submitting = false;
+  bool _totpVerified = false;
   String? _error;
   String? _turnstileToken;
   late final String _setupSecret = _generateTotpSetupSecret();
+
+  @override
+  void initState() {
+    super.initState();
+    _totpCode.addListener(_handleTotpCodeChanged);
+  }
+
+  void _handleTotpCodeChanged() {
+    if (!mounted) return;
+    setState(() {
+      _totpVerified = false;
+      _error = null;
+    });
+  }
 
   @override
   void dispose() {
@@ -610,9 +627,8 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
     _phone.dispose();
     _country.dispose();
     _currency.dispose();
+    _totpCode.removeListener(_handleTotpCodeChanged);
     _totpCode.dispose();
-    _recoveryPhrase.dispose();
-    _securityPin.dispose();
     _walletLabel.dispose();
     super.dispose();
   }
@@ -620,8 +636,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Trader',
-    subtitle:
-        'Enter the GTEX economy with dedicated trading and wallet security.',
+    subtitle: 'Create your trading desk with a verified authenticator.',
     icon: Icons.candlestick_chart_rounded,
     error: _error,
     submitting: _submitting,
@@ -643,52 +658,33 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         const <String>['beginner', 'intermediate', 'professional'],
         (value) => setState(() => _experience = value),
       ),
-      _sectionLabel(context, '03', 'Wallet security'),
+      _sectionLabel(context, '03', 'Authenticator setup'),
       SelectableText(
-        'Authenticator setup secret: $_setupSecret',
+        'GTEX setup key: $_setupSecret',
         style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 11),
       ),
       _field(
         _totpCode,
-        '2FA Authenticator Code',
+        'Current 6-digit authenticator code',
         keyboardType: TextInputType.number,
         validator: (String? value) {
-          final String code = (value ?? '').trim();
-          final bool validDigits = code.codeUnits.every(
-            (int unit) => unit >= 48 && unit <= 57,
-          );
-          return code.length >= 6 && code.length <= 12 && validDigits
+          return RegExp(r'^\d{6}$').hasMatch((value ?? '').trim())
               ? null
-              : 'Enter the current 6–12 digit authenticator code';
+              : 'Enter the current 6-digit authenticator code';
         },
       ),
-      _field(
-        _recoveryPhrase,
-        'Recovery Phrase (at least 8 words)',
-        obscure: true,
-        validator: (String? value) {
-          final List<String> words =
-              (value ?? '').trim().split(RegExp(r'\s+'));
-          return words.where((String word) => word.isNotEmpty).length >= 8
-              ? null
-              : 'Use a recovery phrase containing at least 8 words';
-        },
+      OutlinedButton.icon(
+        onPressed: _totpVerified || !RegExp(r'^\d{6}$').hasMatch(_totpCode.text.trim())
+            ? null
+            : _verifyAuthenticator,
+        icon: Icon(_totpVerified ? Icons.verified_rounded : Icons.verified_user_outlined),
+        label: Text(_totpVerified ? 'Authenticator verified' : 'Verify authenticator'),
       ),
-      _field(
-        _securityPin,
-        'Security PIN (6–12 digits)',
-        obscure: true,
-        keyboardType: TextInputType.number,
-        validator: (String? value) {
-          final String pin = (value ?? '').trim();
-          final bool validDigits = pin.codeUnits.every(
-            (int unit) => unit >= 48 && unit <= 57,
-          );
-          return pin.length >= 6 && pin.length <= 12 && validDigits
-              ? null
-              : 'Use a security PIN containing 6–12 digits';
-        },
-      ),
+      if (_totpVerified)
+        const Text(
+          'Authenticator verified. GTEX will check the code again during registration.',
+          style: TextStyle(color: Color(0xFF36E38A), fontSize: 11),
+        ),
       _field(_walletLabel, 'Wallet Label'),
       const SizedBox(height: 8),
       TurnstileChallenge(
@@ -699,8 +695,30 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
       ),
     ],
   );
+
+  void _verifyAuthenticator() {
+    try {
+      final bool valid = _verifyTraderTotp(_setupSecret, _totpCode.text.trim());
+      setState(() {
+        _totpVerified = valid;
+        _error = valid
+            ? null
+            : 'That code does not match the GTEX setup key. Check your phone time and try the latest code.';
+      });
+    } catch (_) {
+      setState(() {
+        _totpVerified = false;
+        _error = 'The authenticator code could not be checked. Review the setup key and try again.';
+      });
+    }
+  }
+
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
+    if (!_totpVerified) {
+      setState(() => _error = 'Verify your authenticator code before creating your Coin Trader account.');
+      return;
+    }
     if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
       setState(() => _error = 'Complete the security check to continue.');
       return;
@@ -716,13 +734,13 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
       );
       final session = await client.signupTrader(
         GteTraderSignupRequest(
-          fullName: _name.text,
-          tradingAlias: _alias.text,
-          email: _email.text,
+          fullName: _name.text.trim(),
+          tradingAlias: _alias.text.trim(),
+          email: _email.text.trim(),
           password: _password.text,
-          phoneNumber: _phone.text,
-          country: _country.text,
-          preferredCurrency: _currency.text,
+          phoneNumber: _phone.text.trim(),
+          country: _country.text.trim(),
+          preferredCurrency: _currency.text.trim(),
           tradingExperience: _experience,
           interests: const <String>['GTEX Coin', 'Fan Coins', 'P2P'],
           walletLabel: _walletLabel.text.trim().isEmpty
@@ -730,14 +748,6 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
               : _walletLabel.text.trim(),
           totpSecret: _setupSecret,
           totpCode: _totpCode.text.trim(),
-          recoveryPhraseHash: _deriveTraderCredentialHash(
-            'recovery',
-            _recoveryPhrase.text.trim(),
-          ),
-          securityPinHash: _deriveTraderCredentialHash(
-            'pin',
-            _securityPin.text.trim(),
-          ),
           turnstileToken: _turnstileToken,
         ),
       );

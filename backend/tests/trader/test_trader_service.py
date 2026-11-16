@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.auth.dependencies import get_current_wallet_user, get_session
+from app.auth.schemas import TraderSignupRequest
 from app.auth.service import AuthService
 from app.models import Base
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
@@ -263,3 +264,40 @@ def test_trader_security_read_hides_backup_codes(session) -> None:
     assert summary["backup_code_count"] == 8
     assert "backup_codes" not in summary
     assert len(summary["recent_events"]) == 1
+
+
+def test_trader_signup_schema_no_longer_requires_recovery_phrase_or_security_pin() -> None:
+    payload = TraderSignupRequest(
+        full_name="Trader User",
+        trading_alias="easy_desk",
+        email="easy@example.com",
+        password=TEST_PASSWORD,
+        phone_number="+2348012345678",
+        country="NG",
+        preferred_currency="NGN",
+        trading_experience="beginner",
+        totp_secret="JBSWY3DPEHPK3PXP",  # pragma: allowlist secret
+        totp_code="123456",
+    )
+
+    assert payload.recovery_phrase_hash is None
+    assert payload.security_pin_hash is None
+
+
+def test_totp_setup_succeeds_without_recovery_phrase_or_security_pin(session) -> None:
+    trader = _create_trader(session)
+    secret = "JBSWY3DPEHPK3PXP"  # pragma: allowlist secret
+
+    result = TraderService(session).verify_totp_setup(
+        trader,
+        totp_secret=secret,
+        totp_code=_current_totp(secret),
+    )
+    security = session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == trader.id))
+
+    assert result["two_factor_enabled"] is True
+    assert result["backup_code_count"] == 8
+    assert len(result["backup_codes"]) == 8
+    assert security is not None
+    assert security.recovery_phrase_hash is None
+    assert security.security_pin_hash is None

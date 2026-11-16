@@ -89,13 +89,19 @@ class TraderService:
         *,
         totp_secret: str,
         totp_code: str,
-        recovery_phrase_hash: str,
-        security_pin_hash: str,
+        recovery_phrase_hash: str | None = None,
+        security_pin_hash: str | None = None,
     ) -> TraderSecurity:
         try:
             normalized_secret = validate_trader_totp_secret(totp_secret)
-            validated_recovery_hash = validate_trader_credential_hash(recovery_phrase_hash, "recovery")
-            validated_pin_hash = validate_trader_credential_hash(security_pin_hash, "pin")
+            validated_recovery_hash = (
+                validate_trader_credential_hash(recovery_phrase_hash, "recovery")
+                if recovery_phrase_hash is not None
+                else None
+            )
+            validated_pin_hash = (
+                validate_trader_credential_hash(security_pin_hash, "pin") if security_pin_hash is not None else None
+            )
         except ValueError as exc:
             raise TraderAccessError(str(exc)) from exc
         if not verify_totp(normalized_secret, totp_code):
@@ -105,8 +111,10 @@ class TraderService:
         if existing is not None:
             was_enabled = existing.two_factor_enabled
             existing.totp_secret_hash = totp_secret_hash
-            existing.recovery_phrase_hash = validated_recovery_hash
-            existing.security_pin_hash = validated_pin_hash
+            if validated_recovery_hash is not None:
+                existing.recovery_phrase_hash = validated_recovery_hash
+            if validated_pin_hash is not None:
+                existing.security_pin_hash = validated_pin_hash
             existing.two_factor_enabled = True
             if not was_enabled:
                 backup_codes = _generate_backup_codes()
@@ -168,8 +176,8 @@ class TraderService:
         *,
         totp_secret: str,
         totp_code: str,
-        recovery_phrase_hash: str,
-        security_pin_hash: str,
+        recovery_phrase_hash: str | None = None,
+        security_pin_hash: str | None = None,
     ) -> dict[str, object]:
         self.assert_trader(user)
         security = self.ensure_security(

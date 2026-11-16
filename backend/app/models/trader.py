@@ -41,7 +41,9 @@ class TraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         UniqueConstraint("trading_alias", name="uq_trader_profiles_trading_alias"),
     )
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     trading_alias: Mapped[str] = mapped_column(String(120), nullable=False)
     preferred_currency: Mapped[str] = mapped_column(String(12), nullable=False, default="USD", server_default="USD")
     trading_experience: Mapped[TraderExperience] = mapped_column(
@@ -64,12 +66,14 @@ class TraderSecurity(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trader_security"
     __table_args__ = (UniqueConstraint("user_id", name="uq_trader_security_user_id"),)
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     totp_secret_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     two_factor_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     backup_codes_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
-    recovery_phrase_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    security_pin_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    recovery_phrase_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    security_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class TraderMarket(UUIDPrimaryKeyMixin, TimestampMixin, Base):
@@ -90,7 +94,9 @@ class TraderPriceTick(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trader_price_ticks"
     __table_args__ = (Index("ix_trader_price_ticks_market_created", "market_id", "created_at"),)
 
-    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False)
+    market_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False
+    )
     open_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     high_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
     low_price: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
@@ -104,7 +110,9 @@ class TraderOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (Index("ix_trader_orders_user_status", "user_id", "status"),)
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False)
+    market_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False
+    )
     side: Mapped[TraderOrderSide] = mapped_column(
         Enum(
             TraderOrderSide,
@@ -135,7 +143,9 @@ class TraderP2POffer(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (Index("ix_trader_p2p_offers_user_status", "user_id", "status"),)
 
     user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False)
+    market_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False
+    )
     side: Mapped[TraderOrderSide] = mapped_column(
         Enum(
             TraderOrderSide,
@@ -165,8 +175,12 @@ class TraderWatchlist(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "trader_watchlists"
     __table_args__ = (UniqueConstraint("user_id", "market_id", name="uq_trader_watchlists_user_market"),)
 
-    user_id: Mapped[str] = mapped_column(String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    market_id: Mapped[str] = mapped_column(String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    market_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("trader_markets.id", ondelete="CASCADE"), nullable=False
+    )
 
 
 class TraderSecurityEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
