@@ -351,7 +351,6 @@ class FanCoinGiftConversionService:
             self.session.flush()
         return account
 
-
     def _assert_fully_backed_gift_bridge(self) -> LedgerAccount:
         """Return a locked bridge account only when all user Fan Coin is backed.
 
@@ -383,17 +382,20 @@ class FanCoinGiftConversionService:
         outstanding_fancoin = self._normalize(
             self.session.scalar(select(func.coalesce(func.sum(user_balances.c.balance), 0))) or 0
         )
-        bridge_balance = self._normalize(
-            self.session.scalar(
-                select(func.coalesce(func.sum(LedgerEntry.amount), 0))
-                .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
-                .where(
-                    LedgerEntry.account_id == locked_bridge.id,
-                    LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+        if locked_bridge is None:
+            bridge_balance = Decimal("0.0000")
+        else:
+            bridge_balance = self._normalize(
+                self.session.scalar(
+                    select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                    .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+                    .where(
+                        LedgerEntry.account_id == locked_bridge.id,
+                        LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+                    )
                 )
+                or 0
             )
-            or 0
-        ) if locked_bridge is not None else Decimal("0.0000")
         required_reserve = (outstanding_fancoin / COIN_TO_CREDIT_RATE).quantize(
             AMOUNT_QUANTUM, rounding=ROUND_UP
         )
