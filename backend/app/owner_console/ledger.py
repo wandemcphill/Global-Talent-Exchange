@@ -587,10 +587,12 @@ def club_economy(session: Session, club_id: str) -> dict[str, object]:
         "total_spend": str(spend),
         "deposited": str(funding["available_deposited"]),
         "promotional": str(funding["available_promotional"]),
+        "squad_grant": str(funding["available_squad_grant"]),
         "earned": str(funding["available_earned"]),
         "funding_breakdown": {
             "deposited": str(funding["available_deposited"]),
             "promotional": str(funding["available_promotional"]),
+            "squad_grant": str(funding["available_squad_grant"]),
             "earned": str(funding["available_earned"]),
         },
     }
