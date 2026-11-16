@@ -328,7 +328,7 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
     event = ledger.record(
         session,
         event_type="deposit",
-        source=ledger.PAYSTACK,
+        source=f"platform:{provider}",
         destination=ledger.user_account(intent.user_id),
         currency=ledger.GTEX,
         gross=coins,
@@ -336,7 +336,7 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
         user_id=intent.user_id,
         related_type=provider,
         related_id=intent.reference,
-        memo=f"Paystack deposit NGN {ngn:,.2f}",
+        memo=f"GTEX {provider.title()} deposit NGN {ngn:,.2f}",
         wallet_idempotency_key=_deposit_wallet_key(provider, intent.reference),
     )
     intent.status = "credited"
