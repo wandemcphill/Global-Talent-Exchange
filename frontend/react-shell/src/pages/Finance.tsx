@@ -83,8 +83,8 @@ function Deposit({ configured, rates, mode }: any) {
       <label className="gx-label">Amount (₦)</label>
       <input data-testid="deposit-amount-input" className="gx-input" type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} />
       <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦{fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}</p>
-      <Btn className="mt-3 w-full" disabled={!configured} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
-      {!configured && <p className="mt-2 text-xs text-amber-300" data-testid="paystack-not-configured">Payment provider keys are not connected yet, so Naira deposits are switched off.</p>}
+      <Btn className="mt-3 w-full" disabled={!configured?.[provider] && configured !== true} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
+      {!configured?.[provider] && configured !== true && <p className="mt-2 text-xs text-amber-300" data-testid="payment-provider-not-configured">{providerLabel} is not configured for live deposits. Select an enabled provider or use a verified Coin Trader.</p>}
       <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.</p>
     </Panel>
   );
@@ -794,7 +794,7 @@ export default function Finance() {
         ))}
         <SponsorNegotiationDesk clubs={data.clubs} />
         <ClubShareholderDesk clubs={data.clubs} />
-        <Deposit configured={data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
+        <Deposit configured={data.payment_providers || data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
         <Withdraw rates={data.treasury_rates} />
         {data.withdrawals.length > 0 && (
           <Panel eyebrow="History" title="Withdrawals" className="lg:col-span-12" testid="withdrawals-history">
