@@ -105,9 +105,9 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const rate = Number(rates.deposit_rate || 0);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
   const clubCoins = Number(club?.economy?.cash_gtex || 0);
-  const signedPlayers = (club?.squad || []).filter((player: any) => !player.is_regen);
-  const playersRemaining = Math.max(0, 22 - signedPlayers.length);
-  const estimatedCoinsNeeded = Math.max(0, playersRemaining * 200 - clubCoins - walletCoins);
+  const registeredPlayers = Number(club?.formation?.total_registered_players ?? club?.squad?.length ?? 0);
+  // The starter squad already meets the 22-player registration requirement; top-up is optional recruitment capital.
+  const estimatedCoinsNeeded = Math.max(0, 800 - clubCoins - walletCoins);
   const suggestedNaira = Math.max(
     100,
     Math.ceil(
@@ -166,10 +166,10 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
     <div className="mb-8 rounded-xl border border-emerald-500/25 bg-slate-950/70 p-4" data-testid="squad-funding-panel">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <p className="gx-eyebrow text-emerald-300">Build your 22-player squad</p>
-          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Top up your player basket</h3>
+          <p className="gx-eyebrow text-emerald-300">Strengthen your starter squad</p>
+          <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Optional recruitment top-up</h3>
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
-            Your 2,500 GTX founding grant is reserved for eligible player signings. At the planning average of 200 GTX per player, 22 players cost about 4,400 GTX. Based on the squad you have signed and the cash remaining in the club treasury, the estimated balance to complete 22 players is {fmt(estimatedCoinsNeeded)} GTX. Actual transfer prices vary.
+            Your club starts with 22 registered starter players across the First Team, Reserves and Academy, including goalkeepers. That starter squad meets the 22-player minimum. The 2,500 GTX founding grant is additional budget for eligible player signings. This estimate shows what you would need to keep an approximately 800 GTX transfer reserve after considering your club treasury and personal wallet; actual transfer prices vary.
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend player signings require deposited GTX under GTEX acquisition rules.
@@ -243,11 +243,14 @@ function SquadStep({ clubId, onDone }: any) {
     queryFn: async () => (await api.get("/managers/catalog", { params: { limit: 3 } })).data.items,
   });
 
-  const squad = club?.squad?.filter((p: any) => !p.is_regen) || [];
-  const hasGk = squad.some(
+  const allRegisteredSquad = club?.squad || [];
+  const squad = allRegisteredSquad.filter((p: any) => !p.is_regen);
+  const registeredCount = Number(club?.formation?.total_registered_players ?? allRegisteredSquad.length);
+  const remainingToForm = Number(club?.formation?.remaining_to_form ?? Math.max(0, 22 - registeredCount));
+  const hasGk = Boolean(club?.formation?.has_goalkeeper ?? allRegisteredSquad.some(
     (p: any) => (p.position || "").toLowerCase().includes("goal") || (p.position || "").toLowerCase() === "gk"
-  );
-  const isMatchEligible = squad.length >= 22 && hasGk && (club?.formation?.is_formed ?? true);
+  ));
+  const isMatchEligible = Boolean(club?.formation?.is_formed ?? (registeredCount >= 22 && hasGk));
   const clubCash = Number(club?.economy?.cash_gtex || 0);
 
   useEffect(() => {
@@ -447,10 +450,10 @@ function SquadStep({ clubId, onDone }: any) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Chip tone={isMatchEligible ? "emerald" : "gold"} testid="onboarding-squad-count">
-            {club?.formation?.progress_label || `${squad.length}/22 players signed`}
+            {club?.formation?.progress_label || `${registeredCount}/22 players registered`}
           </Chip>
           <Chip tone={hasGk ? "emerald" : "red"}>
-            {hasGk ? "✓ Goalkeeper signed" : "⚠ Needs a goalkeeper"}
+            {hasGk ? "✓ Goalkeeper registered" : "⚠ Needs a goalkeeper"}
           </Chip>
           <span className="text-xs text-slate-400">
             A club becomes match-eligible with 22 players (First Team, Reserves, Academy) including a goalkeeper.
@@ -473,13 +476,13 @@ function SquadStep({ clubId, onDone }: any) {
       </div>
 
       {/* Low cash warning if stuck */}
-      {!isMatchEligible && clubCash < 800 && squad.length > 0 && (
+      {!isMatchEligible && clubCash < 800 && registeredCount > 0 && (
         <div className="mb-6 flex items-start gap-3 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
           <div>
             <p className="font-semibold text-amber-300">Low Treasury Balance ({fmt(clubCash)} GTX remaining)</p>
             <p className="mt-0.5 text-slate-300">
-              You need {Math.max(0, 22 - squad.length)} more player(s){!hasGk ? " including a goalkeeper" : ""}, but minimum transfer fees start around 800 GTX.
+              You need {remainingToForm} more registered player(s){!hasGk ? " including a goalkeeper" : ""}. The registration minimum and any optional market signings are separate requirements.
               Remove any signed player below to receive a full refund, or use <b>Auto-Pick</b> to sign affordable talent.
             </p>
           </div>
@@ -492,7 +495,7 @@ function SquadStep({ clubId, onDone }: any) {
           <div className="flex items-center gap-2">
             <ShoppingCart size={16} className="text-emerald-400" />
             <h3 className="text-sm font-semibold uppercase tracking-wider text-white">
-              Player Basket <span className="text-xs font-normal text-slate-400">({squad.length} / 22 signed)</span>
+              Additional Market Signings <span className="text-xs font-normal text-slate-400">({squad.length})</span>
             </h3>
           </div>
           {squad.length > 0 && (
@@ -507,7 +510,7 @@ function SquadStep({ clubId, onDone }: any) {
 
         {squad.length === 0 ? (
           <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-500">
-            Your player basket is empty. Browse the transfer market below or use Auto-Pick to assemble your 22-player starting squad.
+            Your 22-player starter squad is already registered. Browse the transfer market below to sign additional players and strengthen your club.
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
