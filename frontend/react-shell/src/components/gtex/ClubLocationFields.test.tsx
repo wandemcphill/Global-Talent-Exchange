@@ -182,6 +182,75 @@ describe("club location dropdowns", () => {
     expect(q("go").disabled).toBe(true);
   });
 
+  test("renders dropdowns in Country -> Region / state -> Home city order", () => {
+    act(() => root.render(<Form prefix="t" onDone={() => {}} />));
+    const selects = Array.from(host.querySelectorAll("select")).map((el) => el.getAttribute("data-testid"));
+    expect(selects).toEqual(["t-country-input", "t-region-input", "t-city-input"]);
+  });
+
+  test("clearing region clears previously selected city and disables submission", () => {
+    act(() => root.render(<Form prefix="t" onDone={() => {}} />));
+    act(() => setSelectValue(q("t-country-input"), "Nigeria (NG)"));
+    act(() => setSelectValue(q("t-region-input"), "Lagos"));
+    act(() => setSelectValue(q("t-city-input"), "Ikorodu"));
+    expect(q("go").disabled).toBe(false);
+
+    act(() => setSelectValue(q("t-region-input"), ""));
+    expect(q("t-city-input").value).toBe("");
+    expect(q("t-city-input").disabled).toBe(true);
+    expect(q("go").disabled).toBe(true);
+  });
+
+  test("preserves selected country across CDN name differences and keeps city selectable when CDN city list is empty", async () => {
+    const originalEnv = process.env.NODE_ENV;
+    const originalFetch = globalThis.fetch;
+    (process.env as any).NODE_ENV = "production";
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/countries.json")) {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          ok: true,
+          json: async () => [{ name: "Turkey", iso2: "TR" }],
+        } as Response;
+      }
+      if (url.endsWith("/states/TR.json")) {
+        return {
+          ok: true,
+          json: async () => [{ name: "Empty Province", iso2: "EP" }],
+        } as Response;
+      }
+      if (url.endsWith("/cities/TR-EP.json")) {
+        return {
+          ok: true,
+          json: async () => [],
+        } as Response;
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as typeof fetch;
+
+    try {
+      act(() => root.render(<Form prefix="t" onDone={() => {}} />));
+      act(() => setSelectValue(q("t-country-input"), "Türkiye (TR)"));
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 25));
+      });
+
+      expect(q("t-country-input").value).toBe("Turkey (TR)");
+      act(() => setSelectValue(q("t-region-input"), "Empty Province"));
+      await flush();
+
+      expect(q("t-city-input").disabled).toBe(false);
+      const cityOptions = Array.from(q("t-city-input").options).map((option) => option.value);
+      expect(cityOptions).toContain("Empty Province");
+      act(() => setSelectValue(q("t-city-input"), "Empty Province"));
+      expect(q("go").disabled).toBe(false);
+    } finally {
+      (process.env as any).NODE_ENV = originalEnv;
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   test("surfaces server validation errors clearly", () => {
     const error = {
       response: {

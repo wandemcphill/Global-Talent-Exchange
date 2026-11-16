@@ -11,6 +11,7 @@ from app.models.club_profile import ClubType
 from app.models.user import KycStatus, PublicAccountType, UserRole
 from app.policies.schemas import UserComplianceStatus
 from app.schemas.club_identity_core import ClubProfileCore
+from app.schemas.club_requests import MAX_CREST_ASSET_REF_LENGTH
 from app.users.schemas import UserPublic
 from app.wallets.schemas import WalletAdaptiveOverviewView
 
@@ -174,7 +175,7 @@ class UserClubSignupRequest(BaseModel):
     club_state: str | None = Field(default=None, max_length=120)
     club_locality: str | None = Field(default=None, max_length=120)
     club_type: ClubType | None = None
-    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    crest_asset_ref: str | None = Field(default=None, max_length=MAX_CREST_ASSET_REF_LENGTH)
     primary_color: str = Field(default="#0F766E", max_length=16)
     secondary_color: str = Field(default="#F8FAFC", max_length=16)
     football_identity: str = Field(default="club_owner", max_length=32)
@@ -292,7 +293,7 @@ class CreatorSignupRequest(BaseModel):
     club_name: str | None = Field(default=None, max_length=160)
     club_short_tag: str | None = Field(default=None, max_length=40)
     club_type: ClubType | None = None
-    crest_asset_ref: str | None = Field(default=None, max_length=255)
+    crest_asset_ref: str | None = Field(default=None, max_length=MAX_CREST_ASSET_REF_LENGTH)
     primary_color: str | None = Field(default=None, max_length=32)
     secondary_color: str | None = Field(default=None, max_length=32)
 

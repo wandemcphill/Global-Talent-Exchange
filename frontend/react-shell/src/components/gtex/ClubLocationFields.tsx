@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from "react";
 import {
   CLUB_LOCATION_CATALOG,
-  citiesForRegion,
   countryCodeFromLabel,
   countryLabel,
+  fallbackCitiesForRegion,
+  fallbackRegionsFor,
   loadAllCountries,
   loadCountryRegions,
   loadRegionCities,
   regionForCity,
-  regionsFor,
   type CatalogCountry,
   type CatalogRegion,
   type CatalogLocationCity,
@@ -41,7 +41,7 @@ export function useClubLocation() {
   const changeRegion = (region: string, code = "") => {
     setRegionName(region);
     setRegionCode(code);
-    if (cityName && regionForCity(countryCode, cityName) !== region) {
+    if (cityName && (!region || regionForCity(countryCode, cityName) !== region)) {
       setCityName("");
     }
   };
@@ -111,7 +111,7 @@ export function ClubLocationFields({
       return;
     }
 
-    const bundled = regionsFor(state.countryCode).map((name) => ({ code: "", name }));
+    const bundled = fallbackRegionsFor(state.countryCode);
     if (process.env.NODE_ENV === "test") {
       setRegions(bundled);
       return;
@@ -145,10 +145,7 @@ export function ClubLocationFields({
       return;
     }
 
-    const bundled = citiesForRegion(state.countryCode, state.regionName).map((item) => ({
-      ...item,
-      regionCode: "",
-    }));
+    const bundled = fallbackCitiesForRegion(state.countryCode, state.regionName, state.regionCode);
     if (process.env.NODE_ENV === "test" || !state.regionCode) {
       setCities(bundled);
       return;
@@ -178,6 +175,8 @@ export function ClubLocationFields({
   const countryId = `${testIdPrefix}-country-input`;
   const cityId = `${testIdPrefix}-city-input`;
   const regionId = `${testIdPrefix}-region-input`;
+  const selectedCountryOption = countries.find((country) => country.code === state.countryCode);
+  const countrySelectValue = selectedCountryOption ? countryLabel(selectedCountryOption) : state.countryText;
   const countryBad = touched.country && !state.countryCode;
   const cityBad = touched.city && !state.cityName;
   const regionBad = touched.region && !state.regionName;
@@ -204,7 +203,7 @@ export function ClubLocationFields({
             aria-describedby={countryBad ? `${testIdPrefix}-country-error` : undefined}
             className={fieldClass}
             disabled={disabled}
-            value={state.countryText}
+            value={countrySelectValue}
             onChange={(event) => state.changeCountry(event.target.value)}
             onBlur={() => touch("country")}
           >
@@ -218,6 +217,32 @@ export function ClubLocationFields({
           <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">⌄</span>
         </div>
         {countryBad && error("Select a country from the list.", `${testIdPrefix}-country-error`)}
+      </div>
+
+      <div className="min-w-0">
+        <label htmlFor={regionId} className={labelClass}>Region / state</label>
+        <div className={selectWrap}>
+          <select
+            id={regionId}
+            data-testid={regionId}
+            aria-label="Region or state"
+            aria-invalid={regionBad ? true : undefined}
+            aria-describedby={regionBad ? `${testIdPrefix}-region-error` : undefined}
+            className={fieldClass}
+            disabled={disabled || !state.countryCode || regionsLoading || regions.length === 0}
+            value={state.regionName}
+            onChange={(event) => {
+              const selected = regions.find((region) => region.name === event.target.value);
+              state.changeRegion(event.target.value, selected?.code || "");
+            }}
+            onBlur={() => touch("region")}
+          >
+            <option value="">{regionsLoading ? "Loading regions…" : "Select region / state"}</option>
+            {regions.map((region) => <option key={region.name} value={region.name}>{region.name}</option>)}
+          </select>
+          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">⌄</span>
+        </div>
+        {regionBad && error("Select the club's region or state.", `${testIdPrefix}-region-error`)}
       </div>
 
       <div className="min-w-0">
@@ -246,32 +271,6 @@ export function ClubLocationFields({
           <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">⌄</span>
         </div>
         {cityBad && error("Select the club's home city.", `${testIdPrefix}-city-error`)}
-      </div>
-
-      <div className="min-w-0">
-        <label htmlFor={regionId} className={labelClass}>Region / state</label>
-        <div className={selectWrap}>
-          <select
-            id={regionId}
-            data-testid={regionId}
-            aria-label="Region or state"
-            aria-invalid={regionBad ? true : undefined}
-            aria-describedby={regionBad ? `${testIdPrefix}-region-error` : undefined}
-            className={fieldClass}
-            disabled={disabled || !state.countryCode || regionsLoading || regions.length === 0}
-            value={state.regionName}
-            onChange={(event) => {
-              const selected = regions.find((region) => region.name === event.target.value);
-              state.changeRegion(event.target.value, selected?.code || "");
-            }}
-            onBlur={() => touch("region")}
-          >
-            <option value="">{regionsLoading ? "Loading regions…" : "Select region / state"}</option>
-            {regions.map((region) => <option key={region.name} value={region.name}>{region.name}</option>)}
-          </select>
-          <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">⌄</span>
-        </div>
-        {regionBad && error("Select the club's region or state.", `${testIdPrefix}-region-error`)}
       </div>
       <p className="col-span-full mt-1 text-[9px] text-slate-600">
         Location reference data:{" "}

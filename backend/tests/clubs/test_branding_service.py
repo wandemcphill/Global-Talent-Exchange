@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from app.club_identity.jerseys.service import ClubIdentityService
 from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
+from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, JerseyCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 from app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
@@ -107,3 +108,10 @@ def test_club_creation_persists_crest_data_uri_longer_than_255_characters(sessio
 
     badge = ClubIdentityService(SqlClubIdentityRepository(session)).get_badge(club.id)
     assert badge.badge_url == crest_data_uri
+
+    team_identity = SyntheticSquadFactory()._resolve_team_identity(
+        session,
+        team_id=club.id,
+        team_name=club.club_name,
+    )
+    assert team_identity.badge_url == crest_data_uri

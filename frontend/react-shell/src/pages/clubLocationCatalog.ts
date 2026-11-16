@@ -263,7 +263,37 @@ export function regionsFor(code: string): string[] {
 /** City options can be narrowed to a selected region/state. */
 export function citiesForRegion(code: string, region: string): CatalogCity[] {
   const cities = citiesFor(code);
-  return region ? cities.filter((item) => item.region === region) : cities;
+  if (!region) return cities;
+  const wanted = fold(region);
+  return cities.filter((item) => fold(item.region) === wanted);
+}
+
+/** Region options guaranteed to return at least one area when a country is selected. */
+export function fallbackRegionsFor(code: string): CatalogRegion[] {
+  const regions = regionsFor(code).map((name) => ({ code: "", name }));
+  return regions.length ? regions : [{ code: "__all__", name: "Main area" }];
+}
+
+/** City options guaranteed to remain selectable when CDN lists are empty or unavailable. */
+export function fallbackCitiesForRegion(
+  code: string,
+  regionName: string,
+  regionCode = "",
+): CatalogLocationCity[] {
+  const bundled = citiesForRegion(code, regionName).map((item) => ({
+    ...item,
+    regionCode: "",
+  }));
+  if (bundled.length) return bundled;
+  const trimmedRegion = regionName.trim();
+  if (!trimmedRegion) return [];
+  return [
+    {
+      city: trimmedRegion.length >= 2 ? trimmedRegion : "Main city",
+      region: trimmedRegion,
+      regionCode,
+    },
+  ];
 }
 
 /** Region for a known city, or "" when the city is not in the catalog. */

@@ -6,6 +6,8 @@ declare const afterEach: any;
 
 import {
   countryCodeFromLabel,
+  fallbackCitiesForRegion,
+  fallbackRegionsFor,
   loadAllCountries,
   loadCountryRegions,
   loadRegionCities,
@@ -74,5 +76,13 @@ describe("global club location catalogue", () => {
     expect(cities.map((city) => city.city)).toEqual(["North City", "River Town"]);
     expect(cities.every((city) => city.region === "North Province" && city.regionCode === "NP")).toBe(true);
     expect(requested).toHaveLength(2);
+  });
+
+  test("provides fallback regions and cities when catalog or CDN records are absent", () => {
+    expect(fallbackRegionsFor("ZZ")).toEqual([{ code: "__all__", name: "Main area" }]);
+    expect(fallbackCitiesForRegion("ZZ", "Main area", "__all__")).toEqual([
+      { city: "Main area", region: "Main area", regionCode: "__all__" },
+    ]);
+    expect(fallbackCitiesForRegion("NG", "lagos").map((item) => item.city)).toContain("Ikorodu");
   });
 });

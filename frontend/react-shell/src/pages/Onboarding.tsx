@@ -899,7 +899,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
         primary_philosophy: recruitmentFocus === "academy" ? "academy_first" : recruitmentFocus === "selling" ? "selling_club" : "youth_development",
         secondary_philosophies: ["financially_sustainable"],
         nationality_mode: nationalityFocus,
-        target_nationalities: [],
+        target_nationalities: nationalityFocus === "none" ? [] : [validatedLocation.countryCode],
         allow_dual_nationality: true,
         age_mode: preferredAgeBracket === "none" ? "none" : "preferred",
         preferred_max_age: preferredAgeBracket === "none" ? null : parseInt(preferredAgeBracket.replace("U", ""), 10),
@@ -1215,27 +1215,39 @@ function CreateFirstClub({ onDone, onCancel }: any) {
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
                 Choose Primary Club Crest · 72 Ready-Made Designs
               </label>
-              <div className="mt-3 flex flex-wrap gap-2">
-                {([
-                  ["all", "All 72"],
-                  ["heritage", "Heritage"],
-                  ["modern", "Modern"],
-                  ["royal", "Royal"],
-                ] as const).map(([filter, label]) => (
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {([
+                    ["all", "All 72"],
+                    ["heritage", "Heritage"],
+                    ["modern", "Modern"],
+                    ["royal", "Royal"],
+                  ] as const).map(([filter, label]) => (
+                    <button
+                      type="button"
+                      key={filter}
+                      onClick={() => setCrestFilter(filter)}
+                      aria-pressed={crestFilter === filter}
+                      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                        crestFilter === filter
+                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
+                          : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {recommendation.crest_concepts?.[selectedCrestIdx] && (
                   <button
                     type="button"
-                    key={filter}
-                    onClick={() => setCrestFilter(filter)}
-                    aria-pressed={crestFilter === filter}
-                    className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                      crestFilter === filter
-                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
-                        : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
-                    }`}
+                    onClick={() => setCrestFilter("all")}
+                    className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-500/20"
                   >
-                    {label}
+                    Selected: {recommendation.crest_concepts[selectedCrestIdx].style} ·{" "}
+                    {recommendation.crest_concepts[selectedCrestIdx].icon_family}
                   </button>
-                ))}
+                )}
               </div>
               <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
                 {recommendation.crest_concepts.map((concept: any, idx: number) => ({ concept, idx }))
