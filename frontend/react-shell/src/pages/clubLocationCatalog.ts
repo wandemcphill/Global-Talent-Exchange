@@ -165,9 +165,14 @@ export async function loadAllCountries(): Promise<CatalogCountry[]> {
 
 /** All first-level regions/states for one ISO-2 country code. */
 export async function loadCountryRegions(countryCode: string): Promise<CatalogRegion[]> {
-  const states = await loadLocationJson<Array<{ name: string; iso2: string }>>(
-    `states/${countryCode.toUpperCase()}.json`,
-  );
+  let states: Array<{ name: string; iso2: string }> = [];
+  try {
+    states = await loadLocationJson<Array<{ name: string; iso2: string }>>(
+      `states/${countryCode.toUpperCase()}.json`,
+    );
+  } catch {
+    // A small number of territories publish a country-wide city list instead.
+  }
   if (states.length) {
     return states
       .filter((state) => state.name && state.iso2)
@@ -175,11 +180,14 @@ export async function loadCountryRegions(countryCode: string): Promise<CatalogRe
       .sort((a, b) => a.name.localeCompare(b.name));
   }
 
-  // Some territories have a country-wide city list without a separate state layer.
-  const countryCities = await loadLocationJson<Array<{ name: string }>>(
-    `cities/${countryCode.toUpperCase()}.json`,
-  );
-  return countryCities.length ? [{ code: "__all__", name: "Main area" }] : [];
+  try {
+    const countryCities = await loadLocationJson<Array<{ name: string }>>(
+      `cities/${countryCode.toUpperCase()}.json`,
+    );
+    return countryCities.length ? [{ code: "__all__", name: "Main area" }] : [];
+  } catch {
+    return [];
+  }
 }
 
 /** Cities for the selected country and first-level state/region. */
