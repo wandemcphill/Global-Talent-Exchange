@@ -309,6 +309,7 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
         "max_clubs": service.MAX_CLUBS,
         "min_squad": service.MIN_SQUAD,
         "launch_grant": service.LAUNCH_GRANT_GTEX,
+        "launch_grant_owner_limit": service.LAUNCH_GRANT_OWNER_LIMIT,
     }
 
 
