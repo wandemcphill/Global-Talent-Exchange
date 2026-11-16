@@ -2572,9 +2572,7 @@ def execute_authorized_recruitment_signing(
 
     funding = ledger.get_club_funding(db, state.club_id)
     is_restricted_recruitment = (
-        gsi >= 80
-        or bool(candidate.get("is_regen"))
-        or bool(candidate.get("is_legend") or candidate.get("legend"))
+        gsi >= 80 or bool(candidate.get("is_regen")) or bool(candidate.get("is_legend") or candidate.get("legend"))
     )
     # Autonomous recruitment never draws from the first-club squad grant.
     # Premium/restricted targets require deposited funds; other targets may
