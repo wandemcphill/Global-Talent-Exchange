@@ -169,7 +169,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
           <p className="gx-eyebrow text-emerald-300">Complete your 22-player squad</p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Squad funding and top-up</h3>
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
-            Your club needs 22 registered players across the First Team, Reserves and Academy, including at least one goalkeeper. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: {fmt(estimatedCoinsNeeded)} GTX. The 2,500 GTX grant contributes toward eligible player signings; actual transfer prices vary.
+            Your club needs 22 registered players across the First Team, Reserves and Academy, including at least one goalkeeper. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: {fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for eligible player signings; any remaining grant balance is shown above. Actual transfer prices vary.
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend player signings require deposited GTX under GTEX acquisition rules.
