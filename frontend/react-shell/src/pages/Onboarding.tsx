@@ -107,7 +107,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const clubCoins = Number(club?.economy?.cash_gtex || 0);
   const signedPlayers = (club?.squad || []).filter((player: any) => !player.is_regen);
   const playersRemaining = Math.max(0, 22 - signedPlayers.length);
-  const estimatedCoinsNeeded = Math.max(0, playersRemaining * 200 - clubCoins);
+  const estimatedCoinsNeeded = Math.max(0, playersRemaining * 200 - clubCoins - walletCoins);
   const suggestedNaira = Math.max(
     100,
     Math.ceil(
