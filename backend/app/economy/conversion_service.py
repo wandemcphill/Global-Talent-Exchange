@@ -123,8 +123,7 @@ class FanCoinGiftConversionService:
             unit=FANCOIN,
             allow_negative=False,
         )
-        bridge_coin = self._gtex_bridge_account()
-        self._assert_fully_backed_gift_bridge(bridge_coin)
+        bridge_coin = self._assert_fully_backed_gift_bridge()
         platform_fancoin_revenue = self.wallet_service.ensure_named_system_account(
             self.session,
             code="platform:credit:gift_conversion_fee_revenue",
@@ -353,19 +352,17 @@ class FanCoinGiftConversionService:
         return account
 
 
-    def _assert_fully_backed_gift_bridge(self, bridge_coin) -> None:
-        """Refuse gift settlements unless the bridge backs all outstanding user Fan Coin.
+    def _assert_fully_backed_gift_bridge(self) -> LedgerAccount:
+        """Return a locked bridge account only when all user Fan Coin is backed.
 
-        Lock the bridge row so concurrent gift conversions serialize this reserve
-        check. Derive both balances from committed ledger entries, not projections
-        or cache values. This is a runtime guard in addition to the migration gate.
+        Derive both balances from committed ledger entries, not projections or
+        cache values. The row lock serializes concurrent gift conversions.
         """
         locked_bridge = self.session.scalar(
-            select(LedgerAccount).where(LedgerAccount.id == bridge_coin.id).with_for_update()
+            select(LedgerAccount)
+            .where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE)
+            .with_for_update()
         )
-        if locked_bridge is None:
-            raise EconomicConversionError("Gift conversion bridge is unavailable.")
-
         user_balances = (
             select(
                 LedgerEntry.account_id.label("account_id"),
@@ -396,11 +393,11 @@ class FanCoinGiftConversionService:
                 )
             )
             or 0
-        )
+        ) if locked_bridge is not None else Decimal("0.0000")
         required_reserve = (outstanding_fancoin / COIN_TO_CREDIT_RATE).quantize(
             AMOUNT_QUANTUM, rounding=ROUND_UP
         )
-        if bridge_balance < required_reserve:
+        if locked_bridge is None or bridge_balance < required_reserve:
             shortfall = required_reserve - bridge_balance
             raise EconomicConversionError(
                 "Fan Coin gift conversion is temporarily unavailable because the GTEX bridge "
@@ -408,6 +405,10 @@ class FanCoinGiftConversionService:
                 f"Required reserve: {required_reserve} GTEX; "
                 f"available: {bridge_balance} GTEX; shortfall: {shortfall} GTEX."
             )
+        if locked_bridge.allow_negative:
+            locked_bridge.allow_negative = False
+            self.session.flush()
+        return locked_bridge
 
     def _settled_legs(self, conversion: EconomicConversion) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
         gross = self._normalize(conversion.source_amount)
