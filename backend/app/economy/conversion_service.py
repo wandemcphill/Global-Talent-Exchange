@@ -18,6 +18,7 @@ from app.models.wallet import (
     LedgerAccount,
     LedgerAccountKind,
     LedgerEntry,
+    LedgerBalanceProjection,
     LedgerEntryReason,
     LedgerSourceTag,
     LedgerTransaction,
@@ -360,6 +361,30 @@ class FanCoinGiftConversionService:
         locked_bridge = self.session.scalar(
             select(LedgerAccount).where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE).with_for_update()
         )
+        # append_transaction serializes wallet updates through balance projections.
+        # Lock every existing Fan Coin account projection plus the GTEX bridge
+        # projection in deterministic account-id order, so concurrent Fan Coin
+        # credits and other gift settlements cannot slip past this reserve check.
+        credit_accounts = list(
+            self.session.scalars(
+                select(LedgerAccount)
+                .where(LedgerAccount.unit == LedgerUnit.CREDIT)
+                .order_by(LedgerAccount.id)
+            ).all()
+        )
+        accounts_to_lock = credit_accounts + ([locked_bridge] if locked_bridge is not None else [])
+        for account in accounts_to_lock:
+            self.wallet_service._get_or_build_balance_projection(self.session, account)
+        self.session.flush()
+        account_ids_to_lock = [account.id for account in accounts_to_lock]
+        if account_ids_to_lock:
+            self.session.scalars(
+                select(LedgerBalanceProjection)
+                .where(LedgerBalanceProjection.account_id.in_(account_ids_to_lock))
+                .order_by(LedgerBalanceProjection.account_id)
+                .with_for_update()
+            ).all()
+
         user_balances = (
             select(
                 LedgerEntry.account_id.label("account_id"),
@@ -372,6 +397,7 @@ class FanCoinGiftConversionService:
                 LedgerAccount.owner_user_id.is_not(None),
                 LedgerAccount.kind == LedgerAccountKind.USER,
                 LedgerAccount.unit == LedgerUnit.CREDIT,
+                LedgerEntry.unit == LedgerUnit.CREDIT,
             )
             .group_by(LedgerEntry.account_id)
             .having(func.sum(LedgerEntry.amount) > 0)
@@ -389,6 +415,7 @@ class FanCoinGiftConversionService:
                     .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
                     .where(
                         LedgerEntry.account_id == locked_bridge.id,
+                        LedgerEntry.unit == LedgerUnit.COIN,
                         LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
                     )
                 )
