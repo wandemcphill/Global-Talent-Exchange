@@ -888,6 +888,31 @@ def test_starter_squad_bootstrap_generates_22_non_marketable_players(client, aut
         assert formation["is_formed"] is True
 
 
+def test_squad_grant_cannot_fund_non_player_spend(client, auth_user_factory, app_session_factory):
+    """The first-500 grant is reserved for eligible player purchases only."""
+    user = auth_user_factory(suffix="squad-grant-non-player-spend")
+    claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert claimed.status_code == 200, claimed.text
+    club_id = claimed.json()["club_id"]
+
+    with app_session_factory() as session:
+        with pytest.raises(ledger.LedgerError, match="insufficient_funds"):
+            ledger.record(
+                session,
+                event_type="facility_purchase",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_MARKET,
+                currency=ledger.GTEX,
+                gross=Decimal("1"),
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user["user_id"],
+                related_type="facility",
+                related_id="test-facility",
+            )
+        session.rollback()
+
+
 def test_first_500_campaign_stops_at_owner_500(app_session_factory):
     """The 501st eligible first-club owner receives no GTX or Fan Coin campaign grant."""
     with app_session_factory() as session:
