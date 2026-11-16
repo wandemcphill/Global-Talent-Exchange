@@ -78,7 +78,11 @@ export function ClubLocationFields({
   return (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" data-testid={`${testIdPrefix}-location-fields`}>
       <div className="min-w-0">
+        <label htmlFor={`${testIdPrefix}-country-input`} className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Country
+        </label>
         <input
+          id={`${testIdPrefix}-country-input`}
           data-testid={`${testIdPrefix}-country-input`}
           aria-label="Country"
           aria-invalid={countryBad ? true : undefined}
@@ -100,7 +104,11 @@ export function ClubLocationFields({
         {countryBad && err("Select a country from the list.", `${testIdPrefix}-country-error`)}
       </div>
       <div className="min-w-0">
+        <label htmlFor={`${testIdPrefix}-city-input`} className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Home city
+        </label>
         <input
+          id={`${testIdPrefix}-city-input`}
           data-testid={`${testIdPrefix}-city-input`}
           aria-label="City"
           aria-invalid={cityBad ? true : undefined}
@@ -122,7 +130,11 @@ export function ClubLocationFields({
         {cityBad && err("Enter the home city.", `${testIdPrefix}-city-error`)}
       </div>
       <div className="min-w-0">
+        <label htmlFor={`${testIdPrefix}-region-input`} className="mb-1 block text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+          Region / state
+        </label>
         <input
+          id={`${testIdPrefix}-region-input`}
           data-testid={`${testIdPrefix}-region-input`}
           aria-label="Region or state"
           aria-invalid={regionBad ? true : undefined}
