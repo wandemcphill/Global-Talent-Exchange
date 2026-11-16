@@ -367,9 +367,7 @@ class FanCoinGiftConversionService:
         # credits and other gift settlements cannot slip past this reserve check.
         credit_accounts = list(
             self.session.scalars(
-                select(LedgerAccount)
-                .where(LedgerAccount.unit == LedgerUnit.CREDIT)
-                .order_by(LedgerAccount.id)
+                select(LedgerAccount).where(LedgerAccount.unit == LedgerUnit.CREDIT).order_by(LedgerAccount.id)
             ).all()
         )
         accounts_to_lock = credit_accounts + ([locked_bridge] if locked_bridge is not None else [])
