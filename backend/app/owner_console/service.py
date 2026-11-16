@@ -29,7 +29,7 @@ from app.services.world_clock_service import WorldClockService
 logger = logging.getLogger(__name__)
 
 MAX_CLUBS = 3
-LAUNCH_GRANT_GTEX = 100_000
+LAUNCH_GRANT_GTEX = 2_500
 LAUNCH_GRANT_FAN = 1_000
 MIN_SQUAD = 22
 MAX_SQUAD = 30
@@ -941,7 +941,7 @@ def autopick_squad(
 
     current = squad(session, club_id)
     non_regens = [p for p in current if not p.is_regen]
-    desired_total = max(11, min(int(target_squad_size), 25)) if target_squad_size is not None else MIN_SQUAD
+    desired_total = max(MIN_SQUAD, min(int(target_squad_size), 25)) if target_squad_size is not None else MIN_SQUAD
     slots_needed = desired_total - len(non_regens)
     if slots_needed <= 0:
         return {
