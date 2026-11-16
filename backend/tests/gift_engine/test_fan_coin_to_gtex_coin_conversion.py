@@ -467,3 +467,62 @@ def test_purchased_fan_coin_gift_cannot_increase_withdrawable_gtex() -> None:
         assert bridge.allow_negative is False
     finally:
         session.close()
+
+def test_gift_conversion_blocks_when_bridge_covers_single_gift_but_not_user_liabilities() -> None:
+    session = _make_session()
+    try:
+        sender = _create_user(session, email="reserve-sender@example.com", username="reserve-sender")
+        recipient = _create_user(session, email="reserve-recipient@example.com", username="reserve-recipient")
+        other_user = _create_user(session, email="reserve-other@example.com", username="reserve-other")
+        _seed_gift_economy(session, sender)
+
+        wallet = WalletService()
+        platform_credit = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+        wallet.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=wallet.get_user_account(session, other_user, LedgerUnit.CREDIT),
+                    amount=Decimal("41000.0000"),
+                ),
+                LedgerPosting(account=platform_credit, amount=Decimal("-41000.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="seed-under-reserved-user-liability",
+            actor=other_user,
+        )
+        session.commit()
+
+        # The bridge can cover this one gift (4.6666 GTEX), but cannot
+        # back the complete 41,100 FAN outstanding across user wallets.
+        try:
+            GiftEngineService(session).send_gift(
+                sender=sender,
+                recipient_user_id=recipient.id,
+                gift_key="conversion-star",
+                quantity=Decimal("1.0000"),
+                idempotency_key="under-reserved-global-bridge",
+            )
+        except GiftEngineError as exc:
+            assert exc.reason == "gift_conversion_failed"
+            assert "does not fully back outstanding user Fan Coin" in str(exc)
+        else:
+            raise AssertionError("Gift conversion passed with an under-reserved global bridge.")
+
+        session.rollback()
+        sender_credit = wallet.get_user_account(session, sender, LedgerUnit.CREDIT)
+        recipient_coin = wallet.get_user_account(session, recipient, LedgerUnit.COIN)
+        bridge = wallet.ensure_named_system_account(
+            session,
+            code="platform:coin:gift_conversion_bridge",
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        assert wallet.get_balance(session, sender_credit) == Decimal("100.0000")
+        assert wallet.get_balance(session, recipient_coin) == Decimal("0.0000")
+        assert wallet.get_balance(session, bridge) == Decimal("6.6667")
+        assert session.scalar(select(func.count(GiftTransaction.id))) == 0
+        assert session.scalar(select(func.count(EconomicConversion.id))) == 0
+    finally:
+        session.close()
