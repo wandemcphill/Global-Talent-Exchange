@@ -384,6 +384,8 @@ def test_coin_trader_displayed_liquidity_is_capped_by_wallet_balance(coin_trader
 
     profile_view = service.get_profile(profile.id)
     assert profile_view.rates[0].available_liquidity == Decimal("1000.0000")
+    assert not hasattr(profile_view, "liquidity_snapshot")  # public view must not expose it
+    profile_view = service.admin_list_profiles()[0]  # owner/admin view (full)
     assert profile_view.liquidity_snapshot["coin:NGN"]["available_liquidity"] == "1000.0000"
     assert profile_view.liquidity_snapshot["coin:NGN"]["claimed_available_liquidity"] == "50000.0000"
 

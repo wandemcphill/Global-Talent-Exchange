@@ -48,6 +48,7 @@ from app.coin_traders.schemas import (
     CoinTraderProfileCreateRequest,
     CoinTraderProfileUpdateRequest,
     CoinTraderProfileView,
+    CoinTraderPublicProfileView,
     CoinTraderRateUpsertRequest,
     CoinTraderRateView,
 )
@@ -80,7 +81,7 @@ class CoinTraderService:
         country_code: str | None = None,
         coin_unit: LedgerUnit | None = None,
         approved_only: bool = True,
-    ) -> list[CoinTraderProfileView]:
+    ) -> list[CoinTraderPublicProfileView]:
         statement = (
             select(CoinTraderProfile)
             .join(User, User.id == CoinTraderProfile.user_id)
@@ -92,7 +93,11 @@ class CoinTraderService:
             )
         )
         if approved_only:
-            statement = statement.where(CoinTraderProfile.status == CoinTraderProfileStatus.APPROVED.value)
+            statement = statement.where(
+                CoinTraderProfile.status == CoinTraderProfileStatus.APPROVED.value,
+                CoinTraderProfile.verified_at.is_not(None),
+                CoinTraderProfile.suspended_at.is_(None),
+            )
         if country_code:
             statement = statement.where(CoinTraderProfile.country_code == country_code.upper())
         profiles = list(self.session.scalars(statement).all())
@@ -102,16 +107,16 @@ class CoinTraderService:
                 for profile in profiles
                 if any(rate.coin_unit == coin_unit and rate.is_active for rate in self._rates_for_profile(profile.id))
             ]
-        return [self.to_profile_view(profile) for profile in profiles]
+        return [self.to_public_profile_view(profile) for profile in profiles]
 
-    def get_profile(self, profile_id: str) -> CoinTraderProfileView:
+    def get_profile(self, profile_id: str) -> CoinTraderPublicProfileView:
         profile = self._require_profile(profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
             raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
         trader = self._require_user(profile.user_id)
         if trader.account_type != PublicAccountType.COIN_TRADER:
             raise CoinTraderNotFoundError("Approved coin trader profile was not found.")
-        return self.to_profile_view(profile)
+        return self.to_public_profile_view(profile)
 
     def get_my_profile(self, actor: User) -> CoinTraderProfileView:
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == actor.id))
@@ -1223,6 +1228,41 @@ class CoinTraderService:
 
     def _direction_value(self, direction: CoinTradeDirection | str) -> str:
         return direction.value if hasattr(direction, "value") else str(direction)
+
+    @staticmethod
+    def _public_payment_method_labels(methods: list[object]) -> list[str]:
+        labels: list[str] = []
+        for item in methods or []:
+            label: object | None = None
+            if isinstance(item, str):
+                label = item
+            elif isinstance(item, dict):
+                for key in ("label", "name", "method", "bank", "type"):
+                    if isinstance(item.get(key), str) and item[key].strip():
+                        label = item[key]
+                        break
+            if isinstance(label, str) and label.strip() and label.strip() not in labels:
+                labels.append(label.strip()[:60])
+        return labels
+
+    def to_public_profile_view(self, profile: CoinTraderProfile) -> CoinTraderPublicProfileView:
+        return CoinTraderPublicProfileView(
+            id=profile.id,
+            display_name=profile.display_name,
+            country_code=profile.country_code,
+            status=profile.status,
+            tier=profile.tier,
+            verification_level=profile.verification_level,
+            verified_at=profile.verified_at,
+            completion_rate=profile.completion_rate,
+            average_release_minutes=profile.average_release_minutes,
+            rating=profile.rating,
+            completed_volume_fiat=profile.completed_volume_fiat,
+            dispute_score=profile.dispute_score,
+            terms=dict(profile.terms_json or {}),
+            payment_methods=self._public_payment_method_labels(list(profile.payment_methods_json or [])),
+            rates=[self.to_rate_view(rate) for rate in self._rates_for_profile(profile.id)],
+        )
 
     def to_profile_view(self, profile: CoinTraderProfile) -> CoinTraderProfileView:
         return CoinTraderProfileView(

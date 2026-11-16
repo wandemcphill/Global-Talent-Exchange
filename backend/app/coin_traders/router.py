@@ -20,6 +20,7 @@ from app.coin_traders.schemas import (
     CoinTraderProfileCreateRequest,
     CoinTraderProfileUpdateRequest,
     CoinTraderProfileView,
+    CoinTraderPublicProfileView,
     CoinTraderRateUpsertRequest,
     CoinTraderRateView,
     CoinTraderLiquidityQuoteRequest,
@@ -59,12 +60,12 @@ def _require_liquidity_desk_permission(request: Request, actor: User) -> None:
     assert_admin_capability(request, actor, AdminCapability.MANAGE_LIQUIDITY_DESK)
 
 
-@router.get("/api/coin-traders", response_model=list[CoinTraderProfileView])
+@router.get("/api/coin-traders", response_model=list[CoinTraderPublicProfileView])
 def list_coin_traders(
     country_code: str | None = Query(default=None),
     coin_unit: LedgerUnit | None = Query(default=None),
     service: CoinTraderService = Depends(_service),
-) -> list[CoinTraderProfileView]:
+) -> list[CoinTraderPublicProfileView]:
     return service.list_traders(country_code=country_code, coin_unit=coin_unit)
 
 
@@ -283,8 +284,10 @@ def list_coin_trade_order_messages(
         _raise_coin_trader_error(exc)
 
 
-@router.get("/api/coin-traders/{profile_id}", response_model=CoinTraderProfileView)
-def get_coin_trader_profile(profile_id: str, service: CoinTraderService = Depends(_service)) -> CoinTraderProfileView:
+@router.get("/api/coin-traders/{profile_id}", response_model=CoinTraderPublicProfileView)
+def get_coin_trader_profile(
+    profile_id: str, service: CoinTraderService = Depends(_service)
+) -> CoinTraderPublicProfileView:
     try:
         return service.get_profile(profile_id)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:

@@ -116,6 +116,31 @@ class CoinTraderProfileView(CommonSchema):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
+class CoinTraderPublicProfileView(CommonSchema):
+    """Marketplace-safe projection of a trader profile.
+
+    Intentionally omits bank accounts, KYC provider references, free-form metadata
+    (admin notes), the self-declared liquidity snapshot and suspension details.
+    Payment details are revealed only to order participants at the proper order stage.
+    """
+
+    id: str
+    display_name: str
+    country_code: str | None = None
+    status: CoinTraderProfileStatus | CoinTraderStatusLiteral | str
+    tier: CoinTraderTier | str
+    verification_level: str = "standard"
+    verified_at: datetime | None = None
+    completion_rate: float
+    average_release_minutes: float
+    rating: float
+    completed_volume_fiat: Decimal = Decimal("0.0000")
+    dispute_score: float = 0.0
+    terms: dict[str, Any] = Field(default_factory=dict)
+    payment_methods: list[str] = Field(default_factory=list)
+    rates: list[CoinTraderRateView] = Field(default_factory=list)
+
+
 class CoinTradeOrderCreateRequest(CommonSchema):
     trader_profile_id: str = Field(min_length=1, max_length=36)
     direction: CoinTradeDirection | CoinTradeDirectionLiteral
