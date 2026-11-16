@@ -115,9 +115,7 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
             coin_bridge = _account_balance(session, COIN_BRIDGE_CODE)
             fee_revenue = _account_balance(session, FEE_REVENUE_CODE)
             outstanding_user_fancoin = _outstanding_user_fancoin(session)
-            required_bridge_coin = (
-                outstanding_user_fancoin / COIN_TO_CREDIT_RATE
-            ).quantize(QUANTUM, rounding=ROUND_UP)
+            required_bridge_coin = (outstanding_user_fancoin / COIN_TO_CREDIT_RATE).quantize(QUANTUM, rounding=ROUND_UP)
             available_bridge_coin = coin_bridge or Decimal("0.0000")
             bridge_reserve_shortfall = max(
                 required_bridge_coin - available_bridge_coin,
@@ -138,9 +136,8 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
                 gates["coin_bridge_not_negative"] = coin_bridge >= Decimal("0.0000")
             if credit_bridge is not None:
                 gates["credit_bridge_not_negative"] = credit_bridge >= Decimal("0.0000")
-            gates["coin_bridge_covers_outstanding_fancoin"] = (
-                required_bridge_coin == Decimal("0.0000")
-                or (coin_bridge is not None and coin_bridge >= required_bridge_coin)
+            gates["coin_bridge_covers_outstanding_fancoin"] = required_bridge_coin == Decimal("0.0000") or (
+                coin_bridge is not None and coin_bridge >= required_bridge_coin
             )
             # Issued GTEX is the Fan Coin remainder divided by COIN_TO_CREDIT_RATE (15), so
             # COIN_TO_CREDIT_RATE times issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
