@@ -3,4 +3,8 @@
 /console/app       /app        301
 /console/app/*     /app/:splat 301
 /console/*         /:splat     301
+/robots.txt        /robots.txt 200
+/sitemap.xml       /sitemap.xml 200
+/nigeria           /nigeria/index.html 200
+/nigeria/          /nigeria/index.html 200
 /*                 /index.html 200

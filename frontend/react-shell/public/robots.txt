@@ -1,0 +1,19 @@
+User-agent: *
+Allow: /
+Allow: /nigeria
+Allow: /signup
+Allow: /login
+Allow: /advertise
+Allow: /club/
+Allow: /clubs/
+Disallow: /app
+Disallow: /admin
+Disallow: /advertiser/
+Disallow: /payment/
+Disallow: /inbox
+Disallow: /onboarding
+Disallow: /visual-review
+Disallow: /gift-capture
+
+Host: https://playgtex.app
+Sitemap: https://playgtex.app/sitemap.xml

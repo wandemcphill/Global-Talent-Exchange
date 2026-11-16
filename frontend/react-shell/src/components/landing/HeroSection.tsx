@@ -65,6 +65,12 @@ export const HeroSection: React.FC<HeroSectionProps> = ({ pulse, onExplore }) =>
           <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#9AA7BD] sm:text-base">
             Own up to three clubs, hire managers, develop regens, earn TV money, trade talent and compete for prizes in one living football world.
           </p>
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-[#C5D0E0]">
+            Built in Lagos. Buy and sell coins in naira, open a club in foundation, and enter competitions free.
+            <Link to="/nigeria" data-testid="hero-nigeria-link" className="ml-2 font-semibold text-[#E8C766] underline-offset-2 hover:underline">
+              Play GTEX in Nigeria
+            </Link>
+          </p>
 
           {/* Conversion Calls to Action */}
           <div className="mt-10 flex flex-wrap items-center gap-4">

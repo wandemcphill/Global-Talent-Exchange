@@ -26,6 +26,7 @@ import {
   commercialApi,
   formatNairaMinor,
 } from "@/lib/commercial/api";
+import { DocumentHead } from "@/components/seo/DocumentHead";
 
 export interface CommercialPublicPortalProps {
   division?: "overview" | "brands" | "music";
@@ -36,7 +37,8 @@ export default function CommercialPublicPortal({
   division,
   initialTab,
 }: CommercialPublicPortalProps = {}) {
-  const pathname = typeof window !== "undefined" ? window.location.pathname : "";
+  const location = useLocation();
+  const pathname = location.pathname;
   const tabFromProp = initialTab || division;
   const isPricingRoute = initialTab === "pricing" || pathname.endsWith("/pricing");
   const initialFocus =
@@ -99,11 +101,24 @@ export default function CommercialPublicPortal({
   const brandPackages = packages.filter((p) => p.division === "brand");
   const musicPackages = packages.filter((p) => p.division === "music");
 
+  const seoPath = pathname.includes("/music")
+    ? "/advertise/music"
+    : pathname.includes("/brands")
+      ? "/advertise/brands"
+      : pathname.includes("/pricing")
+        ? "/advertise/pricing"
+        : "/advertise";
+
   return (
     <div
       className="min-h-screen bg-[#050811] text-slate-100 selection:bg-emerald-500/30"
       data-testid="gtex-commercial-public-portal"
     >
+      <DocumentHead
+        title="Advertise on GTEX in Nigeria | Naira campaigns"
+        description="Book GTEX matchday, brand, and music placements in Nigerian naira. Pay with Paystack or KoraPay. No personal football account is required."
+        path={seoPath}
+      />
       {/* Top Commercial Network Navigation */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[#050811]/90 backdrop-blur-xl">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">

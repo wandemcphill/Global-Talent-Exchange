@@ -8,6 +8,7 @@ import { publicUrl } from "@/lib/publicPath";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 import { GtexAuthAdvertisingPanel } from "@/components/advertising/GtexAdvertising";
+import { DocumentHead } from "@/components/seo/DocumentHead";
 
 type AccountType = "user" | "creator" | "coin_trader";
 
@@ -439,6 +440,19 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
 
   return (
     <div className="grid min-h-screen bg-[#070B11] lg:grid-cols-2">
+      <DocumentHead
+        title={
+          mode === "signup"
+            ? "Create a GTEX account in Nigeria | Club, trader, or creator"
+            : "Sign in to GTEX | playgtex.app"
+        }
+        description={
+          mode === "signup"
+            ? "Open a free GTEX account in Nigeria. Found a football club, apply as a naira coin trader, or join as a creator."
+            : "Sign in to GTEX to run your club, trade coins in naira, and manage players."
+        }
+        path={mode === "signup" ? "/signup" : "/login"}
+      />
       <div className="relative hidden overflow-hidden lg:block">
         <img
           src={publicUrl("assets/stadium_bg.png")}

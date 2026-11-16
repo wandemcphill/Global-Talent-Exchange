@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 from app.core.config import Settings, get_settings
 from app.ingestion.models import Country, Player, PlayerVerification
 from app.models.base import utcnow
-from app.models.club_profile import ClubProfile
+from app.models.club_profile import ClubLifecycleStatus, ClubProfile
 from app.models.player_cards import (
     PlayerCard,
     PlayerCardHolding,
@@ -105,8 +105,8 @@ class RegenCreationService:
         self.treasury_service = self.treasury_service or TreasuryService(wallet_service=self.wallet_service)
         self.engine = self.engine or RegenGenerationEngine(self.settings)
 
-    def request_son_options(self, actor: User) -> RequestSonOptionsView:
-        club = self._resolve_actor_club(actor)
+    def request_son_options(self, actor: User, club_id: str | None = None) -> RequestSonOptionsView:
+        club = self._resolve_actor_club(actor, club_id=club_id)
         pricing = self._pricing_view()
         rows = self._eligible_parent_rows(club.id)
         regens_by_player = self._regens_by_player([player.id for player, _country in rows])
@@ -139,7 +139,7 @@ class RegenCreationService:
         actor: User,
         payload: RequestSonCreateRequest,
     ) -> RegenCreationOrderView:
-        club = self._resolve_actor_club(actor)
+        club = self._resolve_actor_club(actor, club_id=payload.club_id)
         parent_player = self._resolve_parent_player(
             club=club,
             actor=actor,
@@ -228,11 +228,30 @@ class RegenCreationService:
             raise RegenCreationPaymentError("Payment must be settled before generation.")
         return self._generate_order(order=order, actor=actor)
 
-    def _resolve_actor_club(self, actor: User) -> ClubProfile:
+    def _resolve_actor_club(self, actor: User, club_id: str | None = None) -> ClubProfile:
+        """Use the club on screen, otherwise the owner's primary club.
+
+        The previous lookup always took the newest club. Owners can hold three,
+        and the academy desk follows the club they activated.
+        """
+        requested_id = (club_id or "").strip() or None
+        if requested_id:
+            club = self.session.get(ClubProfile, requested_id)
+            if club is None or club.owner_user_id != actor.id:
+                raise RegenCreationPermissionError("You can only build a son at a club you own.")
+            if club.lifecycle_status == ClubLifecycleStatus.ARCHIVED_GENERATED:
+                raise RegenCreationValidationError("That club is archived.")
+            return club
+        from app.auth.service import AuthService
+
+        primary = AuthService().resolve_user_club(self.session, actor)
+        if primary is not None and primary.owner_user_id == actor.id:
+            return primary
         club = self.session.scalar(
             select(ClubProfile)
             .where(ClubProfile.owner_user_id == actor.id)
-            .order_by(ClubProfile.created_at.desc(), ClubProfile.id.desc())
+            .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
+            .order_by(ClubProfile.created_at.asc(), ClubProfile.id.asc())
         )
         if club is None:
             raise RegenCreationValidationError("No managed club was found for this user.")

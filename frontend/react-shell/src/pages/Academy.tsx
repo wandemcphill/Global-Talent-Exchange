@@ -84,7 +84,8 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
 
   const optionsQuery = useQuery({
     queryKey: ["request-son-options", club?.club_id],
-    queryFn: async () => (await api.get("/regens/request-son/options")).data,
+    queryFn: async () =>
+      (await api.get("/regens/request-son/options", { params: { club_id: club.club_id } })).data,
     enabled: Boolean(club?.club_id),
   });
   const options = optionsQuery.data;
@@ -160,6 +161,7 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
     try {
       const body: Record<string, unknown> = {
         parent_player_id: parentId,
+        club_id: club.club_id,
         payment_method: "wallet",
       };
       if (sonName.trim()) body.requested_name = sonName.trim();
@@ -175,6 +177,12 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
           generated = paid.data?.generated_player || generated;
         } catch (payErr) {
           toast.error(errMsg(payErr));
+          await Promise.all([
+            qc.invalidateQueries({ queryKey: ["regen-creation-orders"] }),
+            qc.invalidateQueries({ queryKey: ["request-son-options"] }),
+          ]);
+          onOrderUpdated();
+          return;
         }
       }
       if (generated?.full_name) {
