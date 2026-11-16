@@ -47,6 +47,7 @@ function useOrderActions() {
       await api.post(path, body);
       toast.success(ok);
       qc.invalidateQueries({ queryKey: ["coin-orders"] });
+      qc.invalidateQueries({ queryKey: ["club-squad-funding-finance"] });
       refresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -94,7 +95,7 @@ function OrderRow({ o, asTrader, traders }: any) {
 function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount = "4000" }: any) {
   const act = useOrderActions();
   const [coinUnit, setCoinUnit] = useState<CoinUnit>("coin");
-  const [traderId, setTraderId] = useState("");
+  const [traderId, setTraderId] = useState(traders?.[0]?.id || "");
   const [direction, setDirection] = useState("user_buys");
   const [amount, setAmount] = useState(initialAmount);
   const unitInfo = coinUnitMeta(coinUnit);
@@ -190,7 +191,7 @@ function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount =
   );
 }
 
-export function ClubCoinTraderFundingPanel() {
+export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
   const { user } = useAuth();
   const { data: traders, isLoading: tradersLoading } = useQuery({
     queryKey: ["coin-traders"],
@@ -206,6 +207,9 @@ export function ClubCoinTraderFundingPanel() {
   const gtexOrders = (orders || []).filter(
     (order: any) => String(order.coin_unit || "coin").toLowerCase() === "coin"
   );
+  const firstTraderRate = Number(rateOf(approved[0], "coin")?.sell_rate_fiat || 0);
+  const minimumCoinAmount = firstTraderRate > 0 ? Math.ceil(200000 / firstTraderRate) : 1;
+  const suggestedCoinAmount = Math.max(1, Math.ceil(Number(initialAmount) || 0), minimumCoinAmount);
 
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-slate-950/60 p-4" data-testid="club-funding-coin-traders">
@@ -218,7 +222,7 @@ export function ClubCoinTraderFundingPanel() {
         <p className="mt-3 text-xs text-slate-500">Loading verified GTEX Coin traders…</p>
       ) : approved.length ? (
         <div className="mt-4">
-          <OrderForm traders={approved} coinOnly buyOnly initialAmount="4000" />
+          <OrderForm traders={approved} coinOnly buyOnly initialAmount={String(suggestedCoinAmount)} />
         </div>
       ) : (
         <p className="mt-3 rounded border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">
