@@ -1,15 +1,15 @@
 """Rebalance GTEX and Fan Coin retail, trader and withdrawal pricing.
 
-Revision ID: 20261115_0252_gtex_coin_fiat_rate_rebalance
-Revises: 20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration
-Create Date: 2026-11-15
+Revision ID: 20261116_0253_gtex_coin_fiat_rate_rebalance
+Revises: 20261115_0252_canonical_live_match_execution
+Create Date: 2026-11-16
 """
 
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261115_0252_gtex_coin_fiat_rate_rebalance"
-down_revision = "20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration"
+revision = "20261116_0253_gtex_coin_fiat_rate_rebalance"
+down_revision = "20261115_0252_canonical_live_match_execution"
 branch_labels = None
 depends_on = None
 
