@@ -96,6 +96,10 @@ describe("club location form", () => {
     expect(q("t-country-input").value).toBe("");
     expect(q("t-city-input").disabled).toBe(true);
     expect(q("go").disabled).toBe(true);
+    expect(host.textContent).toContain("Country");
+    expect(host.textContent).toContain("Home city");
+    expect(host.textContent).toContain("Region / state");
+    expect(host.querySelectorAll('[role="alert"]')).toHaveLength(0);
   });
 
   test.each([
