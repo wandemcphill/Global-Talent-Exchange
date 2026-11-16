@@ -156,7 +156,6 @@ def test_bridge_audit_is_clean_on_an_untouched_ledger(tmp_path) -> None:
     assert report["pass"] is True
 
 
-
 def test_bridge_audit_detects_legacy_fancoin_backed_only_at_old_rate(tmp_path) -> None:
     session, url = _make_session_and_url(tmp_path)
     try:
