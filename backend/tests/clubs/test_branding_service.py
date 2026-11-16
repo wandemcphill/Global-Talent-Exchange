@@ -73,6 +73,7 @@ def test_branding_and_jersey_services_create_moderation_aware_custom_assets(sess
     assert jersey.moderation_status == "pending_review"
     assert len(catalog_items) >= 6
 
+
 def test_club_creation_persists_crest_data_uri_longer_than_255_characters(session) -> None:
     crest_data_uri = "data:image/svg+xml;base64," + ("A" * 2048)
     club = ClubBrandingService(session).create_club_profile(
