@@ -102,7 +102,7 @@ async function verifyTotpCode(secret: string, code: string): Promise<boolean> {
   return false;
 }
 
-function parseAuthErrorfunction parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
+function parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
   const detail = error?.response?.data?.detail;
   const mappedFields: Record<string, string> = {};
   if (Array.isArray(detail)) {
