@@ -384,6 +384,8 @@ def test_coin_trader_displayed_liquidity_is_capped_by_wallet_balance(coin_trader
 
     profile_view = service.get_profile(profile.id)
     assert profile_view.rates[0].available_liquidity == Decimal("1000.0000")
+    assert not hasattr(profile_view, "liquidity_snapshot")  # public view must not expose it
+    profile_view = service.admin_list_profiles()[0]  # owner/admin view (full)
     assert profile_view.liquidity_snapshot["coin:NGN"]["available_liquidity"] == "1000.0000"
     assert profile_view.liquidity_snapshot["coin:NGN"]["claimed_available_liquidity"] == "50000.0000"
 
@@ -1024,7 +1026,7 @@ def test_expire_stale_orders_sweeps_and_refunds_escrow(
     expired = service.expire_stale_orders()
     assert len(expired) == 1
     assert expired[0].id == order.id
-    assert expired[0].status == CoinTradeOrderStatus.CANCELLED.value
+    assert expired[0].status == CoinTradeOrderStatus.EXPIRED.value
 
     # Verify escrow was refunded back to trader
     trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)

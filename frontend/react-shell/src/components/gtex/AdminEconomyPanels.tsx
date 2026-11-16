@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Panel } from "@/components/gtex/ui";
+import { CoinTraderAdminExtras } from "@/components/gtex/coin-traders/CoinTraderAdminExtras";
 
 type CoinUnit = "coin" | "credit";
 
@@ -19,7 +20,9 @@ interface AdminUserSummary {
 
 function makeIdempotencyKey(prefix: string): string {
   const randomPart =
-    typeof globalThis !== "undefined" && globalThis.crypto && typeof globalThis.crypto.randomUUID === "function"
+    typeof globalThis !== "undefined" &&
+    globalThis.crypto &&
+    typeof globalThis.crypto.randomUUID === "function"
       ? globalThis.crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   return `${prefix}-${randomPart}`;
@@ -49,7 +52,9 @@ function UserSearchSelector({
     queryKey: ["admin-finance-users", testIdPrefix, search],
     queryFn: async () => {
       try {
-        const res = await api.get(`/admin/finance/users?search=${encodeURIComponent(search)}&limit=12`);
+        const res = await api.get(
+          `/admin/finance/users?search=${encodeURIComponent(search)}&limit=12`,
+        );
         return Array.isArray(res.data) ? res.data : [];
       } catch {
         return [];
@@ -77,8 +82,12 @@ function UserSearchSelector({
         />
       </div>
       {selectedUser && (
-        <p className="text-[11px] text-emerald-300" data-testid={`${testIdPrefix}-selected-summary`}>
-          Selected: <b>{selectedUser.display_name || selectedUser.username}</b> ({selectedUser.email})
+        <p
+          className="text-[11px] text-emerald-300"
+          data-testid={`${testIdPrefix}-selected-summary`}
+        >
+          Selected: <b>{selectedUser.display_name || selectedUser.username}</b> (
+          {selectedUser.email})
         </p>
       )}
       {isFetching ? (
@@ -95,10 +104,14 @@ function UserSearchSelector({
                   onClick={() => onSelectUser(u)}
                   data-testid={`${testIdPrefix}-option-${u.id}`}
                   className={`flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs transition-colors ${
-                    active ? "bg-emerald-500/20 text-emerald-200 border border-emerald-400/40" : "text-slate-300 hover:bg-white/5"
+                    active
+                      ? "bg-emerald-500/20 text-emerald-200 border border-emerald-400/40"
+                      : "text-slate-300 hover:bg-white/5"
                   }`}
                 >
-                  <span className="truncate">{u.display_name || u.username} · {u.email}</span>
+                  <span className="truncate">
+                    {u.display_name || u.username} · {u.email}
+                  </span>
                   <span className="gx-mono text-[10px] text-slate-400">{u.role || "user"}</span>
                 </button>
               );
@@ -141,13 +154,18 @@ export function AdminWalletAndPointsPanel() {
   const [pointsBusy, setPointsBusy] = useState(false);
   const [pointsResult, setPointsResult] = useState<any>(null);
 
-  const resolvedPointsUserId = useMemo(() => (pointsUser?.id || pointsUserId).trim(), [pointsUser, pointsUserId]);
+  const resolvedPointsUserId = useMemo(
+    () => (pointsUser?.id || pointsUserId).trim(),
+    [pointsUser, pointsUserId],
+  );
   const { data: selectedUserPoints, refetch: refetchUserPoints } = useQuery<any>({
     queryKey: ["admin-user-points", resolvedPointsUserId],
     enabled: Boolean(resolvedPointsUserId),
     queryFn: async () => {
       try {
-        return (await api.get(`/admin/god-mode/users/${encodeURIComponent(resolvedPointsUserId)}/points`)).data;
+        return (
+          await api.get(`/admin/god-mode/users/${encodeURIComponent(resolvedPointsUserId)}/points`)
+        ).data;
       } catch {
         return null;
       }
@@ -165,7 +183,8 @@ export function AdminWalletAndPointsPanel() {
     const userId = (creditUser?.id || creditUserId).trim();
     const numericAmount = Number(creditAmount);
     if (!userId) return toast.error("Select or enter a target user first.");
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) return toast.error("Amount must be greater than zero.");
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0)
+      return toast.error("Amount must be greater than zero.");
     if (creditReason.trim().length < 4) return toast.error("Reason must be at least 4 characters.");
     setCreditBusy(true);
     try {
@@ -177,7 +196,9 @@ export function AdminWalletAndPointsPanel() {
         idempotency_key: makeIdempotencyKey("admin-credit"),
       });
       setCreditResult(data);
-      toast.success(`Credited ${data.amount} ${creditUnit === "coin" ? "GTC" : "FNC"} to ${data.username || data.user_id}.`);
+      toast.success(
+        `Credited ${data.amount} ${creditUnit === "coin" ? "GTC" : "FNC"} to ${data.username || data.user_id}.`,
+      );
       await invalidateAdminEconomy();
     } catch (e) {
       toast.error(errMsg(e));
@@ -192,8 +213,10 @@ export function AdminWalletAndPointsPanel() {
     const numericAmount = Number(transferAmount);
     if (!sourceId || !destId) return toast.error("Select both source and destination users.");
     if (sourceId === destId) return toast.error("Source and destination users must be different.");
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) return toast.error("Transfer amount must be greater than zero.");
-    if (transferReason.trim().length < 4) return toast.error("Reason must be at least 4 characters.");
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0)
+      return toast.error("Transfer amount must be greater than zero.");
+    if (transferReason.trim().length < 4)
+      return toast.error("Reason must be at least 4 characters.");
     setTransferBusy(true);
     try {
       const { data } = await api.post("/admin/god-mode/wallets/transfer", {
@@ -205,7 +228,9 @@ export function AdminWalletAndPointsPanel() {
         idempotency_key: makeIdempotencyKey("admin-transfer"),
       });
       setTransferResult(data);
-      toast.success(`Transferred ${data.amount} ${transferUnit === "coin" ? "GTC" : "FNC"} successfully.`);
+      toast.success(
+        `Transferred ${data.amount} ${transferUnit === "coin" ? "GTC" : "FNC"} successfully.`,
+      );
       await invalidateAdminEconomy();
     } catch (e) {
       toast.error(errMsg(e));
@@ -218,7 +243,8 @@ export function AdminWalletAndPointsPanel() {
     const userId = resolvedPointsUserId;
     const numericAmount = Number(pointsAmount);
     if (!userId) return toast.error("Select or enter a target user first.");
-    if (!Number.isFinite(numericAmount) || numericAmount <= 0) return toast.error("Points amount must be greater than zero.");
+    if (!Number.isFinite(numericAmount) || numericAmount <= 0)
+      return toast.error("Points amount must be greater than zero.");
     if (pointsReason.trim().length < 4) return toast.error("Reason must be at least 4 characters.");
     setPointsBusy(true);
     try {
@@ -241,7 +267,11 @@ export function AdminWalletAndPointsPanel() {
   return (
     <div className="space-y-6" data-testid="admin-economy-operations-panel">
       {/* 1. Give someone coin */}
-      <Panel eyebrow="Direct Mint & Wallet Credit" title="Give someone coin (GTEX Coin or Fan Coin)" testid="admin-give-coin-panel">
+      <Panel
+        eyebrow="Direct Mint & Wallet Credit"
+        title="Give someone coin (GTEX Coin or Fan Coin)"
+        testid="admin-give-coin-panel"
+      >
         <div className="space-y-3">
           <UserSearchSelector
             labelText="Recipient account"
@@ -293,21 +323,34 @@ export function AdminWalletAndPointsPanel() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-slate-400">Crediting {unitDisplay(creditUnit)} via double-entry operations ledger.</span>
+            <span className="text-xs text-slate-400">
+              Crediting {unitDisplay(creditUnit)} via double-entry operations ledger.
+            </span>
             <Btn onClick={handleGiveCoin} disabled={creditBusy} data-testid="give-coin-submit-btn">
-              {creditBusy ? "Crediting…" : `Give ${creditUnit === "coin" ? "GTEX Coin" : "Fan Coin"}`}
+              {creditBusy
+                ? "Crediting…"
+                : `Give ${creditUnit === "coin" ? "GTEX Coin" : "Fan Coin"}`}
             </Btn>
           </div>
           {creditResult && (
-            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200" data-testid="give-coin-result">
-              Tx <span className="gx-mono">{creditResult.transaction_id}</span> · Before: <b>{fmt(creditResult.balance_before)}</b> → After: <b>{fmt(creditResult.balance_after)}</b>
+            <div
+              className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200"
+              data-testid="give-coin-result"
+            >
+              Tx <span className="gx-mono">{creditResult.transaction_id}</span> · Before:{" "}
+              <b>{fmt(creditResult.balance_before)}</b> → After:{" "}
+              <b>{fmt(creditResult.balance_after)}</b>
             </div>
           )}
         </div>
       </Panel>
 
       {/* 2. Transfer coin between users */}
-      <Panel eyebrow="P2P Desk Correction" title="Transfer coin between users" testid="admin-transfer-coin-panel">
+      <Panel
+        eyebrow="P2P Desk Correction"
+        title="Transfer coin between users"
+        testid="admin-transfer-coin-panel"
+      >
         <div className="space-y-3">
           <div className="grid gap-4 md:grid-cols-2">
             <UserSearchSelector
@@ -375,24 +418,46 @@ export function AdminWalletAndPointsPanel() {
             </div>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs text-slate-400">Atomic double-entry transfer; rejects insufficient sender balance or same-user transfers.</span>
-            <Btn variant="secondary" onClick={handleTransferCoin} disabled={transferBusy} data-testid="transfer-coin-submit-btn">
-              {transferBusy ? "Transferring…" : `Transfer ${transferUnit === "coin" ? "GTEX Coin" : "Fan Coin"}`}
+            <span className="text-xs text-slate-400">
+              Atomic double-entry transfer; rejects insufficient sender balance or same-user
+              transfers.
+            </span>
+            <Btn
+              variant="secondary"
+              onClick={handleTransferCoin}
+              disabled={transferBusy}
+              data-testid="transfer-coin-submit-btn"
+            >
+              {transferBusy
+                ? "Transferring…"
+                : `Transfer ${transferUnit === "coin" ? "GTEX Coin" : "Fan Coin"}`}
             </Btn>
           </div>
           {transferResult && (
-            <div className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200" data-testid="transfer-coin-result">
-              Tx <span className="gx-mono">{transferResult.transaction_id}</span> · From: {fmt(transferResult.from_balance_before)} → <b>{fmt(transferResult.from_balance_after)}</b> · To: {fmt(transferResult.to_balance_before)} → <b>{fmt(transferResult.to_balance_after)}</b>
+            <div
+              className="rounded-lg border border-sky-500/30 bg-sky-500/10 p-3 text-xs text-sky-200"
+              data-testid="transfer-coin-result"
+            >
+              Tx <span className="gx-mono">{transferResult.transaction_id}</span> · From:{" "}
+              {fmt(transferResult.from_balance_before)} →{" "}
+              <b>{fmt(transferResult.from_balance_after)}</b> · To:{" "}
+              {fmt(transferResult.to_balance_before)} →{" "}
+              <b>{fmt(transferResult.to_balance_after)}</b>
             </div>
           )}
         </div>
       </Panel>
 
       {/* 3. Grant personal user points */}
-      <Panel eyebrow="Isolated Reward Ledger" title="Grant personal user points" testid="admin-grant-points-panel">
+      <Panel
+        eyebrow="Isolated Reward Ledger"
+        title="Grant personal user points"
+        testid="admin-grant-points-panel"
+      >
         <div className="space-y-3">
           <p className="text-xs text-slate-400">
-            Credits the user&apos;s dedicated personal reward points ledger (`UserPointAccount`), completely separate from Fan War and Club Loyalty points.
+            Credits the user&apos;s dedicated personal reward points ledger (`UserPointAccount`),
+            completely separate from Fan War and Club Loyalty points.
           </p>
           <UserSearchSelector
             labelText="Target user"
@@ -409,10 +474,17 @@ export function AdminWalletAndPointsPanel() {
             testIdPrefix="grant-points-user"
           />
           {selectedUserPoints && (
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs" data-testid="selected-user-points-balance">
+            <div
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-white/10 bg-black/40 p-2.5 text-xs"
+              data-testid="selected-user-points-balance"
+            >
               <Chip tone="gold">Balance: {fmt(selectedUserPoints.balance)} pts</Chip>
-              <span className="text-slate-300">Lifetime earned: {fmt(selectedUserPoints.lifetime_earned)} pts</span>
-              <span className="text-slate-400">Scope: {label(selectedUserPoints.source_scope || "personal_reward_points")}</span>
+              <span className="text-slate-300">
+                Lifetime earned: {fmt(selectedUserPoints.lifetime_earned)} pts
+              </span>
+              <span className="text-slate-400">
+                Scope: {label(selectedUserPoints.source_scope || "personal_reward_points")}
+              </span>
             </div>
           )}
           <div className="grid gap-3 md:grid-cols-3">
@@ -439,13 +511,22 @@ export function AdminWalletAndPointsPanel() {
             </div>
           </div>
           <div className="flex justify-end">
-            <Btn variant="gold" onClick={handleGrantPoints} disabled={pointsBusy} data-testid="grant-points-submit-btn">
+            <Btn
+              variant="gold"
+              onClick={handleGrantPoints}
+              disabled={pointsBusy}
+              data-testid="grant-points-submit-btn"
+            >
               {pointsBusy ? "Granting…" : "Grant personal points"}
             </Btn>
           </div>
           {pointsResult && (
-            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200" data-testid="grant-points-result">
-              Ref <span className="gx-mono">{pointsResult.reference}</span> · Balance: {fmt(pointsResult.balance_before)} → <b>{fmt(pointsResult.balance_after)}</b>
+            <div
+              className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200"
+              data-testid="grant-points-result"
+            >
+              Ref <span className="gx-mono">{pointsResult.reference}</span> · Balance:{" "}
+              {fmt(pointsResult.balance_before)} → <b>{fmt(pointsResult.balance_after)}</b>
             </div>
           )}
         </div>
@@ -505,9 +586,16 @@ export function CoinTraderDeskAdminPanel() {
   };
 
   const getDraft = (profileId: string) =>
-    liquidityDrafts[profileId] || { coin_unit: "coin" as CoinUnit, amount: "100", note: "Desk inventory allocation" };
+    liquidityDrafts[profileId] || {
+      coin_unit: "coin" as CoinUnit,
+      amount: "100",
+      note: "Desk inventory allocation",
+    };
 
-  const setDraft = (profileId: string, patch: Partial<{ coin_unit: CoinUnit; amount: string; note: string }>) => {
+  const setDraft = (
+    profileId: string,
+    patch: Partial<{ coin_unit: CoinUnit; amount: string; note: string }>,
+  ) => {
     const prev = getDraft(profileId);
     setLiquidityDrafts((curr) => ({ ...curr, [profileId]: { ...prev, ...patch } }));
   };
@@ -591,7 +679,15 @@ export function CoinTraderDeskAdminPanel() {
                     <div>
                       <span className="font-bold text-white">{t.display_name}</span> · Tier:{" "}
                       <span className="capitalize">{t.tier}</span> · Status:{" "}
-                      <Chip tone={t.status === "approved" ? "emerald" : t.status === "applied" ? "gold" : "red"}>
+                      <Chip
+                        tone={
+                          t.status === "approved"
+                            ? "emerald"
+                            : t.status === "applied"
+                              ? "gold"
+                              : "red"
+                        }
+                      >
                         {label(t.status || "applied")}
                       </Chip>{" "}
                       <Chip tone={isVerified ? "emerald" : "gold"}>
@@ -607,7 +703,9 @@ export function CoinTraderDeskAdminPanel() {
                       {t.status === "applied" && (
                         <>
                           <Btn
-                            onClick={() => handleGovernanceAction(t.id, "approve", t.tier || "bronze")}
+                            onClick={() =>
+                              handleGovernanceAction(t.id, "approve", t.tier || "bronze")
+                            }
                             disabled={Boolean(busyKey)}
                             data-testid={`approve-trader-${t.id}`}
                           >
@@ -714,7 +812,10 @@ export function CoinTraderDeskAdminPanel() {
         )}
 
         {lastLiquidityResult && (
-          <div className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200" data-testid="trader-liquidity-result">
+          <div
+            className="mt-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200"
+            data-testid="trader-liquidity-result"
+          >
             Liquidity {lastLiquidityResult.flow}: {fmt(lastLiquidityResult.amount)}{" "}
             {lastLiquidityResult.coin_unit === "coin" ? "GTC" : "FNC"} · Ref{" "}
             <span className="gx-mono">{lastLiquidityResult.reference}</span> · Balance:{" "}
@@ -741,13 +842,23 @@ export function CoinTraderDeskAdminPanel() {
                 data-testid={`admin-kyc-record-${rec.id}`}
               >
                 <div>
-                  <b className="text-white">{rec.trader_display_name || rec.user_email || rec.user_id}</b> ·{" "}
-                  <span className="uppercase text-sky-300">{rec.provider}</span> ·{" "}
+                  <b className="text-white">
+                    {rec.trader_display_name || rec.user_email || rec.user_id}
+                  </b>{" "}
+                  · <span className="uppercase text-sky-300">{rec.provider}</span> ·{" "}
                   <span>{rec.verification_type}</span> · Session{" "}
                   <span className="gx-mono text-slate-400">{rec.provider_session_id || "—"}</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-1.5">
-                  <Chip tone={rec.status === "verified" ? "emerald" : rec.status === "rejected" ? "red" : "gold"}>
+                  <Chip
+                    tone={
+                      rec.status === "verified"
+                        ? "emerald"
+                        : rec.status === "rejected"
+                          ? "red"
+                          : "gold"
+                    }
+                  >
                     {label(rec.status || "pending")}
                   </Chip>
                   {rec.decision && <Chip tone="slate">{label(rec.decision)}</Chip>}
@@ -764,7 +875,8 @@ export function CoinTraderDeskAdminPanel() {
           </div>
         )}
       </Panel>
+
+      <CoinTraderAdminExtras />
     </div>
   );
 }
-

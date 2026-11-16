@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
+import runpy
+import threading
+import time
+from types import SimpleNamespace
+
 from alembic.autogenerate import api as alembic_autogenerate
 from alembic import command as alembic_command
 from alembic.migration import MigrationContext
-from types import SimpleNamespace
-
+from alembic.runtime.environment import EnvironmentContext
+from alembic.script import ScriptDirectory
+import sqlalchemy
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.exc import OperationalError
 
@@ -243,3 +250,131 @@ def test_initialize_database_connection_retries_operational_error(monkeypatch) -
 
     assert initialized_engine is engine
     assert attempts["count"] == 3
+
+
+def test_ensure_database_schema_current_serializes_concurrent_threads(monkeypatch, tmp_path) -> None:
+    database_url = f"sqlite+pysqlite:///{(tmp_path / 'concurrent-heads.db').as_posix()}"
+    engine = create_engine(database_url, connect_args={"check_same_thread": False})
+    state_lock = threading.Lock()
+    state = {"current_head": tuple(), "active_upgrades": 0, "max_active_upgrades": 0, "upgrade_calls": 0}
+
+    class _DummyScriptDirectory:
+        def get_current_head(self) -> str:
+            return "rev-a"
+
+    class _DummyMigrationContext:
+        @staticmethod
+        def configure(_connection):
+            class _ConfiguredContext:
+                def get_current_heads(self) -> tuple[str, ...]:
+                    with state_lock:
+                        return state["current_head"]
+
+            return _ConfiguredContext()
+
+    def _upgrade(_config, _target: str) -> None:
+        with state_lock:
+            state["active_upgrades"] += 1
+            state["max_active_upgrades"] = max(state["max_active_upgrades"], state["active_upgrades"])
+            state["upgrade_calls"] += 1
+        time.sleep(0.05)
+        with state_lock:
+            state["current_head"] = ("rev-a",)
+            state["active_upgrades"] -= 1
+
+    monkeypatch.setattr(database_module, "load_model_modules", lambda: None)
+    monkeypatch.setattr(database_module, "build_alembic_config", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(
+        database_module.ScriptDirectory, "from_config", staticmethod(lambda _config: _DummyScriptDirectory())
+    )
+    monkeypatch.setattr(database_module, "MigrationContext", _DummyMigrationContext)
+    monkeypatch.setattr(database_module, "command", SimpleNamespace(upgrade=_upgrade))
+
+    barrier = threading.Barrier(4)
+    results: list[tuple[str, ...]] = []
+    errors: list[BaseException] = []
+
+    def _worker() -> None:
+        try:
+            barrier.wait(timeout=5)
+            results.append(database_module.ensure_database_schema_current(engine))
+        except BaseException as exc:  # pragma: no cover - surfaced by assertion below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=_worker) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join(timeout=5)
+        assert not thread.is_alive()
+
+    engine.dispose()
+
+    assert not errors
+    assert state["max_active_upgrades"] == 1
+    assert state["upgrade_calls"] == 1
+    assert results == [("rev-a",)] * 4
+
+
+def test_alembic_env_acquires_postgres_advisory_lock_during_online_migrations(monkeypatch) -> None:
+    config = database_module.build_alembic_config("postgresql+psycopg://user:pass@localhost:5432/gtex")
+    script = ScriptDirectory.from_config(config)
+    events: list[str] = []
+
+    class _FakeConnection:
+        dialect = SimpleNamespace(name="postgresql")
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> bool:
+            return False
+
+        def execute(self, statement, params=None) -> None:
+            sql_text = str(statement)
+            if "pg_advisory_xact_lock" in sql_text:
+                assert params and isinstance(params.get("lock_id"), int)
+                events.append("lock")
+
+        def commit(self) -> None:
+            events.append("commit")
+
+    class _FakeEngine:
+        def connect(self):
+            return _FakeConnection()
+
+    class _FakeInspector:
+        @staticmethod
+        def has_table(table_name: str) -> bool:
+            assert table_name == "alembic_version"
+            events.append("inspect_version_table")
+            return True
+
+        @staticmethod
+        def get_columns(table_name: str):
+            assert table_name == "alembic_version"
+            return [{"name": "version_num", "type": SimpleNamespace(length=255)}]
+
+    @contextmanager
+    def _begin_transaction(_self):
+        events.append("begin_transaction")
+        yield
+
+    monkeypatch.setattr(sqlalchemy, "create_engine", lambda *_args, **_kwargs: _FakeEngine())
+    monkeypatch.setattr(sqlalchemy, "inspect", lambda _connection: _FakeInspector())
+    monkeypatch.setattr(EnvironmentContext, "configure", lambda *_args, **_kwargs: events.append("configure"))
+    monkeypatch.setattr(EnvironmentContext, "begin_transaction", _begin_transaction)
+    monkeypatch.setattr(EnvironmentContext, "run_migrations", lambda _self: events.append("run_migrations"))
+
+    with EnvironmentContext(config, script):
+        runpy.run_path(str(database_module.MIGRATIONS_ROOT / "env.py"), run_name="test_env")
+
+    assert events == [
+        "lock",
+        "inspect_version_table",
+        "commit",
+        "configure",
+        "begin_transaction",
+        "lock",
+        "run_migrations",
+    ]

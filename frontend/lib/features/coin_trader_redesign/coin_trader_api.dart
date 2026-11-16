@@ -401,6 +401,110 @@ class GtexCoinTraderApi {
     return list.map(GtexCoinTradeOrder.fromJson).toList(growable: false);
   }
 
+  Future<Map<String, dynamic>> fetchMarketplaceOffers({
+    String coinUnit = 'coin',
+    String side = 'sell',
+    String fiatCurrency = 'NGN',
+    double? fiatAmount,
+    String? paymentMethod,
+    bool verifiedOnly = false,
+    String? sortBy,
+  }) async {
+    return client.getMap(
+      _path('/api/coin-traders/marketplace'),
+      auth: false,
+      query: <String, Object?>{
+        'coin_unit': _ledgerUnit(coinUnit),
+        'side': side,
+        'fiat_currency': fiatCurrency,
+        if (fiatAmount != null && fiatAmount > 0) 'fiat_amount': fiatAmount,
+        if (_notBlank(paymentMethod)) 'payment_method': paymentMethod!.trim(),
+        if (verifiedOnly) 'verified_only': true,
+        if (_notBlank(sortBy)) 'sort_by': sortBy,
+      },
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchMarketReference() {
+    return client.getMap(_path('/api/coin-traders/market-reference'), auth: false);
+  }
+
+  Future<Map<String, dynamic>> fetchMerchantDashboard() {
+    return client.getMap(_path('/api/coin-traders/me/dashboard'));
+  }
+
+  Future<Map<String, dynamic>> upsertMyAdvert({
+    required String coinUnit,
+    required String side,
+    required double priceFiat,
+    String pricingMode = 'fixed',
+    double spreadFiat = 0,
+    double minCoinAmount = 0,
+    double maxCoinAmount = 0,
+    int paymentWindowMinutes = 15,
+    List<String> paymentMethods = const <String>['Bank Transfer'],
+    String? termsText,
+    String status = 'active',
+  }) async {
+    final Object? payload = await client.request(
+      'PUT',
+      _path('/api/coin-traders/me/adverts'),
+      body: <String, Object?>{
+        'coin_unit': _ledgerUnit(coinUnit),
+        'fiat_currency': 'NGN',
+        'side': side,
+        'pricing_mode': pricingMode,
+        'price_fiat': priceFiat,
+        'spread_fiat': spreadFiat,
+        'min_coin_amount': minCoinAmount,
+        'max_coin_amount': maxCoinAmount,
+        'payment_window_minutes': paymentWindowMinutes,
+        'payment_methods': paymentMethods,
+        if (_notBlank(termsText)) 'terms_text': termsText!.trim(),
+        'status': status,
+      },
+    );
+    return payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> updateMyAdvertStatus(String advertId, String status) async {
+    final Object? payload = await client.post(
+      _path('/api/coin-traders/me/adverts/$advertId/status'),
+      body: <String, Object?>{'status': status},
+    );
+    return payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> submitOrderRating({
+    required String orderId,
+    required int score,
+    String? comment,
+  }) async {
+    final Object? payload = await client.post(
+      _path('/api/coin-traders/orders/$orderId/rating'),
+      body: <String, Object?>{
+        'score': score,
+        if (_notBlank(comment)) 'comment': comment!.trim(),
+      },
+    );
+    return payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> adminPauseAdvert(String advertId, String reason) async {
+    final Object? payload = await client.post(
+      _path('/api/admin/coin-traders/adverts/$advertId/pause'),
+      body: <String, Object?>{'reason': reason},
+    );
+    return payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>> adminResumeAdvert(String advertId) async {
+    final Object? payload = await client.post(
+      _path('/api/admin/coin-traders/adverts/$advertId/resume'),
+    );
+    return payload is Map ? Map<String, dynamic>.from(payload) : <String, dynamic>{};
+  }
+
   String _path(String path) {
     final Uri base = Uri.parse(
       client.config.baseUrl.endsWith('/')

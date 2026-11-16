@@ -196,7 +196,7 @@ class GtexCoinTraderProfile {
       completedVolumeFiat: _double(json['completed_volume_fiat']),
       disputeScore: _double(json['dispute_score']),
       terms: _map(json['terms']),
-      paymentMethods: _mapList(json['payment_methods']),
+      paymentMethods: _paymentMethodList(json['payment_methods']),
       bankAccounts: _mapList(json['bank_accounts']),
       liquiditySnapshot: _map(json['liquidity_snapshot']),
       rates: _list(
@@ -656,6 +656,22 @@ List<Object?> _list(Object? value) {
 
 List<Map<String, Object?>> _mapList(Object? value) {
   return _list(value).map(_map).toList(growable: false);
+}
+
+List<Map<String, Object?>> _paymentMethodList(Object? value) {
+  return _list(value)
+      .map((Object? item) {
+        if (item is String && item.trim().isNotEmpty) {
+          final String trimmed = item.trim();
+          return <String, Object?>{
+            'label': trimmed,
+            'type': trimmed.toLowerCase().replaceAll(RegExp(r'\s+'), '_'),
+          };
+        }
+        return _map(item);
+      })
+      .where((Map<String, Object?> m) => m.isNotEmpty)
+      .toList(growable: false);
 }
 
 String _string(Object? value, {String fallback = ''}) {

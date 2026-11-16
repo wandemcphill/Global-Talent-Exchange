@@ -1,7 +1,7 @@
 """Set the default first-club campaign grant to 2,500 GTX.
 
-Revision ID: 20261116_0259_first_500_club_grant_amount
-Revises: 20261116_0258_owner_console_crest_urls_text
+Revision ID: 20261116_0260_first_500_club_grant_amount
+Revises: 20261116_0259_coin_trader_adverts
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from __future__ import annotations
 from alembic import op
 import sqlalchemy as sa
 
-revision = "20261116_0259_first_500_club_grant_amount"
-down_revision = "20261116_0258_owner_console_crest_urls_text"
+revision = "20261116_0260_first_500_club_grant_amount"
+down_revision = "20261116_0259_coin_trader_adverts"
 branch_labels = None
 depends_on = None
 
