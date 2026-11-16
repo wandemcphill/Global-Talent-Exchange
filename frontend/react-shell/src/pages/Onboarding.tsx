@@ -94,7 +94,7 @@ function IdentityStep({ club, onDone }: any) {
 function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const queryClient = useQueryClient();
   const [coinsToMove, setCoinsToMove] = useState("");
-  const [nairaAmount, setNairaAmount] = useState("5000");
+  const [nairaAmount, setNairaAmount] = useState("");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const financeQuery = useQuery({
     queryKey: ["club-squad-funding-finance"],
@@ -103,15 +103,27 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const finance = financeQuery.data;
   const rates = finance?.treasury_rates || {};
   const rate = Number(rates.deposit_rate || 0);
-  const estimatedCoins = rates.deposit_direction === "coin_per_fiat"
-    ? Number(nairaAmount || 0) * rate
-    : Number(nairaAmount || 0) / (rate || 1);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
   const clubCoins = Number(club?.economy?.cash_gtex || 0);
+  const signedPlayers = (club?.squad || []).filter((player: any) => !player.is_regen);
+  const playersRemaining = Math.max(0, 22 - signedPlayers.length);
+  const estimatedCoinsNeeded = Math.max(0, playersRemaining * 200 - clubCoins);
+  const suggestedNaira = Math.max(
+    100,
+    Math.ceil(
+      rates.deposit_direction === "fiat_per_coin"
+        ? estimatedCoinsNeeded * rate
+        : estimatedCoinsNeeded / (rate || 1)
+    )
+  );
+  const amountToPay = Number(nairaAmount || suggestedNaira);
+  const previewCoins = rates.deposit_direction === "coin_per_fiat"
+    ? amountToPay * rate
+    : amountToPay / (rate || 1);
   const platformReady = Boolean(finance?.payment_providers?.[provider]);
 
   const buyFromPlatform = async () => {
-    const amount = Math.trunc(Number(nairaAmount));
+    const amount = Math.trunc(amountToPay);
     if (!Number.isFinite(amount) || amount < 100) {
       toast.error("Enter at least ₦100 to buy GTEX Coin.");
       return;
@@ -157,7 +169,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
           <p className="gx-eyebrow text-emerald-300">Build your 22-player squad</p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">Top up your player basket</h3>
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
-            Your 2,500 GTX founding grant is reserved for eligible player signings. At the planning average of 200 GTX per player, 22 players cost about 4,400 GTX, leaving an estimated 1,900 GTX to cover. Actual transfer prices vary.
+            Your 2,500 GTX founding grant is reserved for eligible player signings. At the planning average of 200 GTX per player, 22 players cost about 4,400 GTX. Based on the squad you have signed and the cash remaining in the club treasury, the estimated balance to complete 22 players is {fmt(estimatedCoinsNeeded)} GTX. Actual transfer prices vary.
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend player signings require deposited GTX under GTEX acquisition rules.
@@ -187,8 +199,8 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
             ))}
           </div>
           <label className="gx-label mt-3 block">Amount to pay (₦)</label>
-          <input className="gx-input mt-1" type="number" min={100} step={1} value={nairaAmount} onChange={(event) => setNairaAmount(event.target.value)} data-testid="squad-platform-amount" />
-          <p className="mt-2 text-xs text-slate-400">Estimated wallet credit: <b className="text-white">{fmt(estimatedCoins, 2)} GTX</b></p>
+          <input className="gx-input mt-1" type="number" min={100} step={1} value={nairaAmount || String(suggestedNaira)} onChange={(event) => setNairaAmount(event.target.value)} data-testid="squad-platform-amount" />
+          <p className="mt-2 text-xs text-slate-400">Estimated wallet credit: <b className="text-white">{fmt(previewCoins, 2)} GTX</b></p>
           <Btn className="mt-3 w-full" disabled={!platformReady || financeQuery.isLoading} onClick={buyFromPlatform} data-testid="squad-platform-buy">
             Buy GTX from platform
           </Btn>
@@ -210,7 +222,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
         </div>
       </div>
       <div className="mt-4">
-        <ClubCoinTraderFundingPanel />
+        <ClubCoinTraderFundingPanel key={String(estimatedCoinsNeeded)} initialAmount={String(estimatedCoinsNeeded)} />
       </div>
     </div>
   );
