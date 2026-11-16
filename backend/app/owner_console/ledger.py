@@ -219,7 +219,7 @@ def record(
         raise LedgerError("amount_must_be_positive")
     if check_funds and not source.startswith(("platform:", "world:", "external:")):
         available_balance = balance(session, source, currency)
-        # Preserve the first-500 founding allocation for player signings only.
+        # Preserve the first-500 allocation unless this debit is explicitly tagged to an eligible player signing.
         is_player_purchase = (
             event_type == "transfer_purchase"
             and balance_class == "squad_grant"
