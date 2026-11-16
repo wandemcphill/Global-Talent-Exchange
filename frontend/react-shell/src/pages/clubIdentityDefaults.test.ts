@@ -40,7 +40,7 @@ describe("bundled club identity defaults", () => {
       expect(kitSet.goalkeeper.jersey_type).toBe("goalkeeper");
       expect(kitSet.home.front_text).toBe(shortCode);
       expect(kitSet.third.front_text).toBe(`${shortCode} ALT`);
-      expect(kitSwatchDataUri(kitSet.home)).toMatch(/^data:image\\/svg\\+xml/);
+      expect(kitSwatchDataUri(kitSet.home).startsWith("data:image/svg+xml")).toBe(true);
     }
   });
 
