@@ -61,7 +61,7 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    crest_asset_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    crest_asset_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_color: Mapped[str] = mapped_column(String(16), nullable=False)
     secondary_color: Mapped[str] = mapped_column(String(16), nullable=False)
     accent_color: Mapped[str] = mapped_column(String(16), nullable=False)
