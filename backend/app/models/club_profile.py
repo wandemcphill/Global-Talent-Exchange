@@ -25,9 +25,7 @@ class ClubLifecycleStatus(StrEnum):
 
 class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "club_profiles"
-    __table_args__ = (
-        UniqueConstraint("slug", name="uq_club_profiles_slug"),
-    )
+    __table_args__ = (UniqueConstraint("slug", name="uq_club_profiles_slug"),)
 
     owner_user_id: Mapped[str] = mapped_column(
         String(36),
@@ -61,7 +59,7 @@ class ClubProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     slug: Mapped[str] = mapped_column(String(120), nullable=False, index=True)
-    crest_asset_ref: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    crest_asset_ref: Mapped[str | None] = mapped_column(Text, nullable=True)
     primary_color: Mapped[str] = mapped_column(String(16), nullable=False)
     secondary_color: Mapped[str] = mapped_column(String(16), nullable=False)
     accent_color: Mapped[str] = mapped_column(String(16), nullable=False)
