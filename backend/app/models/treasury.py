@@ -259,7 +259,7 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
             KycStatus,
             name="kyc_status",
             native_enum=False,
-            values_callable=lambda enum: [item.value for item in enum],
+            values_callable=_enum_values,
         ),
         nullable=False,
         default=KycStatus.UNVERIFIED,
