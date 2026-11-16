@@ -818,6 +818,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
   const [preferredStyle, setPreferredStyle] = useState("traditional");
   const [recommendation, setRecommendation] = useState<any>(null);
   const [selectedCrestIdx, setSelectedCrestIdx] = useState(0);
+  const [crestFilter, setCrestFilter] = useState<"all" | "heritage" | "modern" | "royal">("all");
   const [selectedKitTab, setSelectedKitTab] = useState<"home" | "away" | "third" | "goalkeeper">("home");
   const [selectedKitPresetId, setSelectedKitPresetId] = useState(KIT_PRESETS[0].id);
   const [kitSet, setKitSet] = useState<any>(null);
@@ -846,7 +847,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       nationalityFocus,
     );
     const crestConcepts = buildCrestLibrary(clubName);
-    const initialCrestIndex = preferredStyle === "modern" ? 6 : preferredStyle === "metallic" ? 12 : 0;
+    const initialCrestIndex = preferredStyle === "modern" ? 18 : preferredStyle === "metallic" ? 36 : 0;
     const firstKitPreset = KIT_PRESETS[0];
 
     setRecommendation({
@@ -859,7 +860,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
     setKitSet(buildKitSet(firstKitPreset.id, shortCode));
     setSelectedKitTab("home");
     setWizardStep("studio");
-    toast.success("Design library ready: 24 crest options and 16 complete uniform sets.");
+    toast.success("Design library ready: 72 crest designs and 16 complete uniform collections.");
   };
 
   const create = async () => {
@@ -1212,26 +1213,53 @@ function CreateFirstClub({ onDone, onCancel }: any) {
             {/* 3 Crest Concepts */}
             <div className="mb-6">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Choose Primary Club Crest · 24 Ready-Made Designs
+                Choose Primary Club Crest · 72 Ready-Made Designs
               </label>
-              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-                {recommendation.crest_concepts.map((concept: any, idx: number) => (
-                  <div
-                    key={concept.concept_id}
-                    onClick={() => setSelectedCrestIdx(idx)}
-                    className={`cursor-pointer rounded border p-3 text-center transition-all ${
-                      selectedCrestIdx === idx
-                        ? "border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30"
-                        : "border-white/10 bg-slate-900/40 hover:border-white/25"
+              <div className="mt-3 flex flex-wrap gap-2">
+                {([
+                  ["all", "All 72"],
+                  ["heritage", "Heritage"],
+                  ["modern", "Modern"],
+                  ["royal", "Royal"],
+                ] as const).map(([filter, label]) => (
+                  <button
+                    type="button"
+                    key={filter}
+                    onClick={() => setCrestFilter(filter)}
+                    aria-pressed={crestFilter === filter}
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      crestFilter === filter
+                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
+                        : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
                     }`}
                   >
-                    <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
-                      <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
-                    </div>
-                    <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style} {concept.shape}</p>
-                    <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
-                  </div>
+                    {label}
+                  </button>
                 ))}
+              </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                {recommendation.crest_concepts.map((concept: any, idx: number) => ({ concept, idx }))
+                  .filter(({ concept }: any) => crestFilter === "all" || String(concept.style).toLowerCase().startsWith(crestFilter))
+                  .map(({ concept, idx }: any) => (
+                    <button
+                      type="button"
+                      key={concept.concept_id}
+                      onClick={() => setSelectedCrestIdx(idx)}
+                      aria-pressed={selectedCrestIdx === idx}
+                      data-testid={`club-crest-option-${concept.concept_id}`}
+                      className={`rounded border p-3 text-center transition-all ${
+                        selectedCrestIdx === idx
+                          ? "border-emerald-500 bg-emerald-500/15 ring-2 ring-emerald-500/30"
+                          : "border-white/10 bg-slate-900/40 hover:border-white/25"
+                      }`}
+                    >
+                      <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
+                        <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
+                      </div>
+                      <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style}</p>
+                      <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
+                    </button>
+                  ))}
               </div>
             </div>
 
