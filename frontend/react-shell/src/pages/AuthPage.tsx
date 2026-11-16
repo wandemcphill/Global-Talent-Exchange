@@ -54,32 +54,55 @@ function generateBase32Secret(): string {
   return output;
 }
 
-function toHex(bytes: Uint8Array): string {
-  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+function decodeBase32Secret(secret: string): Uint8Array {
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+  const output: number[] = [];
+  let buffer = 0;
+  let bits = 0;
+  for (const character of secret.replace(/=+$/g, "").toUpperCase()) {
+    const value = alphabet.indexOf(character);
+    if (value < 0) throw new Error("Invalid authenticator setup key.");
+    buffer = (buffer << 5) | value;
+    bits += 5;
+    if (bits >= 8) {
+      bits -= 8;
+      output.push((buffer >>> bits) & 0xff);
+    }
+  }
+  return new Uint8Array(output);
 }
 
-/**
- * PINs and recovery phrases are never sent in plaintext. PBKDF2-SHA256 with a unique
- * random salt gives the backend a verifiable credential derivation without raw exposure.
- */
-async function hashTraderSecret(purpose: "recovery" | "pin", value: string): Promise<string> {
-  const salt = window.crypto.getRandomValues(new Uint8Array(16));
+async function verifyTotpCode(secret: string, code: string): Promise<boolean> {
+  const candidate = code.trim();
+  if (!/^\d{6}$/.test(candidate)) return false;
   const key = await window.crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(value.trim()),
-    "PBKDF2",
+    decodeBase32Secret(secret),
+    { name: "HMAC", hash: "SHA-1" },
     false,
-    ["deriveBits"],
+    ["sign"],
   );
-  const derived = await window.crypto.subtle.deriveBits(
-    { name: "PBKDF2", salt, iterations: 210000, hash: "SHA-256" },
-    key,
-    256,
-  );
-  return `pbkdf2-sha256$210000$${purpose}$${toHex(salt)}$${toHex(new Uint8Array(derived))}`;
+  const counter = Math.floor(Date.now() / 30_000);
+  for (let drift = -1; drift <= 1; drift += 1) {
+    let value = counter + drift;
+    const counterBytes = new Uint8Array(8);
+    for (let i = 7; i >= 0; i -= 1) {
+      counterBytes[i] = value & 0xff;
+      value = Math.floor(value / 256);
+    }
+    const digest = new Uint8Array(await window.crypto.subtle.sign("HMAC", key, counterBytes));
+    const offset = digest[digest.length - 1] & 0x0f;
+    const binary =
+      ((digest[offset] & 0x7f) << 24) |
+      ((digest[offset + 1] & 0xff) << 16) |
+      ((digest[offset + 2] & 0xff) << 8) |
+      (digest[offset + 3] & 0xff);
+    if (String(binary % 1_000_000).padStart(6, "0") === candidate) return true;
+  }
+  return false;
 }
 
-function parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
+function parseAuthErrorfunction parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
   const detail = error?.response?.data?.detail;
   const mappedFields: Record<string, string> = {};
   if (Array.isArray(detail)) {
@@ -144,15 +167,16 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     wallet_label: "GTEX Trading Wallet",
     interests: ["GTEX Coin", "Fan Coins", "P2P"] as string[],
     totp_code: "",
-    recovery_phrase: "",
-    security_pin: "",
   });
   const [totpSecret] = useState(() => generateBase32Secret());
+  const [totpVerified, setTotpVerified] = useState(false);
+  const [totpVerifying, setTotpVerifying] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
   const clearFieldError = (key: string) => {
+    setFormError(null);
     setFieldErrors((previous) => {
       if (!previous[key]) return previous;
       const next = { ...previous };
@@ -267,14 +291,10 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       if (!traderFields.wallet_label.trim()) {
         errors.wallet_label = "Enter a label for your trading wallet.";
       }
-      if (!/^\d{6,12}$/.test(traderFields.totp_code.trim())) {
-        errors.totp_code = "Enter the current 6–12 digit code from your authenticator app.";
-      }
-      if (traderFields.recovery_phrase.trim().split(/\s+/).filter(Boolean).length < 8) {
-        errors.recovery_phrase = "Recovery phrase must contain at least 8 words.";
-      }
-      if (!/^\d{6,12}$/.test(traderFields.security_pin.trim())) {
-        errors.security_pin = "Choose a security PIN containing 6–12 digits.";
+      if (!/^\d{6}$/.test(traderFields.totp_code.trim())) {
+        errors.totp_code = "Enter the current 6-digit code from your authenticator app.";
+      } else if (!totpVerified) {
+        errors.totp_code = "Verify your authenticator code before creating your account.";
       }
     }
 
@@ -350,8 +370,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           wallet_label: traderFields.wallet_label.trim() || "GTEX Trading Wallet",
           totp_secret: totpSecret,
           totp_code: traderFields.totp_code.trim(),
-          recovery_phrase_hash: await hashTraderSecret("recovery", traderFields.recovery_phrase.trim()),
-          security_pin_hash: await hashTraderSecret("pin", traderFields.security_pin.trim()),
           ...securityFields,
         };
       } else {
@@ -500,35 +518,69 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           )}
 
           {mode === "signup" && (
-            <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs text-slate-300">
-              <p className="font-semibold text-emerald-300">Choose how you join</p>
-              <Field label="Account type">
-                <select
-                  data-testid="signup-account-type"
-                  className="gx-input"
-                  value={accountType}
-                  onChange={(event) => {
-                    setAccountType(event.target.value as AccountType);
-                    setFieldErrors({});
-                    setFormError(null);
-                  }}
-                >
-                  <option value="user">Fan or club owner</option>
-                  <option value="coin_trader">Coin trader</option>
-                  <option value="creator">Creator</option>
-                </select>
-              </Field>
-              <p className="mt-2 leading-5 text-slate-400">
-                Fans and club owners use the same account. Coin traders and creators register into their own desks. Advertisers use the corporate signup above.
+            <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4" data-testid="signup-account-type-options">
+              <p className="mb-3 text-sm font-semibold text-emerald-300">Choose your GTEX account</p>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="GTEX account type">
+                {[
+                  { value: "user" as const, title: "Fan / Club Owner", detail: "Join GTEX, support clubs and own a club." },
+                  { value: "coin_trader" as const, title: "Coin Trader", detail: "Run a trading desk and provide coin liquidity." },
+                  { value: "creator" as const, title: "Creator", detail: "Publish content and build an audience." },
+                ].map((option) => {
+                  const selected = accountType === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={selected}
+                      data-testid={`signup-account-type-${option.value}`}
+                      onClick={() => {
+                        setAccountType(option.value);
+                        setFieldErrors({});
+                        setFormError(null);
+                        setTotpVerified(false);
+                      }}
+                      className={`min-h-24 rounded-lg border p-3 text-left transition ${selected
+                        ? "border-emerald-400 bg-emerald-400/10 text-white shadow-[0_0_0_1px_rgba(52,211,153,0.15)]"
+                        : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/25"}`}
+                    >
+                      <span className="block text-sm font-bold">{option.title}</span>
+                      <span className="mt-1 block text-[11px] leading-4 text-slate-400">{option.detail}</span>
+                      <span className={`mt-2 block text-[10px] font-semibold uppercase tracking-wider ${selected ? "text-emerald-300" : "text-slate-500"}`}>
+                        {selected ? "Selected" : "Choose account"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <select
+                data-testid="signup-account-type"
+                aria-hidden="true"
+                tabIndex={-1}
+                className="sr-only"
+                value={accountType}
+                onChange={(event) => {
+                  setAccountType(event.target.value as AccountType);
+                  setFieldErrors({});
+                  setFormError(null);
+                  setTotpVerified(false);
+                }}
+              >
+                <option value="user">Fan or club owner</option>
+                <option value="coin_trader">Coin trader</option>
+                <option value="creator">Creator</option>
+              </select>
+              <p className="mt-3 text-[11px] leading-5 text-slate-400">
+                Fan and club owners share one account type. Coin Traders and Creators have dedicated account spaces.
+                Companies and sponsors should use the separate Corporate Advertiser portal above.
               </p>
               {requestedRole && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
-                  <span>Specialization intent:</span>
+                  <span>Selected path:</span>
                   <span className="font-bold capitalize text-white">{requestedRole}</span>
-                  <span className="text-slate-400">— selected account path</span>
                 </div>
               )}
-            </div>
+            </section>
           )}
 
           {mode === "signup" && accountType === "user" && (
@@ -808,47 +860,56 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                     required
                     inputMode="numeric"
                     autoComplete="one-time-code"
-                    maxLength={12}
+                    maxLength={6}
                     data-testid="trader-totp-code-input"
                     className="gx-input mt-1"
                     value={traderFields.totp_code}
-                    onChange={updateTrader("totp_code")}
+                    onChange={(event) => {
+                      updateTrader("totp_code")(event);
+                      setTotpVerified(false);
+                    }}
                     placeholder="000000"
                   />
                 </Field>
-              </div>
-
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Field label="Recovery phrase (at least 8 words)" error={fieldErrors.recovery_phrase}>
-                  <input
-                    required
-                    autoComplete="off"
-                    data-testid="trader-recovery-input"
-                    type="password"
-                    className="gx-input"
-                    value={traderFields.recovery_phrase}
-                    onChange={updateTrader("recovery_phrase")}
-                    placeholder="Create a private recovery phrase"
-                  />
-                </Field>
-                <Field label="Security PIN (6–12 digits)" error={fieldErrors.security_pin}>
-                  <input
-                    required
-                    inputMode="numeric"
-                    maxLength={12}
-                    autoComplete="new-password"
-                    data-testid="trader-pin-input"
-                    type="password"
-                    className="gx-input"
-                    value={traderFields.security_pin}
-                    onChange={updateTrader("security_pin")}
-                    placeholder="Create a private PIN"
-                  />
-                </Field>
+                <button
+                  type="button"
+                  data-testid="trader-verify-totp-button"
+                  disabled={totpVerifying || !/^\d{6}$/.test(traderFields.totp_code.trim())}
+                  onClick={async () => {
+                    setTotpVerifying(true);
+                    setFormError(null);
+                    clearFieldError("totp_code");
+                    try {
+                      const valid = await verifyTotpCode(totpSecret, traderFields.totp_code);
+                      setTotpVerified(valid);
+                      if (valid) {
+                        toast.success("Authenticator verified.");
+                      } else {
+                        const message = "That code does not match this setup key. Check your phone time and enter the latest six-digit code.";
+                        setFieldErrors((previous) => ({ ...previous, totp_code: message }));
+                      }
+                    } catch {
+                      setTotpVerified(false);
+                      setFieldErrors((previous) => ({
+                        ...previous,
+                        totp_code: "Authenticator verification is unavailable in this browser. Open GTEX over a secure HTTPS connection and try again.",
+                      }));
+                    } finally {
+                      setTotpVerifying(false);
+                    }
+                  }}
+                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ShieldCheck size={14} />
+                  {totpVerifying ? "Checking code…" : totpVerified ? "Authenticator verified" : "Verify authenticator"}
+                </button>
               </div>
               <p className="text-xs leading-5 text-slate-400">
-                Your recovery phrase and PIN are hashed in the browser before submission. GTEX staff will never ask you to send either one.
+                Your authenticator is checked before submission and independently verified again by GTEX.
+                You do not need to create a separate recovery phrase or security PIN during signup.
               </p>
+            </section>
+          )}
             </section>
           )}
 
