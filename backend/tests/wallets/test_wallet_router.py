@@ -248,9 +248,9 @@ def test_create_wallet_conversion_route_moves_balance(session) -> None:
     user_credit_account = wallet_service.get_user_account(session, current_user, LedgerUnit.CREDIT)
     assert payload.transaction_id
     assert payload.source_amount == Decimal("1.0000")
-    assert payload.target_amount == Decimal("100.0000")
+    assert payload.target_amount == Decimal("15.0000")
     assert wallet_service.get_balance(session, user_coin_account) == Decimal("1.0000")
-    assert wallet_service.get_balance(session, user_credit_account) == Decimal("100.0000")
+    assert wallet_service.get_balance(session, user_credit_account) == Decimal("15.0000")
     stored = session.scalar(select(LedgerTransaction).where(LedgerTransaction.id == payload.transaction_id))
     assert stored is not None
     assert stored.idempotency_key == f"u:{current_user.id}:router-convert-1-coin"
@@ -292,8 +292,8 @@ def test_two_users_do_not_share_a_wallet_conversion_idempotency_key(session) -> 
     second_result = create_wallet_conversion(payload, session=session, current_user=second)
 
     assert first_result.transaction_id != second_result.transaction_id
-    assert first_result.target_amount == Decimal("100.0000")
-    assert second_result.target_amount == Decimal("100.0000")
+    assert first_result.target_amount == Decimal("15.0000")
+    assert second_result.target_amount == Decimal("15.0000")
     first_tx = session.get(LedgerTransaction, first_result.transaction_id)
     second_tx = session.get(LedgerTransaction, second_result.transaction_id)
     assert first_tx.idempotency_key == f"u:{first.id}:shared-router-key"
@@ -349,7 +349,7 @@ def test_create_wallet_conversion_route_refreshes_shared_wallet_summary_cache(se
     )
 
     assert coin_payload["balance"] == "1.0000"
-    assert credit_payload["balance"] == "100.0000"
+    assert credit_payload["balance"] == "15.0000"
 
 
 def test_wallet_top_up_flow_creates_transaction_and_updates_balance(session, monkeypatch) -> None:

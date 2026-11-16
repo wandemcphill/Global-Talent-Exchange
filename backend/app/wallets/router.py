@@ -314,11 +314,7 @@ def _build_withdrawal_quote(
     elif gross_amount > eligibility.withdrawable_now:
         blocked_reason = "Withdrawal amount exceeds available withdrawable balance."
     rate_value, rate_direction = treasury.withdrawal_rate_for_user(settings, current_user)
-    estimated_fiat = (
-        gross_amount * rate_value
-        if rate_direction.value == "fiat_per_coin"
-        else gross_amount / rate_value
-    )
+    estimated_fiat = gross_amount * rate_value if rate_direction.value == "fiat_per_coin" else gross_amount / rate_value
     processor_fee = Decimal("0.0000")
     if normalized_provider in {"korapay", "paystack"}:
         try:

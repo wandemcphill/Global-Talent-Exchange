@@ -149,6 +149,6 @@ def test_gift_transaction_view_contains_currency_provenance(session: Session) ->
     assert view.source_ledger_unit == "credit"
     assert view.destination_ledger_unit == "coin"
     assert view.economic_conversion_id == tx.economic_conversion_id
-    assert view.conversion_rate == Decimal("0.0100")
+    assert view.conversion_rate == Decimal("0.0667")
     assert view.fee_policy_rule_key == "platform-economy-defaults"
     assert view.fee_policy_version is not None

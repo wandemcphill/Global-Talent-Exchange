@@ -70,7 +70,7 @@ function OrderForm({ traders }: any) {
   const [traderId, setTraderId] = useState("");
   const [direction, setDirection] = useState("user_buys");
   const [unit, setUnit] = useState("coin");
-  const [amount, setAmount] = useState("250");
+  const [amount, setAmount] = useState("4000");
   const trader = traders.find((t: any) => t.id === traderId);
   const rate = trader ? rateOf(trader, unit) : null;
   const unitLabel = unit === "credit" ? "Fan Coin" : "GTEX Coin";
@@ -101,7 +101,20 @@ function OrderForm({ traders }: any) {
 
   return (
     <div className="grid gap-3 md:grid-cols-5" data-testid="coin-order-form">
-      <select data-testid="coin-unit-select" className="gx-input" value={unit} onChange={(e) => setUnit(e.target.value)}>
+      <select
+        data-testid="coin-unit-select"
+        className="gx-input"
+        value={unit}
+        onChange={(e) => {
+          const nextUnit = e.target.value;
+          setUnit(nextUnit);
+          if (nextUnit === "credit" && amount === "4000") {
+            setAmount("20000");
+          } else if (nextUnit === "coin" && amount === "20000") {
+            setAmount("4000");
+          }
+        }}
+      >
         <option value="coin">GTEX Coin (GTX)</option>
         <option value="credit">Fan Coin (FAN)</option>
       </select>
@@ -413,7 +426,20 @@ function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => void }) 
         </div>
         <div>
           <label className="gx-label">Currency</label>
-          <select data-testid="trader-liquidity-unit" className="gx-input mt-1" value={unit} onChange={(e) => setUnit(e.target.value)}>
+          <select
+            data-testid="trader-liquidity-unit"
+            className="gx-input mt-1"
+            value={unit}
+            onChange={(e) => {
+              const nextUnit = e.target.value;
+              setUnit(nextUnit);
+              if (nextUnit === "credit" && amount === "4000") {
+                setAmount("20000");
+              } else if (nextUnit === "coin" && amount === "20000") {
+                setAmount("4000");
+              }
+            }}
+          >
             <option value="coin">GTEX Coin (GTX)</option>
             <option value="credit">Fan Coin (FAN)</option>
           </select>

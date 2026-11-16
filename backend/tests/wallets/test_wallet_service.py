@@ -836,7 +836,9 @@ def test_conversion_idempotency_key_does_not_replay_another_users_posting(sessio
     assert service.get_balance(session, service.get_user_account(session, second, LedgerUnit.COIN)) == Decimal("2.0000")
     assert (
         session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "shared-convert")
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.idempotency_key == "shared-convert")
         )
         == 1
     )

@@ -8,7 +8,6 @@ Create Date: 2026-11-15
 from alembic import op
 import sqlalchemy as sa
 
-
 revision = "20261115_0252_gtex_coin_fiat_rate_rebalance"
 down_revision = "20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration"
 branch_labels = None
@@ -34,9 +33,7 @@ def upgrade() -> None:
     )
 
     # Update the existing live NGN settings row, not only future defaults.
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE treasury_settings
             SET deposit_rate_value = 60.000000,
                 deposit_rate_direction = 'fiat_per_coin',
@@ -54,15 +51,11 @@ def upgrade() -> None:
                 max_buy_above_withdrawal_fiat = 2.000000,
                 max_sell_below_deposit_fiat = 7.000000
             WHERE currency_code = 'NGN'
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE treasury_settings
             SET deposit_rate_value = 900.000000,
                 withdrawal_rate_value = 880.000000,
@@ -74,9 +67,7 @@ def downgrade() -> None:
                 max_buy_above_withdrawal_fiat = 10.000000,
                 max_sell_below_deposit_fiat = 0.000000
             WHERE currency_code = 'NGN'
-            """
-        )
-    )
+            """))
     op.drop_column("treasury_settings", "trader_withdrawal_rate_value")
     op.drop_column("treasury_settings", "trader_fan_coin_purchase_rate_value")
     op.drop_column("treasury_settings", "trader_coin_purchase_rate_value")

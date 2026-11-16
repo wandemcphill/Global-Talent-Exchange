@@ -900,58 +900,64 @@ class CoinTraderService:
         amount = self.wallet_service._normalize_amount(payload.amount)
         if amount <= Decimal("0.0000"):
             raise CoinTraderValidationError("Liquidity amount must be positive.")
-
-        trader_account = self.wallet_service.get_user_account(self.session, trader_user, payload.coin_unit)
-        platform_account = self.wallet_service.ensure_market_liquidity_account(self.session, payload.coin_unit)
-        if flow == "issue":
-            pool_balance = self.wallet_service.get_balance(self.session, platform_account)
-            if pool_balance < amount:
-                raise InsufficientBalanceError("Liquidity pool balance is lower than the requested issue amount.")
-            postings = [
-                LedgerPosting(account=platform_account, amount=-amount),
-                LedgerPosting(account=trader_account, amount=amount),
-            ]
-            transaction_type = LedgerTransactionType.TRADE_BUY
-            description = "Admin issued coin trader liquidity"
-        elif flow == "redeem":
-            available_balance = self.wallet_service.get_balance(self.session, trader_account)
-            if available_balance < amount:
-                raise CoinTraderValidationError("Trader wallet balance is below redemption amount.")
-            postings = [
-                LedgerPosting(account=trader_account, amount=-amount),
-                LedgerPosting(account=platform_account, amount=amount),
-            ]
-            transaction_type = LedgerTransactionType.TRADE_SELL
-            description = "Admin redeemed coin trader liquidity"
-        else:
+        if flow not in {"issue", "redeem"}:
             raise CoinTraderValidationError("Unsupported liquidity flow.")
 
         reference = payload.reference or f"coin-trader:{profile.id}:liquidity:{flow}"
         idempotency_key = (
             f"coin-trader-liquidity:{profile.id}:{flow}:{payload.idempotency_key}" if payload.idempotency_key else None
         )
-        entries = self.wallet_service.append_transaction(
-            self.session,
-            postings=postings,
-            reason=LedgerEntryReason.TRADE_SETTLEMENT,
-            source_tag=LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION,
-            transaction_type=transaction_type,
-            reference=reference,
-            description=description,
-            external_reference=reference,
-            actor=admin,
-            idempotency_key=idempotency_key,
-            metadata={
-                "coin_trader_liquidity_flow": flow,
-                "trader_profile_id": profile.id,
-                "trader_user_id": trader_user.id,
-                "coin_unit": payload.coin_unit.value,
-                "amount": str(amount),
-                "fiat_total": str(payload.fiat_total) if payload.fiat_total is not None else None,
-                "note": payload.note or "",
-                "metadata_json": dict(payload.metadata_json),
-            },
+        entries = (
+            self.wallet_service._resolve_idempotent_entries(self.session, idempotency_key)
+            if idempotency_key is not None
+            else None
         )
+        if entries is None:
+            trader_account = self.wallet_service.get_user_account(self.session, trader_user, payload.coin_unit)
+            platform_account = self.wallet_service.ensure_market_liquidity_account(self.session, payload.coin_unit)
+            if flow == "issue":
+                pool_balance = self.wallet_service.get_balance(self.session, platform_account)
+                if pool_balance < amount:
+                    raise InsufficientBalanceError("Liquidity pool balance is lower than the requested issue amount.")
+                postings = [
+                    LedgerPosting(account=platform_account, amount=-amount),
+                    LedgerPosting(account=trader_account, amount=amount),
+                ]
+                transaction_type = LedgerTransactionType.TRADE_BUY
+                description = "Admin issued coin trader liquidity"
+            else:
+                available_balance = self.wallet_service.get_balance(self.session, trader_account)
+                if available_balance < amount:
+                    raise CoinTraderValidationError("Trader wallet balance is below redemption amount.")
+                postings = [
+                    LedgerPosting(account=trader_account, amount=-amount),
+                    LedgerPosting(account=platform_account, amount=amount),
+                ]
+                transaction_type = LedgerTransactionType.TRADE_SELL
+                description = "Admin redeemed coin trader liquidity"
+
+            entries = self.wallet_service.append_transaction(
+                self.session,
+                postings=postings,
+                reason=LedgerEntryReason.TRADE_SETTLEMENT,
+                source_tag=LedgerSourceTag.COIN_TRADER_ADMIN_RESOLUTION,
+                transaction_type=transaction_type,
+                reference=reference,
+                description=description,
+                external_reference=reference,
+                actor=admin,
+                idempotency_key=idempotency_key,
+                metadata={
+                    "coin_trader_liquidity_flow": flow,
+                    "trader_profile_id": profile.id,
+                    "trader_user_id": trader_user.id,
+                    "coin_unit": payload.coin_unit.value,
+                    "amount": str(amount),
+                    "fiat_total": str(payload.fiat_total) if payload.fiat_total is not None else None,
+                    "note": payload.note or "",
+                    "metadata_json": dict(payload.metadata_json),
+                },
+            )
         self._assert_admin_liquidity_idempotency_matches(
             entries=entries,
             profile=profile,

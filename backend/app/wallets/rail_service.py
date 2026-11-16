@@ -136,7 +136,7 @@ class WalletRailService:
                     amount=estimate.estimated_fee,
                     input_unit="fiat",
                     rate_value=rate_value,
-                    rate_direction=settings.deposit_rate_direction,
+                    rate_direction=rate_direction,
                 )
             except Exception:
                 processor_fee_coin = Decimal("0.0000")

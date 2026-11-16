@@ -547,7 +547,10 @@ class TreasuryService:
         if fiat_limit is None:
             return None
         if user is None:
-            rate_value, rate_direction = Decimal(settings.withdrawal_rate_value or 0), settings.withdrawal_rate_direction
+            rate_value, rate_direction = (
+                Decimal(settings.withdrawal_rate_value or 0),
+                settings.withdrawal_rate_direction,
+            )
         else:
             rate_value, rate_direction = self.withdrawal_rate_for_user(settings, user)
         if rate_value <= Decimal("0.0000"):

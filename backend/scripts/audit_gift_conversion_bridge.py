@@ -96,14 +96,14 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
             outstanding_coin = coin_issued
 
             gates: dict[str, bool] = {}
-            # Purchases fund this account. Gifts debit GTEX at 1/100 of the Fan
-            # Coin remainder. A negative balance is an unbacked mint.
+            # Purchases fund this account. Gifts debit GTEX at 1/COIN_TO_CREDIT_RATE (1/15) of
+            # the Fan Coin remainder (rounded down). A negative balance is an unbacked mint.
             if coin_bridge is not None:
                 gates["coin_bridge_not_negative"] = coin_bridge >= Decimal("0.0000")
             if credit_bridge is not None:
                 gates["credit_bridge_not_negative"] = credit_bridge >= Decimal("0.0000")
-            # Issued GTEX is the Fan Coin remainder divided by 100, so 100 times
-            # issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
+            # Issued GTEX is the Fan Coin remainder divided by COIN_TO_CREDIT_RATE (15), so
+            # COIN_TO_CREDIT_RATE times issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
             gates["fee_and_destination_within_gross"] = (
                 platform_fee + (outstanding_coin * COIN_TO_CREDIT_RATE)
             ) <= fancoin_consumed

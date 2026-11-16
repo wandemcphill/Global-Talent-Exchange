@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal
+from decimal import Decimal, ROUND_DOWN
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -66,7 +66,7 @@ class FanCoinGiftConversionService:
             )
         if fee + burn + fan_remainder != gross:
             raise EconomicConversionError("FanCoin gift conversion legs must reconcile exactly to the gross amount.")
-        gtex_out = (fan_remainder / COIN_TO_CREDIT_RATE).quantize(AMOUNT_QUANTUM)
+        gtex_out = (fan_remainder / COIN_TO_CREDIT_RATE).quantize(AMOUNT_QUANTUM, rounding=ROUND_DOWN)
         if gtex_out <= Decimal("0"):
             raise EconomicConversionError("Gift conversion must pay a positive GTEX amount.")
         if source_user_id == recipient_user_id:
@@ -164,9 +164,7 @@ class FanCoinGiftConversionService:
             LedgerPosting(
                 account=bridge_fancoin, amount=fan_remainder, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
             ),
-            LedgerPosting(
-                account=bridge_coin, amount=-gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
-            ),
+            LedgerPosting(account=bridge_coin, amount=-gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
             LedgerPosting(
                 account=recipient_account, amount=gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
             ),
@@ -269,9 +267,7 @@ class FanCoinGiftConversionService:
             LedgerPosting(
                 account=bridge_fancoin, amount=-fan_remainder, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
             ),
-            LedgerPosting(
-                account=bridge_coin, amount=gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
-            ),
+            LedgerPosting(account=bridge_coin, amount=gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME),
             LedgerPosting(
                 account=recipient_account, amount=-gtex_out, source_tag=LedgerSourceTag.GTEX_PLATFORM_GIFT_INCOME
             ),
@@ -345,9 +341,7 @@ class FanCoinGiftConversionService:
             self.session.flush()
         return account
 
-    def _settled_legs(
-        self, conversion: EconomicConversion
-    ) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
+    def _settled_legs(self, conversion: EconomicConversion) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
         gross = self._normalize(conversion.source_amount)
         fee = self._normalize(conversion.platform_fee_amount)
         gtex_out = self._normalize(conversion.destination_amount)

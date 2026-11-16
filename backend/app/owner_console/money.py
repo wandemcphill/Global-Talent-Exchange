@@ -64,6 +64,7 @@ def treasury_rates(session: Session) -> dict[str, Any]:
         "withdrawal_rate": Decimal(s.withdrawal_rate_value),
         "withdrawal_direction": str(getattr(s.withdrawal_rate_direction, "value", s.withdrawal_rate_direction)),
         "fan_coin_deposit_rate": Decimal(s.fan_coin_deposit_rate_value),
+        "trader_withdrawal_rate": Decimal(s.trader_withdrawal_rate_value),
     }
 
 
@@ -153,7 +154,12 @@ def request_withdrawal(session: Session, user, payload: dict[str, Any]) -> Owner
     result = withdrawal_eligibility(session, user, amount)
     if not result["eligible"]:
         raise OwnerError("withdrawal_not_eligible", 403, result)
-    rates = treasury_rates(session)
+    from app.treasury.service import TreasuryService
+
+    treasury_service = TreasuryService()
+    settings = treasury_service.ensure_settings(session)
+    withdrawal_rate, withdrawal_direction = treasury_service.withdrawal_rate_for_user(settings, user)
+    withdrawal_direction_value = str(getattr(withdrawal_direction, "value", withdrawal_direction))
     account_age_days = (
         now() - (user.created_at if user.created_at.tzinfo else user.created_at.replace(tzinfo=now().tzinfo))
     ).days
@@ -161,7 +167,7 @@ def request_withdrawal(session: Session, user, payload: dict[str, Any]) -> Owner
     withdrawal = OwnerWithdrawal(
         user_id=user.id,
         amount_coin=amount,
-        amount_ngn=coin_to_fiat(amount, rates["withdrawal_rate"], rates["withdrawal_direction"]),
+        amount_ngn=coin_to_fiat(amount, withdrawal_rate, withdrawal_direction_value),
         bank_name=payload["bank_name"],
         account_number=payload["account_number"],
         account_name=payload["account_name"],

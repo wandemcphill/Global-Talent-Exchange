@@ -36,7 +36,7 @@ GIFT_KEY = "refund-safety-star"
 GROSS = Decimal("100.0000")
 RAKE = Decimal("30.0000")
 FAN_NET = Decimal("70.0000")
-GTEX_OUT = Decimal("4.6667")
+GTEX_OUT = Decimal("4.6666")
 BRIDGE_BACKING = Decimal("6.6667")
 
 

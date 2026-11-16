@@ -36,7 +36,7 @@ from scripts.audit_gift_conversion_bridge import audit_bridge  # noqa: E402
 
 GROSS = Decimal("100.0000")
 FAN_NET = Decimal("70.0000")
-GTEX_OUT = Decimal("4.6667")
+GTEX_OUT = Decimal("4.6666")
 PURCHASED_GTEX = Decimal("6.6667")
 
 
@@ -113,8 +113,8 @@ def test_bridge_reports_outstanding_coin_liability_after_a_gift(tmp_path) -> Non
     assert Decimal(report["fancoin_consumed"]) == GROSS
     assert Decimal(report["coin_issued"]) == GTEX_OUT
     assert Decimal(report["outstanding_coin_liability"]) == GTEX_OUT
-    # The purchase left 1 GTEX on the bridge. The gift spends the Fan Coin
-    # remainder converted at 100:1, so 0.70 GTEX leaves and 0.30 stays backed.
+    # The purchase left 6.6667 GTEX on the bridge. The gift spends the Fan Coin
+    # remainder converted at 15:1 (rounded down to 4.6666 GTEX), leaving 2.0001 GTEX backed.
     assert Decimal(report["coin_bridge_balance"]) == PURCHASED_GTEX - GTEX_OUT
     assert Decimal(report["credit_bridge_balance"]) == FAN_NET
     assert report["bridge_accounts_exist"] is True

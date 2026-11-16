@@ -194,7 +194,7 @@ def test_pricing_engine_backfills_missing_fancoin_price_from_wallet_conversion(s
     quote = PricingEngine(session).quote_service("fast-match-entry")
 
     assert quote.gtex_amount == Decimal("0.2500")
-    assert quote.fancoin_amount == Decimal("25.0000")
+    assert quote.fancoin_amount == Decimal("3.7500")
 
 
 def test_collect_match_entry_supports_coin_and_fancoin_payments(session) -> None:
@@ -376,7 +376,7 @@ def test_governor_adjusts_pricing_conversion_and_rewards(session) -> None:
 
     assert quote.gtex_amount == Decimal("1.1000")
     assert quote.fancoin_amount == Decimal("110.0000")
-    assert conversion.target_amount == Decimal("102.5000")
+    assert conversion.target_amount == Decimal("15.0000")
     assert settlement.gross_amount == Decimal("0.8500")
     assert settlement.net_amount == Decimal("0.7650")
 
