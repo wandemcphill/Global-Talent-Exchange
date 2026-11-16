@@ -223,7 +223,6 @@ def record(
         is_player_purchase = event_type == "transfer_purchase" and related_type in {
             "player",
             "transfer_bid",
-            "recruitment_assignment",
         }
         if source.startswith("club:") and currency == GTEX and not is_player_purchase:
             grant_credits = _sum(
