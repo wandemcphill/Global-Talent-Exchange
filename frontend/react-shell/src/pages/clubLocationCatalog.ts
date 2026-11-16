@@ -126,6 +126,81 @@ export const CLUB_LOCATION_CATALOG: CatalogCountry[] = [
 
 ];
 
+
+export type CatalogRegion = { code: string; name: string };
+export type CatalogLocationCity = { city: string; region: string; regionCode: string };
+
+const CSC_DATA_BASE =
+  "https://cdn.jsdelivr.net/npm/@countrystatecity/countries-browser@3.0.1/dist/data";
+const locationDataCache = new Map<string, Promise<any>>();
+
+async function loadLocationJson<T>(path: string): Promise<T> {
+  const cached = locationDataCache.get(path);
+  if (cached) return cached as Promise<T>;
+
+  const request = fetch(`${CSC_DATA_BASE}/${path}`, {
+    headers: { Accept: "application/json" },
+  })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Location data request failed: ${response.status}`);
+      return response.json();
+    })
+    .catch((error) => {
+      locationDataCache.delete(path);
+      throw error;
+    });
+
+  locationDataCache.set(path, request);
+  return request as Promise<T>;
+}
+
+/** Complete country list, fetched once and cached by the CDN-backed dataset. */
+export async function loadAllCountries(): Promise<CatalogCountry[]> {
+  const countries = await loadLocationJson<Array<{ name: string; iso2: string }>>("countries.json");
+  return countries
+    .filter((country) => country.iso2 && country.name)
+    .map((country) => ({ code: country.iso2.toUpperCase(), name: country.name, cities: [] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** All first-level regions/states for one ISO-2 country code. */
+export async function loadCountryRegions(countryCode: string): Promise<CatalogRegion[]> {
+  const states = await loadLocationJson<Array<{ name: string; iso2: string }>>(
+    `states/${countryCode.toUpperCase()}.json`,
+  );
+  return states
+    .filter((state) => state.name && state.iso2)
+    .map((state) => ({ code: state.iso2, name: state.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** Cities for the selected country and first-level state/region. */
+export async function loadRegionCities(
+  countryCode: string,
+  regionCode: string,
+  regionName: string,
+): Promise<CatalogLocationCity[]> {
+  const cities = await loadLocationJson<Array<{ name: string; state_code: string | null }>>(
+    `cities/${countryCode.toUpperCase()}-${regionCode.toUpperCase()}.json`,
+  );
+  return cities
+    .filter((city) => city.name)
+    .map((city) => ({
+      city: city.name,
+      region: regionName,
+      regionCode,
+    }))
+    .sort((a, b) => a.city.localeCompare(b.city));
+}
+
+/** Resolve the current dropdown label, including countries outside the fallback catalogue. */
+export function countryCodeFromLabel(input: string): string {
+  const known = resolveCountryCode(input);
+  if (known) return known;
+  const match = /\\(([a-z]{2})\\)$/i.exec(input.trim());
+  return match?.[1]?.toUpperCase() || "";
+}
+
 const fold = (s: string) =>
   s
     .normalize("NFD")
