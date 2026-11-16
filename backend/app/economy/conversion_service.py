@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal, ROUND_DOWN, ROUND_UP
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.economy.currency_policy import CurrencyPolicyError, FANCOIN, GTEX_COIN
@@ -14,7 +14,18 @@ from app.models.economic_conversion import (
     EconomicConversionType,
 )
 from app.models.user import User
-from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerEntry,
+    LedgerBalanceProjection,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerTransactionStatus,
+    LedgerTransactionType,
+    LedgerUnit,
+)
 from app.wallets.service import COIN_TO_CREDIT_RATE, InsufficientBalanceError, LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
@@ -113,7 +124,7 @@ class FanCoinGiftConversionService:
             unit=FANCOIN,
             allow_negative=False,
         )
-        bridge_coin = self._gtex_bridge_account()
+        bridge_coin = self._assert_fully_backed_gift_bridge()
         platform_fancoin_revenue = self.wallet_service.ensure_named_system_account(
             self.session,
             code="platform:credit:gift_conversion_fee_revenue",
@@ -340,6 +351,87 @@ class FanCoinGiftConversionService:
             account.allow_negative = False
             self.session.flush()
         return account
+
+    def _assert_fully_backed_gift_bridge(self) -> LedgerAccount:
+        """Return the bridge account only when all user Fan Coin is backed.
+
+        Derive both balances from committed ledger entries, not projections or
+        cache values. Ordered projection locks serialize concurrent credit writes.
+        """
+        locked_bridge = self.session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE)
+        )
+        # append_transaction serializes wallet updates through balance projections.
+        # Lock every existing Fan Coin account projection plus the GTEX bridge
+        # projection in deterministic account-id order, so concurrent Fan Coin
+        # credits and other gift settlements cannot slip past this reserve check.
+        credit_accounts = list(
+            self.session.scalars(
+                select(LedgerAccount).where(LedgerAccount.unit == LedgerUnit.CREDIT).order_by(LedgerAccount.id)
+            ).all()
+        )
+        accounts_to_lock = credit_accounts + ([locked_bridge] if locked_bridge is not None else [])
+        for account in accounts_to_lock:
+            self.wallet_service._get_or_build_balance_projection(self.session, account)
+        self.session.flush()
+        account_ids_to_lock = [account.id for account in accounts_to_lock]
+        if account_ids_to_lock:
+            self.session.scalars(
+                select(LedgerBalanceProjection)
+                .where(LedgerBalanceProjection.account_id.in_(account_ids_to_lock))
+                .order_by(LedgerBalanceProjection.account_id)
+                .with_for_update()
+            ).all()
+
+        user_balances = (
+            select(
+                LedgerEntry.account_id.label("account_id"),
+                func.sum(LedgerEntry.amount).label("balance"),
+            )
+            .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+            .join(LedgerAccount, LedgerAccount.id == LedgerEntry.account_id)
+            .where(
+                LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+                LedgerAccount.owner_user_id.is_not(None),
+                LedgerAccount.kind == LedgerAccountKind.USER,
+                LedgerAccount.unit == LedgerUnit.CREDIT,
+                LedgerEntry.unit == LedgerUnit.CREDIT,
+            )
+            .group_by(LedgerEntry.account_id)
+            .having(func.sum(LedgerEntry.amount) > 0)
+            .subquery()
+        )
+        outstanding_fancoin = self._normalize(
+            self.session.scalar(select(func.coalesce(func.sum(user_balances.c.balance), 0))) or 0
+        )
+        if locked_bridge is None:
+            bridge_balance = Decimal("0.0000")
+        else:
+            bridge_balance = self._normalize(
+                self.session.scalar(
+                    select(func.coalesce(func.sum(LedgerEntry.amount), 0))
+                    .join(LedgerTransaction, LedgerTransaction.id == LedgerEntry.transaction_id)
+                    .where(
+                        LedgerEntry.account_id == locked_bridge.id,
+                        LedgerEntry.unit == LedgerUnit.COIN,
+                        LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+                    )
+                )
+                or 0
+            )
+        required_reserve = (outstanding_fancoin / COIN_TO_CREDIT_RATE).quantize(AMOUNT_QUANTUM, rounding=ROUND_UP)
+        if locked_bridge is None or bridge_balance < required_reserve:
+            shortfall = required_reserve - bridge_balance
+            raise EconomicConversionError(
+                "Fan Coin gift conversion is temporarily unavailable because the GTEX bridge "
+                "does not fully back outstanding user Fan Coin. "
+                f"Required reserve: {required_reserve} GTEX; "
+                f"available: {bridge_balance} GTEX; shortfall: {shortfall} GTEX."
+            )
+        if locked_bridge.allow_negative:
+            locked_bridge.allow_negative = False
+            self.session.flush()
+        return locked_bridge
 
     def _settled_legs(self, conversion: EconomicConversion) -> tuple[Decimal, Decimal, Decimal, Decimal, Decimal]:
         gross = self._normalize(conversion.source_amount)
