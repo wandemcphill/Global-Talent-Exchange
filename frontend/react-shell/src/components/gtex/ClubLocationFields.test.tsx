@@ -111,10 +111,11 @@ describe("club location dropdowns", () => {
     act(() => root.render(<Form prefix="t" onDone={(id) => { clubId = id; }} />));
     act(() => setSelectValue(q("t-country-input"), "Nigeria (NG)"));
 
-    expect(q("t-city-input").disabled).toBe(false);
+    expect(q("t-city-input").disabled).toBe(true);
     expect(q("t-region-input").options.length).toBeGreaterThan(30);
 
     act(() => setSelectValue(q("t-region-input"), "Rivers"));
+    expect(q("t-city-input").disabled).toBe(false);
     expect(q("t-city-input").value).toBe("");
     expect(Array.from(q("t-city-input").options).map((option) => option.value)).toContain("Port Harcourt");
     expect(Array.from(q("t-city-input").options).map((option) => option.value)).not.toContain("Lagos");
@@ -158,9 +159,10 @@ describe("club location dropdowns", () => {
     expect(cityOptions).not.toContain("Port Harcourt");
   });
 
-  test("selecting a city automatically selects its region/state", () => {
+  test("selecting a city within the chosen region keeps its state linked", () => {
     act(() => root.render(<Form prefix="t" onDone={() => {}} />));
     act(() => setSelectValue(q("t-country-input"), "Ghana (GH)"));
+    act(() => setSelectValue(q("t-region-input"), "Ashanti"));
     act(() => setSelectValue(q("t-city-input"), "Kumasi"));
 
     expect(q("t-region-input").value).toBe("Ashanti");
@@ -170,6 +172,7 @@ describe("club location dropdowns", () => {
   test("changing country clears the previous city and region", () => {
     act(() => root.render(<Form prefix="t" onDone={() => {}} />));
     act(() => setSelectValue(q("t-country-input"), "Nigeria (NG)"));
+    act(() => setSelectValue(q("t-region-input"), "Lagos"));
     act(() => setSelectValue(q("t-city-input"), "Lagos"));
     expect(q("t-region-input").value).toBe("Lagos");
 
