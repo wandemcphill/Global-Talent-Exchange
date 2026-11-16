@@ -14,7 +14,7 @@ export default function PaymentCallback() {
       return;
     }
     api
-      .get(`/owner/deposits/verify/${ref}`)
+      .get(`/owner/deposits/verify/${ref}`, { params: { provider: params.get("provider") || "paystack" } })
       .then(({ data }) => {
         if (data.status === "success") {
           const returnTo = params.get("return_to");
