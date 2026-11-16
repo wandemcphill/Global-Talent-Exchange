@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import logging
-from sqlalchemy import select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -12,7 +12,8 @@ from app.owner_console import ledger
 
 logger = logging.getLogger(__name__)
 
-LAUNCH_GRANT_GTEX = Decimal("100000.0000")
+LAUNCH_GRANT_GTEX = Decimal("2500.0000")
+LAUNCH_GRANT_OWNER_LIMIT = 500
 LAUNCH_GRANT_FAN = Decimal("1000.0000")
 
 
@@ -50,6 +51,15 @@ def award_first_club_launch_grant(
     if user.account_type != PublicAccountType.USER:
         raise FirstClubEntitlementError("club_owner_account_type_required", 403)
 
+    # Serialize campaign claims across workers. User uniqueness prevents a
+    # duplicate entitlement; this transaction lock prevents exceeding 500.
+    bind = session.get_bind()
+    if bind is not None and bind.dialect.name == "postgresql":
+        session.execute(
+            text("SELECT pg_advisory_xact_lock(:lock_key)"),
+            {"lock_key": 620611165001},
+        )
+
     existing = get_first_club_entitlement(session, user_id)
     if existing is not None:
         logger.info(
@@ -60,11 +70,23 @@ def award_first_club_launch_grant(
         )
         return existing, False
 
+    campaign_claims = int(
+        session.scalar(
+            select(func.count(FirstClubEntitlement.id)).where(
+                FirstClubEntitlement.gtex_grant_amount == LAUNCH_GRANT_GTEX
+            )
+        )
+        or 0
+    )
+    eligible_for_campaign = campaign_claims < LAUNCH_GRANT_OWNER_LIMIT
+    gtex_grant = LAUNCH_GRANT_GTEX if eligible_for_campaign else Decimal("0.0000")
+    fan_grant = LAUNCH_GRANT_FAN if eligible_for_campaign else Decimal("0.0000")
+
     entitlement = FirstClubEntitlement(
         user_id=user_id,
         club_id=club_id,
-        gtex_grant_amount=LAUNCH_GRANT_GTEX,
-        fan_grant_amount=LAUNCH_GRANT_FAN,
+        gtex_grant_amount=gtex_grant,
+        fan_grant_amount=fan_grant,
     )
 
     try:
@@ -80,7 +102,16 @@ def award_first_club_launch_grant(
         existing = get_first_club_entitlement(session, user_id)
         return existing, False
 
-    # Award promotional launch grant to club treasury
+    if not eligible_for_campaign:
+        logger.info(
+            "first_club_entitlement.campaign_full user_id=%s club_id=%s claims=%s",
+            user_id,
+            club_id,
+            campaign_claims,
+        )
+        return entitlement, False
+
+    # Ring-fenced campaign credit: can only be spent on player signings.
     gtex_event = ledger.record(
         session,
         event_type="launch_grant",
@@ -88,12 +119,12 @@ def award_first_club_launch_grant(
         destination=ledger.club_account(club_id),
         currency=ledger.GTEX,
         gross=LAUNCH_GRANT_GTEX,
-        balance_class="promotional",
+        balance_class="squad_grant",
         club_id=club_id,
         user_id=user_id,
         related_type="club",
         related_id=club_id,
-        memo="GTEX launch grant for first squad (promotional, non-withdrawable)",
+        memo="GTEX first-500 squad signing grant (restricted, non-withdrawable)",
     )
 
     # Award welcome Fan Coin to user wallet
