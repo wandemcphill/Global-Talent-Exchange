@@ -468,6 +468,7 @@ def test_purchased_fan_coin_gift_cannot_increase_withdrawable_gtex() -> None:
     finally:
         session.close()
 
+
 def test_gift_conversion_rejects_underbacked_aggregate_user_liabilities() -> None:
     session = _make_session()
     try:
