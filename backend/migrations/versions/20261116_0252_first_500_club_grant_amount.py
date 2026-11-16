@@ -10,7 +10,7 @@ from alembic import op
 import sqlalchemy as sa
 
 revision = "20261116_0252_first_500_club_grant_amount"
-down_revision = "20261115_0251_abdelkarim_ozhianvuna_odegbami_camara_calibration"
+down_revision = "20261116_0256_remove_test_accounts_and_seeded_owner_competitions"
 branch_labels = None
 depends_on = None
 
