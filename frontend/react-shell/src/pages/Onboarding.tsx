@@ -847,7 +847,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       nationalityFocus,
     );
     const crestConcepts = buildCrestLibrary(clubName);
-    const initialCrestIndex = preferredStyle === "modern" ? 18 : preferredStyle === "metallic" ? 36 : 0;
+    const initialCrestIndex = preferredStyle === "modern" ? 19 : preferredStyle === "metallic" ? 38 : 0;
     const firstKitPreset = KIT_PRESETS[0];
 
     setRecommendation({
