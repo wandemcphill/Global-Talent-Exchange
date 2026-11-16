@@ -116,9 +116,9 @@ class TotpSetupView(BaseModel):
 
 class TotpVerifyRequest(BaseModel):
     secret: str = Field(min_length=16, max_length=128)
-    code: str = Field(min_length=6, max_length=12)
-    recovery_phrase_hash: str = Field(min_length=16, max_length=255)
-    security_pin_hash: str = Field(min_length=16, max_length=255)
+    code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    recovery_phrase_hash: str | None = Field(default=None, min_length=16, max_length=255)
+    security_pin_hash: str | None = Field(default=None, min_length=16, max_length=255)
 
     @field_validator("secret")
     @classmethod
@@ -127,13 +127,13 @@ class TotpVerifyRequest(BaseModel):
 
     @field_validator("recovery_phrase_hash")
     @classmethod
-    def validate_recovery_phrase_hash(cls, value: str) -> str:
-        return validate_trader_credential_hash(value, "recovery")
+    def validate_recovery_phrase_hash(cls, value: str | None) -> str | None:
+        return validate_trader_credential_hash(value, "recovery") if value is not None else None
 
     @field_validator("security_pin_hash")
     @classmethod
-    def validate_security_pin_hash(cls, value: str) -> str:
-        return validate_trader_credential_hash(value, "pin")
+    def validate_security_pin_hash(cls, value: str | None) -> str | None:
+        return validate_trader_credential_hash(value, "pin") if value is not None else None
 
 
 class TraderSecurityEventView(BaseModel):
