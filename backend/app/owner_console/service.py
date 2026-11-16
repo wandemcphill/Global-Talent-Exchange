@@ -687,7 +687,7 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
                 "restricted_player_requires_deposited_funds",
                 402,
                 classification.rejection_reason
-                or "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used.",
+                or "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. The founding squad grant cannot be used.",
             )
         try:
             ledger.record(
