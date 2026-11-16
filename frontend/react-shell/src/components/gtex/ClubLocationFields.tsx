@@ -156,7 +156,9 @@ export function ClubLocationFields({
     setCities([]);
     setCitiesLoading(true);
     loadRegionCities(state.countryCode, state.regionCode, state.regionName)
-      .then((loaded) => setCities(loaded.length ? loaded : bundled))
+      .then((loaded) => {
+        if (active) setCities(loaded.length ? loaded : bundled);
+      })
       .catch(() => {
         if (active) {
           setCities(bundled);
@@ -270,7 +272,16 @@ export function ClubLocationFields({
         {regionBad && error("Select the club's region or state.", `${testIdPrefix}-region-error`)}
       </div>
       <p className="col-span-full mt-1 text-[9px] text-slate-600">
-        Location reference data: Country State City Database · ODbL 1.0
+        Location reference data:{" "}
+        <a
+          href="https://github.com/dr5hn/countries-states-cities-database"
+          target="_blank"
+          rel="noreferrer"
+          className="underline decoration-slate-700 underline-offset-2 hover:text-slate-400"
+        >
+          Country State City Database
+        </a>
+        {" "}· ODbL 1.0
         {usingBundledFallback ? " · Using GTEX's bundled fallback list where available." : ""}
       </p>
     </div>
