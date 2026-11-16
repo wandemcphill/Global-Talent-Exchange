@@ -218,7 +218,27 @@ def record(
     if gross_amount <= 0:
         raise LedgerError("amount_must_be_positive")
     if check_funds and not source.startswith(("platform:", "world:", "external:")):
-        if balance(session, source, currency) < gross_amount:
+        available_balance = balance(session, source, currency)
+        # Preserve the first-500 founding allocation for player signings only.
+        if source.startswith("club:") and currency == GTEX and event_type != "transfer_purchase":
+            grant_credits = _sum(
+                session,
+                LedgerEvent.destination_account == source,
+                LedgerEvent.currency == GTEX,
+                LedgerEvent.status == "completed",
+                LedgerEvent.balance_class == "squad_grant",
+            )
+            grant_debits = _sum(
+                session,
+                LedgerEvent.source_account == source,
+                LedgerEvent.currency == GTEX,
+                LedgerEvent.status.in_(LIVE_STATUSES),
+                LedgerEvent.balance_class == "squad_grant",
+                column=LedgerEvent.gross_amount,
+            )
+            protected_grant = max(Decimal("0"), grant_credits - grant_debits)
+            available_balance = max(Decimal("0"), available_balance - protected_grant)
+        if available_balance < gross_amount:
             raise LedgerError("insufficient_funds")
     fee = D(gross_amount * Decimal(fee_bps) / Decimal(10000))
     event = LedgerEvent(
@@ -288,6 +308,25 @@ def get_club_funding(session: Session, club_id: str) -> dict[str, Any]:
     )
     net_promotional = max(Decimal("0"), promo_credits - promo_debits)
 
+    # Ring-fenced first-500 launch credit is tracked separately from
+    # ordinary promotional funds so only player purchases can consume it.
+    squad_grant_credits = _sum(
+        session,
+        LedgerEvent.destination_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status == "completed",
+        LedgerEvent.balance_class == "squad_grant",
+    )
+    squad_grant_debits = _sum(
+        session,
+        LedgerEvent.source_account == acct,
+        LedgerEvent.currency == GTEX,
+        LedgerEvent.status.in_(LIVE_STATUSES),
+        LedgerEvent.balance_class == "squad_grant",
+        column=LedgerEvent.gross_amount,
+    )
+    net_squad_grant = max(Decimal("0"), squad_grant_credits - squad_grant_debits)
+
     # Earned: gameplay rewards, match gate receipts, player sales, sponsor income
     earned_credits = _sum(
         session,
@@ -309,12 +348,20 @@ def get_club_funding(session: Session, club_id: str) -> dict[str, Any]:
     # Conservative available allocation (historical or untraceable funds stay non-deposited)
     available_deposited = min(net_deposited, total_cash)
     available_promotional = min(net_promotional, max(Decimal("0"), total_cash - available_deposited))
-    available_earned = max(Decimal("0"), total_cash - available_deposited - available_promotional)
+    available_squad_grant = min(
+        net_squad_grant,
+        max(Decimal("0"), total_cash - available_deposited - available_promotional),
+    )
+    available_earned = max(
+        Decimal("0"),
+        total_cash - available_deposited - available_promotional - available_squad_grant,
+    )
 
     return {
         "total_cash": total_cash,
         "available_deposited": available_deposited,
         "available_promotional": available_promotional,
+        "available_squad_grant": available_squad_grant,
         "available_earned": available_earned,
         "net_deposited": net_deposited,
         "net_promotional": net_promotional,
@@ -400,8 +447,10 @@ def settle_club_transfer(
             raise LedgerError("restricted_player_requires_deposited_funds")
         balance_class = "deposited"
     else:
-        # Prefer consuming promotional first, then earned, then deposited
-        if funding["available_promotional"] >= gross_amount:
+        # Player transfers may consume the ring-fenced first-500 squad grant.
+        if funding["available_squad_grant"] >= gross_amount:
+            balance_class = "squad_grant"
+        elif funding["available_promotional"] >= gross_amount:
             balance_class = "promotional"
         elif funding["available_earned"] >= gross_amount:
             balance_class = "earned"
