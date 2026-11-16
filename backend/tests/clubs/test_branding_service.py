@@ -107,4 +107,3 @@ def test_club_creation_persists_crest_data_uri_longer_than_255_characters(sessio
 
     badge = ClubIdentityService(SqlClubIdentityRepository(session)).get_badge(club.id)
     assert badge.badge_url == crest_data_uri
-
