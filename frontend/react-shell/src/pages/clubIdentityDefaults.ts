@@ -253,3 +253,35 @@ export function buildClubDNA(
     vision_narrative: `${clubName} is based in ${cityName}. Its club identity is centred on ${selected.narrative}.`,
   };
 }
+
+export function kitSwatchDataUri(kit: KitVariant): string {
+  const shirtPath = "M36 24 L48 12 L62 20 L76 12 L88 24 L108 39 L97 59 L85 50 L85 116 L39 116 L39 50 L27 59 L16 39 Z";
+  let pattern = "";
+  if (kit.pattern_type === "stripes") {
+    pattern = '<path d="M45 24 H52 V116 H45 Z M65 22 H72 V116 H65 Z M81 25 H85 V116 H81 Z" fill="' + kit.secondary_color + '" opacity=".85"/>';
+  } else if (kit.pattern_type === "hoops") {
+    pattern = '<path d="M25 48 H98 V58 H25 Z M30 72 H94 V82 H30 Z M37 96 H87 V106 H37 Z" fill="' + kit.secondary_color + '" opacity=".9"/>';
+  } else if (kit.pattern_type === "sash") {
+    pattern = '<path d="M27 38 L43 27 L101 94 L89 108 Z" fill="' + kit.secondary_color + '" opacity=".92"/>';
+  } else if (kit.pattern_type === "chevron") {
+    pattern = '<path d="M31 45 L61 68 L92 45 L96 56 L61 83 L27 56 Z M38 85 L61 103 L84 85 L87 95 L61 114 L35 95 Z" fill="' + kit.secondary_color + '" opacity=".9"/>';
+  } else if (kit.pattern_type === "gradient") {
+    pattern = '<path d="' + shirtPath + '" fill="url(#kit-gradient)" opacity=".85"/>';
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 124 130" width="124" height="130">
+    <defs>
+      <linearGradient id="kit-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${kit.secondary_color}" stop-opacity=".1"/><stop offset="1" stop-color="${kit.secondary_color}" stop-opacity=".95"/></linearGradient>
+      <clipPath id="shirt-clip"><path d="${shirtPath}"/></clipPath>
+      <filter id="kit-shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000" flood-opacity=".35"/></filter>
+    </defs>
+    <g filter="url(#kit-shadow)">
+      <path d="${shirtPath}" fill="${kit.primary_color}" stroke="${kit.accent_color}" stroke-width="4" stroke-linejoin="round"/>
+      <g clip-path="url(#shirt-clip)">${pattern}</g>
+      <path d="M48 13 L62 28 L76 13" fill="none" stroke="${kit.accent_color}" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M39 50 L27 59 M85 50 L97 59" stroke="${kit.accent_color}" stroke-width="3" fill="none"/>
+      <circle cx="73" cy="54" r="5" fill="${kit.secondary_color}" stroke="${kit.accent_color}" stroke-width="1.5"/>
+      <path d="M53 32 H70" stroke="${kit.secondary_color}" stroke-width="3" stroke-linecap="round" opacity=".9"/>
+    </g>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
