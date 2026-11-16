@@ -107,6 +107,7 @@ export function ClubLocationFields({
   useEffect(() => {
     if (!state.countryCode) {
       setRegions([]);
+      setRegionsLoading(false);
       return;
     }
 
@@ -140,6 +141,7 @@ export function ClubLocationFields({
   useEffect(() => {
     if (!state.countryCode || !state.regionName) {
       setCities([]);
+      setCitiesLoading(false);
       return;
     }
 
