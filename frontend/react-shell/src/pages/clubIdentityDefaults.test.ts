@@ -22,7 +22,7 @@ describe("bundled club identity defaults", () => {
     expect(new Set(crests.map((crest) => crest.icon_family))).toEqual(
       new Set(["lion", "eagle", "crown", "star", "oak", "bolt"]),
     );
-    expect(crests.every((crest) => crest.initials === "ICFC")).toBe(true);
+    expect(crests.every((crest) => crest.initials === "ICF")).toBe(true);
     expect(crests.every((crest) => crest.svg_markup.startsWith("<svg"))).toBe(true);
     expect(crests.every((crest) => crest.data_uri.startsWith("data:image/svg+xml"))).toBe(true);
   });
@@ -30,7 +30,7 @@ describe("bundled club identity defaults", () => {
   test("provides 16 complete home, away, third and goalkeeper kit presets", () => {
     expect(KIT_PRESETS).toHaveLength(16);
     const shortCode = clubShortCode("Ikorodu City FC");
-    expect(shortCode).toBe("ICFC");
+    expect(shortCode).toBe("ICF");
     for (const preset of KIT_PRESETS) {
       const kitSet = buildKitSet(preset.id, shortCode);
       expect(Object.keys(kitSet).sort()).toEqual(["away", "goalkeeper", "home", "third"]);
