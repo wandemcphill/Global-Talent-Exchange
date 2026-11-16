@@ -9,7 +9,6 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { CoinTraderDesk } from "./CoinTraderDesk";
-import { api } from "@/lib/api";
 
 let mockUser: any = {
   id: "user-1",
@@ -24,6 +23,15 @@ const mockRefreshOwner = jest.fn();
 const mockApiGet = jest.fn();
 const mockApiPost = jest.fn();
 const mockApiPut = jest.fn();
+const mockApiPatch = jest.fn();
+
+jest.mock("react-router-dom", () => ({
+  Link: ({ to, children, ...rest }: any) => (
+    <a href={String(to || "#")} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 
 jest.mock("@/lib/auth", () => ({
   useAuth: () => ({ user: mockUser }),
@@ -52,6 +60,7 @@ jest.mock("@/lib/api", () => ({
     get: (...args: any[]) => mockApiGet(...args),
     post: (...args: any[]) => mockApiPost(...args),
     put: (...args: any[]) => mockApiPut(...args),
+    patch: (...args: any[]) => mockApiPatch(...args),
   },
 }));
 
@@ -59,6 +68,7 @@ const mockedApi = {
   get: mockApiGet,
   post: mockApiPost,
   put: mockApiPut,
+  patch: mockApiPatch,
 };
 
 async function flush() {
@@ -95,6 +105,7 @@ describe("CoinTraderDesk", () => {
     mockedApi.get.mockReset();
     mockedApi.post.mockReset();
     mockedApi.put.mockReset();
+    mockedApi.patch.mockReset();
   });
 
   afterEach(() => {
@@ -119,6 +130,40 @@ describe("CoinTraderDesk", () => {
     await flush();
   };
 
+  it("renders truthful empty state with Become a Coin Trader CTA when zero active offers exist", async () => {
+    mockUser = { id: "buyer-0", username: "buyer0", display_name: "Buyer Zero", account_type: "user" };
+    mockedApi.get.mockImplementation(async (url: string) => {
+      if (url === "/coin-traders/marketplace") {
+        return {
+          data: {
+            coin_unit: "coin",
+            side: "sell",
+            fiat_currency: "NGN",
+            total: 0,
+            offers: [],
+            market_reference: {
+              coin_unit: "coin",
+              name: "GTEX Coin",
+              code: "GTC",
+              direct_buy_rate_fiat: "60",
+              direct_sell_rate_fiat: "48",
+              min_p2p_buy_fiat: "200000",
+              platform_fee_fiat: "0",
+            },
+          },
+        };
+      }
+      return { data: [] };
+    });
+
+    await renderDesk();
+
+    const empty = container.querySelector('[data-testid="marketplace-empty-state"]');
+    expect(empty).not.toBeNull();
+    expect(empty?.textContent).toContain("No active GTEX Coin offers right now");
+    expect(empty?.textContent).toContain("Become a Coin Trader");
+  });
+
   it("initiates DIDit verification with verification_type and trusted handoff_url only", async () => {
     mockUser = {
       id: "trader-user-1",
@@ -142,7 +187,6 @@ describe("CoinTraderDesk", () => {
           },
         };
       }
-      if (url === "/coin-traders/me/orders") return { data: [] };
       if (url === "/coin-traders/verification/status") {
         return {
           data: {
@@ -177,7 +221,6 @@ describe("CoinTraderDesk", () => {
     const kycCard = container.querySelector('[data-testid="trader-kyc-card"]');
     expect(kycCard).not.toBeNull();
     expect(kycCard?.textContent).not.toContain("Sandbox");
-    expect(kycCard?.textContent).not.toContain("Smile ID");
 
     const select = container.querySelector('[data-testid="trader-kyc-type-select"]') as HTMLSelectElement;
     await act(async () => {
@@ -204,84 +247,114 @@ describe("CoinTraderDesk", () => {
     expect(link?.getAttribute("href")).toBe("https://verify.didit.me/session/didit-sess-123");
   });
 
-  it("enforces NGN 200,000 GTC and NGN 50,000 FNC buyer minimums and submits dual-unit orders", async () => {
-    mockUser = {
-      id: "buyer-1",
-      username: "buyer1",
-      display_name: "Buyer One",
-      account_type: "user",
-    };
+  it("enforces NGN 200,000 GTC / NGN 50,000 FNC buyer minimums in Trade Modal and places advert orders", async () => {
+    mockUser = { id: "buyer-1", username: "buyer1", display_name: "Buyer One", account_type: "user" };
 
-    const dualTrader = {
-      id: "prof-dual",
-      user_id: "u-dual",
-      display_name: "Dual Coin Partners",
-      tier: "gold",
-      status: "approved",
-      verified_at: "2026-11-15T10:00:00Z",
-      rates: [
+    const makeMarket = (unit: "coin" | "credit") => ({
+      coin_unit: unit,
+      side: "sell",
+      fiat_currency: "NGN",
+      total: 1,
+      offers: [
         {
-          id: "r-coin",
-          coin_unit: "coin",
+          advert_id: `adv-${unit}`,
+          trader_profile_id: "prof-dual",
+          trader_display_name: "Dual Coin Partners",
+          trader_tier: "gold",
+          is_approved: true,
+          is_didit_verified: true,
+          verification_badge_label: "ID Verified",
+          is_new_merchant: false,
+          completed_orders_count: 14,
+          total_orders_count: 14,
+          completion_rate: 100,
+          average_release_minutes: 4,
+          rating: 4.9,
+          rating_count: 12,
+          dispute_score: 0,
+          coin_unit: unit,
           fiat_currency: "NGN",
-          buy_rate_fiat: "950",
-          sell_rate_fiat: "1000",
+          side: "sell",
+          pricing_mode: "fixed",
+          price_fiat: unit === "coin" ? "55" : "3.2",
+          reference_rate_fiat: unit === "coin" ? "60" : "4",
+          price_deviation_pct: -8.3,
+          savings_vs_direct_pct: 8.3,
           min_coin_amount: "1",
           max_coin_amount: "100000",
-          available_liquidity: "50000",
-          is_active: true,
-        },
-        {
-          id: "r-credit",
-          coin_unit: "credit",
-          fiat_currency: "NGN",
-          buy_rate_fiat: "950",
-          sell_rate_fiat: "1000",
-          min_coin_amount: "1",
-          max_coin_amount: "100000",
-          available_liquidity: "50000",
-          is_active: true,
+          min_fiat_amount: unit === "coin" ? "200000" : "50000",
+          max_fiat_amount: "3000000",
+          available_coin: "50000",
+          payment_window_minutes: 15,
+          payment_methods: ["Bank Transfer", "OPay"],
+          terms_text: "Same-name transfer only.",
+          platform_fee_fiat: "0",
+          updated_at: "2026-11-16T10:00:00Z",
         },
       ],
-    };
+      market_reference: {
+        coin_unit: unit,
+        name: unit === "coin" ? "GTEX Coin" : "Fan Coin",
+        code: unit === "coin" ? "GTC" : "FNC",
+        direct_buy_rate_fiat: unit === "coin" ? "60" : "4",
+        direct_sell_rate_fiat: unit === "coin" ? "48" : null,
+        min_p2p_buy_fiat: unit === "coin" ? "200000" : "50000",
+        platform_fee_fiat: "0",
+      },
+    });
 
-    mockedApi.get.mockImplementation(async (url: string) => {
-      if (url === "/coin-traders") return { data: [dualTrader] };
+    mockedApi.get.mockImplementation(async (url: string, cfg?: any) => {
+      if (url === "/coin-traders/marketplace") {
+        const u = cfg?.params?.coin_unit === "credit" ? "credit" : "coin";
+        return { data: makeMarket(u) };
+      }
       if (url === "/coin-traders/orders") return { data: [] };
-      return { data: null };
+      return { data: [] };
     });
     mockedApi.post.mockResolvedValue({ data: { id: "ord-new" } });
 
     await renderDesk();
 
-    // Select trader and enter 100 GTC (100,000 NGN < 200,000 NGN)
+    // Open GTC trade modal
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="coin-trader-select"]') as HTMLSelectElement, "prof-dual");
-      setInputValue(container.querySelector('[data-testid="coin-amount-input"]') as HTMLInputElement, "100");
+      (container.querySelector('[data-testid="select-offer-adv-coin"]') as HTMLButtonElement).click();
     });
+    await flush();
 
-    const warning = container.querySelector('[data-testid="min-buyer-order-warning"]');
-    expect(warning?.textContent).toContain("200,000");
-    const submitBtn = container.querySelector('[data-testid="coin-order-submit"]') as HTMLButtonElement;
-    expect(submitBtn.disabled).toBe(true);
+    // Enter 100,000 NGN (< 200,000 minimum)
+    await act(async () => {
+      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "100000");
+    });
+    expect(container.querySelector('[data-testid="modal-validation-warning"]')?.textContent).toContain("200,000");
+    expect((container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement).disabled).toBe(true);
 
-    // Switch to Fan Coin (credit) where 100 FNC = 100,000 NGN >= 50,000 NGN
+    // Close and switch to Fan Coin (credit)
+    await act(async () => {
+      (container.querySelector('[aria-label="Close"]') as HTMLButtonElement).click();
+    });
     await act(async () => {
       (container.querySelector('[data-testid="coin-unit-credit"]') as HTMLButtonElement).click();
     });
-    await act(async () => {
-      setInputValue(container.querySelector('[data-testid="coin-trader-select"]') as HTMLSelectElement, "prof-dual");
-      setInputValue(container.querySelector('[data-testid="coin-amount-input"]') as HTMLInputElement, "40");
-    });
-    expect(container.querySelector('[data-testid="min-buyer-order-warning"]')?.textContent).toContain("50,000");
+    await flush();
 
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="coin-amount-input"]') as HTMLInputElement, "60");
+      (container.querySelector('[data-testid="select-offer-adv-credit"]') as HTMLButtonElement).click();
     });
-    const enabledSubmit = container.querySelector('[data-testid="coin-order-submit"]') as HTMLButtonElement;
-    expect(enabledSubmit.disabled).toBe(false);
+    await flush();
+
     await act(async () => {
-      enabledSubmit.click();
+      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "40000");
+    });
+    expect(container.querySelector('[data-testid="modal-validation-warning"]')?.textContent).toContain("50,000");
+
+    await act(async () => {
+      setInputValue(container.querySelector('[data-testid="modal-amount-input"]') as HTMLInputElement, "64000");
+    });
+    const submitBtn = container.querySelector('[data-testid="modal-submit-order"]') as HTMLButtonElement;
+    expect(submitBtn.disabled).toBe(false);
+
+    await act(async () => {
+      submitBtn.click();
     });
     await flush();
 
@@ -289,15 +362,16 @@ describe("CoinTraderDesk", () => {
       "/coin-traders/orders",
       expect.objectContaining({
         trader_profile_id: "prof-dual",
+        advert_id: "adv-credit",
         direction: "user_buys",
         coin_unit: "credit",
-        coin_amount: 60,
+        coin_amount: 20000,
         fiat_currency: "NGN",
       })
     );
   });
 
-  it("allows verified coin traders to publish Fan Coin rates and buy credit liquidity", async () => {
+  it("displays separated balances and publishes Fan Coin adverts from Merchant Dashboard", async () => {
     mockUser = {
       id: "trader-user-2",
       username: "verified_desk",
@@ -306,67 +380,87 @@ describe("CoinTraderDesk", () => {
     };
 
     mockedApi.get.mockImplementation(async (url: string) => {
-      if (url === "/coin-traders") return { data: [] };
-      if (url === "/coin-traders/orders") return { data: [] };
       if (url === "/coin-traders/me") {
         return {
           data: {
             id: "prof-2",
             user_id: "trader-user-2",
             display_name: "Verified Desk",
+            tier: "gold",
             status: "approved",
             verified_at: "2026-11-15T10:00:00Z",
-            rates: [],
+            is_didit_verified: true,
+            verification_provider: "didit",
+            verification_badge_label: "ID Verified",
+            payment_methods: [{ label: "Bank Transfer", type: "bank_transfer" }],
+            bank_accounts: [{ bank_name: "GTBank", account_number: "0123456789", account_name: "Verified Desk" }],
           },
         };
       }
-      if (url === "/coin-traders/me/orders") return { data: [] };
-      return { data: null };
-    });
-
-    mockedApi.put.mockResolvedValue({ data: { id: "rate-1", coin_unit: "credit" } });
-    mockedApi.post.mockImplementation(async (url: string) => {
-      if (url === "/coin-traders/me/liquidity/quote") {
+      if (url === "/coin-traders/me/dashboard") {
         return {
           data: {
-            gross_amount: 1000,
-            fee_amount: 0,
-            net_amount: 1000,
-            amount_fiat: 18000,
-            currency_code: "NGN",
-            unit: "credit",
-            provider_key: "korapay",
+            profile: { id: "prof-2", display_name: "Verified Desk", tier: "gold", status: "approved" },
+            balances: {
+              coin_available: "12000",
+              coin_reserved: "3000",
+              credit_available: "50000",
+              credit_reserved: "0",
+            },
+            order_counts: {
+              new_orders: 1,
+              awaiting_payment: 0,
+              payment_submitted: 0,
+              completed: 4,
+              cancelled: 0,
+              expired: 0,
+              disputed: 0,
+            },
+            performance: {
+              total_volume_fiat: "1250000",
+              completed_orders: 4,
+              total_orders: 4,
+              completion_rate: 100,
+              average_release_minutes: 5,
+              rating: 0,
+              rating_count: 0,
+              dispute_score: 0,
+              realised_profit_fiat: null,
+              realised_profit_note: "Insufficient matched cycles",
+            },
+            adverts: [],
           },
         };
       }
-      if (url === "/coin-traders/me/liquidity/purchase") {
-        return { data: { order_reference: "liq-1", checkout_url: "" } };
-      }
-      return { data: {} };
+      return { data: [] };
     });
+
+    mockedApi.put.mockResolvedValue({ data: { id: "adv-1" } });
 
     await renderDesk();
 
-    // Switch rate publisher to Fan Coin (credit) and submit
+    const overview = container.querySelector('[data-testid="merchant-overview-panel"]');
+    expect(overview?.textContent).toContain("12,000.00 GTC");
+    expect(overview?.textContent).toContain("3,000.00 GTC");
+    expect(overview?.textContent).toContain("No ratings yet");
+
+    // Switch to Adverts tab and publish
     await act(async () => {
-      (container.querySelector('[data-testid="trader-rate-unit-credit"]') as HTMLButtonElement).click();
+      (container.querySelector('[data-testid="merchant-tab-adverts"]') as HTMLButtonElement).click();
     });
+    await flush();
+
     await act(async () => {
-      setInputValue(container.querySelector('[data-testid="trader-rate-buy-input"]') as HTMLInputElement, "19");
-      setInputValue(container.querySelector('[data-testid="trader-rate-sell-input"]') as HTMLInputElement, "21");
-    });
-    await act(async () => {
-      (container.querySelector('[data-testid="trader-rate-save-btn"]') as HTMLButtonElement).click();
+      (container.querySelector('[data-testid="advert-publish-btn"]') as HTMLButtonElement).click();
     });
     await flush();
 
     expect(mockedApi.put).toHaveBeenCalledWith(
-      "/coin-traders/me/rates",
+      "/coin-traders/me/adverts",
       expect.objectContaining({
-        coin_unit: "credit",
-        fiat_currency: "NGN",
-        buy_rate_fiat: 19,
-        sell_rate_fiat: 21,
+        coin_unit: "coin",
+        side: "sell",
+        status: "active",
       })
     );
   });

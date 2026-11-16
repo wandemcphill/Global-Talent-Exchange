@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Panel } from "@/components/gtex/ui";
+import { CoinTraderAdminExtras } from "@/components/gtex/coin-traders/CoinTraderAdminExtras";
 
 type CoinUnit = "coin" | "credit";
 
@@ -764,6 +765,8 @@ export function CoinTraderDeskAdminPanel() {
           </div>
         )}
       </Panel>
+
+      <CoinTraderAdminExtras />
     </div>
   );
 }

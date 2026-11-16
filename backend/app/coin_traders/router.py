@@ -1,22 +1,38 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.coin_traders.schemas import (
+    CoinTraderAdminAdvertPauseRequest,
+    CoinTraderAdminAuditLogView,
+    CoinTraderAdminConfigUpdateRequest,
     CoinTraderAdminLiquidityRequest,
     CoinTraderAdminLiquidityTransferView,
+    CoinTraderAdminOverviewView,
     CoinTradeAdminResolutionRequest,
     CoinTradeDisputeRequest,
     CoinTradeMessageCreateRequest,
     CoinTradeMessageView,
     CoinTradeOrderCreateRequest,
+    CoinTradeOrderQuoteRequest,
+    CoinTradeOrderQuoteView,
     CoinTradeOrderView,
     CoinTradeProofRequest,
+    CoinTradeRatingCreateRequest,
+    CoinTradeRatingView,
     CoinTraderAdminDecisionRequest,
     CoinTraderAdminRejectRequest,
+    CoinTraderAdvertStatusUpdateRequest,
+    CoinTraderAdvertUpsertRequest,
+    CoinTraderAdvertView,
+    CoinTraderDashboardView,
+    CoinTraderMarketReferenceView,
+    CoinTraderMarketplaceResponse,
     CoinTraderProfileCreateRequest,
     CoinTraderProfileUpdateRequest,
     CoinTraderProfileView,
@@ -69,6 +85,55 @@ def list_coin_traders(
     return service.list_traders(country_code=country_code, coin_unit=coin_unit)
 
 
+@router.get("/api/coin-traders/market-reference", response_model=CoinTraderMarketReferenceView)
+def get_coin_trader_market_reference(
+    service: CoinTraderService = Depends(_service),
+) -> CoinTraderMarketReferenceView:
+    return service.marketplace.get_market_reference()
+
+
+@router.get("/api/coin-traders/marketplace", response_model=CoinTraderMarketplaceResponse)
+def list_coin_trader_marketplace_offers(
+    coin_unit: LedgerUnit = Query(default=LedgerUnit.COIN),
+    side: str = Query(default="sell"),
+    fiat_currency: str = Query(default="NGN"),
+    fiat_amount: Decimal | None = Query(default=None, gt=0),
+    payment_method: str | None = Query(default=None),
+    verified_only: bool = Query(default=False),
+    min_completion_rate: float | None = Query(default=None, ge=0, le=100),
+    min_available_coin: Decimal | None = Query(default=None, gt=0),
+    country_code: str | None = Query(default=None),
+    sort_by: str | None = Query(default=None),
+    service: CoinTraderService = Depends(_service),
+) -> CoinTraderMarketplaceResponse:
+    try:
+        return service.marketplace.list_marketplace_offers(
+            coin_unit=coin_unit,
+            side=side,
+            fiat_currency=fiat_currency,
+            fiat_amount=fiat_amount,
+            payment_method=payment_method,
+            verified_only=verified_only,
+            min_completion_rate=min_completion_rate,
+            min_available_coin=min_available_coin,
+            country_code=country_code,
+            sort_by=sort_by,
+        )
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.post("/api/coin-traders/orders/quote", response_model=CoinTradeOrderQuoteView)
+def quote_coin_trader_order(
+    payload: CoinTradeOrderQuoteRequest,
+    service: CoinTraderService = Depends(_service),
+) -> CoinTradeOrderQuoteView:
+    try:
+        return service.marketplace.quote_advert_order(payload)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
 @router.get("/api/coin-traders/me", response_model=CoinTraderProfileView)
 def get_my_coin_trader_profile(
     service: CoinTraderService = Depends(_service),
@@ -76,6 +141,55 @@ def get_my_coin_trader_profile(
 ) -> CoinTraderProfileView:
     try:
         return service.get_my_profile(current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.get("/api/coin-traders/me/dashboard", response_model=CoinTraderDashboardView)
+def get_my_coin_trader_dashboard(
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTraderDashboardView:
+    try:
+        return service.marketplace.get_merchant_dashboard(actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.get("/api/coin-traders/me/adverts", response_model=list[CoinTraderAdvertView])
+def list_my_coin_trader_adverts(
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> list[CoinTraderAdvertView]:
+    try:
+        return service.marketplace.list_my_adverts(actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.put("/api/coin-traders/me/adverts", response_model=CoinTraderAdvertView)
+@router.post("/api/coin-traders/me/adverts", response_model=CoinTraderAdvertView)
+def upsert_my_coin_trader_advert(
+    payload: CoinTraderAdvertUpsertRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTraderAdvertView:
+    try:
+        return service.marketplace.upsert_my_advert(payload, actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@router.patch("/api/coin-traders/me/adverts/{advert_id}/status", response_model=CoinTraderAdvertView)
+@router.post("/api/coin-traders/me/adverts/{advert_id}/status", response_model=CoinTraderAdvertView)
+def update_my_coin_trader_advert_status(
+    advert_id: str,
+    payload: CoinTraderAdvertStatusUpdateRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTraderAdvertView:
+    try:
+        return service.marketplace.update_my_advert_status(advert_id, payload, actor=current_user)
     except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
         _raise_coin_trader_error(exc)
 
@@ -284,6 +398,23 @@ def list_coin_trade_order_messages(
         _raise_coin_trader_error(exc)
 
 
+@router.post(
+    "/api/coin-traders/orders/{order_id}/rating",
+    response_model=CoinTradeRatingView,
+    status_code=status.HTTP_201_CREATED,
+)
+def rate_coin_trade_order(
+    order_id: str,
+    payload: CoinTradeRatingCreateRequest,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_user),
+) -> CoinTradeRatingView:
+    try:
+        return service.marketplace.submit_order_rating(order_id, payload, actor=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
 @router.get("/api/coin-traders/{profile_id}", response_model=CoinTraderPublicProfileView)
 def get_coin_trader_profile(
     profile_id: str, service: CoinTraderService = Depends(_service)
@@ -431,6 +562,88 @@ def admin_expire_stale_coin_trade_orders(
 ) -> list[CoinTradeOrderView]:
     _require_liquidity_desk_permission(request, current_user)
     return service.expire_stale_orders()
+
+
+@admin_router.get("/api/admin/coin-traders/overview", response_model=CoinTraderAdminOverviewView)
+def admin_coin_trader_overview(
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderAdminOverviewView:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.marketplace.admin_overview()
+
+
+@admin_router.get("/api/admin/coin-traders/adverts", response_model=list[CoinTraderAdvertView])
+def admin_list_coin_trader_adverts(
+    request: Request,
+    status_filter: str | None = Query(default=None, alias="status"),
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> list[CoinTraderAdvertView]:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.marketplace.admin_list_adverts(status_filter=status_filter)
+
+
+@admin_router.post("/api/admin/coin-traders/adverts/{advert_id}/pause", response_model=CoinTraderAdvertView)
+def admin_pause_coin_trader_advert(
+    advert_id: str,
+    payload: CoinTraderAdminAdvertPauseRequest,
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderAdvertView:
+    _require_liquidity_desk_permission(request, current_user)
+    try:
+        return service.marketplace.admin_pause_advert(advert_id, payload, admin=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@admin_router.post("/api/admin/coin-traders/adverts/{advert_id}/resume", response_model=CoinTraderAdvertView)
+def admin_resume_coin_trader_advert(
+    advert_id: str,
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderAdvertView:
+    _require_liquidity_desk_permission(request, current_user)
+    try:
+        return service.marketplace.admin_resume_advert(advert_id, admin=current_user)
+    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+        _raise_coin_trader_error(exc)
+
+
+@admin_router.get("/api/admin/coin-traders/audit-logs", response_model=list[CoinTraderAdminAuditLogView])
+def admin_list_coin_trader_audit_logs(
+    request: Request,
+    limit: int = Query(default=100, ge=1, le=250),
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> list[CoinTraderAdminAuditLogView]:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.marketplace.admin_list_audit_logs(limit=limit)
+
+
+@admin_router.get("/api/admin/coin-traders/config", response_model=CoinTraderMarketReferenceView)
+def admin_get_coin_trader_config(
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderMarketReferenceView:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.marketplace.get_market_reference()
+
+
+@admin_router.put("/api/admin/coin-traders/config", response_model=CoinTraderMarketReferenceView)
+def admin_update_coin_trader_config(
+    payload: CoinTraderAdminConfigUpdateRequest,
+    request: Request,
+    service: CoinTraderService = Depends(_service),
+    current_user: User = Depends(get_current_admin),
+) -> CoinTraderMarketReferenceView:
+    _require_liquidity_desk_permission(request, current_user)
+    return service.marketplace.admin_update_config(payload, admin=current_user)
 
 
 __all__ = ["admin_router", "router"]

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 
-from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Enum, Float, ForeignKey, Index, Integer, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
@@ -68,6 +68,10 @@ class CoinTraderProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     completion_rate: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     average_release_minutes: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     rating: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    rating_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    completed_orders_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    total_orders_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     completed_volume_fiat: Mapped[Decimal] = mapped_column(
         Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
     )
@@ -169,6 +173,60 @@ class CoinTraderRate(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class CoinAdvertSide(StrEnum):
+    SELL = "sell"  # trader sells coins to the customer (customer buys)
+    BUY = "buy"  # trader buys coins from the customer (customer sells)
+
+
+class CoinAdvertStatus(StrEnum):
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ADMIN_PAUSED = "admin_paused"
+    CLOSED = "closed"
+
+
+class CoinAdvertPricingMode(StrEnum):
+    FIXED = "fixed"
+    FLOATING = "floating"
+
+
+class CoinTraderAdvert(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    """One advert per (trader, asset, fiat, side). Inventory is never stored here:
+    sell-side availability is always derived live from the trader's canonical wallet."""
+
+    __tablename__ = "coin_trader_adverts"
+    __table_args__ = (
+        UniqueConstraint(
+            "trader_profile_id", "coin_unit", "fiat_currency", "side", name="uq_coin_trader_adverts_profile_unit_fiat_side"
+        ),
+        Index("ix_coin_trader_adverts_market", "coin_unit", "fiat_currency", "side", "status"),
+    )
+
+    trader_profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("coin_trader_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    coin_unit: Mapped[LedgerUnit] = mapped_column(
+        Enum(LedgerUnit, name="ledger_unit", native_enum=False), nullable=False
+    )
+    fiat_currency: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
+    side: Mapped[str] = mapped_column(String(8), nullable=False)
+    pricing_mode: Mapped[str] = mapped_column(String(16), nullable=False, default="fixed", server_default="fixed")
+    price_fiat: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False)
+    spread_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    min_coin_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
+    max_coin_amount: Mapped[Decimal] = mapped_column(Numeric(18, 4), nullable=False, default=Decimal("0.0000"))
+    daily_limit_coin: Mapped[Decimal | None] = mapped_column(Numeric(18, 4), nullable=True)
+    payment_window_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=15, server_default="15")
+    payment_methods_json: Mapped[list[str]] = mapped_column(JSON, nullable=False, default=list)
+    terms_text: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active", server_default="active", index=True)
+    admin_paused_reason: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
+
+
 class CoinTradeOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "coin_trade_orders"
     __table_args__ = (UniqueConstraint("idempotency_key", name="uq_coin_trade_orders_idempotency_key"),)
@@ -198,6 +256,15 @@ class CoinTradeOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     idempotency_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
     payment_method: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    advert_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    payment_window_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    quote_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    fee_coin: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
+    fee_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(18, 4), nullable=False, default=Decimal("0.0000"), server_default="0"
+    )
     payment_window_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     accepted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     proof_submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -210,6 +277,36 @@ class CoinTradeOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class CoinTradeMessage(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "coin_trade_messages"
+
+    order_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("coin_trade_orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sender_user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    sender_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    message: Mapped[str] = mapped_column(String(1000), nullable=False)
+
+
+class CoinTradeRating(UUIDPrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "coin_trade_ratings"
+    __table_args__ = (UniqueConstraint("order_id", name="uq_coin_trade_ratings_order_id"),)
+
+    order_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("coin_trade_orders.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    trader_profile_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("coin_trader_profiles.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    user_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    score: Mapped[int] = mapped_column(Integer, nullable=False)
+    comment: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
 __all__ = [
     "CoinTraderProfileStatus",
     "CoinTraderTier",
@@ -217,6 +314,12 @@ __all__ = [
     "CoinTradeOrderStatus",
     "CoinTraderProfile",
     "CoinTraderRate",
+    "CoinAdvertSide",
+    "CoinAdvertStatus",
+    "CoinAdvertPricingMode",
+    "CoinTraderAdvert",
     "CoinTradeOrder",
+    "CoinTradeMessage",
+    "CoinTradeRating",
     "IdentityVerificationRecord",
 ]

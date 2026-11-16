@@ -157,6 +157,43 @@ class CoinTraderPricingGovernanceService:
             governance_reasons=all_reasons,
         )
 
+    def evaluate_side(self, *, coin_unit: LedgerUnit, side: str, price: Decimal) -> tuple[str, ...]:
+        """Validate ONE advert price against treasury guardrails.
+
+        side="sell": trader sells coins to customers (checked against the sell-rate band and the
+        treasury deposit reference). side="buy": trader buys from customers (buy-rate band and
+        treasury withdrawal reference). Returns blocking reasons (empty tuple means compliant).
+        """
+        price = self._amount(price)
+        result = self.evaluate_values(coin_unit=coin_unit, buy_rate_fiat=price, sell_rate_fiat=price)
+        reasons: list[str] = []
+        if side == "sell":
+            low, high = result.min_trader_sell_rate_fiat, result.max_trader_sell_rate_fiat
+            if low is not None and price < low:
+                reasons.append(f"Selling price {price} is below the minimum {low}.")
+            if high is not None and price > high:
+                reasons.append(f"Selling price {price} is above the maximum {high}.")
+            if result.treasury_deposit_rate_fiat is not None and self._normalized(coin_unit) == LedgerUnit.COIN:
+                settings = self.treasury_service.ensure_settings(self.session)
+                floor = result.treasury_deposit_rate_fiat - self._amount(settings.max_sell_below_deposit_fiat)
+                if price < floor:
+                    reasons.append(f"Selling price {price} undercuts the treasury deposit reference {result.treasury_deposit_rate_fiat}.")
+        else:
+            low, high = result.min_trader_buy_rate_fiat, result.max_trader_buy_rate_fiat
+            if low is not None and price < low:
+                reasons.append(f"Buying price {price} is below the minimum {low}.")
+            if high is not None and price > high:
+                reasons.append(f"Buying price {price} is above the maximum {high}.")
+            if result.treasury_withdrawal_rate_fiat is not None and self._normalized(coin_unit) == LedgerUnit.COIN:
+                settings = self.treasury_service.ensure_settings(self.session)
+                ceiling = result.treasury_withdrawal_rate_fiat + self._amount(settings.max_buy_above_withdrawal_fiat)
+                if price > ceiling:
+                    reasons.append(f"Buying price {price} exceeds the treasury withdrawal reference {result.treasury_withdrawal_rate_fiat}.")
+        return tuple(reasons)
+
+    def _normalized(self, unit: LedgerUnit | str) -> LedgerUnit:
+        return self._ledger_unit(unit)
+
     def evaluate_rate(self, rate: CoinTraderRate) -> CoinTraderGovernanceResult:
         return self.evaluate_values(
             coin_unit=rate.coin_unit,
