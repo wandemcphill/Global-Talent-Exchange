@@ -16,8 +16,13 @@ export default function PaymentCallback() {
     api
       .get(`/owner/deposits/verify/${ref}`)
       .then(({ data }) => {
-        if (data.status === "success") window.location.href = publicUrl("/app/finance?deposit=success");
-        else setMsg("Payment was not successful. No coins were credited.");
+        if (data.status === "success") {
+          const returnTo = params.get("return_to");
+          const destination = returnTo === "/onboarding"
+            ? "/onboarding?deposit=success"
+            : "/app/finance?deposit=success";
+          window.location.href = publicUrl(destination);
+        } else setMsg("Payment was not successful. No coins were credited.");
       })
       .catch(() => setMsg("We could not verify this payment. If you were charged, contact support with your reference."));
   }, [params]);
