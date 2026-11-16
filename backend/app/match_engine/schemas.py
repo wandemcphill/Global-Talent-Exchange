@@ -22,6 +22,7 @@ from app.match_engine.simulation.models import (
     PlayerRole,
     TacticalStyle,
 )
+from app.schemas.club_requests import MAX_CREST_ASSET_REF_LENGTH
 from app.schemas.match_viewer import MatchViewerMonetizationView
 from app.services.ads.schemas import MatchAdPlacementView
 
@@ -131,7 +132,7 @@ class MatchTeamIdentityInput(CommonSchema):
     short_club_code: str | None = Field(default=None, min_length=2, max_length=8)
     is_national_team: bool = False
     national_team_code: str | None = Field(default=None, min_length=2, max_length=8)
-    badge_url: str | None = Field(default=None, max_length=255)
+    badge_url: str | None = Field(default=None, max_length=MAX_CREST_ASSET_REF_LENGTH)
     badge_shape: str = Field(default="shield", min_length=3, max_length=24)
     badge_initials: str = Field(default="FC", min_length=1, max_length=6)
     badge_primary_color: str = Field(default="#123C73", min_length=4, max_length=16)

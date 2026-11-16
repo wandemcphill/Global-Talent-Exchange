@@ -40,30 +40,55 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
       await signInReact(page);
       await visitConsoleRoute(page, "/onboarding");
 
-      // Verify club creation form requires explicit country, city, and region
+      // Verify club creation form requires explicit country, region/state, and city
       const clubNameInput = page
-        .locator('input[name="name"], input[placeholder*="club name" i]')
+        .locator(
+          '[data-testid="first-club-name-input"], input[name="name"], input[placeholder*="club name" i]',
+        )
         .first();
       const countryInput = page
         .locator(
-          'select[name="country_code"], input[name="country_code"], [data-testid="country-select"]',
+          '[data-testid="first-club-country-input"], select[name="country_code"], input[name="country_code"], [data-testid="country-select"]',
+        )
+        .first();
+      const regionInput = page
+        .locator(
+          '[data-testid="first-club-region-input"], select[name="region_name"], input[name="region_name"]',
         )
         .first();
       const cityInput = page
-        .locator('input[name="city_name"], input[placeholder*="city" i]')
+        .locator(
+          '[data-testid="first-club-city-input"], input[name="city_name"], input[placeholder*="city" i]',
+        )
         .first();
 
       if (await clubNameInput.isVisible().catch(() => false)) {
         await clubNameInput.fill("Titan FC Acceptance");
         if (await countryInput.isVisible().catch(() => false)) {
-          if (countryInput.isElementMatchingType?.("select")) {
-            await countryInput.selectOption("GH");
+          const isSelect = await countryInput.evaluate((el) => el.tagName === "SELECT");
+          if (isSelect) {
+            await countryInput.selectOption("Ghana (GH)");
           } else {
             await countryInput.fill("GH");
           }
         }
+        if (await regionInput.isVisible().catch(() => false)) {
+          const isRegionSelect = await regionInput.evaluate((el) => el.tagName === "SELECT");
+          if (isRegionSelect) {
+            await expect(regionInput).toBeEnabled({ timeout: 10_000 });
+            await regionInput.selectOption("Ashanti");
+          } else {
+            await regionInput.fill("Ashanti");
+          }
+        }
         if (await cityInput.isVisible().catch(() => false)) {
-          await cityInput.fill("Accra");
+          const isCitySelect = await cityInput.evaluate((el) => el.tagName === "SELECT");
+          if (isCitySelect) {
+            await expect(cityInput).toBeEnabled({ timeout: 10_000 });
+            await cityInput.selectOption("Kumasi");
+          } else {
+            await cityInput.fill("Accra");
+          }
         }
       }
 
@@ -87,7 +112,10 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
         .first();
 
       await expect(
-        clockElement.or(briefingSection).or(page.getByText(/Control Center|Command Center/i)).first(),
+        clockElement
+          .or(briefingSection)
+          .or(page.getByText(/Control Center|Command Center/i))
+          .first(),
       ).toBeVisible({ timeout: 15_000 });
       await assertNoHorizontalOverflow(page);
     });
@@ -269,7 +297,9 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
         .locator('[data-testid="briefing-summary"]')
         .or(page.getByText(/Briefing|Overview|Next Match|Recent/i))
         .first();
-      await expect(briefingOverview.or(page.getByText(/Control Center|Titan/i)).first()).toBeVisible({
+      await expect(
+        briefingOverview.or(page.getByText(/Control Center|Titan/i)).first(),
+      ).toBeVisible({
         timeout: 15_000,
       });
 
@@ -405,7 +435,12 @@ test.describe("GTEX Owner Journey Acceptance & Lifecycle Parity", () => {
         .first();
       const contentList = page.locator('[data-testid="transfer-listing"]').first();
 
-      await expect(emptyNotice.or(contentList).or(page.getByText(/Transfer Hub/i)).first()).toBeVisible();
+      await expect(
+        emptyNotice
+          .or(contentList)
+          .or(page.getByText(/Transfer Hub/i))
+          .first(),
+      ).toBeVisible();
       await assertNoHorizontalOverflow(page);
     });
 

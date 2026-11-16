@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from app.club_identity.jerseys.service import ClubIdentityService
+from app.club_identity.jerseys.sql_repository import SqlClubIdentityRepository
+from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.schemas.club_requests import BrandingUpsertRequest, ClubCreateRequest, JerseyCreateRequest
 from app.services.club_branding_service import ClubBrandingService
 from app.services.club_cosmetic_catalog_service import ClubCosmeticCatalogService
@@ -70,3 +73,45 @@ def test_branding_and_jersey_services_create_moderation_aware_custom_assets(sess
     assert assets[0].moderation_status == "pending_review"
     assert jersey.moderation_status == "pending_review"
     assert len(catalog_items) >= 6
+
+
+def test_club_creation_persists_crest_data_uri_longer_than_255_characters(session) -> None:
+    crest_data_uri = "data:image/svg+xml;base64," + ("A" * 2048)
+    club = ClubBrandingService(session).create_club_profile(
+        owner_user_id="user-owner",
+        payload=ClubCreateRequest.model_validate(
+            {
+                "club_name": "Long Crest FC",
+                "short_name": "LCFC",
+                "slug": "long-crest-fc",
+                "crest_asset_ref": crest_data_uri,
+                "primary_color": "#123456",
+                "secondary_color": "#FFFFFF",
+                "accent_color": "#F59E0B",
+                "badge_profile": {
+                    "shape": "shield",
+                    "icon_family": "crown",
+                    "primary_color": "#123456",
+                    "secondary_color": "#FFFFFF",
+                    "accent_color": "#F59E0B",
+                    "initials": "LCFC",
+                    "trophy_star_count": 1,
+                    "badge_url": crest_data_uri,
+                },
+                "visibility": "public",
+            }
+        ),
+    )
+
+    assert len(crest_data_uri) > 255
+    assert club.crest_asset_ref == crest_data_uri
+
+    badge = ClubIdentityService(SqlClubIdentityRepository(session)).get_badge(club.id)
+    assert badge.badge_url == crest_data_uri
+
+    team_identity = SyntheticSquadFactory()._resolve_team_identity(
+        session,
+        team_id=club.id,
+        team_name=club.club_name,
+    )
+    assert team_identity.badge_url == crest_data_uri

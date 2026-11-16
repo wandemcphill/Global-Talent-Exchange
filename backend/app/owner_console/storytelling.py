@@ -352,7 +352,11 @@ def resolve_stadium_image_url(stadium_style: str = "stadium") -> str:
 def resolve_club_crest_url(session: Session, club_id: str, club_name: str | None = None) -> str:
     profile = session.get(ClubProfile, club_id)
     if profile and profile.crest_asset_ref:
-        return f"/api/media/{profile.crest_asset_ref}"
+        ref = profile.crest_asset_ref.strip()
+        if ref:
+            if ref.startswith(("data:", "http://", "https://", "/")):
+                return ref
+            return f"/api/media/{ref}"
     name = (profile.club_name if profile else club_name) or "GTEX"
     initials = "".join([part[0] for part in name.split()[:2]]).upper() or "FC"
     primary = (profile.primary_color if profile else None) or "#0F766E"
