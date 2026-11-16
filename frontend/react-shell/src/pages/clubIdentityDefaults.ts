@@ -138,46 +138,93 @@ function shapeMarkup(shape: CrestShape, color: string, accent: string): string {
   return `<path d="M25 25 Q100 12 175 25 C175 90 175 145 100 225 C25 145 25 90 25 25 Z" fill="${color}" stroke="${accent}" stroke-width="7" stroke-linejoin="round"/><path d="M37 38 Q100 27 163 38 C163 96 163 143 100 209 C37 143 37 96 37 38 Z" fill="none" stroke="#FFFFFF" stroke-opacity=".75" stroke-width="2.5"/>`;
 }
 
-function renderCrestSvg(shape: CrestShape, icon: CrestIcon, primary: string, secondary: string, accent: string, initials: string): string {
+type CrestFinish = "heritage" | "modern" | "royal";
+
+function crestFinishMarkup(finish: CrestFinish, accent: string, secondary: string): string {
+  if (finish === "modern") {
+    return `
+      <path d="M31 79 L43 91 M169 79 L157 91 M34 143 L47 153 M166 143 L153 153" stroke="${accent}" stroke-width="5" stroke-linecap="round"/>
+      <path d="M68 215 H132" stroke="${secondary}" stroke-width="2" stroke-linecap="round" opacity=".9"/>
+      <circle cx="100" cy="14" r="4" fill="${accent}"/>
+    `;
+  }
+  if (finish === "royal") {
+    return `
+      <g fill="${accent}" stroke="${secondary}" stroke-width="1.5">
+        <polygon points="69,13 73,21 82,22 75,28 77,37 69,32 61,37 63,28 56,22 65,21"/>
+        <polygon points="100,4 105,14 116,15 108,22 110,33 100,27 90,33 92,22 84,15 95,14"/>
+        <polygon points="131,13 135,21 144,22 137,28 139,37 131,32 123,37 125,28 118,22 127,21"/>
+      </g>
+      <path d="M55 215 Q100 230 145 215" fill="none" stroke="${accent}" stroke-width="4"/>
+    `;
+  }
+  return `
+    <g fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round">
+      <path d="M40 139 C23 120 25 91 43 72 M160 139 C177 120 175 91 157 72"/>
+      <path d="M39 127 L27 122 M35 112 L23 105 M34 96 L24 87 M161 127 L173 122 M165 112 L177 105 M166 96 L176 87"/>
+    </g>
+    <path d="M65 215 H135" stroke="${secondary}" stroke-width="2" opacity=".9"/>
+  `;
+}
+
+function renderCrestSvg(
+  shape: CrestShape,
+  icon: CrestIcon,
+  primary: string,
+  secondary: string,
+  accent: string,
+  initials: string,
+  finish: CrestFinish,
+): string {
   const safeInitials = xmlSafe(initials.slice(0, 6));
   const iconMarkup = crestIconMarkup(icon);
   const shapeMarkupSvg = shapeMarkup(shape, primary, accent);
+  const finishMarkup = crestFinishMarkup(finish, accent, secondary);
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" width="200" height="240">
     <defs>
       <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".8"/><stop offset=".5" stop-color="${accent}"/><stop offset="1" stop-color="#6B7280"/></linearGradient>
       <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="4" stdDeviation="3" flood-color="#000000" flood-opacity=".4"/></filter>
     </defs>
     <g filter="url(#shadow)"><g>${shapeMarkupSvg}</g></g>
+    ${finishMarkup}
     <path d="M49 116 H151" stroke="${secondary}" stroke-opacity=".45" stroke-width="2"/>
     <g transform="translate(50 67) scale(1)" fill="${accent}" stroke="${secondary}" stroke-width="2" stroke-linejoin="round">${iconMarkup}</g>
     <rect x="55" y="170" width="90" height="29" rx="5" fill="${secondary}" stroke="url(#rim)" stroke-width="2"/>
     <text x="100" y="190" text-anchor="middle" font-family="Arial,sans-serif" font-size="16" font-weight="900" letter-spacing="2" fill="${primary}">${safeInitials}</text>
-    <path d="M75 205 Q100 219 125 205" fill="none" stroke="${accent}" stroke-width="3" stroke-linecap="round"/>
   </svg>`;
 }
 
 export function buildCrestLibrary(clubName: string): CrestConcept[] {
   const initials = clubShortCode(clubName);
   const options: CrestConcept[] = [];
+  const finishes: Array<{ id: CrestFinish; label: string }> = [
+    { id: "heritage", label: "Heritage" },
+    { id: "modern", label: "Modern" },
+    { id: "royal", label: "Royal" },
+  ];
+
   SHAPES.forEach((shape, shapeIndex) => {
     ICONS.forEach((icon, iconIndex) => {
-      const palette = CREST_PALETTES[(shapeIndex * ICONS.length + iconIndex) % CREST_PALETTES.length];
-      const svg = renderCrestSvg(shape.id, icon.id, palette[0], palette[1], palette[2], initials);
-      const style = shape.id === "round" ? "Modern" : shape.id === "diamond" ? "Metallic" : "Heritage";
-      options.push({
-        concept_id: `${shape.id}-${icon.id}-${shapeIndex * ICONS.length + iconIndex + 1}`,
-        shape: shape.id,
-        icon_family: icon.id,
-        primary_color: palette[0],
-        secondary_color: palette[1],
-        accent_color: palette[2],
-        initials,
-        style,
-        trophy_stars: 0,
-        visual_meaning: `${icon.label} emblem · ${shape.label.toLowerCase()} silhouette`,
-        design_explanation: `Ready-made ${style.toLowerCase()} crest with a ${icon.label.toLowerCase()} symbol.`,
-        svg_markup: svg,
-        data_uri: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+      finishes.forEach((finish, finishIndex) => {
+        const optionIndex = shapeIndex * ICONS.length * finishes.length + iconIndex * finishes.length + finishIndex;
+        const palette = CREST_PALETTES[optionIndex % CREST_PALETTES.length];
+        const svg = renderCrestSvg(shape.id, icon.id, palette[0], palette[1], palette[2], initials, finish.id);
+        const style = `${finish.label} ${shape.label}`;
+        options.push({
+          concept_id: `${shape.id}-${icon.id}-${finish.id}-${optionIndex + 1}`,
+          shape: shape.id,
+          icon_family: icon.id,
+          primary_color: palette[0],
+          secondary_color: palette[1],
+          accent_color: palette[2],
+          initials,
+          style,
+          trophy_stars: 0,
+          visual_meaning: `${icon.label} emblem · ${shape.label.toLowerCase()} silhouette · ${finish.label.toLowerCase()} finish`,
+          design_explanation: `Ready-made ${finish.label.toLowerCase()} ${shape.label.toLowerCase()} crest with a ${icon.label.toLowerCase()} symbol.`,
+          svg_markup: svg,
+          data_uri: `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`,
+        });
       });
     });
   });
