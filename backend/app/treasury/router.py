@@ -447,7 +447,17 @@ def update_treasury_settings(
         summary="Treasury settings updated.",
         payload=data,
     )
-    if "deposit_rate_value" in data or "withdrawal_rate_value" in data:
+    if any(
+        key in data
+        for key in (
+            "deposit_rate_value",
+            "withdrawal_rate_value",
+            "fan_coin_deposit_rate_value",
+            "trader_coin_purchase_rate_value",
+            "trader_fan_coin_purchase_rate_value",
+            "trader_withdrawal_rate_value",
+        )
+    ):
         service.track_event(session, "admin_rate_changed", user_id=actor.id, metadata=data)
     trader_guardrail_keys = {
         "min_trader_buy_rate_fiat",

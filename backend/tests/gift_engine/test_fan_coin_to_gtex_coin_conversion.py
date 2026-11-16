@@ -77,7 +77,7 @@ def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
     wallet = WalletService()
     sender_account = wallet.get_user_account(session, sender, LedgerUnit.CREDIT)
     platform_credit = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
-    # 100 Fan Coin is backed by 1 GTEX on the gift bridge. Without that backing the gift fails.
+    # 100 Fan Coin is backed by 6.6667 GTEX on the gift bridge. Without that backing the gift fails.
     bridge = wallet.ensure_named_system_account(
         session,
         code="platform:coin:gift_conversion_bridge",
@@ -91,8 +91,8 @@ def _seed_gift_economy(session, sender, *, gift_key: str = "conversion-star"):
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("100.0000")),
             LedgerPosting(account=platform_credit, amount=Decimal("-100.0000")),
-            LedgerPosting(account=bridge, amount=Decimal("1.0000")),
-            LedgerPosting(account=platform_coin, amount=Decimal("-1.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("6.6667")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-6.6667")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-gift-conversion",
@@ -115,13 +115,13 @@ def _assert_converted(session, wallet, tx, sender, recipient) -> None:
 
     assert wallet.get_balance(session, sender_credit) == Decimal("0.0000")
     assert wallet.get_balance(session, recipient_credit) == Decimal("0.0000")
-    assert wallet.get_balance(session, recipient_coin) == Decimal("0.7000")
-    assert wallet.get_balance(session, bridge_coin) == Decimal("0.3000")
+    assert wallet.get_balance(session, recipient_coin) == Decimal("4.6666")
+    assert wallet.get_balance(session, bridge_coin) == Decimal("2.0001")
     assert tx.ledger_unit is LedgerUnit.COIN
     assert tx.source_ledger_unit is LedgerUnit.CREDIT
     assert tx.destination_ledger_unit is LedgerUnit.COIN
     assert tx.recipient_net_amount == Decimal("70.0000")
-    assert tx.conversion_rate == Decimal("0.0100")
+    assert tx.conversion_rate == Decimal("0.0667")
     assert tx.platform_rake_amount == Decimal("30.0000")
     assert tx.economic_conversion_id is not None
 
@@ -130,8 +130,8 @@ def _assert_converted(session, wallet, tx, sender, recipient) -> None:
     assert conversion.source_unit is LedgerUnit.CREDIT
     assert conversion.destination_unit is LedgerUnit.COIN
     assert conversion.source_amount == Decimal("100.0000")
-    assert conversion.destination_amount == Decimal("0.7000")
-    assert conversion.conversion_rate == Decimal("0.0100")
+    assert conversion.destination_amount == Decimal("4.6666")
+    assert conversion.conversion_rate == Decimal("0.0667")
     assert conversion.platform_fee_amount == Decimal("30.0000")
     assert conversion.status.value == "settled"
 
@@ -144,7 +144,7 @@ def _assert_converted(session, wallet, tx, sender, recipient) -> None:
         Decimal(entry.amount)
         for entry in entries
         if entry.unit is LedgerUnit.COIN and entry.account_id == recipient_coin.id
-    ) == Decimal("0.7000")
+    ) == Decimal("4.6666")
 
 
 def test_user_hosted_gift_is_one_atomic_fan_coin_to_gtex_coin_ledger_transaction() -> None:
@@ -353,8 +353,12 @@ def test_unbacked_gift_fails_and_self_gift_stays_blocked() -> None:
         wallet.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=wallet.get_user_account(session, sender, LedgerUnit.CREDIT), amount=Decimal("100.0000")),
-                LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.CREDIT), amount=Decimal("-100.0000")),
+                LedgerPosting(
+                    account=wallet.get_user_account(session, sender, LedgerUnit.CREDIT), amount=Decimal("100.0000")
+                ),
+                LedgerPosting(
+                    account=wallet.ensure_platform_account(session, LedgerUnit.CREDIT), amount=Decimal("-100.0000")
+                ),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             reference="seed-unbacked-fan",
@@ -375,8 +379,12 @@ def test_unbacked_gift_fails_and_self_gift_stays_blocked() -> None:
         else:
             raise AssertionError("Unbacked gift minted GTEX.")
         session.rollback()
-        assert wallet.get_balance(session, wallet.get_user_account(session, sender, LedgerUnit.CREDIT)) == Decimal("100.0000")
-        assert wallet.get_balance(session, wallet.get_user_account(session, recipient, LedgerUnit.COIN)) == Decimal("0.0000")
+        assert wallet.get_balance(session, wallet.get_user_account(session, sender, LedgerUnit.CREDIT)) == Decimal(
+            "100.0000"
+        )
+        assert wallet.get_balance(session, wallet.get_user_account(session, recipient, LedgerUnit.COIN)) == Decimal(
+            "0.0000"
+        )
 
         try:
             service.send_gift(
@@ -413,21 +421,25 @@ def test_purchased_fan_coin_gift_cannot_increase_withdrawable_gtex() -> None:
         wallet.append_transaction(
             session,
             postings=[
-                LedgerPosting(account=wallet.get_user_account(session, sender, LedgerUnit.COIN), amount=Decimal("1.0000")),
-                LedgerPosting(account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=Decimal("-1.0000")),
+                LedgerPosting(
+                    account=wallet.get_user_account(session, sender, LedgerUnit.COIN), amount=Decimal("7.0000")
+                ),
+                LedgerPosting(
+                    account=wallet.ensure_platform_account(session, LedgerUnit.COIN), amount=Decimal("-7.0000")
+                ),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
-            reference="seed-one-gtex",
+            reference="seed-seven-gtex",
             actor=sender,
         )
         session.commit()
         wallet.convert_wallet_units(
             session,
             user=sender,
-            amount=Decimal("1.0000"),
+            amount=Decimal("7.0000"),
             source_unit=LedgerUnit.COIN,
             actor=sender,
-            idempotency_key="purchase-one-gtex",
+            idempotency_key="purchase-seven-gtex",
         )
         session.commit()
         GiftEngineService(session).send_gift(
@@ -442,8 +454,8 @@ def test_purchased_fan_coin_gift_cannot_increase_withdrawable_gtex() -> None:
         sender_coin = wallet.get_balance(session, wallet.get_user_account(session, sender, LedgerUnit.COIN))
         recipient_coin = wallet.get_balance(session, wallet.get_user_account(session, recipient, LedgerUnit.COIN))
         assert sender_coin == Decimal("0.0000")
-        assert recipient_coin == Decimal("0.7000")
-        assert sender_coin + recipient_coin <= Decimal("1.0000")
+        assert recipient_coin == Decimal("4.6666")
+        assert sender_coin + recipient_coin <= Decimal("7.0000")
         bridge = wallet.ensure_named_system_account(
             session,
             code="platform:coin:gift_conversion_bridge",
@@ -451,7 +463,7 @@ def test_purchased_fan_coin_gift_cannot_increase_withdrawable_gtex() -> None:
             unit=LedgerUnit.COIN,
             allow_negative=False,
         )
-        assert wallet.get_balance(session, bridge) == Decimal("0.3000")
+        assert wallet.get_balance(session, bridge) == Decimal("2.3334")
         assert bridge.allow_negative is False
     finally:
         session.close()

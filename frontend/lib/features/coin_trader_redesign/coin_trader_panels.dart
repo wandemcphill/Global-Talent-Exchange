@@ -2125,9 +2125,9 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
     }
     if (labels.isEmpty) {
       labels.addAll(const <String>[
-        'Default buy from user 820-890',
-        'Default sell to user 900-980',
-        'Default max spread 120',
+        'Default buy from user 48-50',
+        'Default sell to user 53-59',
+        'Default max spread 10',
       ]);
     }
     return labels;

@@ -40,7 +40,7 @@ from app.models.wallet import (
 from app.wallets.providers.registry import provider_runtime_statuses
 
 AMOUNT_QUANTUM = Decimal("0.0001")
-COIN_TO_CREDIT_RATE = Decimal("100.0000")
+COIN_TO_CREDIT_RATE = Decimal("15.0000")
 DEFAULT_BALANCE_CACHE_TTL_SECONDS = 300
 DEFAULT_WALLET_SUMMARY_CACHE_TTL_SECONDS = 60
 TRADE_BUY_SOURCE_TAGS = frozenset(
@@ -842,7 +842,7 @@ class WalletService:
         source_account = self.get_user_account(session, user, quote.source_unit)
         target_account = self.get_user_account(session, user, quote.target_unit)
         # GTEX spent on Fan Coin backs the gift bridge. Fan Coin is still minted
-        # from the platform credit clearing account at the published 100:1 rate.
+        # from the platform credit clearing account at the published 15:1 rate.
         if quote.source_unit == LedgerUnit.COIN:
             source_sink = self._gift_conversion_bridge_account(session)
         else:
@@ -1067,9 +1067,7 @@ class WalletService:
         else:
             scoped_balance = self._source_scope_remainder(session, user, unit, source_scope)
             if scoped_balance < normalized_amount:
-                raise InsufficientBalanceError(
-                    f"{source_scope} balance is lower than the requested withdrawal."
-                )
+                raise InsufficientBalanceError(f"{source_scope} balance is lower than the requested withdrawal.")
 
         normalized_idempotency_key = self._normalize_idempotency_key(idempotency_key)
         if normalized_idempotency_key is not None:

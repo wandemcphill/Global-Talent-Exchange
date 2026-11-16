@@ -75,26 +75,40 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         nullable=False,
         default=RateDirection.FIAT_PER_COIN,
     )
+
+    # Separate retail and trader wholesale prices for the Fan Coin rail.
+    fan_coin_deposit_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("4.0000"), server_default="4.0000"
+    )
+    trader_coin_purchase_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("50.0000"), server_default="50.0000"
+    )
+    trader_fan_coin_purchase_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("2.5000"), server_default="2.5000"
+    )
+    trader_withdrawal_rate_value: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("50.0000"), server_default="50.0000"
+    )
     min_trader_buy_rate_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("820.0000"), server_default="820.0000"
+        Numeric(20, 6), nullable=False, default=Decimal("48.0000"), server_default="48.0000"
     )
     max_trader_buy_rate_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("890.0000"), server_default="890.0000"
+        Numeric(20, 6), nullable=False, default=Decimal("50.0000"), server_default="50.0000"
     )
     min_trader_sell_rate_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("900.0000"), server_default="900.0000"
+        Numeric(20, 6), nullable=False, default=Decimal("53.0000"), server_default="53.0000"
     )
     max_trader_sell_rate_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("980.0000"), server_default="980.0000"
+        Numeric(20, 6), nullable=False, default=Decimal("59.0000"), server_default="59.0000"
     )
     max_trader_spread_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("120.0000"), server_default="120.0000"
-    )
-    max_buy_above_withdrawal_fiat: Mapped[Decimal] = mapped_column(
         Numeric(20, 6), nullable=False, default=Decimal("10.0000"), server_default="10.0000"
     )
+    max_buy_above_withdrawal_fiat: Mapped[Decimal] = mapped_column(
+        Numeric(20, 6), nullable=False, default=Decimal("2.0000"), server_default="2.0000"
+    )
     max_sell_below_deposit_fiat: Mapped[Decimal] = mapped_column(
-        Numeric(20, 6), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
+        Numeric(20, 6), nullable=False, default=Decimal("7.0000"), server_default="7.0000"
     )
 
     min_deposit: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))
@@ -316,10 +330,7 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[TreasuryWithdrawalStatus] = mapped_column(
         Enum(
-            TreasuryWithdrawalStatus,
-            name="treasury_withdrawal_status",
-            native_enum=False,
-            values_callable=_enum_values,
+            TreasuryWithdrawalStatus, name="treasury_withdrawal_status", native_enum=False, values_callable=_enum_values
         ),
         nullable=False,
         default=TreasuryWithdrawalStatus.PENDING_REVIEW,

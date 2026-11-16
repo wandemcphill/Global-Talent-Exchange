@@ -27,7 +27,7 @@ from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.fast_match import FastMatchSession, FastMatchSessionStatus
 from app.models.user import User
-from app.wallets.service import LedgerPosting, WalletService
+from app.wallets.service import COIN_TO_CREDIT_RATE, LedgerPosting, WalletService
 from backend.tests.support.economic_policy import seed_economic_policy
 
 
@@ -70,7 +70,7 @@ def _fund_fan_coin(session: Session, user: User, amount: Decimal) -> None:
         allow_negative=False,
     )
     platform_coin = wallet_service.ensure_platform_account(session, LedgerUnit.COIN)
-    gtex_backing = (amount / Decimal("100")).quantize(Decimal("0.0001"))
+    gtex_backing = (amount / COIN_TO_CREDIT_RATE).quantize(Decimal("0.0001"))
     wallet_service.append_transaction(
         session,
         postings=[

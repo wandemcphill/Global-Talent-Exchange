@@ -385,13 +385,13 @@ def test_convert_wallet_units_moves_value_across_coin_and_credit_wallets(session
     )
 
     assert result.source_amount == Decimal("1.0000")
-    assert result.target_amount == Decimal("100.0000")
+    assert result.target_amount == Decimal("15.0000")
     assert service.get_balance(session, coin_account) == Decimal("1.0000")
-    assert service.get_balance(session, credit_account) == Decimal("100.0000")
+    assert service.get_balance(session, credit_account) == Decimal("15.0000")
     # The spent GTEX backs the gift bridge instead of the generic platform coin account.
     assert service.get_balance(session, platform_coin) == Decimal("-2.0000")
     assert service.get_balance(session, bridge) == Decimal("1.0000")
-    assert service.get_balance(session, platform_credit) == Decimal("-100.0000")
+    assert service.get_balance(session, platform_credit) == Decimal("-15.0000")
 
 
 def test_wallet_transaction_service_rolls_back_unbalanced_transaction(session) -> None:
@@ -836,7 +836,9 @@ def test_conversion_idempotency_key_does_not_replay_another_users_posting(sessio
     assert service.get_balance(session, service.get_user_account(session, second, LedgerUnit.COIN)) == Decimal("2.0000")
     assert (
         session.scalar(
-            select(func.count()).select_from(LedgerTransaction).where(LedgerTransaction.idempotency_key == "shared-convert")
+            select(func.count())
+            .select_from(LedgerTransaction)
+            .where(LedgerTransaction.idempotency_key == "shared-convert")
         )
         == 1
     )

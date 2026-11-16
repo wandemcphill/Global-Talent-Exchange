@@ -41,6 +41,7 @@ def _configure_deposit_settings(session) -> None:
     settings = treasury.ensure_settings(session)
     settings.deposit_rate_value = Decimal("1.0000")
     settings.deposit_rate_direction = RateDirection.FIAT_PER_COIN
+    settings.fan_coin_deposit_rate_value = Decimal("1.0000")
     settings.min_deposit = Decimal("0.0000")
     settings.max_deposit = Decimal("100000.0000")
     session.commit()

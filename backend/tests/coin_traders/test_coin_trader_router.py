@@ -35,8 +35,8 @@ def test_normal_user_can_apply_and_operates_desk_after_admin_approval(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "50",
+            "sell_rate_fiat": "56",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "10000",
@@ -59,8 +59,8 @@ def test_normal_user_can_apply_and_operates_desk_after_admin_approval(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "50",
+            "sell_rate_fiat": "56",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "10000",
@@ -110,8 +110,8 @@ def test_coin_trader_router_order_lifecycle(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "50",
+            "sell_rate_fiat": "56",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "100000",
@@ -131,7 +131,7 @@ def test_coin_trader_router_order_lifecycle(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "500",
+            "coin_amount": "4000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-order-key-001",
@@ -192,7 +192,7 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "500",
+            "coin_amount": "4000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-guards-buy-001",
@@ -265,7 +265,7 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "600",
+            "coin_amount": "4500",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-guards-cancel-001",
@@ -294,7 +294,7 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
             "trader_profile_id": profile_id,
             "direction": "user_sells",
             "coin_unit": "coin",
-            "coin_amount": "700",
+            "coin_amount": "1500",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-guards-sell-001",
@@ -340,9 +340,15 @@ def test_coin_trader_router_enforces_escrow_roles_and_admin_resolution(
 
 def test_coin_trader_router_admin_liquidity_issue_and_redeem(
     client,
+    app_session_factory,
     auth_user_factory,
     bootstrap_admin_headers,
 ) -> None:
+    from decimal import Decimal
+
+    from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerUnit
+    from app.wallets.service import LedgerPosting, WalletService
+
     trader = auth_user_factory(suffix="coin-trader-router-liquidity", account_type="coin_trader")
     profile_id = _approved_profile_with_rate(
         client,
@@ -350,6 +356,23 @@ def test_coin_trader_router_admin_liquidity_issue_and_redeem(
         admin_headers=bootstrap_admin_headers,
         suffix="liquidity",
     )
+
+    with app_session_factory() as session:
+        wallet_service = WalletService()
+        pool = wallet_service.ensure_market_liquidity_account(session, LedgerUnit.COIN)
+        operations = wallet_service.ensure_operations_account(session, LedgerUnit.COIN)
+        wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=pool, amount=Decimal("2500.0000")),
+                LedgerPosting(account=operations, amount=Decimal("-2500.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            reference="router-liquidity-pool-seed-001",
+            idempotency_key="router-liquidity-pool-seed-001",
+        )
+        session.commit()
 
     initial_marketplace = client.get("/api/coin-traders", params={"coin_unit": "coin"})
     assert initial_marketplace.status_code == 200, initial_marketplace.text
@@ -468,8 +491,8 @@ def _approved_profile_with_rate(
         json={
             "coin_unit": "coin",
             "fiat_currency": "NGN",
-            "buy_rate_fiat": "860",
-            "sell_rate_fiat": "920",
+            "buy_rate_fiat": "50",
+            "sell_rate_fiat": "56",
             "min_coin_amount": "100",
             "max_coin_amount": "50000",
             "available_liquidity": "100000",
@@ -529,7 +552,7 @@ def test_coin_trader_router_cannot_cancel_after_proof(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "500",
+            "coin_amount": "4000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-cancel-proof-001",
@@ -576,7 +599,7 @@ def test_coin_trader_router_order_messages_chat(
             "trader_profile_id": profile_id,
             "direction": "user_buys",
             "coin_unit": "coin",
-            "coin_amount": "500",
+            "coin_amount": "4000",
             "fiat_currency": "NGN",
             "payment_method": "bank_transfer",
             "idempotency_key": "router-chat-001",

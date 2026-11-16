@@ -107,8 +107,8 @@ def test_gift_combo_applies_bonus(session) -> None:
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("500.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-500.0000")),
-            LedgerPosting(account=bridge, amount=Decimal("5.0000")),
-            LedgerPosting(account=platform_coin, amount=Decimal("-5.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("33.3334")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-33.3334")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-gifts",
@@ -196,8 +196,8 @@ def test_gift_controls_flag_near_limit_and_block_daily_sender_cap(session) -> No
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("400.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-400.0000")),
-            LedgerPosting(account=bridge, amount=Decimal("4.0000")),
-            LedgerPosting(account=platform_coin, amount=Decimal("-4.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("26.6667")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-26.6667")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-tight-gifts",
@@ -287,8 +287,8 @@ def test_match_scope_gift_rate_limit_blocks_the_sixth_sender_recipient_pair_gift
         postings=[
             LedgerPosting(account=sender_account, amount=Decimal("200.0000")),
             LedgerPosting(account=platform_account, amount=Decimal("-200.0000")),
-            LedgerPosting(account=bridge, amount=Decimal("2.0000")),
-            LedgerPosting(account=platform_coin, amount=Decimal("-2.0000")),
+            LedgerPosting(account=bridge, amount=Decimal("13.3334")),
+            LedgerPosting(account=platform_coin, amount=Decimal("-13.3334")),
         ],
         reason=LedgerEntryReason.ADJUSTMENT,
         reference="seed-match-gifts",
