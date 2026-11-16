@@ -1,11 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   CLUB_LOCATION_CATALOG,
   citiesForRegion,
   countryCodeFromLabel,
   countryLabel,
+  loadAllCountries,
+  loadCountryRegions,
+  loadRegionCities,
   regionForCity,
   regionsFor,
+  type CatalogCountry,
+  type CatalogRegion,
+  type CatalogLocationCity,
 } from "@/pages/clubLocationCatalog";
 import { validateClubLocation } from "@/pages/clubCreationLocation";
 
@@ -67,15 +73,103 @@ export function ClubLocationFields({
 }) {
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const touch = (key: string) => setTouched((current) => ({ ...current, [key]: true }));
-  const countries = useMemo(
-    () => [...CLUB_LOCATION_CATALOG].sort((a, b) => a.name.localeCompare(b.name)),
-    [],
+  const [countries, setCountries] = useState<CatalogCountry[]>(
+    [...CLUB_LOCATION_CATALOG].sort((a, b) => a.name.localeCompare(b.name)),
   );
-  const regions = useMemo(() => regionsFor(state.countryCode), [state.countryCode]);
-  const cities = useMemo(
-    () => citiesForRegion(state.countryCode, state.regionName).slice().sort((a, b) => a.city.localeCompare(b.city)),
-    [state.countryCode, state.regionName],
-  );
+  const [regions, setRegions] = useState<CatalogRegion[]>([]);
+  const [cities, setCities] = useState<CatalogLocationCity[]>([]);
+  const [countriesLoading, setCountriesLoading] = useState(false);
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [citiesLoading, setCitiesLoading] = useState(false);
+  const [usingBundledFallback, setUsingBundledFallback] = useState(false);
+
+  // The CDN snapshot contains 250+ countries. Tests use the bundled catalogue to
+  // stay deterministic; production loads only country, selected-state and selected-city data.
+  useEffect(() => {
+    if (process.env.NODE_ENV === "test") return;
+    let active = true;
+    setCountriesLoading(true);
+    loadAllCountries()
+      .then((loaded) => {
+        if (active && loaded.length) setCountries(loaded);
+      })
+      .catch(() => {
+        if (active) setUsingBundledFallback(true);
+      })
+      .finally(() => {
+        if (active) setCountriesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!state.countryCode) {
+      setRegions([]);
+      return;
+    }
+
+    const bundled = regionsFor(state.countryCode).map((name) => ({ code: "", name }));
+    if (process.env.NODE_ENV === "test") {
+      setRegions(bundled);
+      return;
+    }
+
+    let active = true;
+    setRegions([]);
+    setRegionsLoading(true);
+    loadCountryRegions(state.countryCode)
+      .then((loaded) => {
+        if (active) setRegions(loaded.length ? loaded : bundled);
+      })
+      .catch(() => {
+        if (active) {
+          setRegions(bundled);
+          setUsingBundledFallback(true);
+        }
+      })
+      .finally(() => {
+        if (active) setRegionsLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [state.countryCode]);
+
+  useEffect(() => {
+    if (!state.countryCode || !state.regionName) {
+      setCities([]);
+      return;
+    }
+
+    const bundled = citiesForRegion(state.countryCode, state.regionName).map((item) => ({
+      ...item,
+      regionCode: "",
+    }));
+    if (process.env.NODE_ENV === "test" || !state.regionCode) {
+      setCities(bundled);
+      return;
+    }
+
+    let active = true;
+    setCities([]);
+    setCitiesLoading(true);
+    loadRegionCities(state.countryCode, state.regionCode, state.regionName)
+      .then((loaded) => setCities(loaded.length ? loaded : bundled))
+      .catch(() => {
+        if (active) {
+          setCities(bundled);
+          setUsingBundledFallback(true);
+        }
+      })
+      .finally(() => {
+        if (active) setCitiesLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [state.countryCode, state.regionCode, state.regionName]);
 
   const countryId = `${testIdPrefix}-country-input`;
   const cityId = `${testIdPrefix}-city-input`;
@@ -110,7 +204,7 @@ export function ClubLocationFields({
             onChange={(event) => state.changeCountry(event.target.value)}
             onBlur={() => touch("country")}
           >
-            <option value="">Select country</option>
+            <option value="">{countriesLoading ? "Loading countries…" : "Select country"}</option>
             {countries.map((country) => (
               <option key={country.code} value={countryLabel(country)}>
                 {country.name} ({country.code})
@@ -132,12 +226,15 @@ export function ClubLocationFields({
             aria-invalid={cityBad ? true : undefined}
             aria-describedby={cityBad ? `${testIdPrefix}-city-error` : undefined}
             className={fieldClass}
-            disabled={disabled || !state.countryCode || cities.length === 0}
+            disabled={disabled || !state.countryCode || !state.regionName || citiesLoading || cities.length === 0}
             value={state.cityName}
-            onChange={(event) => state.changeCity(event.target.value)}
+            onChange={(event) => {
+              const selected = cities.find((city) => city.city === event.target.value);
+              state.changeCity(event.target.value, selected?.region, selected?.regionCode);
+            }}
             onBlur={() => touch("city")}
           >
-            <option value="">Select city</option>
+            <option value="">{citiesLoading ? "Loading cities…" : "Select city"}</option>
             {cities.map((city) => (
               <option key={`${city.region}:${city.city}`} value={city.city}>{city.city}</option>
             ))}
@@ -157,18 +254,25 @@ export function ClubLocationFields({
             aria-invalid={regionBad ? true : undefined}
             aria-describedby={regionBad ? `${testIdPrefix}-region-error` : undefined}
             className={fieldClass}
-            disabled={disabled || !state.countryCode || regions.length === 0}
+            disabled={disabled || !state.countryCode || regionsLoading || regions.length === 0}
             value={state.regionName}
-            onChange={(event) => state.changeRegion(event.target.value)}
+            onChange={(event) => {
+              const selected = regions.find((region) => region.name === event.target.value);
+              state.changeRegion(event.target.value, selected?.code || "");
+            }}
             onBlur={() => touch("region")}
           >
-            <option value="">Select region / state</option>
-            {regions.map((region) => <option key={region} value={region}>{region}</option>)}
+            <option value="">{regionsLoading ? "Loading regions…" : "Select region / state"}</option>
+            {regions.map((region) => <option key={region.name} value={region.name}>{region.name}</option>)}
           </select>
           <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-slate-400">⌄</span>
         </div>
         {regionBad && error("Select the club's region or state.", `${testIdPrefix}-region-error`)}
       </div>
+      <p className="col-span-full mt-1 text-[9px] text-slate-600">
+        Location reference data: Country State City Database · ODbL 1.0
+        {usingBundledFallback ? " · Using GTEX's bundled fallback list where available." : ""}
+      </p>
     </div>
   );
 }
