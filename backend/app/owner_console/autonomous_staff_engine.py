@@ -2648,33 +2648,34 @@ def execute_authorized_recruitment_signing(
     ledger_events = []
     remaining_fee = fee_dec
     try:
-        for balance_class, available_amount in funding_pools:
-            if remaining_fee <= 0:
-                break
-            portion = min(ledger.D(available_amount), remaining_fee)
-            if portion <= 0:
-                continue
-            ledger_events.append(
-                ledger.record(
-                    db,
-                    event_type="transfer_purchase",
-                    source=ledger.club_account(state.club_id),
-                    destination=ledger.WORLD_MARKET,
-                    currency=ledger.GTEX,
-                    gross=portion,
-                    balance_class=balance_class,
-                    club_id=state.club_id,
-                    user_id=user_id or state.owner_user_id,
-                    related_type="recruitment_assignment",
-                    related_id=ref_key,
-                    memo=f"Authorised recruitment signing: {player_name} ({pos}, GSI {gsi})",
-                    check_funds=True,
-                    wallet_idempotency_key=f"recruit_exec:{ref_key}:{cand_id}:{balance_class}",
+        with db.begin_nested():
+            for balance_class, available_amount in funding_pools:
+                if remaining_fee <= 0:
+                    break
+                portion = min(ledger.D(available_amount), remaining_fee)
+                if portion <= 0:
+                    continue
+                ledger_events.append(
+                    ledger.record(
+                        db,
+                        event_type="transfer_purchase",
+                        source=ledger.club_account(state.club_id),
+                        destination=ledger.WORLD_MARKET,
+                        currency=ledger.GTEX,
+                        gross=portion,
+                        balance_class=balance_class,
+                        club_id=state.club_id,
+                        user_id=user_id or state.owner_user_id,
+                        related_type="recruitment_assignment",
+                        related_id=ref_key,
+                        memo=f"Authorised recruitment signing: {player_name} ({pos}, GSI {gsi})",
+                        check_funds=True,
+                        wallet_idempotency_key=f"recruit_exec:{ref_key}:{cand_id}:{balance_class}",
+                    )
                 )
-            )
-            remaining_fee -= portion
-        if remaining_fee > 0:
-            raise ledger.LedgerError("insufficient_eligible_recruitment_funds")
+                remaining_fee -= portion
+            if remaining_fee > 0:
+                raise ledger.LedgerError("insufficient_eligible_recruitment_funds")
     except ledger.LedgerError as exc:
         if assignment is not None:
             assignment.gm_evaluation_status = "failed_insufficient_funds"
@@ -2715,7 +2716,6 @@ def execute_authorized_recruitment_signing(
             "assignment_id": assignment.id if assignment else None,
             "ledger_event_id": ledger_ev.id,
             "ledger_event_ids": [event.id for event in ledger_events],
-            "ledger_event_ids": [event.id for event in ledger_events],
         },
         growth_log_json=[
             {
@@ -2739,6 +2739,7 @@ def execute_authorized_recruitment_signing(
             "executed_fee_gtex": float(fee_dec),
             "executed_wage_gtex": float(wage_dec),
             "ledger_event_id": ledger_ev.id,
+            "ledger_event_ids": [event.id for event in ledger_events],
             "executed_world_day": int(state.world_day or 1),
         }
         flag_modified(assignment, "metadata_json")
