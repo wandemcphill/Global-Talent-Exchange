@@ -6,7 +6,7 @@ import { Loading } from "@/components/gtex/ui";
 
 export default function PaymentCallback() {
   const [params] = useSearchParams();
-  const [msg, setMsg] = useState("Verifying your Paystack payment");
+  const [msg, setMsg] = useState("Verifying your GTEX Coin payment");
   useEffect(() => {
     const ref = params.get("reference") || params.get("trxref");
     if (!ref) {
