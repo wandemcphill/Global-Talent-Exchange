@@ -170,7 +170,7 @@ export default function AppShell() {
   const { user, loading, logout } = useAuth();
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { data, isLoading } = useControlCenter();
+  const { data, isLoading, isError, refetch } = useControlCenter();
   const moneyRates = useMoneyRates();
   useEffect(() => {
     const economy = data?.economy;
@@ -202,7 +202,7 @@ export default function AppShell() {
 
   if (loading) return <Loading label="Entering the matchday suite..." />;
   if (!user) return <Navigate to="/login" replace />;
-  if (isLoading) return <Loading label="Loading your clubs..." />;
+  if (isLoading && !isError) return <Loading label="Loading your clubs..." />;
 
   const role = String(user.role || "").toLowerCase();
   const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
@@ -282,7 +282,7 @@ export default function AppShell() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const normalNav = hasActiveClub
+  const normalNav = isError || hasActiveClub
     ? NAV
     : NAV.filter((item) =>
         [
@@ -453,6 +453,17 @@ export default function AppShell() {
         {/* Matchday Top Control Strip */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/95 px-4 py-2.5 backdrop-blur-2xl sm:px-8 shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(0,201,145,0.18)]">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
+          {isError && (
+            <button
+              type="button"
+              data-testid="app-shell-control-center-retry"
+              onClick={() => refetch()}
+              className="rounded-xl border border-amber-400/30 bg-amber-400/10 px-3 py-1.5 text-xs font-semibold text-amber-200 hover:border-amber-300/60 hover:text-white"
+              title="Retry loading your club and account data"
+            >
+              Workspace data unavailable · Retry
+            </button>
+          )}
           {!isDedicatedAccount && <ClubSwitcher />}
           <GlobalWorldClockPill />
 

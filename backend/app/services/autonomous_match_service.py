@@ -212,6 +212,137 @@ class AutonomousMatchExecutionService:
             "errors": errors,
         }
 
+    def start_and_step_live_fixtures(
+        self,
+        *,
+        reference_at: datetime | None = None,
+        step_minutes: int = 15,
+        limit: int = 50,
+        lease_owner: str = "autonomous-live-worker",
+        step_interval_seconds: int = 10,
+    ) -> dict[str, Any]:
+        """Start due fixtures as progressive canonical executions and advance active matches."""
+        from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
+
+        eval_time = _as_utc(reference_at) or self.world_clock.now_virtual()
+        live_service = CanonicalLiveExecutionService(
+            self.session,
+            match_service=self.auto_runner.match_service,
+            timeline_service=self.auto_runner.timeline_service,
+            team_factory=self.auto_runner.team_factory,
+            lifecycle_service=self.auto_runner.lifecycle_service,
+        )
+
+        step_summary = live_service.claim_and_advance_due_executions(
+            reference_at=eval_time,
+            step_minutes=step_minutes,
+            limit=limit,
+            lease_owner=lease_owner,
+            step_interval_seconds=step_interval_seconds,
+        )
+
+        stmt = (
+            select(CompetitionMatch)
+            .where(
+                CompetitionMatch.status == MatchStatus.SCHEDULED.value,
+                or_(
+                    CompetitionMatch.scheduled_at <= eval_time,
+                    CompetitionMatch.scheduled_at.is_(None),
+                ),
+            )
+            .order_by(
+                CompetitionMatch.scheduled_at.asc().nullslast(),
+                CompetitionMatch.match_date.asc().nullslast(),
+                CompetitionMatch.created_at.asc(),
+            )
+            .limit(max(1, limit))
+        )
+        if _supports_row_locks(self.session):
+            stmt = stmt.with_for_update(skip_locked=True)
+        candidates = list(self.session.scalars(stmt).all())
+
+        started = 0
+        errors: list[str] = []
+        affected_competitions: dict[str, Competition] = {}
+        for settled_match_id in step_summary.get("settled_match_ids", []):
+            settled_match = self.session.get(CompetitionMatch, settled_match_id)
+            if settled_match is not None:
+                settled_comp = self.session.get(Competition, settled_match.competition_id)
+                if settled_comp is not None:
+                    affected_competitions[settled_comp.id] = settled_comp
+        for match in candidates:
+            comp = self.session.get(Competition, match.competition_id)
+            if comp is None:
+                continue
+            kickoff = self.auto_runner.effective_kickoff_at(comp, match)
+            if kickoff is None or kickoff > eval_time:
+                continue
+            if match.scheduled_at is None:
+                match.scheduled_at = kickoff
+            affected_competitions[comp.id] = comp
+            comp_status = CompetitionStatus(comp.status)
+            if comp_status is CompetitionStatus.SEEDED or self.auto_runner._should_launch(comp, now_virtual=eval_time):
+                try:
+                    with self.session.begin_nested():
+                        self.auto_runner.lifecycle_service.launch_competition(comp)
+                except Exception as exc:
+                    logger.warning("Failed to auto-launch competition %s: %s", comp.id, exc)
+            try:
+                with self.session.begin_nested():
+                    live_service.start_live_execution(
+                        match.id,
+                        competition=comp,
+                        step_interval_seconds=step_interval_seconds,
+                        lease_owner=lease_owner,
+                    )
+                    live_service.step_execution(
+                        match.id,
+                        step_minutes=step_minutes,
+                        stop_at_halftime=True,
+                        settle_on_completion=True,
+                        step_interval_seconds=step_interval_seconds,
+                        lease_owner=lease_owner,
+                        reference_at=eval_time,
+                    )
+                started += 1
+            except Exception as exc:
+                errors.append(f"Match {match.id}: {exc}")
+                logger.exception("Failed starting live canonical fixture %s", match.id)
+
+        settled_competitions: list[str] = []
+        advanced_competitions: list[str] = []
+        for comp_id, comp in affected_competitions.items():
+            try:
+                with self.session.begin_nested():
+                    self.session.refresh(comp)
+                    matches = self.auto_runner._matches(comp.id)
+                    if matches and self.auto_runner._all_matches_complete(matches):
+                        if CompetitionFormat(comp.format) is CompetitionFormat.LEAGUE:
+                            if CompetitionStatus(comp.status) is not CompetitionStatus.SETTLED:
+                                self.auto_runner.lifecycle_service.finalize_competition(comp, settle=True)
+                                settled_competitions.append(comp.id)
+                        else:
+                            prev_round = comp.current_round
+                            self.auto_runner.lifecycle_service.advance_competition(comp, force=False)
+                            matches_after = self.auto_runner._matches(comp.id)
+                            if comp.current_round != prev_round:
+                                advanced_competitions.append(comp.id)
+                            if matches_after and self.auto_runner._all_matches_complete(matches_after):
+                                if CompetitionStatus(comp.status) is not CompetitionStatus.SETTLED:
+                                    self.auto_runner.lifecycle_service.finalize_competition(comp, settle=True)
+                                    settled_competitions.append(comp.id)
+            except Exception as exc:
+                logger.exception("Failed checking competition progression %s: %s", comp_id, exc)
+
+        return {
+            "eval_time": eval_time.isoformat(),
+            "started": started,
+            **step_summary,
+            "errors": [*errors, *step_summary.get("errors", [])],
+            "settled_competitions": settled_competitions,
+            "advanced_competitions": advanced_competitions,
+        }
+
     def get_health_telemetry(self) -> dict[str, Any]:
         """Return operational telemetry on clock, overdue fixtures, and worker state."""
         eval_time = self.world_clock.now_virtual()
@@ -269,6 +400,35 @@ class AutonomousMatchExecutionService:
                 # Malformed retry metadata is not evidence of a valid retry count.
                 continue
 
+        from app.models.competition_match_execution import CompetitionMatchExecution
+
+        halted_executions = (
+            self.session.scalar(
+                select(func.count(CompetitionMatchExecution.id)).where(
+                    CompetitionMatchExecution.execution_status == "halted"
+                )
+            )
+            or 0
+        )
+        paused_executions = (
+            self.session.scalar(
+                select(func.count(CompetitionMatchExecution.id)).where(
+                    CompetitionMatchExecution.execution_status == "paused"
+                )
+            )
+            or 0
+        )
+        stalled_leases = (
+            self.session.scalar(
+                select(func.count(CompetitionMatchExecution.id)).where(
+                    CompetitionMatchExecution.execution_status.in_(["in_progress", "paused"]),
+                    CompetitionMatchExecution.lease_expires_at.is_not(None),
+                    CompetitionMatchExecution.lease_expires_at <= datetime.now(timezone.utc),
+                )
+            )
+            or 0
+        )
+
         return {
             "clock": {
                 "id": clock_state.id,
@@ -286,6 +446,11 @@ class AutonomousMatchExecutionService:
                 "in_progress_count": in_progress_count,
                 "retry_pending_count": retry_pending_count,
                 "worker_mode": worker_mode,
+            },
+            "executions": {
+                "paused_count": paused_executions,
+                "halted_count": halted_executions,
+                "stalled_lease_count": stalled_leases,
             },
         }
 
