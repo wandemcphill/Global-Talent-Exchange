@@ -190,6 +190,57 @@ function OrderForm({ traders, coinOnly = false, buyOnly = false, initialAmount =
   );
 }
 
+export function ClubCoinTraderFundingPanel() {
+  const { user } = useAuth();
+  const { data: traders, isLoading: tradersLoading } = useQuery({
+    queryKey: ["club-funding-coin-traders"],
+    queryFn: async () => (await api.get("/coin-traders")).data,
+  });
+  const { data: orders, isLoading: ordersLoading } = useQuery({
+    queryKey: ["club-funding-coin-orders"],
+    queryFn: async () => (await api.get("/coin-traders/orders")).data,
+  });
+  const approved = (traders || []).filter(
+    (trader: any) => trader.user_id !== user?.id && Boolean(trader.verified_at)
+  );
+  const gtexOrders = (orders || []).filter(
+    (order: any) => String(order.coin_unit || "coin").toLowerCase() === "coin"
+  );
+
+  return (
+    <div className="rounded-xl border border-cyan-500/20 bg-slate-950/60 p-4" data-testid="club-funding-coin-traders">
+      <p className="gx-label text-cyan-300">Option 2 · Verified Coin Traders</p>
+      <h4 className="gx-display mt-1 text-lg font-bold uppercase text-white">Buy GTX from a Coin Trader</h4>
+      <p className="mt-2 text-xs leading-relaxed text-slate-400">
+        Choose an approved, identity-verified trader. Orders are escrow-protected: the trader accepts, you submit Naira payment proof, and GTX is released to your wallet after confirmation.
+      </p>
+      {tradersLoading ? (
+        <p className="mt-3 text-xs text-slate-500">Loading verified GTEX Coin traders…</p>
+      ) : approved.length ? (
+        <div className="mt-4">
+          <OrderForm traders={approved} coinOnly buyOnly initialAmount="4000" />
+        </div>
+      ) : (
+        <p className="mt-3 rounded border border-amber-400/20 bg-amber-400/5 p-3 text-xs text-amber-200">
+          No approved and verified GTEX Coin traders are currently available. Use the platform purchase option or check back later.
+        </p>
+      )}
+      <div className="mt-5 border-t border-white/10 pt-4">
+        <p className="gx-label">Your GTEX Coin trader orders</p>
+        {ordersLoading ? (
+          <p className="mt-2 text-xs text-slate-500">Loading orders…</p>
+        ) : gtexOrders.length ? (
+          <div className="mt-2 space-y-2">
+            {gtexOrders.map((order: any) => <OrderRow key={order.id} o={order} traders={traders || []} />)}
+          </div>
+        ) : (
+          <p className="mt-2 text-xs text-slate-500">No GTEX Coin trader orders yet.</p>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function TraderVerificationCard({ profile, onVerified }: { profile: any; onVerified?: () => void }) {
   const [verificationType, setVerificationType] = useState<"full_kyc" | "government_id" | "bvn_nin" | "liveness">("full_kyc");
   const [initiating, setInitiating] = useState(false);
