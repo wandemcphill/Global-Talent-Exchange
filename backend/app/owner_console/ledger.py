@@ -445,32 +445,44 @@ def settle_club_transfer(
     if is_restricted:
         if funding["available_deposited"] < gross_amount:
             raise LedgerError("restricted_player_requires_deposited_funds")
-        balance_class = "deposited"
+        funding_pools = (("deposited", funding["available_deposited"]),)
     else:
-        # Player transfers may consume the ring-fenced first-500 squad grant.
-        if funding["available_squad_grant"] >= gross_amount:
-            balance_class = "squad_grant"
-        elif funding["available_promotional"] >= gross_amount:
-            balance_class = "promotional"
-        elif funding["available_earned"] >= gross_amount:
-            balance_class = "earned"
-        else:
-            balance_class = "deposited"
+        funding_pools = (
+            ("squad_grant", funding.get("available_squad_grant", Decimal("0"))),
+            ("promotional", funding["available_promotional"]),
+            ("earned", funding["available_earned"]),
+            ("deposited", funding["available_deposited"]),
+        )
 
-    return record(
-        session,
-        event_type="transfer_purchase",
-        source=club_account(buying_club_id),
-        destination=club_account(selling_club_id),
-        currency=GTEX,
-        gross=gross_amount,
-        fee_bps=TRANSFER_PLATFORM_FEE_BPS,
-        balance_class=balance_class,
-        club_id=buying_club_id,
-        related_type="transfer_bid",
-        related_id=transfer_bid_id,
-        memo=memo[:255],
-    )
+    remaining = gross_amount
+    events: list[LedgerEvent] = []
+    for balance_class, available_amount in funding_pools:
+        if remaining <= 0:
+            break
+        portion = min(D(available_amount), remaining)
+        if portion <= 0:
+            continue
+        events.append(
+            record(
+                session,
+                event_type="transfer_purchase",
+                source=club_account(buying_club_id),
+                destination=club_account(selling_club_id),
+                currency=GTEX,
+                gross=portion,
+                fee_bps=TRANSFER_PLATFORM_FEE_BPS,
+                balance_class=balance_class,
+                club_id=buying_club_id,
+                related_type="transfer_bid",
+                related_id=transfer_bid_id,
+                memo=memo[:255],
+            )
+        )
+        remaining -= portion
+
+    if remaining > 0:
+        raise LedgerError("insufficient_club_treasury")
+    return events[0] if events else None
 
 
 def balance(session: Session, account: str, currency: str) -> Decimal:
