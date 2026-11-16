@@ -108,7 +108,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
     : Number(nairaAmount || 0) / (rate || 1);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
   const clubCoins = Number(club?.economy?.cash_gtex || 0);
-  const platformReady = Boolean(finance?.paystack_configured);
+  const platformReady = Boolean(finance?.payment_providers?.[provider]);
 
   const buyFromPlatform = async () => {
     const amount = Math.trunc(Number(nairaAmount));
@@ -120,7 +120,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: amount,
         provider,
-        callback_url: window.location.origin + publicUrl("/payment/callback?return_to=%2Fonboarding"),
+        callback_url: window.location.origin + publicUrl(`/payment/callback?return_to=%2Fonboarding&provider=${provider}`),
       });
       window.location.href = data.authorization_url;
     } catch (error) {
@@ -235,7 +235,7 @@ function SquadStep({ clubId, onDone }: any) {
   const hasGk = squad.some(
     (p: any) => (p.position || "").toLowerCase().includes("goal") || (p.position || "").toLowerCase() === "gk"
   );
-  const isMatchEligible = club?.formation?.is_formed ?? (squad.length >= 22 && hasGk);
+  const isMatchEligible = squad.length >= 22 && hasGk && (club?.formation?.is_formed ?? true);
   const clubCash = Number(club?.economy?.cash_gtex || 0);
 
   useEffect(() => {
