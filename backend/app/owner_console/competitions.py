@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import logging
+import os
 import secrets
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+from app.core.config import get_settings
+from app.core.field_encryption import is_production_environment
 
 from app.owner_console import engine, ledger
 from app.owner_console.models import (
@@ -68,7 +72,17 @@ def comp_account(competition_id: str) -> str:
     return f"competition:{competition_id}"
 
 
+def _seeding_disabled_for_environment() -> bool:
+    """Never auto-seed sample competitions in production-like environments."""
+    env_override = os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
+    if env_override is not None and env_override.strip():
+        return is_production_environment(env_override)
+    return is_production_environment(get_settings().app_env)
+
+
 def ensure_seed(session: Session) -> None:
+    if _seeding_disabled_for_environment():
+        return
     for spec in SEED:
         open_exists = session.scalar(
             select(OwnerCompetition).where(
