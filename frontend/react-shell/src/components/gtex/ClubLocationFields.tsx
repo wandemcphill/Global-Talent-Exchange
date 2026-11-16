@@ -2,10 +2,10 @@ import React, { useMemo, useState } from "react";
 import {
   CLUB_LOCATION_CATALOG,
   citiesForRegion,
+  countryCodeFromLabel,
   countryLabel,
   regionForCity,
   regionsFor,
-  resolveCountryCode,
 } from "@/pages/clubLocationCatalog";
 import { validateClubLocation } from "@/pages/clubCreationLocation";
 
@@ -14,23 +14,27 @@ export function useClubLocation() {
   const [countryText, setCountryText] = useState("");
   const [cityName, setCityName] = useState("");
   const [regionName, setRegionName] = useState("");
-  const countryCode = resolveCountryCode(countryText);
+  const [regionCode, setRegionCode] = useState("");
+  const countryCode = countryCodeFromLabel(countryText);
   const validation = validateClubLocation(countryCode, cityName, regionName);
 
   const changeCountry = (label: string) => {
     setCountryText(label);
     setCityName("");
     setRegionName("");
+    setRegionCode("");
   };
 
-  const changeCity = (city: string) => {
+  const changeCity = (city: string, matchedRegion?: string, matchedRegionCode?: string) => {
     setCityName(city);
-    const matchedRegion = regionForCity(countryCode, city);
-    if (matchedRegion) setRegionName(matchedRegion);
+    const resolvedRegion = matchedRegion || regionForCity(countryCode, city);
+    if (resolvedRegion) setRegionName(resolvedRegion);
+    if (matchedRegionCode) setRegionCode(matchedRegionCode);
   };
 
-  const changeRegion = (region: string) => {
+  const changeRegion = (region: string, code = "") => {
     setRegionName(region);
+    setRegionCode(code);
     if (cityName && regionForCity(countryCode, cityName) !== region) {
       setCityName("");
     }
@@ -40,6 +44,7 @@ export function useClubLocation() {
     countryText,
     cityName,
     regionName,
+    regionCode,
     countryCode,
     validation,
     changeCountry,
