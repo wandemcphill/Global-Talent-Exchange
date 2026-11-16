@@ -202,7 +202,10 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: any) {
     queryFn: async () => (await api.get("/coin-traders/orders")).data,
   });
   const approved = (traders || []).filter(
-    (trader: any) => trader.user_id !== user?.id && Boolean(trader.verified_at)
+    (trader: any) =>
+      trader.user_id !== user?.id &&
+      Boolean(trader.verified_at) &&
+      Boolean(rateOf(trader, "coin"))
   );
   const gtexOrders = (orders || []).filter(
     (order: any) => String(order.coin_unit || "coin").toLowerCase() === "coin"
