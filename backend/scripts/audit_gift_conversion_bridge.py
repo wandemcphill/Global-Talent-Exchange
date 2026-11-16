@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from decimal import Decimal
+from decimal import Decimal, ROUND_UP
 from pathlib import Path
 import sys
 from typing import Any
@@ -34,7 +34,14 @@ from app.models.economic_conversion import (  # noqa: E402
     EconomicConversion,
     EconomicConversionStatus,
 )
-from app.models.wallet import LedgerAccount, LedgerEntry
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerEntry,
+    LedgerTransaction,
+    LedgerTransactionStatus,
+    LedgerUnit,
+)
 from app.wallets.service import COIN_TO_CREDIT_RATE  # noqa: E402
 
 QUANTUM = Decimal("0.0001")
@@ -55,6 +62,26 @@ def _account_balance(session, code: str) -> Decimal | None:
         select(func.coalesce(func.sum(LedgerEntry.amount), 0)).where(LedgerEntry.account_id == account.id)
     )
     return _amount(total)
+
+
+def _outstanding_user_fancoin(session) -> Decimal:
+    rows = session.execute(
+        select(LedgerEntry.account_id, func.sum(LedgerEntry.amount))
+        .join(LedgerAccount, LedgerEntry.account_id == LedgerAccount.id)
+        .join(LedgerTransaction, LedgerEntry.transaction_id == LedgerTransaction.id)
+        .where(
+            LedgerAccount.owner_user_id.is_not(None),
+            LedgerAccount.kind == LedgerAccountKind.USER,
+            LedgerAccount.unit == LedgerUnit.CREDIT,
+            LedgerTransaction.status == LedgerTransactionStatus.COMMITTED,
+        )
+        .group_by(LedgerEntry.account_id)
+    ).all()
+    # Negative balances cannot create a positive Fan Coin redemption claim.
+    return sum(
+        (max(_amount(balance), Decimal("0.0000")) for _, balance in rows),
+        Decimal("0.0000"),
+    )
 
 
 def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
@@ -87,6 +114,15 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
             credit_bridge = _account_balance(session, CREDIT_BRIDGE_CODE)
             coin_bridge = _account_balance(session, COIN_BRIDGE_CODE)
             fee_revenue = _account_balance(session, FEE_REVENUE_CODE)
+            outstanding_user_fancoin = _outstanding_user_fancoin(session)
+            required_bridge_coin = (
+                outstanding_user_fancoin / COIN_TO_CREDIT_RATE
+            ).quantize(QUANTUM, rounding=ROUND_UP)
+            available_bridge_coin = coin_bridge or Decimal("0.0000")
+            bridge_reserve_shortfall = max(
+                required_bridge_coin - available_bridge_coin,
+                Decimal("0.0000"),
+            )
 
             # Outstanding Coin liability created by conversion, i.e. Coin issued
             # and not since compensated by a reversal. A reversal moves the
@@ -102,6 +138,10 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
                 gates["coin_bridge_not_negative"] = coin_bridge >= Decimal("0.0000")
             if credit_bridge is not None:
                 gates["credit_bridge_not_negative"] = credit_bridge >= Decimal("0.0000")
+            gates["coin_bridge_covers_outstanding_fancoin"] = (
+                required_bridge_coin == Decimal("0.0000")
+                or (coin_bridge is not None and coin_bridge >= required_bridge_coin)
+            )
             # Issued GTEX is the Fan Coin remainder divided by COIN_TO_CREDIT_RATE (15), so
             # COIN_TO_CREDIT_RATE times issued coin plus the Fan Coin fee cannot exceed Fan Coin consumed.
             gates["fee_and_destination_within_gross"] = (
@@ -118,6 +158,9 @@ def audit_bridge(*, database_url: str | None = None) -> dict[str, Any]:
                 "coin_issued": str(coin_issued),
                 "coin_reversed": str(coin_reversed),
                 "outstanding_coin_liability": str(outstanding_coin),
+                "outstanding_user_fancoin": str(outstanding_user_fancoin),
+                "required_bridge_coin_for_user_fancoin": str(required_bridge_coin),
+                "bridge_coin_reserve_shortfall": str(bridge_reserve_shortfall),
                 "credit_bridge_balance": None if credit_bridge is None else str(credit_bridge),
                 "coin_bridge_balance": None if coin_bridge is None else str(coin_bridge),
                 "fee_revenue_balance": None if fee_revenue is None else str(fee_revenue),
