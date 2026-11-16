@@ -154,3 +154,44 @@ def test_bridge_audit_is_clean_on_an_untouched_ledger(tmp_path) -> None:
     assert Decimal(report["outstanding_coin_liability"]) == Decimal("0.0000")
     assert report["bridge_accounts_exist"] is False
     assert report["pass"] is True
+
+
+
+def test_bridge_audit_detects_legacy_fancoin_backed_only_at_old_rate(tmp_path) -> None:
+    session, url = _make_session_and_url(tmp_path)
+    try:
+        sender = _user(session, email="legacy-fan-sender@example.com", username="legacy-fan-sender")
+        wallet = WalletService()
+        user_fan = wallet.get_user_account(session, sender, LedgerUnit.CREDIT)
+        platform_fan = wallet.ensure_platform_account(session, LedgerUnit.CREDIT)
+        bridge_coin = wallet.ensure_named_system_account(
+            session,
+            code="platform:coin:gift_conversion_bridge",
+            label="Platform GTEX Coin Gift Conversion Bridge",
+            unit=LedgerUnit.COIN,
+            allow_negative=False,
+        )
+        platform_coin = wallet.ensure_platform_account(session, LedgerUnit.COIN)
+        wallet.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=user_fan, amount=Decimal("100.0000")),
+                LedgerPosting(account=platform_fan, amount=Decimal("-100.0000")),
+                LedgerPosting(account=bridge_coin, amount=Decimal("1.0000")),
+                LedgerPosting(account=platform_coin, amount=Decimal("-1.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            reference="seed-legacy-100-to-1-fan-backing",
+            actor=sender,
+        )
+        session.commit()
+    finally:
+        session.close()
+
+    report = audit_bridge(database_url=url)
+
+    assert Decimal(report["outstanding_user_fancoin"]) == Decimal("100.0000")
+    assert Decimal(report["required_bridge_coin_for_user_fancoin"]) == Decimal("6.6667")
+    assert Decimal(report["bridge_coin_reserve_shortfall"]) == Decimal("5.6667")
+    assert report["gates"]["coin_bridge_covers_outstanding_fancoin"] is False
+    assert report["pass"] is False
