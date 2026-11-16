@@ -5,9 +5,10 @@ Revises: 20261115_0252_canonical_live_match_execution
 Create Date: 2026-11-16
 """
 
+from decimal import Decimal, ROUND_UP
+
 from alembic import op
 import sqlalchemy as sa
-from decimal import Decimal, ROUND_UP
 
 
 revision = "20261116_0253_gtex_coin_fiat_rate_rebalance"
