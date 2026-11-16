@@ -100,9 +100,7 @@ class TraderService:
                 else None
             )
             validated_pin_hash = (
-                validate_trader_credential_hash(security_pin_hash, "pin")
-                if security_pin_hash is not None
-                else None
+                validate_trader_credential_hash(security_pin_hash, "pin") if security_pin_hash is not None else None
             )
         except ValueError as exc:
             raise TraderAccessError(str(exc)) from exc
