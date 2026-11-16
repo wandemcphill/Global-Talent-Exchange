@@ -140,6 +140,17 @@ target_metadata = get_target_metadata()
 ALEMBIC_VERSION_TABLE = "alembic_version"
 ALEMBIC_VERSION_COLUMN = "version_num"
 ALEMBIC_VERSION_LENGTH = 255
+ALEMBIC_MIGRATION_ADVISORY_LOCK_KEY = 6_982_441_730_119_482
+
+
+def _acquire_postgres_migration_lock(connection) -> None:
+    """Serialize concurrent Alembic runs across processes using a transaction advisory lock."""
+    if connection.dialect.name != "postgresql":
+        return
+    connection.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_id)"),
+        {"lock_id": ALEMBIC_MIGRATION_ADVISORY_LOCK_KEY},
+    )
 
 
 def _ensure_alembic_version_capacity(connection) -> None:
@@ -198,6 +209,7 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        _acquire_postgres_migration_lock(connection)
         _ensure_alembic_version_capacity(connection)
         # Inspector queries above can autobegin a transaction on SQLAlchemy 2.x.
         # Commit that preflight work so Alembic controls the migration transaction.
@@ -209,6 +221,7 @@ def run_migrations_online() -> None:
         )
 
         with context.begin_transaction():
+            _acquire_postgres_migration_lock(connection)
             context.run_migrations()
 
 

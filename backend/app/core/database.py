@@ -7,6 +7,7 @@ from importlib import import_module
 import logging
 import os
 from pathlib import Path
+import threading
 import time
 
 from alembic import command
@@ -88,6 +89,7 @@ RUNTIME_SCHEMA_SMOKE_TABLES = (
     "user_streaks",
 )
 logger = logging.getLogger(__name__)
+_SCHEMA_MIGRATION_LOCK = threading.RLock()
 
 
 @lru_cache
@@ -305,30 +307,36 @@ def initialize_database_connection(
 
 
 def ensure_database_schema_current(engine: Engine | None = None) -> tuple[str, ...]:
-    load_model_modules()
-    database_engine = engine or get_engine()
-    # str(url) masks the password as "***" (SQLAlchemy default), which would make
-    # alembic authenticate with an invalid password. Render with the real password.
-    config = build_alembic_config(database_engine.url.render_as_string(hide_password=False))
-    script = ScriptDirectory.from_config(config)
-    target_head = script.get_current_head()
-    target_heads = (target_head,) if target_head is not None else tuple()
+    """Ensure the target database is migrated to the single Alembic head.
 
-    with database_engine.connect() as connection:
-        current_heads = tuple(sorted(MigrationContext.configure(connection).get_current_heads()))
+    Serialized with an in-process lock because Alembic's ``context`` and ``op``
+    proxies are process-global and not thread-safe.
+    """
+    with _SCHEMA_MIGRATION_LOCK:
+        load_model_modules()
+        database_engine = engine or get_engine()
+        # str(url) masks the password as "***" (SQLAlchemy default), which would make
+        # alembic authenticate with an invalid password. Render with the real password.
+        config = build_alembic_config(database_engine.url.render_as_string(hide_password=False))
+        script = ScriptDirectory.from_config(config)
+        target_head = script.get_current_head()
+        target_heads = (target_head,) if target_head is not None else tuple()
 
-    if current_heads != target_heads:
-        command.upgrade(config, "head")
         with database_engine.connect() as connection:
             current_heads = tuple(sorted(MigrationContext.configure(connection).get_current_heads()))
 
-    if current_heads != target_heads:
-        raise RuntimeError(
-            "Database schema is not up to date. "
-            f"Current revisions: {current_heads or ('<none>',)}. Expected: {target_heads or ('<none>',)}."
-        )
+        if current_heads != target_heads:
+            command.upgrade(config, "head")
+            with database_engine.connect() as connection:
+                current_heads = tuple(sorted(MigrationContext.configure(connection).get_current_heads()))
 
-    return current_heads
+        if current_heads != target_heads:
+            raise RuntimeError(
+                "Database schema is not up to date. "
+                f"Current revisions: {current_heads or ('<none>',)}. Expected: {target_heads or ('<none>',)}."
+            )
+
+        return current_heads
 
 
 def check_runtime_schema_smoke(

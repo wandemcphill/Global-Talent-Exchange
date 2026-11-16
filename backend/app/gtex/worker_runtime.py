@@ -6,7 +6,7 @@ from time import sleep
 from uuid import uuid4
 
 from app.backbone.redis_fanout import HybridEventPublisher
-from app.core.config import get_settings
+from app.core.config import Settings, get_settings
 from app.core.database import DatabaseRuntime
 from app.core.events import InMemoryEventPublisher
 from app.gtex import redis_keys
@@ -24,28 +24,43 @@ class WorkerContext:
             self.event_publisher.close()
 
 
-def build_worker_context() -> WorkerContext:
-    settings = get_settings()
-    database = DatabaseRuntime.build(settings=settings)
-    database.initialize(run_migration_check=settings.run_migration_check)
-    if settings.redis_url:
-        event_publisher = HybridEventPublisher(redis_url=settings.redis_url, redis_channel=settings.redis_event_channel)
+def build_worker_context(
+    *,
+    settings: Settings | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> WorkerContext:
+    """Build a GTEX worker context, reusing a pre-initialized DatabaseRuntime when provided."""
+    resolved_settings = settings or get_settings()
+    resolved_database = database or DatabaseRuntime.build(settings=resolved_settings)
+    should_check_migrations = (
+        resolved_settings.run_migration_check if run_migration_check is None else run_migration_check
+    )
+    if database is None or should_check_migrations:
+        resolved_database.initialize(run_migration_check=should_check_migrations)
+    if resolved_settings.redis_url:
+        event_publisher = HybridEventPublisher(
+            redis_url=resolved_settings.redis_url,
+            redis_channel=resolved_settings.redis_event_channel,
+        )
         event_publisher.start()
     else:
         event_publisher = InMemoryEventPublisher()
     runtime = build_gtex_runtime(
-        app_settings=settings,
-        session_factory=database.session_factory,
+        app_settings=resolved_settings,
+        session_factory=resolved_database.session_factory,
         event_publisher=event_publisher,
-        redis_url=settings.redis_url,
-        realtime_channel=settings.redis_realtime_channel,
+        redis_url=resolved_settings.redis_url,
+        realtime_channel=resolved_settings.redis_realtime_channel,
     )
-    with database.session_factory() as session:
-        runtime.jackpot.ensure_open_round(session)
-        runtime.ai_leagues.seed_defaults(session)
-        runtime.universe.seed_defaults(session)
-        session.commit()
-    return WorkerContext(database=database, runtime=runtime, event_publisher=event_publisher)
+    if seed_defaults:
+        with resolved_database.session_factory() as session:
+            runtime.jackpot.ensure_open_round(session)
+            runtime.ai_leagues.seed_defaults(session)
+            runtime.universe.seed_defaults(session)
+            session.commit()
+    return WorkerContext(database=resolved_database, runtime=runtime, event_publisher=event_publisher)
 
 
 @dataclass(slots=True)
@@ -166,17 +181,81 @@ def _run_forever(worker) -> None:
         worker.context.shutdown()
 
 
-def run_jackpot_worker() -> None:
-    _run_forever(JackpotWorker(context=build_worker_context()))
+def _run_worker(
+    worker_cls,
+    *,
+    context: WorkerContext | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> None:
+    resolved_context = context or build_worker_context(
+        database=database,
+        run_migration_check=run_migration_check,
+        seed_defaults=seed_defaults,
+    )
+    _run_forever(worker_cls(context=resolved_context))
 
 
-def run_valuation_worker() -> None:
-    _run_forever(ValuationWorker(context=build_worker_context()))
+def run_jackpot_worker(
+    *,
+    context: WorkerContext | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> None:
+    _run_worker(
+        JackpotWorker,
+        context=context,
+        database=database,
+        run_migration_check=run_migration_check,
+        seed_defaults=seed_defaults,
+    )
 
 
-def run_ai_matchmaker_worker() -> None:
-    _run_forever(AiMatchmakerWorker(context=build_worker_context()))
+def run_valuation_worker(
+    *,
+    context: WorkerContext | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> None:
+    _run_worker(
+        ValuationWorker,
+        context=context,
+        database=database,
+        run_migration_check=run_migration_check,
+        seed_defaults=seed_defaults,
+    )
 
 
-def run_ai_brain_worker() -> None:
-    _run_forever(AiBrainWorker(context=build_worker_context()))
+def run_ai_matchmaker_worker(
+    *,
+    context: WorkerContext | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> None:
+    _run_worker(
+        AiMatchmakerWorker,
+        context=context,
+        database=database,
+        run_migration_check=run_migration_check,
+        seed_defaults=seed_defaults,
+    )
+
+
+def run_ai_brain_worker(
+    *,
+    context: WorkerContext | None = None,
+    database: DatabaseRuntime | None = None,
+    run_migration_check: bool | None = None,
+    seed_defaults: bool = True,
+) -> None:
+    _run_worker(
+        AiBrainWorker,
+        context=context,
+        database=database,
+        run_migration_check=run_migration_check,
+        seed_defaults=seed_defaults,
+    )
