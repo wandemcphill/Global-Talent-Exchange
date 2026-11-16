@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, ArrowRight, Check, Dna, ShoppingCart, Sparkles, Sprout, Trash2 } from "lucide-react";
@@ -166,6 +166,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
         <div className="rounded-lg border border-emerald-500/25 bg-black/25 px-4 py-3 text-right">
           <p className="text-[10px] uppercase tracking-widest text-slate-400">Club treasury</p>
           <p className="gx-mono text-xl font-bold text-emerald-300">{fmt(clubCoins)} GTX</p>
+          <p className="mt-1 text-[10px] text-slate-400">Squad grant remaining: {fmt(club?.economy?.squad_grant || 0)} GTX</p>
         </div>
       </div>
 
