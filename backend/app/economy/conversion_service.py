@@ -353,13 +353,13 @@ class FanCoinGiftConversionService:
         return account
 
     def _assert_fully_backed_gift_bridge(self) -> LedgerAccount:
-        """Return a locked bridge account only when all user Fan Coin is backed.
+        """Return the bridge account only when all user Fan Coin is backed.
 
         Derive both balances from committed ledger entries, not projections or
-        cache values. The row lock serializes concurrent gift conversions.
+        cache values. Ordered projection locks serialize concurrent credit writes.
         """
         locked_bridge = self.session.scalar(
-            select(LedgerAccount).where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE).with_for_update()
+            select(LedgerAccount).where(LedgerAccount.code == GIFT_CONVERSION_BRIDGE_COIN_CODE)
         )
         # append_transaction serializes wallet updates through balance projections.
         # Lock every existing Fan Coin account projection plus the GTEX bridge
