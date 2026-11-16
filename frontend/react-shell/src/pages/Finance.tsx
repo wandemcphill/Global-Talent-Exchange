@@ -58,7 +58,7 @@ function Deposit({ configured, rates, mode }: any) {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: Number(amount),
         provider,
-        callback_url: `${window.location.origin}${publicUrl("/payment/callback")}`,
+        callback_url: `${window.location.origin}${publicUrl(`/payment/callback?provider=${provider}`)}`,
       });
       window.location.href = data.authorization_url;
     } catch (e) {
