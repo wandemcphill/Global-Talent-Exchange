@@ -206,8 +206,11 @@ export async function loadRegionCities(
 export function countryCodeFromLabel(input: string): string {
   const known = resolveCountryCode(input);
   if (known) return known;
-  const match = /\\(([a-z]{2})\\)$/i.exec(input.trim());
-  return match?.[1]?.toUpperCase() || "";
+  const label = input.trim();
+  const opening = label.lastIndexOf("(");
+  if (opening < 0 || !label.endsWith(")")) return "";
+  const code = label.slice(opening + 1, -1).trim().toUpperCase();
+  return /^[A-Z]{2}$/.test(code) ? code : "";
 }
 
 const fold = (s: string) =>
