@@ -2570,16 +2570,39 @@ def execute_authorized_recruitment_signing(
     cand_id = str(candidate.get("candidate_id") or f"target_{uuid4().hex[:8]}")
     ref_key = assignment.id if assignment else str(decision.id)
 
-    actual_cash = ledger.balance(db, ledger.club_account(state.club_id), ledger.GTEX)
-    if fee_dec > actual_cash:
+    funding = ledger.get_club_funding(db, state.club_id)
+    is_restricted_recruitment = (
+        gsi >= 80
+        or bool(candidate.get("is_regen"))
+        or bool(candidate.get("is_legend") or candidate.get("legend"))
+    )
+    # Autonomous recruitment never draws from the first-club squad grant.
+    # Premium/restricted targets require deposited funds; other targets may
+    # use ordinary promotional, earned, or deposited club balances.
+    funding_pools = (
+        (("deposited", funding["available_deposited"]),)
+        if is_restricted_recruitment
+        else (
+            ("promotional", funding["available_promotional"]),
+            ("earned", funding["available_earned"]),
+            ("deposited", funding["available_deposited"]),
+        )
+    )
+    available_for_route = sum((ledger.D(value) for _, value in funding_pools), ledger.D(0))
+    if fee_dec > available_for_route:
+        failure_reason = (
+            "restricted_player_requires_deposited_funds"
+            if is_restricted_recruitment and funding["total_cash"] >= fee_dec
+            else "insufficient_funds"
+        )
         if assignment is not None:
             assignment.gm_evaluation_status = "failed_insufficient_funds"
             assignment.metadata_json = {
                 **a_meta,
                 "execution_status": "failed_insufficient_funds",
-                "failure_reason": "insufficient_funds",
+                "failure_reason": failure_reason,
                 "required_gtex": float(fee_dec),
-                "available_gtex": float(actual_cash),
+                "available_gtex": float(available_for_route),
             }
             flag_modified(assignment, "metadata_json")
             assignment.updated_at = _utcnow()
@@ -2587,7 +2610,7 @@ def execute_authorized_recruitment_signing(
             decision.execution_status = "failed_insufficient_funds"
             decision.outcome_text = (
                 f"Signing of {player_name} blocked: required {float(fee_dec):,.2f} GTX, "
-                f"treasury holds {float(actual_cash):,.2f} GTX."
+                f"eligible recruitment funds available {float(available_for_route):,.2f} GTX."
             )
         living_institution.emit_canonical_club_event(
             db,
@@ -2595,10 +2618,10 @@ def execute_authorized_recruitment_signing(
             category="recruitment",
             event_type="recruitment_execution_blocked",
             source_subsystem="recruitment",
-            title=f"Recruitment Blocked: Insufficient Treasury for {player_name}",
+            title=f"Recruitment Blocked: Eligible Funds Unavailable for {player_name}",
             description=(
-                f"Authorised move for {player_name} ({pos}) halted because fee {float(fee_dec):,.0f} GTX "
-                f"exceeds verified treasury balance {float(actual_cash):,.0f} GTX."
+                f"Authorised move for {player_name} ({pos}) halted because the eligible funding "
+                f"pool holds {float(available_for_route):,.0f} GTX against a fee of {float(fee_dec):,.0f} GTX."
             ),
             idempotency_key=f"recruit_blocked:{ref_key}:{cand_id}:d{int(state.world_day or 1)}",
             visibility_classification=living_institution.VISIBILITY_RESTRICTED_EXECUTIVE,
@@ -2608,36 +2631,50 @@ def execute_authorized_recruitment_signing(
             payload={
                 "player_name": player_name,
                 "required_gtex": float(fee_dec),
-                "available_gtex": float(actual_cash),
-                "failure_reason": "insufficient_funds",
+                "available_gtex": float(available_for_route),
+                "failure_reason": failure_reason,
             },
         )
         db.flush()
         return {
             "executed": False,
-            "reason": "insufficient_funds",
+            "reason": failure_reason,
             "player_name": player_name,
             "required_gtex": float(fee_dec),
-            "available_gtex": float(actual_cash),
+            "available_gtex": float(available_for_route),
             "assignment_id": assignment.id if assignment else None,
         }
 
+    ledger_events = []
+    remaining_fee = fee_dec
     try:
-        ledger_ev = ledger.record(
-            db,
-            event_type="transfer_purchase",
-            source=ledger.club_account(state.club_id),
-            destination=ledger.WORLD_MARKET,
-            currency=ledger.GTEX,
-            gross=fee_dec,
-            club_id=state.club_id,
-            user_id=user_id or state.owner_user_id,
-            related_type="recruitment_assignment",
-            related_id=ref_key,
-            memo=f"Authorised recruitment signing: {player_name} ({pos}, GSI {gsi})",
-            check_funds=True,
-            wallet_idempotency_key=f"recruit_exec:{ref_key}:{cand_id}",
-        )
+        for balance_class, available_amount in funding_pools:
+            if remaining_fee <= 0:
+                break
+            portion = min(ledger.D(available_amount), remaining_fee)
+            if portion <= 0:
+                continue
+            ledger_events.append(
+                ledger.record(
+                    db,
+                    event_type="transfer_purchase",
+                    source=ledger.club_account(state.club_id),
+                    destination=ledger.WORLD_MARKET,
+                    currency=ledger.GTEX,
+                    gross=portion,
+                    balance_class=balance_class,
+                    club_id=state.club_id,
+                    user_id=user_id or state.owner_user_id,
+                    related_type="recruitment_assignment",
+                    related_id=ref_key,
+                    memo=f"Authorised recruitment signing: {player_name} ({pos}, GSI {gsi})",
+                    check_funds=True,
+                    wallet_idempotency_key=f"recruit_exec:{ref_key}:{cand_id}:{balance_class}",
+                )
+            )
+            remaining_fee -= portion
+        if remaining_fee > 0:
+            raise ledger.LedgerError("insufficient_eligible_recruitment_funds")
     except ledger.LedgerError as exc:
         if assignment is not None:
             assignment.gm_evaluation_status = "failed_insufficient_funds"
@@ -2650,9 +2687,11 @@ def execute_authorized_recruitment_signing(
             "reason": str(exc),
             "player_name": player_name,
             "required_gtex": float(fee_dec),
-            "available_gtex": float(actual_cash),
+            "available_gtex": float(available_for_route),
             "assignment_id": assignment.id if assignment else None,
         }
+
+    ledger_ev = ledger_events[0]
 
     sq_player = OwnerSquadPlayer(
         id=str(uuid4()),
@@ -2675,6 +2714,8 @@ def execute_authorized_recruitment_signing(
             "signed_world_day": int(state.world_day or 1),
             "assignment_id": assignment.id if assignment else None,
             "ledger_event_id": ledger_ev.id,
+            "ledger_event_ids": [event.id for event in ledger_events],
+            "ledger_event_ids": [event.id for event in ledger_events],
         },
         growth_log_json=[
             {
