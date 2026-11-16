@@ -105,7 +105,6 @@ function SquadFundingPanel({ clubId, club, onClubFunded }: any) {
   const rate = Number(rates.deposit_rate || 0);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
   const clubCoins = Number(club?.economy?.cash_gtex || 0);
-  const registeredPlayers = Number(club?.formation?.total_registered_players ?? club?.squad?.length ?? 0);
   // The starter squad already meets the 22-player registration requirement; top-up is optional recruitment capital.
   const estimatedCoinsNeeded = Math.max(0, 800 - clubCoins - walletCoins);
   const suggestedNaira = Math.max(
