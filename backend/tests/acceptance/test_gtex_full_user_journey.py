@@ -52,9 +52,7 @@ def _fund_gift_bridge(app_session_factory, actor_user_id: str) -> None:
         outstanding_fan = Decimal(
             str(session.scalar(select(func.coalesce(func.sum(user_fan_balances.c.balance), 0))) or 0)
         )
-        bridge_reserve = (outstanding_fan / Decimal("15.0000")).quantize(
-            Decimal("0.0001"), rounding=ROUND_UP
-        )
+        bridge_reserve = (outstanding_fan / Decimal("15.0000")).quantize(Decimal("0.0001"), rounding=ROUND_UP)
         bridge = wallet.ensure_named_system_account(
             session,
             code="platform:coin:gift_conversion_bridge",
