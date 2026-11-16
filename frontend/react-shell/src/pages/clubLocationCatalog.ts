@@ -168,10 +168,18 @@ export async function loadCountryRegions(countryCode: string): Promise<CatalogRe
   const states = await loadLocationJson<Array<{ name: string; iso2: string }>>(
     `states/${countryCode.toUpperCase()}.json`,
   );
-  return states
-    .filter((state) => state.name && state.iso2)
-    .map((state) => ({ code: state.iso2, name: state.name }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  if (states.length) {
+    return states
+      .filter((state) => state.name && state.iso2)
+      .map((state) => ({ code: state.iso2, name: state.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Some territories have a country-wide city list without a separate state layer.
+  const countryCities = await loadLocationJson<Array<{ name: string }>>(
+    `cities/${countryCode.toUpperCase()}.json`,
+  );
+  return countryCities.length ? [{ code: "__all__", name: "Main area" }] : [];
 }
 
 /** Cities for the selected country and first-level state/region. */
@@ -180,9 +188,10 @@ export async function loadRegionCities(
   regionCode: string,
   regionName: string,
 ): Promise<CatalogLocationCity[]> {
-  const cities = await loadLocationJson<Array<{ name: string; state_code: string | null }>>(
-    `cities/${countryCode.toUpperCase()}-${regionCode.toUpperCase()}.json`,
-  );
+  const cityPath = regionCode === "__all__"
+    ? `cities/${countryCode.toUpperCase()}.json`
+    : `cities/${countryCode.toUpperCase()}-${regionCode.toUpperCase()}.json`;
+  const cities = await loadLocationJson<Array<{ name: string; state_code: string | null }>>(cityPath);
   return cities
     .filter((city) => city.name)
     .map((city) => ({
