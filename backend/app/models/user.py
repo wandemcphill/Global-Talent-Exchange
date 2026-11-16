@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from sqlalchemy import Boolean, DateTime, Enum, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CaseInsensitiveStrEnum, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.wallet import LedgerAccount, LedgerEntry, PaymentEvent, PayoutRequest
@@ -61,24 +61,14 @@ class User(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         default=UserRole.USER,
     )
     account_type: Mapped[PublicAccountType] = mapped_column(
-        Enum(
-            PublicAccountType,
-            name="public_account_type",
-            native_enum=False,
-            values_callable=lambda enum: [item.value for item in enum],
-        ),
+        CaseInsensitiveStrEnum(PublicAccountType, name="public_account_type"),
         nullable=False,
         default=PublicAccountType.USER,
         server_default=PublicAccountType.USER.value,
         index=True,
     )
     kyc_status: Mapped[KycStatus] = mapped_column(
-        Enum(
-            KycStatus,
-            name="kyc_status",
-            native_enum=False,
-            values_callable=lambda enum: [item.value for item in enum],
-        ),
+        CaseInsensitiveStrEnum(KycStatus, name="kyc_status"),
         nullable=False,
         default=KycStatus.UNVERIFIED,
     )

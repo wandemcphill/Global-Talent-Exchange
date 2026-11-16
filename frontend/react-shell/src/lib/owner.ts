@@ -3,6 +3,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 
+function shouldRetryControlCenter(failureCount: number, error: any): boolean {
+  const status = error?.response?.status;
+  // Never trap AppShell on Loading for 4xx/5xx or CORS-stripped 500 network errors.
+  if (!error?.response || (status >= 400 && status !== 408 && status !== 429)) {
+    return false;
+  }
+  return failureCount < 1;
+}
+
 export function useControlCenter() {
   const { user, loading } = useAuth();
   const userId = user?.id ? String(user.id) : null;
@@ -12,6 +21,8 @@ export function useControlCenter() {
     queryFn: async () => (await api.get("/owner/control-center")).data,
     enabled: !loading && Boolean(userId) && accountType === "user",
     staleTime: 15_000,
+    retry: shouldRetryControlCenter,
+    retryOnMount: false,
   });
 }
 

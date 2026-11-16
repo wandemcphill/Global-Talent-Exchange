@@ -5,19 +5,15 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
+from sqlalchemy import DateTime, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CaseInsensitiveStrEnum, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.treasury import RateDirection
 from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
     from app.models.user import User
-
-
-def _enum_values(enum_class: type[StrEnum]) -> list[str]:
-    return [member.value for member in enum_class]
 
 
 class PurchaseOrderStatus(StrEnum):
@@ -51,7 +47,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[PurchaseOrderStatus] = mapped_column(
-        Enum(PurchaseOrderStatus, name="purchase_order_status", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PurchaseOrderStatus, name="purchase_order_status"),
         nullable=False,
         default=PurchaseOrderStatus.REQUESTED,
     )
@@ -60,7 +56,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     provider_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     idempotency_key: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"),
         nullable=False,
         default=LedgerUnit.CREDIT,
     )
@@ -76,7 +72,7 @@ class FancoinPurchaseOrder(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(RateDirection, name="rate_direction"),
         nullable=False,
     )
     processor_mode: Mapped[str] = mapped_column(

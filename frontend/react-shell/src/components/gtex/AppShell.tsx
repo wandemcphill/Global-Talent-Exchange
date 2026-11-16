@@ -202,15 +202,19 @@ export default function AppShell() {
 
   if (loading) return <Loading label="Entering the matchday suite..." />;
   if (!user) return <Navigate to="/login" replace />;
-  if (isLoading && !isError) return <Loading label="Loading your clubs..." />;
 
   const role = String(user.role || "").toLowerCase();
   const accountType = String(user.account_type || user.accountType || "user").toLowerCase();
   const isAdmin = ["admin", "super_admin"].includes(role);
+  const isAdminRoute = pathname === "/app/admin" || pathname.startsWith("/app/admin/");
   const isAdvertiserAccount = role === "advertiser" || accountType === "advertiser";
   const isTraderAccount = accountType === "coin_trader";
   const isCreatorAccount = accountType === "creator";
   const isDedicatedAccount = isTraderAccount || isCreatorAccount || isAdvertiserAccount;
+
+  if (isLoading && !isError && !(isAdmin && isAdminRoute)) {
+    return <Loading label="Loading your clubs..." />;
+  }
 
   if (isAdvertiserAccount && !isAdmin) {
     return <Navigate to="/advertiser/dashboard" replace />;

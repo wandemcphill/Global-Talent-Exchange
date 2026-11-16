@@ -5,20 +5,16 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any, TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, JSON, Numeric, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from app.core.field_encryption import EncryptedString, blind_index
-from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CaseInsensitiveStrEnum, TimestampMixin, UUIDPrimaryKeyMixin
 from app.models.user import KycStatus
 from app.models.wallet import LedgerUnit
 
 if TYPE_CHECKING:
     from app.models.user import User
-
-
-def _enum_values(enum_class: type[StrEnum]) -> list[str]:
-    return [member.value for member in enum_class]
 
 
 class RateDirection(StrEnum):
@@ -65,13 +61,13 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     deposit_rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=Decimal("0.0000"))
     deposit_rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(RateDirection, name="rate_direction"),
         nullable=False,
         default=RateDirection.FIAT_PER_COIN,
     )
     withdrawal_rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False, default=Decimal("0.0000"))
     withdrawal_rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(RateDirection, name="rate_direction"),
         nullable=False,
         default=RateDirection.FIAT_PER_COIN,
     )
@@ -117,12 +113,12 @@ class TreasurySettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     max_withdrawal: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False, default=Decimal("0.0000"))
 
     deposit_mode: Mapped[PaymentMode] = mapped_column(
-        Enum(PaymentMode, name="payment_mode", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PaymentMode, name="payment_mode"),
         nullable=False,
         default=PaymentMode.AUTOMATIC,
     )
     withdrawal_mode: Mapped[PaymentMode] = mapped_column(
-        Enum(PaymentMode, name="payment_mode", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PaymentMode, name="payment_mode"),
         nullable=False,
         default=PaymentMode.AUTOMATIC,
     )
@@ -178,7 +174,7 @@ class DepositRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[DepositStatus] = mapped_column(
-        Enum(DepositStatus, name="deposit_status", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(DepositStatus, name="deposit_status"),
         nullable=False,
         default=DepositStatus.AWAITING_PAYMENT,
     )
@@ -187,7 +183,7 @@ class DepositRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(RateDirection, name="rate_direction"),
         nullable=False,
     )
 
@@ -255,12 +251,7 @@ class KycProfile(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         index=True,
     )
     status: Mapped[KycStatus] = mapped_column(
-        Enum(
-            KycStatus,
-            name="kyc_status",
-            native_enum=False,
-            values_callable=_enum_values,
-        ),
+        CaseInsensitiveStrEnum(KycStatus, name="kyc_status"),
         nullable=False,
         default=KycStatus.UNVERIFIED,
         index=True,
@@ -329,14 +320,12 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     reference: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     status: Mapped[TreasuryWithdrawalStatus] = mapped_column(
-        Enum(
-            TreasuryWithdrawalStatus, name="treasury_withdrawal_status", native_enum=False, values_callable=_enum_values
-        ),
+        CaseInsensitiveStrEnum(TreasuryWithdrawalStatus, name="treasury_withdrawal_status"),
         nullable=False,
         default=TreasuryWithdrawalStatus.PENDING_REVIEW,
     )
     unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"),
         nullable=False,
         default=LedgerUnit.COIN,
     )
@@ -351,7 +340,7 @@ class TreasuryWithdrawalRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     currency_code: Mapped[str] = mapped_column(String(8), nullable=False, default="NGN", server_default="NGN")
     rate_value: Mapped[Decimal] = mapped_column(Numeric(20, 6), nullable=False)
     rate_direction: Mapped[RateDirection] = mapped_column(
-        Enum(RateDirection, name="rate_direction", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(RateDirection, name="rate_direction"),
         nullable=False,
     )
     bank_name: Mapped[str] = mapped_column(String(120), nullable=False)

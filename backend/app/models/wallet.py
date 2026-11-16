@@ -9,7 +9,6 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
-    Enum,
     ForeignKey,
     JSON,
     Numeric,
@@ -20,14 +19,10 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import Base, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
+from app.models.base import Base, CaseInsensitiveStrEnum, CreatedAtMixin, TimestampMixin, UUIDPrimaryKeyMixin
 
 if TYPE_CHECKING:
     from app.models.user import User
-
-
-def _enum_values(enum_cls: Any) -> list[str]:
-    return [member.value for member in enum_cls]
 
 
 class LedgerUnit(StrEnum):
@@ -146,11 +141,9 @@ class LedgerAccount(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     code: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
     label: Mapped[str] = mapped_column(String(120), nullable=False)
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
-    )
+    unit: Mapped[LedgerUnit] = mapped_column(CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"), nullable=False)
     kind: Mapped[LedgerAccountKind] = mapped_column(
-        Enum(LedgerAccountKind, name="ledger_account_kind", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerAccountKind, name="ledger_account_kind"),
         nullable=False,
         default=LedgerAccountKind.USER,
     )
@@ -166,22 +159,17 @@ class LedgerTransaction(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "transactions"
 
     status: Mapped[LedgerTransactionStatus] = mapped_column(
-        Enum(
-            LedgerTransactionStatus,
-            name="ledger_transaction_status",
-            native_enum=False,
-            values_callable=_enum_values,
-        ),
+        CaseInsensitiveStrEnum(LedgerTransactionStatus, name="ledger_transaction_status"),
         nullable=False,
         default=LedgerTransactionStatus.PENDING,
         server_default=LedgerTransactionStatus.PENDING.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
-        Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerEntryReason, name="ledger_entry_reason"),
         nullable=False,
     )
     source_tag: Mapped[LedgerSourceTag] = mapped_column(
-        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerSourceTag, name="ledger_source_tag"),
         nullable=False,
         default=LedgerSourceTag.ADMIN_ADJUSTMENT,
         server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
@@ -215,21 +203,19 @@ class LedgerEntry(UUIDPrimaryKeyMixin, CreatedAtMixin, Base):
         String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
-    )
+    unit: Mapped[LedgerUnit] = mapped_column(CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"), nullable=False)
     source_tag: Mapped[LedgerSourceTag] = mapped_column(
-        Enum(LedgerSourceTag, name="ledger_source_tag", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerSourceTag, name="ledger_source_tag"),
         nullable=False,
         default=LedgerSourceTag.ADMIN_ADJUSTMENT,
         server_default=LedgerSourceTag.ADMIN_ADJUSTMENT.value,
     )
     reason: Mapped[LedgerEntryReason] = mapped_column(
-        Enum(LedgerEntryReason, name="ledger_entry_reason", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerEntryReason, name="ledger_entry_reason"),
         nullable=False,
     )
     transaction_type: Mapped[LedgerTransactionType] = mapped_column(
-        Enum(LedgerTransactionType, name="ledger_transaction_type", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerTransactionType, name="ledger_transaction_type"),
         nullable=False,
         default=LedgerTransactionType.ADJUSTMENT,
         server_default=LedgerTransactionType.ADJUSTMENT.value,
@@ -255,9 +241,7 @@ class LedgerBalanceProjection(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     owner_user_id: Mapped[str | None] = mapped_column(
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=True, index=True
     )
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
-    )
+    unit: Mapped[LedgerUnit] = mapped_column(CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"), nullable=False)
     balance: Mapped[Decimal] = mapped_column(
         Numeric(20, 4), nullable=False, default=Decimal("0.0000"), server_default="0.0000"
     )
@@ -273,7 +257,7 @@ class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     provider: Mapped[PaymentProvider] = mapped_column(
-        Enum(PaymentProvider, name="payment_provider", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PaymentProvider, name="payment_provider"),
         nullable=False,
     )
     provider_reference: Mapped[str] = mapped_column(String(128), nullable=False, unique=True)
@@ -281,12 +265,12 @@ class PaymentEvent(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     pack_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
     unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"),
         nullable=False,
         default=LedgerUnit.COIN,
     )
     status: Mapped[PaymentStatus] = mapped_column(
-        Enum(PaymentStatus, name="payment_status", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PaymentStatus, name="payment_status"),
         nullable=False,
         default=PaymentStatus.PENDING,
     )
@@ -310,11 +294,9 @@ class PayoutRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(36), ForeignKey("wallets.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     amount: Mapped[Decimal] = mapped_column(Numeric(20, 4), nullable=False)
-    unit: Mapped[LedgerUnit] = mapped_column(
-        Enum(LedgerUnit, name="ledger_unit", native_enum=False, values_callable=_enum_values), nullable=False
-    )
+    unit: Mapped[LedgerUnit] = mapped_column(CaseInsensitiveStrEnum(LedgerUnit, name="ledger_unit"), nullable=False)
     status: Mapped[PayoutStatus] = mapped_column(
-        Enum(PayoutStatus, name="payout_status", native_enum=False, values_callable=_enum_values),
+        CaseInsensitiveStrEnum(PayoutStatus, name="payout_status"),
         nullable=False,
         default=PayoutStatus.REQUESTED,
     )
