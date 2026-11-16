@@ -1,153 +1,444 @@
 import React, { useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { errMsg } from "@/lib/api";
+import { ArrowRight, Building2, Copy, Megaphone, ShieldCheck } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 import { GtexAuthAdvertisingPanel } from "@/components/advertising/GtexAdvertising";
-import { Building2, Megaphone, ArrowRight } from "lucide-react";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+type AccountType = "user" | "creator" | "coin_trader";
+
+const TRADER_INTEREST_OPTIONS = ["GTEX Coin", "Fan Coins", "P2P", "Escrow"] as const;
+
+function Field({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <span className="gx-label">{label}</span>
       {children}
+      {error && (
+        <span className="mt-1 block text-xs text-red-300" role="alert">
+          {error}
+        </span>
+      )}
     </label>
   );
+}
+
+function generateBase32Secret(): string {
+  const bytes = new Uint8Array(20);
+  window.crypto.getRandomValues(bytes);
+  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret
+  let bits = 0;
+  let value = 0;
+  let output = "";
+  for (const byte of bytes) {
+    value = (value << 8) | byte;
+    bits += 8;
+    while (bits >= 5) {
+      output += alphabet[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
+  return output;
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+/**
+ * PINs and recovery phrases are never sent in plaintext. PBKDF2-SHA256 with a unique
+ * random salt gives the backend a verifiable credential derivation without raw exposure.
+ */
+async function hashTraderSecret(purpose: "recovery" | "pin", value: string): Promise<string> {
+  const salt = window.crypto.getRandomValues(new Uint8Array(16));
+  const key = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(value.trim()),
+    "PBKDF2",
+    false,
+    ["deriveBits"],
+  );
+  const derived = await window.crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 210000, hash: "SHA-256" },
+    key,
+    256,
+  );
+  return `pbkdf2-sha256$210000$${purpose}$${toHex(salt)}$${toHex(new Uint8Array(derived))}`;
+}
+
+function parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
+  const detail = error?.response?.data?.detail;
+  const mappedFields: Record<string, string> = {};
+  if (Array.isArray(detail)) {
+    const messages: string[] = [];
+    for (const item of detail) {
+      if (item && typeof item === "object") {
+        const loc = Array.isArray(item.loc) ? item.loc : [];
+        const field = String(loc[loc.length - 1] || "");
+        const friendlyField = field.replace(/_/g, " ");
+        const msg = String(item.msg || "Invalid value").replace(/^Value error,\s*/i, "");
+        if (field) {
+          const uiKey = field === "recovery_phrase_hash" ? "recovery_phrase" : field === "security_pin_hash" ? "security_pin" : field;
+          mappedFields[uiKey] = msg;
+          messages.push(friendlyField ? `${friendlyField}: ${msg}` : msg);
+        } else if (msg) {
+          messages.push(msg);
+        }
+      }
+    }
+    if (messages.length > 0) {
+      return { summary: messages[0], fieldErrors: mappedFields };
+    }
+  }
+  const message = error?.response ? errMsg(error) : error?.message || "Unable to complete request.";
+  return { summary: message, fieldErrors: mappedFields };
 }
 
 export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const { user, loading: authLoading, login, signup } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const requestedRole = (searchParams.get("role") || "").toLowerCase().trim();
+  const requestedRole = String(searchParams.get("role") || "").toLowerCase();
 
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
-  const [accountType, setAccountType] = useState(
+  const [accountType, setAccountType] = useState<AccountType>(
     requestedRole === "creator" ? "creator" : requestedRole === "trader" || requestedRole === "coin_trader" ? "coin_trader" : "user",
   );
-  const [f, setF] = useState({
+  const [userFields, setUserFields] = useState({
     full_name: "",
     username: "",
     email: "",
     password: "",
+    date_of_birth: "",
     over18: false,
   });
+  const [creatorFields, setCreatorFields] = useState({
+    creator_name: "",
+    username: "",
+    country: "Nigeria",
+    category: "sports",
+    primary_language: "English",
+    main_club_supported: "",
+  });
+  const [traderFields, setTraderFields] = useState({
+    full_name: "",
+    trading_alias: "",
+    phone_number: "",
+    country: "Nigeria",
+    preferred_currency: "NGN",
+    trading_experience: "beginner",
+    wallet_label: "GTEX Trading Wallet",
+    interests: ["GTEX Coin", "Fan Coins", "P2P"] as string[],
+    totp_code: "",
+    recovery_phrase: "",
+    security_pin: "",
+  });
+  const [totpSecret] = useState(() => generateBase32Secret());
+  const [termsAccepted, setTermsAccepted] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [formError, setFormError] = useState<string | null>(null);
 
-  const set = (key: keyof typeof f) => (event: React.ChangeEvent<HTMLInputElement>) =>
-    setF((previous) => ({
+  const clearFieldError = (key: string) => {
+    setFieldErrors((previous) => {
+      if (!previous[key]) return previous;
+      const next = { ...previous };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const updateUser = (key: keyof typeof userFields) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    clearFieldError(key);
+    setUserFields((previous) => ({
       ...previous,
       [key]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
     }));
+  };
+
+  const updateCreator = (key: keyof typeof creatorFields) => (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    clearFieldError(key);
+    setCreatorFields((previous) => ({ ...previous, [key]: event.target.value }));
+  };
+
+  const updateTrader = (key: keyof typeof traderFields) => (
+    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+  ) => {
+    clearFieldError(key);
+    setTraderFields((previous) => ({ ...previous, [key]: event.target.value }));
+  };
+
+  const toggleTraderInterest = (interest: string) => {
+    clearFieldError("interests");
+    setTraderFields((previous) => {
+      const exists = previous.interests.includes(interest);
+      if (exists) {
+        return { ...previous, interests: previous.interests.filter((item) => item !== interest) };
+      }
+      if (previous.interests.length >= 4) {
+        return previous;
+      }
+      return { ...previous, interests: [...previous.interests, interest] };
+    });
+  };
+
+  const copyTotpSecret = async () => {
+    try {
+      await navigator.clipboard.writeText(totpSecret);
+      toast.success("Authenticator setup key copied.");
+    } catch {
+      toast.error("Copy was blocked by this browser. Select and copy the setup key instead.");
+    }
+  };
+
+  const validateSignupBeforeSubmit = (): { valid: boolean; errors: Record<string, string>; summary?: string } => {
+    const errors: Record<string, string> = {};
+    if (!termsAccepted) {
+      errors.terms = "Accept the GTEX terms to continue.";
+    }
+    if (!userFields.email.trim() || !userFields.email.includes("@")) {
+      errors.email = "Enter a valid email address.";
+    }
+    if (userFields.password.length < 8) {
+      errors.password = "Password must be at least 8 characters."; // pragma: allowlist secret
+    }
+    if (TURNSTILE_SITE_KEY && !turnstileToken) {
+      errors.turnstile = "Complete the security check to continue.";
+    }
+
+    if (accountType === "user") {
+      if (!userFields.over18) {
+        errors.over18 = "You must be 18 or older to sign up for a GTEX account.";
+      }
+      if (userFields.full_name.trim().length < 2) {
+        errors.full_name = "Enter your full name (at least 2 characters).";
+      }
+      if (userFields.username.trim().length < 3) {
+        errors.username = "Username must be at least 3 characters.";
+      }
+    } else if (accountType === "creator") {
+      if (creatorFields.creator_name.trim().length < 2) {
+        errors.creator_name = "Enter a Creator name (at least 2 characters).";
+      }
+      if (creatorFields.username.trim().length < 3) {
+        errors.username = "Creator username must be at least 3 characters.";
+      }
+      if (creatorFields.country.trim().length < 2) {
+        errors.country = "Enter your country.";
+      }
+      if (creatorFields.category.trim().length < 2) {
+        errors.category = "Select a creator category.";
+      }
+      if (creatorFields.primary_language.trim().length < 2) {
+        errors.primary_language = "Enter your primary language.";
+      }
+    } else {
+      if (traderFields.full_name.trim().length < 2) {
+        errors.full_name = "Enter your full legal name.";
+      }
+      if (traderFields.trading_alias.trim().length < 2) {
+        errors.trading_alias = "Enter a trading alias (at least 2 characters).";
+      }
+      const phone = traderFields.phone_number.trim();
+      if (phone.length < 6 || !/^\+?[0-9()\-\s]{6,32}$/.test(phone)) {
+        errors.phone_number = "Enter a valid phone number using digits and optional +.";
+      }
+      if (traderFields.country.trim().length < 2) {
+        errors.country = "Enter your country.";
+      }
+      if (traderFields.preferred_currency.trim().length < 2) {
+        errors.preferred_currency = "Select your preferred trading currency.";
+      }
+      if (!traderFields.wallet_label.trim()) {
+        errors.wallet_label = "Enter a label for your trading wallet.";
+      }
+      if (!/^\d{6,12}$/.test(traderFields.totp_code.trim())) {
+        errors.totp_code = "Enter the current 6–12 digit code from your authenticator app.";
+      }
+      if (traderFields.recovery_phrase.trim().split(/\s+/).filter(Boolean).length < 8) {
+        errors.recovery_phrase = "Recovery phrase must contain at least 8 words.";
+      }
+      if (!/^\d{6,12}$/.test(traderFields.security_pin.trim())) {
+        errors.security_pin = "Choose a security PIN containing 6–12 digits.";
+      }
+    }
+
+    const firstKey = Object.keys(errors)[0];
+    return {
+      valid: Object.keys(errors).length === 0,
+      errors,
+      summary: firstKey ? errors[firstKey] : undefined,
+    };
+  };
 
   const submit = async (event: React.FormEvent) => {
     event.preventDefault();
+    setFormError(null);
+    setFieldErrors({});
     setBusy(true);
     try {
       if (mode === "login") {
-        const result = await login(f.email.trim(), f.password);
+        const result = await login(userFields.email.trim(), userFields.password);
         const type = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
         const landingRoute = String(result.landingRoute || "");
         navigate(
           type === "creator" || landingRoute === "/app/hub"
             ? "/app/creator-access"
-            : type === "coin_trader" ||
-                landingRoute === "/trader" ||
-                landingRoute === "/app/trader-dashboard"
+            : type === "coin_trader" || landingRoute === "/trader" || landingRoute === "/app/trader-dashboard"
               ? "/app/coin-traders"
               : "/app",
         );
         return;
       }
 
-      if (!f.over18) {
-        throw new Error("You must be 18 or older to sign up for a GTEX account.");
-      }
-      if (TURNSTILE_SITE_KEY && !turnstileToken) {
-        throw new Error("Complete the security check to continue.");
+      const check = validateSignupBeforeSubmit();
+      if (!check.valid) {
+        setFieldErrors(check.errors);
+        setFormError(check.summary || "Please fix the highlighted fields.");
+        toast.error(check.summary || "Please check all required fields.");
+        return;
       }
 
       const securityFields: Record<string, unknown> = {};
-      // Never send a development bypass token. Only include a real challenge
-      // token when the public site key configured for this build is present.
       if (TURNSTILE_SITE_KEY && turnstileToken) {
         securityFields.turnstile_token = turnstileToken;
       }
 
-      const signupPayload = {
-        account_type: accountType,
-        full_name: f.full_name.trim(),
-        username: f.username.trim(),
-        email: f.email.trim(),
-        password: f.password,
-        is_over_18: true,
-        ...securityFields,
-      };
+      let signupPayload: Record<string, unknown>;
+      if (accountType === "creator") {
+        signupPayload = {
+          account_type: "creator",
+          creator_name: creatorFields.creator_name.trim(),
+          username: creatorFields.username.trim(),
+          email: userFields.email.trim(),
+          password: userFields.password,
+          country: creatorFields.country.trim(),
+          category: creatorFields.category.trim(),
+          primary_language: creatorFields.primary_language.trim(),
+          ...(creatorFields.main_club_supported.trim()
+            ? { main_club_supported: creatorFields.main_club_supported.trim() }
+            : {}),
+          ...securityFields,
+        };
+      } else if (accountType === "coin_trader") {
+        signupPayload = {
+          account_type: "coin_trader",
+          full_name: traderFields.full_name.trim(),
+          trading_alias: traderFields.trading_alias.trim(),
+          email: userFields.email.trim(),
+          password: userFields.password,
+          phone_number: traderFields.phone_number.trim(),
+          country: traderFields.country.trim(),
+          preferred_currency: traderFields.preferred_currency.trim().toUpperCase(),
+          trading_experience: traderFields.trading_experience,
+          interests: traderFields.interests.length > 0 ? traderFields.interests : ["GTEX Coin"],
+          wallet_label: traderFields.wallet_label.trim() || "GTEX Trading Wallet",
+          totp_secret: totpSecret,
+          totp_code: traderFields.totp_code.trim(),
+          recovery_phrase_hash: await hashTraderSecret("recovery", traderFields.recovery_phrase.trim()),
+          security_pin_hash: await hashTraderSecret("pin", traderFields.security_pin.trim()),
+          ...securityFields,
+        };
+      } else {
+        signupPayload = {
+          account_type: "user",
+          full_name: userFields.full_name.trim(),
+          username: userFields.username.trim(),
+          email: userFields.email.trim(),
+          password: userFields.password,
+          is_over_18: true,
+          ...(userFields.date_of_birth.trim() ? { date_of_birth: userFields.date_of_birth.trim() } : {}),
+          ...securityFields,
+        };
+      }
 
       await signup(signupPayload);
-
-      // Route users into their requested specialization desk or default console
-      if (requestedRole === "creator") {
-        navigate("/app/creator-access");
-      } else if (requestedRole === "trader" || requestedRole === "coin_trader") {
-        navigate("/app/coin-traders");
-      } else {
-        navigate("/app");
-      }
+      navigate(
+        accountType === "creator"
+          ? "/app/creator-access"
+          : accountType === "coin_trader"
+            ? "/app/coin-traders"
+            : "/app",
+      );
     } catch (error: any) {
-      toast.error(error?.response ? errMsg(error) : error.message);
+      const parsed = parseAuthError(error);
+      setFieldErrors(parsed.fieldErrors);
+      setFormError(parsed.summary);
+      toast.error(parsed.summary);
     } finally {
       setBusy(false);
     }
   };
 
-  // Direct registration creates a clean account. If already signed in,
-  // guide the user back to the console or advise signing out.
   if (mode === "signup" && authLoading) {
     return <Loading label="Checking your GTEX session..." />;
   }
+
   if (mode === "signup" && user) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#070B11] px-6 py-12">
-        <section className="w-full max-w-lg space-y-4 rounded-xl border border-white/10 bg-white/[0.02] p-6 text-center">
-          <p className="gx-eyebrow">GTEX Account</p>
-          <h1 className="gx-h2 text-white">You are already signed in</h1>
+        <div className="gx-card max-w-md space-y-4 p-8 text-center">
+          <p className="gx-eyebrow text-emerald-400">Active session</p>
+          <h1 className="gx-h2">You are already signed in</h1>
           <p className="text-sm leading-6 text-slate-300">
             You are signed in as <span className="font-semibold text-white">{user.username || user.email}</span>. Specialized creator, trading, and club ownership capabilities can be managed in your console.
           </p>
-
           <div className="pt-2">
             <Link
               to="/app"
               data-testid="return-to-console-link"
-              className="inline-flex rounded-md bg-emerald-400 px-5 py-2.5 text-sm font-bold text-slate-950 hover:bg-emerald-300 transition-colors"
+              className="gx-btn-primary inline-flex w-full justify-center py-3"
             >
-              Return to console
+              Return to GTEX Console
             </Link>
           </div>
-        </section>
+        </div>
       </div>
     );
   }
+
+  const otpUri =
+    "otpauth://totp/GTEX:" +
+    encodeURIComponent(userFields.email || traderFields.trading_alias || "CoinTrader") +
+    "?secret=" +
+    totpSecret +
+    "&issuer=GTEX&algorithm=SHA1&digits=6&period=30";
 
   return (
     <div className="grid min-h-screen bg-[#070B11] lg:grid-cols-2">
       <div className="relative hidden overflow-hidden lg:block">
         <img
-          src={publicUrl("/img/hero.jpg")}
-          alt="Stadium under lights"
-          className="absolute inset-0 h-full w-full object-cover opacity-50"
+          src={publicUrl("assets/stadium_bg.png")}
+          alt="GTEX Stadium"
+          className="h-full w-full object-cover opacity-50"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#070B11] via-[#070B11]/40 to-transparent" />
-        <div className="relative z-10 flex min-h-screen items-center justify-center p-8 xl:p-12">
-          <GtexAuthAdvertisingPanel />
+        <div className="absolute inset-0 bg-gradient-to-t from-[#070B11] via-[#070B11]/60 to-transparent" />
+        <div className="absolute bottom-12 left-12 right-12 max-w-md">
+          <p className="gx-eyebrow mb-2">GTEX · Club Platform</p>
+          <h2 className="gx-h1 text-3xl">Your club awaits.</h2>
+          <p className="mt-2 text-sm text-slate-400">Live match simulation, squad planning, transfers and tournaments.</p>
+          <div className="mt-6">
+            <GtexAuthAdvertisingPanel />
+          </div>
         </div>
       </div>
-      <div className="flex items-center justify-center px-6 py-12">
-        <form onSubmit={submit} data-testid={`${mode}-form`} className="w-full max-w-xl space-y-4">
+      <div className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
+        <form onSubmit={submit} noValidate data-testid={mode + "-form"} className="w-full max-w-xl space-y-4">
           <div className="lg:hidden">
             <GtexAuthAdvertisingPanel compact />
           </div>
@@ -156,166 +447,473 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           </Link>
           <h1 className="gx-h2">{mode === "login" ? "Sign in" : "Create a GTEX account"}</h1>
 
-          {/* Corporate Advertiser & Brand Direct Access Notice */}
           <div
             data-testid="auth-corporate-advertiser-banner"
             className="rounded-xl border border-[#D4AF37]/40 bg-[#13233A]/90 p-4 shadow-xl backdrop-blur-md"
           >
-            <div className="flex items-start gap-3.5">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-[#D4AF37]/50 bg-[#D4AF37]/15 text-[#D4AF37]">
-                <Megaphone size={20} />
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D4AF37]/30 bg-[#D4AF37]/15 text-[#D4AF37]">
+                <Building2 className="h-4.5 w-4.5" />
               </div>
-              <div className="flex-1 text-xs">
-                <div className="flex flex-wrap items-center justify-between gap-1.5">
-                  <span className="font-['Barlow_Condensed'] text-base font-extrabold uppercase tracking-wide text-[#F2F4F8]">
-                    Looking to advertise or sponsor on GTEX?
-                  </span>
-                  <span className="rounded bg-[#D4AF37]/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#E8C766]">
-                    No Gamer Account Required
-                  </span>
-                </div>
+              <div className="min-w-0 flex-1 text-xs">
+                <p className="font-bold uppercase tracking-[0.14em] text-[#D4AF37]">
+                  Corporate Advertiser &amp; Sponsor Portal
+                </p>
                 <p className="mt-1 leading-relaxed text-[#9AA7BD]">
                   Brands, corporations, and music artists do not need a personal player, creator, or coin trader account to advertise. You can configure and pay for ads directly, or use a dedicated corporate workspace.
                 </p>
-
                 <div className="mt-3 flex flex-wrap items-center gap-2.5">
                   <Link
                     to="/advertise"
-                    data-testid="auth-direct-ad-cta"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-[#D4AF37] bg-[#D4AF37] px-3.5 py-1.5 font-['Barlow_Condensed'] text-xs font-black uppercase tracking-wider text-[#0B1626] transition hover:bg-[#E8C766]"
+                    data-testid="auth-advertise-direct-link"
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#D4AF37] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#07111F] transition hover:bg-[#e5c14d]"
                   >
-                    <span>Launch Advert Directly</span>
-                    <ArrowRight size={13} />
+                    <Megaphone className="h-3.5 w-3.5" /> Advertise Directly <ArrowRight className="h-3 w-3" />
                   </Link>
-                  {mode === "signup" ? (
-                    <Link
-                      to="/advertiser/register"
-                      data-testid="auth-advertiser-register-cta"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-[#22385A] bg-[#0B1626] px-3 py-1.5 text-xs font-semibold text-[#F2F4F8] transition hover:border-[#D4AF37]/60 hover:text-[#D4AF37]"
-                    >
-                      <Building2 size={13} className="text-[#D4AF37]" />
-                      <span>Corporate Workspace Signup</span>
-                    </Link>
-                  ) : (
-                    <Link
-                      to="/advertiser/login"
-                      data-testid="auth-advertiser-login-cta"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-[#22385A] bg-[#0B1626] px-3 py-1.5 text-xs font-semibold text-[#F2F4F8] transition hover:border-[#D4AF37]/60 hover:text-[#D4AF37]"
-                    >
-                      <Building2 size={13} className="text-[#D4AF37]" />
-                      <span>Advertiser Workspace Sign In</span>
-                    </Link>
-                  )}
+                  <Link
+                    to="/advertiser/register"
+                    data-testid="auth-corporate-signup-link"
+                    className="inline-flex items-center gap-1 rounded-lg border border-[#22385A] bg-[#0B1729] px-3 py-1.5 text-[11px] font-semibold text-white transition hover:border-[#D4AF37]/60"
+                  >
+                    Corporate Sign Up
+                  </Link>
+                  <Link
+                    to="/advertiser/login"
+                    data-testid="auth-corporate-login-link"
+                    className="inline-flex items-center gap-1 rounded-lg border border-transparent px-2.5 py-1.5 text-[11px] font-semibold text-[#9AA7BD] transition hover:text-white"
+                  >
+                    Corporate Sign In
+                  </Link>
                 </div>
               </div>
             </div>
           </div>
 
+          {formError && (
+            <div
+              role="alert"
+              data-testid="auth-form-error"
+              className="rounded-lg border border-red-400/30 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+            >
+              {formError}
+            </div>
+          )}
+
           {mode === "signup" && (
             <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-4 text-xs text-slate-300">
               <p className="font-semibold text-emerald-300">Choose how you join</p>
-              <label className="mt-2 block">
-                <span className="gx-label">Account type</span>
+              <Field label="Account type">
                 <select
                   data-testid="signup-account-type"
                   className="gx-input"
                   value={accountType}
-                  onChange={(event) => setAccountType(event.target.value)}
+                  onChange={(event) => {
+                    setAccountType(event.target.value as AccountType);
+                    setFieldErrors({});
+                    setFormError(null);
+                  }}
                 >
                   <option value="user">Fan or club owner</option>
                   <option value="coin_trader">Coin trader</option>
                   <option value="creator">Creator</option>
                 </select>
-              </label>
+              </Field>
               <p className="mt-2 leading-5 text-slate-400">
                 Fans and club owners use the same account. Coin traders and creators register into their own desks. Advertisers use the corporate signup above.
               </p>
-
               {requestedRole && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
                   <span>Specialization intent:</span>
                   <span className="font-bold capitalize text-white">{requestedRole}</span>
-                  <span className="text-slate-400">— ready to activate in console</span>
+                  <span className="text-slate-400">— selected account path</span>
                 </div>
               )}
             </div>
           )}
 
-          {mode === "signup" && (
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="Full name">
+          {mode === "signup" && accountType === "user" && (
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Full name" error={fieldErrors.full_name}>
+                  <input
+                    required
+                    data-testid="signup-fullname-input"
+                    className="gx-input"
+                    value={userFields.full_name}
+                    onChange={updateUser("full_name")}
+                    placeholder="Alex Ferguson"
+                  />
+                </Field>
+                <Field label="Username" error={fieldErrors.username}>
+                  <input
+                    required
+                    minLength={3}
+                    data-testid="signup-username-input"
+                    className="gx-input"
+                    value={userFields.username}
+                    onChange={updateUser("username")}
+                    placeholder="alex_ferguson"
+                  />
+                </Field>
+              </div>
+              <Field label="Date of birth (optional)" error={fieldErrors.date_of_birth}>
                 <input
-                  required
-                  data-testid="signup-fullname-input"
+                  type="date"
+                  data-testid="signup-dob-input"
                   className="gx-input"
-                  value={f.full_name}
-                  onChange={set("full_name")}
-                  placeholder="Alex Ferguson"
+                  value={userFields.date_of_birth}
+                  onChange={updateUser("date_of_birth")}
                 />
               </Field>
-              <Field label="Username">
-                <input
-                  required
-                  minLength={3}
-                  data-testid="signup-username-input"
-                  className="gx-input"
-                  value={f.username}
-                  onChange={set("username")}
-                  placeholder="alex_ferguson"
-                />
-              </Field>
-            </div>
+              <div>
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <input
+                    type="checkbox"
+                    data-testid="signup-over18-checkbox"
+                    checked={userFields.over18}
+                    onChange={updateUser("over18")}
+                  />
+                  I am 18 or older.
+                </label>
+                {fieldErrors.over18 && (
+                  <span className="mt-1 block text-xs text-red-300" role="alert">
+                    {fieldErrors.over18}
+                  </span>
+                )}
+              </div>
+            </>
           )}
 
-          <Field label="Email">
+          {mode === "signup" && accountType === "creator" && (
+            <section
+              data-testid="creator-signup-fields"
+              className="space-y-3 rounded-xl border border-fuchsia-400/20 bg-fuchsia-500/[0.04] p-4"
+            >
+              <p className="text-sm font-semibold text-fuchsia-200">Creator account details</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Creator or brand name" error={fieldErrors.creator_name}>
+                  <input
+                    required
+                    minLength={2}
+                    data-testid="creator-name-input"
+                    className="gx-input"
+                    value={creatorFields.creator_name}
+                    onChange={updateCreator("creator_name")}
+                    placeholder="Your public creator name"
+                  />
+                </Field>
+                <Field label="Creator username" error={fieldErrors.username}>
+                  <input
+                    required
+                    minLength={3}
+                    data-testid="creator-username-input"
+                    className="gx-input"
+                    value={creatorFields.username}
+                    onChange={updateCreator("username")}
+                    placeholder="creator_handle"
+                  />
+                </Field>
+                <Field label="Country" error={fieldErrors.country}>
+                  <input
+                    required
+                    data-testid="creator-country-input"
+                    className="gx-input"
+                    value={creatorFields.country}
+                    onChange={updateCreator("country")}
+                  />
+                </Field>
+                <Field label="Creator category" error={fieldErrors.category}>
+                  <select
+                    required
+                    data-testid="creator-category-input"
+                    className="gx-input"
+                    value={creatorFields.category}
+                    onChange={updateCreator("category")}
+                  >
+                    <option value="sports">Sports</option>
+                    <option value="gaming">Gaming</option>
+                    <option value="entertainment">Entertainment</option>
+                    <option value="music">Music</option>
+                    <option value="education">Education</option>
+                    <option value="other">Other</option>
+                  </select>
+                </Field>
+                <Field label="Primary language" error={fieldErrors.primary_language}>
+                  <input
+                    required
+                    data-testid="creator-language-input"
+                    className="gx-input"
+                    value={creatorFields.primary_language}
+                    onChange={updateCreator("primary_language")}
+                    placeholder="English"
+                  />
+                </Field>
+                <Field label="Main club supported (optional)" error={fieldErrors.main_club_supported}>
+                  <input
+                    data-testid="creator-club-input"
+                    className="gx-input"
+                    value={creatorFields.main_club_supported}
+                    onChange={updateCreator("main_club_supported")}
+                    placeholder="Your club"
+                  />
+                </Field>
+              </div>
+            </section>
+          )}
+
+          {mode === "signup" && accountType === "coin_trader" && (
+            <section
+              data-testid="trader-signup-fields"
+              className="space-y-4 rounded-xl border border-amber-400/20 bg-amber-500/[0.04] p-4"
+            >
+              <p className="text-sm font-semibold text-amber-200">Coin Trader account details</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Full legal name" error={fieldErrors.full_name}>
+                  <input
+                    required
+                    minLength={2}
+                    data-testid="trader-fullname-input"
+                    className="gx-input"
+                    value={traderFields.full_name}
+                    onChange={updateTrader("full_name")}
+                    placeholder="Your legal name"
+                  />
+                </Field>
+                <Field label="Trading alias" error={fieldErrors.trading_alias}>
+                  <input
+                    required
+                    minLength={2}
+                    data-testid="trader-alias-input"
+                    className="gx-input"
+                    value={traderFields.trading_alias}
+                    onChange={updateTrader("trading_alias")}
+                    placeholder="Public trader desk name"
+                  />
+                </Field>
+                <Field label="Phone number" error={fieldErrors.phone_number}>
+                  <input
+                    required
+                    type="tel"
+                    data-testid="trader-phone-input"
+                    className="gx-input"
+                    value={traderFields.phone_number}
+                    onChange={updateTrader("phone_number")}
+                    placeholder="+234 800 000 0000"
+                  />
+                </Field>
+                <Field label="Country" error={fieldErrors.country}>
+                  <input
+                    required
+                    data-testid="trader-country-input"
+                    className="gx-input"
+                    value={traderFields.country}
+                    onChange={updateTrader("country")}
+                  />
+                </Field>
+                <Field label="Preferred currency" error={fieldErrors.preferred_currency}>
+                  <select
+                    required
+                    data-testid="trader-currency-input"
+                    className="gx-input"
+                    value={traderFields.preferred_currency}
+                    onChange={updateTrader("preferred_currency")}
+                  >
+                    <option value="NGN">NGN — Nigerian naira</option>
+                    <option value="USD">USD — US dollar</option>
+                    <option value="EUR">EUR — Euro</option>
+                    <option value="GBP">GBP — Pound sterling</option>
+                  </select>
+                </Field>
+                <Field label="Trading experience" error={fieldErrors.trading_experience}>
+                  <select
+                    required
+                    data-testid="trader-experience-input"
+                    className="gx-input"
+                    value={traderFields.trading_experience}
+                    onChange={updateTrader("trading_experience")}
+                  >
+                    <option value="beginner">Beginner</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="professional">Professional</option>
+                  </select>
+                </Field>
+              </div>
+
+              <Field label="Wallet label" error={fieldErrors.wallet_label}>
+                <input
+                  required
+                  data-testid="trader-wallet-label-input"
+                  className="gx-input"
+                  value={traderFields.wallet_label}
+                  onChange={updateTrader("wallet_label")}
+                  placeholder="GTEX Trading Wallet"
+                />
+              </Field>
+
+              <div>
+                <span className="gx-label">Desk interests (up to 4)</span>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {TRADER_INTEREST_OPTIONS.map((interest) => {
+                    const selected = traderFields.interests.includes(interest);
+                    return (
+                      <button
+                        key={interest}
+                        type="button"
+                        data-testid={`trader-interest-${interest.toLowerCase().replace(/\s+/g, "-")}`}
+                        onClick={() => toggleTraderInterest(interest)}
+                        className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                          selected
+                            ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
+                            : "border-white/10 bg-white/[0.03] text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {interest}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.04] p-3">
+                <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
+                  <ShieldCheck size={17} /> Set up your authenticator app
+                </div>
+                <p className="mt-1 text-xs leading-5 text-slate-400">
+                  Add GTEX to Google Authenticator, Microsoft Authenticator or another TOTP app using this setup key. Keep it private.
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <code
+                    data-testid="signup-totp-secret"
+                    className="select-all break-all rounded bg-slate-950 px-2 py-2 text-xs tracking-wider text-cyan-100"
+                  >
+                    {totpSecret}
+                  </code>
+                  <button
+                    type="button"
+                    onClick={copyTotpSecret}
+                    className="inline-flex items-center gap-1 rounded border border-cyan-400/30 px-2 py-2 text-xs text-cyan-100"
+                  >
+                    <Copy size={13} /> Copy key
+                  </button>
+                </div>
+                <a
+                  href={otpUri}
+                  className="mt-2 inline-block text-xs text-cyan-300 underline"
+                  data-testid="trader-otpauth-link"
+                >
+                  Open authenticator setup link
+                </a>
+                <Field label="Current 6-digit authenticator code" error={fieldErrors.totp_code}>
+                  <input
+                    required
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={12}
+                    data-testid="trader-totp-code-input"
+                    className="gx-input mt-1"
+                    value={traderFields.totp_code}
+                    onChange={updateTrader("totp_code")}
+                    placeholder="000000"
+                  />
+                </Field>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="Recovery phrase (at least 8 words)" error={fieldErrors.recovery_phrase}>
+                  <input
+                    required
+                    autoComplete="off"
+                    data-testid="trader-recovery-input"
+                    type="password"
+                    className="gx-input"
+                    value={traderFields.recovery_phrase}
+                    onChange={updateTrader("recovery_phrase")}
+                    placeholder="Create a private recovery phrase"
+                  />
+                </Field>
+                <Field label="Security PIN (6–12 digits)" error={fieldErrors.security_pin}>
+                  <input
+                    required
+                    inputMode="numeric"
+                    maxLength={12}
+                    autoComplete="new-password"
+                    data-testid="trader-pin-input"
+                    type="password"
+                    className="gx-input"
+                    value={traderFields.security_pin}
+                    onChange={updateTrader("security_pin")}
+                    placeholder="Create a private PIN"
+                  />
+                </Field>
+              </div>
+              <p className="text-xs leading-5 text-slate-400">
+                Your recovery phrase and PIN are hashed in the browser before submission. GTEX staff will never ask you to send either one.
+              </p>
+            </section>
+          )}
+
+          <Field label="Email" error={fieldErrors.email}>
             <input
               required
               type="email"
-              data-testid={`${mode}-email-input`}
+              data-testid={mode + "-email-input"}
               className="gx-input"
-              value={f.email}
-              onChange={set("email")}
+              value={userFields.email}
+              onChange={(event) => {
+                clearFieldError("email");
+                setUserFields((previous) => ({ ...previous, email: event.target.value }));
+              }}
               placeholder="alex@example.com"
             />
           </Field>
-          <Field label="Password">
+          <Field label="Password" error={fieldErrors.password}>
             <input
               required
               type="password"
               minLength={8}
-              data-testid={`${mode}-password-input`}
+              data-testid={mode + "-password-input"}
               className="gx-input"
-              value={f.password}
-              onChange={set("password")}
+              value={userFields.password}
+              onChange={(event) => {
+                clearFieldError("password");
+                setUserFields((previous) => ({ ...previous, password: event.target.value }));
+              }}
               placeholder="••••••••"
             />
           </Field>
 
           {mode === "signup" && (
-            <label className="flex items-center gap-2 text-xs text-slate-400">
-              <input
-                type="checkbox"
-                data-testid="signup-over18-checkbox"
-                checked={f.over18}
-                onChange={set("over18")}
-              />{" "}
-              I am 18 or older and accept the terms.
-            </label>
+            <>
+              <div>
+                <label className="flex items-center gap-2 text-xs text-slate-400">
+                  <input
+                    type="checkbox"
+                    data-testid="signup-terms-checkbox"
+                    checked={termsAccepted}
+                    onChange={(event) => {
+                      clearFieldError("terms");
+                      setTermsAccepted(event.target.checked);
+                    }}
+                  />
+                  I accept the GTEX terms and privacy policy.
+                </label>
+                {fieldErrors.terms && (
+                  <span className="mt-1 block text-xs text-red-300" role="alert">
+                    {fieldErrors.terms}
+                  </span>
+                )}
+              </div>
+              <TurnstileChallenge
+                onTokenChange={(token) => {
+                  clearFieldError("turnstile");
+                  setTurnstileToken(token);
+                }}
+              />
+            </>
           )}
 
-          {mode === "signup" && <TurnstileChallenge onTokenChange={setTurnstileToken} />}
-
-          <Btn
-            type="submit"
-            disabled={busy}
-            className="w-full py-3"
-            data-testid={`${mode}-submit-button`}
-          >
-            {busy
-              ? "Please wait…"
-              : mode === "login"
-                ? "Enter the console"
-                : "Create GTEX account"}
+          <Btn type="submit" disabled={busy} className="w-full py-3" data-testid={mode + "-submit-button"}>
+            {busy ? "Please wait…" : mode === "login" ? "Enter the console" : "Create GTEX account"}
           </Btn>
           <p className="text-center text-sm text-slate-500">
             {mode === "login" ? (
@@ -338,7 +936,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           <div className="border-t border-[#22385A]/60 pt-3 text-center text-xs text-[#9AA7BD]">
             <span>Representing a company or sponsor? </span>
             <Link to="/advertise" className="font-semibold text-[#D4AF37] hover:underline">
-              Explore Commercial Ad Rates & Placement Options &rarr;
+              Visit GTEX Corporate Portal →
             </Link>
           </div>
         </form>

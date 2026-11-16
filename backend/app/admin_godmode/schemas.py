@@ -6,7 +6,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.models.wallet import PayoutStatus
+from app.models.wallet import LedgerUnit, PayoutStatus
 
 
 class AdminAssignmentView(BaseModel):
@@ -345,3 +345,93 @@ class GodModeBootstrapView(BaseModel):
     high_risk_actions: list[HighRiskActionView] = Field(default_factory=list)
     audit_query: AuditQueryView = Field(default_factory=AuditQueryView)
     audit_events: list[AuditEventView]
+
+
+class AdminWalletCreditRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str = Field(min_length=1, max_length=64)
+    unit: LedgerUnit
+    amount: Decimal = Field(gt=0)
+    reason: str = Field(min_length=4, max_length=255)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class AdminWalletCreditView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    transaction_id: str
+    reference: str
+    user_id: str
+    username: str | None = None
+    unit: LedgerUnit
+    amount: Decimal
+    balance_before: Decimal
+    balance_after: Decimal
+    reason: str
+    idempotency_key: str | None = None
+    idempotent_replay: bool = False
+    created_by: str | None = None
+    created_at: datetime
+
+
+class AdminWalletTransferRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    from_user_id: str = Field(min_length=1, max_length=64)
+    to_user_id: str = Field(min_length=1, max_length=64)
+    unit: LedgerUnit
+    amount: Decimal = Field(gt=0)
+    reason: str = Field(min_length=4, max_length=255)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class AdminWalletTransferView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    transaction_id: str
+    reference: str
+    from_user_id: str
+    from_username: str | None = None
+    to_user_id: str
+    to_username: str | None = None
+    unit: LedgerUnit
+    amount: Decimal
+    from_balance_before: Decimal
+    from_balance_after: Decimal
+    to_balance_before: Decimal
+    to_balance_after: Decimal
+    reason: str
+    idempotency_key: str | None = None
+    idempotent_replay: bool = False
+    created_by: str | None = None
+    created_at: datetime
+
+
+class AdminPointGrantRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    user_id: str = Field(min_length=1, max_length=64)
+    amount: Decimal = Field(gt=0)
+    reason: str = Field(min_length=4, max_length=255)
+    idempotency_key: str | None = Field(default=None, max_length=128)
+
+
+class AdminPointGrantView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    entry_id: str
+    account_id: str
+    reference: str
+    user_id: str
+    username: str | None = None
+    amount: Decimal
+    balance_before: Decimal
+    balance_after: Decimal
+    lifetime_earned: Decimal
+    reason: str
+    source_scope: str = "admin_grant"
+    idempotency_key: str | None = None
+    idempotent_replay: bool = False
+    created_by: str | None = None
+    created_at: datetime

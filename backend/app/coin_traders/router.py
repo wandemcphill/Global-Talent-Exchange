@@ -35,6 +35,7 @@ from app.coin_traders.service import (
 )
 from app.models.user import User
 from app.models.wallet import LedgerUnit
+from app.wallets.service import InsufficientBalanceError
 
 router = APIRouter(tags=["coin-traders"])
 admin_router = APIRouter(tags=["admin-coin-traders"])
@@ -49,7 +50,7 @@ def _raise_coin_trader_error(exc: Exception) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     if isinstance(exc, CoinTraderPermissionError):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
-    if isinstance(exc, CoinTraderValidationError):
+    if isinstance(exc, (CoinTraderValidationError, InsufficientBalanceError)):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     raise exc
 
@@ -369,7 +370,12 @@ def admin_issue_coin_trader_liquidity(
     _require_liquidity_desk_permission(request, current_user)
     try:
         return service.admin_issue_liquidity(profile_id, payload, admin=current_user)
-    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+    except (
+        CoinTraderNotFoundError,
+        CoinTraderPermissionError,
+        CoinTraderValidationError,
+        InsufficientBalanceError,
+    ) as exc:
         _raise_coin_trader_error(exc)
 
 
@@ -387,7 +393,12 @@ def admin_redeem_coin_trader_liquidity(
     _require_liquidity_desk_permission(request, current_user)
     try:
         return service.admin_redeem_liquidity(profile_id, payload, admin=current_user)
-    except (CoinTraderNotFoundError, CoinTraderPermissionError, CoinTraderValidationError) as exc:
+    except (
+        CoinTraderNotFoundError,
+        CoinTraderPermissionError,
+        CoinTraderValidationError,
+        InsufficientBalanceError,
+    ) as exc:
         _raise_coin_trader_error(exc)
 
 

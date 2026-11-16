@@ -6,10 +6,17 @@ from sqlalchemy.orm import Session
 from app.admin.capabilities import AdminCapability, note_admin_read, require_admin_capability
 from app.auth.dependencies import get_session
 from app.models.user import User
+from app.users.schemas import UserPointBalanceView
 
 from .schemas import (
+    AdminPointGrantRequest,
+    AdminPointGrantView,
     AdminRoleCatalogUpdate,
     AdminRoleCatalogView,
+    AdminWalletCreditRequest,
+    AdminWalletCreditView,
+    AdminWalletTransferRequest,
+    AdminWalletTransferView,
     AuditEventView,
     CommissionSettingsUpdate,
     CommissionSettingsView,
@@ -32,7 +39,13 @@ from .schemas import (
     WithdrawalStatusUpdate,
     WithdrawalSummaryView,
 )
-from .service import AdminGodModeService, GodModeError, IntegrityBoundError, PermissionDeniedError
+from .service import (
+    AdminGodModeService,
+    GodModeError,
+    IntegrityBoundError,
+    PermissionDeniedError,
+    ResourceNotFoundError,
+)
 from app.wallets.service import InsufficientBalanceError, WalletService
 
 router = APIRouter(prefix="/api/admin/god-mode", tags=["admin-god-mode"])
@@ -318,3 +331,99 @@ def create_treasury_withdrawal(
     except (GodModeError, InsufficientBalanceError) as exc:
         session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/wallets/credit", response_model=AdminWalletCreditView, status_code=status.HTTP_201_CREATED)
+def credit_user_wallet(
+    payload: AdminWalletCreditRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    actor: User = Depends(require_admin_capability(AdminCapability.MANAGE_PAYMENT_RAILS)),
+    service: AdminGodModeService = Depends(get_service),
+) -> AdminWalletCreditView:
+    try:
+        view = service.credit_user_wallet(request.app, session, actor, payload)
+        session.commit()
+        return view
+    except PermissionDeniedError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ResourceNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityBoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except (GodModeError, InsufficientBalanceError) as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/wallets/transfer", response_model=AdminWalletTransferView, status_code=status.HTTP_201_CREATED)
+def transfer_between_user_wallets(
+    payload: AdminWalletTransferRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    actor: User = Depends(require_admin_capability(AdminCapability.MANAGE_PAYMENT_RAILS)),
+    service: AdminGodModeService = Depends(get_service),
+) -> AdminWalletTransferView:
+    try:
+        view = service.transfer_between_users(request.app, session, actor, payload)
+        session.commit()
+        return view
+    except PermissionDeniedError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ResourceNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityBoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except (GodModeError, InsufficientBalanceError) as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post("/points/grant", response_model=AdminPointGrantView, status_code=status.HTTP_201_CREATED)
+def grant_user_points(
+    payload: AdminPointGrantRequest,
+    request: Request,
+    session: Session = Depends(get_session),
+    actor: User = Depends(require_admin_capability(AdminCapability.MANAGE_PAYMENT_RAILS)),
+    service: AdminGodModeService = Depends(get_service),
+) -> AdminPointGrantView:
+    try:
+        view = service.grant_user_points(request.app, session, actor, payload)
+        session.commit()
+        return view
+    except PermissionDeniedError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ResourceNotFoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except IntegrityBoundError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except GodModeError as exc:
+        session.rollback()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/users/{user_id}/points", response_model=UserPointBalanceView)
+def read_user_points_for_admin(
+    user_id: str,
+    request: Request,
+    limit: int = 20,
+    session: Session = Depends(get_session),
+    actor: User = Depends(require_admin_capability(AdminCapability.VIEW_AUDIT_LOG)),
+    service: AdminGodModeService = Depends(get_service),
+) -> UserPointBalanceView:
+    try:
+        note_admin_read(request, "admin.godmode.user_points.read", target_user_id=user_id, limit=limit)
+        return service.get_user_points(request.app, session, actor, user_id, limit=limit)
+    except PermissionDeniedError as exc:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(exc)) from exc
+    except ResourceNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

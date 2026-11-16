@@ -1,5 +1,17 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
+from sqlalchemy import select
+
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerUnit,
+)
+from app.wallets.service import LedgerPosting, WalletService
 from backend.tests.support.secrets import TEST_PASSWORD
 
 
@@ -342,6 +354,7 @@ def test_coin_trader_router_admin_liquidity_issue_and_redeem(
     client,
     auth_user_factory,
     bootstrap_admin_headers,
+    app_session_factory,
 ) -> None:
     trader = auth_user_factory(suffix="coin-trader-router-liquidity", account_type="coin_trader")
     profile_id = _approved_profile_with_rate(
@@ -350,6 +363,33 @@ def test_coin_trader_router_admin_liquidity_issue_and_redeem(
         admin_headers=bootstrap_admin_headers,
         suffix="liquidity",
     )
+    wallet_service = WalletService()
+    with app_session_factory() as session:
+        pool = wallet_service.ensure_market_liquidity_account(session, LedgerUnit.COIN)
+        funding = session.scalar(
+            select(LedgerAccount).where(LedgerAccount.code == "test:coin:router_liquidity_funding")
+        )
+        if funding is None:
+            funding = LedgerAccount(
+                code="test:coin:router_liquidity_funding",
+                label="Test Coin Router Liquidity Funding",
+                unit=LedgerUnit.COIN,
+                kind=LedgerAccountKind.SYSTEM,
+                allow_negative=True,
+            )
+            session.add(funding)
+            session.flush()
+        wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(account=funding, amount=-Decimal("2500.0000")),
+                LedgerPosting(account=pool, amount=Decimal("2500.0000")),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            reference="seed:router-liquidity-issue-and-redeem",
+        )
+        session.commit()
 
     initial_marketplace = client.get("/api/coin-traders", params={"coin_unit": "coin"})
     assert initial_marketplace.status_code == 200, initial_marketplace.text

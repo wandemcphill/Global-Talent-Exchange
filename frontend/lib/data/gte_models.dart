@@ -698,6 +698,7 @@ class GteTraderSignupRequest {
     required this.preferredCurrency,
     required this.tradingExperience,
     required this.interests,
+    this.walletLabel = 'GTEX Trading Wallet',
     required this.totpSecret,
     required this.totpCode,
     required this.recoveryPhraseHash,
@@ -715,6 +716,7 @@ class GteTraderSignupRequest {
   final String preferredCurrency;
   final String tradingExperience;
   final List<String> interests;
+  final String walletLabel;
   final String totpSecret;
   final String totpCode;
   final String recoveryPhraseHash;
@@ -732,6 +734,7 @@ class GteTraderSignupRequest {
     'preferred_currency': preferredCurrency,
     'trading_experience': tradingExperience,
     'interests': interests,
+    'wallet_label': walletLabel,
     'totp_secret': totpSecret,
     'totp_code': totpCode,
     'recovery_phrase_hash': recoveryPhraseHash,

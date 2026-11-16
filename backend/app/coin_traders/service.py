@@ -282,8 +282,18 @@ class CoinTraderService:
             raise CoinTraderValidationError("Trader liquidity is below requested amount.")
         fiat_total = payload.coin_amount * quoted_rate
         if direction == CoinTradeDirection.USER_BUYS.value and payload.fiat_currency.upper() == "NGN":
-            if fiat_total < Decimal("200000.00"):
-                raise CoinTraderValidationError("Minimum buyer order value for GTEX Coin purchases is ₦200,000.")
+            if payload.coin_unit == LedgerUnit.CREDIT:
+                min_fiat_total = Decimal("50000.00")
+                coin_label = "Fan Coin"
+                formatted_min = "₦50,000"
+            else:
+                min_fiat_total = Decimal("200000.00")
+                coin_label = "GTEX Coin"
+                formatted_min = "₦200,000"
+            if fiat_total < min_fiat_total:
+                raise CoinTraderValidationError(
+                    f"Minimum buyer order value for {coin_label} purchases is {formatted_min}."
+                )
         order = CoinTradeOrder(
             trader_profile_id=profile.id,
             user_id=actor.id,

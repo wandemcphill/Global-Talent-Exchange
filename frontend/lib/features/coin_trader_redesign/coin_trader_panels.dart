@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'coin_trader_api.dart';
 import 'coin_trader_models.dart';
@@ -423,6 +424,12 @@ class _GtexCoinTraderDashboardPanelState
           orders: _orders,
           onRefresh: _load,
           onTopUp: widget.onTopUp,
+        ),
+        const SizedBox(height: GtexSpacing.md),
+        _TraderKycVerificationPanel(
+          api: _api,
+          profile: _profile!,
+          onRefresh: _load,
         ),
         const SizedBox(height: GtexSpacing.md),
         _TraderRateBoard(profile: _profile!),
@@ -1363,7 +1370,7 @@ class _CreateCoinTradeOrderSheetState
 
   @override
   Widget build(BuildContext context) {
-    final GtexCoinTraderRate? rate = widget.trader.primaryRateFor(
+    final GtexCoinTraderRate? rate = widget.trader.exactRateFor(
       widget.coinUnit,
     );
     final double amount = double.tryParse(_amountController.text.trim()) ?? 0;
@@ -1374,8 +1381,14 @@ class _CreateCoinTradeOrderSheetState
     final double fiatTotal = amount * quotedRate;
     final bool rateRestricted = rate?.isRestricted == true;
     final bool userSells = widget.direction == 'user_sells';
-    final String coinLabel = rate?.coinLabel ?? 'coin';
+    final bool isCredit = widget.coinUnit.trim().toUpperCase() == 'CREDIT';
+    final String coinLabel = rate?.coinLabel ?? (isCredit ? 'FNC' : 'GTC');
     final String fiatCurrency = rate?.fiatCurrency ?? 'NGN';
+    final double minBuyerNgn = isCredit ? 50000 : 200000;
+    final bool belowBuyerMin =
+        !userSells &&
+        fiatCurrency.toUpperCase() == 'NGN' &&
+        fiatTotal < minBuyerNgn;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1473,7 +1486,19 @@ class _CreateCoinTradeOrderSheetState
               const SizedBox(height: GtexSpacing.xs),
               Text(
                 'Live quote: ${_coin(amount)} $coinLabel = ${_money(fiatTotal)} $fiatCurrency',
-                style: const TextStyle(color: GtexColors.textMuted),
+                style: TextStyle(
+                  color: belowBuyerMin ? GtexColors.gold : GtexColors.textMuted,
+                ),
+              ),
+            ],
+            if (!userSells && fiatCurrency.toUpperCase() == 'NGN') ...<Widget>[
+              const SizedBox(height: GtexSpacing.xs),
+              Text(
+                'NGN buyer minimum for $coinLabel: NGN ${minBuyerNgn.toStringAsFixed(0)}',
+                style: TextStyle(
+                  color: belowBuyerMin ? GtexColors.red : GtexColors.textMuted,
+                  fontSize: 12,
+                ),
               ),
             ],
             const SizedBox(height: GtexSpacing.sm),
@@ -1532,7 +1557,7 @@ class _CreateCoinTradeOrderSheetState
   }
 
   Future<void> _submit() async {
-    final GtexCoinTraderRate? rate = widget.trader.primaryRateFor(
+    final GtexCoinTraderRate? rate = widget.trader.exactRateFor(
       widget.coinUnit,
     );
     if (rate?.isRestricted == true) {
@@ -1551,6 +1576,23 @@ class _CreateCoinTradeOrderSheetState
       return;
     }
     if (rate != null) {
+      final bool isCredit = widget.coinUnit.trim().toUpperCase() == 'CREDIT';
+      final double quotedRate =
+          widget.direction == 'user_sells'
+              ? rate.buyRateFiat
+              : rate.sellRateFiat;
+      final double fiatTotal = amount * quotedRate;
+      final double minBuyerNgn = isCredit ? 50000 : 200000;
+      if (widget.direction == 'user_buys' &&
+          rate.fiatCurrency.toUpperCase() == 'NGN' &&
+          fiatTotal < minBuyerNgn) {
+        setState(
+          () =>
+              _error =
+                  'Minimum buyer order for ${rate.coinName} is NGN ${minBuyerNgn.toStringAsFixed(0)}.',
+        );
+        return;
+      }
       if (rate.minCoinAmount > 0 && amount < rate.minCoinAmount) {
         setState(
           () =>
@@ -1636,7 +1678,7 @@ class _TraderApplyPanelState extends State<_TraderApplyPanel> {
   final TextEditingController _workingHoursController = TextEditingController();
   final Set<String> _preferredCoinUnits = <String>{'COIN', 'CREDIT'};
   bool _sameNameOnly = true;
-  bool _kycRequired = true;
+  bool _kycRequired = false;
   bool _proofRequired = true;
   bool _submitting = false;
   String? _error;
@@ -1972,7 +2014,7 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
   }
 
   void _primeFromRate() {
-    final GtexCoinTraderRate? rate = widget.profile.primaryRateFor(_coinUnit);
+    final GtexCoinTraderRate? rate = widget.profile.exactRateFor(_coinUnit);
     _fiatController.text = rate?.fiatCurrency ?? 'NGN';
     _buyController.text =
         rate == null || rate.buyRateFiat == 0
@@ -1999,7 +2041,7 @@ class _RateEditorPanelState extends State<_RateEditorPanel> {
 
   @override
   Widget build(BuildContext context) {
-    final GtexCoinTraderRate? selectedRate = widget.profile.primaryRateFor(
+    final GtexCoinTraderRate? selectedRate = widget.profile.exactRateFor(
       _coinUnit,
     );
     final List<String> guardrailLabels = _guardrailLabels(selectedRate);
@@ -2236,11 +2278,46 @@ class _AdminTraderDetail extends StatelessWidget {
                 onPressed:
                     () => _openDecisionSheet(context, decision: 'freeze'),
               ),
+              GtexActionButton(
+                label: 'Issue liquidity',
+                icon: Icons.add_card_outlined,
+                accent: GtexColors.pitch,
+                onPressed: () => _openLiquiditySheet(context, flow: 'issue'),
+              ),
+              GtexButton(
+                label: 'Redeem liquidity',
+                icon: Icons.outbox_outlined,
+                variant: GtexButtonVariant.secondary,
+                onPressed: () => _openLiquiditySheet(context, flow: 'redeem'),
+              ),
             ],
           ),
         ),
       ],
     );
+  }
+
+  Future<void> _openLiquiditySheet(
+    BuildContext context, {
+    required String flow,
+  }) async {
+    final bool? changed = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: GtexColors.panel,
+      builder:
+          (BuildContext context) => _AdminLiquidityTransferSheet(
+            api: api,
+            trader: trader,
+            flow: flow,
+          ),
+    );
+    if (changed == true && context.mounted) {
+      onChanged();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Trader liquidity ${_titleCase(flow)} completed.')),
+      );
+    }
   }
 
   Future<void> _openDecisionSheet(
@@ -2383,6 +2460,336 @@ class _AdminTraderDecisionSheetState extends State<_AdminTraderDecisionSheet> {
         setState(() => _submitting = false);
       }
     }
+  }
+}
+
+class _AdminLiquidityTransferSheet extends StatefulWidget {
+  const _AdminLiquidityTransferSheet({
+    required this.api,
+    required this.trader,
+    required this.flow,
+  });
+
+  final GtexCoinTraderApi api;
+  final GtexCoinTraderProfile trader;
+  final String flow;
+
+  @override
+  State<_AdminLiquidityTransferSheet> createState() =>
+      _AdminLiquidityTransferSheetState();
+}
+
+class _AdminLiquidityTransferSheetState
+    extends State<_AdminLiquidityTransferSheet> {
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _noteController = TextEditingController();
+  String _coinUnit = 'COIN';
+  bool _submitting = false;
+  String? _error;
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _noteController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool issuing = widget.flow == 'issue';
+    return _OrderActionSheetFrame(
+      title: issuing ? 'Issue trader liquidity' : 'Redeem trader liquidity',
+      subtitle: '${widget.trader.displayName} · GTC or FNC treasury ledger',
+      error: _error,
+      submitting: _submitting,
+      submitLabel: issuing ? 'Issue liquidity' : 'Redeem liquidity',
+      submitIcon: issuing ? Icons.add_card_outlined : Icons.outbox_outlined,
+      onSubmit: _submit,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          SegmentedButton<String>(
+            segments: const <ButtonSegment<String>>[
+              ButtonSegment<String>(value: 'COIN', label: Text('GTC')),
+              ButtonSegment<String>(value: 'CREDIT', label: Text('FNC')),
+            ],
+            selected: <String>{_coinUnit},
+            onSelectionChanged: (Set<String> value) {
+              setState(() => _coinUnit = value.first);
+            },
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          TextField(
+            controller: _amountController,
+            keyboardType: const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(
+              labelText: 'Amount (${_coinUnit == 'CREDIT' ? 'FNC' : 'GTC'})',
+              prefixIcon: const Icon(Icons.toll_outlined),
+            ),
+          ),
+          const SizedBox(height: GtexSpacing.sm),
+          TextField(
+            controller: _noteController,
+            maxLines: 2,
+            decoration: const InputDecoration(
+              labelText: 'Audit note (optional)',
+              prefixIcon: Icon(Icons.notes_outlined),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _submit() async {
+    final double? amount = double.tryParse(_amountController.text.trim());
+    if (amount == null || amount <= 0) {
+      setState(() => _error = 'Enter a positive liquidity amount.');
+      return;
+    }
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      final String note = _noteController.text.trim();
+      final String ref =
+          'admin-desk-${widget.flow}-${DateTime.now().millisecondsSinceEpoch}';
+      if (widget.flow == 'issue') {
+        await widget.api.adminIssueLiquidity(
+          profileId: widget.trader.id,
+          coinUnit: _coinUnit,
+          amount: amount,
+          reference: ref,
+          note: note,
+        );
+      } else {
+        await widget.api.adminRedeemLiquidity(
+          profileId: widget.trader.id,
+          coinUnit: _coinUnit,
+          amount: amount,
+          reference: ref,
+          note: note,
+        );
+      }
+      if (mounted) {
+        Navigator.of(context).pop(true);
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _error = _messageFor(error));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _submitting = false);
+      }
+    }
+  }
+}
+
+class _TraderKycVerificationPanel extends StatefulWidget {
+  const _TraderKycVerificationPanel({
+    required this.api,
+    required this.profile,
+    required this.onRefresh,
+  });
+
+  final GtexCoinTraderApi api;
+  final GtexCoinTraderProfile profile;
+  final VoidCallback onRefresh;
+
+  @override
+  State<_TraderKycVerificationPanel> createState() =>
+      _TraderKycVerificationPanelState();
+}
+
+class _TraderKycVerificationPanelState
+    extends State<_TraderKycVerificationPanel> {
+  GtexTraderVerificationStatus? _kycStatus;
+  GtexTraderVerificationSession? _activeSession;
+  String _verificationType = 'full_kyc';
+  bool _loadingStatus = false;
+  bool _initiating = false;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStatus();
+  }
+
+  @override
+  void didUpdateWidget(covariant _TraderKycVerificationPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.profile.id != widget.profile.id ||
+        oldWidget.profile.status != widget.profile.status) {
+      _loadStatus();
+    }
+  }
+
+  Future<void> _loadStatus() async {
+    setState(() => _loadingStatus = true);
+    try {
+      final GtexTraderVerificationStatus? status =
+          await widget.api.fetchTraderVerificationStatus();
+      if (!mounted) return;
+      setState(() => _kycStatus = status);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _messageFor(error));
+    } finally {
+      if (mounted) {
+        setState(() => _loadingStatus = false);
+      }
+    }
+  }
+
+  Future<void> _startVerification() async {
+    setState(() {
+      _initiating = true;
+      _error = null;
+    });
+    try {
+      final GtexTraderVerificationSession session =
+          await widget.api.initiateTraderVerification(
+            verificationType: _verificationType,
+          );
+      if (!mounted) return;
+      setState(() => _activeSession = session);
+      await _loadStatus();
+      if (session.hasTrustedDiditHandoffUrl && session.handoffUrl != null) {
+        final Uri uri = Uri.parse(session.handoffUrl!);
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      }
+      widget.onRefresh();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = _messageFor(error));
+    } finally {
+      if (mounted) {
+        setState(() => _initiating = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool verified =
+        widget.profile.isVerified || _kycStatus?.isVerified == true;
+    final String statusLabel =
+        _kycStatus?.decision ?? _kycStatus?.status ?? widget.profile.status;
+
+    return GtexPanel(
+      title: 'DIDit Identity Verification',
+      subtitle:
+          verified
+              ? 'Authoritative identity check completed. Desk operations active.'
+              : 'Complete live DIDit verification before quoting rates or settling OTC orders.',
+      accent: verified ? GtexColors.pitch : GtexColors.gold,
+      trailing: GtexStatusChip(
+        label: _titleCase(statusLabel),
+        icon: verified ? Icons.verified_user_outlined : Icons.shield_outlined,
+        tone: verified ? GtexStatusTone.success : GtexStatusTone.warning,
+        compact: true,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          if (_kycStatus != null) ...<Widget>[
+            Text(
+              'Provider: ${_kycStatus!.provider.toUpperCase()} · '
+              'Ref: ${_kycStatus!.providerReference ?? '--'} · '
+              'Flow: ${_titleCase(_kycStatus!.verificationType)}',
+              style: const TextStyle(color: GtexColors.textMuted, fontSize: 12),
+            ),
+            if (_kycStatus!.rejectionReason?.isNotEmpty == true) ...<Widget>[
+              const SizedBox(height: GtexSpacing.xs),
+              Text(
+                'Rejection reason: ${_kycStatus!.rejectionReason!}',
+                style: const TextStyle(color: GtexColors.red, fontSize: 12),
+              ),
+            ],
+            const SizedBox(height: GtexSpacing.sm),
+          ],
+          if (_error != null) ...<Widget>[
+            Text(_error!, style: const TextStyle(color: GtexColors.red)),
+            const SizedBox(height: GtexSpacing.sm),
+          ],
+          if (!verified) ...<Widget>[
+            DropdownButtonFormField<String>(
+              value: _verificationType,
+              decoration: const InputDecoration(
+                labelText: 'DIDit verification workflow',
+              ),
+              items: const <DropdownMenuItem<String>>[
+                DropdownMenuItem(
+                  value: 'full_kyc',
+                  child: Text('Full KYC (Gov ID + Face Match + Liveness)'),
+                ),
+                DropdownMenuItem(
+                  value: 'government_id',
+                  child: Text('Government ID & Facial Match'),
+                ),
+                DropdownMenuItem(
+                  value: 'bvn_nin',
+                  child: Text('Nigeria BVN / NIN + Liveness'),
+                ),
+                DropdownMenuItem(
+                  value: 'liveness',
+                  child: Text('Live Selfie Liveness'),
+                ),
+              ],
+              onChanged: (String? value) {
+                if (value != null) {
+                  setState(() => _verificationType = value);
+                }
+              },
+            ),
+            const SizedBox(height: GtexSpacing.md),
+            Wrap(
+              spacing: GtexSpacing.sm,
+              runSpacing: GtexSpacing.sm,
+              children: <Widget>[
+                GtexActionButton(
+                  label:
+                      _initiating
+                          ? 'Connecting to DIDit...'
+                          : 'Start DIDit Verification',
+                  icon: Icons.verified_user_outlined,
+                  accent: GtexColors.gold,
+                  onPressed: _initiating ? null : _startVerification,
+                ),
+                GtexButton(
+                  label: _loadingStatus ? 'Refreshing...' : 'Refresh KYC Status',
+                  icon: Icons.sync,
+                  variant: GtexButtonVariant.secondary,
+                  onPressed: _loadingStatus
+                      ? null
+                      : () async {
+                          await _loadStatus();
+                          widget.onRefresh();
+                        },
+                ),
+                if (_activeSession != null &&
+                    _activeSession!.hasTrustedDiditHandoffUrl &&
+                    _activeSession!.handoffUrl != null)
+                  GtexButton(
+                    label: 'Open DIDit Session',
+                    icon: Icons.open_in_new,
+                    variant: GtexButtonVariant.secondary,
+                    onPressed: () async {
+                      await launchUrl(
+                        Uri.parse(_activeSession!.handoffUrl!),
+                        mode: LaunchMode.externalApplication,
+                      );
+                    },
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 }
 

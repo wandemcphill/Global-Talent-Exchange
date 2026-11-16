@@ -5,6 +5,7 @@ import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Empty, Loading, Panel, Stat } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
+import { AdminWalletAndPointsPanel, CoinTraderDeskAdminPanel } from "@/components/gtex/AdminEconomyPanels";
 
 /* ---------- helpers ---------- */
 export function useAdminGet<T = any>(key: string, path: string, enabled = true) {
@@ -391,55 +392,11 @@ function CreatorApplicationsQueue() {
   );
 }
 
-function CoinTraderDeskAdminQueue() {
-  const { data, refetch } = useAdminGet("admin-coin-traders", "/api/coin-traders");
-  const act = useAct();
-  const traders = Array.isArray(data) ? data : data?.items || [];
-
-  const handleTraderStatus = async (profileId: string, action: "suspend" | "reinstate") => {
-    await act(
-      () => api.post(`/api/admin/coin-traders/${profileId}/${action}`, { reason: `Admin ${action}` }),
-      `Trader ${action} successful`
-    );
-    refetch();
-  };
-
-  return (
-    <Panel eyebrow="Desk compliance" title={`Coin Traders & Verification (${traders.length})`}>
-      {traders.length === 0 ? (
-        <Empty title="No coin traders" />
-      ) : (
-        <div className="space-y-3">
-          {traders.map((t: any) => {
-            const isVerified = Boolean(t.verified_at);
-            const isSuspended = Boolean(t.suspended_at) || t.status === "suspended";
-            return (
-              <div key={t.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-white/10 p-3 text-sm" data-testid={`admin-trader-${t.id}`}>
-                <div>
-                  <span className="font-bold text-white">{t.display_name}</span> · Tier: <span className="capitalize">{t.tier}</span> ·{" "}
-                  <Chip tone={isVerified ? "emerald" : "gold"}>{isVerified ? `Verified (${t.verification_provider || "kyc"})` : "Unverified"}</Chip>{" "}
-                  {isSuspended && <Chip tone="red">Suspended</Chip>}
-                </div>
-                <div className="flex gap-2">
-                  {!isSuspended ? (
-                    <Btn variant="danger" onClick={() => handleTraderStatus(t.id, "suspend")}>Suspend Desk</Btn>
-                  ) : (
-                    <Btn onClick={() => handleTraderStatus(t.id, "reinstate")}>Reinstate Desk</Btn>
-                  )}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </Panel>
-  );
-}
 export function QueuesTab() {
   return (
     <div className="space-y-6" data-testid="admin-tab-queues">
       <CreatorApplicationsQueue />
-      <CoinTraderDeskAdminQueue />
+      <CoinTraderDeskAdminPanel />
       <Queue title="Pending fiat deposits" path="/admin/treasury/deposits?status=payment_submitted" render={(d, act) => (
         <>
           <span>{d.user_email} · {fmt(d.amount_fiat)} {d.currency_code} → {fmt(d.amount_coin)} GTX · {d.payer_name || "—"} · ref {d.reference}</span>
@@ -710,6 +667,7 @@ export function EconomyTab() {
   const [simRes, setSimRes] = useState<any>(null);
   return (
     <div className="space-y-6" data-testid="admin-tab-economy">
+      <AdminWalletAndPointsPanel />
       <LaunchMatchPanel />
       <Panel eyebrow="Coin" title="How much coin is out there">
         <p className="mb-3 text-sm leading-relaxed text-slate-400">This page watches the coin already created. It does not print new coin. Coin appears when GTEX pays a prize, a reward, or the jackpot.</p>

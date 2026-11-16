@@ -1,6 +1,15 @@
 from __future__ import annotations
 
+import hashlib
+import os
+
 from backend.tests.support.secrets import TEST_PASSWORD
+
+
+def trader_credential_pbkdf2(purpose: str, value: str) -> str:
+    salt = os.urandom(16)
+    derived = hashlib.pbkdf2_hmac("sha256", value.encode("utf-8"), salt, 210_000)
+    return f"pbkdf2-sha256$210000${purpose}${salt.hex()}${derived.hex()}"
 
 
 def user_signup_payload(
@@ -86,8 +95,10 @@ def trader_signup_payload(
         "interests": ["p2p", "escrow"],
         "wallet_label": "GTEX Trading Wallet",
         "totp_secret": totp_secret,
-        "recovery_phrase_hash": f"recovery-hash-{trader_token}",
-        "security_pin_hash": f"security-pin-hash-{trader_token}",
+        "recovery_phrase_hash": trader_credential_pbkdf2(
+            "recovery", f"alpha bravo charlie delta echo foxtrot golf {trader_token}"
+        ),
+        "security_pin_hash": trader_credential_pbkdf2("pin", "654321"),
         "totp_code": totp_code,
         "turnstile_token": "dev-bypass",
         "compliance": {

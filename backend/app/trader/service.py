@@ -13,6 +13,7 @@ import time
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.auth.schemas import validate_trader_credential_hash, validate_trader_totp_secret
 from app.models.trader import (
     TraderExperience,
     TraderMarket,
@@ -91,18 +92,25 @@ class TraderService:
         recovery_phrase_hash: str,
         security_pin_hash: str,
     ) -> TraderSecurity:
-        if not verify_totp(totp_secret, totp_code):
+        try:
+            normalized_secret = validate_trader_totp_secret(totp_secret)
+            validated_recovery_hash = validate_trader_credential_hash(recovery_phrase_hash, "recovery")
+            validated_pin_hash = validate_trader_credential_hash(security_pin_hash, "pin")
+        except ValueError as exc:
+            raise TraderAccessError(str(exc)) from exc
+        if not verify_totp(normalized_secret, totp_code):
             raise TraderAccessError("Invalid authenticator code.")
+        totp_secret_hash = _hash_secret(normalized_secret, purpose="totp")
         existing = self.session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == user.id))
         if existing is not None:
             was_enabled = existing.two_factor_enabled
-            existing.totp_secret_hash = _hash_secret(totp_secret)
-            existing.recovery_phrase_hash = recovery_phrase_hash
-            existing.security_pin_hash = security_pin_hash
+            existing.totp_secret_hash = totp_secret_hash
+            existing.recovery_phrase_hash = validated_recovery_hash
+            existing.security_pin_hash = validated_pin_hash
             existing.two_factor_enabled = True
             if not was_enabled:
                 backup_codes = _generate_backup_codes()
-                existing.backup_codes_json = [_hash_secret(code) for code in backup_codes]
+                existing.backup_codes_json = [_hash_secret(code, purpose="backup") for code in backup_codes]
                 existing._plain_backup_codes = backup_codes  # type: ignore[attr-defined]
             elif hasattr(existing, "_plain_backup_codes"):
                 delattr(existing, "_plain_backup_codes")
@@ -119,10 +127,10 @@ class TraderService:
         backup_codes = _generate_backup_codes()
         security = TraderSecurity(
             user_id=user.id,
-            totp_secret_hash=_hash_secret(totp_secret),
-            backup_codes_json=[_hash_secret(code) for code in backup_codes],
-            recovery_phrase_hash=recovery_phrase_hash,
-            security_pin_hash=security_pin_hash,
+            totp_secret_hash=totp_secret_hash,
+            backup_codes_json=[_hash_secret(code, purpose="backup") for code in backup_codes],
+            recovery_phrase_hash=validated_recovery_hash,
+            security_pin_hash=validated_pin_hash,
             two_factor_enabled=True,
         )
         self.session.add(security)
@@ -297,8 +305,10 @@ class TraderService:
         return market
 
 
-def _hash_secret(value: str) -> str:
-    return hashlib.sha256(value.strip().encode("utf-8")).hexdigest()
+def _hash_secret(value: str, *, purpose: str = "secret") -> str:
+    salt = secrets.token_bytes(16)
+    derived = hashlib.pbkdf2_hmac("sha256", value.strip().encode("utf-8"), salt, 210_000)
+    return f"pbkdf2-sha256$210000${purpose}${salt.hex()}${derived.hex()}"
 
 
 def _generate_backup_codes() -> list[str]:

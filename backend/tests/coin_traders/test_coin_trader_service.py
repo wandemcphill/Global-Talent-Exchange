@@ -31,8 +31,14 @@ from app.models.coin_trader import (
 from app.models.notification_record import NotificationRecord
 from app.models.risk_ops import SystemEvent
 from app.models.user import KycStatus, PublicAccountType, User, UserRole
-from app.models.wallet import LedgerSourceTag, LedgerUnit
-from app.wallets.service import WalletService
+from app.models.wallet import (
+    LedgerAccount,
+    LedgerAccountKind,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerUnit,
+)
+from app.wallets.service import LedgerPosting, WalletService
 
 
 @pytest.fixture()
@@ -211,11 +217,52 @@ def test_coin_trader_buy_order_locks_and_releases_escrow(coin_trader_session: Se
     assert profile_view.average_release_minutes > 0
 
 
+def _seed_liquidity_pool(
+    session: Session,
+    wallet_service: WalletService,
+    *,
+    unit: LedgerUnit,
+    amount: Decimal,
+    reference: str,
+) -> None:
+    pool = wallet_service.ensure_market_liquidity_account(session, unit)
+    funding_code = f"test:{unit.value}:liquidity_funding"
+    funding = session.scalar(select(LedgerAccount).where(LedgerAccount.code == funding_code))
+    if funding is None:
+        funding = LedgerAccount(
+            code=funding_code,
+            label=f"Test {unit.value} Liquidity Funding",
+            unit=unit,
+            kind=LedgerAccountKind.SYSTEM,
+            allow_negative=True,
+        )
+        session.add(funding)
+        session.flush()
+    wallet_service.append_transaction(
+        session,
+        postings=[
+            LedgerPosting(account=funding, amount=-amount),
+            LedgerPosting(account=pool, amount=amount),
+        ],
+        reason=LedgerEntryReason.ADJUSTMENT,
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+        reference=reference,
+    )
+    session.commit()
+
+
 def test_admin_issues_and_redeems_coin_trader_liquidity_idempotently(coin_trader_session: Session) -> None:
     users = _seed_users(coin_trader_session)
     wallet_service = WalletService()
     service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
     profile = _approve_trader_with_rate(service, users, available_liquidity=Decimal("5000"))
+    _seed_liquidity_pool(
+        coin_trader_session,
+        wallet_service,
+        unit=LedgerUnit.COIN,
+        amount=Decimal("6000.0000"),
+        reference="seed:service-liquidity-idempotent",
+    )
 
     issued = service.admin_issue_liquidity(
         profile.id,
@@ -296,6 +343,20 @@ def test_admin_liquidity_keeps_gtex_coin_and_fan_coin_balances_distinct(coin_tra
             available_liquidity=Decimal("9000"),
         ),
         actor=users["trader"],
+    )
+    _seed_liquidity_pool(
+        coin_trader_session,
+        wallet_service,
+        unit=LedgerUnit.COIN,
+        amount=Decimal("1200.0000"),
+        reference="seed:service-liquidity-distinct-coin",
+    )
+    _seed_liquidity_pool(
+        coin_trader_session,
+        wallet_service,
+        unit=LedgerUnit.CREDIT,
+        amount=Decimal("3400.0000"),
+        reference="seed:service-liquidity-distinct-credit",
     )
 
     service.admin_issue_liquidity(

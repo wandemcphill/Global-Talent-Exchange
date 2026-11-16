@@ -1,3 +1,101 @@
+class GtexTraderVerificationSession {
+  const GtexTraderVerificationSession({
+    required this.sessionId,
+    required this.provider,
+    required this.reference,
+    required this.verificationType,
+    required this.status,
+    this.handoffUrl,
+    this.expiresAt,
+  });
+
+  final String sessionId;
+  final String provider;
+  final String reference;
+  final String verificationType;
+  final String status;
+  final String? handoffUrl;
+  final DateTime? expiresAt;
+
+  bool get hasTrustedDiditHandoffUrl {
+    if (handoffUrl == null || handoffUrl!.trim().isEmpty) {
+      return false;
+    }
+    final Uri? parsed = Uri.tryParse(handoffUrl!.trim());
+    if (parsed == null || parsed.scheme != 'https') {
+      return false;
+    }
+    final String host = parsed.host.toLowerCase();
+    return host == 'verify.didit.me' || host == 'verification.didit.me';
+  }
+
+  factory GtexTraderVerificationSession.fromJson(Object? raw) {
+    final Map<String, Object?> json = _map(raw);
+    return GtexTraderVerificationSession(
+      sessionId: _string(json['session_id']),
+      provider: _string(json['provider'], fallback: 'didit'),
+      reference: _string(json['reference']),
+      verificationType: _string(json['verification_type'], fallback: 'full_kyc'),
+      status: _string(json['status'], fallback: 'pending'),
+      handoffUrl:
+          _stringOrNull(json['handoff_url']) ??
+          _stringOrNull(json['session_url']),
+      expiresAt: _dateTime(json['expires_at']),
+    );
+  }
+}
+
+class GtexTraderVerificationStatus {
+  const GtexTraderVerificationStatus({
+    required this.id,
+    required this.userId,
+    required this.provider,
+    required this.verificationType,
+    required this.status,
+    required this.initiatedAt,
+    this.traderProfileId,
+    this.providerReference,
+    this.decision,
+    this.rejectionReason,
+    this.checksSummary = const <String, Object?>{},
+    this.verifiedAt,
+  });
+
+  final String id;
+  final String userId;
+  final String? traderProfileId;
+  final String provider;
+  final String? providerReference;
+  final String verificationType;
+  final String status;
+  final String? decision;
+  final String? rejectionReason;
+  final Map<String, Object?> checksSummary;
+  final DateTime initiatedAt;
+  final DateTime? verifiedAt;
+
+  bool get isVerified => status.toLowerCase() == 'verified';
+  bool get isRejected => status.toLowerCase() == 'rejected';
+
+  factory GtexTraderVerificationStatus.fromJson(Object? raw) {
+    final Map<String, Object?> json = _map(raw);
+    return GtexTraderVerificationStatus(
+      id: _string(json['id']),
+      userId: _string(json['user_id']),
+      traderProfileId: _stringOrNull(json['trader_profile_id']),
+      provider: _string(json['provider'], fallback: 'didit'),
+      providerReference: _stringOrNull(json['provider_reference']),
+      verificationType: _string(json['verification_type'], fallback: 'full_kyc'),
+      status: _string(json['status'], fallback: 'pending'),
+      decision: _stringOrNull(json['decision']),
+      rejectionReason: _stringOrNull(json['rejection_reason']),
+      checksSummary: _map(json['checks_summary']),
+      initiatedAt: _dateTime(json['initiated_at']) ?? DateTime.now(),
+      verifiedAt: _dateTime(json['verified_at']),
+    );
+  }
+}
+
 class GtexCoinTraderProfile {
   const GtexCoinTraderProfile({
     required this.id,
@@ -5,6 +103,7 @@ class GtexCoinTraderProfile {
     required this.displayName,
     required this.status,
     required this.tier,
+    this.verifiedAt,
     this.bio,
     this.isOnline,
     this.lastSeenAt,
@@ -32,6 +131,7 @@ class GtexCoinTraderProfile {
   final String? countryCode;
   final String status;
   final String tier;
+  final DateTime? verifiedAt;
   final String? bio;
   final bool? isOnline;
   final DateTime? lastSeenAt;
@@ -61,6 +161,7 @@ class GtexCoinTraderProfile {
       countryCode: _stringOrNull(json['country_code']),
       status: _string(json['status'], fallback: 'applied'),
       tier: _string(json['tier'], fallback: 'bronze'),
+      verifiedAt: _dateTime(json['verified_at']),
       bio: _stringOrNull(json['bio']) ?? _stringOrNull(metadata['bio']),
       isOnline:
           _boolOrNull(json['is_online']) ??
@@ -107,12 +208,29 @@ class GtexCoinTraderProfile {
 
   bool get isApproved => status.toLowerCase() == 'approved';
 
+  bool get isVerified => verifiedAt != null;
+
   double get totalLiquidity {
     return rates.fold<double>(
       0,
       (double total, GtexCoinTraderRate rate) =>
           total + rate.availableLiquidity,
     );
+  }
+
+  GtexCoinTraderRate? exactRateFor(String coinUnit) {
+    final String normalized = coinUnit.trim().toUpperCase();
+    for (final GtexCoinTraderRate rate in rates) {
+      if (rate.coinUnit == normalized && rate.isActive) {
+        return rate;
+      }
+    }
+    for (final GtexCoinTraderRate rate in rates) {
+      if (rate.coinUnit == normalized) {
+        return rate;
+      }
+    }
+    return null;
   }
 
   GtexCoinTraderRate? primaryRateFor(String coinUnit) {

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -90,3 +91,33 @@ class SuggestedFollowResponse(BaseModel):
     user_id: str
     suggestions: list[SuggestedFollowView] = Field(default_factory=list)
     generated_at: datetime
+
+
+class UserPointLedgerEntryView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    account_id: str
+    user_id: str
+    granted_by_user_id: str | None = None
+    delta: Decimal
+    balance_before: Decimal
+    balance_after: Decimal
+    reason: str
+    reference: str
+    idempotency_key: str | None = None
+    source_scope: str = "admin_grant"
+    created_at: datetime
+
+
+class UserPointBalanceView(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: str
+    account_id: str | None = None
+    balance: Decimal = Decimal("0.0000")
+    lifetime_earned: Decimal = Decimal("0.0000")
+    lifetime_spent: Decimal = Decimal("0.0000")
+    source_scope: str = "personal_reward_points"
+    updated_at: datetime | None = None
+    recent_entries: list[UserPointLedgerEntryView] = Field(default_factory=list)

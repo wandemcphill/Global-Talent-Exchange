@@ -13,9 +13,13 @@ from sqlalchemy.orm import Session
 from app.models.base import generate_uuid, utcnow
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.user import User, UserRole
+from app.models.user_points import UserPointAccount, UserPointLedgerEntry
 from app.models.wallet import (
     LedgerAccount,
+    LedgerEntryReason,
     LedgerSourceTag,
+    LedgerTransaction,
+    LedgerTransactionType,
     LedgerUnit,
     PaymentEvent,
     PaymentStatus,
@@ -23,6 +27,8 @@ from app.models.wallet import (
     PayoutStatus,
 )
 from app.players.read_models import PlayerSummaryReadModel
+from app.users.points import build_user_point_balance_view
+from app.users.schemas import UserPointBalanceView
 from app.wallets.constants import SUPPORTED_TOP_UP_PROVIDER_KEYS
 from app.wallets.providers.registry import provider_live_deposit_ready
 from app.wallets.service import LedgerPosting, WalletService
@@ -36,8 +42,14 @@ from .runtime_paths import (
     admin_godmode_state_path,
 )
 from .schemas import (
+    AdminPointGrantRequest,
+    AdminPointGrantView,
     AdminRoleCatalogUpdate,
     AdminRoleCatalogView,
+    AdminWalletCreditRequest,
+    AdminWalletCreditView,
+    AdminWalletTransferRequest,
+    AdminWalletTransferView,
     AuditEventView,
     AuditQueryView,
     CommissionSettingsUpdate,
@@ -227,6 +239,10 @@ class PermissionDeniedError(GodModeError):
 
 
 class IntegrityBoundError(GodModeError):
+    pass
+
+
+class ResourceNotFoundError(GodModeError):
     pass
 
 
@@ -1350,3 +1366,463 @@ class AdminGodModeService:
             session.add(account)
             session.flush()
         return account
+
+    def _authorize_action(self, app: FastAPI, actor: User, permission: str) -> None:
+        state = self._load_state(app)
+        profile = self.resolve_profile(actor, state)
+        self._assert_has_permission(profile, permission)
+
+    @staticmethod
+    def _normalize_idempotency_key(value: str | None) -> str | None:
+        normalized = (value or "").strip()
+        return normalized or None
+
+    @staticmethod
+    def _quantize_positive_amount(amount: Decimal) -> Decimal:
+        normalized = Decimal(amount).quantize(Decimal("0.0001"))
+        if normalized <= Decimal("0.0000"):
+            raise GodModeError("Amount must be greater than zero.")
+        return normalized
+
+    def _record_economy_audit(
+        self,
+        app: FastAPI,
+        session: Session,
+        actor: User,
+        *,
+        event_type: str,
+        action_key: str,
+        summary: str,
+        detail: str,
+        payload: dict[str, Any],
+    ) -> None:
+        self._log_admin_override(
+            session=session,
+            actor=actor,
+            action_key=action_key,
+            detail=detail,
+            metadata=payload,
+        )
+        self._append_audit(
+            app,
+            event_type=event_type,
+            actor=actor,
+            summary=summary,
+            payload=payload,
+        )
+
+    def credit_user_wallet(
+        self,
+        app: FastAPI,
+        session: Session,
+        actor: User,
+        payload: AdminWalletCreditRequest,
+    ) -> AdminWalletCreditView:
+        self._authorize_action(app, actor, "manage_payment_rails")
+        amount = self._quantize_positive_amount(payload.amount)
+        reason = payload.reason.strip()
+        if len(reason) < 4:
+            raise GodModeError("Reason must be at least 4 characters.")
+        idempotency_key = self._normalize_idempotency_key(payload.idempotency_key)
+        target_user = session.get(User, payload.user_id)
+        if target_user is None:
+            raise ResourceNotFoundError(f"User {payload.user_id} was not found.")
+
+        if idempotency_key is not None:
+            existing_tx = session.scalar(
+                select(LedgerTransaction).where(LedgerTransaction.idempotency_key == idempotency_key)
+            )
+            if existing_tx is not None:
+                meta = dict(existing_tx.metadata_json or {})
+                if (
+                    meta.get("kind") != "admin_wallet_credit"
+                    or meta.get("target_user_id") != target_user.id
+                    or meta.get("unit") != payload.unit.value
+                    or Decimal(str(meta.get("amount") or "0")) != amount
+                ):
+                    raise IntegrityBoundError("Idempotency key has already been used for a different wallet operation.")
+                return AdminWalletCreditView(
+                    transaction_id=existing_tx.id,
+                    reference=existing_tx.reference or idempotency_key,
+                    user_id=target_user.id,
+                    username=target_user.username,
+                    unit=payload.unit,
+                    amount=amount,
+                    balance_before=Decimal(str(meta.get("balance_before") or "0.0000")),
+                    balance_after=Decimal(str(meta.get("balance_after") or "0.0000")),
+                    reason=str(meta.get("reason") or existing_tx.description or reason),
+                    idempotency_key=idempotency_key,
+                    idempotent_replay=True,
+                    created_by=existing_tx.created_by_user_id,
+                    created_at=existing_tx.created_at,
+                )
+
+        ops_account = self.wallet_service.ensure_operations_account(session, payload.unit)
+        user_account = self.wallet_service.get_user_account(session, target_user, payload.unit)
+        balance_before = self.wallet_service.get_balance(session, user_account)
+        balance_after = (balance_before + amount).quantize(Decimal("0.0001"))
+        reference = f"godmode:credit:{payload.unit.value}:{generate_uuid()}"
+        entries = self.wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=user_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+                LedgerPosting(
+                    account=ops_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            transaction_type=LedgerTransactionType.ADJUSTMENT,
+            reference=reference,
+            description=reason,
+            external_reference=idempotency_key or reference,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            metadata={
+                "kind": "admin_wallet_credit",
+                "target_user_id": target_user.id,
+                "unit": payload.unit.value,
+                "amount": str(amount),
+                "balance_before": str(balance_before),
+                "balance_after": str(balance_after),
+                "reason": reason,
+                "actor_user_id": actor.id,
+            },
+        )
+        audit_payload = {
+            "transaction_id": entries[0].transaction_id,
+            "reference": reference,
+            "user_id": target_user.id,
+            "unit": payload.unit.value,
+            "amount": str(amount),
+            "balance_before": str(balance_before),
+            "balance_after": str(balance_after),
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+            "actor_user_id": actor.id,
+        }
+        self._record_economy_audit(
+            app,
+            session,
+            actor,
+            event_type="admin.wallet.credited",
+            action_key="admin.wallet.credited",
+            summary=f"Credited {amount} {payload.unit.value} to user {target_user.username}.",
+            detail=reason,
+            payload=audit_payload,
+        )
+        return AdminWalletCreditView(
+            transaction_id=entries[0].transaction_id,
+            reference=reference,
+            user_id=target_user.id,
+            username=target_user.username,
+            unit=payload.unit,
+            amount=amount,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            idempotent_replay=False,
+            created_by=actor.id,
+            created_at=entries[0].created_at,
+        )
+
+    def transfer_between_users(
+        self,
+        app: FastAPI,
+        session: Session,
+        actor: User,
+        payload: AdminWalletTransferRequest,
+    ) -> AdminWalletTransferView:
+        self._authorize_action(app, actor, "manage_payment_rails")
+        amount = self._quantize_positive_amount(payload.amount)
+        reason = payload.reason.strip()
+        if len(reason) < 4:
+            raise GodModeError("Reason must be at least 4 characters.")
+        if payload.from_user_id == payload.to_user_id:
+            raise GodModeError("Source and destination users must be different.")
+        idempotency_key = self._normalize_idempotency_key(payload.idempotency_key)
+
+        from_user = session.get(User, payload.from_user_id)
+        if from_user is None:
+            raise ResourceNotFoundError(f"Source user {payload.from_user_id} was not found.")
+        to_user = session.get(User, payload.to_user_id)
+        if to_user is None:
+            raise ResourceNotFoundError(f"Destination user {payload.to_user_id} was not found.")
+
+        if idempotency_key is not None:
+            existing_tx = session.scalar(
+                select(LedgerTransaction).where(LedgerTransaction.idempotency_key == idempotency_key)
+            )
+            if existing_tx is not None:
+                meta = dict(existing_tx.metadata_json or {})
+                if (
+                    meta.get("kind") != "admin_wallet_transfer"
+                    or meta.get("from_user_id") != from_user.id
+                    or meta.get("to_user_id") != to_user.id
+                    or meta.get("unit") != payload.unit.value
+                    or Decimal(str(meta.get("amount") or "0")) != amount
+                ):
+                    raise IntegrityBoundError(
+                        "Idempotency key has already been used for a different transfer operation."
+                    )
+                return AdminWalletTransferView(
+                    transaction_id=existing_tx.id,
+                    reference=existing_tx.reference or idempotency_key,
+                    from_user_id=from_user.id,
+                    from_username=from_user.username,
+                    to_user_id=to_user.id,
+                    to_username=to_user.username,
+                    unit=payload.unit,
+                    amount=amount,
+                    from_balance_before=Decimal(str(meta.get("from_balance_before") or "0.0000")),
+                    from_balance_after=Decimal(str(meta.get("from_balance_after") or "0.0000")),
+                    to_balance_before=Decimal(str(meta.get("to_balance_before") or "0.0000")),
+                    to_balance_after=Decimal(str(meta.get("to_balance_after") or "0.0000")),
+                    reason=str(meta.get("reason") or existing_tx.description or reason),
+                    idempotency_key=idempotency_key,
+                    idempotent_replay=True,
+                    created_by=existing_tx.created_by_user_id,
+                    created_at=existing_tx.created_at,
+                )
+
+        from_account = self.wallet_service.get_user_account(session, from_user, payload.unit)
+        to_account = self.wallet_service.get_user_account(session, to_user, payload.unit)
+        from_balance_before = self.wallet_service.get_balance(session, from_account)
+        to_balance_before = self.wallet_service.get_balance(session, to_account)
+        from_balance_after = (from_balance_before - amount).quantize(Decimal("0.0001"))
+        to_balance_after = (to_balance_before + amount).quantize(Decimal("0.0001"))
+        reference = f"godmode:transfer:{payload.unit.value}:{generate_uuid()}"
+
+        entries = self.wallet_service.append_transaction(
+            session,
+            postings=[
+                LedgerPosting(
+                    account=from_account,
+                    amount=-amount,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+                LedgerPosting(
+                    account=to_account,
+                    amount=amount,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            transaction_type=LedgerTransactionType.ADJUSTMENT,
+            reference=reference,
+            description=reason,
+            external_reference=idempotency_key or reference,
+            actor=actor,
+            idempotency_key=idempotency_key,
+            metadata={
+                "kind": "admin_wallet_transfer",
+                "from_user_id": from_user.id,
+                "to_user_id": to_user.id,
+                "unit": payload.unit.value,
+                "amount": str(amount),
+                "from_balance_before": str(from_balance_before),
+                "from_balance_after": str(from_balance_after),
+                "to_balance_before": str(to_balance_before),
+                "to_balance_after": str(to_balance_after),
+                "reason": reason,
+                "actor_user_id": actor.id,
+            },
+        )
+        audit_payload = {
+            "transaction_id": entries[0].transaction_id,
+            "reference": reference,
+            "from_user_id": from_user.id,
+            "to_user_id": to_user.id,
+            "unit": payload.unit.value,
+            "amount": str(amount),
+            "from_balance_before": str(from_balance_before),
+            "from_balance_after": str(from_balance_after),
+            "to_balance_before": str(to_balance_before),
+            "to_balance_after": str(to_balance_after),
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+            "actor_user_id": actor.id,
+        }
+        self._record_economy_audit(
+            app,
+            session,
+            actor,
+            event_type="admin.wallet.transferred",
+            action_key="admin.wallet.transferred",
+            summary=f"Transferred {amount} {payload.unit.value} from {from_user.username} to {to_user.username}.",
+            detail=reason,
+            payload=audit_payload,
+        )
+        return AdminWalletTransferView(
+            transaction_id=entries[0].transaction_id,
+            reference=reference,
+            from_user_id=from_user.id,
+            from_username=from_user.username,
+            to_user_id=to_user.id,
+            to_username=to_user.username,
+            unit=payload.unit,
+            amount=amount,
+            from_balance_before=from_balance_before,
+            from_balance_after=from_balance_after,
+            to_balance_before=to_balance_before,
+            to_balance_after=to_balance_after,
+            reason=reason,
+            idempotency_key=idempotency_key,
+            idempotent_replay=False,
+            created_by=actor.id,
+            created_at=entries[0].created_at,
+        )
+
+    def grant_user_points(
+        self,
+        app: FastAPI,
+        session: Session,
+        actor: User,
+        payload: AdminPointGrantRequest,
+    ) -> AdminPointGrantView:
+        self._authorize_action(app, actor, "manage_payment_rails")
+        amount = self._quantize_positive_amount(payload.amount)
+        reason = payload.reason.strip()
+        if len(reason) < 4:
+            raise GodModeError("Reason must be at least 4 characters.")
+        idempotency_key = self._normalize_idempotency_key(payload.idempotency_key)
+        target_user = session.get(User, payload.user_id)
+        if target_user is None:
+            raise ResourceNotFoundError(f"User {payload.user_id} was not found.")
+
+        if idempotency_key is not None:
+            existing_entry = session.scalar(
+                select(UserPointLedgerEntry).where(UserPointLedgerEntry.idempotency_key == idempotency_key)
+            )
+            if existing_entry is not None:
+                if (
+                    existing_entry.user_id != target_user.id
+                    or Decimal(existing_entry.delta).quantize(Decimal("0.0001")) != amount
+                    or existing_entry.source_scope != "admin_grant"
+                ):
+                    raise IntegrityBoundError("Idempotency key has already been used for a different point grant.")
+                account = session.get(UserPointAccount, existing_entry.account_id)
+                return AdminPointGrantView(
+                    entry_id=existing_entry.id,
+                    account_id=existing_entry.account_id,
+                    reference=existing_entry.reference,
+                    user_id=target_user.id,
+                    username=target_user.username,
+                    amount=Decimal(existing_entry.delta).quantize(Decimal("0.0001")),
+                    balance_before=Decimal(existing_entry.balance_before).quantize(Decimal("0.0001")),
+                    balance_after=Decimal(existing_entry.balance_after).quantize(Decimal("0.0001")),
+                    lifetime_earned=(
+                        Decimal(account.lifetime_earned).quantize(Decimal("0.0001"))
+                        if account is not None
+                        else Decimal(existing_entry.balance_after).quantize(Decimal("0.0001"))
+                    ),
+                    reason=existing_entry.reason,
+                    source_scope=existing_entry.source_scope,
+                    idempotency_key=idempotency_key,
+                    idempotent_replay=True,
+                    created_by=existing_entry.granted_by_user_id,
+                    created_at=existing_entry.created_at,
+                )
+
+        account = session.scalar(
+            select(UserPointAccount).where(UserPointAccount.user_id == target_user.id).with_for_update()
+        )
+        if account is None:
+            account = UserPointAccount(
+                user_id=target_user.id,
+                balance=Decimal("0.0000"),
+                lifetime_earned=Decimal("0.0000"),
+                lifetime_spent=Decimal("0.0000"),
+            )
+            session.add(account)
+            session.flush()
+
+        balance_before = Decimal(account.balance).quantize(Decimal("0.0001"))
+        balance_after = (balance_before + amount).quantize(Decimal("0.0001"))
+        lifetime_earned = (Decimal(account.lifetime_earned) + amount).quantize(Decimal("0.0001"))
+        account.balance = balance_after
+        account.lifetime_earned = lifetime_earned
+
+        reference = f"godmode:points:grant:{generate_uuid()}"
+        entry = UserPointLedgerEntry(
+            account_id=account.id,
+            user_id=target_user.id,
+            granted_by_user_id=actor.id,
+            delta=amount,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            reason=reason,
+            reference=reference,
+            idempotency_key=idempotency_key,
+            source_scope="admin_grant",
+            metadata_json={"actor_user_id": actor.id, "target_user_id": target_user.id},
+        )
+        session.add(entry)
+        session.flush()
+
+        audit_payload = {
+            "entry_id": entry.id,
+            "account_id": account.id,
+            "reference": reference,
+            "user_id": target_user.id,
+            "amount": str(amount),
+            "balance_before": str(balance_before),
+            "balance_after": str(balance_after),
+            "reason": reason,
+            "idempotency_key": idempotency_key,
+            "actor_user_id": actor.id,
+        }
+        self._record_economy_audit(
+            app,
+            session,
+            actor,
+            event_type="admin.points.granted",
+            action_key="admin.points.granted",
+            summary=f"Granted {amount} personal reward points to user {target_user.username}.",
+            detail=reason,
+            payload=audit_payload,
+        )
+        return AdminPointGrantView(
+            entry_id=entry.id,
+            account_id=account.id,
+            reference=reference,
+            user_id=target_user.id,
+            username=target_user.username,
+            amount=amount,
+            balance_before=balance_before,
+            balance_after=balance_after,
+            lifetime_earned=lifetime_earned,
+            reason=reason,
+            source_scope="admin_grant",
+            idempotency_key=idempotency_key,
+            idempotent_replay=False,
+            created_by=actor.id,
+            created_at=entry.created_at,
+        )
+
+    def get_user_points(
+        self,
+        app: FastAPI,
+        session: Session,
+        actor: User,
+        user_id: str,
+        *,
+        limit: int = 20,
+    ) -> UserPointBalanceView:
+        self._authorize_action(app, actor, "view_audit_log")
+        target_user = session.get(User, user_id)
+        if target_user is None:
+            raise ResourceNotFoundError(f"User {user_id} was not found.")
+        return build_user_point_balance_view(session, user_id=target_user.id, recent_limit=limit)

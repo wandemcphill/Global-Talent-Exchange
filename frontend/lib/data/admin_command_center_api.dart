@@ -238,6 +238,94 @@ class AdminCommandCenterApi {
     return AdminMarketTopup.fromJson(payload);
   }
 
+  Future<List<AdminDirectoryUser>> searchUsers({
+    String query = '',
+    int limit = 20,
+  }) async {
+    final List<dynamic> payload = await client.getList(
+      '/api/admin/finance/users',
+      query: <String, Object?>{
+        if (query.trim().isNotEmpty) 'search': query.trim(),
+        'limit': limit,
+      },
+    );
+    return payload.map(AdminDirectoryUser.fromJson).toList(growable: false);
+  }
+
+  Future<AdminGodModeWalletCreditResult> adminCreditUserWallet({
+    required String userId,
+    required String unit,
+    required double amount,
+    required String reason,
+    String? idempotencyKey,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/admin/god-mode/wallets/credit',
+      body: <String, Object?>{
+        'user_id': userId.trim(),
+        'unit': unit.trim().toLowerCase(),
+        'amount': amount,
+        'reason': reason.trim(),
+        if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+          'idempotency_key': idempotencyKey.trim(),
+      },
+    );
+    return AdminGodModeWalletCreditResult.fromJson(payload);
+  }
+
+  Future<AdminGodModeWalletTransferResult> adminTransferUserWallet({
+    required String fromUserId,
+    required String toUserId,
+    required String unit,
+    required double amount,
+    required String reason,
+    String? idempotencyKey,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/admin/god-mode/wallets/transfer',
+      body: <String, Object?>{
+        'from_user_id': fromUserId.trim(),
+        'to_user_id': toUserId.trim(),
+        'unit': unit.trim().toLowerCase(),
+        'amount': amount,
+        'reason': reason.trim(),
+        if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+          'idempotency_key': idempotencyKey.trim(),
+      },
+    );
+    return AdminGodModeWalletTransferResult.fromJson(payload);
+  }
+
+  Future<AdminPointGrantResult> adminGrantUserPoints({
+    required String userId,
+    required double amount,
+    required String reason,
+    String? idempotencyKey,
+  }) async {
+    final Object? payload = await client.post(
+      '/api/admin/god-mode/points/grant',
+      body: <String, Object?>{
+        'user_id': userId.trim(),
+        'amount': amount,
+        'reason': reason.trim(),
+        if (idempotencyKey != null && idempotencyKey.trim().isNotEmpty)
+          'idempotency_key': idempotencyKey.trim(),
+      },
+    );
+    return AdminPointGrantResult.fromJson(payload);
+  }
+
+  Future<AdminUserPointsBalance> fetchUserPoints(
+    String userId, {
+    int limit = 20,
+  }) async {
+    final Map<String, dynamic> payload = await client.getMap(
+      '/api/admin/god-mode/users/${userId.trim()}/points',
+      query: <String, Object?>{'limit': limit},
+    );
+    return AdminUserPointsBalance.fromJson(payload);
+  }
+
   Future<String> createGtexHostedCompetition({
     required String templateKey,
     required String title,
@@ -796,6 +884,319 @@ class AdminMarketTopup {
         'settled_at',
         'settledAt',
       ]),
+    );
+  }
+}
+
+class AdminDirectoryUser {
+  const AdminDirectoryUser({
+    required this.id,
+    required this.email,
+    required this.username,
+    this.displayName,
+    this.role,
+    this.isActive = true,
+    this.kycStatus,
+  });
+
+  final String id;
+  final String email;
+  final String username;
+  final String? displayName;
+  final String? role;
+  final bool isActive;
+  final String? kycStatus;
+
+  String get label =>
+      (displayName?.trim().isNotEmpty == true ? displayName!.trim() : username) +
+      ' ($email)';
+
+  factory AdminDirectoryUser.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(value, label: 'admin user');
+    return AdminDirectoryUser(
+      id: GteJson.string(json, <String>['id']),
+      email: GteJson.string(json, <String>['email'], fallback: ''),
+      username: GteJson.string(json, <String>['username'], fallback: ''),
+      displayName: GteJson.stringOrNull(json, <String>[
+        'display_name',
+        'displayName',
+      ]),
+      role: GteJson.stringOrNull(json, <String>['role']),
+      isActive: GteJson.boolean(
+        json,
+        <String>['is_active', 'isActive'],
+        fallback: true,
+      ),
+      kycStatus: GteJson.stringOrNull(json, <String>[
+        'kyc_status',
+        'kycStatus',
+      ]),
+    );
+  }
+}
+
+class AdminGodModeWalletCreditResult {
+  const AdminGodModeWalletCreditResult({
+    required this.transactionId,
+    required this.reference,
+    required this.userId,
+    required this.unit,
+    required this.amount,
+    required this.balanceBefore,
+    required this.balanceAfter,
+    required this.reason,
+    this.username,
+    this.idempotencyKey,
+    this.idempotentReplay = false,
+  });
+
+  final String transactionId;
+  final String reference;
+  final String userId;
+  final String? username;
+  final String unit;
+  final double amount;
+  final double balanceBefore;
+  final double balanceAfter;
+  final String reason;
+  final String? idempotencyKey;
+  final bool idempotentReplay;
+
+  factory AdminGodModeWalletCreditResult.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin wallet credit',
+    );
+    return AdminGodModeWalletCreditResult(
+      transactionId: GteJson.string(json, <String>[
+        'transaction_id',
+        'transactionId',
+      ]),
+      reference: GteJson.string(json, <String>['reference']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      username: GteJson.stringOrNull(json, <String>['username']),
+      unit: GteJson.string(json, <String>['unit'], fallback: 'coin'),
+      amount: GteJson.number(json, <String>['amount']),
+      balanceBefore: GteJson.number(json, <String>[
+        'balance_before',
+        'balanceBefore',
+      ]),
+      balanceAfter: GteJson.number(json, <String>[
+        'balance_after',
+        'balanceAfter',
+      ]),
+      reason: GteJson.string(json, <String>['reason'], fallback: ''),
+      idempotencyKey: GteJson.stringOrNull(json, <String>[
+        'idempotency_key',
+        'idempotencyKey',
+      ]),
+      idempotentReplay: GteJson.boolean(json, <String>[
+        'idempotent_replay',
+        'idempotentReplay',
+      ]),
+    );
+  }
+}
+
+class AdminGodModeWalletTransferResult {
+  const AdminGodModeWalletTransferResult({
+    required this.transactionId,
+    required this.reference,
+    required this.fromUserId,
+    required this.toUserId,
+    required this.unit,
+    required this.amount,
+    required this.fromBalanceBefore,
+    required this.fromBalanceAfter,
+    required this.toBalanceBefore,
+    required this.toBalanceAfter,
+    required this.reason,
+    this.fromUsername,
+    this.toUsername,
+    this.idempotencyKey,
+    this.idempotentReplay = false,
+  });
+
+  final String transactionId;
+  final String reference;
+  final String fromUserId;
+  final String? fromUsername;
+  final String toUserId;
+  final String? toUsername;
+  final String unit;
+  final double amount;
+  final double fromBalanceBefore;
+  final double fromBalanceAfter;
+  final double toBalanceBefore;
+  final double toBalanceAfter;
+  final String reason;
+  final String? idempotencyKey;
+  final bool idempotentReplay;
+
+  factory AdminGodModeWalletTransferResult.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin wallet transfer',
+    );
+    return AdminGodModeWalletTransferResult(
+      transactionId: GteJson.string(json, <String>[
+        'transaction_id',
+        'transactionId',
+      ]),
+      reference: GteJson.string(json, <String>['reference']),
+      fromUserId: GteJson.string(json, <String>[
+        'from_user_id',
+        'fromUserId',
+      ]),
+      fromUsername: GteJson.stringOrNull(json, <String>[
+        'from_username',
+        'fromUsername',
+      ]),
+      toUserId: GteJson.string(json, <String>['to_user_id', 'toUserId']),
+      toUsername: GteJson.stringOrNull(json, <String>[
+        'to_username',
+        'toUsername',
+      ]),
+      unit: GteJson.string(json, <String>['unit'], fallback: 'coin'),
+      amount: GteJson.number(json, <String>['amount']),
+      fromBalanceBefore: GteJson.number(json, <String>[
+        'from_balance_before',
+        'fromBalanceBefore',
+      ]),
+      fromBalanceAfter: GteJson.number(json, <String>[
+        'from_balance_after',
+        'fromBalanceAfter',
+      ]),
+      toBalanceBefore: GteJson.number(json, <String>[
+        'to_balance_before',
+        'toBalanceBefore',
+      ]),
+      toBalanceAfter: GteJson.number(json, <String>[
+        'to_balance_after',
+        'toBalanceAfter',
+      ]),
+      reason: GteJson.string(json, <String>['reason'], fallback: ''),
+      idempotencyKey: GteJson.stringOrNull(json, <String>[
+        'idempotency_key',
+        'idempotencyKey',
+      ]),
+      idempotentReplay: GteJson.boolean(json, <String>[
+        'idempotent_replay',
+        'idempotentReplay',
+      ]),
+    );
+  }
+}
+
+class AdminPointGrantResult {
+  const AdminPointGrantResult({
+    required this.entryId,
+    required this.accountId,
+    required this.reference,
+    required this.userId,
+    required this.amount,
+    required this.balanceBefore,
+    required this.balanceAfter,
+    required this.lifetimeEarned,
+    required this.reason,
+    this.username,
+    this.sourceScope = 'admin_grant',
+    this.idempotentReplay = false,
+  });
+
+  final String entryId;
+  final String accountId;
+  final String reference;
+  final String userId;
+  final String? username;
+  final double amount;
+  final double balanceBefore;
+  final double balanceAfter;
+  final double lifetimeEarned;
+  final String reason;
+  final String sourceScope;
+  final bool idempotentReplay;
+
+  factory AdminPointGrantResult.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'admin point grant',
+    );
+    return AdminPointGrantResult(
+      entryId: GteJson.string(json, <String>['entry_id', 'entryId']),
+      accountId: GteJson.string(json, <String>['account_id', 'accountId']),
+      reference: GteJson.string(json, <String>['reference']),
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      username: GteJson.stringOrNull(json, <String>['username']),
+      amount: GteJson.number(json, <String>['amount']),
+      balanceBefore: GteJson.number(json, <String>[
+        'balance_before',
+        'balanceBefore',
+      ]),
+      balanceAfter: GteJson.number(json, <String>[
+        'balance_after',
+        'balanceAfter',
+      ]),
+      lifetimeEarned: GteJson.number(json, <String>[
+        'lifetime_earned',
+        'lifetimeEarned',
+      ]),
+      reason: GteJson.string(json, <String>['reason'], fallback: ''),
+      sourceScope: GteJson.string(
+        json,
+        <String>['source_scope', 'sourceScope'],
+        fallback: 'admin_grant',
+      ),
+      idempotentReplay: GteJson.boolean(json, <String>[
+        'idempotent_replay',
+        'idempotentReplay',
+      ]),
+    );
+  }
+}
+
+class AdminUserPointsBalance {
+  const AdminUserPointsBalance({
+    required this.userId,
+    required this.balance,
+    required this.lifetimeEarned,
+    required this.lifetimeSpent,
+    this.accountId,
+    this.sourceScope = 'personal_reward_points',
+  });
+
+  final String userId;
+  final String? accountId;
+  final double balance;
+  final double lifetimeEarned;
+  final double lifetimeSpent;
+  final String sourceScope;
+
+  factory AdminUserPointsBalance.fromJson(Object? value) {
+    final Map<String, Object?> json = GteJson.map(
+      value,
+      label: 'user point balance',
+    );
+    return AdminUserPointsBalance(
+      userId: GteJson.string(json, <String>['user_id', 'userId']),
+      accountId: GteJson.stringOrNull(json, <String>[
+        'account_id',
+        'accountId',
+      ]),
+      balance: GteJson.number(json, <String>['balance']),
+      lifetimeEarned: GteJson.number(json, <String>[
+        'lifetime_earned',
+        'lifetimeEarned',
+      ]),
+      lifetimeSpent: GteJson.number(json, <String>[
+        'lifetime_spent',
+        'lifetimeSpent',
+      ]),
+      sourceScope: GteJson.string(
+        json,
+        <String>['source_scope', 'sourceScope'],
+        fallback: 'personal_reward_points',
+      ),
     );
   }
 }

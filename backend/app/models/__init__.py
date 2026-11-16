@@ -46,6 +46,7 @@ from app.models.betting import BetAuditLog, BetIntegrityAlert, BetTicket, Bettin
 from app.models.calendar_engine import CalendarEvent, CalendarSeason, CompetitionLifecycleRun, GlobalEvent
 from app.models.world_clock import WorldClockState
 from app.models.base import Base
+from app.models.user_points import UserPointAccount, UserPointLedgerEntry
 from app.models.card_access import (
     CardLoanContract,
     CardLoanListing,
@@ -1348,6 +1349,8 @@ __all__ = [
     "UserAchievement",
     "MilestoneProgress",
     "UserProfile",
+    "UserPointAccount",
+    "UserPointLedgerEntry",
     "UserFollow",
     "FollowTargetType",
     "SocialActivity",

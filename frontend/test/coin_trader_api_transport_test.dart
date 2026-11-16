@@ -372,6 +372,145 @@ void main() {
     expect(transport.requests[2].method, 'POST');
     expect(transport.requests[2].uri.path, '/api/admin/coin-traders/orders/expire-stale');
   });
+
+  test(
+    'didit trader kyc initiation, status retrieval, trusted handoff validation, exact rate lookup, and admin dual-unit liquidity',
+    () async {
+      final _RecordingTransport transport = _RecordingTransport(
+        <GteTransportResponse>[
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'session_id': 'didit-sess-1',
+              'provider': 'didit',
+              'reference': 'gtex-ref-1',
+              'verification_type': 'bvn_nin',
+              'status': 'pending',
+              'handoff_url': 'https://verify.didit.me/session/didit-sess-1',
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'id': 'kyc-rec-1',
+              'user_id': 'trader-user-1',
+              'trader_profile_id': 'trader-profile-1',
+              'provider': 'didit',
+              'provider_reference': 'gtex-ref-1',
+              'verification_type': 'bvn_nin',
+              'status': 'pending',
+              'decision': 'In Review',
+              'checks_summary': <String, Object?>{
+                'id_verification': 'Approved',
+                'liveness': 'Approved',
+              },
+              'initiated_at': '2026-11-16T00:00:00Z',
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 404,
+            body: <String, Object?>{'detail': 'Not found'},
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'flow': 'issue',
+              'coin_unit': 'credit',
+              'amount': 500,
+              'available_balance': 1500,
+            },
+          ),
+          const GteTransportResponse(
+            statusCode: 200,
+            body: <String, Object?>{
+              'flow': 'redeem',
+              'coin_unit': 'coin',
+              'amount': 200,
+              'available_balance': 800,
+            },
+          ),
+        ],
+      );
+      final GtexCoinTraderApi api = _api(transport);
+
+      final GtexTraderVerificationSession session = await api
+          .initiateTraderVerification(
+            verificationType: 'bvn_nin',
+            callbackUrl: 'https://app.gtex.local/trader',
+          );
+      expect(session.provider, 'didit');
+      expect(session.verificationType, 'bvn_nin');
+      expect(session.hasTrustedDiditHandoffUrl, isTrue);
+      expect(
+        transport.requests[0].uri.path,
+        '/api/coin-traders/verification/initiate',
+      );
+      expect(
+        (transport.requests[0].body as Map<String, Object?>)['verification_type'],
+        'bvn_nin',
+      );
+
+      const GtexTraderVerificationSession untrustedSession =
+          GtexTraderVerificationSession(
+            sessionId: 'bad-sess',
+            provider: 'didit',
+            reference: 'ref-bad',
+            verificationType: 'full_kyc',
+            status: 'pending',
+            handoffUrl: 'https://evil.example/phish',
+          );
+      expect(untrustedSession.hasTrustedDiditHandoffUrl, isFalse);
+
+      final GtexTraderVerificationStatus? status = await api
+          .fetchTraderVerificationStatus();
+      expect(status, isNotNull);
+      expect(status!.decision, 'In Review');
+      expect(status.isVerified, isFalse);
+      expect(status.isRejected, isFalse);
+
+      final GtexTraderVerificationStatus? missingStatus = await api
+          .fetchTraderVerificationStatus();
+      expect(missingStatus, isNull);
+
+      final GtexCoinTraderProfile profileWithOnlyCredit =
+          GtexCoinTraderProfile.fromJson(_profileBody());
+      expect(profileWithOnlyCredit.exactRateFor('CREDIT'), isNotNull);
+      expect(profileWithOnlyCredit.exactRateFor('COIN'), isNull);
+
+      final Map<String, dynamic> issued = await api.adminIssueLiquidity(
+        profileId: 'trader-profile-1',
+        coinUnit: 'CREDIT',
+        amount: 500,
+        reference: 'admin-fnc-001',
+        note: 'FNC restock',
+      );
+      expect(issued['coin_unit'], 'credit');
+      expect(
+        transport.requests[3].uri.path,
+        '/api/admin/coin-traders/trader-profile-1/liquidity/issue',
+      );
+      expect(
+        (transport.requests[3].body as Map<String, Object?>)['coin_unit'],
+        'credit',
+      );
+
+      final Map<String, dynamic> redeemed = await api.adminRedeemLiquidity(
+        profileId: 'trader-profile-1',
+        coinUnit: 'COIN',
+        amount: 200,
+        reference: 'admin-gtc-001',
+      );
+      expect(redeemed['coin_unit'], 'coin');
+      expect(
+        transport.requests[4].uri.path,
+        '/api/admin/coin-traders/trader-profile-1/liquidity/redeem',
+      );
+      expect(
+        (transport.requests[4].body as Map<String, Object?>)['coin_unit'],
+        'coin',
+      );
+    },
+  );
 }
 
 GtexCoinTraderApi _api(_RecordingTransport transport) {
