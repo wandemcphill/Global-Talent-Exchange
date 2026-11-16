@@ -38,15 +38,11 @@ def downgrade() -> None:
     # those older recovery paths can validate them.
     op.execute(
         sa.text(
-            "UPDATE trader_security SET recovery_phrase_hash = 'legacy-unset' "
-            "WHERE recovery_phrase_hash IS NULL"
+            "UPDATE trader_security SET recovery_phrase_hash = 'legacy-unset' " "WHERE recovery_phrase_hash IS NULL"
         )
     )
     op.execute(
-        sa.text(
-            "UPDATE trader_security SET security_pin_hash = 'legacy-unset' "
-            "WHERE security_pin_hash IS NULL"
-        )
+        sa.text("UPDATE trader_security SET security_pin_hash = 'legacy-unset' " "WHERE security_pin_hash IS NULL")
     )
     with op.batch_alter_table("trader_security") as batch_op:
         batch_op.alter_column(
