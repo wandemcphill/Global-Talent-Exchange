@@ -611,7 +611,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   }
 
   void _handleTotpCodeChanged() {
-    if (!mounted || (!_totpVerified && _error == null)) return;
+    if (!mounted) return;
     setState(() {
       _totpVerified = false;
       _error = null;
