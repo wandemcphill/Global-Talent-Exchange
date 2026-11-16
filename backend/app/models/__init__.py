@@ -198,6 +198,10 @@ from app.models.owner_competition_lifecycle_mapping import (
     OwnerMatchLifecycleMapping,
 )
 from app.models.competition_match_event import CompetitionMatchEvent
+from app.models.competition_match_execution import (
+    CompetitionMatchExecution,
+    CompetitionMatchTacticalCommand,
+)
 from app.models.player_match_performance import PlayerMatchPerformance
 from app.models.club_ranking_integrity import ClubRankingAbuseFlag, ClubRankingEvent, CompetitionIntegrityScore
 from app.models.highlight_event import HighlightEvent
@@ -942,6 +946,8 @@ __all__ = [
     "CompetitionInvite",
     "CompetitionMatch",
     "CompetitionMatchEvent",
+    "CompetitionMatchExecution",
+    "CompetitionMatchTacticalCommand",
     "PlayerMatchPerformance",
     "HighlightEvent",
     "CommentaryEvent",

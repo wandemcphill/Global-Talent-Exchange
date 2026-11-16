@@ -723,29 +723,49 @@ def _public_matchday_atmosphere(value: Any) -> dict[str, Any]:
 
 
 def _canonical_match_spectator_metadata(app: Any, match_id: str) -> dict[str, Any]:
-    """Read the persisted pre-match atmosphere snapshot; never recompute per viewer."""
+    """Read the persisted match atmosphere and canonical broadcast clock snapshot; never recompute per viewer."""
     session_factory = getattr(getattr(app, "state", None), "session_factory", None)
     if session_factory is None:
         return {}
     try:
+        from sqlalchemy import select
+        from sqlalchemy.exc import SQLAlchemyError
         from app.models.competition_match import CompetitionMatch
+        from app.models.competition_match_execution import CompetitionMatchExecution
 
         with session_factory() as session:
             match = session.get(CompetitionMatch, str(match_id))
             if match is None:
                 return {}
+            result: dict[str, Any] = {}
             metadata = dict(match.metadata_json or {})
             context = metadata.get("institutional_match_context")
-            if not isinstance(context, dict):
-                return {}
-            atmosphere: dict[str, Any] = {}
-            for side in ("home", "away"):
-                side_context = context.get(side)
-                if isinstance(side_context, dict):
-                    safe = _public_matchday_atmosphere(side_context.get("atmosphere"))
-                    if safe:
-                        atmosphere[side] = safe
-            return {"institutional_atmosphere": atmosphere} if atmosphere else {}
+            if isinstance(context, dict):
+                atmosphere: dict[str, Any] = {}
+                for side in ("home", "away"):
+                    side_context = context.get(side)
+                    if isinstance(side_context, dict):
+                        safe = _public_matchday_atmosphere(side_context.get("atmosphere"))
+                        if safe:
+                            atmosphere[side] = safe
+                if atmosphere:
+                    result["institutional_atmosphere"] = atmosphere
+            try:
+                execution = session.scalar(
+                    select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == str(match_id))
+                )
+            except SQLAlchemyError:
+                execution = None
+            if execution is not None:
+                result["canonical_execution"] = {
+                    "execution_revision": int(execution.execution_revision),
+                    "execution_status": execution.execution_status,
+                    "clock_phase": execution.clock_phase,
+                    "current_minute": int(execution.current_minute),
+                    "assigned_duration_seconds": int(execution.assigned_duration_seconds),
+                    "pause_replay_enabled": False,
+                }
+            return result
     except Exception:
         logger.exception("broadcast.institutional_atmosphere_snapshot_failed match_id=%s", match_id)
         return {}

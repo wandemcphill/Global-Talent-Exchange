@@ -216,6 +216,25 @@ def adapt_match_stream_message(match_id: str, payload: dict[str, Any]) -> dict[s
     home_score = _safe_int(payload.get("home_score"))
     away_score = _safe_int(payload.get("away_score"))
     commentary = str(payload.get("commentary") or payload.get("source_commentary") or "").strip()
+    execution_revision = (
+        _safe_int(metadata.get("execution_revision"))
+        if metadata.get("execution_revision") is not None
+        else (_safe_int(payload.get("execution_revision")) if payload.get("execution_revision") is not None else None)
+    )
+    effective_from_minute = (
+        _safe_int(metadata.get("effective_from_minute"))
+        if metadata.get("effective_from_minute") is not None
+        else (
+            _safe_int(payload.get("effective_from_minute"))
+            if payload.get("effective_from_minute") is not None
+            else None
+        )
+    )
+    commit_cursor = (
+        _safe_int(metadata.get("commit_cursor"))
+        if metadata.get("commit_cursor") is not None
+        else (_safe_int(payload.get("commit_cursor")) if payload.get("commit_cursor") is not None else None)
+    )
     event_payload: dict[str, Any] = {
         "event_id": event_id,
         "sequence": _safe_int(payload.get("sequence")) if payload.get("sequence") is not None else None,
@@ -233,6 +252,9 @@ def adapt_match_stream_message(match_id: str, payload: dict[str, Any]) -> dict[s
         "primary_player_name": payload.get("player"),
         "secondary_player_id": payload.get("secondary_player_id"),
         "secondary_player_name": payload.get("secondary_player"),
+        "execution_revision": execution_revision,
+        "effective_from_minute": effective_from_minute,
+        "commit_cursor": commit_cursor,
         "flags": ["penalty"] if metadata.get("is_penalty") else [],
     }
     event_payload = {key: value for key, value in event_payload.items() if value is not None}

@@ -47,6 +47,7 @@ import { ROUTER_BASENAME } from "@/lib/publicPath";
 import { GtexAdvertisingProvider } from "@/components/advertising/GtexAdvertising";
 import { GtexAudioProvider } from "@/lib/audio";
 import { Loading } from "@/components/gtex/ui";
+import { PublicTrafficTracker } from "@/components/analytics/PublicTrafficTracker";
 
 function AdvertiserRouteGuard({ children }: { children: React.ReactElement }) {
   const { user, loading } = useAuth();
@@ -81,6 +82,7 @@ export default function App() {
       <SkinProvider>
         <GtexAudioProvider>
           <BrowserRouter basename={ROUTER_BASENAME}>
+            <PublicTrafficTracker />
             <React.Suspense fallback={<Loading label="Loading GTEX 3D Studio..." />}>
             <Routes>
               {/* Public GTEX Consumer Routes */}
