@@ -118,8 +118,8 @@ def _create_club_profile(
 # =========================================================================
 
 
-def test_first_club_receives_100k_gtex_promotional_grant(client, auth_user_factory, app_session_factory):
-    """Test 1: User's first club receives exactly 100,000 GTEX Coin classified as promotional."""
+def test_first_club_receives_2500_gtex_squad_grant(client, auth_user_factory, app_session_factory):
+    """Test 1: User's first club receives exactly 2,500 ring-fenced GTEX Coin for signings."""
     user = auth_user_factory(suffix="first-club-100k")
     claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
     assert claimed.status_code == 200, claimed.text
@@ -127,8 +127,8 @@ def test_first_club_receives_100k_gtex_promotional_grant(client, auth_user_facto
 
     with app_session_factory() as session:
         funding = ledger.get_club_funding(session, club_id)
-        assert funding["total_cash"] == Decimal("100000")
-        assert funding["available_promotional"] == Decimal("100000")
+        assert funding["total_cash"] == Decimal("2500")
+        assert funding["available_squad_grant"] == Decimal("2500")
         assert funding["available_deposited"] == Decimal("0")
         assert funding["available_earned"] == Decimal("0")
 
@@ -275,7 +275,7 @@ def test_concurrent_first_club_claims_award_grant_exactly_once(client, auth_user
         )
         assert len(entitlements) == 1
 
-        # Verify treasury only credited 100k once
+        # Verify treasury only credited 2,500 GTX once
         funding = ledger.get_club_funding(session, club.id)
         assert funding["total_cash"] == Decimal("100000")
 
@@ -292,7 +292,7 @@ def test_first_club_entitlement_recorded_with_ledger_tx_ids(client, auth_user_fa
         assert entitlement is not None
         assert entitlement.user_id == user["user_id"]
         assert entitlement.club_id == club_id
-        assert entitlement.gtex_grant_amount == Decimal("100000")
+        assert entitlement.gtex_grant_amount == Decimal("2500")
         assert entitlement.fan_grant_amount == Decimal("1000")
         assert entitlement.gtex_ledger_event_id is not None
         assert entitlement.fan_ledger_event_id is not None
@@ -401,7 +401,7 @@ def test_real_player_gsi_79_purchasable_with_promotional_credit(client, auth_use
 
         # Promotional credit was consumed
         funding = ledger.get_club_funding(session, club_id)
-        assert funding["available_promotional"] < Decimal("100000")
+        assert funding["available_squad_grant"] < Decimal("2500")
 
 
 def test_real_player_gsi_80_rejected_with_promotional_credit(client, auth_user_factory, app_session_factory):
@@ -581,7 +581,7 @@ def test_mixed_promotional_and_deposited_insufficient_deposited_fails(client, au
         price, _ = service.player_quotes(session, [player_82])[player_82.id]
         assert price > 0
 
-        # Club has 100,000 promotional from launch grant.
+        # Club has a 2,500 GTX ring-fenced squad grant.
         # Credit deposited GTEX Coin that is strictly less than price (e.g. half of price)
         deposited_amount = max(Decimal("1"), Decimal(str(price // 2)))
         ledger.record(
@@ -886,3 +886,63 @@ def test_starter_squad_bootstrap_generates_22_non_marketable_players(client, aut
         # Verify club formation is satisfied
         formation = service.get_club_formation_status(session, club_id)
         assert formation["is_formed"] is True
+
+
+def test_first_500_campaign_stops_at_owner_500(app_session_factory):
+    """The 501st eligible first-club owner receives no GTX or Fan Coin campaign grant."""
+    with app_session_factory() as session:
+        existing_count = len(
+            session.scalars(
+                select(FirstClubEntitlement.id).where(
+                    FirstClubEntitlement.gtex_grant_amount == Decimal("2500")
+                )
+            ).all()
+        )
+        seed_count = max(0, 500 - existing_count)
+        seed_users = []
+        seed_entitlements = []
+        for _ in range(seed_count):
+            uid = str(uuid4())
+            seed_users.append(
+                User(
+                    id=uid,
+                    email=f"campaign-seed-{uuid4().hex}@example.com",
+                    username=f"campaign_{uuid4().hex[:12]}",
+                    password_hash="test-hash",  # pragma: allowlist secret
+                    account_type="user",
+                )
+            )
+            seed_entitlements.append(
+                FirstClubEntitlement(
+                    user_id=uid,
+                    club_id=str(uuid4()),
+                    gtex_grant_amount=Decimal("2500"),
+                    fan_grant_amount=Decimal("1000"),
+                )
+            )
+        session.add_all(seed_users)
+        session.flush()
+        session.add_all(seed_entitlements)
+        session.flush()
+
+        owner = User(
+            id=str(uuid4()),
+            email=f"campaign-501-{uuid4().hex[:8]}@example.com",
+            username=f"campaign501_{uuid4().hex[:8]}",
+            password_hash="test-hash",  # pragma: allowlist secret
+            account_type="user",
+        )
+        session.add(owner)
+        session.flush()
+        club = _create_club_profile(session, owner.id, club_name=f"Campaign 501 {uuid4().hex[:6]} FC")
+
+        entitlement, awarded = award_first_club_launch_grant(session, user_id=owner.id, club_id=club.id)
+        assert awarded is False
+        assert entitlement is not None
+        assert entitlement.gtex_grant_amount == Decimal("0")
+        assert entitlement.fan_grant_amount == Decimal("0")
+        assert ledger.balance(session, ledger.club_account(club.id), ledger.GTEX) == Decimal("0")
+        assert ledger.balance(session, ledger.user_account(owner.id), ledger.FAN) == Decimal("0")
+
+        # The 500 seeded campaign claims must not affect other tests or fixtures.
+        session.rollback()
