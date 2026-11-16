@@ -230,7 +230,7 @@ class _GtexAdminEconomyOperationsPanelState
   Widget build(BuildContext context) {
     return GtexColumnGap(
       children: <Widget>[
-        GtexSurfacePanel(
+        GteSurfacePanel(
           accentColor: GteShellTheme.positive,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -287,7 +287,7 @@ class _GtexAdminEconomyOperationsPanelState
           ),
         ),
         const SizedBox(height: 18),
-        GtexSurfacePanel(
+        GteSurfacePanel(
           accentColor: GteShellTheme.accent,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -351,7 +351,7 @@ class _GtexAdminEconomyOperationsPanelState
           ),
         ),
         const SizedBox(height: 18),
-        GtexSurfacePanel(
+        GteSurfacePanel(
           accentColor: GteShellTheme.accentAdmin,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

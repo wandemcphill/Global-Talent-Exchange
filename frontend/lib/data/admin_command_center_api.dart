@@ -907,9 +907,11 @@ class AdminDirectoryUser {
   final bool isActive;
   final String? kycStatus;
 
-  String get label =>
-      (displayName?.trim().isNotEmpty == true ? displayName!.trim() : username) +
-      ' ($email)';
+  String get label {
+    final String name =
+        displayName?.trim().isNotEmpty == true ? displayName!.trim() : username;
+    return '$name ($email)';
+  }
 
   factory AdminDirectoryUser.fromJson(Object? value) {
     final Map<String, Object?> json = GteJson.map(value, label: 'admin user');
