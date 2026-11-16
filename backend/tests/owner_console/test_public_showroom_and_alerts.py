@@ -54,7 +54,7 @@ def test_public_showroom_allowlist_for_logged_out_caller(client, app):
         user = User(
             email="public-card@gte.local",
             username="public_card",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Public Card",
             account_type=PublicAccountType.USER,
         )
@@ -187,7 +187,7 @@ def test_resolve_club_crest_url_preserves_data_uri_and_external_urls(app):
         user = User(
             email="crest-resolver@test.gtex.local",
             username="crestresolver",
-            password_hash="x",
+            password_hash="x",  # pragma: allowlist secret
             display_name="Crest Resolver",
             account_type=PublicAccountType.USER,
         )
@@ -249,7 +249,7 @@ def test_decision_expiry_applies_safe_default_and_warns_once(app):
         user = User(
             email="deadline-owner@gte.local",
             username="deadline_owner",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Deadline Owner",
             account_type=PublicAccountType.USER,
         )
@@ -310,7 +310,7 @@ def test_wonderkid_price_jump_uses_share_history_and_skips_missing_readings(app)
         user = User(
             email="wonderkid-alert@gte.local",
             username="wonderkid_alert",
-            password_hash="hash",
+            password_hash="hash",  # pragma: allowlist secret
             display_name="Wonderkid Alert",
             account_type=PublicAccountType.USER,
         )
