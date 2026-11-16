@@ -993,9 +993,7 @@ def test_first_500_campaign_stops_at_owner_500(app_session_factory):
     with app_session_factory() as session:
         existing_count = len(
             session.scalars(
-                select(FirstClubEntitlement.id).where(
-                    FirstClubEntitlement.gtex_grant_amount == Decimal("2500")
-                )
+                select(FirstClubEntitlement.id).where(FirstClubEntitlement.gtex_grant_amount == Decimal("2500"))
             ).all()
         )
         seed_count = max(0, 500 - existing_count)
