@@ -31,6 +31,7 @@ jest.mock("sonner", () => ({
 
 jest.mock("@/lib/api", () => ({
   __esModule: true,
+  API: "http://127.0.0.1:8000/api",
   api: {
     get: (...args: any[]) => mockGet(...args),
     post: (...args: any[]) => mockPost(...args),

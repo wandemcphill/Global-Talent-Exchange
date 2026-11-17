@@ -151,12 +151,8 @@ def test_canonical_injury_days_are_applied_once_per_match() -> None:
                 "metadata": {"recovery_days": 12, "injury_type": "hamstring"},
             }
         ]
-        apply_canonical_injury_days(
-            session, match_id="match-1", club_id="club-a", events=events, side_key="home"
-        )
-        apply_canonical_injury_days(
-            session, match_id="match-1", club_id="club-a", events=events, side_key="home"
-        )
+        apply_canonical_injury_days(session, match_id="match-1", club_id="club-a", events=events, side_key="home")
+        apply_canonical_injury_days(session, match_id="match-1", club_id="club-a", events=events, side_key="home")
         player = session.get(OwnerSquadPlayer, "owner-forward")
         assert player is not None
         assert player.injured_days == 12
