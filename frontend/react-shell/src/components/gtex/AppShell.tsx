@@ -14,6 +14,7 @@ import {
   Globe,
   Inbox,
   LogOut,
+  Link2,
   Megaphone,
   MessagesSquare,
   Newspaper,
@@ -413,6 +414,7 @@ export default function AppShell() {
                 ADMINISTRATION
               </p>
               <NavItem item={{ to: "/app/admin/advertising", label: "Advertising Review", icon: Megaphone, id: "admin-advertising" }} />
+              <NavItem item={{ to: "/app/admin/referrals", label: "Referral & Affiliates", icon: Link2, id: "admin-referrals" }} />
               <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
             </div>
           )}
