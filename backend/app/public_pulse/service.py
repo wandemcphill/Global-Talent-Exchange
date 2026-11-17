@@ -142,9 +142,7 @@ class PublicPulseService:
         filters = [AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT]
         if since is not None:
             filters.append(AnalyticsEvent.created_at >= since)
-        page_views = int(
-            self.session.scalar(select(func.count()).select_from(AnalyticsEvent).where(*filters)) or 0
-        )
+        page_views = int(self.session.scalar(select(func.count()).select_from(AnalyticsEvent).where(*filters)) or 0)
         visitors = int(
             self.session.scalar(
                 select(func.count(func.distinct(AnalyticsEvent.metadata_json["visitor_key"].as_string()))).where(
