@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 from app.common.enums.creator_profile_status import CreatorProfileStatus
 from app.common.enums.referral_reward_status import ReferralRewardStatus
