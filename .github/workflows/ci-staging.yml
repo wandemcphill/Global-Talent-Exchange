@@ -242,9 +242,11 @@ jobs:
         run: |
           echo "MODULE backend/tests/live_matches/test_canonical_broadcast_clock.py"
           echo "MODULE backend/tests/app/test_database_engine_connect_args.py"
+          echo "MODULE backend/tests/live_matches/test_three_spectator_broadcast.py"
           python -m pytest --tb=short \
             backend/tests/live_matches/test_canonical_broadcast_clock.py \
-            backend/tests/app/test_database_engine_connect_args.py
+            backend/tests/app/test_database_engine_connect_args.py \
+            backend/tests/live_matches/test_three_spectator_broadcast.py
       - run: >
           python -m pytest
           backend/tests/live_matches/test_live_match_router.py
@@ -264,7 +266,7 @@ jobs:
 
   backend-postgres-lease-lock:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     services:
       postgres:
         image: postgres:16
@@ -289,7 +291,7 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.lock
       - run: python -m pip install pytest
-      - name: Prove PostgreSQL SKIP LOCKED hides a row held by another connection
+      - name: Prove PostgreSQL SKIP LOCKED and the application claim path
         env:
           GTE_TEST_POSTGRES_URL: postgresql+psycopg://postgres:gtex@localhost:5432/gtex # pragma: allowlist secret
         run: |

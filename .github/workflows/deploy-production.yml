@@ -92,9 +92,11 @@ jobs:
         run: |
           echo "MODULE backend/tests/live_matches/test_canonical_broadcast_clock.py"
           echo "MODULE backend/tests/app/test_database_engine_connect_args.py"
+          echo "MODULE backend/tests/live_matches/test_three_spectator_broadcast.py"
           python -m pytest --tb=short \
             backend/tests/live_matches/test_canonical_broadcast_clock.py \
-            backend/tests/app/test_database_engine_connect_args.py
+            backend/tests/app/test_database_engine_connect_args.py \
+            backend/tests/live_matches/test_three_spectator_broadcast.py
       - run: >
           python -m pytest
           backend/tests/live_matches/test_live_match_router.py

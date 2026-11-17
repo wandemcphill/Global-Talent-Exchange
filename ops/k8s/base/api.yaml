@@ -45,6 +45,15 @@ spec:
               value: "false"
             - name: GTE_OTEL_SERVICE_NAME
               value: gtex-api
+            # The image defaults WEB_CONCURRENCY to 2. Keep that explicit.
+            # Each process holds one engine when the read URL is the primary:
+            # replicas * 2 * (pool 2 + overflow 1). HPA can raise replicas to 10.
+            - name: WEB_CONCURRENCY
+              value: "2"
+            - name: GTE_DB_POOL_SIZE
+              value: "2"
+            - name: GTE_DB_MAX_OVERFLOW
+              value: "1"
           startupProbe:
             httpGet:
               path: /health

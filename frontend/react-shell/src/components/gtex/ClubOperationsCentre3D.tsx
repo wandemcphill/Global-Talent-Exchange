@@ -13,6 +13,7 @@ import {
   updateDepartmentScreens,
 } from "./operationsRoomInteriors";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "@/lib/3d/GtexSceneRegistry";
+import { stepOperationsQuality } from "@/lib/3d/operationsAdaptiveQuality";
 import {
   Building2,
   Compass,
@@ -205,6 +206,8 @@ interface OperationsPerfTelemetry {
   tier: string;
   pixelRatio: number;
   contextLossCount: number;
+  shadowsEnabled: boolean;
+  rendering: boolean;
 }
 
 export function ClubOperationsCentre3D({
@@ -810,6 +813,7 @@ export function ClubOperationsCentre3D({
 
     let isContextLost = false;
     let contextLossCount = 0;
+    let scheduleFrame = () => {};
 
     const onWebglContextLost = (event: Event) => {
       event.preventDefault();
@@ -829,6 +833,7 @@ export function ClubOperationsCentre3D({
       renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
       onResize();
       setWebglStatus("ready");
+      scheduleFrame();
     };
     renderer.domElement.addEventListener("webglcontextlost", onWebglContextLost);
     renderer.domElement.addEventListener("webglcontextrestored", onWebglContextRestored);
@@ -843,12 +848,24 @@ export function ClubOperationsCentre3D({
     let slowQualityWindows = 0;
     let fastQualityWindows = 0;
     let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
+    let adaptiveShadows = qualityProfile.shadowsEnabled;
+    let sceneVisible = true;
+    const visibilityObserver =
+      typeof IntersectionObserver === "function"
+        ? new IntersectionObserver((entries) => {
+            sceneVisible = entries.some((entry) => entry.isIntersecting);
+            scheduleFrame();
+          })
+        : null;
+    visibilityObserver?.observe(renderer.domElement);
     let latestTelemetry: OperationsPerfTelemetry = {
       fps: qualityProfile.targetFps,
       frameMs: Math.round((1000 / Math.max(1, qualityProfile.targetFps)) * 10) / 10,
       tier: qualityTier,
       pixelRatio: adaptivePixelRatio,
       contextLossCount,
+      shadowsEnabled: adaptiveShadows,
+      rendering: true,
     };
 
     if (typeof window !== "undefined") {
@@ -875,9 +892,18 @@ export function ClubOperationsCentre3D({
     // Allow 2.5ms of rAF timer jitter so 60Hz monitors never drop every second frame
     // and trigger false-positive adaptive quality downgrades.
     const frameCapThreshold = Math.max(0, targetFrameInterval - 2.5);
+    const pageShouldRender = () => {
+      const pageHidden = typeof document !== "undefined" && document.hidden;
+      return mounted && !isContextLost && !pageHidden && sceneVisible;
+    };
     const animate = (now: number) => {
+      animFrameId = 0;
+      if (!pageShouldRender()) {
+        lastRenderAt = 0;
+        latestTelemetry = { ...latestTelemetry, rendering: false };
+        return;
+      }
       animFrameId = requestAnimationFrame(animate);
-      if (isContextLost) return;
       if (lastRenderAt > 0 && now - lastRenderAt < frameCapThreshold) return;
       const frameDelta = lastRenderAt > 0 ? Math.min(250, now - lastRenderAt) : targetFrameInterval;
       lastRenderAt = now;
@@ -891,51 +917,39 @@ export function ClubOperationsCentre3D({
           tier: qualityTier,
           pixelRatio: adaptivePixelRatio,
           contextLossCount,
+          shadowsEnabled: adaptiveShadows,
+          rendering: true,
         };
         setPerfTelemetry(latestTelemetry);
       }
       if (now - qualityWindowStartedAt >= 2500 && qualityFrameCount > 8) {
         const averageFrameMs = qualityFrameTotalMs / qualityFrameCount;
-        const slowFrameThreshold = Math.max(24, targetFrameInterval * 1.25);
-        const fastFrameThreshold = Math.max(18, targetFrameInterval * 0.9);
-        if (averageFrameMs > slowFrameThreshold) {
-          slowQualityWindows += 1;
-          fastQualityWindows = 0;
-        } else if (averageFrameMs < fastFrameThreshold) {
-          fastQualityWindows += 1;
-          slowQualityWindows = 0;
-        } else {
-          slowQualityWindows = 0;
-          fastQualityWindows = 0;
-        }
-        if (slowQualityWindows >= 2 && adaptivePixelRatio > 0.85) {
-          adaptivePixelRatio = Math.max(0.85, adaptivePixelRatio * 0.85);
-          renderer.setPixelRatio(adaptivePixelRatio);
-          renderer.shadowMap.enabled = false;
-          sunLight.castShadow = false;
-          slowQualityWindows = 0;
-        } else if (
-          fastQualityWindows >= 3 &&
-          adaptivePixelRatio < Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio)
-        ) {
-          adaptivePixelRatio = Math.min(
-            window.devicePixelRatio || 1,
-            qualityProfile.pixelRatio,
-            adaptivePixelRatio / 0.85,
-          );
-          renderer.setPixelRatio(adaptivePixelRatio);
-          if (qualityProfile.shadowsEnabled) {
-            renderer.shadowMap.enabled = true;
-            sunLight.castShadow = true;
-          }
-          fastQualityWindows = 0;
-        }
+        const stepped = stepOperationsQuality({
+          averageFrameMs,
+          slowFrameThreshold: Math.max(24, targetFrameInterval * 1.25),
+          fastFrameThreshold: Math.max(18, targetFrameInterval * 0.9),
+          pixelRatio: adaptivePixelRatio,
+          maxPixelRatio: Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio),
+          shadowsEnabled: adaptiveShadows,
+          profileAllowsShadows: qualityProfile.shadowsEnabled,
+          slowWindows: slowQualityWindows,
+          fastWindows: fastQualityWindows,
+        });
+        adaptivePixelRatio = stepped.pixelRatio;
+        adaptiveShadows = stepped.shadowsEnabled;
+        slowQualityWindows = stepped.slowWindows;
+        fastQualityWindows = stepped.fastWindows;
+        renderer.setPixelRatio(adaptivePixelRatio);
+        renderer.shadowMap.enabled = adaptiveShadows;
+        sunLight.castShadow = adaptiveShadows;
         latestTelemetry = {
           fps: Math.max(1, Math.round(1000 / Math.max(1, averageFrameMs))),
           frameMs: Math.round(averageFrameMs * 10) / 10,
           tier: qualityTier,
           pixelRatio: adaptivePixelRatio,
           contextLossCount,
+          shadowsEnabled: adaptiveShadows,
+          rendering: true,
         };
         setPerfTelemetry(latestTelemetry);
         qualityWindowStartedAt = now;
@@ -978,11 +992,19 @@ export function ClubOperationsCentre3D({
       controls.update();
       renderer.render(scene, camera);
     };
-    animate(performance.now());
+    scheduleFrame = () => {
+      if (!pageShouldRender() || animFrameId) return;
+      animFrameId = requestAnimationFrame(animate);
+    };
+    const onPageVisibility = () => scheduleFrame();
+    document.addEventListener("visibilitychange", onPageVisibility);
+    scheduleFrame();
 
     return () => {
       mounted = false;
       cancelAnimationFrame(animFrameId);
+      document.removeEventListener("visibilitychange", onPageVisibility);
+      visibilityObserver?.disconnect();
       window.removeEventListener("resize", onResize);
       resizeObserver?.disconnect();
       renderer.domElement.removeEventListener("pointerdown", onPointerDown);

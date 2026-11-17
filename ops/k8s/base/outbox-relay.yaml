@@ -48,6 +48,11 @@ spec:
               value: "9103"
             - name: GTE_OTEL_SERVICE_NAME
               value: gtex-outbox-relay
+            # One process, one replica. This deployment has no HPA.
+            - name: GTE_DB_POOL_SIZE
+              value: "1"
+            - name: GTE_DB_MAX_OVERFLOW
+              value: "1"
           resources:
             requests:
               cpu: 100m

@@ -188,7 +188,12 @@ def resolve_read_engine(
 
 
 def collect_database_pool_telemetry(engine: Engine) -> dict[str, object]:
-    """Snapshot pool occupancy. SQLite pools do not expose checkout counters."""
+    """Snapshot pool occupancy.
+
+    long_connection_checkouts counts how long a connection stayed checked out
+    of the pool. It is not a database transaction duration.
+    SQLite pools do not expose checkout counters.
+    """
 
     pool = engine.pool
     with _POOL_STATS_LOCK:

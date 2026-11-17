@@ -48,6 +48,11 @@ spec:
               value: "9102"
             - name: GTE_OTEL_SERVICE_NAME
               value: gtex-projection-worker
+            # One process per pod. replicas 1, HPA max 6.
+            - name: GTE_DB_POOL_SIZE
+              value: "1"
+            - name: GTE_DB_MAX_OVERFLOW
+              value: "1"
           resources:
             requests:
               cpu: 250m
