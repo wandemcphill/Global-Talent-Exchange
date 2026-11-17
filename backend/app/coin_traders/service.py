@@ -84,6 +84,15 @@ class CoinTraderValidationError(CoinTraderError):
     """Raised when a coin trader action is invalid."""
 
 
+def _legacy_rate_reason_blocks_side(reason: str, *, side: str, other_price: Decimal) -> bool:
+    text = reason.lower()
+    if "spread" in text:
+        return other_price > Decimal("0")
+    if side == "sell":
+        return "sell" in text or "undercut" in text
+    return "buy" in text or "withdrawal" in text
+
+
 def _payment_method_keys_match(left: str, right: str) -> bool:
     def key(value: str) -> str:
         return "".join(ch for ch in value.lower() if ch.isalnum())
@@ -333,9 +342,28 @@ class CoinTraderService:
                 )
             )
             if legacy_rate is not None:
-                legacy_governance = CoinTraderPricingGovernanceService(self.session).evaluate_rate(legacy_rate)
-                if legacy_governance.is_blocked:
-                    raise CoinTraderValidationError("; ".join(legacy_governance.governance_reasons))
+                traded_side = (
+                    "sell" if direction == CoinTradeDirection.USER_BUYS.value else "buy"
+                )
+                traded_price = (
+                    legacy_rate.sell_rate_fiat if traded_side == "sell" else legacy_rate.buy_rate_fiat
+                )
+                other_price = (
+                    legacy_rate.buy_rate_fiat if traded_side == "sell" else legacy_rate.sell_rate_fiat
+                )
+                if traded_price is not None and Decimal(traded_price) > Decimal("0"):
+                    legacy_governance = CoinTraderPricingGovernanceService(self.session).evaluate_rate(legacy_rate)
+                    blocking = [
+                        reason
+                        for reason in legacy_governance.governance_reasons
+                        if _legacy_rate_reason_blocks_side(
+                            reason,
+                            side=traded_side,
+                            other_price=Decimal(other_price or 0),
+                        )
+                    ]
+                    if blocking:
+                        raise CoinTraderValidationError("; ".join(blocking))
         payload = self._bind_single_active_advert(payload, direction)
         advert: CoinTraderAdvert | None = None
         if payload.advert_id:

@@ -2007,6 +2007,9 @@ class CanonicalLiveExecutionService:
                     int(item.execution_revision),
                     int(item.current_minute),
                 )
+            revision_before = int(item.execution_revision)
+            minute_before = int(item.current_minute)
+            status_before = item.execution_status
             try:
                 with self.session.begin_nested():
                     match, updated_exec, _ = self.step_execution(
@@ -2021,6 +2024,13 @@ class CanonicalLiveExecutionService:
                         reference_at=now,
                         respect_schedule=True,
                     )
+                    stepped = (
+                        int(updated_exec.execution_revision) != revision_before
+                        or int(updated_exec.current_minute) != minute_before
+                        or updated_exec.execution_status != status_before
+                    )
+                    if not stepped:
+                        continue
                     advanced += 1
                     if updated_exec.execution_status == "completed" and match.status == MatchStatus.COMPLETED.value:
                         settled += 1
