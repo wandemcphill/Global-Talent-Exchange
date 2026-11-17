@@ -201,32 +201,6 @@ def _request_client_context(request: Request | None, *, device_id: str | None = 
     }
 
 
-
-
-def _capture_signup_referral(session: Session, user: User, referral_code: str | None, *, account_type: str) -> None:
-    """Capture the referral at registration so first-touch ownership cannot be overwritten later."""
-    code = str(referral_code or "").strip().lower()
-    if not code:
-        return
-    from app.schemas.referral_requests import ShareCodeRedeemRequest
-    from app.services.referral_orchestrator import ReferralActionError, ReferralOrchestrator
-
-    try:
-        ReferralOrchestrator(session=session).redeem_share_code(
-            current_user=user,
-            code=code,
-            payload=ShareCodeRedeemRequest(
-                source_channel="direct_link",
-                metadata={"signup_account_type": account_type},
-            ),
-        )
-    except ReferralActionError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="This referral link is invalid, expired, disabled, or has reached its usage limit.",
-        ) from exc
-
-
 def _record_login_attempt(
     request: Request | None,
     *,
@@ -710,7 +684,6 @@ def signup_user(
             account_type=PublicAccountType.USER,
             timing_recorder=telemetry.capture,
         )
-        _capture_signup_referral(session, user, payload.referral_code, account_type="user")
         if payload.creates_club:
             service.create_explicit_club_profile(
                 session,
@@ -811,7 +784,6 @@ def signup_creator(
             account_type=PublicAccountType.CREATOR,
             timing_recorder=telemetry.capture,
         )
-        _capture_signup_referral(session, user, payload.referral_code, account_type="creator")
         session.add(
             CreatorProfile(
                 user_id=user.id,
@@ -917,7 +889,6 @@ def signup_trader(
             account_type=PublicAccountType.COIN_TRADER,
             timing_recorder=telemetry.capture,
         )
-        _capture_signup_referral(session, user, payload.referral_code, account_type="coin_trader")
         trader_service = TraderService(session)
         trader_service.ensure_profile(
             user,

@@ -71,7 +71,7 @@ from app.models.share_code import ShareCode
 from app.models.treasury import DepositRequest, DepositStatus, RateDirection
 from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 
 FIAT_QUANTUM = Decimal("0.01")
 COIN_QUANTUM = Decimal("0.0001")
@@ -238,16 +238,19 @@ class FirstDepositReferralService:
             allowed = set(DEFAULT_DEPOSIT_TYPES)
             chosen = [str(item) for item in payload["qualifying_deposit_types"] or [] if str(item) in allowed]
             if not chosen:
-                raise FirstDepositReferralError(
-                    "invalid_deposit_types", "Choose at least one qualifying deposit type."
-                )
+                raise FirstDepositReferralError("invalid_deposit_types", "Choose at least one qualifying deposit type.")
             settings.qualifying_deposit_types_json = chosen
         settings.version = int(settings.version or 1) + 1
         settings.updated_by_user_id = actor.id
         self.session.flush()
-        self._audit(actor, "programme_settings_updated", "programme", settings.id, payload.get("reason"), {
-            "version": settings.version
-        })
+        self._audit(
+            actor,
+            "programme_settings_updated",
+            "programme",
+            settings.id,
+            payload.get("reason"),
+            {"version": settings.version},
+        )
         return self._settings_view(settings)
 
     def settings_view(self) -> dict[str, Any]:
@@ -372,9 +375,7 @@ class FirstDepositReferralService:
         if attribution is None:
             return
         if attribution.locked_at is not None and attribution.share_code_id != share_code_id:
-            raise FirstDepositReferralError(
-                "attribution_locked", "A qualifying deposit already locked this referral."
-            )
+            raise FirstDepositReferralError("attribution_locked", "A qualifying deposit already locked this referral.")
         if attribution.share_code_id != share_code_id:
             raise FirstDepositReferralError(
                 "attribution_conflict", "This account is already attributed to another referral code."
@@ -702,12 +703,19 @@ class FirstDepositReferralService:
             reward.payout_batch_id = batch.id
             self._ledger(reward, "payout_reserved", reward.status, batch.id)
         self.session.flush()
-        self._audit(actor, "payout_batch_created", "referral_payout_batch", batch.id, off_cycle_reason, {
-            "total": format(total, "f"),
-            "currency": currency,
-            "method": method,
-            "reward_ids": [reward.id for reward in rewards],
-        })
+        self._audit(
+            actor,
+            "payout_batch_created",
+            "referral_payout_batch",
+            batch.id,
+            off_cycle_reason,
+            {
+                "total": format(total, "f"),
+                "currency": currency,
+                "method": method,
+                "reward_ids": [reward.id for reward in rewards],
+            },
+        )
         return self._batch_view(batch)
 
     def confirm_payout_batch(
@@ -722,7 +730,11 @@ class FirstDepositReferralService:
             raise FirstDepositReferralError("batch_not_found", "Payout batch not found.")
         reference = (external_reference or "").strip()
         if batch.status == "confirmed":
-            if batch.payout_method == "external_transfer" and reference and reference != (batch.external_reference or ""):
+            if (
+                batch.payout_method == "external_transfer"
+                and reference
+                and reference != (batch.external_reference or "")
+            ):
                 raise FirstDepositReferralError(
                     "duplicate_payout_confirmation",
                     "This payout was already confirmed with a different payment reference.",
@@ -773,10 +785,17 @@ class FirstDepositReferralService:
             reward.reward_reference = batch.external_reference
             self._ledger(reward, "payout_paid", reward.status, batch.external_reference or batch.id)
         self.session.flush()
-        self._audit(actor, "payout_batch_confirmed", "referral_payout_batch", batch.id, reference or None, {
-            "method": batch.payout_method,
-            "reference": batch.external_reference,
-        })
+        self._audit(
+            actor,
+            "payout_batch_confirmed",
+            "referral_payout_batch",
+            batch.id,
+            reference or None,
+            {
+                "method": batch.payout_method,
+                "reference": batch.external_reference,
+            },
+        )
         return self._batch_view(batch)
 
     def create_partner(self, actor: User, payload: dict[str, Any]) -> dict[str, Any]:
@@ -797,9 +816,9 @@ class FirstDepositReferralService:
             owner = self.session.get(User, owner_user_id)
         code = self._normalize_code(payload.get("code")) if payload.get("code") else self._generate_code()
         self._ensure_code_available(code)
-        email = (payload.get("contact_email") or None)
+        email = payload.get("contact_email") or None
         email = email.strip().lower() if isinstance(email, str) and email.strip() else None
-        destination = (payload.get("payout_destination_label") or None)
+        destination = payload.get("payout_destination_label") or None
         destination = destination.strip() if isinstance(destination, str) and destination.strip() else None
         currency = str(payload.get("payout_currency") or "NGN").strip().upper()
         starts_at = _aware(payload.get("starts_at")) if isinstance(payload.get("starts_at"), datetime) else None
@@ -864,10 +883,17 @@ class FirstDepositReferralService:
         self.session.flush()
         share.referral_campaign_id = campaign.id
         self.session.flush()
-        self._audit(actor, "partner_created", "referral_partner", partner.id, None, {
-            "code": code,
-            "campaign_id": campaign.id,
-        })
+        self._audit(
+            actor,
+            "partner_created",
+            "referral_partner",
+            partner.id,
+            None,
+            {
+                "code": code,
+                "campaign_id": campaign.id,
+            },
+        )
         return self._partner_view(partner, include_private=True)
 
     def update_partner(self, actor: User, partner_id: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -962,7 +988,9 @@ class FirstDepositReferralService:
         return [self._attribution_admin_view(row) for row in rows]
 
     def list_links(self) -> list[dict[str, Any]]:
-        campaigns = list(self.session.scalars(select(ReferralCampaign).order_by(ReferralCampaign.created_at.desc())).all())
+        campaigns = list(
+            self.session.scalars(select(ReferralCampaign).order_by(ReferralCampaign.created_at.desc())).all()
+        )
         return [self._campaign_view(campaign) for campaign in campaigns]
 
     def list_attributions(self) -> list[dict[str, Any]]:
@@ -1000,20 +1028,28 @@ class FirstDepositReferralService:
         if clicks:
             steps.append({"step": "referral_link_clicked", "at": clicks[0].created_at, "count": len(clicks)})
         steps.append({"step": "account_registered", "at": attribution.created_at})
-        steps.append({"step": "referral_attributed", "at": attribution.first_touch_at, "status": attribution.attribution_status})
+        steps.append(
+            {"step": "referral_attributed", "at": attribution.first_touch_at, "status": attribution.attribution_status}
+        )
         for reward in rewards:
             label = "user_bonus_issued" if reward.reward_type == BONUS_TYPE else "commission_generated"
-            steps.append({"step": label, "at": reward.created_at, "status": reward.status.value, "reward_id": reward.id})
+            steps.append(
+                {"step": label, "at": reward.created_at, "status": reward.status.value, "reward_id": reward.id}
+            )
             if reward.reward_type == COMMISSION_TYPE:
                 if reward.hold_until:
                     steps.append({"step": "hold_until", "at": reward.hold_until, "status": reward.status.value})
                 if reward.approved_at:
                     steps.append({"step": "commission_approved", "at": reward.approved_at})
                 if reward.paid_at:
-                    steps.append({"step": "commission_paid", "at": reward.paid_at, "reference": reward.reward_reference})
+                    steps.append(
+                        {"step": "commission_paid", "at": reward.paid_at, "reference": reward.reward_reference}
+                    )
         for event in events:
             if event.event_type == ReferralEventType.FIRST_QUALIFYING_DEPOSIT:
-                steps.append({"step": "first_deposit_settled", "at": event.occurred_at, "payload": event.event_payload_json})
+                steps.append(
+                    {"step": "first_deposit_settled", "at": event.occurred_at, "payload": event.event_payload_json}
+                )
         steps.sort(key=lambda item: _aware(item.get("at")) or datetime.min.replace(tzinfo=timezone.utc))
         view = self._attribution_admin_view(attribution)
         view["timeline"] = _jsonable(steps)
@@ -1067,17 +1103,19 @@ class FirstDepositReferralService:
         for (kind, beneficiary_id, currency), items in grouped.items():
             total = _money(sum((_money(item.reward_amount) for item in items), Decimal("0")))
             threshold = thresholds.get(currency)
-            preview.append({
-                "beneficiary_kind": kind,
-                "beneficiary_id": beneficiary_id,
-                "currency": currency,
-                "commission_count": len(items),
-                "total": format(total, "f"),
-                "reward_ids": [item.id for item in items],
-                "threshold": threshold,
-                "meets_threshold": threshold is not None and total >= _money(threshold),
-                "destination_label": self._destination_label(kind, beneficiary_id),
-            })
+            preview.append(
+                {
+                    "beneficiary_kind": kind,
+                    "beneficiary_id": beneficiary_id,
+                    "currency": currency,
+                    "commission_count": len(items),
+                    "total": format(total, "f"),
+                    "reward_ids": [item.id for item in items],
+                    "threshold": threshold,
+                    "meets_threshold": threshold is not None and total >= _money(threshold),
+                    "destination_label": self._destination_label(kind, beneficiary_id),
+                }
+            )
         return preview
 
     def list_fraud(self) -> list[dict[str, Any]]:
@@ -1098,9 +1136,7 @@ class FirstDepositReferralService:
 
     def overview(self) -> dict[str, Any]:
         performance = self._performance_for(partner_id=None, share_code_ids=None)
-        performance["partners"] = int(
-            self.session.scalar(select(func.count()).select_from(ReferralPartner)) or 0
-        )
+        performance["partners"] = int(self.session.scalar(select(func.count()).select_from(ReferralPartner)) or 0)
         performance["active_campaigns"] = int(
             self.session.scalar(
                 select(func.count()).select_from(ReferralCampaign).where(ReferralCampaign.status == "active")
@@ -1125,45 +1161,113 @@ class FirstDepositReferralService:
         buffer = io.StringIO()
         writer = csv.writer(buffer)
         if kind == "rewards":
-            writer.writerow([
-                "reward_id", "type", "status", "referred_user_id", "beneficiary_user_id", "partner_id",
-                "qualifying_amount", "qualifying_currency", "reward_amount", "reward_unit", "applied_rate_bps",
-                "policy_version", "deposit_kind", "deposit_id", "payment_reference", "created_at", "paid_at",
-            ])
+            writer.writerow(
+                [
+                    "reward_id",
+                    "type",
+                    "status",
+                    "referred_user_id",
+                    "beneficiary_user_id",
+                    "partner_id",
+                    "qualifying_amount",
+                    "qualifying_currency",
+                    "reward_amount",
+                    "reward_unit",
+                    "applied_rate_bps",
+                    "policy_version",
+                    "deposit_kind",
+                    "deposit_id",
+                    "payment_reference",
+                    "created_at",
+                    "paid_at",
+                ]
+            )
             rewards = self.session.scalars(select(ReferralReward).order_by(ReferralReward.created_at.asc())).all()
             for reward in rewards:
                 if reward.reward_type not in {BONUS_TYPE, COMMISSION_TYPE}:
                     continue
                 payload = reward.reward_payload_json or {}
-                writer.writerow([
-                    reward.id, reward.reward_type.value, reward.status.value, reward.referred_user_id,
-                    reward.beneficiary_user_id or "", reward.referral_partner_id or "",
-                    reward.qualifying_amount, reward.qualifying_currency, reward.reward_amount, reward.reward_unit,
-                    reward.applied_rate_bps, reward.policy_version, reward.deposit_kind, reward.deposit_id,
-                    payload.get("payment_reference", ""), reward.created_at, reward.paid_at or "",
-                ])
+                writer.writerow(
+                    [
+                        reward.id,
+                        reward.reward_type.value,
+                        reward.status.value,
+                        reward.referred_user_id,
+                        reward.beneficiary_user_id or "",
+                        reward.referral_partner_id or "",
+                        reward.qualifying_amount,
+                        reward.qualifying_currency,
+                        reward.reward_amount,
+                        reward.reward_unit,
+                        reward.applied_rate_bps,
+                        reward.policy_version,
+                        reward.deposit_kind,
+                        reward.deposit_id,
+                        payload.get("payment_reference", ""),
+                        reward.created_at,
+                        reward.paid_at or "",
+                    ]
+                )
         elif kind == "attributions":
-            writer.writerow([
-                "attribution_id", "referred_user_id", "referrer_user_id", "partner_id", "share_code_id",
-                "account_type", "status", "locked_at", "created_at",
-            ])
-            for row in self.session.scalars(select(ReferralAttribution).order_by(ReferralAttribution.created_at.asc())).all():
-                writer.writerow([
-                    row.id, row.referred_user_id, row.referrer_user_id or "", row.referral_partner_id or "",
-                    row.share_code_id or "", row.account_type_snapshot or "", row.attribution_status,
-                    row.locked_at or "", row.created_at,
-                ])
+            writer.writerow(
+                [
+                    "attribution_id",
+                    "referred_user_id",
+                    "referrer_user_id",
+                    "partner_id",
+                    "share_code_id",
+                    "account_type",
+                    "status",
+                    "locked_at",
+                    "created_at",
+                ]
+            )
+            for row in self.session.scalars(
+                select(ReferralAttribution).order_by(ReferralAttribution.created_at.asc())
+            ).all():
+                writer.writerow(
+                    [
+                        row.id,
+                        row.referred_user_id,
+                        row.referrer_user_id or "",
+                        row.referral_partner_id or "",
+                        row.share_code_id or "",
+                        row.account_type_snapshot or "",
+                        row.attribution_status,
+                        row.locked_at or "",
+                        row.created_at,
+                    ]
+                )
         elif kind == "payouts":
-            writer.writerow([
-                "batch_id", "status", "method", "beneficiary_user_id", "beneficiary_partner_id", "currency",
-                "total", "external_reference", "confirmed_at",
-            ])
-            for batch in self.session.scalars(select(ReferralPayoutBatch).order_by(ReferralPayoutBatch.created_at.asc())).all():
-                writer.writerow([
-                    batch.id, batch.status, batch.payout_method, batch.beneficiary_user_id or "",
-                    batch.beneficiary_partner_id or "", batch.currency_code, batch.total_amount,
-                    batch.external_reference or "", batch.confirmed_at or "",
-                ])
+            writer.writerow(
+                [
+                    "batch_id",
+                    "status",
+                    "method",
+                    "beneficiary_user_id",
+                    "beneficiary_partner_id",
+                    "currency",
+                    "total",
+                    "external_reference",
+                    "confirmed_at",
+                ]
+            )
+            for batch in self.session.scalars(
+                select(ReferralPayoutBatch).order_by(ReferralPayoutBatch.created_at.asc())
+            ).all():
+                writer.writerow(
+                    [
+                        batch.id,
+                        batch.status,
+                        batch.payout_method,
+                        batch.beneficiary_user_id or "",
+                        batch.beneficiary_partner_id or "",
+                        batch.currency_code,
+                        batch.total_amount,
+                        batch.external_reference or "",
+                        batch.confirmed_at or "",
+                    ]
+                )
         else:
             raise FirstDepositReferralError("unknown_report", "Report must be rewards, attributions, or payouts.")
         return buffer.getvalue()
@@ -1212,7 +1316,9 @@ class FirstDepositReferralService:
     def my_affiliate(self, user: User) -> dict[str, Any]:
         share = self.ensure_personal_code(user)
         partner = self.session.scalar(select(ReferralPartner).where(ReferralPartner.owner_user_id == user.id))
-        share_ids = [item.id for item in self.session.scalars(select(ShareCode).where(ShareCode.owner_user_id == user.id)).all()]
+        share_ids = [
+            item.id for item in self.session.scalars(select(ShareCode).where(ShareCode.owner_user_id == user.id)).all()
+        ]
         if partner is not None:
             share_ids.extend(self._partner_share_ids(partner.id))
         attributions = self._attributions_for_owner(user.id, partner.id if partner else None, share_ids)
@@ -1223,6 +1329,7 @@ class FirstDepositReferralService:
         for bonus in bonuses:
             currency = bonus.qualifying_currency or ""
             volume[currency] = _money(volume.get(currency, Decimal("0")) + _money(bonus.qualifying_amount))
+
         def total(status: ReferralRewardStatus) -> dict[str, str]:
             amounts: dict[str, Decimal] = {}
             for reward in commissions:
@@ -1231,6 +1338,7 @@ class FirstDepositReferralService:
                 currency = reward.qualifying_currency or ""
                 amounts[currency] = _money(amounts.get(currency, Decimal("0")) + _money(reward.reward_amount))
             return {currency: format(amount, "f") for currency, amount in amounts.items()}
+
         return {
             "code": share.code,
             "link": referral_link(share.code),
@@ -1267,7 +1375,11 @@ class FirstDepositReferralService:
         bonus_fiat = _percent(deposit.gross_fiat, bonus_bps)
         commission_fiat = _percent(deposit.gross_fiat, commission_bps)
         bonus_wallet = fiat_to_wallet(bonus_fiat, deposit.rate_value, deposit.rate_direction)
-        partner = self.session.get(ReferralPartner, attribution.referral_partner_id) if attribution.referral_partner_id else None
+        partner = (
+            self.session.get(ReferralPartner, attribution.referral_partner_id)
+            if attribution.referral_partner_id
+            else None
+        )
         beneficiary_user_id = attribution.referrer_user_id or (partner.owner_user_id if partner else None)
         payload = {
             "qualifying_base": "gross_verified_fiat",
@@ -1344,7 +1456,11 @@ class FirstDepositReferralService:
         self._event(
             attribution,
             ReferralEventType.FIRST_QUALIFYING_DEPOSIT,
-            {"deposit_id": deposit.deposit_id, "deposit_kind": deposit.deposit_kind, "gross_fiat": format(deposit.gross_fiat, "f")},
+            {
+                "deposit_id": deposit.deposit_id,
+                "deposit_kind": deposit.deposit_kind,
+                "gross_fiat": format(deposit.gross_fiat, "f"),
+            },
         )
         self._ledger(bonus, "reward_created", bonus.status, deposit.deposit_id)
         self._ledger(commission, "reward_created", commission.status, deposit.deposit_id)
@@ -1413,7 +1529,9 @@ class FirstDepositReferralService:
                 notes=note,
             )
             self._ledger(reward, "recovery_opened", reward.status, note)
-            self._flag("paid_commission_recovery", "high", "referral_reward", reward.id, ["deposit_reversed_after_payout"])
+            self._flag(
+                "paid_commission_recovery", "high", "referral_reward", reward.id, ["deposit_reversed_after_payout"]
+            )
             return
         if reward.status in {ReferralRewardStatus.REVERSED, ReferralRewardStatus.BLOCKED}:
             self._ledger(reward, "deposit_reversal_noted", reward.status, note)
@@ -1446,8 +1564,12 @@ class FirstDepositReferralService:
                     self.wallet_service.append_transaction(
                         self.session,
                         postings=[
-                            LedgerPosting(account=account, amount=-clawed, transaction_type=LedgerTransactionType.ADJUSTMENT),
-                            LedgerPosting(account=operations, amount=clawed, transaction_type=LedgerTransactionType.ADJUSTMENT),
+                            LedgerPosting(
+                                account=account, amount=-clawed, transaction_type=LedgerTransactionType.ADJUSTMENT
+                            ),
+                            LedgerPosting(
+                                account=operations, amount=clawed, transaction_type=LedgerTransactionType.ADJUSTMENT
+                            ),
                         ],
                         reason=LedgerEntryReason.ADJUSTMENT,
                         source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
@@ -1536,7 +1658,9 @@ class FirstDepositReferralService:
             partner = self.session.get(ReferralPartner, attribution.referral_partner_id)
             if partner and partner.payout_destination_fingerprint:
                 others = self.session.scalar(
-                    select(func.count()).select_from(ReferralPartner).where(
+                    select(func.count())
+                    .select_from(ReferralPartner)
+                    .where(
                         ReferralPartner.payout_destination_fingerprint == partner.payout_destination_fingerprint,
                         ReferralPartner.id != partner.id,
                     )
@@ -1550,14 +1674,22 @@ class FirstDepositReferralService:
                         ["duplicate_payout_destination"],
                     )
             day_count = self.session.scalar(
-                select(func.count()).select_from(ReferralReward).where(
+                select(func.count())
+                .select_from(ReferralReward)
+                .where(
                     ReferralReward.referral_partner_id == attribution.referral_partner_id,
                     ReferralReward.reward_type == BONUS_TYPE,
                     ReferralReward.created_at >= utcnow() - timedelta(days=1),
                 )
             )
             if int(day_count or 0) >= 10:
-                self._flag("unusual_referral_velocity", "medium", "referral_partner", attribution.referral_partner_id, ["velocity"])
+                self._flag(
+                    "unusual_referral_velocity",
+                    "medium",
+                    "referral_partner",
+                    attribution.referral_partner_id,
+                    ["velocity"],
+                )
         if attribution.referrer_user_id == attribution.referred_user_id:
             self._flag("self_referral", "high", "referral_reward", bonus.id, ["self_referral"])
 
@@ -1588,7 +1720,10 @@ class FirstDepositReferralService:
     def _resolve_active_code(self, code: str, *, for_update: bool = False) -> tuple[ShareCode, ReferralCampaign | None]:
         normalized = self._normalize_code(code)
         statement = select(ShareCode).where(
-            or_(func.lower(ShareCode.code) == normalized.lower(), func.lower(ShareCode.vanity_code) == normalized.lower())
+            or_(
+                func.lower(ShareCode.code) == normalized.lower(),
+                func.lower(ShareCode.vanity_code) == normalized.lower(),
+            )
         )
         bind = self.session.get_bind()
         if for_update and bind is not None and bind.dialect.name != "sqlite":
@@ -1600,9 +1735,7 @@ class FirstDepositReferralService:
         if share.referral_campaign_id:
             campaign = self.session.get(ReferralCampaign, share.referral_campaign_id)
         elif share.referral_partner_id:
-            campaign = self.session.scalar(
-                select(ReferralCampaign).where(ReferralCampaign.share_code_id == share.id)
-            )
+            campaign = self.session.scalar(select(ReferralCampaign).where(ReferralCampaign.share_code_id == share.id))
         now = utcnow()
         if not share.is_active or (campaign is not None and campaign.status != "active"):
             raise FirstDepositReferralError("referral_code_inactive", "This referral code is not active.")
@@ -1640,7 +1773,9 @@ class FirstDepositReferralService:
             return
         cutoff = utcnow() - timedelta(minutes=10)
         count = self.session.scalar(
-            select(func.count()).select_from(ReferralClick).where(
+            select(func.count())
+            .select_from(ReferralClick)
+            .where(
                 ReferralClick.ip_hash == ip_hash,
                 ReferralClick.succeeded.is_(False),
                 ReferralClick.created_at >= cutoff,
@@ -1734,7 +1869,9 @@ class FirstDepositReferralService:
         )
         self.session.flush()
 
-    def _ledger(self, reward: ReferralReward, entry_type: str, status: ReferralRewardStatus, reference: str | None) -> None:
+    def _ledger(
+        self, reward: ReferralReward, entry_type: str, status: ReferralRewardStatus, reference: str | None
+    ) -> None:
         entry_key = f"{reward.id}:{entry_type}:{reference or 'none'}"[:128]
         existing = self.session.scalar(select(ReferralRewardLedger).where(ReferralRewardLedger.entry_key == entry_key))
         if existing is not None:
@@ -1822,7 +1959,9 @@ class FirstDepositReferralService:
         user = self.session.get(User, user_id)
         if user is None:
             raise FirstDepositReferralError("owner_not_found", "The referrer account no longer exists.")
-        units = {str((reward.reward_payload_json or {}).get("wallet_unit") or LedgerUnit.COIN.value) for reward in rewards}
+        units = {
+            str((reward.reward_payload_json or {}).get("wallet_unit") or LedgerUnit.COIN.value) for reward in rewards
+        }
         if len(units) != 1:
             raise FirstDepositReferralError(
                 "payout_wallet_unit_mismatch",
@@ -1838,15 +1977,21 @@ class FirstDepositReferralService:
             )
         wallet_amount = _coin(wallet_amount)
         if wallet_amount <= 0:
-            raise FirstDepositReferralError("rate_not_configured", "The original deposit rate cannot convert this payout.")
+            raise FirstDepositReferralError(
+                "rate_not_configured", "The original deposit rate cannot convert this payout."
+            )
         unit = _unit(next(iter(units)))
         account = self.wallet_service.get_user_account(self.session, user, unit)
         operations = self.wallet_service.ensure_operations_account(self.session, unit)
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=account, amount=wallet_amount, transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT),
-                LedgerPosting(account=operations, amount=-wallet_amount, transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT),
+                LedgerPosting(
+                    account=account, amount=wallet_amount, transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT
+                ),
+                LedgerPosting(
+                    account=operations, amount=-wallet_amount, transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT
+                ),
             ],
             reason=LedgerEntryReason.ADJUSTMENT,
             source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
@@ -1873,7 +2018,9 @@ class FirstDepositReferralService:
             attribution_query = attribution_query.where(ReferralAttribution.referral_partner_id == partner_id)
         elif share_code_ids is not None:
             click_query = click_query.where(ReferralClick.share_code_id.in_(share_code_ids or ["__none__"]))
-            attribution_query = attribution_query.where(ReferralAttribution.share_code_id.in_(share_code_ids or ["__none__"]))
+            attribution_query = attribution_query.where(
+                ReferralAttribution.share_code_id.in_(share_code_ids or ["__none__"])
+            )
         clicks = int(self.session.scalar(click_query) or 0)
         attributions = list(self.session.scalars(attribution_query).all())
         attribution_ids = [row.id for row in attributions] or ["__none__"]
@@ -1907,7 +2054,14 @@ class FirstDepositReferralService:
         return {
             "clicks": clicks,
             "registrations": registrations,
-            "conversion_rate": format((Decimal(deposits) / Decimal(registrations)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP), "f") if registrations else "0.0000",
+            "conversion_rate": (
+                format(
+                    (Decimal(deposits) / Decimal(registrations)).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP),
+                    "f",
+                )
+                if registrations
+                else "0.0000"
+            ),
             "first_deposits": deposits,
             "qualifying_volume": {currency: format(_money(amount), "f") for currency, amount in volume.items()},
             "user_bonuses": {unit: format(_coin(amount), "f") for unit, amount in bonus_totals.items()},
@@ -1933,9 +2087,7 @@ class FirstDepositReferralService:
         return {currency: format(amount, "f") for currency, amount in totals.items()}
 
     def _partner_share_ids(self, partner_id: str) -> list[str]:
-        return list(
-            self.session.scalars(select(ShareCode.id).where(ShareCode.referral_partner_id == partner_id)).all()
-        )
+        return list(self.session.scalars(select(ShareCode.id).where(ShareCode.referral_partner_id == partner_id)).all())
 
     def _partner_or_raise(self, partner_id: str) -> ReferralPartner:
         partner = self.session.get(ReferralPartner, partner_id)
@@ -1945,7 +2097,11 @@ class FirstDepositReferralService:
 
     def _normalize_code(self, code: str | None) -> str:
         candidate = "".join(str(code or "").strip().upper().split())
-        if len(candidate) < 4 or len(candidate) > 16 or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" for character in candidate):
+        if (
+            len(candidate) < 4
+            or len(candidate) > 16
+            or any(character not in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789" for character in candidate)
+        ):
             raise FirstDepositReferralError("referral_code_invalid", "This referral code is not recognised.")
         return candidate
 
@@ -2028,13 +2184,15 @@ class FirstDepositReferralService:
             "campaigns": campaigns,
         }
         if include_private:
-            view.update({
-                "contact_email": partner.contact_email,
-                "notes": partner.notes,
-                "contractual_terms": partner.contractual_terms,
-                "payout_destination_label": partner.payout_destination_label,
-                "payout_currency": partner.payout_currency,
-            })
+            view.update(
+                {
+                    "contact_email": partner.contact_email,
+                    "notes": partner.notes,
+                    "contractual_terms": partner.contractual_terms,
+                    "payout_destination_label": partner.payout_destination_label,
+                    "payout_currency": partner.payout_currency,
+                }
+            )
         return view
 
     def _campaign_view(self, campaign: ReferralCampaign) -> dict[str, Any]:
@@ -2065,7 +2223,9 @@ class FirstDepositReferralService:
             "partner_id": reward.referral_partner_id,
             "attribution_id": reward.referral_attribution_id,
             "share_code_id": payload.get("share_code_id"),
-            "qualifying_amount": format(_money(reward.qualifying_amount), "f") if reward.qualifying_amount is not None else None,
+            "qualifying_amount": (
+                format(_money(reward.qualifying_amount), "f") if reward.qualifying_amount is not None else None
+            ),
             "qualifying_currency": reward.qualifying_currency,
             "reward_amount": format(Decimal(reward.reward_amount), "f") if reward.reward_amount is not None else None,
             "reward_unit": reward.reward_unit,
@@ -2110,14 +2270,20 @@ class FirstDepositReferralService:
             "status": row.attribution_status,
             "locked_at": row.locked_at.isoformat() if row.locked_at else None,
             "created_at": row.created_at.isoformat() if row.created_at else None,
-            "qualifying_amount": format(_money(bonus.qualifying_amount), "f") if bonus and bonus.qualifying_amount is not None else None,
+            "qualifying_amount": (
+                format(_money(bonus.qualifying_amount), "f") if bonus and bonus.qualifying_amount is not None else None
+            ),
             "qualifying_currency": bonus.qualifying_currency if bonus else None,
             "bonus_status": bonus.status.value if bonus else None,
-            "commission_status": next((reward.status.value for reward in rewards if reward.reward_type == COMMISSION_TYPE), None),
+            "commission_status": next(
+                (reward.status.value for reward in rewards if reward.reward_type == COMMISSION_TYPE), None
+            ),
         }
 
     def _batch_view(self, batch: ReferralPayoutBatch) -> dict[str, Any]:
-        items = list(self.session.scalars(select(ReferralPayoutItem).where(ReferralPayoutItem.batch_id == batch.id)).all())
+        items = list(
+            self.session.scalars(select(ReferralPayoutItem).where(ReferralPayoutItem.batch_id == batch.id)).all()
+        )
         return {
             "id": batch.id,
             "status": batch.status,
@@ -2144,7 +2310,9 @@ class FirstDepositReferralService:
             filters.append(ReferralAttribution.share_code_id.in_(share_ids))
         return list(self.session.scalars(select(ReferralAttribution).where(or_(*filters))).all())
 
-    def _rewards_for_attributions(self, attributions: list[ReferralAttribution], reward_type: ReferralRewardType) -> list[ReferralReward]:
+    def _rewards_for_attributions(
+        self, attributions: list[ReferralAttribution], reward_type: ReferralRewardType
+    ) -> list[ReferralReward]:
         ids = [row.id for row in attributions]
         if not ids:
             return []
@@ -2172,5 +2340,7 @@ class FirstDepositReferralService:
         if partner_id:
             filters.append(ReferralPayoutBatch.beneficiary_partner_id == partner_id)
         return list(
-            self.session.scalars(select(ReferralPayoutBatch).where(or_(*filters)).order_by(ReferralPayoutBatch.created_at.desc())).all()
+            self.session.scalars(
+                select(ReferralPayoutBatch).where(or_(*filters)).order_by(ReferralPayoutBatch.created_at.desc())
+            ).all()
         )

@@ -36,7 +36,9 @@ class ReferralPartner(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     payout_destination_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     payout_destination_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     payout_currency: Mapped[str] = mapped_column(String(12), nullable=False, default="NGN", server_default="NGN")
-    created_by_user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    created_by_user_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
 
 class ReferralCampaign(UUIDPrimaryKeyMixin, TimestampMixin, Base):

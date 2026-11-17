@@ -56,66 +56,161 @@ import {
   TelemetrySparklineCard,
 } from "@/components/gtex/ApexWidgets";
 
-function NoClubDashboard({ onCreateClub }: { onCreateClub: () => void }) {
+function NoClubDashboard({
+  onCreateClub,
+  gtexBalance,
+}: {
+  onCreateClub: () => void;
+  gtexBalance?: string;
+}) {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
       <section className="relative overflow-hidden rounded-3xl border border-gtex-emerald/30 bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
-        <p className="gx-eyebrow mb-3">GTEX member workspace</p>
+        <p className="gx-eyebrow mb-3">Start here</p>
         <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
-          Your account is ready. Your football journey starts here.
+          Top up. Create your club. Hire the staff.
         </h1>
-        <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-300">
-          You do not need to own a club to use GTEX. Explore the football world, follow talent, buy club shares, and manage a national team in eligible competitions with your user account.
+        <p
+          className="mt-4 max-w-2xl text-sm leading-6 text-slate-300"
+          data-testid="member-start-guide"
+        >
+          Your personal GTEX Coin wallet has{" "}
+          <b className="text-white">{fmt(gtexBalance || "0")} GTX</b>. Coins you buy, and coins an
+          admin credits, land here. Club cash is a separate balance you fund after the club exists.
         </p>
+        <ol className="mt-5 max-w-2xl space-y-3 text-sm leading-6 text-slate-200">
+          <li>
+            <b className="text-white">1. Top up your account.</b> Buying and selling through
+            verified coin traders guarantees more value for money than the platform treasury rate.
+          </li>
+          <li>
+            <b className="text-white">2. Create your club.</b> The first 500 club owners receive a
+            2,500 GTEX Coin grant.
+          </li>
+          <li>
+            <b className="text-white">3. Hire the right staff.</b> Gameplay is not required. You do
+            not play the matches. Your manager handles matchday and tactics.
+          </li>
+        </ol>
+        <div className="mt-6 flex flex-wrap items-center gap-3">
+          <Btn onClick={onCreateClub} data-testid="no-club-create-club">
+            Create your club
+          </Btn>
+          <Link
+            to="/app/finance"
+            className="text-xs font-bold uppercase tracking-wider text-emerald-300 hover:text-white"
+          >
+            Top up wallet
+          </Link>
+          <Link
+            to="/app/coin-traders"
+            className="text-xs font-bold uppercase tracking-wider text-amber-300 hover:text-white"
+          >
+            Buy through coin traders
+          </Link>
+        </div>
       </section>
 
       <WorldClockCard />
 
       <section className="grid gap-4 md:grid-cols-3" aria-label="Explore GTEX">
-        <Link to="/app/national" data-testid="no-club-national-team" className="rounded-2xl group rounded-2xl border border-gtex-emerald/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-emerald hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
+        <Link
+          to="/app/national"
+          data-testid="no-club-national-team"
+          className="rounded-2xl group rounded-2xl border border-gtex-emerald/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-emerald hover:bg-gtex-slate shadow-xl hover:-translate-y-1"
+        >
           <Trophy className="mb-4 text-emerald-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">National team</h2>
-          <p className="mt-2 text-sm leading-5 text-slate-400">Enter an eligible national competition and rent players without owning a club.</p>
-          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-emerald-300">Explore national duty →</span>
+          <p className="mt-2 text-sm leading-5 text-slate-400">
+            Enter an eligible national competition and rent players without owning a club.
+          </p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-emerald-300">
+            Explore national duty →
+          </span>
         </Link>
-        <Link to="/app/regen-world" data-testid="no-club-regen-world" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
+        <Link
+          to="/app/regen-world"
+          data-testid="no-club-regen-world"
+          className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1"
+        >
           <Globe2 className="mb-4 text-cyan-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">Regen world</h2>
-          <p className="mt-2 text-sm leading-5 text-slate-400">Discover emerging talent and follow the next generation across GTEX.</p>
-          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-cyan-300">Explore talent →</span>
+          <p className="mt-2 text-sm leading-5 text-slate-400">
+            Discover emerging talent and follow the next generation across GTEX.
+          </p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-cyan-300">
+            Explore talent →
+          </span>
         </Link>
-        <Link to="/app/market" data-testid="no-club-player-shares" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
+        <Link
+          to="/app/market"
+          data-testid="no-club-player-shares"
+          className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-gtex-pitch hover:bg-gtex-slate shadow-xl hover:-translate-y-1"
+        >
           <Users className="mb-4 text-amber-300" size={22} />
           <h2 className="gx-display text-xl font-bold uppercase text-white">Player shares</h2>
-          <p className="mt-2 text-sm leading-5 text-slate-400">Explore available player-share opportunities and club ownership markets.</p>
-          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">Explore the market →</span>
+          <p className="mt-2 text-sm leading-5 text-slate-400">
+            Explore available player-share opportunities and club ownership markets.
+          </p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">
+            Explore the market →
+          </span>
         </Link>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2" aria-label="Optional GTEX capabilities">
-        <Link to="/app/creator-access" data-testid="no-club-creator-access" className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-purple-400/60 hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
+        <Link
+          to="/app/creator-access"
+          data-testid="no-club-creator-access"
+          className="rounded-2xl group rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 transition-all hover:border-purple-400/60 hover:bg-gtex-slate shadow-xl hover:-translate-y-1"
+        >
           <Video className="mb-4 text-pink-300" size={22} />
           <p className="gx-eyebrow text-pink-300">Creator tools</p>
-          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Build a football audience</h2>
-          <p className="mt-2 text-sm leading-5 text-slate-400">Use your existing GTEX ID to apply for creator access, publish football stories, and build a community. Creator tools do not require club ownership.</p>
-          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-pink-300">Apply for creator access →</span>
+          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">
+            Build a football audience
+          </h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">
+            Use your existing GTEX ID to apply for creator access, publish football stories, and
+            build a community. Creator tools do not require club ownership.
+          </p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-pink-300">
+            Apply for creator access →
+          </span>
         </Link>
-        <Link to="/app/coin-traders" data-testid="no-club-coin-traders" className="rounded-2xl group rounded-2xl border border-gtex-gold/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-gold hover:bg-gtex-slate shadow-xl hover:-translate-y-1">
+        <Link
+          to="/app/coin-traders"
+          data-testid="no-club-coin-traders"
+          className="rounded-2xl group rounded-2xl border border-gtex-gold/30 bg-gtex-slate/80 p-6 transition-all hover:border-gtex-gold hover:bg-gtex-slate shadow-xl hover:-translate-y-1"
+        >
           <CandlestickChart className="mb-4 text-amber-300" size={22} />
           <p className="gx-eyebrow text-amber-300">Coin trader tools</p>
-          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">Enter the GTEX economy</h2>
-          <p className="mt-2 text-sm leading-5 text-slate-400">Buy and sell GTEX Coin with approved traders, or apply to operate a trader desk. Approval is required for liquidity-partner operations.</p>
-          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">Explore Coin Traders →</span>
+          <h2 className="gx-display mt-1 text-xl font-bold uppercase text-white">
+            Enter the GTEX economy
+          </h2>
+          <p className="mt-2 text-sm leading-5 text-slate-400">
+            Coin traders are how members get more value for money. Buying and selling GTEX Coin
+            through a verified trader guarantees a better price than paying the platform directly.
+          </p>
+          <span className="mt-5 inline-block text-xs font-bold uppercase tracking-wider text-amber-300">
+            Explore Coin Traders →
+          </span>
         </Link>
       </section>
 
-      <Panel eyebrow="Optional next step" title="Own a club when you are ready">
+      <Panel eyebrow="Your club" title="The first 500 club owners receive 2,500 GTEX Coin">
         <p className="max-w-3xl text-sm leading-6 text-slate-300">
-          Club ownership unlocks the club treasury, facilities, squad management, and club operations. You can start that journey now or return to it later; your GTEX user account remains useful either way.
+          Create the club, then hire your staff. You do not play the matches. Your manager handles
+          matchday and tactics. Top up the personal wallet first, preferably through a coin trader,
+          so the club has GTEX Coin to spend.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
-          <Btn onClick={onCreateClub} data-testid="no-club-create-club">Explore club ownership</Btn>
-          <Link to="/app/clubs" className="text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white">My clubs</Link>
+          <Btn onClick={onCreateClub}>Create your club</Btn>
+          <Link
+            to="/app/clubs"
+            className="text-xs font-bold uppercase tracking-wider text-slate-300 hover:text-white"
+          >
+            My clubs
+          </Link>
         </div>
       </Panel>
     </div>
@@ -132,12 +227,18 @@ export function ControlCenter() {
 
   const [winBonusOpen, setWinBonusOpen] = useState(false);
   const [winBonusAmount, setWinBonusAmount] = useState("5000");
-  const [winBonusNote, setWinBonusNote] = useState("Victory performance bonus for the starting squad.");
+  const [winBonusNote, setWinBonusNote] = useState(
+    "Victory performance bonus for the starting squad.",
+  );
   const [pledgingBonus, setPledgingBonus] = useState(false);
   const [active3DScene, setActive3DScene] = useState<Cinema3DSceneType>("manager_arrival");
   const [pressConferenceOpen, setPressConferenceOpen] = useState(false);
-  const [pressTone, setPressTone] = useState<"ambitious" | "calm" | "assertive" | "defiant">("assertive");
-  const [pressStatement, setPressStatement] = useState("We are laser-focused on continental glory and tactical discipline.");
+  const [pressTone, setPressTone] = useState<"ambitious" | "calm" | "assertive" | "defiant">(
+    "assertive",
+  );
+  const [pressStatement, setPressStatement] = useState(
+    "We are laser-focused on continental glory and tactical discipline.",
+  );
   const [submittingPress, setSubmittingPress] = useState(false);
   const [selectedOpsDestination, setSelectedOpsDestination] = useState<string>("executive_office");
 
@@ -178,15 +279,27 @@ export function ControlCenter() {
       />
     );
   }
-  if (!(data.clubs || []).length) return <NoClubDashboard onCreateClub={() => navigate("/onboarding")} />;
+  if (!(data.clubs || []).length) {
+    return (
+      <NoClubDashboard
+        onCreateClub={() => navigate("/onboarding")}
+        gtexBalance={data?.economy?.wallet?.gtex_total}
+      />
+    );
+  }
 
   const wallet = data.economy?.wallet || {};
-  const activeClubProfile = data.clubs?.find((c: any) => c.club_id === activeClub?.club_id) || data.clubs?.[0] || {};
+  const activeClubProfile =
+    data.clubs?.find((c: any) => c.club_id === activeClub?.club_id) || data.clubs?.[0] || {};
   const upcomingFixture = data.fixtures?.upcoming?.[0];
   const recentResult = data.fixtures?.recent?.[0];
   const pendingInbox = data.inbox?.filter((i: any) => !i.is_read) || [];
   const waterfall = data.ecosystem_waterfall || {};
-  const tvRevenue = waterfall.club_tv_revenue_gtex ?? data.economy?.tv_revenue ?? data.economy?.broadcast_revenue ?? null;
+  const tvRevenue =
+    waterfall.club_tv_revenue_gtex ??
+    data.economy?.tv_revenue ??
+    data.economy?.broadcast_revenue ??
+    null;
 
   const staffMap = clubDetail?.staff || {};
   const executives = [
@@ -195,7 +308,9 @@ export function ControlCenter() {
       roleLabel: "First-Team Manager",
       name: staffMap.first_team_manager?.name || activeClubProfile.manager?.name || "Tactical Boss",
       mood: staffMap.first_team_manager?.mood ?? activeClubProfile.manager?.mood ?? 78,
-      agenda: staffMap.first_team_manager?.personal_agenda || "Win silverware & enforce high-press identity",
+      agenda:
+        staffMap.first_team_manager?.personal_agenda ||
+        "Win silverware & enforce high-press identity",
       secretTrait: staffMap.first_team_manager?.secret_trait || "Dressing-Room Loyalist",
       poachingRisk: staffMap.first_team_manager?.poaching_risk || "low",
       to: "/app/squad",
@@ -206,7 +321,9 @@ export function ControlCenter() {
       roleLabel: "General Manager (GM)",
       name: staffMap.general_manager?.name || "Commercial Director",
       mood: staffMap.general_manager?.mood ?? 82,
-      agenda: staffMap.general_manager?.personal_agenda || "Maximize sponsor yield & wage-to-turnover discipline",
+      agenda:
+        staffMap.general_manager?.personal_agenda ||
+        "Maximize sponsor yield & wage-to-turnover discipline",
       secretTrait: staffMap.general_manager?.secret_trait || "Clause Architect",
       poachingRisk: staffMap.general_manager?.poaching_risk || "low",
       to: "/app/finance",
@@ -217,7 +334,9 @@ export function ControlCenter() {
       roleLabel: "Head of Youth Dev (HOYD)",
       name: staffMap.head_of_youth_development?.name || "Youth Director",
       mood: staffMap.head_of_youth_development?.mood ?? 85,
-      agenda: staffMap.head_of_youth_development?.personal_agenda || "Fast-track academy wonderkids & Build-A-Son scions",
+      agenda:
+        staffMap.head_of_youth_development?.personal_agenda ||
+        "Fast-track academy wonderkids & Build-A-Son scions",
       secretTrait: staffMap.head_of_youth_development?.secret_trait || "Bloodline Whisperer",
       poachingRisk: staffMap.head_of_youth_development?.poaching_risk || "medium",
       to: "/app/academy",
@@ -264,7 +383,9 @@ export function ControlCenter() {
                 color: activeClubProfile.secondary_color || "#070b11",
               }}
             >
-              {(activeClubProfile.short_name || activeClubProfile.club_name || "GTX").slice(0, 3).toUpperCase()}
+              {(activeClubProfile.short_name || activeClubProfile.club_name || "GTX")
+                .slice(0, 3)
+                .toUpperCase()}
             </div>
 
             <div className="space-y-1">
@@ -319,17 +440,27 @@ export function ControlCenter() {
         {/* 2. VERIFIED FINANCIAL COMMAND STATS */}
         <div className="mt-8 grid grid-cols-2 lg:grid-cols-4 gap-4 border-t border-white/10 pt-6">
           <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Total Treasury</p>
-            <p className="gx-mono text-2xl font-black text-white mt-1">
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+              Your GTEX Coin
+            </p>
+            <p
+              className="gx-mono text-2xl font-black text-white mt-1"
+              data-testid="home-personal-gtex"
+            >
               {fmt(wallet.gtex_total)} <span className="text-xs text-blue-400">GTX</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
-              Withdrawable: <b className="text-emerald-400 font-mono">{fmt(wallet.gtex_earned)}</b>
+              Personal wallet. Club cash is separate. Labelled withdrawable:{" "}
+              <b className="text-emerald-400 font-mono">
+                {fmt(wallet.withdrawable ?? wallet.gtex_earned)}
+              </b>
             </p>
           </div>
 
           <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Fan Tokens (FAN)</p>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+              Fan Tokens (FAN)
+            </p>
             <p className="gx-mono text-2xl font-black text-amber-300 mt-1">
               {fmt(wallet.fan_total)} <span className="text-xs text-amber-400/80">FAN</span>
             </p>
@@ -337,9 +468,14 @@ export function ControlCenter() {
           </div>
 
           <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Club Valuation</p>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+              Club Valuation
+            </p>
             <p className="gx-mono text-2xl font-black text-emerald-300 mt-1">
-              {activeClubProfile.value ? fmt(activeClubProfile.value) : fmt(activeClubProfile.cash || 0)} <span className="text-xs text-emerald-400/80">GTX</span>
+              {activeClubProfile.value
+                ? fmt(activeClubProfile.value)
+                : fmt(activeClubProfile.cash || 0)}{" "}
+              <span className="text-xs text-emerald-400/80">GTX</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
               Trend: <b className="text-emerald-400">+{activeClubProfile.value_trend ?? "0.0"}%</b>
@@ -347,7 +483,9 @@ export function ControlCenter() {
           </div>
 
           <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Broadcast & TV Rights</p>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-400">
+              Broadcast & TV Rights
+            </p>
             <p className="gx-mono text-2xl font-black text-cyan-300 mt-1">
               {tvRevenue ? `${fmt(tvRevenue)} GTX` : "Active Pool"}
             </p>
@@ -357,7 +495,10 @@ export function ControlCenter() {
       </section>
 
       {/* 1b. APEX COMMAND DECK: 3D HOLOGRAPHIC TALISMAN + LIVE SVG SPARKLINE + 2.5D TACTICAL PITCH */}
-      <section className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch" data-testid="apex-command-deck">
+      <section
+        className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-stretch"
+        data-testid="apex-command-deck"
+      >
         <div className="lg:col-span-4">
           <HolographicPlayerCard
             name={clubDetail?.squad?.[0]?.name || "Kylian Regent"}
@@ -394,7 +535,10 @@ export function ControlCenter() {
       </section>
 
       {/* 2a. EXECUTIVE BOARDROOM TRIUMVIRATE (MANAGER, GM, HOYD) */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="executive-triumvirate-strip">
+      <section
+        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        data-testid="executive-triumvirate-strip"
+      >
         {executives.map((exec) => (
           <Link
             key={exec.roleKey}
@@ -428,7 +572,10 @@ export function ControlCenter() {
       </section>
 
       {/* 2a-ii. INSTITUTIONAL PULSE: SUPPORTERS, MEDIA & PERMANENT CLUB ARCHIVE */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-4" data-testid="institutional-pulse-strip">
+      <section
+        className="grid grid-cols-1 md:grid-cols-3 gap-4"
+        data-testid="institutional-pulse-strip"
+      >
         <Link
           to="/app/story"
           data-testid="control-center-supporters-card"
@@ -443,8 +590,8 @@ export function ControlCenter() {
                 (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 65
                   ? "emerald"
                   : (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 45
-                  ? "gold"
-                  : "red"
+                    ? "gold"
+                    : "red"
               }
             >
               Sentiment {clubDetail?.supporters_summary?.overall_sentiment ?? 65}/100
@@ -478,7 +625,10 @@ export function ControlCenter() {
               Media Scrutiny & Public Standing
             </span>
             <Chip tone="blue">
-              Rep {clubDetail?.media_standing?.public_reputation_score ?? activeClubProfile.prestige ?? 50}
+              Rep{" "}
+              {clubDetail?.media_standing?.public_reputation_score ??
+                activeClubProfile.prestige ??
+                50}
             </Chip>
           </div>
           <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-cyan-300">
@@ -520,12 +670,12 @@ export function ControlCenter() {
               /100
             </b>{" "}
             · Correlated chains:{" "}
-            <b className="text-white">
-              {(institutionalPulse?.unified_timeline || []).length}
-            </b>{" "}
-            {(institutionalPulse?.staff_and_governance?.supporter_driven_agenda || []).length > 0 && (
+            <b className="text-white">{(institutionalPulse?.unified_timeline || []).length}</b>{" "}
+            {(institutionalPulse?.staff_and_governance?.supporter_driven_agenda || []).length >
+              0 && (
               <span className="text-rose-300 font-semibold">
-                · {institutionalPulse.staff_and_governance.supporter_driven_agenda.length} board alert
+                · {institutionalPulse.staff_and_governance.supporter_driven_agenda.length} board
+                alert
               </span>
             )}
           </p>
@@ -533,7 +683,10 @@ export function ControlCenter() {
       </section>
 
       {/* 2a-3D. INTERACTIVE 3D CEREMONIAL & BOARDROOM PRESENTATION SUITE */}
-      <section className="rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 shadow-2xl space-y-4" data-testid="executive-3d-suite">
+      <section
+        className="rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 shadow-2xl space-y-4"
+        data-testid="executive-3d-suite"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
@@ -578,19 +731,19 @@ export function ControlCenter() {
             active3DScene === "manager_arrival"
               ? `3D First-Day Training Ground Arrival · ${executives[0].name}`
               : active3DScene === "signing_walkout"
-              ? `3D Stadium Floodlight Signing Walkout · ${activeClubProfile.club_name}`
-              : active3DScene === "world_gala"
-              ? `3D GTEX World Player of the Year Gala · ${activeClubProfile.club_name}`
-              : active3DScene === "luxury_turntable"
-              ? `3D Owner Luxury Vault & Gifting Unveil · ${activeClubProfile.club_name}`
-              : `3D Executive Boardroom War Room · ${executives[0].name} vs ${executives[1].name}`
+                ? `3D Stadium Floodlight Signing Walkout · ${activeClubProfile.club_name}`
+                : active3DScene === "world_gala"
+                  ? `3D GTEX World Player of the Year Gala · ${activeClubProfile.club_name}`
+                  : active3DScene === "luxury_turntable"
+                    ? `3D Owner Luxury Vault & Gifting Unveil · ${activeClubProfile.club_name}`
+                    : `3D Executive Boardroom War Room · ${executives[0].name} vs ${executives[1].name}`
           }
           subtitle={
             active3DScene === "manager_arrival"
               ? `Trait: ${executives[0].secretTrait} · Mandate: ${executives[0].agenda}`
               : active3DScene === "boardroom_clash"
-              ? `Tactical Ambition vs. Commercial Wage Cap Discipline`
-              : `Interactive 360° 3D Stage · Switch between FIFA Motion & FM 3D Diorama Still`
+                ? `Tactical Ambition vs. Commercial Wage Cap Discipline`
+                : `Interactive 360° 3D Stage · Switch between FIFA Motion & FM 3D Diorama Still`
           }
           badgeText="LIVE 3D STAGE"
           clubName={activeClubProfile.club_name || "GTEX FC"}
@@ -598,15 +751,15 @@ export function ControlCenter() {
             active3DScene === "manager_arrival" || active3DScene === "boardroom_clash"
               ? executives[0].name
               : active3DScene === "luxury_turntable"
-              ? "Rose-Gold Tourbillon"
-              : "Marquee #9 Superstar"
+                ? "Rose-Gold Tourbillon"
+                : "Marquee #9 Superstar"
           }
           subjectRole={
             active3DScene === "manager_arrival"
               ? `First-Team Manager · Mood ${executives[0].mood}`
               : active3DScene === "boardroom_clash"
-              ? `Executive Alignment: ${executives[0].secretTrait}`
-              : "Club Icon"
+                ? `Executive Alignment: ${executives[0].secretTrait}`
+                : "Club Icon"
           }
           jerseyNumber={9}
           overallRating={89}
@@ -634,7 +787,10 @@ export function ControlCenter() {
       />
 
       {/* 2c. ECOSYSTEM REVENUE & PRE-MATCH WIN BONUS */}
-      <section className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4" data-testid="ecosystem-revenue-card">
+      <section
+        className="rounded-2xl border border-gtex-graphite bg-gtex-slate/80 p-6 shadow-xl space-y-4"
+        data-testid="ecosystem-revenue-card"
+      >
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-white/10 pb-4">
           <div>
             <div className="flex items-center gap-2">
@@ -644,7 +800,8 @@ export function ControlCenter() {
               </h3>
             </div>
             <p className="text-xs text-slate-400 mt-1">
-              TV broadcast allocation, participation grants, prize recycling, and squad win bonus incentives.
+              TV broadcast allocation, participation grants, prize recycling, and squad win bonus
+              incentives.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -680,7 +837,8 @@ export function ControlCenter() {
           <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
             <p className="text-[10px] uppercase font-bold text-slate-400">Competition Grants</p>
             <p className="gx-mono text-xl font-black text-emerald-300 mt-1">
-              {fmt(waterfall.club_competition_grants_gtex ?? 0)} <span className="text-xs">GTX</span>
+              {fmt(waterfall.club_competition_grants_gtex ?? 0)}{" "}
+              <span className="text-xs">GTX</span>
             </p>
             <p className="text-[10px] text-slate-400 mt-0.5">Participation stipend</p>
           </div>
@@ -705,10 +863,14 @@ export function ControlCenter() {
           <div className="flex items-center gap-2">
             <Sparkles size={15} className="text-emerald-400 shrink-0" />
             <span>
-              Ecosystem Fee Recycling: <b>40% TV Broadcast Pool</b> · <b>35% Competition Prizes</b> · <b>25% Global Jackpot Pool</b>
+              Ecosystem Fee Recycling: <b>40% TV Broadcast Pool</b> · <b>35% Competition Prizes</b>{" "}
+              · <b>25% Global Jackpot Pool</b>
             </span>
           </div>
-          <Link to="/app/jackpot" className="text-emerald-300 hover:text-white font-bold uppercase underline shrink-0">
+          <Link
+            to="/app/jackpot"
+            className="text-emerald-300 hover:text-white font-bold uppercase underline shrink-0"
+          >
             View Jackpot Pool →
           </Link>
         </div>
@@ -725,7 +887,10 @@ export function ControlCenter() {
                 Matchday Rail & Schedule
               </h3>
             </div>
-            <Link to="/app/competitions" className="text-xs font-bold text-emerald-400 hover:text-emerald-300 uppercase">
+            <Link
+              to="/app/competitions"
+              className="text-xs font-bold text-emerald-400 hover:text-emerald-300 uppercase"
+            >
               All Fixtures →
             </Link>
           </div>
@@ -745,18 +910,28 @@ export function ControlCenter() {
               </div>
               {upcomingFixture ? (
                 <div className="space-y-1">
-                  <p className="text-sm font-bold text-white uppercase">{upcomingFixture.home_name || activeClubProfile.club_name}</p>
+                  <p className="text-sm font-bold text-white uppercase">
+                    {upcomingFixture.home_name || activeClubProfile.club_name}
+                  </p>
                   <p className="gx-mono text-base font-black text-emerald-400">vs</p>
-                  <p className="text-sm font-bold text-white uppercase">{upcomingFixture.away_name || "Opponent"}</p>
+                  <p className="text-sm font-bold text-white uppercase">
+                    {upcomingFixture.away_name || "Opponent"}
+                  </p>
                 </div>
               ) : (
                 <div className="py-2 text-center">
                   <p className="text-xs font-bold text-slate-300">No Scheduled Match</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Fixtures appear once calendar draw occurs.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Fixtures appear once calendar draw occurs.
+                  </p>
                 </div>
               )}
               <Link
-                to={upcomingFixture ? `/app/competitions/${upcomingFixture.competition_id}` : "/app/competitions"}
+                to={
+                  upcomingFixture
+                    ? `/app/competitions/${upcomingFixture.competition_id}`
+                    : "/app/competitions"
+                }
                 className="gx-btn gx-btn-primary w-full text-xs font-bold text-center mt-2"
               >
                 Match Briefing & Tactics
@@ -777,16 +952,22 @@ export function ControlCenter() {
               </div>
               {recentResult ? (
                 <div className="space-y-1">
-                  <p className="text-sm font-semibold text-slate-200">{recentResult.home_name || activeClubProfile.club_name}</p>
+                  <p className="text-sm font-semibold text-slate-200">
+                    {recentResult.home_name || activeClubProfile.club_name}
+                  </p>
                   <p className="gx-mono text-xl font-black text-amber-300">
                     {recentResult.home_goals} - {recentResult.away_goals}
                   </p>
-                  <p className="text-sm font-semibold text-slate-200">{recentResult.away_name || "Opponent"}</p>
+                  <p className="text-sm font-semibold text-slate-200">
+                    {recentResult.away_name || "Opponent"}
+                  </p>
                 </div>
               ) : (
                 <div className="py-2 text-center">
                   <p className="text-xs font-bold text-slate-300">No Results Recorded Yet</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">Completed match reports will show here.</p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    Completed match reports will show here.
+                  </p>
                 </div>
               )}
               <Link
@@ -808,7 +989,10 @@ export function ControlCenter() {
                 Decisions Awaiting Action
               </h3>
             </div>
-            <Link to="/app/inbox" className="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase">
+            <Link
+              to="/app/inbox"
+              className="text-xs font-bold text-amber-400 hover:text-amber-300 uppercase"
+            >
               Inbox ({pendingInbox.length}) →
             </Link>
           </div>
@@ -818,12 +1002,14 @@ export function ControlCenter() {
               <div className="rounded-xl border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
                 <CheckCircle2 size={24} className="mx-auto text-emerald-400 mb-2" />
                 <p className="font-bold text-white uppercase">All Boardroom Actions Resolved</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Manager, transfers, and facility tasks up to date.</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Manager, transfers, and facility tasks up to date.
+                </p>
               </div>
             ) : (
-              pendingInbox.slice(0, 3).map((item: any) => (
-                <InboxItem key={item.id} item={item} onDone={() => {}} />
-              ))
+              pendingInbox
+                .slice(0, 3)
+                .map((item: any) => <InboxItem key={item.id} item={item} onDone={() => {}} />)
             )}
           </div>
         </section>
@@ -839,15 +1025,69 @@ export function ControlCenter() {
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-9 gap-3">
           {[
-            { to: "/app/squad", label: "Squad Tactics", sub: "Lineup & Morale", icon: Shirt, color: "text-emerald-400" },
-            { to: "/app/academy", label: "Youth & Son", sub: "Build-A-Son & HOYD", icon: Sprout, color: "text-emerald-300" },
-            { to: "/app/regen-world", label: "Regen World", sub: "Bloodlines & DNA", icon: Sparkles, color: "text-amber-300" },
-            { to: "/app/transfer-hub", label: "Transfer Hub", sub: "Bids & Unveilings", icon: Compass, color: "text-cyan-300" },
-            { to: "/app/competitions", label: "Competitions", sub: "ELO & Leaderboards", icon: Swords, color: "text-emerald-400" },
-            { to: "/app/showroom", label: "Luxury Room", sub: "Jets, Watches & Gifts", icon: Gift, color: "text-purple-300" },
-            { to: "/app/jackpot", label: "Jackpot Pool", sub: "25% Fee Recycling", icon: Crown, color: "text-amber-400" },
-            { to: "/app/newsroom", label: "AI Newsroom", sub: "Press & Broadcasts", icon: Newspaper, color: "text-white" },
-            { to: "/app/finance", label: "Club Ledger", sub: "Sponsors & Shares", icon: Wallet, color: "text-emerald-300" },
+            {
+              to: "/app/squad",
+              label: "Squad Tactics",
+              sub: "Lineup & Morale",
+              icon: Shirt,
+              color: "text-emerald-400",
+            },
+            {
+              to: "/app/academy",
+              label: "Youth & Son",
+              sub: "Build-A-Son & HOYD",
+              icon: Sprout,
+              color: "text-emerald-300",
+            },
+            {
+              to: "/app/regen-world",
+              label: "Regen World",
+              sub: "Bloodlines & DNA",
+              icon: Sparkles,
+              color: "text-amber-300",
+            },
+            {
+              to: "/app/transfer-hub",
+              label: "Transfer Hub",
+              sub: "Bids & Unveilings",
+              icon: Compass,
+              color: "text-cyan-300",
+            },
+            {
+              to: "/app/competitions",
+              label: "Competitions",
+              sub: "ELO & Leaderboards",
+              icon: Swords,
+              color: "text-emerald-400",
+            },
+            {
+              to: "/app/showroom",
+              label: "Luxury Room",
+              sub: "Jets, Watches & Gifts",
+              icon: Gift,
+              color: "text-purple-300",
+            },
+            {
+              to: "/app/jackpot",
+              label: "Jackpot Pool",
+              sub: "25% Fee Recycling",
+              icon: Crown,
+              color: "text-amber-400",
+            },
+            {
+              to: "/app/newsroom",
+              label: "AI Newsroom",
+              sub: "Press & Broadcasts",
+              icon: Newspaper,
+              color: "text-white",
+            },
+            {
+              to: "/app/finance",
+              label: "Club Ledger",
+              sub: "Sponsors & Shares",
+              icon: Wallet,
+              color: "text-emerald-300",
+            },
           ].map((op) => {
             const Icon = op.icon;
             return (
@@ -856,7 +1096,10 @@ export function ControlCenter() {
                 to={op.to}
                 className="group rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-center transition-all hover:-translate-y-1 hover:border-gtex-emerald/50 hover:bg-gtex-slate shadow-lg"
               >
-                <Icon size={20} className={`mx-auto mb-1.5 ${op.color} transition-transform group-hover:scale-110`} />
+                <Icon
+                  size={20}
+                  className={`mx-auto mb-1.5 ${op.color} transition-transform group-hover:scale-110`}
+                />
                 <p className="gx-display text-xs font-bold uppercase text-white group-hover:text-emerald-300 transition-colors">
                   {op.label}
                 </p>
@@ -869,18 +1112,31 @@ export function ControlCenter() {
 
       {/* Convene Press Conference Modal */}
       {pressConferenceOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="press-conference-modal">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          data-testid="press-conference-modal"
+        >
           <div className="w-full max-w-md rounded-2xl border border-gtex-pitch/40 bg-gtex-slate p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Radio className="text-sky-300" size={18} />
-                <h3 className="gx-display text-lg font-black uppercase text-white">Convene Press Conference</h3>
+                <h3 className="gx-display text-lg font-black uppercase text-white">
+                  Convene Press Conference
+                </h3>
               </div>
-              <button onClick={() => setPressConferenceOpen(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              <button
+                onClick={() => setPressConferenceOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handleHoldPressConference} className="space-y-4">
               <p className="text-xs text-slate-300 leading-relaxed">
-                Address continental sports media and supporters. Your tone shapes squad pressure, fan expectations, and manager authority.
+                Address continental sports media and supporters. Your tone shapes squad pressure,
+                fan expectations, and manager authority.
               </p>
               <div>
                 <label className="gx-label">Conference Posture & Tone</label>
@@ -936,18 +1192,31 @@ export function ControlCenter() {
 
       {/* Pledge Win Bonus Modal */}
       {winBonusOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" data-testid="win-bonus-modal">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          data-testid="win-bonus-modal"
+        >
           <div className="w-full max-w-md rounded-2xl border border-gtex-graphite bg-gtex-slate p-6 shadow-2xl space-y-4">
             <div className="flex items-center justify-between border-b border-white/10 pb-3">
               <div className="flex items-center gap-2">
                 <Flame className="text-amber-400" size={18} />
-                <h3 className="gx-display text-lg font-black uppercase text-white">Pledge Match Win Bonus</h3>
+                <h3 className="gx-display text-lg font-black uppercase text-white">
+                  Pledge Match Win Bonus
+                </h3>
               </div>
-              <button onClick={() => setWinBonusOpen(false)} className="text-slate-400 hover:text-white"><X size={16} /></button>
+              <button
+                onClick={() => setWinBonusOpen(false)}
+                className="text-slate-400 hover:text-white"
+              >
+                <X size={16} />
+              </button>
             </div>
             <form onSubmit={handlePledgeWinBonus} className="space-y-4">
               <p className="text-xs text-slate-300 leading-relaxed">
-                Pledging a matchday victory bonus motivates the squad, elevates morale (+8 to +15), and sharpens coach tactical commitment for the next fixture.
+                Pledging a matchday victory bonus motivates the squad, elevates morale (+8 to +15),
+                and sharpens coach tactical commitment for the next fixture.
               </p>
               <div>
                 <label className="gx-label">Bonus Amount (GTX)</label>

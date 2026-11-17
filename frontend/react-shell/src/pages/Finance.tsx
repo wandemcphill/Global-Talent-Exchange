@@ -17,11 +17,21 @@ function Balances({ w, rates }: any) {
   const nairaPerGtex = Number(rates?.naira_per_gtex) || live.nairaPerGtex;
   const nairaPerFan = Number(rates?.naira_per_fan) || live.nairaPerFan;
   const rows = [
-    ["withdrawable", "Withdrawable", "good"], ["non_withdrawable", "Non-withdrawable", "default"], ["earned", "Earned", "default"],
-    ["deposited", "Deposited", "default"], ["promotional", "Promotional", "warn"], ["pending_review", "Pending review", "warn"], ["exchange_activity", "Exchange & traders", "default"],
+    ["withdrawable", "Withdrawable", "good"],
+    ["non_withdrawable", "Non-withdrawable", "default"],
+    ["earned", "Earned", "default"],
+    ["deposited", "Deposited", "default"],
+    ["promotional", "Promotional", "warn"],
+    ["pending_review", "Pending review", "warn"],
+    ["exchange_activity", "Exchange & traders", "default"],
   ];
   return (
-    <Panel eyebrow="Owner wallet · labelled balances" title="Balances" testid="balances-panel" className="lg:col-span-12">
+    <Panel
+      eyebrow="Owner wallet · labelled balances"
+      title="Balances"
+      testid="balances-panel"
+      className="lg:col-span-12"
+    >
       <div className="mb-5">
         <TelemetrySparklineCard
           title="REAL-TIME TREASURY VELOCITY"
@@ -32,16 +42,37 @@ function Balances({ w, rates }: any) {
         />
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
-        <Stat label="GTEX Coin total" value={<Coin amount={w.gtex_total} />} testid="balance-gtex-total" />
-        <Stat label="Fan Coin" value={<Coin amount={w.fan_total} currency="FAN" />} testid="balance-fan-total" />
+        <Stat
+          label="GTEX Coin total"
+          value={<Coin amount={w.gtex_total} />}
+          testid="balance-gtex-total"
+        />
+        <Stat
+          label="Fan Coin"
+          value={<Coin amount={w.fan_total} currency="FAN" />}
+          testid="balance-fan-total"
+        />
         {rows.map(([k, l, tone]) => (
-          <Stat key={k} label={l} value={<span>{fmt(w[k])} GTX <span className="text-slate-400">{nairaText(w[k], "GTEX")}</span></span>} tone={tone} testid={`balance-${k}`} />
+          <Stat
+            key={k}
+            label={l}
+            value={
+              <span>
+                {fmt(w[k])} GTX <span className="text-slate-400">{nairaText(w[k], "GTEX")}</span>
+              </span>
+            }
+            tone={tone}
+            testid={`balance-${k}`}
+          />
         ))}
       </div>
       <p className="mt-4 text-xs text-slate-500">
-        1 GTX = ₦{fmt(nairaPerGtex)} and 1 FAN = ₦{fmt(nairaPerFan, 2)}. {fmt(live.fanPerGtex)} Fan Coin equals 1 GTEX Coin.
-        Player wages and staff salaries are paid in Fan Coin. GTEX Coin buys players, facilities, and shares.
-        Fan Coin is never withdrawable. Promotional GTX can be spent but not withdrawn.
+        1 GTX = ₦{fmt(nairaPerGtex)} and 1 FAN = ₦{fmt(nairaPerFan, 2)}. {fmt(live.fanPerGtex)} Fan
+        Coin equals 1 GTEX Coin. Player wages and staff salaries are paid in Fan Coin. GTEX Coin
+        buys players, facilities, and shares. Fan Coin is never withdrawable. Promotional GTX can be
+        spent but not withdrawn. GTEX Coin total is your personal wallet. A credit from GTEX appears
+        in that total. Club cash further down is a separate balance. Buying and selling through coin
+        traders guarantees more value for money.
       </p>
     </Panel>
   );
@@ -62,7 +93,10 @@ function Deposit({ configured, rates, mode }: any) {
   }, [configured, providerTouched]);
 
   const rate = Number(rates?.deposit_rate || 0);
-  const coins = rates?.deposit_direction === "coin_per_fiat" ? Number(amount || 0) * rate : Number(amount || 0) / (rate || 1);
+  const coins =
+    rates?.deposit_direction === "coin_per_fiat"
+      ? Number(amount || 0) * rate
+      : Number(amount || 0) / (rate || 1);
   const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
   const go = async () => {
     try {
@@ -77,7 +111,12 @@ function Deposit({ configured, rates, mode }: any) {
     }
   };
   return (
-    <Panel eyebrow={`${providerLabel} · NGN`} title="Deposit" testid="deposit-panel" className="lg:col-span-4">
+    <Panel
+      eyebrow={`${providerLabel} · NGN`}
+      title="Deposit"
+      testid="deposit-panel"
+      className="lg:col-span-4"
+    >
       <div className="mb-3 flex gap-2">
         {(["korapay", "paystack"] as const).map((p) => (
           <button
@@ -95,21 +134,64 @@ function Deposit({ configured, rates, mode }: any) {
         ))}
       </div>
       <label className="gx-label">Amount (₦)</label>
-      <input data-testid="deposit-amount-input" className="gx-input" type="number" min={100} value={amount} onChange={(e) => setAmount(e.target.value)} />
-      <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦{fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}</p>
-      <Btn className="mt-3 w-full" disabled={!configured?.[provider] && configured !== true} onClick={go} data-testid="deposit-button">Pay with {providerLabel}</Btn>
-      {!configured?.[provider] && configured !== true && <p className="mt-2 text-xs text-amber-300" data-testid="payment-provider-not-configured">{providerLabel} is not configured for live deposits. Select an enabled provider or use a verified Coin Trader.</p>}
-      <p className="mt-2 text-xs text-slate-500">Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.</p>
+      <input
+        data-testid="deposit-amount-input"
+        className="gx-input"
+        type="number"
+        min={100}
+        value={amount}
+        onChange={(e) => setAmount(e.target.value)}
+      />
+      <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">
+        You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦
+        {fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}
+      </p>
+      <p className="mt-2 text-xs leading-5 text-amber-200" data-testid="deposit-trader-value">
+        Buying and selling through verified coin traders guarantees more value for money. Coin
+        traders buy GTEX Coin at ₦50, and a ₦500,000 purchase includes 300 extra coins. A ₦1,000,000
+        purchase includes 700 extra coins.
+      </p>
+      <Btn
+        className="mt-3 w-full"
+        disabled={!configured?.[provider] && configured !== true}
+        onClick={go}
+        data-testid="deposit-button"
+      >
+        Pay with {providerLabel}
+      </Btn>
+      {!configured?.[provider] && configured !== true && (
+        <p className="mt-2 text-xs text-amber-300" data-testid="payment-provider-not-configured">
+          {providerLabel} is not configured for live deposits. Select an enabled provider or use a
+          verified Coin Trader.
+        </p>
+      )}
+      <p className="mt-2 text-xs text-slate-500">
+        Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.
+      </p>
     </Panel>
   );
 }
 
 function Withdraw({ rates }: any) {
   const wRate = Number(rates?.withdrawal_rate || 0);
-  const toNgn = (c: number) => (rates?.withdrawal_direction === "coin_per_fiat" ? c / (wRate || 1) : c * wRate);
+  const toNgn = (c: number) =>
+    rates?.withdrawal_direction === "coin_per_fiat" ? c / (wRate || 1) : c * wRate;
   const refresh = useRefreshOwner();
-  const [f, setF] = useState<any>({ amount_coin: "", bank_name: "", account_number: "", account_name: "" });
-  const { data: elig } = useQuery({ queryKey: ["finance", "elig", f.amount_coin], queryFn: async () => (await api.get("/owner/withdrawals/eligibility", { params: { amount: Number(f.amount_coin) || 1 } })).data });
+  const [f, setF] = useState<any>({
+    amount_coin: "",
+    bank_name: "",
+    account_number: "",
+    account_name: "",
+  });
+  const { data: elig } = useQuery({
+    queryKey: ["finance", "elig", f.amount_coin],
+    queryFn: async () =>
+      (
+        await api.get("/owner/withdrawals/eligibility", {
+          params: { amount: Number(f.amount_coin) || 1 },
+        })
+      ).data,
+  });
   const submit = async () => {
     try {
       await api.post("/owner/withdrawals", { ...f, amount_coin: Number(f.amount_coin) });
@@ -120,35 +202,90 @@ function Withdraw({ rates }: any) {
     }
   };
   return (
-    <Panel eyebrow="Payout · reviewed" title="Withdraw" testid="withdraw-panel" className="lg:col-span-8">
+    <Panel
+      eyebrow="Payout · reviewed"
+      title="Withdraw"
+      testid="withdraw-panel"
+      className="lg:col-span-8"
+    >
       <div className="grid gap-3 md:grid-cols-4">
-        <input data-testid="withdraw-amount-input" className="gx-input" placeholder="Amount (GTX)" value={f.amount_coin} onChange={(e) => setF({ ...f, amount_coin: e.target.value })} />
-        <input data-testid="withdraw-bank-input" className="gx-input" placeholder="Bank" value={f.bank_name} onChange={(e) => setF({ ...f, bank_name: e.target.value })} />
-        <input data-testid="withdraw-account-number-input" className="gx-input" placeholder="10-digit NUBAN" value={f.account_number} onChange={(e) => setF({ ...f, account_number: e.target.value })} />
-        <input data-testid="withdraw-account-name-input" className="gx-input" placeholder="Account name" value={f.account_name} onChange={(e) => setF({ ...f, account_name: e.target.value })} />
+        <input
+          data-testid="withdraw-amount-input"
+          className="gx-input"
+          placeholder="Amount (GTX)"
+          value={f.amount_coin}
+          onChange={(e) => setF({ ...f, amount_coin: e.target.value })}
+        />
+        <input
+          data-testid="withdraw-bank-input"
+          className="gx-input"
+          placeholder="Bank"
+          value={f.bank_name}
+          onChange={(e) => setF({ ...f, bank_name: e.target.value })}
+        />
+        <input
+          data-testid="withdraw-account-number-input"
+          className="gx-input"
+          placeholder="10-digit NUBAN"
+          value={f.account_number}
+          onChange={(e) => setF({ ...f, account_number: e.target.value })}
+        />
+        <input
+          data-testid="withdraw-account-name-input"
+          className="gx-input"
+          placeholder="Account name"
+          value={f.account_name}
+          onChange={(e) => setF({ ...f, account_name: e.target.value })}
+        />
       </div>
       {elig && (
         <div className="mt-4 flex flex-wrap gap-2" data-testid="withdraw-eligibility">
-          {Object.entries(elig.checks).map(([k, v]: any) => <Chip key={k} tone={v ? "emerald" : "red"}>{label(k)}</Chip>)}
+          {Object.entries(elig.checks).map(([k, v]: any) => (
+            <Chip key={k} tone={v ? "emerald" : "red"}>
+              {label(k)}
+            </Chip>
+          ))}
           <Chip tone="blue">Integrity {elig.integrity_score}</Chip>
-          <Chip>KYC {elig.kyc_status} · required above {fmt(elig.kyc_threshold)}</Chip>
+          <Chip>
+            KYC {elig.kyc_status} · required above {fmt(elig.kyc_threshold)}
+          </Chip>
         </div>
       )}
-      <Btn className="mt-4" disabled={!elig?.eligible || !f.amount_coin} onClick={submit} data-testid="withdraw-submit-button">Request withdrawal{f.amount_coin ? ` · ₦${fmt(toNgn(Number(f.amount_coin)))}` : ""}</Btn>
-      <p className="mt-2 text-xs text-slate-500">Payouts follow the platform processor mode (manual bank transfer): an admin reviews every request, then pays it out to your bank account.</p>
-      <p className="mt-2 text-xs text-slate-500">Every withdrawal goes to manual fraud review. Available in: {elig?.supported_countries?.join(", ")}. Only earned and deposited GTEX Coin is withdrawable.</p>
+      <Btn
+        className="mt-4"
+        disabled={!elig?.eligible || !f.amount_coin}
+        onClick={submit}
+        data-testid="withdraw-submit-button"
+      >
+        Request withdrawal{f.amount_coin ? ` · ₦${fmt(toNgn(Number(f.amount_coin)))}` : ""}
+      </Btn>
+      <p className="mt-2 text-xs text-slate-500">
+        Payouts follow the platform processor mode (manual bank transfer): an admin reviews every
+        request, then pays it out to your bank account.
+      </p>
+      <p className="mt-2 text-xs text-slate-500">
+        Every withdrawal goes to manual fraud review. Available in:{" "}
+        {elig?.supported_countries?.join(", ")}. Only earned and deposited GTEX Coin is
+        withdrawable.
+      </p>
     </Panel>
   );
 }
 
 function SupportUnits({ data }: any) {
   const refresh = useRefreshOwner();
-  const { data: world } = useQuery({ queryKey: ["world-clubs"], queryFn: async () => (await api.get("/owner/world/clubs")).data.clubs });
+  const { data: world } = useQuery({
+    queryKey: ["world-clubs"],
+    queryFn: async () => (await api.get("/owner/world/clubs")).data.clubs,
+  });
   const [club, setClub] = useState("");
   const [units, setUnits] = useState("1");
   const buy = async () => {
     try {
-      const { data: r } = await api.post("/owner/support-units/buy", { club_id: club, units: Number(units) });
+      const { data: r } = await api.post("/owner/support-units/buy", {
+        club_id: club,
+        units: Number(units),
+      });
       toast.success(`You now hold ${r.units} units · ${r.tier}`);
       refresh();
     } catch (e) {
@@ -156,23 +293,51 @@ function SupportUnits({ data }: any) {
     }
   };
   return (
-    <Panel eyebrow="Secondary · supporter status" title="Club Support Units" testid="support-units-panel" className="lg:col-span-6">
+    <Panel
+      eyebrow="Secondary · supporter status"
+      title="Club Support Units"
+      testid="support-units-panel"
+      className="lg:col-span-6"
+    >
       <div className="mb-4 flex gap-2 rounded-sm border border-amber-500/20 bg-amber-500/5 p-3 text-xs text-amber-200">
         <ShieldAlert size={16} className="shrink-0" />
-        Support Units are supporter memberships. They are not shares, not an investment, and carry no dividends, returns or ownership rights. Any reward pools are discretionary and follow published platform rules.
+        Support Units are supporter memberships. They are not shares, not an investment, and carry
+        no dividends, returns or ownership rights. Any reward pools are discretionary and follow
+        published platform rules.
       </div>
       <div className="flex flex-wrap gap-2">
-        <select data-testid="support-club-select" className="gx-input flex-1" value={club} onChange={(e) => setClub(e.target.value)}>
+        <select
+          data-testid="support-club-select"
+          className="gx-input flex-1"
+          value={club}
+          onChange={(e) => setClub(e.target.value)}
+        >
           <option value="">Choose a club</option>
-          {(world || []).map((c: any) => <option key={c.club_id} value={c.club_id}>{c.club_name}{c.multi_club_group ? " (multi-club group)" : ""}</option>)}
+          {(world || []).map((c: any) => (
+            <option key={c.club_id} value={c.club_id}>
+              {c.club_name}
+              {c.multi_club_group ? " (multi-club group)" : ""}
+            </option>
+          ))}
         </select>
-        <input data-testid="support-units-input" className="gx-input w-24" type="number" min={1} value={units} onChange={(e) => setUnits(e.target.value)} />
-        <Btn variant="gold" disabled={!club} onClick={buy} data-testid="support-buy-button">Support · {fmt(Number(units) * data.support_unit_price)} GTX</Btn>
+        <input
+          data-testid="support-units-input"
+          className="gx-input w-24"
+          type="number"
+          min={1}
+          value={units}
+          onChange={(e) => setUnits(e.target.value)}
+        />
+        <Btn variant="gold" disabled={!club} onClick={buy} data-testid="support-buy-button">
+          Support · {fmt(Number(units) * data.support_unit_price)} GTX
+        </Btn>
       </div>
       <div className="mt-4 space-y-2">
         {data.support_units.map((h: any) => (
           <div key={h.club_id} className="rounded-sm border border-white/5 p-3 text-sm">
-            <p className="text-white">{h.club_name} · {h.units} units <Chip tone="gold">{h.tier}</Chip></p>
+            <p className="text-white">
+              {h.club_name} · {h.units} units <Chip tone="gold">{h.tier}</Chip>
+            </p>
             <p className="text-xs text-slate-500">{h.benefits.join(" · ")}</p>
           </div>
         ))}
@@ -194,11 +359,29 @@ function FanCoin({ data }: any) {
     }
   };
   return (
-    <Panel eyebrow="Secondary · fan rail" title="Fan Coin" testid="fan-coin-panel" className="lg:col-span-6">
-      <p className="mb-3 text-sm text-slate-400">Convert GTEX Coin to Fan Coin at 1 GTX = {data.fan_coin_per_gtex} FAN ({nairaText(1, "GTEX")} = {nairaText(data.fan_coin_per_gtex, "FAN")}). Wages are paid from Fan Coin. Fan Coin is non-withdrawable.</p>
+    <Panel
+      eyebrow="Secondary · fan rail"
+      title="Fan Coin"
+      testid="fan-coin-panel"
+      className="lg:col-span-6"
+    >
+      <p className="mb-3 text-sm text-slate-400">
+        Convert GTEX Coin to Fan Coin at 1 GTX = {data.fan_coin_per_gtex} FAN (
+        {nairaText(1, "GTEX")} = {nairaText(data.fan_coin_per_gtex, "FAN")}). Wages are paid from
+        Fan Coin. Fan Coin is non-withdrawable.
+      </p>
       <div className="flex gap-2">
-        <input data-testid="fan-coin-amount-input" className="gx-input" type="number" min={1} value={amt} onChange={(e) => setAmt(e.target.value)} />
-        <Btn variant="secondary" onClick={buy} data-testid="fan-coin-buy-button">Convert</Btn>
+        <input
+          data-testid="fan-coin-amount-input"
+          className="gx-input"
+          type="number"
+          min={1}
+          value={amt}
+          onChange={(e) => setAmt(e.target.value)}
+        />
+        <Btn variant="secondary" onClick={buy} data-testid="fan-coin-buy-button">
+          Convert
+        </Btn>
       </div>
     </Panel>
   );
@@ -206,23 +389,65 @@ function FanCoin({ data }: any) {
 
 function LedgerTable({ rows }: any) {
   return (
-    <Panel eyebrow="Single source of truth" title="Unified ledger" testid="ledger-panel" className="lg:col-span-12">
-      {rows.length === 0 ? <Empty title="No ledger events yet" /> : (
+    <Panel
+      eyebrow="Single source of truth"
+      title="Unified ledger"
+      testid="ledger-panel"
+      className="lg:col-span-12"
+    >
+      {rows.length === 0 ? (
+        <Empty title="No ledger events yet" />
+      ) : (
         <div className="gx-scroll max-h-[520px] overflow-auto">
           <table className="gx-table w-full min-w-[980px]">
-            <thead><tr><th>Time</th><th>Event</th><th>From → To</th><th>Cur</th><th>Gross</th><th>Fee</th><th>Net</th><th>Class</th><th>Status</th></tr></thead>
+            <thead>
+              <tr>
+                <th>Time</th>
+                <th>Event</th>
+                <th>From → To</th>
+                <th>Cur</th>
+                <th>Gross</th>
+                <th>Fee</th>
+                <th>Net</th>
+                <th>Class</th>
+                <th>Status</th>
+              </tr>
+            </thead>
             <tbody>
               {rows.map((e: any) => (
                 <tr key={e.id} data-testid={`ledger-row-${e.id}`}>
-                  <td className="gx-mono text-xs text-slate-500">{new Date(e.created_at).toLocaleString("en-NG")}</td>
-                  <td className="capitalize text-white">{label(e.event_type)}<span className="block text-xs text-slate-500">{e.memo}</span></td>
-                  <td className="gx-mono text-[11px] text-slate-400">{e.source_account.split(":")[0]} → {e.destination_account.split(":")[0]}</td>
-                  <td><Chip tone={e.currency === "FAN_COIN" ? "gold" : "blue"}>{e.currency === "FAN_COIN" ? "FAN" : "GTX"}</Chip></td>
+                  <td className="gx-mono text-xs text-slate-500">
+                    {new Date(e.created_at).toLocaleString("en-NG")}
+                  </td>
+                  <td className="capitalize text-white">
+                    {label(e.event_type)}
+                    <span className="block text-xs text-slate-500">{e.memo}</span>
+                  </td>
+                  <td className="gx-mono text-[11px] text-slate-400">
+                    {e.source_account.split(":")[0]} → {e.destination_account.split(":")[0]}
+                  </td>
+                  <td>
+                    <Chip tone={e.currency === "FAN_COIN" ? "gold" : "blue"}>
+                      {e.currency === "FAN_COIN" ? "FAN" : "GTX"}
+                    </Chip>
+                  </td>
                   <td className="gx-mono">{fmt(e.gross_amount, 2)}</td>
                   <td className="gx-mono text-slate-500">{fmt(e.platform_fee, 2)}</td>
                   <td className="gx-mono text-white">{fmt(e.net_amount, 2)}</td>
                   <td className="text-xs capitalize">{label(e.balance_class)}</td>
-                  <td><Chip tone={e.status === "completed" ? "emerald" : e.status === "reversed" ? "red" : "gold"}>{label(e.status)}</Chip></td>
+                  <td>
+                    <Chip
+                      tone={
+                        e.status === "completed"
+                          ? "emerald"
+                          : e.status === "reversed"
+                            ? "red"
+                            : "gold"
+                      }
+                    >
+                      {label(e.status)}
+                    </Chip>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -239,7 +464,11 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
   const refresh = useRefreshOwner();
   const [signingOfferId, setSigningOfferId] = useState<string | null>(null);
 
-  const { data: sponsorData, isLoading, refetch } = useQuery({
+  const {
+    data: sponsorData,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["sponsor-offers", activeClubId],
     queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/sponsors/offers`)).data,
     enabled: Boolean(activeClubId),
@@ -278,7 +507,9 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
     if (!activeClubId) return;
     setSigningOfferId(offer.offer_id);
     try {
-      const { data: r } = await api.post(`/owner/clubs/${activeClubId}/sponsors/sign`, { offer_id: offer.offer_id });
+      const { data: r } = await api.post(`/owner/clubs/${activeClubId}/sponsors/sign`, {
+        offer_id: offer.offer_id,
+      });
       toast.success(
         `Signed sponsorship with ${offer.sponsor_name}! +${fmt(r.upfront_signing_bonus_gtex || offer.upfront_signing_bonus_gtex)} GTX upfront bonus credited.`,
       );
@@ -319,11 +550,15 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           {sponsorData && (
             <div className="flex flex-wrap items-center gap-2 text-xs">
               <span className="text-slate-400">
-                General Manager: <b className="text-white">{sponsorData.gm_name}</b> (Negotiation {sponsorData.gm_negotiation}/20)
+                General Manager: <b className="text-white">{sponsorData.gm_name}</b> (Negotiation{" "}
+                {sponsorData.gm_negotiation}/20)
               </span>
               <span className="text-slate-600">·</span>
               <span className="text-slate-400">
-                Prestige: <b className="text-amber-300">{sponsorData.club_prestige} ({sponsorData.prestige_tier})</b>
+                Prestige:{" "}
+                <b className="text-amber-300">
+                  {sponsorData.club_prestige} ({sponsorData.prestige_tier})
+                </b>
               </span>
               {Boolean(sponsorData.active_win_bonus_clause_gtex) && (
                 <>
@@ -337,7 +572,8 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           )}
         </div>
         <p className="text-xs text-slate-400">
-          Seasonal sponsorship packages negotiated by your General Manager + live stadium surface ad placements.
+          Seasonal sponsorship packages negotiated by your General Manager + live stadium surface ad
+          placements.
         </p>
       </div>
 
@@ -356,8 +592,16 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
             jerseyNumber={10}
             overallRating={90}
             stats={[
-              { label: "Upfront Bonus", value: `+${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`, accent: "#F5B83D" },
-              { label: "Win Clause", value: `+${fmt(sponsorData.offers[0]?.win_bonus_gtex || 0)} GTX`, accent: "#00E676" },
+              {
+                label: "Upfront Bonus",
+                value: `+${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`,
+                accent: "#F5B83D",
+              },
+              {
+                label: "Win Clause",
+                value: `+${fmt(sponsorData.offers[0]?.win_bonus_gtex || 0)} GTX`,
+                accent: "#00E676",
+              },
             ]}
           />
           <Cinema3DStage
@@ -373,7 +617,11 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
             facilityLevel={4}
             stats={[
               { label: "Ad Surfaces", value: "4 LIVE ZONES", accent: "#38BDF8" },
-              { label: "Per Match Ad", value: `+${fmt(sponsorData.offers[0]?.per_match_gross_gtex || 0)} GTX`, accent: "#00E676" },
+              {
+                label: "Per Match Ad",
+                value: `+${fmt(sponsorData.offers[0]?.per_match_gross_gtex || 0)} GTX`,
+                accent: "#00E676",
+              },
             ]}
           />
         </div>
@@ -409,25 +657,33 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
 
                     <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/5 bg-black/40 p-2.5 text-xs">
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Upfront Bonus</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Upfront Bonus
+                        </span>
                         <span className="gx-mono text-xs font-black text-emerald-400">
                           +{fmt(offer.upfront_signing_bonus_gtex)} GTX
                         </span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Per Match Payout</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Per Match Payout
+                        </span>
                         <span className="gx-mono text-xs font-black text-cyan-300">
                           {fmt(offer.per_match_gross_gtex)} GTX
                         </span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Win-Bonus Clause</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Win-Bonus Clause
+                        </span>
                         <span className="gx-mono text-xs font-black text-amber-300">
                           +{fmt(offer.win_bonus_clause_gtex)} GTX
                         </span>
                       </div>
                       <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">Duration / Gate</span>
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                          Duration / Gate
+                        </span>
                         <span className="gx-mono text-xs text-slate-300">
                           {offer.matches_duration} matches · P{offer.min_prestige_required}
                         </span>
@@ -435,7 +691,9 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
                     </div>
 
                     <div className="rounded-md border border-white/5 bg-slate-900/50 p-2.5 text-[11px] text-slate-300 leading-relaxed italic">
-                      <span className="font-semibold not-italic text-amber-300 block mb-0.5">GM Recommendation:</span>
+                      <span className="font-semibold not-italic text-amber-300 block mb-0.5">
+                        GM Recommendation:
+                      </span>
                       "{offer.gm_recommendation}"
                     </div>
                   </div>
@@ -479,11 +737,15 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
                   >
                     <div>
                       <p className="font-semibold text-white">{deal.sponsor_name}</p>
-                      <p className="text-[11px] text-slate-400">{deal.slot} · {fmt(deal.per_match_gross)} GTX / match</p>
+                      <p className="text-[11px] text-slate-400">
+                        {deal.slot} · {fmt(deal.per_match_gross)} GTX / match
+                      </p>
                     </div>
                     <div className="text-right">
                       <Chip tone="emerald">{deal.status}</Chip>
-                      <p className="text-[10px] text-slate-400 mt-1">{deal.matches_remaining} matches left</p>
+                      <p className="text-[10px] text-slate-400 mt-1">
+                        {deal.matches_remaining} matches left
+                      </p>
                     </div>
                   </div>
                 ))}
@@ -492,35 +754,65 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           )}
 
           {/* Canonical Stadium Ad Surfaces & Sponsored Broadcast Feed */}
-          <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3" data-testid="stadium-ad-placements">
+          <div
+            className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3"
+            data-testid="stadium-ad-placements"
+          >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-cyan-300 flex items-center gap-1.5">
-                <Megaphone size={14} /> Canonical Stadium Surface Ad Placements (/sponsorship/placements)
+                <Megaphone size={14} /> Canonical Stadium Surface Ad Placements
+                (/sponsorship/placements)
               </span>
-              <Chip tone="cyan">
-                {stadiumPlacements?.length || 4} Active Stadium Surfaces
-              </Chip>
+              <Chip tone="cyan">{stadiumPlacements?.length || 4} Active Stadium Surfaces</Chip>
             </div>
             <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 text-xs">
               {(stadiumPlacements && stadiumPlacements.length > 0
                 ? stadiumPlacements
                 : [
-                    { surface: "perimeter_led", sponsor_name: sponsorData.active_deals?.[0]?.sponsor_name || "GTEX Exchange", campaign_code: "LED-MAIN", source: "club_contract" },
-                    { surface: "tunnel_arch", sponsor_name: "Paystack Pro", campaign_code: "TUNNEL-VIP", source: "platform_network" },
-                    { surface: "scoreboard_ribbon", sponsor_name: "Starlight Air", campaign_code: "RIBBON-HD", source: "broadcast_pool" },
-                    { surface: "press_backdrop", sponsor_name: "Kora Emerald", campaign_code: "MEDIA-WALL", source: "club_contract" },
+                    {
+                      surface: "perimeter_led",
+                      sponsor_name: sponsorData.active_deals?.[0]?.sponsor_name || "GTEX Exchange",
+                      campaign_code: "LED-MAIN",
+                      source: "club_contract",
+                    },
+                    {
+                      surface: "tunnel_arch",
+                      sponsor_name: "Paystack Pro",
+                      campaign_code: "TUNNEL-VIP",
+                      source: "platform_network",
+                    },
+                    {
+                      surface: "scoreboard_ribbon",
+                      sponsor_name: "Starlight Air",
+                      campaign_code: "RIBBON-HD",
+                      source: "broadcast_pool",
+                    },
+                    {
+                      surface: "press_backdrop",
+                      sponsor_name: "Kora Emerald",
+                      campaign_code: "MEDIA-WALL",
+                      source: "club_contract",
+                    },
                   ]
               ).map((pl: any, idx: number) => (
-                <div key={`${pl.surface}-${idx}`} className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                  <p className="text-[10px] uppercase font-bold text-slate-400">{label(pl.surface)}</p>
+                <div
+                  key={`${pl.surface}-${idx}`}
+                  className="rounded-lg border border-white/10 bg-black/40 p-2.5"
+                >
+                  <p className="text-[10px] uppercase font-bold text-slate-400">
+                    {label(pl.surface)}
+                  </p>
                   <p className="font-bold text-white mt-0.5">{pl.sponsor_name}</p>
-                  <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">{pl.campaign_code} · {label(pl.source || "active")}</p>
+                  <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">
+                    {pl.campaign_code} · {label(pl.source || "active")}
+                  </p>
                 </div>
               ))}
             </div>
             {sponsoredFeed?.items?.length > 0 && (
               <p className="text-[11px] text-slate-400">
-                Sponsored Broadcast Feed Active: {sponsoredFeed.items.length} promoted highlight clips generating matchday ad impressions.
+                Sponsored Broadcast Feed Active: {sponsoredFeed.items.length} promoted highlight
+                clips generating matchday ad impressions.
               </p>
             )}
           </div>
@@ -539,7 +831,11 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
   const [distributing, setDistributing] = useState(false);
   const [bidding, setBidding] = useState(false);
 
-  const { data: shData, isLoading, refetch } = useQuery({
+  const {
+    data: shData,
+    isLoading,
+    refetch,
+  } = useQuery({
     queryKey: ["club-shareholders", activeClubId],
     queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/shareholders`)).data,
     enabled: Boolean(activeClubId),
@@ -563,7 +859,10 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
     setDistributing(true);
     try {
       const body = dividendAmount ? { amount_gtex: Number(dividendAmount) } : {};
-      const { data: res } = await api.post(`/owner/clubs/${activeClubId}/shareholders/distribute-dividend`, body);
+      const { data: res } = await api.post(
+        `/owner/clubs/${activeClubId}/shareholders/distribute-dividend`,
+        body,
+      );
       toast.success(
         `Distributed ${fmt(res.total_distributed_gtex)} GTX dividend across ${res.recipient_count} shareholders!`,
       );
@@ -582,10 +881,15 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
     setBidding(true);
     try {
       const unitsNum = Number(takeoverUnits) || 10;
-      const { data: res } = await api.post(`/owner/clubs/${activeClubId}/shareholders/takeover-bid`, {
-        units: unitsNum,
-      });
-      toast.success(`Acquired ${res.units} units in ${res.club_name || shData?.club_name}! Tier: ${res.tier}`);
+      const { data: res } = await api.post(
+        `/owner/clubs/${activeClubId}/shareholders/takeover-bid`,
+        {
+          units: unitsNum,
+        },
+      );
+      toast.success(
+        `Acquired ${res.units} units in ${res.club_name || shData?.club_name}! Tier: ${res.tier}`,
+      );
       await refetch();
       refresh();
     } catch (e) {
@@ -622,12 +926,17 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
           )}
           {shData && (
             <span className="text-xs text-slate-300">
-              Valuation: <b className="text-white">{fmt(canonicalValuation?.estimated_valuation_coin ?? shData.valuation_gtex)} GTX</b> · Prestige {shData.prestige} ({shData.prestige_tier})
+              Valuation:{" "}
+              <b className="text-white">
+                {fmt(canonicalValuation?.estimated_valuation_coin ?? shData.valuation_gtex)} GTX
+              </b>{" "}
+              · Prestige {shData.prestige} ({shData.prestige_tier})
             </span>
           )}
         </div>
         <p className="text-xs text-slate-400">
-          Minority support units entitle fans and co-owners to seasonal TV/competition prize dividend pools.
+          Minority support units entitle fans and co-owners to seasonal TV/competition prize
+          dividend pools.
         </p>
       </div>
 
@@ -636,14 +945,22 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
       ) : (
         <div className="mt-4 space-y-6">
           <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-            <Stat label="Total Minority Units" value={`${fmt(shData.total_minority_units)} Units`} testid="sh-total-units" />
+            <Stat
+              label="Total Minority Units"
+              value={`${fmt(shData.total_minority_units)} Units`}
+              testid="sh-total-units"
+            />
             <Stat
               label="Accrued Dividend Pool"
               value={<Coin amount={shData.accrued_dividend_pool_gtex} />}
               tone="good"
               testid="sh-accrued-pool"
             />
-            <Stat label="Shareholder Count" value={fmt(shData.shareholder_count)} testid="sh-count" />
+            <Stat
+              label="Shareholder Count"
+              value={fmt(shData.shareholder_count)}
+              testid="sh-count"
+            />
             <Stat
               label="Your Holding / Takeover Goal"
               value={`${fmt(shData.my_units)} / ${fmt(shData.minority_takeover_threshold_units)}`}
@@ -657,7 +974,9 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
               <div>
                 <h5 className="text-sm font-bold text-white">Distribute Seasonal Dividend</h5>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Distribute funds from the accrued TV rights and prize pool ({fmt(shData.accrued_dividend_pool_gtex)} GTX) proportionally to all minority shareholders.
+                  Distribute funds from the accrued TV rights and prize pool (
+                  {fmt(shData.accrued_dividend_pool_gtex)} GTX) proportionally to all minority
+                  shareholders.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -684,9 +1003,13 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
 
             <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4 space-y-3">
               <div>
-                <h5 className="text-sm font-bold text-white">Acquire Minority Stake / Takeover Units</h5>
+                <h5 className="text-sm font-bold text-white">
+                  Acquire Minority Stake / Takeover Units
+                </h5>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Purchase additional minority equity units to increase your dividend entitlement and work toward the {shData.minority_takeover_threshold_units}-unit co-chair takeover threshold.
+                  Purchase additional minority equity units to increase your dividend entitlement
+                  and work toward the {shData.minority_takeover_threshold_units}-unit co-chair
+                  takeover threshold.
                 </p>
               </div>
               <div className="flex gap-2">
@@ -716,8 +1039,10 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
             <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-3">
               Club Shareholder Registry ({shData.shareholders?.length || 0} Investors)
             </h5>
-            {(!shData.shareholders || shData.shareholders.length === 0) ? (
-              <p className="text-xs text-slate-400 py-3 text-center">No minority shareholders registered yet.</p>
+            {!shData.shareholders || shData.shareholders.length === 0 ? (
+              <p className="text-xs text-slate-400 py-3 text-center">
+                No minority shareholders registered yet.
+              </p>
             ) : (
               <div className="gx-scroll overflow-x-auto">
                 <table className="gx-table w-full min-w-[640px]">
@@ -737,7 +1062,11 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
                         <td className="gx-mono">{fmt(sh.units)}</td>
                         <td className="gx-mono text-cyan-300">{sh.share_pct}%</td>
                         <td>
-                          {sh.tier ? <Chip tone="gold">{sh.tier}</Chip> : <span className="text-slate-500 text-xs">—</span>}
+                          {sh.tier ? (
+                            <Chip tone="gold">{sh.tier}</Chip>
+                          ) : (
+                            <span className="text-slate-500 text-xs">—</span>
+                          )}
                         </td>
                         <td className="gx-mono text-emerald-300">
                           {fmt(sh.estimated_dividend_gtex)} GTX
@@ -756,7 +1085,10 @@ function ClubShareholderDesk({ clubs }: { clubs: any[] }) {
 }
 
 export default function Finance() {
-  const { data, isLoading } = useQuery({ queryKey: ["finance"], queryFn: async () => (await api.get("/owner/finance")).data });
+  const { data, isLoading } = useQuery({
+    queryKey: ["finance"],
+    queryFn: async () => (await api.get("/owner/finance")).data,
+  });
   if (data?.naira_per_gtex) {
     setMoneyRates({
       nairaPerGtex: Number(data.naira_per_gtex),
@@ -767,7 +1099,11 @@ export default function Finance() {
   if (isLoading || !data) return <Loading label="Reading the ledger" />;
   return (
     <div data-testid="finance-page">
-      <PageHeader eyebrow="Finance" title="Money, clearly labelled" sub="Every coin amount shows its naira value. Wages are Fan Coin. Transfer fees and shares stay in GTEX Coin." />
+      <PageHeader
+        eyebrow="Finance"
+        title="Money, clearly labelled"
+        sub="Every coin amount shows its naira value. Wages are Fan Coin. Transfer fees and shares stay in GTEX Coin."
+      />
       <div className="grid gap-6 lg:grid-cols-12">
         <Balances w={data.wallet} rates={data} />
         {data.ecosystem_waterfall && (
@@ -778,41 +1114,105 @@ export default function Finance() {
             testid="finance-ecosystem-waterfall"
           >
             <div className="grid gap-4 md:grid-cols-4">
-              <Stat label="40% TV Broadcast Pool" value={<Coin amount={data.ecosystem_waterfall.tv_broadcast_pool_gtex ?? 0} />} />
-              <Stat label="35% Competition Prize Pool" value={<Coin amount={data.ecosystem_waterfall.competition_prize_pool_gtex ?? 0} />} />
-              <Stat label="25% Global Jackpot Pool" value={<Coin amount={data.ecosystem_waterfall.jackpot_ecosystem_pool_gtex ?? 0} />} />
-              <Stat label="Your Club TV & Grant Earnings" value={<Coin amount={Number(data.ecosystem_waterfall.club_tv_revenue_gtex || 0) + Number(data.ecosystem_waterfall.club_competition_grants_gtex || 0)} />} tone="good" />
+              <Stat
+                label="40% TV Broadcast Pool"
+                value={<Coin amount={data.ecosystem_waterfall.tv_broadcast_pool_gtex ?? 0} />}
+              />
+              <Stat
+                label="35% Competition Prize Pool"
+                value={<Coin amount={data.ecosystem_waterfall.competition_prize_pool_gtex ?? 0} />}
+              />
+              <Stat
+                label="25% Global Jackpot Pool"
+                value={<Coin amount={data.ecosystem_waterfall.jackpot_ecosystem_pool_gtex ?? 0} />}
+              />
+              <Stat
+                label="Your Club TV & Grant Earnings"
+                value={
+                  <Coin
+                    amount={
+                      Number(data.ecosystem_waterfall.club_tv_revenue_gtex || 0) +
+                      Number(data.ecosystem_waterfall.club_competition_grants_gtex || 0)
+                    }
+                  />
+                }
+                tone="good"
+              />
             </div>
             <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
-              <span>Platform fees from transfers, regen sales, and gifting rakes recycle back into TV rights, competition grants, and the GTEX Jackpot.</span>
-              <Link to="/app/jackpot" className="text-amber-300 hover:underline font-semibold">Open Global Jackpot Hub →</Link>
+              <span>
+                Platform fees from transfers, regen sales, and gifting rakes recycle back into TV
+                rights, competition grants, and the GTEX Jackpot.
+              </span>
+              <Link to="/app/jackpot" className="text-amber-300 hover:underline font-semibold">
+                Open Global Jackpot Hub →
+              </Link>
             </div>
           </Panel>
         )}
         {data.clubs.map((c: any) => (
-          <Panel key={c.club_id} eyebrow="Club treasury" title={c.club_name} className="lg:col-span-6" testid={`treasury-${c.club_id}`}>
+          <Panel
+            key={c.club_id}
+            eyebrow="Club treasury"
+            title={c.club_name}
+            className="lg:col-span-6"
+            testid={`treasury-${c.club_id}`}
+          >
             <div className="grid grid-cols-3 gap-4">
               <Stat label="Cash" value={<Coin amount={c.cash_gtex} />} />
               <Stat label="Distributable" value={<Coin amount={c.distributable} />} />
               <Stat label="Held payouts" value={<Coin amount={c.pending_payouts} />} />
             </div>
             <div className="mt-3 grid grid-cols-3 gap-2 border-t border-white/10 pt-3">
-              <Stat label="Deposited" value={fmt(c.deposited ?? c.funding_breakdown?.deposited ?? 0)} tone="good" />
-              <Stat label="Promotional" value={fmt(c.promotional ?? c.funding_breakdown?.promotional ?? 0)} tone="warn" />
+              <Stat
+                label="Deposited"
+                value={fmt(c.deposited ?? c.funding_breakdown?.deposited ?? 0)}
+                tone="good"
+              />
+              <Stat
+                label="Promotional"
+                value={fmt(c.promotional ?? c.funding_breakdown?.promotional ?? 0)}
+                tone="warn"
+              />
               <Stat label="Earned" value={fmt(c.earned ?? c.funding_breakdown?.earned ?? 0)} />
             </div>
             <div className="mt-4 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
-              {Object.entries(c.earnings_sources).map(([k, v]: any) => <div key={k} className="flex justify-between"><span className="capitalize text-slate-400">{label(k)}</span><span className="gx-mono">{fmt(v)}</span></div>)}
+              {Object.entries(c.earnings_sources).map(([k, v]: any) => (
+                <div key={k} className="flex justify-between">
+                  <span className="capitalize text-slate-400">{label(k)}</span>
+                  <span className="gx-mono">{fmt(v)}</span>
+                </div>
+              ))}
             </div>
           </Panel>
         ))}
         <SponsorNegotiationDesk clubs={data.clubs} />
         <ClubShareholderDesk clubs={data.clubs} />
-        <Deposit configured={data.payment_providers || data.paystack_configured} rates={data.treasury_rates} mode={data.paystack_mode} />
+        <Deposit
+          configured={data.payment_providers || data.paystack_configured}
+          rates={data.treasury_rates}
+          mode={data.paystack_mode}
+        />
         <Withdraw rates={data.treasury_rates} />
         {data.withdrawals.length > 0 && (
-          <Panel eyebrow="History" title="Withdrawals" className="lg:col-span-12" testid="withdrawals-history">
-            {data.withdrawals.map((w: any) => <p key={w.id} className="text-sm text-slate-300">{fmt(w.amount_coin)} GTX → {w.bank_name} ****{w.account_last4} <Chip tone={w.status === "approved" ? "emerald" : w.status === "rejected" ? "red" : "gold"}>{label(w.status)}</Chip></p>)}
+          <Panel
+            eyebrow="History"
+            title="Withdrawals"
+            className="lg:col-span-12"
+            testid="withdrawals-history"
+          >
+            {data.withdrawals.map((w: any) => (
+              <p key={w.id} className="text-sm text-slate-300">
+                {fmt(w.amount_coin)} GTX → {w.bank_name} ****{w.account_last4}{" "}
+                <Chip
+                  tone={
+                    w.status === "approved" ? "emerald" : w.status === "rejected" ? "red" : "gold"
+                  }
+                >
+                  {label(w.status)}
+                </Chip>
+              </p>
+            ))}
           </Panel>
         )}
         <LedgerTable rows={data.ledger} />

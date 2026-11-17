@@ -111,6 +111,50 @@ def test_admin_godmode_wallet_credit_dual_units_idempotency_and_audit(
         assert len(audit_rows) >= 2
 
 
+def test_admin_wallet_credit_by_email_lands_in_the_personal_wallet(
+    client,
+    auth_user_factory,
+    bootstrap_admin_headers,
+) -> None:
+    recipient = auth_user_factory(suffix="email-credit-target")
+    before = client.get("/api/wallets/summary?currency=coin", headers=recipient["headers"])
+    assert before.status_code == 200, before.text
+    starting_balance = Decimal(str(before.json()["available_balance"]))
+
+    credit = client.post(
+        "/api/admin/god-mode/wallets/credit",
+        headers=bootstrap_admin_headers,
+        json={
+            "user_id": recipient["email"],
+            "unit": "coin",
+            "amount": "200000",
+            "reason": "Personal wallet credit by email",
+        },
+    )
+    assert credit.status_code == 201, credit.text
+    body = credit.json()
+    assert body["email"] == recipient["email"]
+    assert body["user_id"] == recipient["user_id"]
+    assert body["wallet_label"] == "personal"
+    assert Decimal(str(body["balance_after"])) == starting_balance + Decimal("200000.0000")
+
+    after = client.get("/api/wallets/summary?currency=coin", headers=recipient["headers"])
+    assert after.status_code == 200, after.text
+    assert Decimal(str(after.json()["available_balance"])) == starting_balance + Decimal("200000.0000")
+
+    missing = client.post(
+        "/api/admin/god-mode/wallets/credit",
+        headers=bootstrap_admin_headers,
+        json={
+            "user_id": "nobody@gtex.test",
+            "unit": "coin",
+            "amount": "1",
+            "reason": "Unknown email must not succeed",
+        },
+    )
+    assert missing.status_code == 404, missing.text
+
+
 def test_admin_godmode_wallet_transfer_double_entry_and_validation(
     client,
     auth_user_factory,

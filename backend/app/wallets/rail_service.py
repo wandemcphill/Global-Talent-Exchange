@@ -41,6 +41,27 @@ class WalletRailConflictError(WalletRailError):
     pass
 
 
+_TRADER_BULK_TIER_ONE_FIAT = Decimal("500000.00")
+_TRADER_BULK_TIER_ONE_BONUS = Decimal("300.0000")
+_TRADER_BULK_TIER_TWO_FIAT = Decimal("1000000.00")
+_TRADER_BULK_TIER_TWO_BONUS = Decimal("700.0000")
+
+
+def trader_gtex_bulk_bonus(amount_fiat: Decimal) -> Decimal:
+    """Extra GTEX Coin on a coin-trader inventory purchase only.
+
+    At the ₦50 trader rate, ₦500,000 buys 10,000 coins and grants 300 more.
+    ₦1,000,000 buys 20,000 coins and grants 700 more. The larger package
+    replaces the smaller one. Member deposits and Fan Coin get nothing.
+    """
+    fiat = Decimal(amount_fiat)
+    if fiat >= _TRADER_BULK_TIER_TWO_FIAT:
+        return _TRADER_BULK_TIER_TWO_BONUS
+    if fiat >= _TRADER_BULK_TIER_ONE_FIAT:
+        return _TRADER_BULK_TIER_ONE_BONUS
+    return Decimal("0.0000")
+
+
 @dataclass(frozen=True, slots=True)
 class PurchaseOrderQuote:
     amount_fiat: Decimal
@@ -58,6 +79,7 @@ class PurchaseOrderQuote:
     processor_fee: Decimal = Decimal("0.0000")
     total_fiat_charged: Decimal = Decimal("0.0000")
     merchant_bears_processor_fee: bool = True
+    bulk_bonus_amount: Decimal = Decimal("0.0000")
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +149,11 @@ class WalletRailService:
         fee_bps = int(self._commission_settings().get("buy_commission_bps", 0) or 0)
         fee_amount = self._normalize_amount(amount_coin * Decimal(fee_bps) / Decimal(10_000))
         net_amount = self._normalize_amount(amount_coin - fee_amount)
+        bulk_bonus_amount = Decimal("0.0000")
+        if source_scope == "trader_liquidity" and unit == LedgerUnit.COIN:
+            bulk_bonus_amount = trader_gtex_bulk_bonus(amount_fiat)
+            if bulk_bonus_amount > 0:
+                net_amount = self._normalize_amount(net_amount + bulk_bonus_amount)
 
         # Estimate processor fee from provider adapter if supported
         processor_fee_coin = Decimal("0.0000")
@@ -159,6 +186,7 @@ class WalletRailService:
             processor_fee=processor_fee_coin,
             total_fiat_charged=amount_fiat,
             merchant_bears_processor_fee=True,
+            bulk_bonus_amount=bulk_bonus_amount,
         )
 
     def create_purchase_order(
@@ -471,9 +499,7 @@ class WalletRailService:
         actor: User | None,
     ) -> None:
         """Reverse unpaid referral liabilities and claw back a bonus when funds remain."""
-        rewards = self.session.scalars(
-            select(ReferralReward).where(ReferralReward.referred_user_id == user.id)
-        ).all()
+        rewards = self.session.scalars(select(ReferralReward).where(ReferralReward.referred_user_id == user.id)).all()
         from app.services.referral_orchestrator import ReferralRuntimeStore
         from app.services.referral_reward_service import ReferralRewardService
 

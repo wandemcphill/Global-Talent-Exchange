@@ -45,7 +45,8 @@ jest.mock("sonner", () => ({
 const affiliate = {
   code: "CREATOR10",
   link: "https://playgtex.app/signup?ref=CREATOR10",
-  explanation: "Register with this referral code and receive a 10% bonus on your first qualifying deposit.",
+  explanation:
+    "Register with this referral code and receive a 10% bonus on your first qualifying deposit.",
   registrations: 2,
   qualifying_deposits: 1,
   referred_deposit_volume: { NGN: "100000.00" },
@@ -97,7 +98,16 @@ describe("Referral dashboards", () => {
       if (url === "/owner/onboarding") return Promise.resolve({ data: { clubs: [] } });
       if (url === "/referrals/me/affiliate") return Promise.resolve({ data: affiliate });
       if (url === "/admin/referrals/affiliate/overview") {
-        return Promise.resolve({ data: { clicks: 7, registrations: 3, first_deposits: 1, conversion_rate: "0.33", fraud_flags: 0, partners: 1 } });
+        return Promise.resolve({
+          data: {
+            clicks: 7,
+            registrations: 3,
+            first_deposits: 1,
+            conversion_rate: "0.33",
+            fraud_flags: 0,
+            partners: 1,
+          },
+        });
       }
       return Promise.resolve({ data: [] });
     });
@@ -121,28 +131,48 @@ describe("Referral dashboards", () => {
     });
     ({ container, root } = render(<Referrals />));
     await flush();
-    expect(container?.querySelector('[data-testid="referrals-account-lane"]')?.textContent).toBe(label);
-    expect(container?.querySelector('[data-testid="referrals-code"]')?.textContent).toBe("CREATOR10");
+    expect(container?.querySelector('[data-testid="referrals-account-lane"]')?.textContent).toBe(
+      label,
+    );
+    expect(container?.querySelector('[data-testid="referrals-code"]')?.textContent).toBe(
+      "CREATOR10",
+    );
   });
 
   it("loads admin overview from the API and does not report a failed payout as paid", async () => {
     mockUser = { id: "admin-1", role: "admin", account_type: "user" };
-    mockApiPost.mockRejectedValueOnce({ response: { data: { detail: "Payment reference was rejected" } } });
+    mockApiPost.mockRejectedValueOnce({
+      response: { data: { detail: "Payment reference was rejected" } },
+    });
     ({ container, root } = render(<ReferralAdmin />));
     await flush();
-    expect(container?.querySelector('[data-testid="referral-admin-overview"]')?.textContent).toContain("7");
+    expect(
+      container?.querySelector('[data-testid="referral-admin-overview"]')?.textContent,
+    ).toContain("7");
     act(() => {
-      (container?.querySelector('[data-testid="referral-admin-tab-payouts"]') as HTMLButtonElement).click();
+      (
+        container?.querySelector('[data-testid="referral-admin-tab-payouts"]') as HTMLButtonElement
+      ).click();
     });
     await flush();
-    setInput(container?.querySelector('[data-testid="referral-admin-batch-id"]') as HTMLInputElement, "batch-1");
-    setInput(container?.querySelector('[data-testid="referral-admin-payment-reference"]') as HTMLInputElement, "BANK-1");
+    setInput(
+      container?.querySelector('[data-testid="referral-admin-batch-id"]') as HTMLInputElement,
+      "batch-1",
+    );
+    setInput(
+      container?.querySelector(
+        '[data-testid="referral-admin-payment-reference"]',
+      ) as HTMLInputElement,
+      "BANK-1",
+    );
     await act(async () => {
-      (container?.querySelector('[data-testid="referral-admin-payouts"] form') as HTMLFormElement).dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
+      (
+        container?.querySelector('[data-testid="referral-admin-payouts"] form') as HTMLFormElement
+      ).dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
-    expect(container?.querySelector('[data-testid="referral-admin-error"]')?.textContent).toContain("Payment reference was rejected");
+    expect(container?.querySelector('[data-testid="referral-admin-error"]')?.textContent).toContain(
+      "Payment reference was rejected",
+    );
     expect(container?.querySelector('[data-testid="referral-admin-success"]')).toBeNull();
   });
 });

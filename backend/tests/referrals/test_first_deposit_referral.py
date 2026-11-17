@@ -46,7 +46,13 @@ def _engine():
     return engine
 
 
-def _user(email: str, username: str, *, role: UserRole = UserRole.USER, account_type: PublicAccountType = PublicAccountType.USER) -> User:
+def _user(
+    email: str,
+    username: str,
+    *,
+    role: UserRole = UserRole.USER,
+    account_type: PublicAccountType = PublicAccountType.USER,
+) -> User:
     return User(
         email=email,
         username=username,
@@ -85,7 +91,9 @@ def _order(
         currency_code=currency,
         rate_value=Decimal(rate),
         rate_direction=direction,
-        account_type_snapshot=str(user.account_type.value if hasattr(user.account_type, "value") else user.account_type),
+        account_type_snapshot=str(
+            user.account_type.value if hasattr(user.account_type, "value") else user.account_type
+        ),
         raw_payload={},
     )
 
@@ -109,41 +117,47 @@ def _service(session) -> FirstDepositReferralService:
 
 
 def test_signup_schemas_accept_referral_codes() -> None:
-    user = UserClubSignupRequest.model_validate({
-        "full_name": "Club Owner",
-        "username": "club_owner",
-        "email": "club@gtex.test",
-        "password": "ValidPassword123!",
-        "is_over_18": True,
-        "country": "Nigeria",
-        "referral_code": " creator10 ",
-        "club_name": "Northside",
-        "club_short_tag": "NOR",
-        "club_type": "community",
-    })
-    creator = CreatorSignupRequest.model_validate({
-        "creator_name": "Creator",
-        "username": "creator_one",
-        "email": "creator@gtex.test",
-        "password": "ValidPassword123!",
-        "country": "NG",
-        "category": "football",
-        "primary_language": "en",
-        "referral_code": "creator10",
-    })
-    trader = TraderSignupRequest.model_validate({
-        "full_name": "Trader",
-        "trading_alias": "Desk",
-        "email": "trader@gtex.test",
-        "password": "ValidPassword123!",
-        "phone_number": "+2348012345678",
-        "country": "NG",
-        "preferred_currency": "NGN",
-        "trading_experience": "beginner",
-        "totp_secret": "JBSWY3DPEHPK3PXP",
-        "totp_code": "123456",
-        "referral_code": "creator10",
-    })
+    user = UserClubSignupRequest.model_validate(
+        {
+            "full_name": "Club Owner",
+            "username": "club_owner",
+            "email": "club@gtex.test",
+            "password": "ValidPassword123!",
+            "is_over_18": True,
+            "country": "Nigeria",
+            "referral_code": " creator10 ",
+            "club_name": "Northside",
+            "club_short_tag": "NOR",
+            "club_type": "community",
+        }
+    )
+    creator = CreatorSignupRequest.model_validate(
+        {
+            "creator_name": "Creator",
+            "username": "creator_one",
+            "email": "creator@gtex.test",
+            "password": "ValidPassword123!",
+            "country": "NG",
+            "category": "football",
+            "primary_language": "en",
+            "referral_code": "creator10",
+        }
+    )
+    trader = TraderSignupRequest.model_validate(
+        {
+            "full_name": "Trader",
+            "trading_alias": "Desk",
+            "email": "trader@gtex.test",
+            "password": "ValidPassword123!",
+            "phone_number": "+2348012345678",
+            "country": "NG",
+            "preferred_currency": "NGN",
+            "trading_experience": "beginner",
+            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "totp_code": "123456",
+            "referral_code": "creator10",
+        }
+    )
     assert user.referral_code == "creator10"
     assert user.creates_club is True
     assert creator.referral_code == "creator10"
@@ -153,14 +167,17 @@ def test_signup_schemas_accept_referral_codes() -> None:
 def test_registration_lanes_and_code_guards(db) -> None:
     session, _, admin, _referrer = db
     service = _service(session)
-    partner = service.create_partner(admin, {
-        "display_name": "External Creator",
-        "campaign_name": "Launch",
-        "code": "CREATOR10",
-        "contact_email": "promoter@outside.test",
-        "social_handle": "@promoter",
-        "payout_destination_label": "External bank",
-    })
+    partner = service.create_partner(
+        admin,
+        {
+            "display_name": "External Creator",
+            "campaign_name": "Launch",
+            "code": "CREATOR10",
+            "contact_email": "promoter@outside.test",
+            "social_handle": "@promoter",
+            "payout_destination_label": "External bank",
+        },
+    )
     session.commit()
     assert partner["owner_user_id"] is None
     code = partner["campaigns"][0]["code"]
@@ -214,11 +231,14 @@ def test_registration_lanes_and_code_guards(db) -> None:
 def test_settled_deposit_pays_ten_percent_once_and_replays_do_not_duplicate(db) -> None:
     session, _, admin, _referrer = db
     service = _service(session)
-    partner = service.create_partner(admin, {
-        "display_name": "External Creator",
-        "campaign_name": "Launch",
-        "code": "CREATOR10",
-    })
+    partner = service.create_partner(
+        admin,
+        {
+            "display_name": "External Creator",
+            "campaign_name": "Launch",
+            "code": "CREATOR10",
+        },
+    )
     member = _user("member@gtex.test", "member")
     session.add(member)
     session.flush()
@@ -247,9 +267,7 @@ def test_settled_deposit_pays_ten_percent_once_and_replays_do_not_duplicate(db) 
     assert commission.beneficiary_user_id is None
     assert bonus.applied_rate_bps == 1000
     assert commission.applied_rate_bps == 1000
-    wallet = WalletService().get_balance(
-        session, WalletService().get_user_account(session, member, LedgerUnit.COIN)
-    )
+    wallet = WalletService().get_balance(session, WalletService().get_user_account(session, member, LedgerUnit.COIN))
     deposit_credit = fiat_to_wallet(Decimal("100000.00"), Decimal("100"), RateDirection.FIAT_PER_COIN)
     assert wallet == deposit_credit + bonus.reward_amount
 
@@ -272,7 +290,9 @@ def test_settled_deposit_pays_ten_percent_once_and_replays_do_not_duplicate(db) 
     clicks = session.scalar(select(func.count()).select_from(ReferralClick).where(ReferralClick.succeeded.is_(True)))
     registrations = session.scalar(select(func.count()).select_from(ReferralAttribution))
     deposits = session.scalar(
-        select(func.count()).select_from(ReferralReward).where(ReferralReward.reward_type == ReferralRewardType.FIRST_DEPOSIT_BONUS)
+        select(func.count())
+        .select_from(ReferralReward)
+        .where(ReferralReward.reward_type == ReferralRewardType.FIRST_DEPOSIT_BONUS)
     )
     assert analytics["clicks"] == clicks
     assert analytics["registrations"] == registrations
@@ -280,7 +300,9 @@ def test_settled_deposit_pays_ten_percent_once_and_replays_do_not_duplicate(db) 
 
     old_amount = commission.reward_amount
     old_rate = commission.applied_rate_bps
-    service.update_settings(admin, {"user_bonus_bps": 1500, "referrer_commission_bps": 1500, "reason": "Future campaigns only"})
+    service.update_settings(
+        admin, {"user_bonus_bps": 1500, "referrer_commission_bps": 1500, "reason": "Future campaigns only"}
+    )
     session.refresh(commission)
     assert commission.reward_amount == old_amount
     assert commission.applied_rate_bps == old_rate
@@ -351,20 +373,74 @@ def test_trader_minimum_stays_at_two_hundred_thousand(db) -> None:
         assert "200,000" not in str(exc)
 
 
+def test_coin_trader_bulk_packages_grant_extra_gtex_coin(db) -> None:
+    session, _, _admin, _referrer = db
+    rail = WalletRailService(session=session)
+    settings = TreasurySettings(
+        currency_code="NGN",
+        deposit_rate_value=Decimal("100"),
+        deposit_rate_direction=RateDirection.FIAT_PER_COIN,
+        trader_coin_purchase_rate_value=Decimal("50"),
+        trader_fan_coin_purchase_rate_value=Decimal("2.50"),
+        min_deposit=None,
+        max_deposit=None,
+    )
+
+    def quote(amount: str, *, source_scope: str = "trader_liquidity", unit: LedgerUnit = LedgerUnit.COIN):
+        return rail.quote_purchase_order(
+            settings=settings,
+            amount=Decimal(amount),
+            input_unit="fiat",
+            provider_key="manual",
+            source_scope=source_scope,
+            unit=unit,
+            processor_mode="manual_review",
+            payout_channel="manual",
+        )
+
+    half_million = quote("500000")
+    assert half_million.amount_fiat == Decimal("500000.0000")
+    assert half_million.gross_amount == Decimal("10000.0000")
+    assert half_million.bulk_bonus_amount == Decimal("300.0000")
+    assert half_million.net_amount == half_million.gross_amount - half_million.fee_amount + Decimal("300.0000")
+
+    one_million = quote("1000000")
+    assert one_million.gross_amount == Decimal("20000.0000")
+    assert one_million.bulk_bonus_amount == Decimal("700.0000")
+    assert one_million.net_amount == one_million.gross_amount - one_million.fee_amount + Decimal("700.0000")
+
+    opening_inventory = quote("200000")
+    assert opening_inventory.bulk_bonus_amount == Decimal("0.0000")
+    assert opening_inventory.net_amount == opening_inventory.gross_amount - opening_inventory.fee_amount
+
+    member_deposit = quote("500000", source_scope="wallet")
+    assert member_deposit.bulk_bonus_amount == Decimal("0.0000")
+    assert member_deposit.net_amount == member_deposit.gross_amount - member_deposit.fee_amount
+
+    fan_inventory = quote("500000", unit=LedgerUnit.CREDIT)
+    assert fan_inventory.bulk_bonus_amount == Decimal("0.0000")
+
+
 def test_hold_approval_and_beneficiary_currency_payout(db) -> None:
     session, _, admin, referrer = db
     service = _service(session)
-    external = service.create_partner(admin, {
-        "display_name": "External",
-        "campaign_name": "External campaign",
-        "code": "EXTCODE",
-    })
-    internal = service.create_partner(admin, {
-        "display_name": "Internal",
-        "campaign_name": "Internal campaign",
-        "code": "INTCODE",
-        "owner_user_id": referrer.id,
-    })
+    external = service.create_partner(
+        admin,
+        {
+            "display_name": "External",
+            "campaign_name": "External campaign",
+            "code": "EXTCODE",
+        },
+    )
+    internal = service.create_partner(
+        admin,
+        {
+            "display_name": "Internal",
+            "campaign_name": "Internal campaign",
+            "code": "INTCODE",
+            "owner_user_id": referrer.id,
+        },
+    )
     first = _user("one@gtex.test", "one")
     second = _user("two@gtex.test", "two")
     session.add_all([first, second])
@@ -480,9 +556,7 @@ def test_reversal_preserves_history_and_opens_recovery(db) -> None:
     session.commit()
     session.refresh(commission)
     assert commission.status == ReferralRewardStatus.PAID
-    recovery = session.scalar(
-        select(ReferralRecoveryCase).where(ReferralRecoveryCase.reward_id == commission.id)
-    )
+    recovery = session.scalar(select(ReferralRecoveryCase).where(ReferralRecoveryCase.reward_id == commission.id))
     assert recovery is not None
     assert recovery.kind == "paid_commission_recovery"
     ledger_after = session.scalar(select(func.count()).select_from(ReferralRewardLedger))
@@ -595,12 +669,15 @@ def test_admin_routes_reject_non_admins_and_serve_records(db) -> None:
         denied = client.get("/api/admin/referrals/affiliate/overview")
         assert denied.status_code == 403
         holder["user"] = admin
-        created = client.post("/api/admin/referrals/affiliate/partners", json={
-            "display_name": "Partner",
-            "campaign_name": "Campaign",
-            "code": "ADMIN10",
-            "contact_email": "partner@outside.test",
-        })
+        created = client.post(
+            "/api/admin/referrals/affiliate/partners",
+            json={
+                "display_name": "Partner",
+                "campaign_name": "Campaign",
+                "code": "ADMIN10",
+                "contact_email": "partner@outside.test",
+            },
+        )
         assert created.status_code == 201, created.text
         assert created.json()["owner_user_id"] is None
         overview = client.get("/api/admin/referrals/affiliate/overview")

@@ -26,7 +26,9 @@ def upgrade() -> None:
         batch.add_column(sa.Column("payout_currency", sa.String(length=12), server_default="NGN", nullable=False))
     op.create_index("ix_referral_partners_owner_user_id", "referral_partners", ["owner_user_id"])
     op.create_index("ix_referral_partners_creator_profile_id", "referral_partners", ["creator_profile_id"])
-    op.create_index("ix_referral_partners_payout_destination_fingerprint", "referral_partners", ["payout_destination_fingerprint"])
+    op.create_index(
+        "ix_referral_partners_payout_destination_fingerprint", "referral_partners", ["payout_destination_fingerprint"]
+    )
 
     op.create_table(
         "referral_programme_settings",
@@ -42,8 +44,12 @@ def upgrade() -> None:
         sa.Column("qualifying_deposit_types_json", sa.JSON(), nullable=False),
         sa.Column("version", sa.Integer(), server_default="1", nullable=False),
         sa.Column("updated_by_user_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("settings_key", name="uq_referral_programme_settings_settings_key"),
     )
@@ -57,7 +63,9 @@ def upgrade() -> None:
         sa.Column("ip_hash", sa.String(length=64), nullable=True),
         sa.Column("user_agent_hash", sa.String(length=64), nullable=True),
         sa.Column("failure_reason", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_referral_clicks_share_code_id", "referral_clicks", ["share_code_id"])
@@ -81,13 +89,21 @@ def upgrade() -> None:
         sa.Column("confirmed_by_user_id", sa.String(length=36), nullable=True),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("idempotency_key", name="uq_referral_payout_batches_idempotency_key"),
     )
-    op.create_index("ix_referral_payout_batches_beneficiary_user_id", "referral_payout_batches", ["beneficiary_user_id"])
-    op.create_index("ix_referral_payout_batches_beneficiary_partner_id", "referral_payout_batches", ["beneficiary_partner_id"])
+    op.create_index(
+        "ix_referral_payout_batches_beneficiary_user_id", "referral_payout_batches", ["beneficiary_user_id"]
+    )
+    op.create_index(
+        "ix_referral_payout_batches_beneficiary_partner_id", "referral_payout_batches", ["beneficiary_partner_id"]
+    )
 
     op.create_table(
         "referral_campaigns",
@@ -101,8 +117,12 @@ def upgrade() -> None:
         sa.Column("max_registrations", sa.Integer(), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
         sa.Column("public_link", sa.String(length=255), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["partner_id"], ["referral_partners.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["share_code_id"], ["share_codes.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -118,7 +138,9 @@ def upgrade() -> None:
         sa.Column("reward_id", sa.String(length=36), nullable=False),
         sa.Column("amount", sa.Numeric(20, 4), nullable=False),
         sa.Column("currency_code", sa.String(length=12), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["batch_id"], ["referral_payout_batches.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["reward_id"], ["referral_rewards.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
@@ -138,8 +160,12 @@ def upgrade() -> None:
         sa.Column("deposit_kind", sa.String(length=32), nullable=True),
         sa.Column("deposit_id", sa.String(length=64), nullable=True),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.ForeignKeyConstraint(["reward_id"], ["referral_rewards.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("reward_id", "kind", name="uq_referral_recovery_reward_kind"),
@@ -156,7 +182,9 @@ def upgrade() -> None:
         sa.Column("resource_id", sa.String(length=64), nullable=True),
         sa.Column("reason", sa.String(length=255), nullable=True),
         sa.Column("payload_json", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_referral_admin_audits_actor_user_id", "referral_admin_audits", ["actor_user_id"])

@@ -286,7 +286,6 @@ def test_provider_webhook_does_not_auto_settle_duplicate_provider_reference(sess
     assert second_order.status == PurchaseOrderStatus.PROCESSING
 
 
-
 def test_first_deposit_referral_rewards_are_once_only_and_reversed_with_deposit(session) -> None:
     referrer = _create_user(session)
     referred = AuthService().register_user(

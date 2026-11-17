@@ -115,7 +115,12 @@ function parseAuthError(error: any): { summary: string; fieldErrors: Record<stri
         const friendlyField = field.replace(/_/g, " ");
         const msg = String(item.msg || "Invalid value").replace(/^Value error,\s*/i, "");
         if (field) {
-          const uiKey = field === "recovery_phrase_hash" ? "recovery_phrase" : field === "security_pin_hash" ? "security_pin" : field;
+          const uiKey =
+            field === "recovery_phrase_hash"
+              ? "recovery_phrase"
+              : field === "security_pin_hash"
+                ? "security_pin"
+                : field;
           mappedFields[uiKey] = msg;
           messages.push(friendlyField ? `${friendlyField}: ${msg}` : msg);
         } else if (msg) {
@@ -136,23 +141,33 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedRole = String(searchParams.get("role") || "").toLowerCase();
-  const referralCode = mode === "signup"
-    ? String(searchParams.get("ref") || searchParams.get("referral_code") || "").trim().toLowerCase()
-    : "";
-  const referralSignupFields = referralCode ? { referral_code: referralCode } : {};
 
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [accountType, setAccountType] = useState<AccountType>(
-    requestedRole === "creator" ? "creator" : requestedRole === "trader" || requestedRole === "coin_trader" ? "coin_trader" : "user",
+    requestedRole === "creator"
+      ? "creator"
+      : requestedRole === "trader" || requestedRole === "coin_trader"
+        ? "coin_trader"
+        : "user",
   );
   const [referralCode, setReferralCode] = useState(() => {
-    const fromUrl = (searchParams.get("ref") || searchParams.get("referral") || "").trim();
+    const fromUrl = (
+      searchParams.get("ref") ||
+      searchParams.get("referral") ||
+      searchParams.get("referral_code") ||
+      ""
+    ).trim();
     const stored = window.sessionStorage.getItem("gtex_referral_code") || "";
     return (fromUrl || stored).trim().toUpperCase();
   });
   useEffect(() => {
-    const fromUrl = (searchParams.get("ref") || searchParams.get("referral") || "").trim();
+    const fromUrl = (
+      searchParams.get("ref") ||
+      searchParams.get("referral") ||
+      searchParams.get("referral_code") ||
+      ""
+    ).trim();
     if (!fromUrl) return;
     const normalized = fromUrl.toUpperCase();
     window.sessionStorage.setItem("gtex_referral_code", normalized);
@@ -203,27 +218,28 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     });
   };
 
-  const updateUser = (key: keyof typeof userFields) => (event: React.ChangeEvent<HTMLInputElement>) => {
-    clearFieldError(key);
-    setUserFields((previous) => ({
-      ...previous,
-      [key]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
-    }));
-  };
+  const updateUser =
+    (key: keyof typeof userFields) => (event: React.ChangeEvent<HTMLInputElement>) => {
+      clearFieldError(key);
+      setUserFields((previous) => ({
+        ...previous,
+        [key]: event.target.type === "checkbox" ? event.target.checked : event.target.value,
+      }));
+    };
 
-  const updateCreator = (key: keyof typeof creatorFields) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    clearFieldError(key);
-    setCreatorFields((previous) => ({ ...previous, [key]: event.target.value }));
-  };
+  const updateCreator =
+    (key: keyof typeof creatorFields) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      clearFieldError(key);
+      setCreatorFields((previous) => ({ ...previous, [key]: event.target.value }));
+    };
 
-  const updateTrader = (key: keyof typeof traderFields) => (
-    event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
-  ) => {
-    clearFieldError(key);
-    setTraderFields((previous) => ({ ...previous, [key]: event.target.value }));
-  };
+  const updateTrader =
+    (key: keyof typeof traderFields) =>
+    (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      clearFieldError(key);
+      setTraderFields((previous) => ({ ...previous, [key]: event.target.value }));
+    };
 
   const toggleTraderInterest = (interest: string) => {
     clearFieldError("interests");
@@ -248,7 +264,11 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     }
   };
 
-  const validateSignupBeforeSubmit = (): { valid: boolean; errors: Record<string, string>; summary?: string } => {
+  const validateSignupBeforeSubmit = (): {
+    valid: boolean;
+    errors: Record<string, string>;
+    summary?: string;
+  } => {
     const errors: Record<string, string> = {};
     if (!termsAccepted) {
       errors.terms = "Accept the GTEX terms to continue.";
@@ -334,12 +354,16 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
         const result = await login(userFields.email.trim(), userFields.password, {
           totp_code: userFields.totp_code.trim(),
         });
-        const type = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
+        const type = String(
+          result.user?.account_type || result.user?.accountType || "user",
+        ).toLowerCase();
         const landingRoute = String(result.landingRoute || "");
         navigate(
           type === "creator" || landingRoute === "/app/hub"
             ? "/app/creator-access"
-            : type === "coin_trader" || landingRoute === "/trader" || landingRoute === "/app/trader-dashboard"
+            : type === "coin_trader" ||
+                landingRoute === "/trader" ||
+                landingRoute === "/app/trader-dashboard"
               ? "/app/coin-traders"
               : "/app",
         );
@@ -364,7 +388,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       if (accountType === "creator") {
         signupPayload = {
           account_type: "creator",
-          ...referralSignupFields,
           creator_name: creatorFields.creator_name.trim(),
           username: creatorFields.username.trim(),
           email: userFields.email.trim(),
@@ -381,7 +404,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       } else if (accountType === "coin_trader") {
         signupPayload = {
           account_type: "coin_trader",
-          ...referralSignupFields,
           full_name: traderFields.full_name.trim(),
           trading_alias: traderFields.trading_alias.trim(),
           email: userFields.email.trim(),
@@ -400,13 +422,14 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       } else {
         signupPayload = {
           account_type: "user",
-          ...referralSignupFields,
           full_name: userFields.full_name.trim(),
           username: userFields.username.trim(),
           email: userFields.email.trim(),
           password: userFields.password,
           is_over_18: true,
-          ...(userFields.date_of_birth.trim() ? { date_of_birth: userFields.date_of_birth.trim() } : {}),
+          ...(userFields.date_of_birth.trim()
+            ? { date_of_birth: userFields.date_of_birth.trim() }
+            : {}),
           ...referralFields,
           ...securityFields,
         };
@@ -441,7 +464,10 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           <p className="gx-eyebrow text-emerald-400">Active session</p>
           <h1 className="gx-h2">You are already signed in</h1>
           <p className="text-sm leading-6 text-slate-300">
-            You are signed in as <span className="font-semibold text-white">{user.username || user.email}</span>. Specialized creator, trading, and club ownership capabilities can be managed in your console.
+            You are signed in as{" "}
+            <span className="font-semibold text-white">{user.username || user.email}</span>.
+            Specialized creator, trading, and club ownership capabilities can be managed in your
+            console.
           </p>
           <div className="pt-2">
             <Link
@@ -489,14 +515,21 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
         <div className="absolute bottom-12 left-12 right-12 max-w-md">
           <p className="gx-eyebrow mb-2">GTEX · Club Platform</p>
           <h2 className="gx-h1 text-3xl">Your club awaits.</h2>
-          <p className="mt-2 text-sm text-slate-400">Live match simulation, squad planning, transfers and tournaments.</p>
+          <p className="mt-2 text-sm text-slate-400">
+            Live match simulation, squad planning, transfers and tournaments.
+          </p>
           <div className="mt-6">
             <GtexAuthAdvertisingPanel />
           </div>
         </div>
       </div>
       <div className="flex items-center justify-center px-4 py-8 sm:px-6 sm:py-12">
-        <form onSubmit={submit} noValidate data-testid={mode + "-form"} className="w-full max-w-xl space-y-4">
+        <form
+          onSubmit={submit}
+          noValidate
+          data-testid={mode + "-form"}
+          className="w-full max-w-xl space-y-4"
+        >
           <div className="lg:hidden">
             <GtexAuthAdvertisingPanel compact />
           </div>
@@ -518,7 +551,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                   Corporate Advertiser &amp; Sponsor Portal
                 </p>
                 <p className="mt-1 leading-relaxed text-[#9AA7BD]">
-                  Brands, corporations, and music artists do not need a personal player, creator, or coin trader account to advertise. You can configure and pay for ads directly, or use a dedicated corporate workspace.
+                  Brands, corporations, and music artists do not need a personal player, creator, or
+                  coin trader account to advertise. You can configure and pay for ads directly, or
+                  use a dedicated corporate workspace.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-2.5">
                   <Link
@@ -526,7 +561,8 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                     data-testid="auth-advertise-direct-link"
                     className="inline-flex items-center gap-1.5 rounded-lg bg-[#D4AF37] px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-[#07111F] transition hover:bg-[#e5c14d]"
                   >
-                    <Megaphone className="h-3.5 w-3.5" /> Advertise Directly <ArrowRight className="h-3 w-3" />
+                    <Megaphone className="h-3.5 w-3.5" /> Advertise Directly{" "}
+                    <ArrowRight className="h-3 w-3" />
                   </Link>
                   <Link
                     to="/advertiser/register"
@@ -558,13 +594,34 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           )}
 
           {mode === "signup" && (
-            <section className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4" data-testid="signup-account-type-options">
-              <p className="mb-3 text-sm font-semibold text-emerald-300">Choose your GTEX account</p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="GTEX account type">
+            <section
+              className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4"
+              data-testid="signup-account-type-options"
+            >
+              <p className="mb-3 text-sm font-semibold text-emerald-300">
+                Choose your GTEX account
+              </p>
+              <div
+                className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+                role="radiogroup"
+                aria-label="GTEX account type"
+              >
                 {[
-                  { value: "user" as const, title: "Fan / Club Owner", detail: "Join GTEX, support clubs and own a club." },
-                  { value: "coin_trader" as const, title: "Coin Trader", detail: "Run a trading desk and provide coin liquidity." },
-                  { value: "creator" as const, title: "Creator", detail: "Publish content and build an audience." },
+                  {
+                    value: "user" as const,
+                    title: "Fan / Club Owner",
+                    detail: "Top up, create a club, and hire staff. Your manager runs matchday.",
+                  },
+                  {
+                    value: "coin_trader" as const,
+                    title: "Coin Trader",
+                    detail: "Buy and sell GTEX Coin. Members get more value for money through you.",
+                  },
+                  {
+                    value: "creator" as const,
+                    title: "Creator",
+                    detail: "Publish content and build an audience.",
+                  },
                 ].map((option) => {
                   const selected = accountType === option.value;
                   return (
@@ -580,13 +637,19 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                         setFormError(null);
                         setTotpVerified(false);
                       }}
-                      className={`min-h-24 rounded-lg border p-3 text-left transition ${selected
-                        ? "border-emerald-400 bg-emerald-400/10 text-white shadow-[0_0_0_1px_rgba(52,211,153,0.15)]"
-                        : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/25"}`}
+                      className={`min-h-24 rounded-lg border p-3 text-left transition ${
+                        selected
+                          ? "border-emerald-400 bg-emerald-400/10 text-white shadow-[0_0_0_1px_rgba(52,211,153,0.15)]"
+                          : "border-white/10 bg-slate-950/50 text-slate-300 hover:border-white/25"
+                      }`}
                     >
                       <span className="block text-sm font-bold">{option.title}</span>
-                      <span className="mt-1 block text-[11px] leading-4 text-slate-400">{option.detail}</span>
-                      <span className={`mt-2 block text-[10px] font-semibold uppercase tracking-wider ${selected ? "text-emerald-300" : "text-slate-500"}`}>
+                      <span className="mt-1 block text-[11px] leading-4 text-slate-400">
+                        {option.detail}
+                      </span>
+                      <span
+                        className={`mt-2 block text-[10px] font-semibold uppercase tracking-wider ${selected ? "text-emerald-300" : "text-slate-500"}`}
+                      >
                         {selected ? "Selected" : "Choose account"}
                       </span>
                     </button>
@@ -611,9 +674,26 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                 <option value="creator">Creator</option>
               </select>
               <p className="mt-3 text-[11px] leading-5 text-slate-400">
-                Fan and club owners share one account type. Coin Traders and Creators have dedicated account spaces.
-                Companies and sponsors should use the separate Corporate Advertiser portal above.
+                Fan and club owners share one account type. Coin Traders and Creators have dedicated
+                account spaces. Companies and sponsors should use the separate Corporate Advertiser
+                portal above.
               </p>
+              {accountType === "user" && (
+                <ol
+                  className="mt-3 space-y-1.5 text-[11px] leading-5 text-slate-300"
+                  data-testid="signup-user-guide"
+                >
+                  <li>
+                    Top up your GTEX Coin wallet. Buying and selling through coin traders guarantees
+                    more value for money.
+                  </li>
+                  <li>Create your club. The first 500 club owners receive 2,500 GTEX Coin.</li>
+                  <li>
+                    Gameplay is not required. Hire the right staff. Your manager handles matchday
+                    and tactics.
+                  </li>
+                </ol>
+              )}
               {requestedRole && (
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] font-medium text-emerald-300">
                   <span>Selected path:</span>
@@ -740,7 +820,10 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                     placeholder="English"
                   />
                 </Field>
-                <Field label="Main club supported (optional)" error={fieldErrors.main_club_supported}>
+                <Field
+                  label="Main club supported (optional)"
+                  error={fieldErrors.main_club_supported}
+                >
                   <input
                     data-testid="creator-club-input"
                     className="gx-input"
@@ -871,7 +954,8 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                   <ShieldCheck size={17} /> Set up your authenticator app
                 </div>
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  Add GTEX to Google Authenticator, Microsoft Authenticator or another TOTP app using this setup key. Keep it private.
+                  Add GTEX to Google Authenticator, Microsoft Authenticator or another TOTP app
+                  using this setup key. Keep it private.
                 </p>
                 <div className="mt-2 flex flex-wrap items-center gap-2">
                   <code
@@ -925,14 +1009,16 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                       if (valid) {
                         toast.success("Authenticator verified.");
                       } else {
-                        const message = "That code does not match this setup key. Check your phone time and enter the latest six-digit code.";
+                        const message =
+                          "That code does not match this setup key. Check your phone time and enter the latest six-digit code.";
                         setFieldErrors((previous) => ({ ...previous, totp_code: message }));
                       }
                     } catch {
                       setTotpVerified(false);
                       setFieldErrors((previous) => ({
                         ...previous,
-                        totp_code: "Authenticator verification is unavailable in this browser. Open GTEX over a secure HTTPS connection and try again.",
+                        totp_code:
+                          "Authenticator verification is unavailable in this browser. Open GTEX over a secure HTTPS connection and try again.",
                       }));
                     } finally {
                       setTotpVerifying(false);
@@ -941,20 +1027,29 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                   className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <ShieldCheck size={14} />
-                  {totpVerifying ? "Checking code…" : totpVerified ? "Authenticator verified" : "Verify authenticator"}
+                  {totpVerifying
+                    ? "Checking code…"
+                    : totpVerified
+                      ? "Authenticator verified"
+                      : "Verify authenticator"}
                 </button>
               </div>
               <p className="text-xs leading-5 text-slate-400">
-                Your authenticator is checked before submission and independently verified again by GTEX.
-                You do not need to create a separate recovery phrase or security PIN during signup.
+                Your authenticator is checked before submission and independently verified again by
+                GTEX. You do not need to create a separate recovery phrase or security PIN during
+                signup.
               </p>
             </section>
           )}
 
           {mode === "signup" && (
-            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3" data-testid="signup-referral-panel">
+            <div
+              className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3"
+              data-testid="signup-referral-panel"
+            >
               <p className="text-sm leading-6 text-slate-200">
-                Register with this referral code and receive a 10% bonus on your first qualifying deposit.
+                Register with this referral code and receive a 10% bonus on your first qualifying
+                deposit.
               </p>
               <Field label="Referral code" error={fieldErrors.referral_code}>
                 <input
@@ -1053,21 +1148,34 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
             </>
           )}
 
-          <Btn type="submit" disabled={busy} className="w-full py-3" data-testid={mode + "-submit-button"}>
+          <Btn
+            type="submit"
+            disabled={busy}
+            className="w-full py-3"
+            data-testid={mode + "-submit-button"}
+          >
             {busy ? "Please wait…" : mode === "login" ? "Enter the console" : "Create GTEX account"}
           </Btn>
           <p className="text-center text-sm text-slate-500">
             {mode === "login" ? (
               <>
                 New to GTEX?{" "}
-                <Link data-testid="goto-signup-link" className="text-emerald-400 hover:text-emerald-300" to="/signup">
+                <Link
+                  data-testid="goto-signup-link"
+                  className="text-emerald-400 hover:text-emerald-300"
+                  to="/signup"
+                >
                   Create account
                 </Link>
               </>
             ) : (
               <>
                 Already have an account?{" "}
-                <Link data-testid="goto-login-link" className="text-emerald-400 hover:text-emerald-300" to="/login">
+                <Link
+                  data-testid="goto-login-link"
+                  className="text-emerald-400 hover:text-emerald-300"
+                  to="/login"
+                >
                   Sign in
                 </Link>
               </>

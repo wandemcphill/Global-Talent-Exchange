@@ -30,7 +30,7 @@ from app.models.coin_trader import (
     CoinTraderRate,
 )
 from app.models.risk_ops import AuditLog
-from app.models.user import KycStatus, PublicAccountType, User, UserRole
+from app.models.user import KycStatus, PublicAccountType, User
 from app.models.wallet import (
     LedgerAccount,
     LedgerEntry,
@@ -839,6 +839,7 @@ class CoinTraderService:
             "rate_value": quote.rate_value,
             "unit": quote.unit,
             "provider_key": quote.provider_key,
+            "bulk_bonus_amount": quote.bulk_bonus_amount,
         }
 
     def initiate_liquidity_purchase(
@@ -1418,7 +1419,8 @@ class CoinTraderService:
         return (
             order.direction == direction
             and order.coin_unit == payload.coin_unit
-            and Decimal(order.coin_amount).quantize(amount_quantum) == Decimal(payload.coin_amount).quantize(amount_quantum)
+            and Decimal(order.coin_amount).quantize(amount_quantum)
+            == Decimal(payload.coin_amount).quantize(amount_quantum)
             and order.fiat_currency == payload.fiat_currency.upper()
             and (payload.advert_id is None or order.advert_id == payload.advert_id)
         )
@@ -1429,9 +1431,7 @@ class CoinTraderService:
         if payload.advert_id:
             return payload
         expected_side = (
-            CoinAdvertSide.SELL.value
-            if direction == CoinTradeDirection.USER_BUYS.value
-            else CoinAdvertSide.BUY.value
+            CoinAdvertSide.SELL.value if direction == CoinTradeDirection.USER_BUYS.value else CoinAdvertSide.BUY.value
         )
         adverts = list(
             self.session.scalars(
@@ -1451,9 +1451,7 @@ class CoinTraderService:
         return payload.model_copy(update={"advert_id": active[0].id})
 
     def _opposite_active_price(self, profile_id: str, advert: CoinTraderAdvert) -> Decimal | None:
-        other_side = (
-            CoinAdvertSide.BUY.value if advert.side == CoinAdvertSide.SELL.value else CoinAdvertSide.SELL.value
-        )
+        other_side = CoinAdvertSide.BUY.value if advert.side == CoinAdvertSide.SELL.value else CoinAdvertSide.SELL.value
         other = self.session.scalar(
             select(CoinTraderAdvert).where(
                 CoinTraderAdvert.trader_profile_id == profile_id,
@@ -1796,9 +1794,7 @@ class CoinTraderService:
             if isinstance(raw_payout, dict):
                 customer_payout_details = dict(raw_payout)
         public_metadata = {
-            key: value
-            for key, value in dict(order.metadata_json or {}).items()
-            if key != "customer_payout_details"
+            key: value for key, value in dict(order.metadata_json or {}).items() if key != "customer_payout_details"
         }
         rating_row = self.session.scalar(select(CoinTradeRating).where(CoinTradeRating.order_id == order.id))
         my_rating = (

@@ -31,7 +31,6 @@ import CommunityPage from "@/pages/Community";
 const Admin = React.lazy(() => import("@/pages/Admin"));
 const ReferralAdmin = React.lazy(() => import("@/pages/ReferralAdmin"));
 const AdminAdvertising = React.lazy(() => import("@/pages/AdminAdvertising"));
-const ReferralAdmin = React.lazy(() => import("@/pages/ReferralAdmin"));
 const CommercialPublicPortal = React.lazy(() => import("@/pages/CommercialPublicPortal"));
 import AdvertiserAuthPage from "@/pages/AdvertiserAuthPage";
 const AdvertiserWorkspacePortal = React.lazy(() => import("@/pages/AdvertiserWorkspacePortal"));
@@ -40,7 +39,9 @@ import NationalTeam from "@/pages/NationalTeam";
 import { ClubStory } from "@/pages/ClubStory";
 import PublicClubProfile from "@/pages/PublicClubProfile";
 import { Newsroom } from "@/pages/Newsroom";
-const Showroom = React.lazy(() => import("@/pages/Showroom").then((m) => ({ default: m.Showroom })));
+const Showroom = React.lazy(() =>
+  import("@/pages/Showroom").then((m) => ({ default: m.Showroom })),
+);
 const ClubCampus = React.lazy(() => import("@/pages/ClubCampus"));
 import Jackpot from "@/pages/Jackpot";
 import AppearanceStudio from "@/pages/AppearanceStudio";
@@ -88,148 +89,290 @@ export default function App() {
           <BrowserRouter basename={ROUTER_BASENAME}>
             <PublicTrafficTracker />
             <React.Suspense fallback={<Loading label="Loading GTEX 3D Studio..." />}>
-            <Routes>
-              {/* Public GTEX Consumer Routes */}
-              <Route path="/visual-review" element={<VisualReviewPage />} />
-              <Route path="/gift-capture" element={<GiftCapturePage />} />
-              <Route path="/" element={<GtexAdvertisingProvider><Landing /></GtexAdvertisingProvider>} />
-              <Route path="/nigeria" element={<NigeriaPlay />} />
-              <Route path="/play-in-nigeria" element={<Navigate to="/nigeria" replace />} />
-              <Route path="/login" element={<GtexAdvertisingProvider><AuthPage mode="login" /></GtexAdvertisingProvider>} />
-              <Route path="/signup" element={<GtexAdvertisingProvider><AuthPage mode="signup" /></GtexAdvertisingProvider>} />
-              <Route path="/onboarding" element={<Onboarding />} />
-              <Route path="/payment/callback" element={<PaymentCallback />} />
-              <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
-              <Route path="/clubs/:clubSlug" element={<PublicClubProfile />} />
-              <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
+              <Routes>
+                {/* Public GTEX Consumer Routes */}
+                <Route path="/visual-review" element={<VisualReviewPage />} />
+                <Route path="/gift-capture" element={<GiftCapturePage />} />
+                <Route
+                  path="/"
+                  element={
+                    <GtexAdvertisingProvider>
+                      <Landing />
+                    </GtexAdvertisingProvider>
+                  }
+                />
+                <Route path="/nigeria" element={<NigeriaPlay />} />
+                <Route path="/play-in-nigeria" element={<Navigate to="/nigeria" replace />} />
+                <Route
+                  path="/login"
+                  element={
+                    <GtexAdvertisingProvider>
+                      <AuthPage mode="login" />
+                    </GtexAdvertisingProvider>
+                  }
+                />
+                <Route
+                  path="/signup"
+                  element={
+                    <GtexAdvertisingProvider>
+                      <AuthPage mode="signup" />
+                    </GtexAdvertisingProvider>
+                  }
+                />
+                <Route path="/onboarding" element={<Onboarding />} />
+                <Route path="/payment/callback" element={<PaymentCallback />} />
+                <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
+                <Route path="/clubs/:clubSlug" element={<PublicClubProfile />} />
+                <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
 
-              {/* Dedicated GTEX Commercial Network Public Portal */}
-              <Route path="/advertise" element={<CommercialPublicPortal />} />
-              <Route path="/advertise/music" element={<CommercialPublicPortal division="music" initialTab="music" />} />
-              <Route path="/advertise/brands" element={<CommercialPublicPortal division="brands" initialTab="brands" />} />
-              <Route path="/advertise/pricing" element={<CommercialPublicPortal initialTab="pricing" />} />
-              <Route path="/advertise/login" element={<Navigate to="/advertiser/login" replace />} />
-              <Route path="/advertise/register" element={<Navigate to="/advertiser/register" replace />} />
+                {/* Dedicated GTEX Commercial Network Public Portal */}
+                <Route path="/advertise" element={<CommercialPublicPortal />} />
+                <Route
+                  path="/advertise/music"
+                  element={<CommercialPublicPortal division="music" initialTab="music" />}
+                />
+                <Route
+                  path="/advertise/brands"
+                  element={<CommercialPublicPortal division="brands" initialTab="brands" />}
+                />
+                <Route
+                  path="/advertise/pricing"
+                  element={<CommercialPublicPortal initialTab="pricing" />}
+                />
+                <Route
+                  path="/advertise/login"
+                  element={<Navigate to="/advertiser/login" replace />}
+                />
+                <Route
+                  path="/advertise/register"
+                  element={<Navigate to="/advertiser/register" replace />}
+                />
 
-              {/* Dedicated Commercial Advertiser Authentication Routes */}
-              <Route path="/advertiser/login" element={<AdvertiserAuthPage mode="login" initialMode="login" />} />
-              <Route path="/advertiser/register" element={<AdvertiserAuthPage mode="register" initialMode="register" />} />
+                {/* Dedicated Commercial Advertiser Authentication Routes */}
+                <Route
+                  path="/advertiser/login"
+                  element={<AdvertiserAuthPage mode="login" initialMode="login" />}
+                />
+                <Route
+                  path="/advertiser/register"
+                  element={<AdvertiserAuthPage mode="register" initialMode="register" />}
+                />
 
-              {/* Dedicated Independent Advertiser Workspace Management Portal */}
-              <Route path="/advertiser" element={<Navigate to="/advertiser/dashboard" replace />} />
-              <Route
-                path="/advertiser/dashboard"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="dashboard" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/campaigns"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="campaigns" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/campaigns/new"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="new-campaign" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/campaigns/:id"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="campaign-detail" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/brands"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="brands" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/music"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="music" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/billing"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="billing" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/subscriptions"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="subscriptions" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/reports"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="reports" /></AdvertiserRouteGuard>}
-              />
-              <Route
-                path="/advertiser/settings"
-                element={<AdvertiserRouteGuard><AdvertiserWorkspacePortal section="settings" /></AdvertiserRouteGuard>}
-              />
+                {/* Dedicated Independent Advertiser Workspace Management Portal */}
+                <Route
+                  path="/advertiser"
+                  element={<Navigate to="/advertiser/dashboard" replace />}
+                />
+                <Route
+                  path="/advertiser/dashboard"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="dashboard" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/campaigns"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="campaigns" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/campaigns/new"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="new-campaign" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/campaigns/:id"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="campaign-detail" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/brands"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="brands" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/music"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="music" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/billing"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="billing" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/subscriptions"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="subscriptions" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/reports"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="reports" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
+                <Route
+                  path="/advertiser/settings"
+                  element={
+                    <AdvertiserRouteGuard>
+                      <AdvertiserWorkspacePortal section="settings" />
+                    </AdvertiserRouteGuard>
+                  }
+                />
 
-              {/* Dedicated Top-Level Commercial Administration Routes */}
-              <Route path="/admin/advertising" element={<AdminAdvertising initialSection="campaigns" />} />
-              <Route path="/admin/advertising/accounts" element={<AdminAdvertising initialSection="accounts" />} />
-              <Route path="/admin/advertising/campaigns" element={<AdminAdvertising initialSection="campaigns" />} />
-              <Route path="/admin/advertising/music" element={<AdminAdvertising initialSection="music" />} />
-              <Route path="/admin/advertising/placements" element={<AdminAdvertising initialSection="placements" />} />
-              <Route path="/admin/advertising/pricing" element={<AdminAdvertising initialSection="pricing" />} />
-              <Route path="/admin/advertising/payments" element={<AdminAdvertising initialSection="payments" />} />
-              <Route path="/admin/advertising/analytics" element={<AdminAdvertising initialSection="analytics" />} />
+                {/* Dedicated Top-Level Commercial Administration Routes */}
+                <Route
+                  path="/admin/advertising"
+                  element={<AdminAdvertising initialSection="campaigns" />}
+                />
+                <Route
+                  path="/admin/advertising/accounts"
+                  element={<AdminAdvertising initialSection="accounts" />}
+                />
+                <Route
+                  path="/admin/advertising/campaigns"
+                  element={<AdminAdvertising initialSection="campaigns" />}
+                />
+                <Route
+                  path="/admin/advertising/music"
+                  element={<AdminAdvertising initialSection="music" />}
+                />
+                <Route
+                  path="/admin/advertising/placements"
+                  element={<AdminAdvertising initialSection="placements" />}
+                />
+                <Route
+                  path="/admin/advertising/pricing"
+                  element={<AdminAdvertising initialSection="pricing" />}
+                />
+                <Route
+                  path="/admin/advertising/payments"
+                  element={<AdminAdvertising initialSection="payments" />}
+                />
+                <Route
+                  path="/admin/advertising/analytics"
+                  element={<AdminAdvertising initialSection="analytics" />}
+                />
 
-              {/* Authenticated Normal GTEX Application Routes */}
-              <Route path="/app" element={<AppShell />}>
-                <Route index element={<ControlCenter />} />
-                <Route path="clubs" element={<MyClubs />} />
-                <Route path="governance" element={<ClubAuthorityPage />} />
-                <Route path="clubs/:clubId/governance" element={<ClubAuthorityPage />} />
-                <Route path="authority" element={<ClubAuthorityPage />} />
-                <Route path="clubs/:clubId/authority" element={<ClubAuthorityPage />} />
-                <Route path="showroom" element={<Showroom />} />
-                <Route path="clubs/:clubId/showroom" element={<Showroom />} />
-                <Route path="campus" element={<ClubCampus />} />
-                <Route path="clubs/:clubId/campus" element={<ClubCampus />} />
-                <Route path="story" element={<ClubStory />} />
-                <Route path="clubs/:clubId/story" element={<ClubStory />} />
-                <Route path="newsroom" element={<Newsroom />} />
-                <Route path="market" element={<Market />} />
-                <Route path="transfer-hub" element={<TransferHub />} />
-                <Route path="regen-world" element={<RegenWorld />} />
-                <Route path="awards" element={<RegenAwards />} />
-                <Route path="competitions" element={<Competitions />} />
-                <Route path="competitions/:id" element={<CompetitionDetail />} />
-                <Route path="match/:id" element={<MatchCenter />} />
-                <Route path="squad" element={<Squad />} />
-                <Route path="staff-market" element={<StaffMarket />} />
-                <Route path="lineup" element={<Lineup />} />
-                <Route path="academy" element={<Academy />} />
-                <Route path="build-a-son" element={<Academy />} />
-                <Route path="regens/create-son" element={<Academy />} />
-                <Route path="trophies" element={<ClubStory />} />
-                <Route path="dynasty" element={<ClubStory />} />
-                <Route path="player-cards" element={<Navigate to="/app/market" replace />} />
-                <Route path="players" element={<Navigate to="/app/market" replace />} />
-                <Route path="transfers" element={<Navigate to="/app/transfer-hub" replace />} />
-                <Route path="club-sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
-                <Route path="clubs/sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
-                <Route path="national" element={<NationalTeam />} />
-                <Route path="finance" element={<Finance />} />
-                <Route path="referrals" element={<Referrals />} />
-                <Route path="jackpot" element={<Jackpot />} />
-                <Route path="creator-access" element={<CreatorAccess />} />
-                <Route path="advertising" element={<LegacyAdvertisingRedirect />} />
-                <Route path="coin-traders" element={<CoinTraders />} />
-                <Route path="inbox" element={<InboxPage />} />
-                <Route path="community" element={<CommunityPage />} />
-                <Route path="admin" element={<Admin />} />
-                <Route path="admin/referrals" element={<ReferralAdmin />} />
-                <Route path="admin/advertising" element={<AdminAdvertising initialSection="campaigns" />} />
-                <Route path="admin/advertising/accounts" element={<AdminAdvertising initialSection="accounts" />} />
-                <Route path="admin/advertising/campaigns" element={<AdminAdvertising initialSection="campaigns" />} />
-                <Route path="admin/advertising/music" element={<AdminAdvertising initialSection="music" />} />
-                <Route path="admin/advertising/placements" element={<AdminAdvertising initialSection="placements" />} />
-                <Route path="admin/advertising/pricing" element={<AdminAdvertising initialSection="pricing" />} />
-                <Route path="admin/advertising/payments" element={<AdminAdvertising initialSection="payments" />} />
-                <Route path="admin/advertising/analytics" element={<AdminAdvertising initialSection="analytics" />} />
-                <Route path="club/studio" element={<ClubIdentityStudio />} />
-                <Route path="clubs/:clubId/studio" element={<ClubIdentityStudio />} />
-                <Route path="settings/kit-studio" element={<ClubIdentityStudio />} />
-                <Route path="settings/appearance" element={<AppearanceStudio />} />
-                <Route path="appearance" element={<Navigate to="/app/settings/appearance" replace />} />
-              </Route>
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+                {/* Authenticated Normal GTEX Application Routes */}
+                <Route path="/app" element={<AppShell />}>
+                  <Route index element={<ControlCenter />} />
+                  <Route path="clubs" element={<MyClubs />} />
+                  <Route path="governance" element={<ClubAuthorityPage />} />
+                  <Route path="clubs/:clubId/governance" element={<ClubAuthorityPage />} />
+                  <Route path="authority" element={<ClubAuthorityPage />} />
+                  <Route path="clubs/:clubId/authority" element={<ClubAuthorityPage />} />
+                  <Route path="showroom" element={<Showroom />} />
+                  <Route path="clubs/:clubId/showroom" element={<Showroom />} />
+                  <Route path="campus" element={<ClubCampus />} />
+                  <Route path="clubs/:clubId/campus" element={<ClubCampus />} />
+                  <Route path="story" element={<ClubStory />} />
+                  <Route path="clubs/:clubId/story" element={<ClubStory />} />
+                  <Route path="newsroom" element={<Newsroom />} />
+                  <Route path="market" element={<Market />} />
+                  <Route path="transfer-hub" element={<TransferHub />} />
+                  <Route path="regen-world" element={<RegenWorld />} />
+                  <Route path="awards" element={<RegenAwards />} />
+                  <Route path="competitions" element={<Competitions />} />
+                  <Route path="competitions/:id" element={<CompetitionDetail />} />
+                  <Route path="match/:id" element={<MatchCenter />} />
+                  <Route path="squad" element={<Squad />} />
+                  <Route path="staff-market" element={<StaffMarket />} />
+                  <Route path="lineup" element={<Lineup />} />
+                  <Route path="academy" element={<Academy />} />
+                  <Route path="build-a-son" element={<Academy />} />
+                  <Route path="regens/create-son" element={<Academy />} />
+                  <Route path="trophies" element={<ClubStory />} />
+                  <Route path="dynasty" element={<ClubStory />} />
+                  <Route path="player-cards" element={<Navigate to="/app/market" replace />} />
+                  <Route path="players" element={<Navigate to="/app/market" replace />} />
+                  <Route path="transfers" element={<Navigate to="/app/transfer-hub" replace />} />
+                  <Route
+                    path="club-sale-market"
+                    element={<Navigate to="/app/market?tab=club-sales" replace />}
+                  />
+                  <Route
+                    path="clubs/sale-market"
+                    element={<Navigate to="/app/market?tab=club-sales" replace />}
+                  />
+                  <Route path="national" element={<NationalTeam />} />
+                  <Route path="finance" element={<Finance />} />
+                  <Route path="referrals" element={<Referrals />} />
+                  <Route path="jackpot" element={<Jackpot />} />
+                  <Route path="creator-access" element={<CreatorAccess />} />
+                  <Route path="advertising" element={<LegacyAdvertisingRedirect />} />
+                  <Route path="coin-traders" element={<CoinTraders />} />
+                  <Route path="inbox" element={<InboxPage />} />
+                  <Route path="community" element={<CommunityPage />} />
+                  <Route path="admin" element={<Admin />} />
+                  <Route path="admin/referrals" element={<ReferralAdmin />} />
+                  <Route
+                    path="admin/advertising"
+                    element={<AdminAdvertising initialSection="campaigns" />}
+                  />
+                  <Route
+                    path="admin/advertising/accounts"
+                    element={<AdminAdvertising initialSection="accounts" />}
+                  />
+                  <Route
+                    path="admin/advertising/campaigns"
+                    element={<AdminAdvertising initialSection="campaigns" />}
+                  />
+                  <Route
+                    path="admin/advertising/music"
+                    element={<AdminAdvertising initialSection="music" />}
+                  />
+                  <Route
+                    path="admin/advertising/placements"
+                    element={<AdminAdvertising initialSection="placements" />}
+                  />
+                  <Route
+                    path="admin/advertising/pricing"
+                    element={<AdminAdvertising initialSection="pricing" />}
+                  />
+                  <Route
+                    path="admin/advertising/payments"
+                    element={<AdminAdvertising initialSection="payments" />}
+                  />
+                  <Route
+                    path="admin/advertising/analytics"
+                    element={<AdminAdvertising initialSection="analytics" />}
+                  />
+                  <Route path="club/studio" element={<ClubIdentityStudio />} />
+                  <Route path="clubs/:clubId/studio" element={<ClubIdentityStudio />} />
+                  <Route path="settings/kit-studio" element={<ClubIdentityStudio />} />
+                  <Route path="settings/appearance" element={<AppearanceStudio />} />
+                  <Route
+                    path="appearance"
+                    element={<Navigate to="/app/settings/appearance" replace />}
+                  />
+                </Route>
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
             </React.Suspense>
           </BrowserRouter>
           <Toaster theme="dark" position="top-right" richColors />

@@ -7,6 +7,7 @@ from sqlalchemy import select
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
 from app.auth.dependencies import get_current_user, get_session
+from app.models.base import utcnow
 from app.models.user import User
 from app.models.referral_partner import ReferralPartner
 from app.models.share_code import ShareCode
@@ -48,26 +49,23 @@ def _require_admin(current_user: User = Depends(get_current_user)) -> User:
 def _build_partner_view(session, partner: ReferralPartner) -> ReferralPartnerView:
     codes = tuple(session.scalars(select(ShareCode).order_by(ShareCode.created_at.desc())).all())
     partner_codes = [
-        code
-        for code in codes
-        if str((code.metadata_json or {}).get("referral_partner_id") or "") == partner.id
+        code for code in codes if str((code.metadata_json or {}).get("referral_partner_id") or "") == partner.id
     ]
     code = partner_codes[0] if partner_codes else None
     attributions = []
     rewards = []
     if code is not None:
         attributions = list(
-            session.scalars(
-                select(ReferralAttribution).where(ReferralAttribution.share_code_id == code.id)
-            ).all()
+            session.scalars(select(ReferralAttribution).where(ReferralAttribution.share_code_id == code.id)).all()
         )
         rewards = list(
             session.scalars(
-                select(ReferralReward).where(ReferralReward.referral_attribution_id.in_(
-                    [item.id for item in attributions] or ["__none__"]
-                ))
+                select(ReferralReward).where(
+                    ReferralReward.referral_attribution_id.in_([item.id for item in attributions] or ["__none__"])
+                )
             ).all()
         )
+
     def total_for(status_value: str):
         return sum(
             (
@@ -78,6 +76,7 @@ def _build_partner_view(session, partner: ReferralPartner) -> ReferralPartnerVie
             ),
             start=__import__("decimal").Decimal("0.0000"),
         )
+
     return ReferralPartnerView(
         partner_id=partner.id,
         display_name=partner.display_name,

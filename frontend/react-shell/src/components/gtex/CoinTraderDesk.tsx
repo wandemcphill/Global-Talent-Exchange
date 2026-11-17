@@ -249,9 +249,10 @@ export function CoinTraderDesk() {
       className="lg:col-span-12"
     >
       <p className="mb-4 text-sm text-slate-400">
-        Buy or sell GTEX Coin (GTC, min buyer order ₦200,000) and Fan Coin (FNC, min buyer order
-        ₦50,000) directly with verified Naira merchants through canonical GTEX escrow protection and
-        zero P2P platform fees.
+        Coin traders matter. Buying and selling GTEX Coin through a verified trader guarantees more
+        value for money than the platform treasury rate. GTEX Coin buyer orders start at ₦200,000
+        and Fan Coin buyer orders start at ₦50,000, with canonical GTEX escrow and zero P2P platform
+        fees.
       </p>
 
       {/* Top Section Tabs */}
@@ -482,9 +483,9 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: { initial
         Buy GTX from a Coin Trader
       </h4>
       <p className="mt-2 text-xs leading-relaxed text-slate-400">
-        Choose an approved, identity-verified merchant advert. Orders are escrow-protected through the
-        GTEX order room with zero P2P platform fees. GTEX Coin buyer orders have a ₦200,000 minimum;
-        any surplus stays in your wallet for later use.
+        Choose an approved, identity-verified merchant advert. Orders are escrow-protected through
+        the GTEX order room with zero P2P platform fees. GTEX Coin buyer orders have a ₦200,000
+        minimum; any surplus stays in your wallet for later use.
       </p>
 
       {marketLoading ? (
@@ -512,8 +513,8 @@ export function ClubCoinTraderFundingPanel({ initialAmount = "4000" }: { initial
                   </div>
                   <p className="text-slate-400">
                     Rate: <b className="text-white">₦{fmt(unitRate, 2)}</b> / GTC · Available:{" "}
-                    <b className="text-slate-200">{fmt(offer.available_coin)} GTC</b> · Suggested gap
-                    order: <b className="text-cyan-300">{fmt(suggestedCoins)} GTC</b>
+                    <b className="text-slate-200">{fmt(offer.available_coin)} GTC</b> · Suggested
+                    gap order: <b className="text-cyan-300">{fmt(suggestedCoins)} GTC</b>
                   </p>
                 </div>
                 <Btn
