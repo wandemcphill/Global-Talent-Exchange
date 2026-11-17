@@ -14,11 +14,11 @@ import {
   Globe,
   Inbox,
   LogOut,
-  Link2,
   Megaphone,
   MessagesSquare,
   Newspaper,
   Search,
+  Share2,
   Shield,
   Shirt,
   ShoppingBag,
@@ -79,6 +79,7 @@ const NAV = [
 
   // 7. WALLET & ECONOMY
   { to: "/app/finance", label: "Wallet & Finance", icon: Wallet, id: "finance", category: "WALLET & ECONOMY" },
+  { to: "/app/referrals", label: "Referrals", icon: Share2, id: "referrals", category: "WALLET & ECONOMY" },
   { to: "/app/market", label: "Player Shares Market", icon: ShoppingBag, id: "market", category: "WALLET & ECONOMY" },
   { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "WALLET & ECONOMY" },
   { to: "/app/coin-traders", label: "Buy & Sell GTEX Coin", icon: CandlestickChart, id: "coin-traders", category: "WALLET & ECONOMY" },
@@ -227,7 +228,7 @@ export default function AppShell() {
     !isDedicatedAccount &&
     clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/community", "/app/settings/appearance", "/app/appearance"];
+  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/referrals", "/app/community", "/app/settings/appearance", "/app/appearance"];
   const creatorAllowed = [
     "/app/creator-access",
     "/app/community",
@@ -239,6 +240,7 @@ export default function AppShell() {
     "/app/competitions",
     "/app/national",
     "/app/finance",
+    "/app/referrals",
     "/app/settings/appearance",
     "/app/appearance",
   ];
@@ -263,6 +265,7 @@ export default function AppShell() {
     "/app/clubs",
     "/app/national",
     "/app/finance",
+    "/app/referrals",
     "/app/market",
     "/app/transfer-hub",
     "/app/regen-world",
@@ -307,6 +310,7 @@ export default function AppShell() {
           "newsroom",
           "community",
           "finance",
+          "referrals",
           "creator-access",
           "coin-traders",
           "appearance-studio",
@@ -315,7 +319,7 @@ export default function AppShell() {
       );
 
   const visibleNav = isTraderAccount
-    ? NAV.filter((item) => ["coin-traders", "finance", "community", "appearance-studio"].includes(item.id))
+    ? NAV.filter((item) => ["coin-traders", "finance", "referrals", "community", "appearance-studio"].includes(item.id))
     : isCreatorAccount
     ? NAV.filter((item) =>
         [
@@ -329,6 +333,7 @@ export default function AppShell() {
           "competitions",
           "national",
           "finance",
+          "referrals",
           "appearance-studio",
         ].includes(item.id)
       ).map((item) => (item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item))
@@ -414,7 +419,7 @@ export default function AppShell() {
                 ADMINISTRATION
               </p>
               <NavItem item={{ to: "/app/admin/advertising", label: "Advertising Review", icon: Megaphone, id: "admin-advertising" }} />
-              <NavItem item={{ to: "/app/admin/referrals", label: "Referral & Affiliates", icon: Link2, id: "admin-referrals" }} />
+              <NavItem item={{ to: "/app/admin/referrals", label: "Referral & Affiliate", icon: Share2, id: "admin-referrals" }} />
               <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
             </div>
           )}

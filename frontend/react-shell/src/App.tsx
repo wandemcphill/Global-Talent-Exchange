@@ -25,9 +25,11 @@ import Academy from "@/pages/Academy";
 import CreatorAccess from "@/pages/CreatorAccess";
 import CoinTraders from "@/pages/CoinTraders";
 import Finance from "@/pages/Finance";
+import Referrals from "@/pages/Referrals";
 import InboxPage from "@/pages/Inbox";
 import CommunityPage from "@/pages/Community";
 const Admin = React.lazy(() => import("@/pages/Admin"));
+const ReferralAdmin = React.lazy(() => import("@/pages/ReferralAdmin"));
 const AdminAdvertising = React.lazy(() => import("@/pages/AdminAdvertising"));
 const ReferralAdmin = React.lazy(() => import("@/pages/ReferralAdmin"));
 const CommercialPublicPortal = React.lazy(() => import("@/pages/CommercialPublicPortal"));
@@ -203,6 +205,7 @@ export default function App() {
                 <Route path="clubs/sale-market" element={<Navigate to="/app/market?tab=club-sales" replace />} />
                 <Route path="national" element={<NationalTeam />} />
                 <Route path="finance" element={<Finance />} />
+                <Route path="referrals" element={<Referrals />} />
                 <Route path="jackpot" element={<Jackpot />} />
                 <Route path="creator-access" element={<CreatorAccess />} />
                 <Route path="advertising" element={<LegacyAdvertisingRedirect />} />

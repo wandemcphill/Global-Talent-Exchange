@@ -1,392 +1,419 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
+import { Navigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Copy, Link2, Plus, RefreshCw, ShieldCheck, Wallet } from "lucide-react";
-import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
+import { Loading } from "@/components/gtex/ui";
 
-type Partner = {
-  partner_id: string;
-  display_name: string;
-  contact_email?: string | null;
-  social_handle?: string | null;
-  campaign_name?: string | null;
-  payout_method: string;
-  payout_destination_reference?: string | null;
-  is_active: boolean;
-  share_code?: string | null;
-  referral_path?: string | null;
-  current_uses: number;
-  max_uses: number;
-  attributed_signups: number;
-  pending_commission: string | number;
-  approved_commission: string | number;
-  paid_commission: string | number;
-};
+const SECTIONS = [
+  ["overview", "Overview"],
+  ["partners", "Referral partners"],
+  ["create", "Create campaign"],
+  ["links", "Referral links"],
+  ["attributions", "Attributed registrations"],
+  ["conversions", "First-deposit conversions"],
+  ["pending", "Pending commissions"],
+  ["approved", "Approved commissions"],
+  ["payouts", "Payout batches"],
+  ["history", "Payment history"],
+  ["fraud", "Fraud review"],
+  ["analytics", "Analytics and reports"],
+  ["settings", "Programme settings"],
+] as const;
 
-type ReferralReward = {
-  reward_id: string;
-  beneficiary_name?: string | null;
-  beneficiary_email?: string | null;
-  payout_method?: string | null;
-  payout_destination_reference?: string | null;
-  share_code?: string | null;
-  deposit_reference?: string | null;
-  deposit_amount_fiat?: string | number | null;
-  amount?: string | number | null;
-  unit?: string | null;
-  status: string;
-  hold_until?: string | null;
-  label: string;
-  review_reason?: string | null;
-};
+type SectionId = (typeof SECTIONS)[number][0];
 
-const money = (value: unknown, currency = "NGN") =>
-  new Intl.NumberFormat("en-NG", { style: "currency", currency, maximumFractionDigits: 2 }).format(Number(value || 0));
+async function loadSection(section: SectionId) {
+  if (section === "overview") return (await api.get("/admin/referrals/affiliate/overview")).data;
+  if (section === "partners" || section === "create") return (await api.get("/admin/referrals/affiliate/partners")).data;
+  if (section === "links") return (await api.get("/admin/referrals/affiliate/links")).data;
+  if (section === "attributions") return (await api.get("/admin/referrals/affiliate/attributions")).data;
+  if (section === "conversions") return (await api.get("/admin/referrals/affiliate/conversions")).data;
+  if (section === "pending") return (await api.get("/admin/referrals/affiliate/commissions", { params: { status: "pending" } })).data;
+  if (section === "approved") return (await api.get("/admin/referrals/affiliate/commissions", { params: { status: "approved" } })).data;
+  if (section === "payouts") return (await api.get("/admin/referrals/affiliate/payouts/preview")).data;
+  if (section === "history") return (await api.get("/admin/referrals/affiliate/payout-batches")).data;
+  if (section === "fraud") return (await api.get("/admin/referrals/affiliate/fraud")).data;
+  if (section === "analytics") return (await api.get("/admin/referrals/affiliate/analytics")).data;
+  return (await api.get("/admin/referrals/affiliate/settings")).data;
+}
 
 export default function ReferralAdmin() {
-  const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const [payoutSaving, setPayoutSaving] = useState(false);
-  const [selected, setSelected] = useState<string[]>([]);
-  const [paymentReference, setPaymentReference] = useState("");
-  const [createdLink, setCreatedLink] = useState("");
-  const [form, setForm] = useState({
+  const { user, loading } = useAuth();
+  const queryClient = useQueryClient();
+  const isAdmin = ["admin", "super_admin"].includes(String(user?.role).toLowerCase());
+  const [section, setSection] = useState<SectionId>("overview");
+  const [formError, setFormError] = useState<string | null>(null);
+  const [formMessage, setFormMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [partnerForm, setPartnerForm] = useState({
     display_name: "",
     contact_email: "",
     social_handle: "",
     campaign_name: "",
-    payout_method: "bank_transfer",
-    payout_destination_reference: "",
-    vanity_code: "",
-    max_uses: "100000",
+    code: "",
+    payout_currency: "NGN",
     notes: "",
+    contractual_terms: "",
+  });
+  const [selectedRewards, setSelectedRewards] = useState<string[]>([]);
+  const [paymentReference, setPaymentReference] = useState("");
+  const [batchId, setBatchId] = useState("");
+  const [settingsForm, setSettingsForm] = useState<any>(null);
+
+  const query = useQuery({
+    queryKey: ["referral-admin", section],
+    queryFn: () => loadSection(section),
+    enabled: isAdmin,
+    retry: false,
   });
 
-  const partnersQuery = useQuery<Partner[]>({
-    queryKey: ["admin-referral-partners"],
-    queryFn: async () => (await api.get("/admin/referrals/partners")).data,
-  });
-  const pendingQuery = useQuery<ReferralReward[]>({
-    queryKey: ["admin-referral-pending"],
-    queryFn: async () => (await api.get("/admin/referrals/rewards/pending")).data,
-  });
-  const approvedQuery = useQuery<ReferralReward[]>({
-    queryKey: ["admin-referral-approved"],
-    queryFn: async () => (await api.get("/admin/referrals/rewards/approved")).data,
-  });
+  if (loading) return <Loading label="Opening referral administration..." />;
+  if (!isAdmin) return <Navigate to="/app" replace />;
 
-  const selectedTotal = useMemo(
-    () => (approvedQuery.data || []).filter((reward) => selected.includes(reward.reward_id)),
-    [approvedQuery.data, selected],
-  );
-  const selectedCurrencies = Array.from(new Set(selectedTotal.map((item) => String(item.unit || "").toUpperCase())));
-  const invalidate = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["admin-referral-partners"] }),
-      qc.invalidateQueries({ queryKey: ["admin-referral-pending"] }),
-      qc.invalidateQueries({ queryKey: ["admin-referral-approved"] }),
-    ]);
+  const refresh = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["referral-admin"] });
   };
 
   const createPartner = async (event: React.FormEvent) => {
     event.preventDefault();
-    setSaving(true);
-    setCreatedLink("");
+    setBusy(true);
+    setFormError(null);
+    setFormMessage(null);
     try {
-      const response = await api.post("/admin/referrals/partners", {
-        ...form,
-        max_uses: Number(form.max_uses || 100000),
-        contact_email: form.contact_email.trim() || null,
-        social_handle: form.social_handle.trim() || null,
-        campaign_name: form.campaign_name.trim() || null,
-        payout_destination_reference: form.payout_destination_reference.trim() || null,
-        vanity_code: form.vanity_code.trim() || null,
-        notes: form.notes.trim() || null,
-      });
-      const partner = response.data as Partner;
-      const url = partner.referral_path
-        ? window.location.origin + partner.referral_path
-        : "";
-      setCreatedLink(url);
-      setForm({
-        display_name: "",
-        contact_email: "",
-        social_handle: "",
-        campaign_name: "",
-        payout_method: "bank_transfer",
-        payout_destination_reference: "",
-        vanity_code: "",
-        max_uses: "100000",
-        notes: "",
-      });
-      toast.success("Referral partner and link created.");
-      await invalidate();
+      const payload = {
+        ...partnerForm,
+        code: partnerForm.code.trim() || undefined,
+        contact_email: partnerForm.contact_email.trim() || undefined,
+      };
+      const { data } = await api.post("/admin/referrals/affiliate/partners", payload);
+      const link = data.campaigns?.[0]?.link;
+      setFormMessage(link ? `Campaign created. Share ${link}` : "Campaign created.");
+      setSection("links");
+      await refresh();
     } catch (error) {
-      toast.error(errMsg(error));
+      setFormError(errMsg(error));
     } finally {
-      setSaving(false);
+      setBusy(false);
     }
   };
 
-  const setPartnerActive = async (partner: Partner) => {
-    try {
-      await api.patch(`/admin/referrals/partners/${partner.partner_id}/status`, {
-        is_active: !partner.is_active,
-        reason: partner.is_active ? "Admin disabled referral partner campaign" : "Admin re-enabled referral partner campaign",
-      });
-      toast.success(partner.is_active ? "Referral link disabled." : "Referral link re-enabled.");
-      await invalidate();
-    } catch (error) {
-      toast.error(errMsg(error));
-    }
-  };
-
-  const reviewReward = async (rewardId: string, action: "approve" | "block") => {
-    try {
-      await api.post(`/admin/referrals/rewards/${rewardId}/review`, {
-        action,
-        reason: action === "approve" ? "First-deposit referral passed admin review" : "Referral commission blocked after admin review",
-      });
-      toast.success(action === "approve" ? "Commission approved for payout." : "Commission blocked.");
-      await invalidate();
-    } catch (error) {
-      toast.error(errMsg(error));
-    }
-  };
-
-  const payBatch = async () => {
-    if (!selected.length || !paymentReference.trim()) {
-      toast.error("Select approved commissions and enter the bank or transfer reference.");
+  const decide = async (rewardId: string, decision: string) => {
+    const reason = window.prompt(`Reason for ${decision}`) || "";
+    if (reason.trim().length < 3) {
+      setFormError("A review reason is required.");
+      setFormMessage(null);
       return;
     }
-    if (selectedCurrencies.length !== 1) {
-      toast.error("Pay one currency per batch. Split the selected rewards by currency.");
-      return;
-    }
-    setPayoutSaving(true);
+    setBusy(true);
+    setFormError(null);
+    setFormMessage(null);
     try {
-      const response = await api.post("/admin/referrals/rewards/payout-batch", {
-        reward_ids: selected,
-        payment_reference: paymentReference.trim(),
+      await api.post(`/admin/referrals/affiliate/commissions/${rewardId}/decision`, { decision, reason });
+      setFormMessage(`Commission ${decision} recorded.`);
+      await refresh();
+    } catch (error) {
+      setFormError(errMsg(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const createBatch = async () => {
+    setBusy(true);
+    setFormError(null);
+    setFormMessage(null);
+    try {
+      const { data } = await api.post("/admin/referrals/affiliate/payout-batches", {
+        reward_ids: selectedRewards,
+        payout_method: "external_transfer",
+        off_cycle_reason: "Administrator reconciliation",
       });
-      toast.success(
-        `Payout batch recorded: ${response.data.reward_count} commission(s), ${money(response.data.total_amount, response.data.currency)}.`,
-      );
-      setSelected([]);
+      setBatchId(data.id);
+      setFormMessage(`Draft batch ${data.id} totals ${data.currency} ${data.total}. It is not paid until you record the transfer reference.`);
+      await refresh();
+    } catch (error) {
+      setFormError(errMsg(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const confirmBatch = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setFormError(null);
+    setFormMessage(null);
+    try {
+      await api.post(`/admin/referrals/affiliate/payout-batches/${batchId}/confirm`, {
+        external_reference: paymentReference,
+      });
+      setFormMessage("Payment reference recorded. The selected commissions are marked paid.");
       setPaymentReference("");
-      await invalidate();
+      await refresh();
     } catch (error) {
-      toast.error(errMsg(error));
+      setFormError(errMsg(error));
     } finally {
-      setPayoutSaving(false);
+      setBusy(false);
     }
   };
 
-  const toggleSelected = (rewardId: string) => {
-    setSelected((current) =>
-      current.includes(rewardId) ? current.filter((id) => id !== rewardId) : [...current, rewardId],
-    );
+  const saveSettings = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!settingsForm) return;
+    setBusy(true);
+    setFormError(null);
+    setFormMessage(null);
+    try {
+      await api.put("/admin/referrals/affiliate/settings", {
+        user_bonus_bps: Number(settingsForm.user_bonus_bps),
+        referrer_commission_bps: Number(settingsForm.referrer_commission_bps),
+        is_active: Boolean(settingsForm.is_active),
+        hold_days: Number(settingsForm.hold_days),
+        payout_weekday: Number(settingsForm.payout_weekday),
+        min_payout_thresholds: settingsForm.min_payout_thresholds,
+        eligible_account_types: settingsForm.eligible_account_types,
+        qualifying_deposit_types: settingsForm.qualifying_deposit_types,
+        reason: "Programme settings updated from the affiliate centre",
+      });
+      setFormMessage("Settings saved. Existing rewards keep the rate they were created with.");
+      await refresh();
+    } catch (error) {
+      setFormError(errMsg(error));
+    } finally {
+      setBusy(false);
+    }
   };
 
-  const partnerRows = partnersQuery.data || [];
-  const pendingRows = pendingQuery.data || [];
-  const approvedRows = approvedQuery.data || [];
+  const data = query.data;
+  const settings = section === "settings" ? (settingsForm || data) : null;
 
   return (
-    <div className="space-y-6" data-testid="admin-referral-centre">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <p className="gx-eyebrow text-emerald-300">Growth and partnerships</p>
-          <h1 className="gx-h1">Referral & Affiliate Centre</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
-            Create tracked creator links, monitor first-deposit conversions, approve commissions and reconcile payouts.
-            Every eligible GTEX account type receives the same first-deposit offer.
-          </p>
-        </div>
-        <button
-          onClick={() => void invalidate()}
-          className="inline-flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-200 hover:bg-white/5"
-        >
-          <RefreshCw size={14} /> Refresh
-        </button>
+    <div className="space-y-6 p-4 sm:p-8" data-testid="referral-admin">
+      <header>
+        <p className="gx-eyebrow text-amber-300">Administration</p>
+        <h1 className="text-3xl font-black text-white">Referral & Affiliate Centre</h1>
+        <p className="mt-2 max-w-3xl text-sm text-slate-300">
+          External promoters do not need a GTEX login. Commissions stay pending through the hold and are marked paid only after an admin records the real transfer reference.
+        </p>
       </header>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Partners / campaigns</p>
-          <p className="mt-2 text-2xl font-bold text-white">{partnerRows.length}</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Attributed signups</p>
-          <p className="mt-2 text-2xl font-bold text-white">{partnerRows.reduce((n, p) => n + Number(p.attributed_signups || 0), 0)}</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Commissions awaiting review</p>
-          <p className="mt-2 text-2xl font-bold text-amber-200">{pendingRows.length}</p>
-        </div>
-        <div className="rounded-xl border border-white/10 bg-slate-950/60 p-4">
-          <p className="text-xs uppercase tracking-wider text-slate-500">Approved to pay</p>
-          <p className="mt-2 text-2xl font-bold text-emerald-300">{approvedRows.length}</p>
-        </div>
-      </section>
-
-      <section className="grid gap-5 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-        <form onSubmit={createPartner} className="space-y-4 rounded-2xl border border-white/10 bg-[#0B1421] p-5">
-          <div className="flex items-center gap-2">
-            <Plus size={17} className="text-emerald-300" />
-            <h2 className="text-lg font-bold text-white">Create an influencer referral link</h2>
-          </div>
-          <p className="text-xs leading-5 text-slate-400">
-            The partner does not need a GTEX login. Add their identity and a secure payout destination reference;
-            do not enter full bank-card or account credentials here.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-xs text-slate-400">Creator / partner name
-              <input required minLength={2} maxLength={120} value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })} className="gx-input mt-1" placeholder="Creator name" />
-            </label>
-            <label className="text-xs text-slate-400">Contact email
-              <input type="email" value={form.contact_email} onChange={(e) => setForm({ ...form, contact_email: e.target.value })} className="gx-input mt-1" placeholder="creator@example.com" />
-            </label>
-            <label className="text-xs text-slate-400">Social handle
-              <input value={form.social_handle} onChange={(e) => setForm({ ...form, social_handle: e.target.value })} className="gx-input mt-1" placeholder="@creator" />
-            </label>
-            <label className="text-xs text-slate-400">Campaign name
-              <input value={form.campaign_name} onChange={(e) => setForm({ ...form, campaign_name: e.target.value })} className="gx-input mt-1" placeholder="November creator launch" />
-            </label>
-            <label className="text-xs text-slate-400">Payout method
-              <select value={form.payout_method} onChange={(e) => setForm({ ...form, payout_method: e.target.value })} className="gx-input mt-1">
-                <option value="bank_transfer">Bank transfer</option>
-                <option value="mobile_money">Mobile money</option>
-                <option value="crypto">Crypto</option>
-                <option value="wallet">GTEX wallet</option>
-                <option value="manual">Manual / offline</option>
-                <option value="other">Other</option>
-              </select>
-            </label>
-            <label className="text-xs text-slate-400">Payout destination reference (masked / provider ID)
-              <input value={form.payout_destination_reference} onChange={(e) => setForm({ ...form, payout_destination_reference: e.target.value })} className="gx-input mt-1" placeholder="Secure payout profile or masked label" />
-            </label>
-            <label className="text-xs text-slate-400">Custom referral code (optional)
-              <input maxLength={32} value={form.vanity_code} onChange={(e) => setForm({ ...form, vanity_code: e.target.value.toLowerCase().replace(/[^a-z0-9]/g, "") })} className="gx-input mt-1" placeholder="CREATOR10" />
-            </label>
-            <label className="text-xs text-slate-400">Maximum registrations
-              <input type="number" min={1} max={1000000} value={form.max_uses} onChange={(e) => setForm({ ...form, max_uses: e.target.value })} className="gx-input mt-1" />
-            </label>
-          </div>
-          <label className="block text-xs text-slate-400">Internal notes
-            <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} className="gx-input mt-1 min-h-20" placeholder="Contract terms, approval notes, campaign details" />
-          </label>
-          <button disabled={saving} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-50">
-            {saving ? "Creating link…" : "Create referral partner & link"}
+      <div className="flex flex-wrap gap-2">
+        {SECTIONS.map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            className={`rounded-full px-3 py-1 text-xs font-bold ${section === id ? "bg-cyan-400 text-slate-950" : "bg-slate-800 text-slate-200"}`}
+            onClick={() => {
+              setSection(id);
+              setFormError(null);
+              setFormMessage(null);
+            }}
+            data-testid={`referral-admin-tab-${id}`}
+          >
+            {label}
           </button>
-          {createdLink && (
-            <div className="rounded-xl border border-emerald-400/30 bg-emerald-400/5 p-3">
-              <p className="text-xs font-bold text-emerald-200">Referral link created</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <code className="min-w-0 flex-1 break-all text-xs text-white">{createdLink}</code>
-                <button type="button" onClick={() => { void navigator.clipboard.writeText(createdLink).then(() => toast.success("Referral link copied.")); }} className="rounded-lg border border-white/15 px-3 py-2 text-xs text-white">
-                  <Copy size={13} className="inline mr-1" /> Copy
-                </button>
-              </div>
-            </div>
-          )}
-          <div className="rounded-lg border border-white/10 bg-black/20 p-3 text-xs leading-5 text-slate-400">
-            <b className="text-white">Campaign terms:</b> 10% first-deposit bonus for the referred user and 10% commission for the partner. The first-deposit bonus is credited after a real deposit settles. Partner commission is held for seven days, then reviewed and paid in batches.
-          </div>
-        </form>
+        ))}
+      </div>
+      {formError && <p className="rounded-xl border border-red-400/40 bg-red-950/40 p-3 text-sm text-red-200" data-testid="referral-admin-error">{formError}</p>}
+      {formMessage && <p className="rounded-xl border border-emerald-400/40 bg-emerald-950/30 p-3 text-sm text-emerald-100" data-testid="referral-admin-success">{formMessage}</p>}
+      {query.isLoading && <Loading label="Loading referral records..." />}
+      {query.isError && <p className="text-sm text-red-300" data-testid="referral-admin-load-error">{errMsg(query.error)}</p>}
 
-        <div className="space-y-4 rounded-2xl border border-white/10 bg-[#0B1421] p-5">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-bold text-white">Partner performance</h2>
-            <Link2 size={17} className="text-slate-500" />
-          </div>
-          {partnersQuery.isLoading ? <p className="text-sm text-slate-500">Loading referral partners…</p> : null}
-          {partnerRows.length === 0 && !partnersQuery.isLoading ? <p className="text-sm text-slate-500">No referral partners have been created yet.</p> : null}
-          <div className="space-y-3">
-            {partnerRows.map((partner) => {
-              const link = partner.referral_path ? window.location.origin + partner.referral_path : "";
-              return (
-                <div key={partner.partner_id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="font-bold text-white">{partner.display_name}</p>
-                      <p className="mt-0.5 text-xs text-slate-500">{partner.contact_email || partner.social_handle || "No contact provided"}</p>
-                      <p className="mt-1 font-mono text-xs text-emerald-300">{partner.share_code || "No code"}</p>
-                    </div>
-                    <button onClick={() => void setPartnerActive(partner)} className={`rounded-lg border px-2.5 py-1.5 text-xs font-semibold ${partner.is_active ? "border-emerald-400/30 text-emerald-300" : "border-rose-400/30 text-rose-300"}`}>
-                      {partner.is_active ? "Active · Disable" : "Disabled · Enable"}
-                    </button>
-                  </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2 text-xs sm:grid-cols-4">
-                    <div><p className="text-slate-500">Signups</p><b className="text-white">{partner.attributed_signups}</b></div>
-                    <div><p className="text-slate-500">Pending</p><b className="text-amber-200">{money(partner.pending_commission)}</b></div>
-                    <div><p className="text-slate-500">Approved</p><b className="text-emerald-200">{money(partner.approved_commission)}</b></div>
-                    <div><p className="text-slate-500">Paid</p><b className="text-white">{money(partner.paid_commission)}</b></div>
-                  </div>
-                  {link && <div className="mt-3 flex items-center gap-2"><p className="min-w-0 flex-1 truncate text-xs text-slate-500">{link}</p><button onClick={() => { void navigator.clipboard.writeText(link).then(() => toast.success("Referral link copied.")); }} className="rounded-md border border-white/10 px-2 py-1 text-xs text-slate-200"><Copy size={12} /></button></div>}
-                </div>
-              );
-            })}
-          </div>
+      {section === "overview" && data && (
+        <div className="grid gap-4 md:grid-cols-3" data-testid="referral-admin-overview">
+          <Stat label="Clicks" value={data.clicks} />
+          <Stat label="Registrations" value={data.registrations} />
+          <Stat label="First deposits" value={data.first_deposits} />
+          <Stat label="Conversion" value={data.conversion_rate} />
+          <Stat label="Fraud flags" value={data.fraud_flags} />
+          <Stat label="Partners" value={data.partners} />
         </div>
-      </section>
+      )}
 
-      <section className="grid gap-5 xl:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-[#0B1421] p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <ShieldCheck size={17} className="text-amber-300" />
-            <h2 className="text-lg font-bold text-white">Commissions awaiting review</h2>
-          </div>
-          <div className="space-y-3">
-            {pendingRows.length === 0 ? <p className="text-sm text-slate-500">No commissions are awaiting review.</p> : null}
-            {pendingRows.map((reward) => (
-              <div key={reward.reward_id} className="rounded-xl border border-white/10 bg-black/20 p-3">
-                <div className="flex flex-wrap items-start justify-between gap-2">
-                  <div><p className="font-semibold text-white">{reward.beneficiary_name || "GTEX referrer"}</p><p className="text-xs text-slate-500">{reward.beneficiary_email || reward.share_code || "Referral partner"}</p></div>
-                  <b className="text-amber-200">{money(reward.amount, String(reward.unit || "NGN").toUpperCase())}</b>
-                </div>
-                <p className="mt-2 text-xs text-slate-400">First deposit: {money(reward.deposit_amount_fiat, "NGN")} · {reward.deposit_reference || "verified deposit"}</p>
-                <p className="mt-1 text-xs text-slate-500">Hold until: {reward.hold_until ? new Date(reward.hold_until).toLocaleString() : "No hold"}</p>
-                {reward.review_reason && <p className="mt-1 text-xs text-slate-500">{reward.review_reason}</p>}
-                <div className="mt-3 flex gap-2">
-                  <button onClick={() => void reviewReward(reward.reward_id, "approve")} className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-slate-950">Approve</button>
-                  <button onClick={() => void reviewReward(reward.reward_id, "block")} className="rounded-lg border border-rose-400/30 px-3 py-2 text-xs font-bold text-rose-200">Block</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="rounded-2xl border border-white/10 bg-[#0B1421] p-5">
-          <div className="mb-4 flex items-center gap-2">
-            <Wallet size={17} className="text-emerald-300" />
-            <h2 className="text-lg font-bold text-white">Approved commissions · payout batch</h2>
-          </div>
-          <p className="mb-3 text-xs leading-5 text-slate-400">Select approved, hold-cleared commissions that have already been transferred externally. Recording this batch marks them paid and appends an immutable referral payout audit entry; it does not initiate the bank transfer.</p>
-          <div className="space-y-2">
-            {approvedRows.length === 0 ? <p className="text-sm text-slate-500">No approved commissions are ready for payout.</p> : null}
-            {approvedRows.map((reward) => (
-              <label key={reward.reward_id} className="flex items-start gap-2 rounded-lg border border-white/10 bg-black/20 p-3 text-xs">
-                <input type="checkbox" checked={selected.includes(reward.reward_id)} onChange={() => toggleSelected(reward.reward_id)} className="mt-0.5" />
-                <span className="min-w-0 flex-1">
-                  <span className="block font-semibold text-white">{reward.beneficiary_name || "GTEX referrer"}</span>
-                  <span className="block text-slate-500">{reward.share_code || reward.beneficiary_email || "First-deposit referral"}</span>
-                </span>
-                <b className="shrink-0 text-emerald-200">{money(reward.amount, String(reward.unit || "NGN").toUpperCase())}</b>
-              </label>
-            ))}
-          </div>
-          <div className="mt-4 rounded-lg border border-white/10 bg-black/20 p-3">
-            <p className="text-xs text-slate-400">Selected: {selected.length} · Total: {money(selectedTotal.reduce((sum, reward) => sum + Number(reward.amount || 0), 0), selectedCurrencies[0] || "NGN")}</p>
-            <label className="mt-3 block text-xs text-slate-400">External payment / batch reference
-              <input value={paymentReference} onChange={(e) => setPaymentReference(e.target.value)} className="gx-input mt-1" placeholder="Bank transfer reference or payout batch ID" />
+      {section === "create" && (
+        <form className="grid max-w-xl gap-3" onSubmit={createPartner} data-testid="referral-admin-create">
+          {(["display_name", "contact_email", "social_handle", "campaign_name", "code", "payout_currency"] as const).map((field) => (
+            <label key={field} className="text-xs uppercase tracking-wide text-slate-400">
+              {field.replace(/_/g, " ")}
+              <input
+                className="gx-input mt-1"
+                value={(partnerForm as any)[field]}
+                onChange={(event) => setPartnerForm((current) => ({ ...current, [field]: event.target.value }))}
+                required={field === "display_name" || field === "campaign_name"}
+              />
             </label>
-            <button disabled={payoutSaving || !selected.length || !paymentReference.trim()} onClick={() => void payBatch()} className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-3 text-sm font-bold text-slate-950 disabled:opacity-40">
-              {payoutSaving ? "Recording payout…" : "Record selected payouts as paid"}
+          ))}
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Notes
+            <textarea className="gx-input mt-1" value={partnerForm.notes} onChange={(event) => setPartnerForm((current) => ({ ...current, notes: event.target.value }))} />
+          </label>
+          <label className="text-xs uppercase tracking-wide text-slate-400">
+            Contractual terms
+            <textarea className="gx-input mt-1" value={partnerForm.contractual_terms} onChange={(event) => setPartnerForm((current) => ({ ...current, contractual_terms: event.target.value }))} />
+          </label>
+          <button className="gx-btn-primary" disabled={busy} type="submit">Create partner and link</button>
+        </form>
+      )}
+
+      {section === "partners" && Array.isArray(data) && (
+        <ul className="space-y-3" data-testid="referral-admin-partners">
+          {data.map((partner: any) => (
+            <li key={partner.id} className="rounded-2xl border border-slate-700 p-4">
+              <p className="font-bold text-white">{partner.display_name} · {partner.status}</p>
+              <p className="text-sm text-slate-400">{partner.contact_email || "No login required"} · {partner.social_handle || "No handle"}</p>
+              {(partner.campaigns || []).map((campaign: any) => (
+                <p key={campaign.id} className="mt-2 text-sm text-cyan-200">{campaign.code} · {campaign.link}</p>
+              ))}
+              <div className="mt-3 flex gap-2">
+                <button type="button" className="gx-btn-secondary" disabled={busy} onClick={async () => {
+                  setFormError(null);
+                  setFormMessage(null);
+                  try {
+                    await api.post(`/admin/referrals/affiliate/partners/${partner.id}/status`, {
+                      active: partner.status !== "active",
+                      reason: partner.status === "active" ? "Suspended from the affiliate centre" : "Reactivated from the affiliate centre",
+                    });
+                    setFormMessage(partner.status === "active" ? "Partner suspended." : "Partner reactivated.");
+                    await refresh();
+                  } catch (error) {
+                    setFormError(errMsg(error));
+                  }
+                }}>{partner.status === "active" ? "Suspend" : "Reactivate"}</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {section === "links" && Array.isArray(data) && (
+        <ul className="space-y-2" data-testid="referral-admin-links">
+          {data.map((link: any) => (
+            <li key={link.id} className="text-sm text-slate-200">{link.name}: {link.code} · {link.link} · {link.status}</li>
+          ))}
+        </ul>
+      )}
+
+      {section === "attributions" && Array.isArray(data) && (
+        <ul className="space-y-2 text-sm text-slate-200" data-testid="referral-admin-attributions">
+          {data.map((row: any) => (
+            <li key={row.id}>{row.referred_username || row.referred_user_id} · {row.account_type} · {row.share_code} · {row.status}</li>
+          ))}
+        </ul>
+      )}
+
+      {section === "conversions" && Array.isArray(data) && (
+        <ul className="space-y-2 text-sm text-slate-200">
+          {data.map((row: any) => (
+            <li key={row.id}>{row.qualifying_currency} {row.qualifying_amount} · bonus {row.reward_amount} {row.reward_unit} · {row.status}</li>
+          ))}
+        </ul>
+      )}
+
+      {(section === "pending" || section === "approved") && Array.isArray(data) && (
+        <ul className="space-y-3" data-testid={`referral-admin-${section}`}>
+          {data.map((row: any) => (
+            <li key={row.id} className="rounded-2xl border border-slate-700 p-4 text-sm text-slate-200">
+              <p>{row.qualifying_currency} {row.reward_amount} · hold until {row.hold_until || "n/a"} · {row.status}</p>
+              {section === "approved" && (
+                <label className="mt-2 flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={selectedRewards.includes(row.id)}
+                    onChange={(event) => setSelectedRewards((current) => event.target.checked ? [...current, row.id] : current.filter((id) => id !== row.id))}
+                  />
+                  Select for payout
+                </label>
+              )}
+              {section === "pending" && (
+                <div className="mt-2 flex gap-2">
+                  <button type="button" className="gx-btn-primary" onClick={() => decide(row.id, "approve")}>Approve</button>
+                  <button type="button" className="gx-btn-secondary" onClick={() => decide(row.id, "block")}>Block</button>
+                  <button type="button" className="gx-btn-secondary" onClick={() => decide(row.id, "hold")}>Hold</button>
+                  <button type="button" className="gx-btn-secondary" onClick={() => decide(row.id, "reverse")}>Reverse</button>
+                </div>
+              )}
+            </li>
+          ))}
+          {section === "approved" && (
+            <button type="button" className="gx-btn-primary" disabled={busy || selectedRewards.length === 0} onClick={createBatch} data-testid="referral-admin-create-batch">
+              Create draft payout
             </button>
-          </div>
+          )}
+        </ul>
+      )}
+
+      {section === "payouts" && (
+        <div className="space-y-4" data-testid="referral-admin-payouts">
+          {Array.isArray(data) && data.map((group: any) => (
+            <p key={`${group.beneficiary_kind}-${group.beneficiary_id}-${group.currency}`} className="text-sm text-slate-200">
+              {group.beneficiary_kind} {group.beneficiary_id}: {group.currency} {group.total} · threshold {group.threshold || "not set"} · destination {group.destination_label || "not recorded"}
+            </p>
+          ))}
+          <form className="grid max-w-md gap-3" onSubmit={confirmBatch}>
+            <input className="gx-input" placeholder="Draft batch id" value={batchId} onChange={(event) => setBatchId(event.target.value)} data-testid="referral-admin-batch-id" />
+            <input className="gx-input" placeholder="Bank or provider reference" value={paymentReference} onChange={(event) => setPaymentReference(event.target.value)} data-testid="referral-admin-payment-reference" />
+            <button className="gx-btn-primary" disabled={busy} type="submit" data-testid="referral-admin-confirm-payout">Record completed transfer</button>
+          </form>
         </div>
-      </section>
+      )}
+
+      {section === "history" && Array.isArray(data) && (
+        <ul className="space-y-2 text-sm text-slate-200" data-testid="referral-admin-history">
+          {data.map((batch: any) => (
+            <li key={batch.id}>{batch.status} · {batch.currency} {batch.total} · {batch.external_reference || "no reference"} · transferred by GTEX: {String(batch.transferred_by_gtex)}</li>
+          ))}
+        </ul>
+      )}
+
+      {section === "fraud" && Array.isArray(data) && (
+        <ul className="space-y-2 text-sm text-slate-200">
+          {data.map((flag: any) => (
+            <li key={flag.id}>{flag.flag_type} · {flag.severity} · {flag.status}</li>
+          ))}
+        </ul>
+      )}
+
+      {section === "analytics" && data && (
+        <div className="space-y-3" data-testid="referral-admin-analytics">
+          <p className="text-sm text-slate-200">Clicks {data.clicks} · registrations {data.registrations} · deposits {data.first_deposits}</p>
+          <a className="text-cyan-300 underline" href={`${api.defaults.baseURL}/admin/referrals/affiliate/reports/rewards`}>Download rewards CSV</a>
+          <a className="ml-4 text-cyan-300 underline" href={`${api.defaults.baseURL}/admin/referrals/affiliate/reports/payouts`}>Download payout CSV</a>
+        </div>
+      )}
+
+      {section === "settings" && settings && (
+        <form className="grid max-w-xl gap-3" onSubmit={saveSettings} data-testid="referral-admin-settings">
+          <label className="text-xs text-slate-400">User bonus basis points
+            <input className="gx-input mt-1" value={settings.user_bonus_bps} onChange={(event) => setSettingsForm({ ...settings, user_bonus_bps: event.target.value })} />
+          </label>
+          <label className="text-xs text-slate-400">Referrer commission basis points
+            <input className="gx-input mt-1" value={settings.referrer_commission_bps} onChange={(event) => setSettingsForm({ ...settings, referrer_commission_bps: event.target.value })} />
+          </label>
+          <label className="text-xs text-slate-400">Hold days
+            <input className="gx-input mt-1" value={settings.hold_days} onChange={(event) => setSettingsForm({ ...settings, hold_days: event.target.value })} />
+          </label>
+          <label className="text-xs text-slate-400">Payout weekday (0 = Monday)
+            <input className="gx-input mt-1" value={settings.payout_weekday} onChange={(event) => setSettingsForm({ ...settings, payout_weekday: event.target.value })} />
+          </label>
+          <label className="flex items-center gap-2 text-sm text-slate-200">
+            <input type="checkbox" checked={Boolean(settings.is_active)} onChange={(event) => setSettingsForm({ ...settings, is_active: event.target.checked })} />
+            Programme active
+          </label>
+          <p className="text-xs text-slate-400">Eligible: {(settings.eligible_account_types || []).join(", ")}</p>
+          <p className="text-xs text-slate-400">Deposit types: {(settings.qualifying_deposit_types || []).join(", ")}</p>
+          <p className="text-xs text-slate-400">NGN threshold: {(settings.min_payout_thresholds || {}).NGN}</p>
+          <button className="gx-btn-primary" disabled={busy} type="submit">Save settings</button>
+        </form>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-slate-700 p-4">
+      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-2 text-2xl font-black text-white">{String(value ?? "0")}</p>
     </div>
   );
 }

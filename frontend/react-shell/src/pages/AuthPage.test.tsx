@@ -219,4 +219,45 @@ describe("GTEX signup and trader authenticator flow", () => {
     expect(mockLogin).toHaveBeenCalledWith("user@example.com", "Password123");
     expect(mockNavigate).toHaveBeenCalledWith("/app");
   });
+
+  it("keeps a referral code from the signup URL through registration", async () => {
+    window.sessionStorage.clear();
+    mockSearchParams = new URLSearchParams("ref=creator10");
+    mockSignup.mockResolvedValueOnce({ user: { id: "user-9", account_type: "user" } });
+    act(() => root.render(<AuthPage mode="signup" />));
+    expect(container.textContent).toContain("Register with this referral code and receive a 10% bonus on your first qualifying deposit.");
+    expect((container.querySelector('[data-testid="signup-referral-code"]') as HTMLInputElement).value).toBe("CREATOR10");
+    setInput(container.querySelector('[data-testid="signup-fullname-input"]') as HTMLInputElement, "Test User");
+    setInput(container.querySelector('[data-testid="signup-username-input"]') as HTMLInputElement, "test_user");
+    setInput(container.querySelector('[data-testid="signup-email-input"]') as HTMLInputElement, "test@example.com");
+    setInput(container.querySelector('[data-testid="signup-password-input"]') as HTMLInputElement, "ValidPassword123!");
+    clickCheckbox(container.querySelector('[data-testid="signup-over18-checkbox"]') as HTMLInputElement);
+    clickCheckbox(container.querySelector('[data-testid="signup-terms-checkbox"]') as HTMLInputElement);
+    await act(async () => {
+      (container.querySelector('[data-testid="signup-form"]') as HTMLFormElement).dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    expect(mockSignup).toHaveBeenCalledWith(expect.objectContaining({ account_type: "user", referral_code: "CREATOR10" }));
+  });
+
+  it("accepts a manually entered referral code", async () => {
+    window.sessionStorage.clear();
+    mockSignup.mockResolvedValueOnce({ user: { id: "user-10", account_type: "user" } });
+    act(() => root.render(<AuthPage mode="signup" />));
+    setInput(container.querySelector('[data-testid="signup-referral-code"]') as HTMLInputElement, "manual10");
+    expect(container.querySelector('[data-testid="signup-referral-applied"]')?.textContent).toContain("MANUAL10");
+    setInput(container.querySelector('[data-testid="signup-fullname-input"]') as HTMLInputElement, "Test User");
+    setInput(container.querySelector('[data-testid="signup-username-input"]') as HTMLInputElement, "test_user");
+    setInput(container.querySelector('[data-testid="signup-email-input"]') as HTMLInputElement, "test@example.com");
+    setInput(container.querySelector('[data-testid="signup-password-input"]') as HTMLInputElement, "ValidPassword123!");
+    clickCheckbox(container.querySelector('[data-testid="signup-over18-checkbox"]') as HTMLInputElement);
+    clickCheckbox(container.querySelector('[data-testid="signup-terms-checkbox"]') as HTMLInputElement);
+    await act(async () => {
+      (container.querySelector('[data-testid="signup-form"]') as HTMLFormElement).dispatchEvent(
+        new Event("submit", { bubbles: true, cancelable: true }),
+      );
+    });
+    expect(mockSignup).toHaveBeenCalledWith(expect.objectContaining({ referral_code: "MANUAL10" }));
+  });
 });

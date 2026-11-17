@@ -33,6 +33,13 @@ export default function CreatorAccess() {
     retry: false,
   });
 
+  const affiliate = useQuery({
+    queryKey: ["creator-affiliate", user?.id],
+    queryFn: async () => (await api.get("/referrals/me/affiliate")).data,
+    enabled: Boolean(user?.id) && accountType === "creator",
+    retry: false,
+  });
+
   const { data: application, isLoading, isError, error, refetch } = useQuery({
     queryKey: ["creator-application", user?.id],
     queryFn: async () => (await api.get("/creator/application")).data,
@@ -178,6 +185,19 @@ export default function CreatorAccess() {
           </div>
         </div>
       </section>
+
+      {isCreatorAccount && (
+        <Panel eyebrow="Affiliate" title="Creator referral performance">
+          {affiliate.isLoading && <p className="text-sm text-slate-400">Loading affiliate performance...</p>}
+          {affiliate.isError && <p className="text-sm text-red-300" data-testid="creator-affiliate-error">{errMsg(affiliate.error)}</p>}
+          {affiliate.data && (
+            <div data-testid="creator-affiliate-summary">
+              <p className="text-sm text-slate-300">Code {affiliate.data.code}. Registrations {affiliate.data.registrations}. Qualifying deposits {affiliate.data.qualifying_deposits}.</p>
+              <Link to="/app/referrals" className="mt-3 inline-flex text-sm font-bold text-cyan-300">Open referral dashboard</Link>
+            </div>
+          )}
+        </Panel>
+      )}
 
       {isCreatorAccount && (
         <Panel eyebrow="Dedicated account" title="Creator account active">

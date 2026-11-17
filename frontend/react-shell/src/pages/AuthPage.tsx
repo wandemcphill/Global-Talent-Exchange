@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { ArrowRight, Building2, Copy, Megaphone, ShieldCheck } from "lucide-react";
@@ -146,6 +146,18 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const [accountType, setAccountType] = useState<AccountType>(
     requestedRole === "creator" ? "creator" : requestedRole === "trader" || requestedRole === "coin_trader" ? "coin_trader" : "user",
   );
+  const [referralCode, setReferralCode] = useState(() => {
+    const fromUrl = (searchParams.get("ref") || searchParams.get("referral") || "").trim();
+    const stored = window.sessionStorage.getItem("gtex_referral_code") || "";
+    return (fromUrl || stored).trim().toUpperCase();
+  });
+  useEffect(() => {
+    const fromUrl = (searchParams.get("ref") || searchParams.get("referral") || "").trim();
+    if (!fromUrl) return;
+    const normalized = fromUrl.toUpperCase();
+    window.sessionStorage.setItem("gtex_referral_code", normalized);
+    setReferralCode(normalized);
+  }, [searchParams]);
   const [userFields, setUserFields] = useState({
     full_name: "",
     username: "",
@@ -346,6 +358,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       if (TURNSTILE_SITE_KEY && turnstileToken) {
         securityFields.turnstile_token = turnstileToken;
       }
+      const referralFields = referralCode.trim() ? { referral_code: referralCode.trim() } : {};
 
       let signupPayload: Record<string, unknown>;
       if (accountType === "creator") {
@@ -362,6 +375,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           ...(creatorFields.main_club_supported.trim()
             ? { main_club_supported: creatorFields.main_club_supported.trim() }
             : {}),
+          ...referralFields,
           ...securityFields,
         };
       } else if (accountType === "coin_trader") {
@@ -380,6 +394,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           wallet_label: traderFields.wallet_label.trim() || "GTEX Trading Wallet",
           totp_secret: totpSecret,
           totp_code: traderFields.totp_code.trim(),
+          ...referralFields,
           ...securityFields,
         };
       } else {
@@ -392,6 +407,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           password: userFields.password,
           is_over_18: true,
           ...(userFields.date_of_birth.trim() ? { date_of_birth: userFields.date_of_birth.trim() } : {}),
+          ...referralFields,
           ...securityFields,
         };
       }
@@ -935,6 +951,32 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
             </section>
           )}
 
+          {mode === "signup" && (
+            <div className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3" data-testid="signup-referral-panel">
+              <p className="text-sm leading-6 text-slate-200">
+                Register with this referral code and receive a 10% bonus on your first qualifying deposit.
+              </p>
+              <Field label="Referral code" error={fieldErrors.referral_code}>
+                <input
+                  type="text"
+                  data-testid="signup-referral-code"
+                  className="gx-input mt-2 uppercase"
+                  value={referralCode}
+                  onChange={(event) => {
+                    const next = event.target.value.toUpperCase();
+                    setReferralCode(next);
+                    window.sessionStorage.setItem("gtex_referral_code", next.trim());
+                  }}
+                  placeholder="CREATOR10"
+                />
+              </Field>
+              {referralCode.trim() && (
+                <p className="mt-2 text-xs text-cyan-200" data-testid="signup-referral-applied">
+                  Applied referral code: {referralCode.trim()}
+                </p>
+              )}
+            </div>
+          )}
           <Field label="Email" error={fieldErrors.email}>
             <input
               required
