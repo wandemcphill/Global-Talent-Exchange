@@ -136,6 +136,10 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requestedRole = String(searchParams.get("role") || "").toLowerCase();
+  const referralCode = mode === "signup"
+    ? String(searchParams.get("ref") || searchParams.get("referral_code") || "").trim().toLowerCase()
+    : "";
+  const referralSignupFields = referralCode ? { referral_code: referralCode } : {};
 
   const [busy, setBusy] = useState(false);
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
@@ -347,6 +351,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       if (accountType === "creator") {
         signupPayload = {
           account_type: "creator",
+          ...referralSignupFields,
           creator_name: creatorFields.creator_name.trim(),
           username: creatorFields.username.trim(),
           email: userFields.email.trim(),
@@ -362,6 +367,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       } else if (accountType === "coin_trader") {
         signupPayload = {
           account_type: "coin_trader",
+          ...referralSignupFields,
           full_name: traderFields.full_name.trim(),
           trading_alias: traderFields.trading_alias.trim(),
           email: userFields.email.trim(),
@@ -379,6 +385,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       } else {
         signupPayload = {
           account_type: "user",
+          ...referralSignupFields,
           full_name: userFields.full_name.trim(),
           username: userFields.username.trim(),
           email: userFields.email.trim(),
