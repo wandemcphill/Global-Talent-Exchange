@@ -95,6 +95,24 @@ class ConsoleSPARequestHandler(SimpleHTTPRequestHandler):
         pass
 
 
+REALTIME_SOCKET_GLOB = "**/realtime/stream**"
+
+
+def hold_realtime_off_production(page) -> None:
+    """Do not present the asset-test placeholder to the production realtime API.
+
+    The shell is built with the production API origin. A string in localStorage
+    only opens the client route. Production rejects that string with HTTP 403,
+    which is the correct authorization result. This intercept never connects
+    upstream and does not change that check.
+    """
+
+    def _intercept(_ws) -> None:
+        return None
+
+    page.route_web_socket(REALTIME_SOCKET_GLOB, _intercept)
+
+
 def seed_test_database():
     session = _session()
     # service.club_detail() queries player_contracts / academy_players / players via authoritative_squad_counts.
@@ -179,6 +197,7 @@ def run_verification(headless: bool = True) -> int:
 
         context = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
         page = context.new_page()
+        hold_realtime_off_production(page)
 
         page_errors = []
         page.on("pageerror", lambda err: page_errors.append(f"[page] {err}"))
@@ -573,6 +592,7 @@ def run_verification(headless: bool = True) -> int:
         context_fail = browser.new_context(viewport={"width": 1600, "height": 1000}, device_scale_factor=1.25)
         try:
             page_fail = context_fail.new_page()
+            hold_realtime_off_production(page_fail)
             page_fail.on("pageerror", lambda err: page_errors.append(f"[page_fail] {err}"))
             page_fail.on(
                 "response",
@@ -674,6 +694,7 @@ def run_verification(headless: bool = True) -> int:
         )
         try:
             page_mobile = context_mobile.new_page()
+            hold_realtime_off_production(page_mobile)
             page_mobile.on("pageerror", lambda err: page_errors.append(f"[page_mobile] {err}"))
             page_mobile.route("**/api/**", handle_api)
             page_mobile.route("http://localhost:8000/**", handle_api)
