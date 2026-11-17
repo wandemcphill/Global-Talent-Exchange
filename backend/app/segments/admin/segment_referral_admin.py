@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 
-from app.auth.dependencies import get_current_user
+from app.auth.dependencies import get_current_user, get_session
 from app.models.user import User
 from app.models.referral_partner import ReferralPartner
 from app.models.share_code import ShareCode
@@ -139,6 +139,7 @@ def create_referral_partner(
         payout_destination_reference=(payload.payout_destination_reference or "").strip() or None,
         notes=(payload.notes or "").strip() or None,
         is_active=True,
+        status="active",
         created_by_user_id=current_user.id,
     )
     session.add(partner)
@@ -154,6 +155,7 @@ def create_referral_partner(
         current_uses=0,
         starts_at=payload.starts_at,
         ends_at=payload.ends_at,
+        referral_partner_id=partner.id,
         metadata_json={
             "origin": "admin_referral_affiliate",
             "referral_partner_id": partner.id,
@@ -190,6 +192,7 @@ def set_referral_partner_status(
     if partner is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="referral_partner_not_found")
     partner.is_active = payload.is_active
+    partner.status = "active" if payload.is_active else "suspended"
     for code in session.scalars(select(ShareCode)).all():
         if str((code.metadata_json or {}).get("referral_partner_id") or "") == partner.id:
             code.is_active = payload.is_active
