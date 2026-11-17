@@ -21,7 +21,6 @@ from sqlalchemy import select, text
 from sqlalchemy.engine.url import make_url
 
 from app.core.database import create_database_engine, create_session_factory, load_model_modules
-from app.models.base import Base
 from app.models.competition_match_execution import CompetitionMatchExecution
 from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
 
@@ -73,12 +72,30 @@ def _phase1():
     return module
 
 
+def _migrate_disposable_database(url: str) -> None:
+    """Apply the real migrations.
+
+    Metadata.create_all quotes a model server_default that PostgreSQL rejects.
+    The migration uses an unquoted CURRENT_TIMESTAMP, which is the schema the
+    application actually runs.
+    """
+
+    from alembic import command
+    from alembic.config import Config
+
+    backend = Path(__file__).resolve().parents[2]
+    config = Config(str(backend / "migrations" / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")
+
+
 def test_two_workers_claim_one_canonical_execution() -> None:
     """Application-level claim. This is not the standalone SKIP LOCKED probe."""
 
-    engine = create_database_engine(_local_postgres_url())
+    url = _local_postgres_url()
+    _migrate_disposable_database(url)
+    engine = create_database_engine(url)
     load_model_modules()
-    Base.metadata.create_all(bind=engine)
     session_factory = create_session_factory(engine)
     helpers = _phase1()
     now = datetime.now(timezone.utc)
