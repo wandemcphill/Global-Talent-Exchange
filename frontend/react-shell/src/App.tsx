@@ -29,6 +29,7 @@ import InboxPage from "@/pages/Inbox";
 import CommunityPage from "@/pages/Community";
 const Admin = React.lazy(() => import("@/pages/Admin"));
 const AdminAdvertising = React.lazy(() => import("@/pages/AdminAdvertising"));
+const ReferralAdmin = React.lazy(() => import("@/pages/ReferralAdmin"));
 const CommercialPublicPortal = React.lazy(() => import("@/pages/CommercialPublicPortal"));
 import AdvertiserAuthPage from "@/pages/AdvertiserAuthPage";
 const AdvertiserWorkspacePortal = React.lazy(() => import("@/pages/AdvertiserWorkspacePortal"));
@@ -209,6 +210,7 @@ export default function App() {
                 <Route path="inbox" element={<InboxPage />} />
                 <Route path="community" element={<CommunityPage />} />
                 <Route path="admin" element={<Admin />} />
+                <Route path="admin/referrals" element={<ReferralAdmin />} />
                 <Route path="admin/advertising" element={<AdminAdvertising initialSection="campaigns" />} />
                 <Route path="admin/advertising/accounts" element={<AdminAdvertising initialSection="accounts" />} />
                 <Route path="admin/advertising/campaigns" element={<AdminAdvertising initialSection="campaigns" />} />
