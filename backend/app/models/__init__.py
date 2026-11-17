@@ -1209,6 +1209,7 @@ __all__ = [
     "ReferralEvent",
     "ReferralReward",
     "ReferralRewardLedger",
+    "ReferralPartner",
     "ScoutAssignment",
     "ScoutingRegion",
     "ServicePricingRule",
