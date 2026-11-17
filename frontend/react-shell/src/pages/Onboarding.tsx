@@ -6,7 +6,8 @@ import { AlertTriangle, ArrowRight, Check, Dna, ShoppingCart, Sparkles, Sprout, 
 import { api, errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
 import { clubCreateErrorMessage } from "./clubLocationCatalog";
-import { buildClubDNA, buildCrestLibrary, buildKitSet, clubShortCode, KIT_PRESETS, kitSwatchDataUri } from "./clubIdentityDefaults";
+import { buildClubDNA, buildCrestLibrary, buildKitSet, CREST_PAGE_SIZE, filterCrestLibrary, filterKitPresets, KIT_PAGE_SIZE, KIT_PRESETS, kitSwatchDataUri, preferredCrestIndex } from "./clubIdentityDefaults";
+import { JerseyTurntable } from "./JerseyTurntable";
 import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import { useAuth } from "@/lib/auth";
 import { fmt, useClub } from "@/lib/owner";
@@ -982,6 +983,12 @@ function CreateFirstClub({ onDone, onCancel }: any) {
   const [recommendation, setRecommendation] = useState<any>(null);
   const [selectedCrestIdx, setSelectedCrestIdx] = useState(0);
   const [crestFilter, setCrestFilter] = useState<"all" | "heritage" | "modern" | "royal">("all");
+  const [crestShape, setCrestShape] = useState<"all" | "shield" | "round" | "diamond" | "pennant">("all");
+  const [crestQuery, setCrestQuery] = useState("");
+  const [crestPage, setCrestPage] = useState(0);
+  const [kitPattern, setKitPattern] = useState("all");
+  const [kitQuery, setKitQuery] = useState("");
+  const [kitPage, setKitPage] = useState(0);
   const [selectedKitTab, setSelectedKitTab] = useState<"home" | "away" | "third" | "goalkeeper">("home");
   const [selectedKitPresetId, setSelectedKitPresetId] = useState(KIT_PRESETS[0].id);
   const [kitSet, setKitSet] = useState<any>(null);
@@ -1000,7 +1007,6 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       return;
     }
 
-    const shortCode = clubShortCode(clubName);
     const dna = buildClubDNA(
       clubName,
       location.cityName,
@@ -1010,20 +1016,27 @@ function CreateFirstClub({ onDone, onCancel }: any) {
       nationalityFocus,
     );
     const crestConcepts = buildCrestLibrary(clubName);
-    const initialCrestIndex = preferredStyle === "modern" ? 19 : preferredStyle === "metallic" ? 38 : 0;
+    const initialCrestIndex = preferredCrestIndex(crestConcepts, preferredStyle);
     const firstKitPreset = KIT_PRESETS[0];
 
     setRecommendation({
-      short_code: shortCode,
+      short_code: crestConcepts[0]?.initials,
       crest_concepts: crestConcepts,
       ...dna,
     });
     setSelectedCrestIdx(initialCrestIndex);
+    setCrestFilter("all");
+    setCrestShape("all");
+    setCrestQuery("");
+    setCrestPage(0);
+    setKitPattern("all");
+    setKitQuery("");
+    setKitPage(0);
     setSelectedKitPresetId(firstKitPreset.id);
-    setKitSet(buildKitSet(firstKitPreset.id, shortCode));
+    setKitSet(buildKitSet(firstKitPreset.id, clubName));
     setSelectedKitTab("home");
     setWizardStep("studio");
-    toast.success("Design library ready: 72 crest designs and 16 complete uniform collections.");
+    toast.success(`Design library ready: ${crestConcepts.length} crest designs and ${KIT_PRESETS.length} uniform collections.`);
   };
 
   const create = async () => {
@@ -1151,12 +1164,23 @@ function CreateFirstClub({ onDone, onCancel }: any) {
     }
   };
 
+  const crestConcepts = recommendation?.crest_concepts || [];
+  const visibleCrests = filterCrestLibrary(crestConcepts, { finish: crestFilter, shape: crestShape, query: crestQuery });
+  const crestPageCount = Math.max(1, Math.ceil(visibleCrests.length / CREST_PAGE_SIZE));
+  const safeCrestPage = Math.min(crestPage, crestPageCount - 1);
+  const pagedCrests = visibleCrests.slice(safeCrestPage * CREST_PAGE_SIZE, safeCrestPage * CREST_PAGE_SIZE + CREST_PAGE_SIZE);
+  const visibleKits = filterKitPresets(KIT_PRESETS, { pattern: kitPattern, query: kitQuery });
+  const kitPageCount = Math.max(1, Math.ceil(visibleKits.length / KIT_PAGE_SIZE));
+  const safeKitPage = Math.min(kitPage, kitPageCount - 1);
+  const pagedKits = visibleKits.slice(safeKitPage * KIT_PAGE_SIZE, safeKitPage * KIT_PAGE_SIZE + KIT_PAGE_SIZE);
+  const featuredCrests = safeCrestPage === 0 && crestFilter === "all" && crestShape === "all" && crestQuery.trim() === "";
+
   return (
     <div
       className="gx-pitch-grid flex min-h-screen items-center justify-center bg-[#070B11] px-4 py-8"
       data-testid="create-first-club"
     >
-      <div className="w-full max-w-2xl">
+      <div className={`w-full ${wizardStep === "studio" ? "max-w-5xl" : "max-w-2xl"}`}>
         {/* Step Indicator Header */}
         <div className="mb-4 flex items-center justify-between text-xs text-slate-400">
           <span className="font-semibold uppercase tracking-wider text-emerald-400">
@@ -1373,49 +1397,83 @@ function CreateFirstClub({ onDone, onCancel }: any) {
               <p className="mt-1 text-slate-300 italic">{recommendation.vision_narrative}</p>
             </div>
 
-            {/* 3 Crest Concepts */}
             <div className="mb-6">
               <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                Choose Primary Club Crest · 72 Ready-Made Designs
+                Choose Primary Club Crest · {crestConcepts.length} Designs
               </label>
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
-                  {([
-                    ["all", "All 72"],
-                    ["heritage", "Heritage"],
-                    ["modern", "Modern"],
-                    ["royal", "Royal"],
-                  ] as const).map(([filter, label]) => (
-                    <button
-                      type="button"
-                      key={filter}
-                      onClick={() => setCrestFilter(filter)}
-                      aria-pressed={crestFilter === filter}
-                      className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
-                        crestFilter === filter
-                          ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
-                          : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                Every badge carries the club initials {crestConcepts[0]?.initials || ""}. The first page is the featured set.
+              </p>
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <input
+                  value={crestQuery}
+                  onChange={(event) => {
+                    setCrestQuery(event.target.value);
+                    setCrestPage(0);
+                  }}
+                  placeholder="Search lion, shield, royal"
+                  aria-label="Search crest designs"
+                  className="min-w-[12rem] flex-1 rounded border border-white/10 bg-slate-950 px-3 py-1.5 text-xs text-white outline-none placeholder:text-slate-500"
+                />
                 {recommendation.crest_concepts?.[selectedCrestIdx] && (
-                  <button
-                    type="button"
-                    onClick={() => setCrestFilter("all")}
-                    className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200 hover:bg-emerald-500/20"
-                  >
-                    Selected: {recommendation.crest_concepts[selectedCrestIdx].style} ·{" "}
-                    {recommendation.crest_concepts[selectedCrestIdx].icon_family}
-                  </button>
+                  <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-semibold text-emerald-200">
+                    Selected: {recommendation.crest_concepts[selectedCrestIdx].initials} · {recommendation.crest_concepts[selectedCrestIdx].style}
+                  </span>
                 )}
               </div>
-              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-                {recommendation.crest_concepts.map((concept: any, idx: number) => ({ concept, idx }))
-                  .filter(({ concept }: any) => crestFilter === "all" || String(concept.style).toLowerCase().startsWith(crestFilter))
-                  .map(({ concept, idx }: any) => (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {([
+                  ["all", "All finishes"],
+                  ["heritage", "Heritage"],
+                  ["modern", "Modern"],
+                  ["royal", "Royal"],
+                ] as const).map(([filter, label]) => (
+                  <button
+                    type="button"
+                    key={filter}
+                    onClick={() => {
+                      setCrestFilter(filter);
+                      setCrestPage(0);
+                    }}
+                    aria-pressed={crestFilter === filter}
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      crestFilter === filter
+                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
+                        : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+                {([
+                  ["all", "All shapes"],
+                  ["shield", "Shield"],
+                  ["round", "Roundel"],
+                  ["diamond", "Diamond"],
+                  ["pennant", "Pennant"],
+                ] as const).map(([shape, label]) => (
+                  <button
+                    type="button"
+                    key={shape}
+                    onClick={() => {
+                      setCrestShape(shape);
+                      setCrestPage(0);
+                    }}
+                    aria-pressed={crestShape === shape}
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+                      crestShape === shape
+                        ? "border-amber-300 bg-amber-400/10 text-amber-200"
+                        : "border-white/10 bg-slate-900/50 text-slate-400 hover:border-white/25"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2.5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                {pagedCrests.map((concept) => {
+                  const idx = crestConcepts.findIndex((item: { concept_id: string }) => item.concept_id === concept.concept_id);
+                  return (
                     <button
                       type="button"
                       key={concept.concept_id}
@@ -1429,33 +1487,71 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                       }`}
                     >
                       <div className="mx-auto flex h-24 w-24 items-center justify-center p-1">
-                        <img src={concept.data_uri} alt={concept.concept_id} className="h-full w-full object-contain" />
+                        <img src={concept.data_uri} alt={`${concept.initials} ${concept.style}`} className="h-full w-full object-contain" />
                       </div>
-                      <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.style}</p>
+                      <p className="mt-2 text-xs font-semibold uppercase text-white">{concept.initials} · {concept.style}</p>
                       <p className="mt-1 text-[11px] text-slate-400 line-clamp-2">{concept.visual_meaning}</p>
                     </button>
-                  ))}
+                  );
+                })}
+              </div>
+              {pagedCrests.length === 0 && (
+                <p className="mt-3 text-xs text-slate-400">No crests match that search. Clear the filters to see the featured set.</p>
+              )}
+              <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                <span>{featuredCrests ? "Featured crests" : "Crest designs"} · {visibleCrests.length}</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="rounded border border-white/10 px-2 py-1 disabled:opacity-40" disabled={safeCrestPage === 0} onClick={() => setCrestPage(safeCrestPage - 1)}>Previous</button>
+                  <span>{safeCrestPage + 1} / {crestPageCount}</span>
+                  <button type="button" className="rounded border border-white/10 px-2 py-1 disabled:opacity-40" disabled={safeCrestPage >= crestPageCount - 1} onClick={() => setCrestPage(safeCrestPage + 1)}>Next</button>
+                </div>
               </div>
             </div>
 
-            {/* Ready-made uniform collections */}
             <div className="mb-6">
               <div className="flex flex-wrap items-end justify-between gap-2">
                 <div>
                   <label className="text-xs font-semibold uppercase tracking-wider text-slate-300">
-                    Ready-Made Uniform Collections · 16 Sets
+                    Uniform Collections · {KIT_PRESETS.length} Sets
                   </label>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Every collection includes home, away, third and goalkeeper kits.
+                    Every set has home, away, third and goalkeeper shirts. {clubName || "The club name"} is printed on the chest.
                   </p>
                 </div>
-                <span className="rounded border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-[10px] font-semibold uppercase text-emerald-300">
-                  Fixed design library
-                </span>
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {KIT_PRESETS.map((preset) => {
-                  const previewSet = buildKitSet(preset.id, recommendation.short_code || clubShortCode(clubName));
+              <div className="mt-3 flex flex-wrap gap-2">
+                <input
+                  value={kitQuery}
+                  onChange={(event) => {
+                    setKitQuery(event.target.value);
+                    setKitPage(0);
+                  }}
+                  placeholder="Search royal, gold, hoops"
+                  aria-label="Search uniform designs"
+                  className="min-w-[12rem] flex-1 rounded border border-white/10 bg-slate-950 px-3 py-1.5 text-xs text-white outline-none placeholder:text-slate-500"
+                />
+                {["all", "stripes", "hoops", "sash", "chevron", "solid", "gradient"].map((pattern) => (
+                  <button
+                    type="button"
+                    key={pattern}
+                    onClick={() => {
+                      setKitPattern(pattern);
+                      setKitPage(0);
+                    }}
+                    aria-pressed={kitPattern === pattern}
+                    className={`rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider ${
+                      kitPattern === pattern
+                        ? "border-emerald-400 bg-emerald-500/15 text-emerald-300"
+                        : "border-white/10 bg-slate-900/50 text-slate-400"
+                    }`}
+                  >
+                    {pattern === "all" ? "All patterns" : pattern}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+                {pagedKits.map((preset) => {
+                  const previewSet = buildKitSet(preset.id, clubName);
                   const selected = selectedKitPresetId === preset.id;
                   return (
                     <button
@@ -1482,25 +1578,19 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                         <div className="min-w-0">
                           <p className="truncate text-[11px] font-bold uppercase text-white">{preset.name}</p>
                           <p className="mt-1 line-clamp-3 text-[10px] leading-relaxed text-slate-400">{preset.description}</p>
-                          <div className="mt-2 flex gap-1">
-                            {preset.home.map((color) => (
-                              <span
-                                key={color}
-                                className="h-3 w-3 rounded-full border border-white/20"
-                                style={{ backgroundColor: color }}
-                              />
-                            ))}
-                          </div>
                         </div>
                       </div>
-                      {selected && (
-                        <p className="mt-1 text-[9px] font-bold uppercase tracking-wider text-emerald-300">
-                          Selected set ✓
-                        </p>
-                      )}
                     </button>
                   );
                 })}
+              </div>
+              <div className="mt-3 flex items-center justify-between text-[11px] text-slate-400">
+                <span>{safeKitPage === 0 && kitPattern === "all" && kitQuery.trim() === "" ? "Featured kits" : "Kit designs"} · {visibleKits.length}</span>
+                <div className="flex items-center gap-2">
+                  <button type="button" className="rounded border border-white/10 px-2 py-1 disabled:opacity-40" disabled={safeKitPage === 0} onClick={() => setKitPage(safeKitPage - 1)}>Previous</button>
+                  <span>{safeKitPage + 1} / {kitPageCount}</span>
+                  <button type="button" className="rounded border border-white/10 px-2 py-1 disabled:opacity-40" disabled={safeKitPage >= kitPageCount - 1} onClick={() => setKitPage(safeKitPage + 1)}>Next</button>
+                </div>
               </div>
             </div>
 
@@ -1530,11 +1620,11 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                 </div>
 
                 {kitSet[selectedKitTab] && (
-                  <div className="mt-2.5 flex items-center gap-4 rounded border border-white/10 bg-slate-900/60 p-4">
-                    <img
-                      src={kitSwatchDataUri(kitSet[selectedKitTab])}
-                      alt={`${selectedKitTab} uniform preview`}
-                      className="h-28 w-24 shrink-0 object-contain"
+                  <div className="mt-2.5 grid gap-4 rounded border border-white/10 bg-slate-900/60 p-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(16rem,0.8fr)]">
+                    <JerseyTurntable
+                      kit={kitSet[selectedKitTab]}
+                      crestDataUri={recommendation.crest_concepts?.[selectedCrestIdx]?.data_uri}
+                      chestText={kitSet[selectedKitTab].front_text}
                     />
 
                     <div className="min-w-0 flex-1 text-xs">
@@ -1547,6 +1637,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                           {kitSet[selectedKitTab].collar_style} collar
                         </span>
                       </div>
+                      <p className="mt-3 text-sm font-black uppercase tracking-wide text-white">{kitSet[selectedKitTab].front_text}</p>
                       <div className="mt-2 flex items-center gap-2 text-[11px] text-slate-400">
                         <span>Colors:</span>
                         <span className="h-3.5 w-3.5 rounded-full border border-white/30" style={{ backgroundColor: kitSet[selectedKitTab].primary_color }} title="Primary" />
@@ -1580,6 +1671,13 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                     src={recommendation.crest_concepts[selectedCrestIdx].data_uri}
                     alt="Crest"
                     className="h-16 w-16 object-contain"
+                  />
+                )}
+                {kitSet?.home && (
+                  <img
+                    src={kitSwatchDataUri(kitSet.home)}
+                    alt="Home kit"
+                    className="h-20 w-16 object-contain"
                   />
                 )}
                 <div>

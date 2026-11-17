@@ -436,6 +436,16 @@ def update_treasury_settings(
     data = payload.model_dump(exclude_unset=True)
     for key, value in data.items():
         setattr(settings, key, value)
+    if settings.withdrawal_rate_value > settings.deposit_rate_value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Withdrawal rate cannot exceed the deposit rate.",
+        )
+    if settings.trader_withdrawal_rate_value > settings.trader_coin_purchase_rate_value:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Trader cash-out rate cannot exceed the trader purchase rate.",
+        )
     settings.updated_by_user_id = actor.id
     session.flush()
     service._audit(

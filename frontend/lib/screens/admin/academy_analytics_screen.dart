@@ -11,7 +11,7 @@ import 'package:gte_frontend/widgets/gte_state_panel.dart';
 class AcademyAnalyticsScreen extends StatelessWidget {
   const AcademyAnalyticsScreen({
     super.key,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.mode = GteBackendMode.live,
     this.api,
     this.controller,

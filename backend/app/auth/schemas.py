@@ -379,6 +379,9 @@ class LoginRequest(BaseModel):
 
     email: str = Field(min_length=5, max_length=320)
     password: str = Field(min_length=8, max_length=128)
+    totp_code: str | None = Field(default=None, min_length=6, max_length=8)
+    backup_code: str | None = Field(default=None, min_length=6, max_length=64)
+    recovery_phrase_hash: str | None = Field(default=None, min_length=16, max_length=255)
 
     @field_validator("email")
     @classmethod

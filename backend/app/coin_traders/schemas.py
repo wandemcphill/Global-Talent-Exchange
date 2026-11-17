@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from app.common.schemas.base import CommonSchema
 from app.models.coin_trader import (
@@ -83,7 +83,7 @@ class CoinTraderAdminLiquidityRequest(CommonSchema):
     coin_unit: LedgerUnit = LedgerUnit.COIN
     amount: Decimal = Field(gt=0)
     reference: str | None = Field(default=None, min_length=3, max_length=120)
-    idempotency_key: str | None = Field(default=None, min_length=8, max_length=120)
+    idempotency_key: str = Field(min_length=8, max_length=120)
     fiat_total: Decimal | None = Field(default=None, ge=0)
     note: str | None = Field(default=None, max_length=1000)
     metadata_json: dict[str, Any] = Field(default_factory=dict)
@@ -184,6 +184,18 @@ class CoinTradeProofRequest(CommonSchema):
     proof_reference: str | None = Field(default=None, max_length=255)
     proof_url: str | None = Field(default=None, max_length=2048)
     note: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def require_some_evidence(self) -> "CoinTradeProofRequest":
+        if not any(
+            (
+                (self.proof_reference or "").strip(),
+                (self.proof_url or "").strip(),
+                (self.note or "").strip(),
+            )
+        ):
+            raise ValueError("Payment proof needs a reference, a receipt URL, or a note.")
+        return self
 
 
 class CoinTradeMessageCreateRequest(CommonSchema):

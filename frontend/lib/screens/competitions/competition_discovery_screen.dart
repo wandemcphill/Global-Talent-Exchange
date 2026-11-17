@@ -19,7 +19,7 @@ class CompetitionDiscoveryScreen extends StatefulWidget {
   const CompetitionDiscoveryScreen({
     super.key,
     this.controller,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.accessToken,
     required this.currentUserId,

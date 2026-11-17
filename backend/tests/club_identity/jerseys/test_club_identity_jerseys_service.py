@@ -2,15 +2,23 @@ from __future__ import annotations
 
 import pytest
 
+from app.club_identity.initials import club_initials
 from app.club_identity.jerseys.service import ClubIdentityService
 from app.club_identity.models.jersey_models import BadgeShape, IconFamily, JerseyType
+
+
+def test_club_initials_are_three_letters() -> None:
+    assert club_initials("VIDA FC") == "VID"
+    assert club_initials("Lagos Lions") == "LLI"
+    assert club_initials("Ikorodu City FC") == "ICF"
+    assert len(club_initials("Vida")) == 3
 
 
 def test_jersey_creation_generates_full_default_identity(identity_service: ClubIdentityService) -> None:
     profile = identity_service.get_identity("lagos-lions")
 
     assert profile.club_name == "Lagos Lions"
-    assert profile.short_club_code == "LL"
+    assert profile.short_club_code == "LLI"
     assert profile.jersey_set.home.jersey_type == JerseyType.HOME
     assert profile.jersey_set.away.jersey_type == JerseyType.AWAY
     assert profile.jersey_set.third.jersey_type == JerseyType.THIRD

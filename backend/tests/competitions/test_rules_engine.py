@@ -41,9 +41,10 @@ def test_rules_engine_builds_deterministic_top_n_payouts_and_fee_summary() -> No
     assert summary.min_participants == 4
     assert summary.max_participants == 12
     assert payout_percentages == [34, 33, 33]
-    assert fee_summary.gross_pool_minor == 30_000
-    assert fee_summary.platform_fee_minor == 1_500
-    assert fee_summary.net_prize_pool_minor == 27_500
+    assert fee_summary.gross_pool_minor == 0
+    assert fee_summary.platform_fee_minor == 0
+    assert fee_summary.net_prize_pool_minor == 0
+    assert fee_summary.entry_fee_minor == 0
 
 
 def test_rules_engine_rejects_duplicate_league_tie_breaks() -> None:

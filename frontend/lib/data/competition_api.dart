@@ -50,7 +50,7 @@ class CompetitionApi {
     assertFixtureFactoryAllowed('CompetitionApi.fixture');
     return CompetitionApi._(
       config: const GteRepositoryConfig(
-        baseUrl: 'http://127.0.0.1:8000',
+        baseUrl: '',
         mode: GteBackendMode.fixture,
       ),
       transport: _UnsupportedCompetitionTransport(),

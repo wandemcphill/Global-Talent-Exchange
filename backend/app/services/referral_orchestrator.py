@@ -172,7 +172,15 @@ def generate_id(prefix: str) -> str:
 class ReferralOrchestrator:
     """GTEX creator profiles, share codes, invite attribution, and referral rewards are community-growth features tied to qualified participation milestones in creator competitions and other skill-based platform activity. They are not betting affiliate flows, house-banked wagering products, or cash-settled prediction mechanics."""
 
-    def __init__(self, store: ReferralRuntimeStore | None = None, session: Session | None = None) -> None:
+    def __init__(
+        self,
+        store: ReferralRuntimeStore | None = None,
+        session: Session | None = None,
+        *,
+        require_database: bool = True,
+    ) -> None:
+        if require_database and session is None:
+            raise ReferralActionError("referral_database_required")
         from app.services.creator_competition_link_service import CreatorCompetitionLinkService
         from app.services.creator_profile_service import CreatorProfileService
         from app.services.referral_attribution_service import ReferralAttributionService
@@ -752,14 +760,7 @@ def get_referral_orchestrator(
     request: Request,
     session: Session = Depends(get_session),
 ) -> ReferralOrchestrator:
-    store = getattr(request.app.state, "referral_runtime_store", None)
-    if store is None:
-        store = getattr(request.app.state, "referral_store", None)
-    if store is None:
-        store = ReferralRuntimeStore()
-    request.app.state.referral_runtime_store = store
-
-    # Do not cache a request-scoped SQLAlchemy session on app.state.
-    # A fresh orchestrator per request preserves the shared runtime store
-    # while avoiding stale-session reads across app instances and restarts.
-    return ReferralOrchestrator(store=store, session=session)
+    del request
+    if session is None:
+        raise ReferralActionError("referral_database_required")
+    return ReferralOrchestrator(session=session)

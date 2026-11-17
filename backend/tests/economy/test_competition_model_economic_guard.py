@@ -76,6 +76,6 @@ def test_model_guard_accepts_host_funded_coin_contract() -> None:
             currency="coin",
             entry_fee_minor=0,
             host_funded_prize_total_minor=100000,
-            host_funding_required_minor=130000,
+            host_funding_required_minor=0,
         ),
     )

@@ -30,7 +30,6 @@ from app.services.referral_analytics_service import ReferralAnalyticsService
 from app.services.referral_orchestrator import (
     ReferralActionError,
     ReferralOrchestrator,
-    ReferralRuntimeStore,
     RewardRecord,
     utcnow,
 )
@@ -561,17 +560,9 @@ def get_referral_admin_service(
         runtime_store = ReferralAdminRuntimeStore()
     request.app.state.referral_admin_runtime_store = runtime_store
 
-    orchestrator = getattr(request.app.state, "referral_orchestrator", None)
-    if orchestrator is None:
-        runtime_referral_store = getattr(request.app.state, "referral_runtime_store", None)
-        if runtime_referral_store is None:
-            runtime_referral_store = getattr(request.app.state, "referral_store", None)
-        if runtime_referral_store is None:
-            runtime_referral_store = ReferralRuntimeStore()
-        request.app.state.referral_runtime_store = runtime_referral_store
-        orchestrator = ReferralOrchestrator(store=runtime_referral_store, session=session)
-    elif session is not None and getattr(orchestrator, "session", None) is None:
-        orchestrator = ReferralOrchestrator(store=orchestrator.store, session=session)
+    if session is None:
+        raise ReferralActionError("referral_database_required")
+    orchestrator = ReferralOrchestrator(session=session)
 
     return ReferralAdminService(orchestrator, runtime_store=runtime_store, session=session)
 

@@ -149,6 +149,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     password: "",
     date_of_birth: "",
     over18: false,
+    totp_code: "",
   });
   const [creatorFields, setCreatorFields] = useState({
     creator_name: "",
@@ -314,7 +315,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     setBusy(true);
     try {
       if (mode === "login") {
-        const result = await login(userFields.email.trim(), userFields.password);
+        const result = await login(userFields.email.trim(), userFields.password, {
+          totp_code: userFields.totp_code.trim(),
+        });
         const type = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
         const landingRoute = String(result.landingRoute || "");
         navigate(
@@ -954,6 +957,22 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
               placeholder="••••••••"
             />
           </Field>
+          {mode === "login" && (
+            <Field label="Authenticator code" error={fieldErrors.totp_code}>
+              <input
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                data-testid="login-totp-input"
+                className="gx-input"
+                value={userFields.totp_code}
+                onChange={(event) => {
+                  clearFieldError("totp_code");
+                  setUserFields((previous) => ({ ...previous, totp_code: event.target.value }));
+                }}
+                placeholder="6-digit code, if your account uses one"
+              />
+            </Field>
+          )}
 
           {mode === "signup" && (
             <>

@@ -49,8 +49,7 @@ BEGIN
     SELECT COALESCE(ARRAY_AGG(id::TEXT), ARRAY[]::TEXT[])
     INTO v_club_ids
     FROM club_profiles
-    WHERE owner_user_id = ANY(v_user_ids)
-       OR lower(slug) = ANY(v_test_club_slugs);
+    WHERE owner_user_id = ANY(v_user_ids);
 
     SELECT COALESCE(ARRAY_AGG(id::TEXT), ARRAY[]::TEXT[])
     INTO v_org_ids
@@ -65,22 +64,25 @@ BEGIN
     SELECT COALESCE(ARRAY_AGG(id::TEXT), ARRAY[]::TEXT[])
     INTO v_comp_ids
     FROM owner_competitions
-    WHERE (host_type = 'gtex' AND name = ANY(v_seeded_comp_names))
-       OR host_user_id = ANY(v_user_ids);
+    WHERE host_user_id = ANY(v_user_ids)
+       OR (
+           host_type = 'gtex'
+           AND name = ANY(v_seeded_comp_names)
+           AND NOT EXISTS (
+               SELECT 1
+               FROM owner_competition_entries AS entry
+               WHERE entry.competition_id = owner_competitions.id
+                 AND entry.owner_user_id IS NOT NULL
+                 AND NOT (entry.owner_user_id = ANY(v_user_ids))
+           )
+       );
 
     SELECT COALESCE(ARRAY_AGG(nte.id::TEXT), ARRAY[]::TEXT[])
     INTO v_nt_entry_ids
     FROM national_team_entries AS nte
     JOIN national_team_competitions AS ntc ON ntc.id = nte.competition_id
     LEFT JOIN users AS u ON u.id = nte.entry_owner_user_id
-    WHERE nte.entry_owner_user_id = ANY(v_user_ids)
-       OR (
-           nte.squad_size = 0
-           AND (
-               (lower(u.email) = 'vidvimedialtd@gmail.com' AND ntc.key = 'gtex-afcon')
-               OR (lower(u.email) = 'fliptrybe.ng@gmail.com' AND ntc.key = 'gtex-u17-asian-cup')
-           )
-       );
+    WHERE nte.entry_owner_user_id = ANY(v_user_ids);
 
     SELECT COALESCE(ARRAY_AGG(w.id::TEXT), ARRAY[]::TEXT[])
     INTO v_wallet_ids
@@ -111,6 +113,19 @@ BEGIN
         FROM transactions AS t
         WHERE t.created_by_user_id = ANY(v_user_ids)
     ) AS tx_union;
+
+    -- Leave transactions that also post to a real user's wallet.
+    SELECT COALESCE(ARRAY_AGG(candidate.tx_id), ARRAY[]::TEXT[])
+    INTO v_tx_ids
+    FROM unnest(v_tx_ids) AS candidate(tx_id)
+    WHERE NOT EXISTS (
+        SELECT 1
+        FROM ledger_entries AS le
+        JOIN wallets AS w ON w.id::text = le.account_id::text
+        WHERE le.transaction_id::text = candidate.tx_id
+          AND w.owner_user_id IS NOT NULL
+          AND NOT (w.owner_user_id = ANY(v_user_ids))
+    );
 
     SELECT COALESCE(ARRAY_AGG(DISTINCT le.account_id::TEXT), ARRAY[]::TEXT[])
     INTO v_affected_system_wallet_ids
@@ -327,8 +342,7 @@ BEGIN
 
     BEGIN
         DELETE FROM ledger_entries
-        WHERE transaction_id = ANY(v_tx_ids)
-           OR account_id = ANY(v_wallet_ids);
+        WHERE transaction_id = ANY(v_tx_ids);
     EXCEPTION
         WHEN OTHERS THEN
             IF v_has_append_only_trigger THEN
@@ -412,8 +426,7 @@ BEGIN
 
     DELETE FROM share_codes
     WHERE owner_user_id = ANY(v_user_ids)
-       OR owner_creator_id = ANY(v_creator_profile_ids)
-       OR lower(code) = 'zaracreates';
+       OR owner_creator_id = ANY(v_creator_profile_ids);
 
     DELETE FROM referral_rewards
     WHERE referred_user_id = ANY(v_user_ids)

@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.admin.capabilities import AdminCapability, assert_admin_capability
 from app.auth.dependencies import get_current_admin, get_current_user, get_session
 from app.coin_traders.service import CoinTraderService
 from app.identity.providers.didit import IdentityProviderConfigurationError
@@ -232,10 +233,12 @@ def list_verification_records(
 @admin_router.post("/api/admin/coin-traders/{profile_id}/suspend")
 def admin_suspend_coin_trader(
     profile_id: str,
+    request: Request,
     payload: CoinTraderAdminActionRequest | None = None,
     current_admin: User = Depends(get_current_admin),
     service: CoinTraderService = Depends(_coin_trader_service),
 ) -> dict[str, Any]:
+    assert_admin_capability(request, current_admin, AdminCapability.MANAGE_LIQUIDITY_DESK)
     notes = payload.notes if payload else None
     reason = payload.reason if payload else "Administrative suspension"
     profile_view = service.suspend_trader(
@@ -247,10 +250,12 @@ def admin_suspend_coin_trader(
 @admin_router.post("/api/admin/coin-traders/{profile_id}/reinstate")
 def admin_reinstate_coin_trader(
     profile_id: str,
+    request: Request,
     payload: CoinTraderAdminActionRequest | None = None,
     current_admin: User = Depends(get_current_admin),
     service: CoinTraderService = Depends(_coin_trader_service),
 ) -> dict[str, Any]:
+    assert_admin_capability(request, current_admin, AdminCapability.MANAGE_LIQUIDITY_DESK)
     notes = payload.notes if payload else None
     profile_view = service.reinstate_trader(profile_id=profile_id, admin=current_admin, note=notes)
     return {"status": "reinstated", "profile": profile_view}

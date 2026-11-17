@@ -15,7 +15,7 @@ class GtexAdminTrustOpsScreen extends StatefulWidget {
   const GtexAdminTrustOpsScreen({
     super.key,
     this.repository,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.accessToken,
     this.backendMode = GteBackendMode.live,
   });

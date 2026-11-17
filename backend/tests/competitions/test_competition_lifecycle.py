@@ -349,7 +349,7 @@ def test_launch_applies_tournament_lock_metadata(
     assert lock["rentals_disabled"] is True
 
 
-def test_paid_competition_join_is_idempotent_and_collects_single_fee(
+def test_competition_join_is_idempotent_and_collects_no_entry_fee(
     client,
     app_session_factory,
     competition_admin_headers,
@@ -425,10 +425,10 @@ def test_paid_competition_join_is_idempotent_and_collects_single_fee(
 
     assert participant_count == 1
     assert entry_count == 1
-    assert fee_collection_count == 1
+    assert fee_collection_count == 0
     assert participant is not None
-    assert participant.paid_at is not None
-    assert participant.paid_entry_fee_minor == 250000
+    assert participant.paid_at is None
+    assert participant.paid_entry_fee_minor == 0
 
 
 def test_match_writes_require_host_or_admin(

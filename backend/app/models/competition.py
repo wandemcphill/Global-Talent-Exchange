@@ -82,14 +82,13 @@ def _validate_competition_economic_contract(_: Any, __: Any, competition: UserCo
     currency = (competition.currency or "").strip().lower()
     entry_fee = int(competition.entry_fee_minor or 0)
     host_prize = int(competition.host_funded_prize_total_minor or 0)
-    host_required = int(competition.host_funding_required_minor or 0)
 
     if prize_mode == "host_funded_fixed":
         if currency != "coin":
             raise ValueError("Host-funded prize competitions must use GTEX Coin.")
         if entry_fee != 0:
             raise ValueError("Host-funded GTEX Coin competitions cannot charge a participant Coin entry fee.")
-        if host_prize <= 0 or host_required <= 0:
+        if host_prize <= 0:
             raise ValueError("Host-funded GTEX Coin competitions require a positive funded prize.")
         return
 

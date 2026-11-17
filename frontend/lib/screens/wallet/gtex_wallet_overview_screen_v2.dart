@@ -38,7 +38,7 @@ class GtexWalletOverviewScreenV2 extends StatelessWidget {
     this.onOpenPlayer,
     this.onModuleChanged,
     this.initialModule = GtexWalletDeskModule.wallet,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.authedApi,
   });

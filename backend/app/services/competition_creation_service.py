@@ -47,12 +47,12 @@ class CompetitionCreationService:
             start_mode=payload.core.start_mode.value,
             scheduled_start_at=payload.core.scheduled_start_at,
             currency=payload.financials.currency,
-            entry_fee_minor=payload.financials.entry_fee_minor,
-            platform_fee_bps=payload.financials.platform_fee_bps,
+            entry_fee_minor=0,
+            platform_fee_bps=0,
             host_fee_bps=0,
-            host_creation_fee_minor=payload.financials.host_creation_fee_minor,
-            gross_pool_minor=validation.fee_summary.gross_pool_minor,
-            net_prize_pool_minor=validation.fee_summary.net_prize_pool_minor,
+            host_creation_fee_minor=0,
+            gross_pool_minor=0,
+            net_prize_pool_minor=0,
         )
 
         rule_set = self._build_rule_set(

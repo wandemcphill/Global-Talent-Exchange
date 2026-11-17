@@ -75,15 +75,12 @@ def test_creation_service_builds_linked_competition_aggregate() -> None:
     assert result.competition.id
     assert result.rule_set.competition_id == result.competition.id
     assert result.prize_rule.competition_id == result.competition.id
-    assert [entry.competition_id for entry in result.ledger_entries] == [result.competition.id, result.competition.id]
-    assert result.competition.gross_pool_minor == 8_000
-    assert result.competition.net_prize_pool_minor == 6_700
+    assert result.ledger_entries == ()
+    assert result.competition.entry_fee_minor == 0
+    assert result.competition.gross_pool_minor == 0
+    assert result.competition.net_prize_pool_minor == 0
     assert result.prize_rule.payout_percentages == [100]
     assert result.rule_set.league_tie_break_order == ["points", "goal_diff", "goals_for"]
-    assert [entry.entry_type for entry in result.ledger_entries] == [
-        "host_creation_fee",
-        "platform_fee_projection",
-    ]
 
 
 def test_competition_wallet_ledger_is_append_only() -> None:

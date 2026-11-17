@@ -202,6 +202,9 @@ class AuthService:
         *,
         email: str,
         password: str,
+        totp_code: str | None = None,
+        backup_code: str | None = None,
+        recovery_phrase_hash: str | None = None,
         timing_recorder: AuthTimingRecorder | None = None,
     ) -> User:
         normalize_started_at = perf_counter()
@@ -217,6 +220,18 @@ class AuthService:
             raise InvalidCredentialsError("Invalid email or password.")
         if not user.is_active:
             raise InvalidCredentialsError("User account is inactive.")
+        from app.trader.service import TraderAccessError, assert_login_second_factor
+
+        try:
+            assert_login_second_factor(
+                session,
+                user,
+                totp_code=totp_code,
+                backup_code=backup_code,
+                recovery_phrase_hash=recovery_phrase_hash,
+            )
+        except TraderAccessError as exc:
+            raise InvalidCredentialsError("Authenticator code is required.") from exc
 
         user.last_login_at = utcnow()
         flush_started_at = perf_counter()

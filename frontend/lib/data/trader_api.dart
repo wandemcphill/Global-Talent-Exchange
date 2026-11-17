@@ -34,7 +34,7 @@ class TraderApi {
     return TraderApi(
       client: GteAuthedApi(
         config: const GteRepositoryConfig(
-          baseUrl: 'http://127.0.0.1:8000',
+          baseUrl: '',
           mode: GteBackendMode.fixture,
         ),
         transport: GteHttpTransport(),

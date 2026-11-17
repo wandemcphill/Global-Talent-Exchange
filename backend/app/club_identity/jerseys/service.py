@@ -4,6 +4,7 @@ from dataclasses import dataclass, replace
 from hashlib import sha256
 import math
 
+from app.club_identity.initials import club_initials
 from app.club_identity.jerseys.repository import InMemoryClubIdentityRepository
 from app.club_identity.models.jersey_models import (
     BadgePlacement,
@@ -453,10 +454,7 @@ class ClubIdentityService:
             raise ValueError("Home and away jerseys must remain visually distinct")
 
     def _build_short_code(self, club_name: str) -> str:
-        words = [part for part in club_name.replace("-", " ").split() if part]
-        if len(words) >= 2:
-            return "".join(word[0] for word in words[:3]).upper()
-        return club_name.replace(" ", "")[:3].upper()
+        return club_initials(club_name)
 
     def _titleize_club_name(self, club_id: str) -> str:
         return " ".join(part.capitalize() for part in club_id.replace("_", "-").split("-") if part)

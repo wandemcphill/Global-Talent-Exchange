@@ -9,7 +9,7 @@ class ClubDynastyOverviewScreen extends StatelessWidget {
   const ClubDynastyOverviewScreen({
     super.key,
     required this.clubId,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
   });
 

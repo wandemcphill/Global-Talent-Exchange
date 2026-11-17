@@ -44,20 +44,17 @@ class CoinAwareHostedCompetitionService(HostedCompetitionService):
             return EconomicPolicy(rule=rule, policy_version="legacy-fallback", effective_at=rule.updated_at)
 
     def _active_platform_fee_bps(self) -> int:
-        policy = self._active_policy()
-        fee_bps = int(policy.competition_platform_fee_bps)
-        if fee_bps < 0 or fee_bps > 3000:
-            raise HostedCompetitionError("Configured competition platform fee is outside the allowed policy range.")
-        return fee_bps
+        return 0
 
     def _policy_provenance(self) -> tuple[str, str]:
         policy = self._active_policy()
         return policy.rule.rule_key, policy.policy_version
 
     def _frozen_platform_fee_bps(self, competition: UserHostedCompetition) -> int:
-        raw = str((competition.metadata_json or {}).get("platform_fee_bps") or "").strip()
-        if not raw:
+        raw = (competition.metadata_json or {}).get("platform_fee_bps")
+        if raw is None or str(raw).strip() == "":
             raise HostedCompetitionError("Hosted competition is missing its frozen platform fee policy.")
+        raw = str(raw).strip()
         try:
             fee_bps = int(raw)
         except ValueError as exc:

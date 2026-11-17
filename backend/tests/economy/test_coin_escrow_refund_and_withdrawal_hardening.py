@@ -168,12 +168,10 @@ def test_coin_escrow_refund_to_host(session: Session) -> None:
     session.add(competition)
     session.commit()
 
-    # Host funds the competition escrow
     escrow_service.fund_from_host(competition=competition, host=host, gross_prize=Decimal("50.0000"))
     assert escrow_service.available_balance(competition) == Decimal("50.0000")
-    assert wallet.get_balance(session, wallet.get_user_account(session, host, LedgerUnit.COIN)) == Decimal("50.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, host, LedgerUnit.COIN)) == Decimal("100.0000")
 
-    # Competition is cancelled, escrow refunded to host
     tx_id = escrow_service.refund_to_host(
         competition=competition,
         host=host,

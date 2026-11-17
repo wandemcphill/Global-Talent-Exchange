@@ -15,7 +15,7 @@ from app.common.schemas.base import CommonSchema
 class AcademyClubRequestView(CommonSchema):
     club_id: str = Field(min_length=1)
     club_name: str = Field(min_length=1)
-    senior_buy_in_tier: int = Field(gt=0)
+    senior_buy_in_tier: int = Field(ge=0)
     carry_over_from_previous_season: bool = False
 
 
@@ -129,8 +129,8 @@ class AcademyKnockoutTieView(CommonSchema):
     home_club_name: str
     away_club_id: str
     away_club_name: str
-    winner_club_id: str
-    winner_club_name: str
+    winner_club_id: str | None = None
+    winner_club_name: str | None = None
     is_cup_match: bool
     allow_penalties: bool
     extra_time_allowed: bool
@@ -144,9 +144,9 @@ class AcademyChampionsLeagueFlowView(CommonSchema):
     league_phase_table: tuple[AcademyLeaguePhaseRowView, ...]
     quarterfinals: tuple[AcademyKnockoutTieView, ...]
     semifinals: tuple[AcademyKnockoutTieView, ...]
-    final: AcademyKnockoutTieView
-    champion_club_id: str
-    champion_club_name: str
+    final: AcademyKnockoutTieView | None = None
+    champion_club_id: str | None = None
+    champion_club_name: str | None = None
 
 
 class AcademyAwardAllocationView(CommonSchema):

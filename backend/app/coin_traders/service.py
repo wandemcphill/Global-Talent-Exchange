@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import and_, inspect, or_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.base import utcnow
@@ -80,6 +82,13 @@ class CoinTraderPermissionError(CoinTraderError):
 
 class CoinTraderValidationError(CoinTraderError):
     """Raised when a coin trader action is invalid."""
+
+
+def _payment_method_keys_match(left: str, right: str) -> bool:
+    def key(value: str) -> str:
+        return "".join(ch for ch in value.lower() if ch.isalnum())
+
+    return bool(key(left)) and key(left) == key(right)
 
 
 @dataclass(slots=True)
@@ -279,13 +288,14 @@ class CoinTraderService:
                 advert.status = CoinAdvertStatus.ACTIVE.value if rate.is_active else CoinAdvertStatus.PAUSED.value
 
     def create_order(self, payload: CoinTradeOrderCreateRequest, *, actor: User) -> CoinTradeOrderView:
+        self.expire_stale_orders()
         if payload.idempotency_key:
             existing = self.session.scalar(
                 select(CoinTradeOrder).where(CoinTradeOrder.idempotency_key == payload.idempotency_key)
             )
             if existing is not None:
-                if existing.user_id != actor.id:
-                    raise CoinTraderValidationError("Idempotency key is already used by another order.")
+                if existing.user_id != actor.id or not self._idempotent_order_matches(existing, payload):
+                    raise CoinTraderValidationError("Idempotency key is already used by a different order.")
                 return self.to_order_view(existing)
         profile = self._require_profile(payload.trader_profile_id)
         if profile.status != CoinTraderProfileStatus.APPROVED.value:
@@ -313,6 +323,20 @@ class CoinTraderService:
                     "Please complete your KYC verification in Wallet Settings."
                 )
         direction = self._direction_value(payload.direction)
+        if payload.advert_id is None:
+            legacy_rate = self.session.scalar(
+                select(CoinTraderRate).where(
+                    CoinTraderRate.trader_profile_id == profile.id,
+                    CoinTraderRate.coin_unit == payload.coin_unit,
+                    CoinTraderRate.fiat_currency == payload.fiat_currency.upper(),
+                    CoinTraderRate.is_active.is_(True),
+                )
+            )
+            if legacy_rate is not None:
+                legacy_governance = CoinTraderPricingGovernanceService(self.session).evaluate_rate(legacy_rate)
+                if legacy_governance.is_blocked:
+                    raise CoinTraderValidationError("; ".join(legacy_governance.governance_reasons))
+        payload = self._bind_single_active_advert(payload, direction)
         advert: CoinTraderAdvert | None = None
         if payload.advert_id:
             stmt_ad = select(CoinTraderAdvert).where(CoinTraderAdvert.id == payload.advert_id)
@@ -346,6 +370,14 @@ class CoinTraderService:
             )
             if reasons:
                 raise CoinTraderValidationError("; ".join(reasons))
+            spread_reasons = CoinTraderPricingGovernanceService(self.session).spread_reasons(
+                coin_unit=advert.coin_unit,
+                side=advert.side,
+                price=quoted_rate,
+                other_price=self._opposite_active_price(profile.id, advert),
+            )
+            if spread_reasons:
+                raise CoinTraderValidationError("; ".join(spread_reasons))
             if quoted_rate <= Decimal("0"):
                 raise CoinTraderValidationError("Coin trader advert price is not available.")
             if payload.coin_amount < advert.min_coin_amount:
@@ -364,7 +396,7 @@ class CoinTraderService:
             if (
                 payload.payment_method
                 and advert_methods
-                and not any(m.lower() == payload.payment_method.strip().lower() for m in advert_methods)
+                and not any(_payment_method_keys_match(m, payload.payment_method) for m in advert_methods)
             ):
                 raise CoinTraderValidationError("Selected payment method is not accepted on this advert.")
             terms_snapshot = {
@@ -411,7 +443,7 @@ class CoinTraderService:
                 raise CoinTraderValidationError("Trader liquidity is below requested amount.")
             terms_snapshot = dict(profile.terms_json or {})
             payment_window_minutes = 45
-        fiat_total = payload.coin_amount * quoted_rate
+        fiat_total = (payload.coin_amount * quoted_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
         if direction == CoinTradeDirection.USER_BUYS.value and payload.fiat_currency.upper() == "NGN":
             minimum_fiat = Decimal("200000.00") if payload.coin_unit == LedgerUnit.COIN else Decimal("50000.00")
             if fiat_total < minimum_fiat:
@@ -463,7 +495,16 @@ class CoinTraderService:
             raise CoinTraderValidationError(f"{who} is insufficient to escrow this order.") from exc
         order.escrow_owner_user_id = escrow_owner.id
         order.ledger_refs_json = {"escrow_lock_entry_ids": [entry.id for entry in entries]}
-        self.session.commit()
+        try:
+            self.session.commit()
+        except IntegrityError:
+            self.session.rollback()
+            raced = self.session.scalar(
+                select(CoinTradeOrder).where(CoinTradeOrder.idempotency_key == payload.idempotency_key)
+            )
+            if raced is not None and raced.user_id == actor.id and self._idempotent_order_matches(raced, payload):
+                return self.to_order_view(raced)
+            raise CoinTraderValidationError("Idempotency key is already used by a different order.") from None
         self.session.refresh(order)
         return self.to_order_view(order)
 
@@ -477,6 +518,7 @@ class CoinTraderService:
         return [self.to_order_view(order) for order in self.session.scalars(statement).all()]
 
     def accept_order(self, order_id: str, *, actor: User) -> CoinTradeOrderView:
+        self.expire_stale_orders()
         order = self._require_order(order_id, for_update=True)
         profile = self._require_approved_profile(order.trader_profile_id)
         if profile.user_id != actor.id:
@@ -529,7 +571,7 @@ class CoinTraderService:
         return self.to_order_view(order)
 
     def submit_proof(self, order_id: str, payload: CoinTradeProofRequest, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_participating_order(order_id, actor)
+        order = self._require_participating_order(order_id, actor, for_update=True)
         profile = self._require_profile(order.trader_profile_id)
         proof_submitter_user_id = (
             order.user_id if order.direction == CoinTradeDirection.USER_BUYS.value else profile.user_id
@@ -612,7 +654,7 @@ class CoinTraderService:
         return self._refund_order(order, actor=actor, admin=False)
 
     def dispute_order(self, order_id: str, payload: CoinTradeDisputeRequest, *, actor: User) -> CoinTradeOrderView:
-        order = self._require_participating_order(order_id, actor)
+        order = self._require_participating_order(order_id, actor, for_update=True)
         if order.status not in {CoinTradeOrderStatus.PAYMENT_PENDING.value, CoinTradeOrderStatus.PROOF_SUBMITTED.value}:
             raise CoinTraderValidationError("Only active escrow orders can be disputed.")
         order.status = CoinTradeOrderStatus.DISPUTED.value
@@ -904,7 +946,7 @@ class CoinTraderService:
         *,
         admin: User,
     ) -> CoinTradeOrderView:
-        order = self._require_order(order_id)
+        order = self._require_order(order_id, for_update=True)
         if order.status not in {
             CoinTradeOrderStatus.PAYMENT_PENDING.value,
             CoinTradeOrderStatus.PROOF_SUBMITTED.value,
@@ -946,7 +988,13 @@ class CoinTraderService:
                 ),
                 and_(
                     CoinTradeOrder.status == CoinTradeOrderStatus.CREATED.value,
-                    CoinTradeOrder.created_at <= unaccepted_cutoff,
+                    or_(
+                        and_(
+                            CoinTradeOrder.quote_expires_at.is_not(None),
+                            CoinTradeOrder.quote_expires_at <= current_time,
+                        ),
+                        CoinTradeOrder.created_at <= unaccepted_cutoff,
+                    ),
                 ),
             )
         )
@@ -984,12 +1032,9 @@ class CoinTraderService:
     ) -> CoinTradeMessageView:
         order = self._require_order(order_id)
         profile = self._require_profile(order.trader_profile_id)
-        is_participant = actor.id in {order.user_id, profile.user_id} or actor.role in {
-            UserRole.ADMIN,
-            UserRole.SUPER_ADMIN,
-        }
+        is_participant = actor.id in {order.user_id, profile.user_id}
         if not is_participant:
-            raise CoinTraderPermissionError("Only trade participants or admins can post messages to this order.")
+            raise CoinTraderPermissionError("Only trade participants can post messages to this order.")
 
         sender_name = actor.display_name or actor.username or "Participant"
         msg_row = CoinTradeMessage(
@@ -1023,12 +1068,9 @@ class CoinTraderService:
     def list_order_messages(self, order_id: str, *, actor: User) -> list[CoinTradeMessageView]:
         order = self._require_order(order_id)
         profile = self._require_profile(order.trader_profile_id)
-        is_participant = actor.id in {order.user_id, profile.user_id} or actor.role in {
-            UserRole.ADMIN,
-            UserRole.SUPER_ADMIN,
-        }
+        is_participant = actor.id in {order.user_id, profile.user_id}
         if not is_participant:
-            raise CoinTraderPermissionError("Only trade participants or admins can view order messages.")
+            raise CoinTraderPermissionError("Only trade participants can view order messages.")
         return self._messages_for_order(order)
 
     def _messages_for_order(self, order: CoinTradeOrder) -> list[CoinTradeMessageView]:
@@ -1165,8 +1207,19 @@ class CoinTraderService:
         admin: User,
         flow: str,
     ) -> CoinTraderAdminLiquidityTransferView:
-        profile = self._require_approved_profile(profile_id)
+        if not payload.idempotency_key:
+            raise CoinTraderValidationError("An idempotency key is required for liquidity transfers.")
+        profile = self._require_profile(profile_id)
         trader_user = self._require_user(profile.user_id)
+        if flow == "issue":
+            if profile.status != CoinTraderProfileStatus.APPROVED.value or profile.frozen_at is not None:
+                raise CoinTraderPermissionError("Liquidity can only be issued to an approved desk.")
+        elif profile.status not in {
+            CoinTraderProfileStatus.APPROVED.value,
+            CoinTraderProfileStatus.FROZEN.value,
+        }:
+            raise CoinTraderPermissionError("Liquidity can only be redeemed from an approved or frozen desk.")
+        self._require_dedicated_trader_account(trader_user)
         amount = self.wallet_service._normalize_amount(payload.amount)
         if amount <= Decimal("0.0000"):
             raise CoinTraderValidationError("Liquidity amount must be positive.")
@@ -1358,6 +1411,77 @@ class CoinTraderService:
             inspector.has_table(table_name)
             for table_name in ("notification_records", "notification_preferences", "users")
         )
+
+    def _idempotent_order_matches(self, order: CoinTradeOrder, payload: CoinTradeOrderCreateRequest) -> bool:
+        direction = self._direction_value(payload.direction)
+        amount_quantum = Decimal("0.0001")
+        return (
+            order.direction == direction
+            and order.coin_unit == payload.coin_unit
+            and Decimal(order.coin_amount).quantize(amount_quantum) == Decimal(payload.coin_amount).quantize(amount_quantum)
+            and order.fiat_currency == payload.fiat_currency.upper()
+            and (payload.advert_id is None or order.advert_id == payload.advert_id)
+        )
+
+    def _bind_single_active_advert(
+        self, payload: CoinTradeOrderCreateRequest, direction: str
+    ) -> CoinTradeOrderCreateRequest:
+        if payload.advert_id:
+            return payload
+        expected_side = (
+            CoinAdvertSide.SELL.value
+            if direction == CoinTradeDirection.USER_BUYS.value
+            else CoinAdvertSide.BUY.value
+        )
+        adverts = list(
+            self.session.scalars(
+                select(CoinTraderAdvert).where(
+                    CoinTraderAdvert.trader_profile_id == payload.trader_profile_id,
+                    CoinTraderAdvert.coin_unit == payload.coin_unit,
+                    CoinTraderAdvert.fiat_currency == payload.fiat_currency.upper(),
+                    CoinTraderAdvert.side == expected_side,
+                )
+            ).all()
+        )
+        if not adverts:
+            return payload
+        active = [advert for advert in adverts if advert.status == CoinAdvertStatus.ACTIVE.value]
+        if len(active) != 1:
+            raise CoinTraderValidationError("Select an active advert for this order.")
+        return payload.model_copy(update={"advert_id": active[0].id})
+
+    def _opposite_active_price(self, profile_id: str, advert: CoinTraderAdvert) -> Decimal | None:
+        other_side = (
+            CoinAdvertSide.BUY.value if advert.side == CoinAdvertSide.SELL.value else CoinAdvertSide.SELL.value
+        )
+        other = self.session.scalar(
+            select(CoinTraderAdvert).where(
+                CoinTraderAdvert.trader_profile_id == profile_id,
+                CoinTraderAdvert.coin_unit == advert.coin_unit,
+                CoinTraderAdvert.fiat_currency == advert.fiat_currency,
+                CoinTraderAdvert.side == other_side,
+                CoinTraderAdvert.status == CoinAdvertStatus.ACTIVE.value,
+            )
+        )
+        if other is None or Decimal(other.price_fiat or 0) <= 0:
+            return None
+        return Decimal(other.price_fiat)
+
+    @staticmethod
+    def _public_terms(terms: dict[str, Any] | None) -> dict[str, Any]:
+        def scrub(value: object) -> object | None:
+            if isinstance(value, str):
+                return None if re.search(r"\d{8,}", value) else value
+            if isinstance(value, dict):
+                cleaned = {key: scrubbed for key, item in value.items() if (scrubbed := scrub(item)) is not None}
+                return cleaned or None
+            if isinstance(value, list):
+                cleaned_list = [scrubbed for item in value if (scrubbed := scrub(item)) is not None]
+                return cleaned_list or None
+            return value
+
+        raw = scrub(dict(terms or {}))
+        return raw if isinstance(raw, dict) else {}
 
     def _require_order(self, order_id: str, *, for_update: bool = False) -> CoinTradeOrder:
         order = self.session.get(
@@ -1552,7 +1676,10 @@ class CoinTraderService:
                         label = item[key]
                         break
             if isinstance(label, str) and label.strip() and label.strip() not in labels:
-                labels.append(label.strip()[:60])
+                visible = label.strip()[:60]
+                if re.search(r"\d{8,}", visible):
+                    continue
+                labels.append(visible)
         return labels
 
     def to_public_profile_view(self, profile: CoinTraderProfile) -> CoinTraderPublicProfileView:
@@ -1577,9 +1704,12 @@ class CoinTraderService:
             last_active_at=profile.last_active_at,
             completed_volume_fiat=profile.completed_volume_fiat,
             dispute_score=profile.dispute_score,
-            terms=dict(profile.terms_json or {}),
+            terms=self._public_terms(profile.terms_json),
             payment_methods=self._public_payment_method_labels(list(profile.payment_methods_json or [])),
-            rates=[self.to_rate_view(rate) for rate in self._rates_for_profile(profile.id)],
+            rates=[
+                self.to_rate_view(rate).model_copy(update={"metadata_json": {}})
+                for rate in self._rates_for_profile(profile.id)
+            ],
         )
 
     def to_profile_view(self, profile: CoinTraderProfile) -> CoinTraderProfileView:
@@ -1665,6 +1795,11 @@ class CoinTraderService:
             raw_payout = (order.metadata_json or {}).get("customer_payout_details")
             if isinstance(raw_payout, dict):
                 customer_payout_details = dict(raw_payout)
+        public_metadata = {
+            key: value
+            for key, value in dict(order.metadata_json or {}).items()
+            if key != "customer_payout_details"
+        }
         rating_row = self.session.scalar(select(CoinTradeRating).where(CoinTradeRating.order_id == order.id))
         my_rating = (
             {
@@ -1688,7 +1823,7 @@ class CoinTraderService:
             fiat_currency=order.fiat_currency,
             status=order.status,
             escrow_owner_user_id=order.escrow_owner_user_id,
-            idempotency_key=order.idempotency_key,
+            idempotency_key=None,
             payment_method=order.payment_method,
             advert_id=order.advert_id,
             payment_window_minutes=order.payment_window_minutes,
@@ -1710,7 +1845,7 @@ class CoinTraderService:
             trader_display_name=profile.display_name if profile is not None else None,
             customer_display_name=(customer.display_name or customer.username) if customer is not None else None,
             my_rating=my_rating,
-            metadata_json=dict(order.metadata_json or {}),
+            metadata_json=public_metadata,
         )
 
 

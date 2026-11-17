@@ -337,7 +337,7 @@ class TreasuryService:
         deposit_request_id: str,
         admin_notes: str | None = None,
     ) -> DepositRequest:
-        request = self._get_deposit_or_raise(session, deposit_request_id)
+        request = self._lock_deposit(session, deposit_request_id)
         if request.status == DepositStatus.CONFIRMED and request.ledger_transaction_id:
             return request
         if request.status not in {DepositStatus.PAYMENT_SUBMITTED, DepositStatus.UNDER_REVIEW}:
@@ -361,6 +361,7 @@ class TreasuryService:
             description="Manual bank transfer deposit confirmed.",
             external_reference=request.reference,
             actor=actor,
+            idempotency_key=f"deposit-confirm:{request.id}",
         )
         request.status = DepositStatus.CONFIRMED
         request.confirmed_at = utcnow()
@@ -589,11 +590,16 @@ class TreasuryService:
         # Ordinary USER and CREATOR accounts are not blocked by universal KYC.
         # COIN_TRADER accounts must be verified and active to withdraw.
         # Once accredited, they do not repeat routine KYC for every withdrawal.
+        desk_frozen = False
         if getattr(user, "account_type", None) == PublicAccountType.COIN_TRADER:
             from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
 
             trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
-            requires_kyc = (
+            desk_frozen = trader_profile is not None and (
+                trader_profile.frozen_at is not None
+                or trader_profile.status == CoinTraderProfileStatus.FROZEN.value
+            )
+            requires_kyc = (not desk_frozen) and (
                 trader_profile is None
                 or trader_profile.status != CoinTraderProfileStatus.APPROVED.value
                 or trader_profile.verified_at is None
@@ -607,14 +613,18 @@ class TreasuryService:
             else not has_active_bank_account
         )
         pending_withdrawals = self._pending_withdrawal_amount(session, user)
-        policy_blocked = (not country_withdrawals_enabled) or bool(missing_required_policies)
+        policy_blocked = desk_frozen or (not country_withdrawals_enabled) or bool(missing_required_policies)
         policy_block_reason = (
-            f"Withdrawals are disabled for country policy {country_code}."
-            if not country_withdrawals_enabled
+            "This coin trader desk is frozen. Withdrawals are paused."
+            if desk_frozen
             else (
-                "Accept the latest required policies before requesting withdrawals."
-                if missing_required_policies
-                else None
+                f"Withdrawals are disabled for country policy {country_code}."
+                if not country_withdrawals_enabled
+                else (
+                    "Accept the latest required policies before requesting withdrawals."
+                    if missing_required_policies
+                    else None
+                )
             )
         )
         if requires_kyc:
@@ -1801,6 +1811,16 @@ class TreasuryService:
                 DepositRequest.user_id == user.id,
             )
         )
+        if request is None:
+            raise TreasuryNotFoundError("Deposit request not found.")
+        return request
+
+    def _lock_deposit(self, session: Session, deposit_request_id: str) -> DepositRequest:
+        statement = select(DepositRequest).where(DepositRequest.id == deposit_request_id)
+        bind = session.get_bind()
+        if bind is not None and bind.dialect.name != "sqlite":
+            statement = statement.with_for_update()
+        request = session.scalar(statement.execution_options(populate_existing=True))
         if request is None:
             raise TreasuryNotFoundError("Deposit request not found.")
         return request

@@ -199,6 +199,7 @@ def test_discovery_filters_cover_public_format_fee_and_creator(client, auth_user
     assert set(_names(client.get("/api/competitions", params={**creator_params, "fee_filter": "free"}))) == {
         "Invite Cup",
         "Private League",
+        "Public League",
     }
     assert set(_names(client.get("/api/competitions", params={**creator_params, "beginner_friendly": True}))) == {
         "Public League",
@@ -263,12 +264,12 @@ def test_discovery_cards_surface_competition_economics_and_ranked_metadata(
         for item in client.get("/api/competitions", params={"creator_id": host["user_id"]}).json()["items"]
     }
     paid = items["Ranked Paid Ladder Cup"]
-    assert paid["entry_fee"] == "5.00"
-    assert paid["gross_pot"] == "5.0000"
-    assert paid["platform_fee_pct"] == "0.20"
-    assert paid["platform_fee_amount"] == "1.0000"
-    assert paid["net_payout_pot"] == "4.0000"
-    assert paid["prize_mode"] == "entry_funded"
+    assert paid["entry_fee"] == "0.00"
+    assert paid["gross_pot"] == "0.0000"
+    assert paid["platform_fee_pct"] == "0.00"
+    assert paid["platform_fee_amount"] == "0.0000"
+    assert paid["net_payout_pot"] == "0.0000"
+    assert paid["prize_mode"] == "none"
     assert paid["is_ranked"] is True
     assert paid["online_now"] is True
 
@@ -282,9 +283,9 @@ def test_discovery_cards_surface_competition_economics_and_ranked_metadata(
     guaranteed = items["Guaranteed Host Prize"]
     assert guaranteed["prize_mode"] == "host_funded_fixed"
     assert Decimal(guaranteed["host_funded_prize_total"]) == Decimal("100.0000")
-    assert Decimal(guaranteed["host_funding_required"]) == Decimal("125.0000")
-    assert Decimal(guaranteed["host_funding_escrowed"]) == Decimal("125.0000")
-    assert Decimal(guaranteed["host_platform_fee"]) == Decimal("25.0000")
+    assert Decimal(guaranteed["host_funding_required"]) == Decimal("0.0000")
+    assert Decimal(guaranteed["host_funding_escrowed"]) == Decimal("0.0000")
+    assert Decimal(guaranteed["host_platform_fee"]) == Decimal("0.0000")
     assert {key: Decimal(value) for key, value in guaranteed["fixed_prizes"].items()} == {
         "first": Decimal("60.0000"),
         "second": Decimal("25.0000"),
@@ -355,10 +356,14 @@ def test_discovery_filters_cover_reward_time_ranking_host_and_national_modes(
         },
     )
 
-    assert "User Paid Rewards" in _names(client.get("/api/competitions", params={"reward_filter": "has_rewards"}))
-    assert "User Free Unranked" in _names(client.get("/api/competitions", params={"reward_filter": "no_rewards"}))
-    assert "User Free Unranked" in _names(client.get("/api/competitions", params={"fee_filter": "free"}))
-    assert "User Paid Rewards" in _names(client.get("/api/competitions", params={"fee_filter": "paid"}))
+    assert "User Paid Rewards" not in _names(client.get("/api/competitions", params={"reward_filter": "has_rewards"}))
+    assert {"User Free Unranked", "User Paid Rewards"}.issubset(
+        set(_names(client.get("/api/competitions", params={"reward_filter": "no_rewards"})))
+    )
+    assert {"User Free Unranked", "User Paid Rewards"}.issubset(
+        set(_names(client.get("/api/competitions", params={"fee_filter": "free"})))
+    )
+    assert "User Paid Rewards" not in _names(client.get("/api/competitions", params={"fee_filter": "paid"}))
     assert "User Paid Rewards" in _names(client.get("/api/competitions", params={"starts": "online_now"}))
     assert "User Paid Rewards" in _names(
         client.get(
@@ -430,9 +435,13 @@ def test_discovery_sorting_supports_new_prize_pool_fill_rate_and_trending(
         name="Gamma Paid Cup",
         format="cup",
         visibility="public",
-        entry_fee="25.00",
+        entry_fee="0.00",
         capacity=8,
         created_at=datetime(2026, 3, 10, tzinfo=timezone.utc),
+        extra={
+            "prize_mode": "host_funded_fixed",
+            "host_funded_prize_total": "100.00",
+        },
     )
 
     alpha_user = auth_user_factory(suffix="discovery-alpha", funded_credit="100.0000")

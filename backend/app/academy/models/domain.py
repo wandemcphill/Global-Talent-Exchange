@@ -150,8 +150,8 @@ class AcademyKnockoutTie:
     home_club_name: str
     away_club_id: str
     away_club_name: str
-    winner_club_id: str
-    winner_club_name: str
+    winner_club_id: str | None = None
+    winner_club_name: str | None = None
     is_cup_match: bool = True
     allow_penalties: bool = True
     extra_time_allowed: bool = False
@@ -166,9 +166,9 @@ class AcademyChampionsLeagueFlow:
     league_phase_table: tuple[AcademyLeaguePhaseRow, ...]
     quarterfinals: tuple[AcademyKnockoutTie, ...]
     semifinals: tuple[AcademyKnockoutTie, ...]
-    final: AcademyKnockoutTie
-    champion_club_id: str
-    champion_club_name: str
+    final: AcademyKnockoutTie | None
+    champion_club_id: str | None
+    champion_club_name: str | None
 
 
 @dataclass(slots=True, frozen=True)

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from threading import Event as ThreadEvent
-from time import sleep
+from time import monotonic, sleep
 from uuid import uuid4
 
 from app.backbone.redis_fanout import HybridEventPublisher
@@ -11,6 +12,8 @@ from app.core.database import DatabaseRuntime
 from app.core.events import InMemoryEventPublisher
 from app.gtex import redis_keys
 from app.gtex.runtime import build_gtex_runtime
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -171,11 +174,26 @@ class AiBrainWorker:
         return handled
 
 
+def _expire_coin_trade_orders(worker) -> None:
+    now = monotonic()
+    if now - getattr(_expire_coin_trade_orders, "last_run", 0.0) < 30:
+        return
+    _expire_coin_trade_orders.last_run = now  # type: ignore[attr-defined]
+    try:
+        from app.coin_traders.service import CoinTraderService
+
+        with worker.context.database.session_factory() as session:
+            CoinTraderService(session).expire_stale_orders()
+    except Exception:
+        logger.exception("gtex.worker.coin_trade_expiry_failed")
+
+
 def _run_forever(worker) -> None:
     stop_event = ThreadEvent()
     try:
         while not stop_event.is_set():
             worker.run_once()
+            _expire_coin_trade_orders(worker)
             sleep(worker.context.runtime.settings.worker_poll_interval_seconds)
     finally:
         worker.context.shutdown()

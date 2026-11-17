@@ -306,7 +306,11 @@ def test_admin_issues_and_redeems_coin_trader_liquidity_idempotently(coin_trader
     with pytest.raises(CoinTraderValidationError, match="below redemption amount"):
         service.admin_redeem_liquidity(
             profile.id,
-            CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.COIN, amount=Decimal("2000")),
+            CoinTraderAdminLiquidityRequest(
+                coin_unit=LedgerUnit.COIN,
+                amount=Decimal("2000"),
+                idempotency_key="admin-redeem-overdraw-001",
+            ),
             admin=users["admin"],
         )
 
@@ -346,12 +350,20 @@ def test_admin_liquidity_keeps_gtex_coin_and_fan_coin_balances_distinct(coin_tra
 
     service.admin_issue_liquidity(
         profile.id,
-        CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.COIN, amount=Decimal("1200")),
+        CoinTraderAdminLiquidityRequest(
+            coin_unit=LedgerUnit.COIN,
+            amount=Decimal("1200"),
+            idempotency_key="issue-coin-distinct-001",
+        ),
         admin=users["admin"],
     )
     service.admin_issue_liquidity(
         profile.id,
-        CoinTraderAdminLiquidityRequest(coin_unit=LedgerUnit.CREDIT, amount=Decimal("3400")),
+        CoinTraderAdminLiquidityRequest(
+            coin_unit=LedgerUnit.CREDIT,
+            amount=Decimal("3400"),
+            idempotency_key="issue-credit-distinct-001",
+        ),
         admin=users["admin"],
     )
 

@@ -43,7 +43,7 @@ class ClubOpsApi {
   }
 
   factory ClubOpsApi.fixture({
-    String baseUrl = 'http://127.0.0.1:8000',
+    String baseUrl = '',
     Duration latency = Duration.zero,
   }) {
     assertFixtureFactoryAllowed('ClubOpsApi.fixture');

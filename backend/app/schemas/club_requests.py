@@ -3,7 +3,9 @@ from __future__ import annotations
 from datetime import date
 from typing import Any
 
-from pydantic import AliasChoices, Field
+from pydantic import AliasChoices, Field, field_validator
+
+from app.common.crest_refs import is_safe_crest_ref
 
 from app.common.enums.club_brand_asset_type import ClubBrandAssetType
 from app.common.enums.club_identity_visibility import ClubIdentityVisibility
@@ -39,6 +41,16 @@ class ClubCreateRequest(CommonSchema):
     badge_profile: dict[str, Any] | None = None
     jersey_set: dict[str, Any] | None = None
 
+    @field_validator("crest_asset_ref")
+    @classmethod
+    def validate_crest_asset_ref(cls, value: str | None) -> str | None:
+        return _validate_crest(value)
+
+    @field_validator("country_code")
+    @classmethod
+    def validate_country_code(cls, value: str | None) -> str | None:
+        return _validate_country(value)
+
 
 class ClubUpdateRequest(CommonSchema):
     club_name: str | None = Field(default=None, min_length=2, max_length=120)
@@ -60,6 +72,33 @@ class ClubUpdateRequest(CommonSchema):
     description: str | None = Field(default=None, max_length=1000)
     visibility: ClubIdentityVisibility | None = None
     founded_at: date | None = None
+
+    @field_validator("crest_asset_ref")
+    @classmethod
+    def validate_crest_asset_ref(cls, value: str | None) -> str | None:
+        return _validate_crest(value)
+
+    @field_validator("country_code")
+    @classmethod
+    def validate_country_code(cls, value: str | None) -> str | None:
+        return _validate_country(value)
+
+
+def _validate_crest(value: str | None) -> str | None:
+    if value is None or not value.strip():
+        return value
+    if not is_safe_crest_ref(value):
+        raise ValueError("Crest must be an https URL, a site path, or an image data URI.")
+    return value.strip()
+
+
+def _validate_country(value: str | None) -> str | None:
+    if value is None or not str(value).strip():
+        return value
+    code = str(value).strip().upper()
+    if len(code) != 2 or not code.isalpha():
+        raise ValueError("Country must be a two-letter code.")
+    return code
 
 
 class BrandingAssetUpsertRequest(CommonSchema):

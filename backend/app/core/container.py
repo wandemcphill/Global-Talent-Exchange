@@ -118,7 +118,6 @@ class Container:
         from app.risk.fraud_service import FraudDetectionService
         from app.risk.security_monitoring_service import SecurityMonitoringService
         from app.services.email import EmailService
-        from app.services.referral_orchestrator import ReferralOrchestrator
         from app.value_engine.service import IngestionValueEngineBridge
 
         logger.info("container.initialize.begin")
@@ -218,7 +217,7 @@ class Container:
             job_backend=self.job_backend,
         )
         self.match_service = MatchSimulationService()
-        self.orchestrator = ReferralOrchestrator()
+        self.orchestrator = None
         self._initialized = True
         logger.info("container.initialize.complete")
         return self
