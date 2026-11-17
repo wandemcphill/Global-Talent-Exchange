@@ -110,6 +110,48 @@ def test_live_world_pulse_counts_active_sessions_and_unique_daily_visitors(sessi
     assert pulse.page_views_today == 3
     assert pulse.players_online == 0
     assert pulse.labels["visitors_today"] == "Unique visitors today"
+    assert pulse.visitors_last_7_days == 2
+    assert pulse.visitors_all_time == 2
+    assert pulse.page_views_last_30_days == 3
+    assert pulse.page_views_all_time == 3
+
+
+def test_live_world_pulse_keeps_weekly_monthly_and_all_time_traffic(session) -> None:
+    now = utcnow()
+
+    def event(visitor: str, *, days_ago: float, path: str = "/") -> AnalyticsEvent:
+        return AnalyticsEvent(
+            name=PUBLIC_PAGE_VIEW_EVENT,
+            user_id=None,
+            created_at=now - timedelta(days=days_ago),
+            metadata_json={"visitor_key": visitor, "path": path},
+        )
+
+    session.add_all(
+        [
+            event("visitor-a", days_ago=0),
+            event("visitor-a", days_ago=0, path="/market"),
+            event("visitor-b", days_ago=0),
+            event("visitor-c", days_ago=3),
+            event("visitor-a", days_ago=3, path="/clubs"),
+            event("visitor-d", days_ago=20),
+            event("visitor-d", days_ago=20, path="/tv"),
+            event("visitor-e", days_ago=45),
+        ]
+    )
+    session.commit()
+
+    pulse = PublicPulseService(session).live_world_pulse()
+    assert pulse.visitors_today == 2
+    assert pulse.page_views_today == 3
+    assert pulse.visitors_last_7_days == 3
+    assert pulse.page_views_last_7_days == 5
+    assert pulse.visitors_last_30_days == 4
+    assert pulse.page_views_last_30_days == 7
+    assert pulse.visitors_all_time == 5
+    assert pulse.page_views_all_time == 8
+    assert pulse.labels["visitors_last_7_days"] == "Unique visitors in the last 7 days"
+    assert pulse.labels["page_views_all_time"] == "Page views all time"
 
 
 def test_anonymous_heartbeat_records_private_visitor_hash_and_safe_path(session) -> None:

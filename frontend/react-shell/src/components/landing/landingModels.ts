@@ -363,12 +363,21 @@ export const kCompetitionFormatPreviews: ActiveCompetitionItem[] = [
   },
 ];
 
+export interface GtexTrafficTotals {
+  today: number | null;
+  last7Days: number | null;
+  last30Days: number | null;
+  allTime: number | null;
+}
+
 export interface GtexLiveWorldPulse {
   clubsOnGtex: number;
   usersOnline: number;
   playersOnline: number;
   visitorsToday: number | null;
   pageViewsToday: number | null;
+  visitors: GtexTrafficTotals;
+  pageViews: GtexTrafficTotals;
   registeredUsers: number | null;
   usersOnlineWindowSeconds?: number;
   generatedAt?: string;

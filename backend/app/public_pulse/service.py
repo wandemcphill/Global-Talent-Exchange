@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 from dataclasses import dataclass
-from datetime import timedelta
+from datetime import datetime, timedelta
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -24,6 +24,11 @@ from app.public_pulse.schemas import LiveWorldPulseView
 USERS_ONLINE_WINDOW_SECONDS = 90
 TRAFFIC_HEARTBEAT_INTERVAL_SECONDS = 30
 PUBLIC_PAGE_VIEW_EVENT = "public.visitor.page_view"
+# Rolling windows, not calendar weeks or months. A Monday or month-start reset
+# would understate reach for advertisers early in the period. "Today" stays a
+# UTC calendar day so the live board still resets at midnight.
+TRAFFIC_ROLLING_WEEK = timedelta(days=7)
+TRAFFIC_ROLLING_MONTH = timedelta(days=30)
 _LIVE_MATCH_STATUSES = frozenset({"live", "in_progress", "playing", "started", "first_half", "second_half", "halftime"})
 
 
@@ -90,21 +95,10 @@ class PublicPulseService:
         registered_users = int(
             self.session.scalar(select(func.count()).select_from(User).where(User.is_active.is_(True))) or 0
         )
-        page_view_filter = (
-            AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT,
-            AnalyticsEvent.created_at >= today_start,
-        )
-        page_views_today = int(
-            self.session.scalar(select(func.count()).select_from(AnalyticsEvent).where(*page_view_filter)) or 0
-        )
-        visitors_today = int(
-            self.session.scalar(
-                select(func.count(func.distinct(AnalyticsEvent.metadata_json["visitor_key"].as_string()))).where(
-                    *page_view_filter
-                )
-            )
-            or 0
-        )
+        visitors_today, page_views_today = self._traffic_totals(since=today_start)
+        visitors_last_7_days, page_views_last_7_days = self._traffic_totals(since=now - TRAFFIC_ROLLING_WEEK)
+        visitors_last_30_days, page_views_last_30_days = self._traffic_totals(since=now - TRAFFIC_ROLLING_MONTH)
+        visitors_all_time, page_views_all_time = self._traffic_totals(since=None)
 
         players_online = self._managers_in_live_matches()
         return LiveWorldPulseView(
@@ -113,7 +107,13 @@ class PublicPulseService:
             players_online=players_online,
             users_online_window_seconds=USERS_ONLINE_WINDOW_SECONDS,
             visitors_today=visitors_today,
+            visitors_last_7_days=visitors_last_7_days,
+            visitors_last_30_days=visitors_last_30_days,
+            visitors_all_time=visitors_all_time,
             page_views_today=page_views_today,
+            page_views_last_7_days=page_views_last_7_days,
+            page_views_last_30_days=page_views_last_30_days,
+            page_views_all_time=page_views_all_time,
             registered_users=registered_users,
             generated_at=now,
             labels={
@@ -121,10 +121,39 @@ class PublicPulseService:
                 "users_online": "Registered users active now",
                 "players_online": "Managers in live matches",
                 "visitors_today": "Unique visitors today",
+                "visitors_last_7_days": "Unique visitors in the last 7 days",
+                "visitors_last_30_days": "Unique visitors in the last 30 days",
+                "visitors_all_time": "Unique visitors all time",
                 "page_views_today": "Page views today",
+                "page_views_last_7_days": "Page views in the last 7 days",
+                "page_views_last_30_days": "Page views in the last 30 days",
+                "page_views_all_time": "Page views all time",
                 "registered_users": "Registered user accounts",
             },
         )
+
+    def _traffic_totals(self, *, since: datetime | None) -> tuple[int, int]:
+        """Return unique visitors and page views for one window.
+
+        A visitor is one browser, counted once per window. A page view is every
+        recorded page open, so the same visitor can contribute many page views.
+        Passing since=None keeps the full stored history.
+        """
+        filters = [AnalyticsEvent.name == PUBLIC_PAGE_VIEW_EVENT]
+        if since is not None:
+            filters.append(AnalyticsEvent.created_at >= since)
+        page_views = int(
+            self.session.scalar(select(func.count()).select_from(AnalyticsEvent).where(*filters)) or 0
+        )
+        visitors = int(
+            self.session.scalar(
+                select(func.count(func.distinct(AnalyticsEvent.metadata_json["visitor_key"].as_string()))).where(
+                    *filters
+                )
+            )
+            or 0
+        )
+        return visitors, page_views
 
     def _managers_in_live_matches(self) -> int:
         live_matches = list(

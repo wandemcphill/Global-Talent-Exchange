@@ -27,6 +27,8 @@ import {
   formatNairaMinor,
 } from "@/lib/commercial/api";
 import { DocumentHead } from "@/components/seo/DocumentHead";
+import { PublicTrafficStatsStrip } from "@/components/landing/PublicTrafficStatsStrip";
+import { useLiveWorldPulse } from "@/components/landing/useLiveWorldPulse";
 
 export interface CommercialPublicPortalProps {
   division?: "overview" | "brands" | "music";
@@ -49,6 +51,7 @@ export default function CommercialPublicPortal({
         : "all";
 
   const [activeTab, setActiveTab] = useState<"all" | "brand" | "music">(initialFocus);
+  const pulse = useLiveWorldPulse();
   const [placements, setPlacements] = useState<AdPlacementSpec[]>([]);
   const [packages, setPackages] = useState<AdPricingPackage[]>([]);
   const [loading, setLoading] = useState(true);
@@ -380,6 +383,8 @@ export default function CommercialPublicPortal({
           </div>
         </div>
       </section>
+
+      <PublicTrafficStatsStrip pulse={pulse} />
 
       {/* Campaign Process Section */}
       <section className="border-b border-white/10 py-16">

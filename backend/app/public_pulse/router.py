@@ -18,7 +18,7 @@ router = APIRouter(prefix="/public", tags=["public-pulse"])
 
 @router.get("/live-stats", response_model=LiveWorldPulseView)
 def get_live_world_pulse(session: Session = Depends(get_session)) -> LiveWorldPulseView:
-    """Public homepage metrics: unique visits, active logins, clubs and live-match managers."""
+    """Public homepage metrics: visitor and page-view history, active logins, clubs and live-match managers."""
     return PublicPulseService(session).live_world_pulse()
 
 
