@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.auth.schemas import validate_trader_credential_hash, validate_trader_totp_secret
+from app.core.field_encryption import ENCRYPTION_PREFIX, decrypt_field, encrypt_field
 from app.models.trader import (
     TraderExperience,
     TraderMarket,
@@ -91,6 +92,7 @@ class TraderService:
         totp_code: str,
         recovery_phrase_hash: str | None = None,
         security_pin_hash: str | None = None,
+        current_code: str | None = None,
     ) -> TraderSecurity:
         try:
             normalized_secret = validate_trader_totp_secret(totp_secret)
@@ -106,8 +108,11 @@ class TraderService:
             raise TraderAccessError(str(exc)) from exc
         if not verify_totp(normalized_secret, totp_code):
             raise TraderAccessError("Invalid authenticator code.")
-        totp_secret_hash = _hash_secret(normalized_secret, purpose="totp")
+        totp_secret_hash = encrypt_field(normalized_secret) or ""
         existing = self.session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == user.id))
+        if existing is not None and existing.two_factor_enabled:
+            if not _current_factor_matches(existing, current_code):
+                raise TraderAccessError("Current authenticator code is required to replace the secret.")
         if existing is not None:
             was_enabled = existing.two_factor_enabled
             existing.totp_secret_hash = totp_secret_hash
@@ -178,6 +183,7 @@ class TraderService:
         totp_code: str,
         recovery_phrase_hash: str | None = None,
         security_pin_hash: str | None = None,
+        current_code: str | None = None,
     ) -> dict[str, object]:
         self.assert_trader(user)
         security = self.ensure_security(
@@ -186,6 +192,7 @@ class TraderService:
             totp_code=totp_code,
             recovery_phrase_hash=recovery_phrase_hash,
             security_pin_hash=security_pin_hash,
+            current_code=current_code,
         )
         events = list(
             self.session.scalars(
@@ -311,6 +318,76 @@ class TraderService:
         if market is None:
             raise TraderMarketNotFoundError("Trader market not found.")
         return market
+
+
+def assert_login_second_factor(
+    session: Session,
+    user: User,
+    *,
+    totp_code: str | None = None,
+    backup_code: str | None = None,
+    recovery_phrase_hash: str | None = None,
+) -> None:
+    """Require a live authenticator, backup code, or recovery hash when one is stored."""
+    security = session.scalar(select(TraderSecurity).where(TraderSecurity.user_id == user.id))
+    if security is None or not security.two_factor_enabled:
+        return
+    secret = _readable_totp_secret(security.totp_secret_hash)
+    has_backup = bool(security.backup_codes_json)
+    has_recovery = bool(security.recovery_phrase_hash)
+    if secret is None and not has_backup and not has_recovery:
+        return
+    if secret and totp_code and verify_totp(secret, totp_code):
+        return
+    if backup_code and _matches_any_hash(backup_code, list(security.backup_codes_json or [])):
+        return
+    if (
+        recovery_phrase_hash
+        and security.recovery_phrase_hash
+        and hmac.compare_digest(recovery_phrase_hash, security.recovery_phrase_hash)
+    ):
+        return
+    raise TraderAccessError("Authenticator code is required.")
+
+
+def _readable_totp_secret(stored: str | None) -> str | None:
+    if not stored or stored.startswith("pbkdf2-"):
+        return None
+    if not stored.startswith(ENCRYPTION_PREFIX):
+        return None
+    try:
+        return decrypt_field(stored)
+    except Exception:
+        return None
+
+
+def _current_factor_matches(security: TraderSecurity, current_code: str | None) -> bool:
+    if not current_code:
+        return False
+    secret = _readable_totp_secret(security.totp_secret_hash)
+    if secret and verify_totp(secret, current_code):
+        return True
+    if _matches_any_hash(current_code, list(security.backup_codes_json or [])):
+        return True
+    return False
+
+
+def _matches_any_hash(value: str, stored_hashes: list[str]) -> bool:
+    return any(_verify_hashed_secret(value, stored) for stored in stored_hashes)
+
+
+def _verify_hashed_secret(value: str, stored: str) -> bool:
+    parts = stored.split("$")
+    if len(parts) != 5 or parts[0] != "pbkdf2-sha256":
+        return False
+    try:
+        iterations = int(parts[1])
+        salt = bytes.fromhex(parts[3])
+        expected = bytes.fromhex(parts[4])
+    except ValueError:
+        return False
+    derived = hashlib.pbkdf2_hmac("sha256", value.strip().encode("utf-8"), salt, iterations)
+    return hmac.compare_digest(derived, expected)
 
 
 def _hash_secret(value: str, *, purpose: str = "secret") -> str:

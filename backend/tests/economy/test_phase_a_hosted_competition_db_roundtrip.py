@@ -118,12 +118,12 @@ def test_hosted_coin_competition_create_freeze_settle_roundtrip_uses_db_ledger()
         session.commit()
 
         assert host_participation_created is True
-        assert competition.metadata_json["platform_fee_bps"] == 3000
+        assert competition.metadata_json["platform_fee_bps"] == 0
         assert competition.metadata_json["platform_fee_policy_frozen"] is True
         assert competition.host_funding_escrowed_coin == Decimal("1000.0000")
         assert WalletService().get_balance(
             session, WalletService().get_user_account(session, host, LedgerUnit.COIN)
-        ) == Decimal("0.0000")
+        ) == Decimal("1000.0000")
 
         session.add(
             UserHostedCompetitionParticipant(
@@ -139,8 +139,8 @@ def test_hosted_coin_competition_create_freeze_settle_roundtrip_uses_db_ledger()
         finance_before = service.finance_snapshot(competition.id)
         assert finance_before["currency"] == "coin"
         assert finance_before["escrow_balance"] == Decimal("1000.0000")
-        assert finance_before["projected_reward_pool"] == Decimal("700.0000")
-        assert finance_before["projected_platform_fee"] == Decimal("300.0000")
+        assert finance_before["projected_reward_pool"] == Decimal("1000.0000")
+        assert finance_before["projected_platform_fee"] == Decimal("0.0000")
 
         rule = session.scalar(select(AdminRewardRule).where(AdminRewardRule.rule_key == "phase-a-competition-fee"))
         assert rule is not None
@@ -157,7 +157,7 @@ def test_hosted_coin_competition_create_freeze_settle_roundtrip_uses_db_ledger()
         winner_balance = WalletService().get_balance(
             session, WalletService().get_user_account(session, winner, LedgerUnit.COIN)
         )
-        assert winner_balance == Decimal("700.0000")
+        assert winner_balance == Decimal("1000.0000")
         assert competition.host_funding_escrowed_coin == Decimal("0.0000")
 
         settlements = list(
@@ -172,16 +172,16 @@ def test_hosted_coin_competition_create_freeze_settle_roundtrip_uses_db_ledger()
         prize = next(row for row in settlements if row.settlement_type == "prize")
         platform_fee = next(row for row in settlements if row.settlement_type == "platform_fee")
         assert prize.currency == "coin"
-        assert prize.net_amount == Decimal("700.0000")
+        assert prize.net_amount == Decimal("1000.0000")
         assert platform_fee.currency == "coin"
-        assert platform_fee.net_amount == Decimal("300.0000")
-        assert platform_fee.platform_fee_amount == Decimal("300.0000")
+        assert platform_fee.net_amount == Decimal("0.0000")
+        assert platform_fee.platform_fee_amount == Decimal("0.0000")
         assert prize.ledger_transaction_id == platform_fee.ledger_transaction_id
 
         finance_after = service.finance_snapshot(competition.id)
         assert finance_after["escrow_balance"] == Decimal("0.0000")
-        assert finance_after["settled_prizes"] == Decimal("700.0000")
-        assert finance_after["settled_platform_fee"] == Decimal("300.0000")
+        assert finance_after["settled_prizes"] == Decimal("1000.0000")
+        assert finance_after["settled_platform_fee"] == Decimal("0.0000")
         assert finance_after["status"] == "completed"
     finally:
         session.close()

@@ -7,7 +7,6 @@ from app.config.competition_constants import (
     USER_COMPETITION_MAX_ENTRY_FEE_MINOR,
     USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR,
     USER_COMPETITION_MAX_PLATFORM_FEE_BPS,
-    USER_COMPETITION_MIN_PARTICIPANTS,
 )
 from app.models.competition import Competition
 from app.schemas.competition_core import CompetitionCreateRequest, CompetitionUpdateRequest
@@ -35,6 +34,17 @@ class CompetitionValidationService:
         self._rules_engine = rules_engine or CompetitionRulesEngine()
 
     def validate_creation(self, payload: CompetitionCreateRequest) -> CompetitionValidationResult:
+        payload = payload.model_copy(
+            update={
+                "financials": payload.financials.model_copy(
+                    update={
+                        "entry_fee_minor": 0,
+                        "platform_fee_bps": 0,
+                        "host_creation_fee_minor": 0,
+                    }
+                )
+            }
+        )
         errors: list[str] = []
         try:
             rule_summary = self._rules_engine.validate_rules(payload.rules)
@@ -108,18 +118,15 @@ class CompetitionValidationService:
     def _validate_financial_bounds(self, financials) -> list[str]:
         errors: list[str] = []
         if financials.entry_fee_minor > USER_COMPETITION_MAX_ENTRY_FEE_MINOR:
-            errors.append("entry fee exceeds the allowed maximum")
+            errors.append("competition entry is free")
         if financials.platform_fee_bps > USER_COMPETITION_MAX_PLATFORM_FEE_BPS:
-            errors.append("platform fee exceeds the allowed maximum")
+            errors.append("competition entry cannot include a platform cut")
         if financials.host_creation_fee_minor > USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR:
-            errors.append("host creation fee exceeds the allowed maximum")
+            errors.append("competition entry cannot include a host creation fee")
         return errors
 
     def _validate_paid_competition_minimum(self, *, entry_fee_minor: int, min_participants: int) -> list[str]:
-        if entry_fee_minor <= 0:
-            return []
-        if min_participants < USER_COMPETITION_MIN_PARTICIPANTS:
-            return ["paid competitions must allow at least the minimum participant count"]
+        del entry_fee_minor, min_participants
         return []
 
     def _validate_payout_shape(self, *, payout_percentages: list[int], max_participants: int) -> list[str]:
@@ -133,10 +140,7 @@ class CompetitionValidationService:
         entry_fee_minor: int,
         fee_summary: CompetitionFeeSummary,
     ) -> list[str]:
-        if entry_fee_minor <= 0:
-            return []
-        if fee_summary.net_prize_pool_minor <= 0:
-            return ["paid skill contests must leave a positive net prize pool after disclosed fees"]
+        del entry_fee_minor, fee_summary
         return []
 
     def _locked_statuses(self) -> set[CompetitionStatus]:

@@ -61,6 +61,22 @@ class GteAppConfig {
   }
 }
 
+String coerceGteApiBaseUrl(
+  String baseUrl, {
+  GteBackendMode mode = GteBackendMode.live,
+}) {
+  final String trimmed = baseUrl.trim();
+  if (trimmed.isNotEmpty &&
+      trimmed != '' &&
+      trimmed != 'http://localhost:8000') {
+    return trimmed;
+  }
+  if (mode == GteBackendMode.fixture) {
+    return gteFixtureApiBaseUrl;
+  }
+  return resolveGteApiBaseUrlForRuntimeEnvironment();
+}
+
 String resolveGteApiBaseUrl({
   required String rawBaseUrl,
   required GteBackendMode backendMode,

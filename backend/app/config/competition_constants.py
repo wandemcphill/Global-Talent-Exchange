@@ -26,8 +26,9 @@ CHAMPIONS_LEAGUE_LEAGUE_PHASE_TEAMS: int = 36
 
 FAST_CUP_REGISTRATION_INTERVAL_MINUTES: int = 15
 
+# Retained as historical labels only. Registration must not charge them.
 LEAGUE_BUY_IN_TIERS: list[int] = [1000, 800, 500, 300, 150, 25]
-ACADEMY_BUY_IN_MULTIPLIER: float = 0.5
+ACADEMY_BUY_IN_MULTIPLIER: float = 0.0
 
 LEAGUE_WINNER_PCT: float = 0.50
 TOP_SCORER_PCT: float = 0.10
@@ -57,8 +58,8 @@ LEAGUE_RULE_ALLOWED_TIE_BREAKS: tuple[str, ...] = (
 
 CUP_ALLOWED_PARTICIPANT_SIZES: tuple[int, ...] = (4, 8, 12, 16, 32, 64)
 
-# Maximum permitted user-competition platform cut. The active rate remains
-# Admin-configured through the central economic policy and is not hardcoded here.
-USER_COMPETITION_MAX_PLATFORM_FEE_BPS: int = 3000
-USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR: int = 250_000
-USER_COMPETITION_MAX_ENTRY_FEE_MINOR: int = 1_000_000
+# Competition entry is free. A platform cut, host creation fee, or entry fee
+# cannot be stored. Prize coin is funded by GTEX, not by entrants.
+USER_COMPETITION_MAX_PLATFORM_FEE_BPS: int = 0
+USER_COMPETITION_MAX_HOST_CREATION_FEE_MINOR: int = 0
+USER_COMPETITION_MAX_ENTRY_FEE_MINOR: int = 0

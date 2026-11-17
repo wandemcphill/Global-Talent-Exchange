@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:http/http.dart' as http;
 
+import '../app/test_runtime_detector.dart';
 import '../shared/auth/auth_identity_store.dart';
 import '../shared/models/auth_session.dart';
 import 'gte_api_contract.dart';
@@ -110,6 +111,29 @@ abstract class GteTransport {
   Future<GteTransportResponse> send(GteTransportRequest request);
 }
 
+String gteEffectiveApiBaseUrl(
+  String baseUrl, {
+  GteBackendMode mode = GteBackendMode.live,
+}) {
+  final String trimmed = baseUrl.trim();
+  if (trimmed.isNotEmpty) {
+    return trimmed;
+  }
+  if (mode == GteBackendMode.fixture) {
+    return 'https://fixture.invalid';
+  }
+  const String fromEnvironment = String.fromEnvironment('GTE_API_BASE_URL');
+  if (fromEnvironment.trim().isNotEmpty) {
+    return fromEnvironment.trim();
+  }
+  if (isFlutterTestRuntime) {
+    return 'https://runtime-config.invalid';
+  }
+  throw StateError(
+    'GTE_API_BASE_URL must be set when GTE_BACKEND_MODE is strict_live.',
+  );
+}
+
 class GteRepositoryConfig {
   const GteRepositoryConfig({
     required this.baseUrl,
@@ -124,8 +148,9 @@ class GteRepositoryConfig {
     Map<String, Object?> queryParameters = const <String, Object?>{},
   ]) {
     final String resolvedPath = gteCanonicalApiPath(path);
+    final String resolvedBaseUrl = gteEffectiveApiBaseUrl(baseUrl, mode: mode);
     final Uri baseUri = Uri.parse(
-      baseUrl.endsWith('/') ? baseUrl : '$baseUrl/',
+      resolvedBaseUrl.endsWith('/') ? resolvedBaseUrl : '$resolvedBaseUrl/',
     );
     final Uri resolved = baseUri.resolve(
       resolvedPath.startsWith('/') ? resolvedPath.substring(1) : resolvedPath,

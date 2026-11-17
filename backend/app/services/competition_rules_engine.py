@@ -89,19 +89,15 @@ class CompetitionRulesEngine:
         *,
         max_participants: int,
     ) -> CompetitionFeeSummary:
-        gross_pool_minor = financials.entry_fee_minor * max_participants
-        platform_fee_minor = (gross_pool_minor * financials.platform_fee_bps) // 10_000
-        net_prize_pool_minor = gross_pool_minor - platform_fee_minor - financials.host_creation_fee_minor
-        if net_prize_pool_minor < 0:
-            net_prize_pool_minor = 0
+        del max_participants
         return CompetitionFeeSummary(
-            entry_fee_minor=financials.entry_fee_minor,
+            entry_fee_minor=0,
             currency=financials.currency,
-            platform_fee_bps=financials.platform_fee_bps,
-            host_creation_fee_minor=financials.host_creation_fee_minor,
-            gross_pool_minor=gross_pool_minor,
-            platform_fee_minor=platform_fee_minor,
-            net_prize_pool_minor=net_prize_pool_minor,
+            platform_fee_bps=0,
+            host_creation_fee_minor=0,
+            gross_pool_minor=0,
+            platform_fee_minor=0,
+            net_prize_pool_minor=0,
         )
 
     def _validate_league_rules(self, rules: LeagueRuleSetPayload) -> list[str]:

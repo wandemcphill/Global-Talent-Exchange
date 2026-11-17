@@ -7,7 +7,7 @@ import '../../features/trust_ops_redesign/trust_ops_redesign.dart';
 class GtexAdminTrustOpsScreenV2 extends StatelessWidget {
   const GtexAdminTrustOpsScreenV2({
     super.key,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.accessToken,
     this.backendMode = GteBackendMode.live,
   });

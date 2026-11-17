@@ -331,8 +331,7 @@ class HostedCompetitionService:
         )
 
     def _active_platform_fee_bps(self) -> int:
-        rule = next(iter(AdminEngineService(self.session).list_reward_rules(active_only=True)), None)
-        return int(rule.competition_platform_fee_bps if rule is not None else 1000)
+        return 0
 
     def _competition_escrow_account(self, competition: UserHostedCompetition) -> LedgerAccount:
         code = f"competition:{competition.id}:credit:escrow"
@@ -377,9 +376,12 @@ class HostedCompetitionService:
         self.session.flush()
 
     def _fund_gtex_hosted_reward_pool(self, *, competition: UserHostedCompetition, admin: User) -> None:
-        del competition, admin
-        raise HostedCompetitionError(
-            "Host-funded prizes must be escrowed from the host wallet, not minted on an unbounded platform account."
+        if self.wallet_service is None:
+            raise HostedCompetitionError("Wallet service is required to fund a GTEX prize.")
+        HostedCompetitionCoinEscrowService(self.session, self.wallet_service).fund_from_platform(
+            competition=competition,
+            gross_prize=competition.reward_pool_coin,
+            actor=admin,
         )
 
     def create_competition(

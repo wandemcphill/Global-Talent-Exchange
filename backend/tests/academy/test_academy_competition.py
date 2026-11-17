@@ -73,8 +73,8 @@ def test_academy_buy_in_multiplier_tracks_shared_senior_tiers() -> None:
 
     buy_ins = {registration.senior_buy_in_tier: registration.academy_buy_in for registration in registrations}
 
-    assert buy_ins[1000] == Decimal("500.00")
-    assert buy_ins[25] == Decimal("12.50")
+    assert buy_ins[1000] == Decimal("0.00")
+    assert buy_ins[25] == Decimal("0.00")
 
 
 def test_academy_season_integrity_generates_double_round_robin_across_seven_days() -> None:
@@ -126,12 +126,12 @@ def test_academy_qualification_flow_and_knockout_path_follow_scaled_senior_ratio
         "club-08",
     ]
     assert len(projection.champions_league.playoff_ties) == 2
-    assert len(projection.champions_league.league_phase_table) == 6
-    assert len(projection.champions_league.quarterfinals) == 2
-    assert len(projection.champions_league.semifinals) == 2
-    assert projection.champions_league.final.allow_penalties is True
-    assert projection.champions_league.final.extra_time_allowed is False
-    assert projection.champions_league.champion_club_id == "club-01"
+    assert all(tie.winner_club_id is None for tie in projection.champions_league.playoff_ties)
+    assert len(projection.champions_league.league_phase_table) == 4
+    assert projection.champions_league.quarterfinals == ()
+    assert projection.champions_league.semifinals == ()
+    assert projection.champions_league.final is None
+    assert projection.champions_league.champion_club_id is None
 
 
 def test_academy_remains_active_during_senior_world_super_cup_window() -> None:
@@ -163,11 +163,11 @@ def test_academy_top_four_rollover_and_awards_preview() -> None:
         "club-04",
     ]
     assert all(club.carry_over_from_previous_season for club in projection.rollover_clubs)
-    assert projection.awards.total_pool == Decimal("5062.50")
-    assert projection.awards.league_winner_share == Decimal("2531.25")
-    assert projection.awards.top_scorer_share == Decimal("506.25")
-    assert projection.awards.top_assist_share == Decimal("253.13")
-    assert projection.awards.champions_league_fund_share == Decimal("1771.88")
+    assert projection.awards.total_pool == Decimal("0.00")
+    assert projection.awards.league_winner_share == Decimal("0.00")
+    assert projection.awards.top_scorer_share == Decimal("0.00")
+    assert projection.awards.top_assist_share == Decimal("0.00")
+    assert projection.awards.champions_league_fund_share == Decimal("0.00")
 
 
 def test_academy_router_exposes_season_summary_api() -> None:
@@ -211,7 +211,7 @@ def test_academy_router_exposes_season_summary_api() -> None:
     assert payload["champion_club_id"] == "club-01"
     assert payload["active_during_senior_world_super_cup"] is True
     assert len(payload["fixtures"]) == 380
-    assert payload["awards"]["champions_league_fund_share"] == "1771.88"
+    assert payload["awards"]["champions_league_fund_share"] == "0.00"
 
 
 def test_academy_dispatch_jobs_preserve_open_window_slot_sequences() -> None:

@@ -354,7 +354,9 @@ def resolve_club_crest_url(session: Session, club_id: str, club_name: str | None
     if profile and profile.crest_asset_ref:
         ref = profile.crest_asset_ref.strip()
         if ref:
-            if ref.startswith(("data:", "http://", "https://", "/")):
+            from app.common.crest_refs import is_safe_crest_ref
+
+            if is_safe_crest_ref(ref):
                 return ref
             return f"/api/media/{ref}"
     name = (profile.club_name if profile else club_name) or "GTEX"

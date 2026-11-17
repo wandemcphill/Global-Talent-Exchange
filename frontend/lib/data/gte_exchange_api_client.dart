@@ -47,7 +47,7 @@ class GteExchangeApiClient {
   factory GteExchangeApiClient.fixture({Duration latency = Duration.zero}) {
     assertFixtureFactoryAllowed('GteExchangeApiClient.fixture');
     final GteRepositoryConfig config = const GteRepositoryConfig(
-      baseUrl: 'http://127.0.0.1:8000',
+      baseUrl: '',
       mode: GteBackendMode.fixture,
     );
     final GteTransport transport = _UnsupportedTransport();

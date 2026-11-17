@@ -17,7 +17,7 @@ class DynastyLeaderboardScreen extends StatefulWidget {
     super.key,
     this.controller,
     this.repository,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.onOpenClub,
   });

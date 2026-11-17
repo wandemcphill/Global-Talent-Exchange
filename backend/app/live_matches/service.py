@@ -483,6 +483,38 @@ class LiveMatchHub:
                 raise LiveMatchError("Spectator session was not found.")
             return item
 
+    def _persist_match_halt(self, match_id: str, halt_state: dict[str, object], *, enabled: bool) -> None:
+        if self.session_factory is None:
+            return
+        try:
+            from app.models.competition_match_execution import CompetitionMatchExecution
+
+            with self.session_factory() as session:
+                execution = session.scalar(
+                    select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+                )
+                if execution is None:
+                    return
+                metadata = dict(execution.metadata_json or {})
+                if enabled:
+                    metadata["admin_halt"] = {
+                        "reason": halt_state.get("reason"),
+                        "actor_user_id": halt_state.get("actor_user_id"),
+                        "halted_at": halt_state.get("updated_at"),
+                        "previous_status": execution.execution_status,
+                    }
+                    execution.execution_status = "halted"
+                else:
+                    previous = dict(metadata.get("admin_halt") or {}).get("previous_status")
+                    if execution.execution_status == "halted":
+                        execution.execution_status = str(previous or "in_progress")
+                    metadata.pop("admin_halt", None)
+                execution.metadata_json = metadata
+                session.commit()
+        except Exception as exc:
+            logger.exception("live_match.halt_persist_failed match_id=%s", match_id)
+            raise LiveMatchError("Match halt could not be persisted.") from exc
+
     def _canonical_execution_bundle(self, match_id: str) -> tuple[Any, Any] | None:
         if self.session_factory is None:
             return None
@@ -855,8 +887,9 @@ class LiveMatchHub:
                         ).all()
                     )
                     active_set.update(rows)
-            except Exception:
-                pass
+            except Exception as exc:
+                logger.exception("live_match.active_list_failed")
+                raise LiveMatchError("Active matches could not be read.") from exc
         active_set.update(
             self._safe_hot_cache_call("list_active_matches", self._hot_cache.list_active_matches, default=()) or ()
         )
@@ -869,12 +902,17 @@ class LiveMatchHub:
         reason: str | None = None,
         actor_user_id: str | None = None,
     ) -> dict[str, object]:
+        halt_state = {
+            "reason": (reason or "").strip() or None,
+            "actor_user_id": actor_user_id,
+            "updated_at": utcnow().isoformat(),
+        }
+        try:
+            self._persist_match_halt(match_id, halt_state, enabled=True)
+        except LiveMatchError:
+            raise
         with self._lock:
-            self._halted_matches[match_id] = {
-                "reason": (reason or "").strip() or None,
-                "actor_user_id": actor_user_id,
-                "updated_at": utcnow().isoformat(),
-            }
+            self._halted_matches[match_id] = halt_state
             runtime = self._matches.get(match_id)
             if runtime is None:
                 self._safe_hot_cache_call("clear_match_state", lambda: self._hot_cache.clear_match_state(match_id))
@@ -892,6 +930,7 @@ class LiveMatchHub:
         return {"match_id": match_id, "enabled": True, **self._halted_matches[match_id]}
 
     def clear_match_halt(self, match_id: str) -> dict[str, object]:
+        self._persist_match_halt(match_id, {}, enabled=False)
         with self._lock:
             removed = self._halted_matches.pop(match_id, None)
         return {
@@ -1687,8 +1726,9 @@ class LiveMatchHub:
                                     },
                                 }
                                 match_tactics = self._tactics[match_id]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.exception("live_match.tactics_read_failed match_id=%s", match_id)
+                    raise LiveMatchError("Match tactics could not be read.") from exc
 
             if not match_tactics:
                 try:
@@ -1716,8 +1756,9 @@ class LiveMatchHub:
                                     "away": dict(saved.get("away", {})),
                                 }
                                 match_tactics = self._tactics[match_id]
-                except Exception:
-                    pass
+                except Exception as exc:
+                    logger.exception("live_match.tactics_read_failed match_id=%s", match_id)
+                    raise LiveMatchError("Match tactics could not be read.") from exc
 
             if not match_tactics:
                 match_tactics = {}

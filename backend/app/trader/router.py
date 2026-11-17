@@ -153,6 +153,7 @@ def verify_totp_setup(
             totp_code=payload.code,
             recovery_phrase_hash=payload.recovery_phrase_hash,
             security_pin_hash=payload.security_pin_hash,
+            current_code=payload.current_code,
         )
     except TraderAccessError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

@@ -940,6 +940,9 @@ def login_user(
             session,
             email=payload.email,
             password=payload.password,
+            totp_code=payload.totp_code,
+            backup_code=payload.backup_code,
+            recovery_phrase_hash=payload.recovery_phrase_hash,
             timing_recorder=telemetry.capture,
         )
         telemetry.mark("service.authenticate_user_ms", login_started_at)

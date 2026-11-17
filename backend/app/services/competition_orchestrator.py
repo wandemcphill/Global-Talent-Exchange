@@ -23,7 +23,7 @@ from app.common.enums.competition_status import CompetitionStatus
 from app.common.enums.competition_visibility import CompetitionVisibility
 from app.common.enums.fixture_window import FixtureWindow
 from app.common.enums.match_status import MatchStatus
-from app.config.competition_constants import USER_COMPETITION_MAX_PLATFORM_FEE_BPS, USER_COMPETITION_MIN_PARTICIPANTS
+from app.config.competition_constants import USER_COMPETITION_MIN_PARTICIPANTS
 from app.core.events import DomainEvent, EventPublisher, InMemoryEventPublisher
 from app.models.competition import Competition
 from app.models.competition_escrow import CompetitionEscrow
@@ -260,7 +260,9 @@ class CompetitionOrchestrator:
             domain_payload.financials.host_creation_fee_minor = 0
             domain_payload.financials.currency = "coin"
         else:
-            domain_payload.financials.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
+            domain_payload.financials.platform_fee_bps = 0
+            domain_payload.financials.entry_fee_minor = 0
+            domain_payload.financials.host_creation_fee_minor = 0
             domain_payload.financials.currency = payload.currency
         creation = self.creation_service.build_competition(domain_payload)
         competition = creation.competition
@@ -281,9 +283,7 @@ class CompetitionOrchestrator:
         competition.online_now = bool(payload.online_now)
         competition.source_type = payload.source_type
         competition.source_id = payload.source_id
-        if host_type is CompetitionHostType.USER_HOSTED:
-            competition.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
-        competition.host_fee_bps = self._pct_to_bps(payload.host_fee_pct)
+        self._waive_entry_charges(competition)
         self._apply_host_funded_prize_configuration(competition, payload)
         if payload.scheduled_start_at:
             competition.scheduled_start_at = payload.scheduled_start_at
@@ -462,13 +462,7 @@ class CompetitionOrchestrator:
         if payload.structure is not None:
             self._apply_structure(rule_set, payload.structure)
 
-        is_platform_competition = self._is_platform_competition(competition.source_type)
-        if payload.entry_fee is not None and not is_platform_competition:
-            competition.entry_fee_minor = self._to_minor_units(payload.entry_fee)
-        if not is_platform_competition:
-            competition.platform_fee_bps = USER_COMPETITION_MAX_PLATFORM_FEE_BPS
-        if payload.host_fee_pct is not None:
-            competition.host_fee_bps = self._pct_to_bps(payload.host_fee_pct)
+        self._waive_entry_charges(competition)
 
         self._refresh_financials(competition, rule_set)
 
@@ -650,6 +644,7 @@ class CompetitionOrchestrator:
         dynamic_prize_pool_service = (
             DynamicPrizePoolService(self.session) if list_context.dynamic_prize_pool_context is not None else None
         )
+        world_now = self._world_now()
 
         items: list[CompetitionSummaryView] = []
         for item in competitions:
@@ -669,6 +664,7 @@ class CompetitionOrchestrator:
                 prize_rule=list_context.prize_rules.get(item.id),
                 visibility_rules=list_context.visibility_rules.get(item.id, ()),
                 dynamic_prize_pool=dynamic_prize_pool,
+                now=world_now,
             )
             if summary is not None:
                 items.append(summary)
@@ -706,6 +702,7 @@ class CompetitionOrchestrator:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
+        self._waive_entry_charges(competition)
 
         rule_set = self._rule_set(competition.id)
         club = self._resolve_join_club(competition, user_id=user_id, club_id=club_id, club_name=club_name)
@@ -769,9 +766,9 @@ class CompetitionOrchestrator:
             user_id=user_id,
             entry_id=entry.id,
             status="joined",
-            paid_entry_fee_minor=competition.entry_fee_minor,
+            paid_entry_fee_minor=0,
             entry_fee_currency=competition.currency,
-            escrow_status="pending" if competition.entry_fee_minor > 0 else "none",
+            escrow_status="none",
         )
         participant_savepoint = self.session.begin_nested()
         try:
@@ -990,6 +987,7 @@ class CompetitionOrchestrator:
         competition = self.session.get(Competition, competition_id)
         if competition is None:
             return None
+        self._waive_entry_charges(competition)
         rule_set = self._rule_set(competition.id)
         resolved_user_id = actor_user_id or payload.user_id
         if resolved_user_id is None:
@@ -1799,6 +1797,7 @@ class CompetitionOrchestrator:
         prize_rule: CompetitionPrizeRule | None = None,
         visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
         dynamic_prize_pool: object = _DYNAMIC_PRIZE_POOL_UNSET,
+        now: datetime | None = None,
     ) -> CompetitionSummaryView:
         participant_count = (
             participant_count if participant_count is not None else self._participant_count(competition.id)
@@ -1834,6 +1833,7 @@ class CompetitionOrchestrator:
             participant_count=participant_count,
             rule_set=rule_set,
             visibility_rules=visibility_rules,
+            now=now,
         )
         host_type = self._host_type_for_competition(competition)
         return CompetitionSummaryView(
@@ -1901,6 +1901,7 @@ class CompetitionOrchestrator:
         prize_rule: CompetitionPrizeRule | None = None,
         visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
         dynamic_prize_pool: object = _DYNAMIC_PRIZE_POOL_UNSET,
+        now: datetime | None = None,
     ) -> CompetitionSummaryView | None:
         try:
             return self._to_summary(
@@ -1910,6 +1911,7 @@ class CompetitionOrchestrator:
                 prize_rule=prize_rule,
                 visibility_rules=visibility_rules,
                 dynamic_prize_pool=dynamic_prize_pool,
+                now=now,
             )
         except CompetitionActionError as exc:
             if exc.reason in _DISCOVERY_SKIP_REASONS:
@@ -2166,8 +2168,10 @@ class CompetitionOrchestrator:
         rule_set: CompetitionRuleSet | None = None,
         visibility_rules: Iterable[CompetitionVisibilityRule] | None = None,
         visibility_context: dict[str, Any] | None = None,
+        now: datetime | None = None,
     ) -> JoinDecision:
         rule_set = rule_set or self._rule_set(competition.id)
+        resolved_now = now or self._world_now()
         user_id = self._normalized_string(user_id)
         club_id = self._normalized_string(club_id)
         invite_code = self._normalized_string(invite_code)
@@ -2200,11 +2204,11 @@ class CompetitionOrchestrator:
             already_joined=already_joined,
             invite_valid=invite_valid,
             scheduled_start_at=competition.scheduled_start_at,
-            now=self._world_now(),
+            now=resolved_now,
         )
         registration_deadline = _as_utc(getattr(competition, "registration_deadline", None))
         if join_decision.eligible and not already_joined and registration_deadline is not None:
-            if self._world_now() >= registration_deadline:
+            if resolved_now >= registration_deadline:
                 return JoinDecision(eligible=False, reason="registration_closed")
         if (
             join_decision.eligible
@@ -2408,38 +2412,20 @@ class CompetitionOrchestrator:
         competition.prize_mode = "host_funded_fixed"
         competition.fixed_prizes_json = fixed_prizes_minor
         competition.host_funded_prize_total_minor = prize_total_minor
-        required = self._gross_up_host_funding(prize_total_minor)
-        competition.host_funding_required_minor = required
-        competition.host_platform_fee_minor = max(required - prize_total_minor, 0)
+        competition.host_funding_required_minor = 0
+        competition.host_platform_fee_minor = 0
 
     def _ensure_host_funded_prize_escrowed(self, competition: Competition) -> None:
         if competition.prize_mode != "host_funded_fixed":
             return
-        required = int(competition.host_funding_required_minor or 0)
-        if required <= 0:
+        if int(competition.host_funded_prize_total_minor or 0) <= 0:
             raise CompetitionActionError(
-                "Host-funded competitions must advertise a positive fixed prize pool.",
+                "A fixed prize must be advertised before the competition opens.",
                 reason="host_prize_required",
             )
-        if int(competition.host_funding_escrowed_minor or 0) >= required:
-            return
-        try:
-            result = self.competition_wallet_service.escrow_host_funding(
-                competition=competition,
-                host_user_id=competition.host_user_id,
-                amount_minor=required,
-            )
-        except InsufficientBalanceError as exc:
-            raise CompetitionActionError(
-                "Host wallet balance is lower than the advertised prize pool plus platform fee.",
-                reason="host_prize_insufficient_balance",
-            ) from exc
-        if result.status != "settled":
-            raise CompetitionActionError(
-                "Host-funded prize escrow could not be validated.",
-                reason="host_prize_escrow_unverified",
-            )
-        competition.host_funding_escrowed_minor = required
+        competition.host_funding_required_minor = 0
+        competition.host_platform_fee_minor = 0
+        competition.host_funding_escrowed_minor = 0
 
     def _competition_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
         if payload.format == CompetitionFormat.CUP:
@@ -2449,13 +2435,12 @@ class CompetitionOrchestrator:
         return payload.format.value
 
     def _prize_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
-        if payload.prize_mode:
-            return payload.prize_mode
-        if payload.fixed_prizes or payload.host_funded_prize_total:
+        requested = str(payload.prize_mode or "").strip().lower()
+        if requested == "host_funded_fixed" or payload.fixed_prizes or payload.host_funded_prize_total:
             return "host_funded_fixed"
-        if payload.entry_fee > 0:
-            return "entry_funded"
-        return "none"
+        if requested in {"", "entry_funded", "none"}:
+            return "none"
+        return requested
 
     def _payout_mode_for_payload(self, payload: CompetitionCreateRequest) -> str:
         if payload.payout_mode:
@@ -2490,9 +2475,8 @@ class CompetitionOrchestrator:
 
     @staticmethod
     def _gross_up_host_funding(net_prize_total_minor: int) -> int:
-        if net_prize_total_minor <= 0:
-            return 0
-        return int((Decimal(net_prize_total_minor) / Decimal("0.80")).to_integral_value(rounding=ROUND_CEILING))
+        del net_prize_total_minor
+        return 0
 
     @staticmethod
     def _eligibility_tier_for_points(points: int) -> str:
@@ -2683,13 +2667,15 @@ class CompetitionOrchestrator:
                 return invite_code
         raise CompetitionActionError("Failed to generate invite code.", reason="invite_code_unavailable")
 
+    def _waive_entry_charges(self, competition: Competition) -> None:
+        competition.entry_fee_minor = 0
+        competition.platform_fee_bps = 0
+        competition.host_fee_bps = 0
+        competition.host_creation_fee_minor = 0
+
     def _projected_reward_pool_minor(self, *, competition: Competition, rule_set: CompetitionRuleSet) -> int:
-        participant_count = rule_set.max_participants
-        gross_pool = competition.entry_fee_minor * participant_count
-        platform_fee_minor = gross_pool * competition.platform_fee_bps // 10_000
-        host_fee_minor = gross_pool * competition.host_fee_bps // 10_000
-        net_pool = gross_pool - platform_fee_minor - host_fee_minor
-        return max(net_pool, 0)
+        del competition, rule_set
+        return 0
 
     def _refresh_financials(
         self,
@@ -2721,15 +2707,14 @@ class CompetitionOrchestrator:
                             snapshot=snapshot,
                         )
             return
-        participant_count = (
-            participant_count if participant_count is not None else self._participant_count(competition.id)
-        )
-        gross_pool = competition.entry_fee_minor * participant_count
-        platform_fee_minor = gross_pool * competition.platform_fee_bps // 10_000
-        host_fee_minor = gross_pool * competition.host_fee_bps // 10_000
-        net_pool = gross_pool - platform_fee_minor - host_fee_minor
-        competition.gross_pool_minor = gross_pool
-        competition.net_prize_pool_minor = max(net_pool, 0)
+        del participant_count
+        if competition.prize_mode == "host_funded_fixed":
+            funded = max(int(competition.host_funded_prize_total_minor or 0), 0)
+            competition.gross_pool_minor = funded
+            competition.net_prize_pool_minor = funded
+        else:
+            competition.gross_pool_minor = 0
+            competition.net_prize_pool_minor = 0
         reward_pool = self.session.scalar(
             select(CompetitionRewardPool)
             .where(
@@ -2878,9 +2863,9 @@ def backend_competition_create_request(
     *,
     default_platform_fee_pct: Decimal,
 ) -> CompetitionCoreCreateRequest:
-    platform_fee_pct = payload.platform_fee_pct if payload.platform_fee_pct is not None else default_platform_fee_pct
-    entry_fee_minor = int((payload.entry_fee * Decimal("10000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    platform_fee_bps = int((platform_fee_pct * Decimal("10000")).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
+    del default_platform_fee_pct
+    entry_fee_minor = 0
+    platform_fee_bps = 0
     payout_percentages = []
     payout_mode = CompetitionPayoutMode.WINNER_TAKE_ALL
     top_n = None

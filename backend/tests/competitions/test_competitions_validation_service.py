@@ -88,9 +88,10 @@ def test_validate_creation_returns_auditable_fee_summary() -> None:
     assert result.payout_percentages == [100]
     assert result.min_participants == 4
     assert result.max_participants == 8
-    assert result.fee_summary.gross_pool_minor == 8_000
-    assert result.fee_summary.platform_fee_minor == 800
-    assert result.fee_summary.net_prize_pool_minor == 6_700
+    assert result.fee_summary.entry_fee_minor == 0
+    assert result.fee_summary.gross_pool_minor == 0
+    assert result.fee_summary.platform_fee_minor == 0
+    assert result.fee_summary.net_prize_pool_minor == 0
 
 
 def test_validate_creation_rejects_payout_config_above_capacity() -> None:
@@ -100,19 +101,22 @@ def test_validate_creation_rejects_payout_config_above_capacity() -> None:
         service.validate_creation(_league_request(max_participants=8, payout_mode="top_n", top_n=9))
 
 
-def test_validate_creation_rejects_fee_stacks_without_a_prize_pool() -> None:
+def test_validate_creation_drops_fee_stacks_without_charging_entrants() -> None:
     service = CompetitionValidationService()
 
-    with pytest.raises(CompetitionValidationError, match="positive net prize pool"):
-        service.validate_creation(
-            _league_request(
-                entry_fee_minor=1000,
-                platform_fee_bps=1500,
-                host_creation_fee_minor=1700,
-                min_participants=2,
-                max_participants=2,
-            )
+    result = service.validate_creation(
+        _league_request(
+            entry_fee_minor=1000,
+            platform_fee_bps=1500,
+            host_creation_fee_minor=1700,
+            min_participants=2,
+            max_participants=2,
         )
+    )
+
+    assert result.fee_summary.entry_fee_minor == 0
+    assert result.fee_summary.gross_pool_minor == 0
+    assert result.fee_summary.net_prize_pool_minor == 0
 
 
 def test_validate_update_rejects_critical_changes_after_first_paid_join() -> None:

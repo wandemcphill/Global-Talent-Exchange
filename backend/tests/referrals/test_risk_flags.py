@@ -18,7 +18,7 @@ class StubUser:
 
 
 def test_risk_service_flags_concentrated_bursts_low_retention_and_same_device_clusters() -> None:
-    orchestrator = ReferralOrchestrator()
+    orchestrator = ReferralOrchestrator(require_database=False)
     creator = StubUser("user-alpha", "alpha", "Alpha Creator", "alpha@example.com")
     referred_users = [
         StubUser(f"user-r{index}", f"referred{index}", f"Referred {index}", f"r{index}@example.com")

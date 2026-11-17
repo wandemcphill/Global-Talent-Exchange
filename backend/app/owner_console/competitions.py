@@ -9,9 +9,6 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.config import get_settings
-from app.core.field_encryption import is_production_environment
-
 from app.owner_console import engine, ledger
 from app.owner_console.models import (
     OwnerClubState,
@@ -72,12 +69,13 @@ def comp_account(competition_id: str) -> str:
     return f"competition:{competition_id}"
 
 
+_EXPLICIT_SEED_ENVS = {"development", "dev", "test", "testing", "local"}
+
+
 def _seeding_disabled_for_environment() -> bool:
-    """Never auto-seed sample competitions in production-like environments."""
-    env_override = os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT")
-    if env_override is not None and env_override.strip():
-        return is_production_environment(env_override)
-    return is_production_environment(get_settings().app_env)
+    """Seed sample competitions only when an environment variable explicitly says this is local development."""
+    explicit = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "").strip().lower()
+    return explicit not in _EXPLICIT_SEED_ENVS
 
 
 def ensure_seed(session: Session) -> None:
@@ -232,12 +230,12 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
     else:
         data["execution_model"] = "user_hosted_legacy"
         data["canonical_lifecycle_status"] = "not_applicable"
-        data["entry_fee"] = str(comp.entry_fee)
+        data["entry_fee"] = "0"
         declared = Decimal(comp.sponsored_pool or 0)
         funded = Decimal(str(data.get("prize_pool") or 0))
         data["prize_pool"] = str(max(declared, funded))
-        data["contribution"] = str(comp.entry_fee)
-        data["allow_same_owner"] = comp.allow_same_owner
+        data["contribution"] = "0"
+        data["allow_same_owner"] = False
     return data
 
 
@@ -557,26 +555,6 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
             409,
             "Clubs under common ownership cannot enter the same competition.",
         )
-    contribution = Decimal(comp.entry_fee or 0)
-    if contribution > 0:
-        try:
-            ledger.record(
-                session,
-                event_type="competition_entry_fee",
-                source=ledger.club_account(club_id),
-                destination=comp_account(comp.id),
-                currency=ledger.GTEX,
-                gross=contribution,
-                club_id=club_id,
-                user_id=user_id,
-                related_type="owner_competition",
-                related_id=comp.id,
-                memo=f"Entry contribution for {comp.name}",
-            )
-        except ledger.LedgerError as exc:
-            raise OwnerError(
-                "contribution_unpaid", 402, "The club cannot cover this competition contribution."
-            ) from exc
     strength = club_strength(
         [player_dict(p) for p in squad(session, club_id)], state.manager_json or {}, state.facilities_json or {}
     )
@@ -619,12 +597,9 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
         competition_format = "knockout"
     max_clubs = int(payload.get("max_clubs") or (template or {}).get("max_participants") or 4)
     max_clubs = max(2, min(32, max_clubs))
-    contribution = Decimal(
-        str(payload.get("contribution") if payload.get("contribution") is not None else payload.get("entry_fee") or 0)
-    )
     prize = Decimal(str(payload.get("winner_prize") or payload.get("prize_pool") or 0))
-    if contribution < 0 or prize < 0:
-        raise OwnerError("invalid_competition_money", 400, "Contribution and prize must be zero or more.")
+    if prize < 0:
+        raise OwnerError("invalid_competition_money", 400, "Prize must be zero or more.")
     pin = str(payload.get("pin") or payload.get("invite_code") or "").strip().upper()
     if pin and (len(pin) < 4 or len(pin) > 12 or not pin.isalnum()):
         raise OwnerError("invalid_pin", 400, "Pin must be 4 to 12 letters or numbers.")
@@ -639,38 +614,17 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
         host_user_id=user_id,
         format=competition_format,
         tier="Friends",
-        entry_fee=contribution,
+        entry_fee=Decimal("0"),
         sponsored_pool=prize,
         max_clubs=max_clubs,
-        allow_same_owner=bool(payload.get("allow_same_owner") or False),
-        prize_sensitive=prize > 0 or contribution > 0,
-        platform_fee_bps=1000,
+        allow_same_owner=False,
+        prize_sensitive=False,
+        platform_fee_bps=0,
         invite_code=pin,
-        description=payload.get("description") or "One club per owner. Official GTEX entry stays free.",
+        description="One club per owner.",
     )
     session.add(comp)
     session.flush()
-    club_id = payload.get("club_id")
-    if prize > 0:
-        if not club_id:
-            raise OwnerError("club_required_to_fund_prize", 400, "Select a club to fund the winner prize.")
-        require_state(session, str(club_id), user_id)
-        try:
-            ledger.record(
-                session,
-                event_type="competition_entry_fee",
-                source=ledger.club_account(str(club_id)),
-                destination=comp_account(comp.id),
-                currency=ledger.GTEX,
-                gross=prize,
-                club_id=str(club_id),
-                user_id=user_id,
-                related_type="owner_competition",
-                related_id=comp.id,
-                memo=f"Host prize for {name}",
-            )
-        except ledger.LedgerError as exc:
-            raise OwnerError("prize_unfunded", 402, "The club cannot fund that winner prize.") from exc
     return comp
 
 

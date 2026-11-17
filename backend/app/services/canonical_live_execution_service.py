@@ -708,6 +708,7 @@ class CanonicalLiveExecutionService:
         lease_ttl_seconds: int = DEFAULT_LEASE_TTL_SECONDS,
         reference_at: datetime | None = None,
         refresh_viewer: bool = True,
+        respect_schedule: bool = False,
     ) -> tuple[CompetitionMatch, CompetitionMatchExecution, list[MatchEvent]]:
         """Advance an active canonical match execution deterministically by one bounded checkpoint."""
 
@@ -720,6 +721,14 @@ class CanonicalLiveExecutionService:
             raise CanonicalMatchNotFoundError(f"Canonical execution state for match '{match_id}' was not found.")
 
         if is_terminal(match.status) or execution.execution_status in {"completed", "cancelled", "abandoned"}:
+            return match, execution, []
+
+        if (
+            respect_schedule
+            and execution.execution_status == "in_progress"
+            and execution.next_step_at is not None
+            and _as_utc(execution.next_step_at) > now
+        ):
             return match, execution, []
 
         if (
@@ -1964,6 +1973,9 @@ class CanonicalLiveExecutionService:
             )
             .limit(max(1, int(limit)))
         )
+        bind = self.session.get_bind()
+        if bind is not None and bind.dialect.name == "postgresql":
+            stmt = stmt.with_for_update(skip_locked=True)
         candidates = list(self.session.scalars(stmt).all())
         advanced = 0
         settled = 0
@@ -2001,12 +2013,13 @@ class CanonicalLiveExecutionService:
                         match_id,
                         step_minutes=step_minutes,
                         stop_at_halftime=True,
-                        resume_halftime=True,
+                        resume_halftime=False,
                         settle_on_completion=True,
-                        step_interval_seconds=step_interval_seconds,
+                        step_interval_seconds=max(1, int(step_interval_seconds)),
                         halftime_pause_seconds=halftime_pause_seconds,
                         lease_owner=lease_owner,
                         reference_at=now,
+                        respect_schedule=True,
                     )
                     advanced += 1
                     if updated_exec.execution_status == "completed" and match.status == MatchStatus.COMPLETED.value:

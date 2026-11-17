@@ -25,9 +25,7 @@ _PLATFORM_PRIZE_BY_SIZE = {
 
 
 def _platform_prize_pool(cup: FastCup) -> Decimal:
-    """GTEX funds the purse. A stored buy-in on an older cup is not collected again."""
-    if cup.buy_in > Decimal("0"):
-        return (cup.buy_in * Decimal(cup.size)).quantize(_FOUR_PLACES, rounding=ROUND_DOWN)
+    """GTEX funds the purse. A stored buy-in is never collected and never sizes the prize."""
     return _PLATFORM_PRIZE_BY_SIZE.get(int(cup.size), Decimal("5000.0000"))
 
 

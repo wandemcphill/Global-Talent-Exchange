@@ -40,8 +40,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     loadMe();
   }, [loadMe]);
 
-  const login = async (email: string, password: string): Promise<AuthResult> => {
-    const { data } = await api.post("/v2/auth/login", { email, password });
+  const login = async (
+    email: string,
+    password: string,
+    extras?: { totp_code?: string; backup_code?: string },
+  ): Promise<AuthResult> => {
+    const { data } = await api.post("/v2/auth/login", {
+      email,
+      password,
+      ...(extras?.totp_code ? { totp_code: extras.totp_code } : {}),
+      ...(extras?.backup_code ? { backup_code: extras.backup_code } : {}),
+    });
     tokens.set(data.access_token, data.refresh_token);
     const currentUser = await loadMe();
     return { user: currentUser || data.user, landingRoute: data.landing_route };

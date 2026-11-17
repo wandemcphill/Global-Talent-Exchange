@@ -96,7 +96,7 @@ class ClubApi {
   factory ClubApi.fixture() {
     assertFixtureFactoryAllowed('ClubApi.fixture');
     const GteRepositoryConfig config = GteRepositoryConfig(
-      baseUrl: 'http://127.0.0.1:8000',
+      baseUrl: '',
       mode: GteBackendMode.fixture,
     );
     return ClubApi(

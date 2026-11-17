@@ -8,7 +8,7 @@ import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 class GtexAwardsScreenV2 extends StatefulWidget {
   const GtexAwardsScreenV2({
     super.key,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.accessToken,
   });

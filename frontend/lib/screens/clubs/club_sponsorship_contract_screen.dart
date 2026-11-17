@@ -15,7 +15,7 @@ class ClubSponsorshipContractScreen extends StatelessWidget {
     required this.contractId,
     this.clubId = 'royal-lagos-fc',
     this.clubName,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.mode = GteBackendMode.live,
     this.api,
     this.controller,

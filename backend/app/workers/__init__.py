@@ -1,4 +1,5 @@
 from .jobs import (
+    expire_stale_coin_trade_orders_job,
     regen_dna_evolution_job,
     regen_rivalry_detection_job,
     regen_story_regeneration_job,
@@ -7,6 +8,7 @@ from .jobs import (
 )
 
 __all__ = [
+    "expire_stale_coin_trade_orders_job",
     "regen_dna_evolution_job",
     "regen_rivalry_detection_job",
     "regen_story_regeneration_job",

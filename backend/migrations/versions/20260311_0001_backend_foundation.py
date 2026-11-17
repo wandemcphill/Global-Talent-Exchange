@@ -1,4 +1,4 @@
-﻿"""Base backend foundation for auth, users, and append-only ledger."""
+"""Base backend foundation for auth, users, and append-only ledger."""
 
 from __future__ import annotations
 

@@ -10,7 +10,17 @@ from app.models.competition_escrow import CompetitionEscrow
 
 def _error_message(response) -> str:
     payload = response.json()
-    return payload.get("detail") or payload.get("message")
+    message = payload.get("message")
+    if isinstance(message, str) and message.strip():
+        return message
+    detail = payload.get("detail")
+    if isinstance(detail, str) and detail.strip():
+        return detail
+    if isinstance(detail, dict):
+        nested = detail.get("detail") or detail.get("message")
+        if isinstance(nested, str) and nested.strip():
+            return nested
+    return str(message or detail or payload)
 
 
 def _create_club(app_session_factory, *, owner_user_id: str, slug: str, name: str) -> str:
@@ -32,7 +42,7 @@ def _create_club(app_session_factory, *, owner_user_id: str, slug: str, name: st
         return club.id
 
 
-def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
+def test_user_hosted_join_collects_no_entry_fee_and_keeps_pot_at_zero(
     client,
     app_session_factory,
     auth_user_factory,
@@ -61,7 +71,8 @@ def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
     )
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
-    assert created["platform_fee_pct"] == "0.20"
+    assert created["platform_fee_pct"] == "0.00"
+    assert created["entry_fee"] == "0.00"
     assert created["currency"] == "credit"
     assert created["is_ranked"] is True
 
@@ -81,22 +92,22 @@ def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
     assert join_response.status_code == 200, join_response.text
     joined = join_response.json()
     assert joined["participant_count"] == 1
-    assert joined["gross_pot"] == "10.0000"
-    assert joined["net_payout_pot"] == "8.0000"
+    assert joined["gross_pot"] == "0.0000"
+    assert joined["net_payout_pot"] == "0.0000"
 
     pot_response = client.get(f"/api/competitions/{competition_id}/pot")
     assert pot_response.status_code == 200, pot_response.text
     pot = pot_response.json()
-    assert pot["gross_pot"] == "10.0000"
-    assert pot["platform_fee_amount"] == "2.0000"
-    assert pot["net_payout_pot"] == "8.0000"
+    assert pot["gross_pot"] == "0.0000"
+    assert pot["platform_fee_amount"] == "0.0000"
+    assert pot["net_payout_pot"] == "0.0000"
     assert pot["remaining_slots"] == 3
 
     participants_response = client.get(f"/api/competitions/{competition_id}/participants")
     assert participants_response.status_code == 200, participants_response.text
     participants = participants_response.json()["participants"]
     assert participants[0]["club_id"] == club_id
-    assert participants[0]["escrow_status"] == "escrowed"
+    assert participants[0]["escrow_status"] == "none"
 
     with app_session_factory() as session:
         escrow = session.scalar(
@@ -107,9 +118,9 @@ def test_paid_user_hosted_join_creates_fan_coin_escrow_and_visible_pot(
             )
         )
         assert escrow is not None
-        assert escrow.amount_minor == 100_000
+        assert escrow.amount_minor == 0
         assert escrow.currency == "credit"
-        assert escrow.escrow_status == "escrowed"
+        assert escrow.escrow_status == "none"
 
 
 def test_host_funded_fixed_prize_requires_escrow_before_publish(
@@ -140,8 +151,12 @@ def test_host_funded_fixed_prize_requires_escrow_before_publish(
         headers=host["headers"],
         json={"open_for_join": True},
     )
-    assert publish_response.status_code == 400
-    assert _error_message(publish_response) == "host_prize_insufficient_balance"
+    assert publish_response.status_code == 200, publish_response.text
+    published = publish_response.json()
+    assert published["status"] == "open"
+    assert published["host_funding_required"] == "0.00"
+    assert published["host_platform_fee"] == "0.00"
+    assert published["host_funding_escrowed"] == "0.00"
 
 
 def test_host_funded_fixed_prize_escrows_and_refunds_on_cancel(
@@ -171,8 +186,8 @@ def test_host_funded_fixed_prize_escrows_and_refunds_on_cancel(
     assert create_response.status_code == 201, create_response.text
     created = create_response.json()
     assert created["host_funded_prize_total"] == "100.00"
-    assert created["host_funding_required"] == "125.00"
-    assert created["host_platform_fee"] == "25.00"
+    assert created["host_funding_required"] == "0.00"
+    assert created["host_platform_fee"] == "0.00"
 
     competition_id = created["id"]
     publish_response = client.post(
@@ -181,7 +196,7 @@ def test_host_funded_fixed_prize_escrows_and_refunds_on_cancel(
         json={"open_for_join": True},
     )
     assert publish_response.status_code == 200, publish_response.text
-    assert publish_response.json()["host_funding_escrowed"] == "125.00"
+    assert publish_response.json()["host_funding_escrowed"] == "0.00"
 
     cancel_response = client.post(f"/api/competitions/{competition_id}/cancel", headers=host["headers"])
     assert cancel_response.status_code == 200, cancel_response.text

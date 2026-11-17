@@ -29,7 +29,6 @@ def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
     service._create_entry_participant = MagicMock(
         return_value=SimpleNamespace(entry_fee_fancoin=Decimal("0.0000"), metadata_json={})
     )
-    service._active_platform_fee_bps = MagicMock(return_value=3000)
     service._policy_provenance = MagicMock(return_value=("host-funded-test-policy", "test-v1"))
     host = SimpleNamespace(id="host-1")
     payload = SimpleNamespace(
@@ -53,7 +52,7 @@ def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
     assert host_participation_created is True
     assert competition.funding_mode.value == "host_funded_gtex_coin_prize"
     assert competition.reward_pool_coin == Decimal("1000.0000")
-    assert competition.platform_fee_amount == Decimal("300.0000")
+    assert competition.platform_fee_amount == Decimal("0.0000")
     assert competition.host_funding_required_coin == Decimal("1000.0000")
     assert competition.host_funding_escrowed_coin == Decimal("1000.0000")
     assert competition.entry_fee_fancoin == Decimal("0.0000")
@@ -61,6 +60,9 @@ def test_coin_funding_mode_creates_host_funded_withdrawable_contract() -> None:
     assert competition.metadata_json["fee_policy_version"] == "test-v1"
     postings = wallet.append_transaction.call_args.kwargs["postings"]
     assert all(posting.account.unit is LedgerUnit.COIN for posting in postings)
+    assert postings[0].account.code == "platform"
+    assert postings[0].amount == Decimal("-1000.0000")
+    wallet.get_user_account.assert_not_called()
     assert competition.reward_pool_coin != Decimal("250.0000") * Decimal(payload.max_participants)
 
 
@@ -99,7 +101,6 @@ def test_template_entry_fee_is_not_charged() -> None:
     service._create_entry_participant = MagicMock(
         return_value=SimpleNamespace(entry_fee_fancoin=Decimal("250.0000"), metadata_json={})
     )
-    service._active_platform_fee_bps = MagicMock(return_value=1000)
     service._policy_provenance = MagicMock(return_value=("policy", "v1"))
     payload = SimpleNamespace(
         funding_mode=None,

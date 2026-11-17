@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from app.models.hosted_competition import UserHostedCompetition
 from app.models.user import User
 from app.models.wallet import LedgerAccount, LedgerAccountKind, LedgerEntryReason, LedgerSourceTag, LedgerUnit
-from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
+from app.wallets.service import LedgerPosting, WalletService
 
 AMOUNT_QUANTUM = Decimal("0.0001")
 
@@ -45,32 +45,34 @@ class HostedCompetitionCoinEscrowService:
     def available_balance(self, competition: UserHostedCompetition) -> Decimal:
         return self._amount(self.wallet_service.get_balance(self.session, self.escrow_account(competition)))
 
-    def fund_from_host(
-        self, *, competition: UserHostedCompetition, host: User, gross_prize: Decimal | int | float | str
+    def fund_from_platform(
+        self,
+        *,
+        competition: UserHostedCompetition,
+        gross_prize: Decimal | int | float | str,
+        actor: User | None = None,
     ) -> str:
         amount = self._amount(gross_prize)
         if amount <= Decimal("0.0000"):
-            raise HostedCompetitionCoinEscrowError("Host-funded GTEX Coin prize must be positive.")
-        account = self.wallet_service.get_user_account(self.session, host, LedgerUnit.COIN)
-        if self.wallet_service.get_balance(self.session, account) < amount:
-            raise InsufficientBalanceError("Host does not have enough withdrawable GTEX Coin to fund the prize.")
+            raise HostedCompetitionCoinEscrowError("GTEX Coin prize must be positive.")
+        platform = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
         escrow = self.escrow_account(competition)
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
-                LedgerPosting(account=account, amount=-amount, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
+                LedgerPosting(account=platform, amount=-amount, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
                 LedgerPosting(account=escrow, amount=amount, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD),
             ],
             reason=LedgerEntryReason.COMPETITION_REWARD,
             reference=f"hosted-coin-prize-fund:{competition.id}",
             external_reference=f"hosted-coin-prize-fund:{competition.id}",
-            description=f"Host-funded GTEX Coin prize for {competition.title}",
-            actor=host,
+            description=f"GTEX-funded Coin prize for {competition.title}",
+            actor=actor,
             idempotency_key=f"hosted-coin-prize-fund:{competition.id}",
             metadata={
                 "hosted_competition_id": competition.id,
                 "currency": LedgerUnit.COIN.value,
-                "funding_mode": "host_funded_gtex_coin_prize",
+                "funding_mode": "gtex_funded_coin_prize",
             },
         )
         competition.host_funding_required_coin = amount
@@ -78,6 +80,11 @@ class HostedCompetitionCoinEscrowService:
         competition.reward_pool_coin = amount
         self.session.flush()
         return entries[0].transaction_id
+
+    def fund_from_host(
+        self, *, competition: UserHostedCompetition, host: User, gross_prize: Decimal | int | float | str
+    ) -> str:
+        return self.fund_from_platform(competition=competition, gross_prize=gross_prize, actor=host)
 
     def settle(
         self,
@@ -176,8 +183,9 @@ class HostedCompetitionCoinEscrowService:
         escrow_balance = self.available_balance(competition)
         if escrow_balance <= Decimal("0.0000"):
             return None
+        del host
         escrow = self.escrow_account(competition)
-        host_account = self.wallet_service.get_user_account(self.session, host, LedgerUnit.COIN)
+        platform = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
         entries = self.wallet_service.append_transaction(
             self.session,
             postings=[
@@ -185,7 +193,7 @@ class HostedCompetitionCoinEscrowService:
                     account=escrow, amount=-escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
                 ),
                 LedgerPosting(
-                    account=host_account, amount=escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
+                    account=platform, amount=escrow_balance, source_tag=LedgerSourceTag.PLATFORM_COMPETITION_REWARD
                 ),
             ],
             reason=LedgerEntryReason.COMPETITION_REWARD,
@@ -197,7 +205,7 @@ class HostedCompetitionCoinEscrowService:
             metadata={
                 "hosted_competition_id": competition.id,
                 "currency": LedgerUnit.COIN.value,
-                "funding_mode": "host_funded_gtex_coin_prize",
+                "funding_mode": "gtex_funded_coin_prize",
                 "refund_reason": reason,
                 "refund_amount": str(escrow_balance),
             },

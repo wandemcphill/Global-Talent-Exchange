@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from itertools import combinations
@@ -33,12 +33,9 @@ from app.common.schemas.competition import CompetitionScheduleRequest
 from app.competition_engine import MatchDispatcher, QueuedJobRecord
 from app.competition_engine.scheduler import CompetitionScheduler
 from app.config.competition_constants import (
-    ACADEMY_BUY_IN_MULTIPLIER,
     CHAMPIONS_LEAGUE_DIRECT_SLOTS,
     CHAMPIONS_LEAGUE_FUND_PCT,
     CHAMPIONS_LEAGUE_TOTAL_QUALIFIERS,
-    FINAL_PRESENTATION_MAX_MINUTES,
-    LEAGUE_BUY_IN_TIERS,
     LEAGUE_GROUP_SIZE,
     LEAGUE_MATCH_WINDOWS_PER_DAY,
     LEAGUE_WINNER_PCT,
@@ -142,7 +139,7 @@ class AcademyCompetitionService:
         completed_results = self._normalize_results(fixtures=fixtures, results=request.results)
         standings = self._build_standings(registrations=registrations, fixtures=fixtures, results=completed_results)
         qualification = self._build_qualification_entries(standings)
-        flow = self._build_champions_league_flow(request.season_id, qualification)
+        flow = self._build_champions_league_flow(request.season_id, qualification, completed_results)
         awards = self._build_awards(registrations, standings, request.awards_leaders)
         rollover_clubs = self._build_rollover_clubs(registrations, standings)
         status = self._resolve_status(fixtures=fixtures, completed_fixture_count=len(completed_results))
@@ -413,6 +410,7 @@ class AcademyCompetitionService:
         self,
         season_id: str,
         qualification: AcademyQualificationPlan,
+        results: Sequence[AcademyMatchResult],
     ) -> AcademyChampionsLeagueFlow:
         playoff_seeds = sorted(qualification.playoff_qualifiers, key=lambda entry: entry.league_rank)
         if len(playoff_seeds) != 4:
@@ -441,78 +439,27 @@ class AcademyCompetitionService:
                 presentation_max_minutes=MATCH_PRESENTATION_MAX_MINUTES,
             ),
         )
+        played = self._apply_knockout_results(playoff_ties, results)
         winners = tuple(
-            next(club for club in playoff_seeds if club.club_id == tie.winner_club_id)
-            for tie in playoff_ties
+            club
+            for tie in played
+            if tie.winner_club_id
+            for club in playoff_seeds
+            if club.club_id == tie.winner_club_id
         )
-        league_phase_clubs = tuple(sorted([*qualification.direct_qualifiers, *winners], key=lambda club: club.league_rank))
-        league_phase_table = self._simulate_league_phase(league_phase_clubs)
-        quarterfinals = (
-            self._build_knockout_tie(
-                tie_id=f"{season_id}:acl:quarterfinal:1",
-                stage_name="quarterfinal",
-                home_club_id=league_phase_table[2].club_id,
-                home_club_name=league_phase_table[2].club_name,
-                home_seed=league_phase_table[2].rank,
-                away_club_id=league_phase_table[5].club_id,
-                away_club_name=league_phase_table[5].club_name,
-                away_seed=league_phase_table[5].rank,
-                presentation_max_minutes=MATCH_PRESENTATION_MAX_MINUTES,
-            ),
-            self._build_knockout_tie(
-                tie_id=f"{season_id}:acl:quarterfinal:2",
-                stage_name="quarterfinal",
-                home_club_id=league_phase_table[3].club_id,
-                home_club_name=league_phase_table[3].club_name,
-                home_seed=league_phase_table[3].rank,
-                away_club_id=league_phase_table[4].club_id,
-                away_club_name=league_phase_table[4].club_name,
-                away_seed=league_phase_table[4].rank,
-                presentation_max_minutes=MATCH_PRESENTATION_MAX_MINUTES,
-            ),
+        league_phase_clubs = tuple(
+            sorted([*qualification.direct_qualifiers, *winners], key=lambda club: club.league_rank)
         )
-        semifinal_one = self._build_knockout_tie(
-            tie_id=f"{season_id}:acl:semifinal:1",
-            stage_name="semifinal",
-            home_club_id=league_phase_table[0].club_id,
-            home_club_name=league_phase_table[0].club_name,
-            home_seed=league_phase_table[0].rank,
-            away_club_id=quarterfinals[1].winner_club_id,
-            away_club_name=quarterfinals[1].winner_club_name,
-            away_seed=self._league_phase_rank(league_phase_table, quarterfinals[1].winner_club_id),
-            presentation_max_minutes=MATCH_PRESENTATION_MAX_MINUTES,
-        )
-        semifinal_two = self._build_knockout_tie(
-            tie_id=f"{season_id}:acl:semifinal:2",
-            stage_name="semifinal",
-            home_club_id=league_phase_table[1].club_id,
-            home_club_name=league_phase_table[1].club_name,
-            home_seed=league_phase_table[1].rank,
-            away_club_id=quarterfinals[0].winner_club_id,
-            away_club_name=quarterfinals[0].winner_club_name,
-            away_seed=self._league_phase_rank(league_phase_table, quarterfinals[0].winner_club_id),
-            presentation_max_minutes=MATCH_PRESENTATION_MAX_MINUTES,
-        )
-        final = self._build_knockout_tie(
-            tie_id=f"{season_id}:acl:final",
-            stage_name="final",
-            home_club_id=semifinal_one.winner_club_id,
-            home_club_name=semifinal_one.winner_club_name,
-            home_seed=self._league_phase_rank(league_phase_table, semifinal_one.winner_club_id),
-            away_club_id=semifinal_two.winner_club_id,
-            away_club_name=semifinal_two.winner_club_name,
-            away_seed=self._league_phase_rank(league_phase_table, semifinal_two.winner_club_id),
-            presentation_max_minutes=FINAL_PRESENTATION_MAX_MINUTES,
-        )
+        league_phase_table = self._list_league_phase(league_phase_clubs)
         return AcademyChampionsLeagueFlow(
             qualification=qualification,
-            playoff_ties=playoff_ties,
+            playoff_ties=played,
             league_phase_table=league_phase_table,
-            quarterfinals=quarterfinals,
-            semifinals=(semifinal_one, semifinal_two),
-            final=final,
-            champion_club_id=final.winner_club_id,
-            champion_club_name=final.winner_club_name,
+            quarterfinals=(),
+            semifinals=(),
+            final=None,
+            champion_club_id=None,
+            champion_club_name=None,
         )
 
     def _simulate_league_phase(
@@ -559,6 +506,40 @@ class AcademyCompetitionService:
             row.goal_difference = row.goals_for - row.goals_against
         return tuple(table)
 
+    def _apply_knockout_results(
+        self,
+        ties: tuple[AcademyKnockoutTie, ...],
+        results: Sequence[AcademyMatchResult],
+    ) -> tuple[AcademyKnockoutTie, ...]:
+        by_fixture = {result.fixture_id: result for result in results}
+        played: list[AcademyKnockoutTie] = []
+        for tie in ties:
+            result = by_fixture.get(tie.tie_id)
+            if result is None or result.home_goals == result.away_goals:
+                played.append(tie)
+                continue
+            if result.home_goals > result.away_goals:
+                winner_id, winner_name = tie.home_club_id, tie.home_club_name
+            else:
+                winner_id, winner_name = tie.away_club_id, tie.away_club_name
+            played.append(replace(tie, winner_club_id=winner_id, winner_club_name=winner_name))
+        return tuple(played)
+
+    def _list_league_phase(
+        self,
+        clubs: Sequence[AcademyQualificationEntry],
+    ) -> tuple[AcademyLeaguePhaseRow, ...]:
+        ordered = sorted(clubs, key=lambda club: club.league_rank)
+        return tuple(
+            AcademyLeaguePhaseRow(
+                club_id=club.club_id,
+                club_name=club.club_name,
+                seed=club.league_rank,
+                rank=index,
+            )
+            for index, club in enumerate(ordered, start=1)
+        )
+
     def _build_knockout_tie(
         self,
         *,
@@ -572,12 +553,7 @@ class AcademyCompetitionService:
         away_seed: int,
         presentation_max_minutes: int,
     ) -> AcademyKnockoutTie:
-        if home_seed <= away_seed:
-            winner_club_id = home_club_id
-            winner_club_name = home_club_name
-        else:
-            winner_club_id = away_club_id
-            winner_club_name = away_club_name
+        del home_seed, away_seed
         return AcademyKnockoutTie(
             tie_id=tie_id,
             stage_name=stage_name,
@@ -585,8 +561,8 @@ class AcademyCompetitionService:
             home_club_name=home_club_name,
             away_club_id=away_club_id,
             away_club_name=away_club_name,
-            winner_club_id=winner_club_id,
-            winner_club_name=winner_club_name,
+            winner_club_id=None,
+            winner_club_name=None,
             is_cup_match=True,
             allow_penalties=True,
             extra_time_allowed=False,
@@ -600,7 +576,7 @@ class AcademyCompetitionService:
         standings: Sequence[AcademyStandingRow],
         leaders: AcademyAwardsLeaders | None,
     ) -> AcademyAwardsPreview:
-        total_pool = self._quantize(sum((club.academy_buy_in for club in registrations), start=Decimal("0")))
+        total_pool = Decimal("0.00")
         champion = standings[0]
         club_names = {club.club_id: club.club_name for club in registrations}
         scorer_club_id = leaders.top_scorer_club_id if leaders is not None else None
@@ -691,14 +667,13 @@ class AcademyCompetitionService:
                 raise AcademyValidationError("Academy club ids must be non-empty.")
             if club.club_id in seen_ids:
                 raise AcademyValidationError(f"Duplicate academy club id {club.club_id}.")
-            if club.senior_buy_in_tier not in LEAGUE_BUY_IN_TIERS:
-                raise AcademyValidationError(
-                    f"Academy club {club.club_id} used unsupported senior buy-in tier {club.senior_buy_in_tier}."
-                )
+            if club.senior_buy_in_tier < 0:
+                raise AcademyValidationError(f"Academy club {club.club_id} cannot use a negative tier label.")
             seen_ids.add(club.club_id)
 
     def _academy_buy_in(self, senior_buy_in_tier: int) -> Decimal:
-        return self._quantize(Decimal(senior_buy_in_tier) * Decimal(str(ACADEMY_BUY_IN_MULTIPLIER)))
+        del senior_buy_in_tier
+        return Decimal("0.00")
 
     def _academy_direct_slots(self) -> int:
         return max(4, LEAGUE_GROUP_SIZE // 5)

@@ -16,7 +16,7 @@ class ClubHubScreen extends StatelessWidget {
     required this.clubId,
     this.clubName,
     this.controller,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.isAuthenticated = true,
     this.onOpenLogin,

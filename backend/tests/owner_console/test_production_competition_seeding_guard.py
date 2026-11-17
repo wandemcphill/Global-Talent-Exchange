@@ -38,6 +38,19 @@ def test_ensure_seed_skips_in_production_and_seeds_in_development(
     returned_names = {item["name"] for item in list_res.json()["competitions"]}
     assert returned_names.isdisjoint(seed_names)
 
+    for key in ("GTE_APP_ENV", "APP_ENV", "ENVIRONMENT"):
+        monkeypatch.delenv(key, raising=False)
+    with app_session_factory() as session:
+        for comp_id in session.scalars(select(OwnerCompetition.id).where(OwnerCompetition.name.in_(seed_names))).all():
+            session.delete(session.get(OwnerCompetition, comp_id))
+        session.flush()
+        comps.ensure_seed(session)
+        seeded_when_unset = session.scalars(
+            select(OwnerCompetition).where(OwnerCompetition.name.in_(seed_names))
+        ).all()
+        assert seeded_when_unset == []
+        session.rollback()
+
     monkeypatch.setenv("GTE_APP_ENV", "development")
     with app_session_factory() as session:
         comps.ensure_seed(session)

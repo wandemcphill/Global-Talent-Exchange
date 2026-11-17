@@ -117,6 +117,7 @@ class TotpSetupView(BaseModel):
 class TotpVerifyRequest(BaseModel):
     secret: str = Field(min_length=16, max_length=128)
     code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    current_code: str | None = Field(default=None, min_length=6, max_length=64)
     recovery_phrase_hash: str | None = Field(default=None, min_length=16, max_length=255)
     security_pin_hash: str | None = Field(default=None, min_length=16, max_length=255)
 

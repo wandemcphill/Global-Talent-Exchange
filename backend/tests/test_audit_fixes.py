@@ -142,4 +142,4 @@ def test_fix_5_hosted_competition_seeds_national_team_template(db_session):
     assert national_template.team_type == "national_team"
     assert national_template.is_user_hostable is True
     assert national_template.participants == 8
-    assert national_template.entry_fee_fancoin == Decimal("100.0000")
+    assert national_template.entry_fee_fancoin == Decimal("0.0000")

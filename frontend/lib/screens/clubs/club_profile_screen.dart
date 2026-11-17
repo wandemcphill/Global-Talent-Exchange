@@ -19,7 +19,7 @@ class ClubProfileScreen extends StatefulWidget {
     required this.clubId,
     this.clubName,
     this.controller,
-    this.baseUrl = 'http://127.0.0.1:8000',
+    this.baseUrl = '',
     this.backendMode = GteBackendMode.live,
     this.accessToken,
     this.isAuthenticated = true,

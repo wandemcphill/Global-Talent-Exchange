@@ -6,6 +6,7 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.club_identity.initials import club_initials
 from app.club_identity.models.jersey_models import (
     BadgePlacement,
     BadgeProfile,
@@ -338,8 +339,7 @@ class SqlClubIdentityRepository:
         }
 
     def _build_short_code(self, club_name: str) -> str:
-        letters = "".join(part[:1].upper() for part in club_name.replace("-", " ").split() if part)
-        return (letters or club_name[:3].upper())[:6]
+        return club_initials(club_name)
 
     def _theme_tags(self, slot: JerseyType) -> list[str]:
         return {

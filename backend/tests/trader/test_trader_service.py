@@ -208,6 +208,7 @@ def test_trader_security_verification_returns_backup_codes_once(session) -> None
         trader,
         totp_secret=secret,
         totp_code=_current_totp(secret),
+        current_code=_current_totp(secret),
         recovery_phrase_hash=trader_credential_pbkdf2("recovery", "india juliet kilo lima mike november oscar papa"),
         security_pin_hash=trader_credential_pbkdf2("pin", "987654"),
     )
@@ -237,7 +238,7 @@ def test_trader_security_does_not_persist_raw_totp_secret(session) -> None:
     assert security is not None
     assert security.totp_secret_hash != secret
     assert secret not in security.totp_secret_hash
-    assert security.totp_secret_hash.startswith("pbkdf2-sha256$210000$totp$")
+    assert security.totp_secret_hash.startswith("enc:v1:")
     assert security.recovery_phrase_hash == recovery_hash
     assert security.security_pin_hash == pin_hash
     assert all(

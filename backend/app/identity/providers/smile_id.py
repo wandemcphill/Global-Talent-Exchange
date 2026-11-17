@@ -20,11 +20,10 @@ class SmileIDVerificationAdapter(BaseIdentityVerificationAdapter):
         return "smile_id"
 
     def _get_secret(self) -> str:
-        return (
-            os.environ.get("GTE_SMILE_ID_WEBHOOK_SECRET")
-            or os.environ.get("GTE_KYC_WEBHOOK_SECRET")
-            or "smile-id-webhook-test-secret"
-        )
+        secret = os.environ.get("GTE_SMILE_ID_WEBHOOK_SECRET") or os.environ.get("GTE_KYC_WEBHOOK_SECRET")
+        if not secret or not secret.strip():
+            raise ValueError("Smile ID webhook verification is not configured.")
+        return secret.strip()
 
     def initiate_session(
         self,

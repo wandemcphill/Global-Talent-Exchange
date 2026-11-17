@@ -111,7 +111,7 @@ class ClubSaleMarketApiRepository implements ClubSaleMarketRepository {
     assertFixtureFactoryAllowed('ClubSaleMarketApiRepository.fixture');
     return ClubSaleMarketApiRepository(
       client: createFeatureApi(
-        baseUrl: 'http://127.0.0.1:8000',
+        baseUrl: '',
         mode: GteBackendMode.fixture,
         accessToken: 'fixture-token',
       ),

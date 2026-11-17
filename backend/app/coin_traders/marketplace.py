@@ -598,6 +598,24 @@ class CoinTraderMarketplaceHelper:
         reasons = gov.evaluate_side(coin_unit=advert.coin_unit, side=side, price=effective_price)
         if reasons:
             raise CoinTraderValidationError("; ".join(reasons))
+        other_side = CoinAdvertSide.BUY.value if side == CoinAdvertSide.SELL.value else CoinAdvertSide.SELL.value
+        other_advert = self.session.scalar(
+            select(CoinTraderAdvert).where(
+                CoinTraderAdvert.trader_profile_id == profile.id,
+                CoinTraderAdvert.coin_unit == advert.coin_unit,
+                CoinTraderAdvert.fiat_currency == advert.fiat_currency,
+                CoinTraderAdvert.side == other_side,
+                CoinTraderAdvert.status == CoinAdvertStatus.ACTIVE.value,
+            )
+        )
+        spread_reasons = gov.spread_reasons(
+            coin_unit=advert.coin_unit,
+            side=side,
+            price=effective_price,
+            other_price=Decimal(other_advert.price_fiat) if other_advert is not None else None,
+        )
+        if spread_reasons:
+            raise CoinTraderValidationError("; ".join(spread_reasons))
 
         if status_val == CoinAdvertStatus.ACTIVE.value and side == CoinAdvertSide.SELL.value:
             wallet_avail = self.service._trader_available_balance(profile, advert.coin_unit)
@@ -682,9 +700,9 @@ class CoinTraderMarketplaceHelper:
             self.session.add(rate)
         else:
             if advert.side == CoinAdvertSide.BUY.value:
-                rate.buy_rate_fiat = effective_price
+                rate.buy_rate_fiat = effective_price if advert.status == CoinAdvertStatus.ACTIVE.value else Decimal("0")
             else:
-                rate.sell_rate_fiat = effective_price
+                rate.sell_rate_fiat = effective_price if advert.status == CoinAdvertStatus.ACTIVE.value else Decimal("0")
             rate.min_coin_amount = advert.min_coin_amount
             rate.max_coin_amount = advert.max_coin_amount
             if advert.status == CoinAdvertStatus.ACTIVE.value:

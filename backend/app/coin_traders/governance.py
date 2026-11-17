@@ -195,6 +195,23 @@ class CoinTraderPricingGovernanceService:
                     )
         return tuple(reasons)
 
+    def spread_reasons(
+        self,
+        *,
+        coin_unit: LedgerUnit,
+        side: str,
+        price: Decimal,
+        other_price: Decimal | None,
+    ) -> tuple[str, ...]:
+        """Block a two-sided desk whose buy and sell prices exceed the spread cap."""
+        if other_price is None or other_price <= Decimal("0"):
+            return ()
+        if side == "sell":
+            result = self.evaluate_values(coin_unit=coin_unit, buy_rate_fiat=other_price, sell_rate_fiat=price)
+        else:
+            result = self.evaluate_values(coin_unit=coin_unit, buy_rate_fiat=price, sell_rate_fiat=other_price)
+        return tuple(reason for reason in result.governance_reasons if "spread" in reason.lower())
+
     def _normalized(self, unit: LedgerUnit | str) -> LedgerUnit:
         return self._ledger_unit(unit)
 

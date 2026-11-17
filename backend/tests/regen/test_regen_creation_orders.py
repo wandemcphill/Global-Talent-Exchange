@@ -260,12 +260,13 @@ def test_user_cannot_request_son_for_someone_elses_club(session) -> None:
         "/api/regens/request-son",
         json={
             "parent_player_id": player.id,
+            "club_id": club.id,
             "payment_method": "wallet",
         },
     )
 
     assert response.status_code == 403
-    assert "own club" in response.json()["detail"].lower()
+    assert "club you own" in response.json()["detail"].lower()
 
 
 def test_pending_order_does_not_generate_regen_before_payment(session) -> None:

@@ -63,8 +63,10 @@ def test_host_funding_uses_gtex_coin_and_records_escrow() -> None:
 
     postings = wallet.append_transaction.call_args.kwargs["postings"]
     assert all(posting.account.unit is LedgerUnit.COIN for posting in postings)
+    assert postings[0].account.code == "platform"
     assert postings[0].amount == Decimal("-1000.0000")
     assert postings[1].amount == Decimal("1000.0000")
+    wallet.get_user_account.assert_not_called()
 
 
 def test_coin_settlement_pays_winner_and_platform_from_coin_escrow() -> None:
