@@ -244,14 +244,14 @@ class ReferralAdminService:
             )
         return sorted(items, key=lambda item: item.first_touched_at, reverse=True)
 
-    def list_pending_rewards(self) -> list[PendingRewardView]:
+    def list_pending_rewards(self, *, status_filter: str = "pending") -> list[PendingRewardView]:
         rewards = self.orchestrator.rewards.list_all()
         attributions = {
             attribution.attribution_id: attribution for attribution in self.orchestrator.attributions.list_all()
         }
         items = []
         for reward in rewards:
-            if reward.status != "pending":
+            if reward.status != status_filter:
                 continue
             attribution = attributions.get(reward.attribution_id)
             creator_id = reward.beneficiary_creator_id or (
