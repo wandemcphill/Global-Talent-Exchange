@@ -1515,7 +1515,7 @@ function CreateFirstClub({ onDone, onCancel }: any) {
                     Uniform Collections · {KIT_PRESETS.length} Sets
                   </label>
                   <p className="mt-1 text-[11px] text-slate-500">
-                    Every set has home, away, third and goalkeeper shirts. {clubName || "The club name"} is printed on the chest.
+                    Every set has home, away, third and goalkeeper shirts. {kitSet?.home?.front_text || clubName} is printed on the chest.
                   </p>
                 </div>
               </div>
