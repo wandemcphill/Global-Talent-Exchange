@@ -505,11 +505,21 @@ from app.models.federation import (
     FederationVote,
     FederationVoteType,
 )
+from app.models.referral_affiliate import (
+    ReferralAdminAudit,
+    ReferralCampaign,
+    ReferralClick,
+    ReferralPartner,
+    ReferralPayoutBatch,
+    ReferralPayoutItem,
+    ReferralProgrammeSettings,
+    ReferralRecoveryCase,
+)
 from app.models.referral_attribution import ReferralAttribution
 from app.models.referral_event import ReferralEvent
+from app.models.referral_flag import ReferralFlag
 from app.models.referral_reward import ReferralReward
 from app.models.referral_reward_ledger import ReferralRewardLedger
-from app.models.referral_partner import ReferralPartner
 from app.models.scout_assignment import ScoutAssignment
 from app.models.scouting_region import ScoutingRegion
 from app.models.share_code import ShareCode
@@ -1205,8 +1215,17 @@ __all__ = [
     "SponsorOffer",
     "SponsorOfferRule",
     "StarterSquadRental",
+    "ReferralAdminAudit",
     "ReferralAttribution",
+    "ReferralCampaign",
+    "ReferralClick",
     "ReferralEvent",
+    "ReferralFlag",
+    "ReferralPartner",
+    "ReferralPayoutBatch",
+    "ReferralPayoutItem",
+    "ReferralProgrammeSettings",
+    "ReferralRecoveryCase",
     "ReferralReward",
     "ReferralRewardLedger",
     "ReferralPartner",

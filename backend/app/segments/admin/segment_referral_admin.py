@@ -415,3 +415,8 @@ def get_creator_leaderboard(
     admin_service: ReferralAdminService = Depends(get_referral_admin_service),
 ) -> CreatorLeaderboardResponse:
     return admin_service.creator_leaderboard()
+
+
+from app.segments.admin.segment_referral_affiliate_admin import router as affiliate_admin_router
+
+router.include_router(affiliate_admin_router)

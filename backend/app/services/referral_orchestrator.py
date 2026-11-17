@@ -389,6 +389,16 @@ class ReferralOrchestrator:
             share_code=share_code,
             metadata=payload.metadata,
         )
+        if self.session is not None:
+            from app.services.first_deposit_referral_service import FirstDepositReferralError, FirstDepositReferralService
+
+            try:
+                FirstDepositReferralService(self.session).prepare_redeem(
+                    user_id=current_user.id,
+                    share_code_id=share_code.share_code_id,
+                )
+            except FirstDepositReferralError as exc:
+                raise ReferralActionError(exc.code) from exc
         attribution = self.attributions.redeem_share_code(
             referred_user_id=current_user.id,
             share_code=share_code,
@@ -417,6 +427,13 @@ class ReferralOrchestrator:
                 refreshed = self.store.share_codes_by_id[share_code.share_code_id]
                 refreshed.current_uses += 1
                 refreshed.updated_at = utcnow()
+        if self.session is not None:
+            from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+            FirstDepositReferralService(self.session).stamp_redeemed_partner(
+                user_id=current_user.id,
+                share_code_id=share_code.share_code_id,
+            )
         if attribution.creator_profile_id is not None:
             self.creator_competitions.record_signup(
                 creator_id=attribution.creator_profile_id,

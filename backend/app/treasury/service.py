@@ -389,6 +389,9 @@ class TreasuryService:
             resource_id=request.id,
             metadata={"reference": request.reference},
         )
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+        FirstDepositReferralService(session, self.wallet_service).on_treasury_deposit_confirmed(request)
         return request
 
     def reject_deposit(

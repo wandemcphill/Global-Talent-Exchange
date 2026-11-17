@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
-from sqlalchemy import DateTime, Enum, ForeignKey, JSON, Numeric, String
+from sqlalchemy import DateTime, Enum, ForeignKey, Integer, JSON, Numeric, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.common.enums.referral_event_type import ReferralEventType
@@ -84,4 +84,16 @@ class ReferralReward(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     reversed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     review_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    referral_partner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    qualifying_amount: Mapped[Decimal | None] = mapped_column(Numeric(20, 4), nullable=True)
+    qualifying_currency: Mapped[str | None] = mapped_column(String(12), nullable=True)
+    applied_rate_bps: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    policy_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    deposit_kind: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    deposit_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    payout_batch_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("referral_payout_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     reward_payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

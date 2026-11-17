@@ -169,7 +169,7 @@ class UserClubSignupRequest(BaseModel):
     # Default True keeps older clients working; easy signup FE always sends explicit.
     is_over_18: bool = Field(default=True)
     turnstile_token: str | None = Field(default=None, max_length=2048)
-    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
+    referral_code: str | None = Field(default=None, max_length=32)
     club_name: str | None = Field(default=None, max_length=120)
     club_short_tag: str | None = Field(default=None, max_length=40)
     club_country: str | None = Field(default=None, max_length=120)
@@ -189,6 +189,14 @@ class UserClubSignupRequest(BaseModel):
     # Kept optional so older clients that still POST a compliance block don't 400;
     # the value is ignored by the signup flow.
     compliance: ComplianceSubmissionRequest | None = None
+
+    @field_validator("referral_code")
+    @classmethod
+    def normalize_referral_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
 
     @field_validator("email")
     @classmethod
@@ -291,7 +299,7 @@ class CreatorSignupRequest(BaseModel):
     banner_asset_ref: str | None = Field(default=None, max_length=255)
     monetization: list[str] = Field(default_factory=list, max_length=4)
     turnstile_token: str | None = Field(default=None, max_length=2048)
-    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
+    referral_code: str | None = Field(default=None, max_length=32)
     club_name: str | None = Field(default=None, max_length=160)
     club_short_tag: str | None = Field(default=None, max_length=40)
     club_type: ClubType | None = None
@@ -311,6 +319,14 @@ class CreatorSignupRequest(BaseModel):
         if resolved is None:
             raise ValueError("Username is required.")
         return resolved
+
+    @field_validator("referral_code")
+    @classmethod
+    def normalize_referral_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
 
     @field_validator("club_name", "club_short_tag", "crest_asset_ref", "primary_color", "secondary_color")
     @classmethod
@@ -346,7 +362,15 @@ class TraderSignupRequest(BaseModel):
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
     turnstile_token: str | None = Field(default=None, max_length=2048)
-    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
+    referral_code: str | None = Field(default=None, max_length=32)
+
+    @field_validator("referral_code")
+    @classmethod
+    def normalize_referral_code(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        candidate = value.strip()
+        return candidate or None
 
     @field_validator("email")
     @classmethod

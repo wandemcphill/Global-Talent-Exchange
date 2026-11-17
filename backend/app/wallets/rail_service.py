@@ -302,8 +302,6 @@ class WalletRailService:
         order.settled_at = utcnow()
         order.ledger_transaction_id = entries[0].transaction_id if entries else order.ledger_transaction_id
 
-        self._apply_first_deposit_referral_rewards(user=user, order=order)
-
         # Update Coin Trader available liquidity if trader purchased liquidity
         account_type = getattr(user, "account_type", None)
         is_trader = (
@@ -326,127 +324,24 @@ class WalletRailService:
                 },
             )
         )
+        self._apply_first_deposit_referral(order)
         return order
 
-    def _apply_first_deposit_referral_rewards(self, *, user: User, order: FancoinPurchaseOrder) -> None:
-        """Apply the 10% user bonus and 10% referrer commission once, on the first settled top-up."""
-        if order.source_scope not in {"wallet", "trader_liquidity"}:
-            return
-        if order.purchase_purpose not in {"wallet_top_up", "trader_liquidity"}:
-            return
-        if order.status != PurchaseOrderStatus.SETTLED:
-            return
+    def _apply_first_deposit_referral(self, order: FancoinPurchaseOrder) -> None:
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
 
-        # Serialize competing first-deposit settlements for the same user.
-        self.session.scalar(select(User).where(User.id == user.id).with_for_update())
-        prior_settled_deposit = self.session.scalar(
-            select(FancoinPurchaseOrder.id)
-            .where(
-                FancoinPurchaseOrder.user_id == user.id,
-                FancoinPurchaseOrder.id != order.id,
-                FancoinPurchaseOrder.status == PurchaseOrderStatus.SETTLED,
-                FancoinPurchaseOrder.source_scope.in_(("wallet", "trader_liquidity")),
-                FancoinPurchaseOrder.purchase_purpose.in_(("wallet_top_up", "trader_liquidity")),
-            )
-            .limit(1)
-        )
-        if prior_settled_deposit is not None:
-            return
+        FirstDepositReferralService(self.session, self.wallet_service).on_purchase_order_settled(order)
 
-        from app.services.referral_orchestrator import ReferralOrchestrator
+    def _reverse_first_deposit_referral(
+        self, order: FancoinPurchaseOrder, reversal_status: str, wallet_reversal_completed: bool
+    ) -> None:
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
 
-        orchestrator = ReferralOrchestrator(session=self.session)
-        attribution = orchestrator.attributions.get_for_user(user.id)
-        if attribution is None:
-            return
-        share_code = orchestrator._resolve_share_code_for_user(
-            current_user_id=user.id,
-            requested_code=None,
+        FirstDepositReferralService(self.session, self.wallet_service).on_purchase_order_reversed(
+            order,
+            reversal_status=reversal_status,
+            wallet_reversal_completed=wallet_reversal_completed,
         )
-        deposit_context = {
-            "purchase_order_id": order.id,
-            "order_reference": order.reference,
-            "amount_fiat": str(order.amount_fiat),
-            "currency_code": order.currency_code,
-            "unit": order.unit.value,
-            "net_amount": str(order.net_amount),
-            "bonus_amount": str((Decimal(order.net_amount) * Decimal("0.10")).quantize(AMOUNT_QUANTUM)),
-        }
-        captured = orchestrator.attributions.capture(
-            referred_user_id=user.id,
-            share_code=share_code,
-            source_channel=attribution.source_channel,
-            campaign_name=attribution.campaign_name,
-            linked_competition_id=attribution.linked_competition_id,
-            milestone="wallet_funded",
-            metadata={
-                "first_deposit_order_id": order.id,
-                "first_deposit_reference": order.reference,
-                "first_deposit_amount_fiat": str(order.amount_fiat),
-                "first_deposit_currency": order.currency_code,
-            },
-        )
-        rewards = orchestrator.rewards.evaluate(
-            captured,
-            milestone="wallet_funded",
-            deposit_context=deposit_context,
-        )
-        bonus = next(
-            (
-                reward
-                for reward in rewards
-                if reward.beneficiary_user_id == user.id
-                and reward.reward_type == "wallet_credit"
-                and reward.trigger_milestone == "wallet_funded"
-            ),
-            None,
-        )
-        if bonus is None or bonus.amount is None or Decimal(bonus.amount) <= Decimal("0.0000"):
-            return
-
-        bonus_amount = Decimal(bonus.amount).quantize(AMOUNT_QUANTUM)
-        user_account = self.wallet_service.get_user_account(self.session, user, order.unit)
-        operations_account = self.wallet_service.ensure_operations_account(self.session, order.unit)
-        bonus_entries = self.wallet_service.append_transaction(
-            self.session,
-            postings=[
-                LedgerPosting(
-                    account=user_account,
-                    amount=bonus_amount,
-                    source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
-                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
-                ),
-                LedgerPosting(
-                    account=operations_account,
-                    amount=-bonus_amount,
-                    source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
-                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
-                ),
-            ],
-            reason=LedgerEntryReason.ADJUSTMENT,
-            source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
-            reference=f"referral-first-deposit-bonus:{order.reference}",
-            description="10% GTEX first-deposit referral bonus",
-            external_reference=order.provider_reference,
-            actor=user,
-            idempotency_key=f"referral:first-deposit-bonus:{order.id}",
-            transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
-            metadata={
-                "referral": {
-                    "attribution_id": captured.attribution_id,
-                    "purchase_order_id": order.id,
-                    "bonus_rate_bps": 1000,
-                    "bonus_amount": str(bonus_amount),
-                    "account_type": str(getattr(user.account_type, "value", user.account_type)),
-                }
-            },
-        )
-        if bonus_entries:
-            orchestrator.rewards.mark_paid(
-                reward_id=bonus.reward_id,
-                payment_reference=bonus_entries[0].transaction_id,
-                enforce_hold=False,
-            )
 
     def _sync_trader_liquidity_on_settlement(self, *, user: User, order: FancoinPurchaseOrder) -> None:
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
@@ -501,6 +396,7 @@ class WalletRailService:
             order.status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED}
             and order.reversed_at
         ):
+            self._reverse_first_deposit_referral(order, status.value, True)
             return order
         if order.ledger_transaction_id is None:
             order.status = status
@@ -546,6 +442,7 @@ class WalletRailService:
             order.status = status
             order.notes = notes or order.notes
             order.reversed_at = utcnow()
+            self._reverse_first_deposit_referral(order, status.value, True)
         except InsufficientBalanceError:
             order.status = PurchaseOrderStatus.DISPUTED
             order.notes = notes or order.notes
@@ -562,8 +459,7 @@ class WalletRailService:
                     "status": status.value,
                 },
             )
-        if order.status == status:
-            self._reverse_referral_rewards_for_order(order=order, user=user, actor=actor)
+            self._reverse_first_deposit_referral(order, status.value, False)
         self.session.flush()
         return order
 
