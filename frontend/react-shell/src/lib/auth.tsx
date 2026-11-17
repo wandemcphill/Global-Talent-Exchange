@@ -6,7 +6,11 @@ type AuthResult = { user: any; landingRoute?: string | null };
 type AuthState = {
   user: any | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<AuthResult>;
+  login: (
+    email: string,
+    password: string,
+    extras?: { totp_code?: string; backup_code?: string },
+  ) => Promise<AuthResult>;
   signup: (payload: any) => Promise<AuthResult>;
   logout: () => void;
   refresh?: () => Promise<any>;

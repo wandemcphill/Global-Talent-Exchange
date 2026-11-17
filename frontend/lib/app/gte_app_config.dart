@@ -61,14 +61,22 @@ class GteAppConfig {
   }
 }
 
+bool _isLoopbackDevApi(String value) {
+  final Uri? uri = Uri.tryParse(value);
+  if (uri == null || uri.scheme != 'http' || uri.hasQuery || uri.path.isNotEmpty) {
+    return false;
+  }
+  final String host = uri.host.toLowerCase();
+  final bool loopback = host == 'localhost' || host == '127.0.0.1';
+  return loopback && uri.port == 8000;
+}
+
 String coerceGteApiBaseUrl(
   String baseUrl, {
   GteBackendMode mode = GteBackendMode.live,
 }) {
   final String trimmed = baseUrl.trim();
-  if (trimmed.isNotEmpty &&
-      trimmed != '' &&
-      trimmed != 'http://localhost:8000') {
+  if (trimmed.isNotEmpty && !_isLoopbackDevApi(trimmed)) {
     return trimmed;
   }
   if (mode == GteBackendMode.fixture) {
