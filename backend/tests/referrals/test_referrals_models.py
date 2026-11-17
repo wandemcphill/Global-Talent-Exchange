@@ -41,6 +41,7 @@ def test_alembic_upgrade_creates_creator_referral_growth_tables(tmp_path) -> Non
             "referral_events",
             "referral_rewards",
             "referral_reward_ledger",
+            "referral_partners",
             "referral_flags",
             "referral_analytics_daily",
             "creator_leaderboard_snapshots",
