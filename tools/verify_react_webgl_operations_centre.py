@@ -1,8 +1,8 @@
 """Automated browser-level verification for GTEX Club Operations Centre WebGL & GLB assets.
 
 Verifies:
-1. Destination GLB URLs correctly resolve under /console.
-2. All six GLB assets load successfully in the React Three.js environment.
+1. Destination GLB URLs that the hub assigns resolve under /console.
+2. Those campus models load, and the three procedural offices count toward 6/6.
 3. Loaded-asset count reaches '6/6 GLB Assets Loaded'.
 4. A failed asset triggers the warning state (data-testid="glb-asset-warning").
 5. Procedural wireframe fallback remains visible and interactive when an asset fails.
@@ -48,14 +48,23 @@ EXPECTED_DESTINATIONS = [
     "finance_commercial_office",
 ]
 
+# The hub assigns a campus model only where that file is the room.
+# Manager, General Manager, and Finance are walk-in interiors built in code.
 EXPECTED_GLBS = {
     "executive_office": "/models/campus/club_hq.glb",
-    "managers_office": "/models/campus/stadium_main.glb",
-    "general_managers_office": "/models/campus/vip_skybox_concourse.glb",
     "academy_department": "/models/campus/elite_academy_complex.glb",
     "medical_department": "/models/campus/recovery_hydro_hub.glb",
-    "finance_commercial_office": "/models/campus/vip_hospitality.glb",
 }
+PROCEDURAL_DESTINATIONS = (
+    "managers_office",
+    "general_managers_office",
+    "finance_commercial_office",
+)
+PROCEDURAL_GLB_PATHS = (
+    "/models/campus/stadium_main.glb",
+    "/models/campus/vip_skybox_concourse.glb",
+    "/models/campus/vip_hospitality.glb",
+)
 
 
 class ConsoleSPARequestHandler(SimpleHTTPRequestHandler):
@@ -367,7 +376,7 @@ def run_verification(headless: bool = True) -> int:
             server.shutdown()
             return 1
 
-        # Verify all 6 GLBs were resolved under /console
+        # Verify the campus models the hub actually assigns, under /console.
         for dest_key, glb_path in EXPECTED_GLBS.items():
             expected_console_url = f"/console{glb_path}"
             matched = any(expected_console_url in u for u in loaded_glbs)
@@ -377,6 +386,14 @@ def run_verification(headless: bool = True) -> int:
                 server.shutdown()
                 return 1
             print(f"[PASS] Confirmed resolution under /console: {expected_console_url}")
+
+        for glb_path in PROCEDURAL_GLB_PATHS:
+            if any(glb_path in u for u in loaded_glbs):
+                print(f"[FAIL] Procedural office fetched a campus model that is not that room: {glb_path}")
+                browser.close()
+                server.shutdown()
+                return 1
+        print("[PASS] Manager, General Manager, and Finance stayed procedural.")
 
         # Verify no warning banner when all assets load
         warning_locator = page.locator('[data-testid="glb-asset-warning"]')
