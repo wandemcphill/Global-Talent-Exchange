@@ -363,6 +363,14 @@ def list_pending_referral_rewards(
     return admin_service.list_pending_rewards()
 
 
+@router.get("/rewards/approved", response_model=list[PendingRewardView])
+def list_approved_referral_rewards(
+    _: User = Depends(_require_admin),
+    admin_service: ReferralAdminService = Depends(get_referral_admin_service),
+) -> list[PendingRewardView]:
+    return admin_service.list_pending_rewards(status_filter="approved")
+
+
 @router.post("/rewards/{reward_id}/review", response_model=RewardReviewDecisionView)
 def review_referral_reward(
     reward_id: str,
