@@ -857,18 +857,29 @@ def build_unity_live_payload_for_app(
     hub = ensure_live_match_hub(app)
     source = "live_match_hub"
     state = hub.get_state(match_id)
-    if (state is None or not state.is_live) and _bootstrap_infinite_league_stream(
-        app,
-        hub,
-        match_id,
-        restart_if_completed=True,
+    canonical_bundle = hub._canonical_execution_bundle(match_id)
+    if (
+        canonical_bundle is None
+        and (state is None or not state.is_live)
+        and _bootstrap_infinite_league_stream(
+            app,
+            hub,
+            match_id,
+            restart_if_completed=True,
+        )
     ):
         state = hub.get_state(match_id)
         source = "infinite_league_runtime"
     view_state: MatchViewStateView | None = None
     live_status = "completed"
     playback_context = hub.get_playback_context(match_id)
-    if playback_context is not None and playback_context.viewer_state is not None:
+    authoritative = bool(playback_context is not None and getattr(playback_context, "authoritative", False))
+    if authoritative:
+        view_state = _resolve_canonical_view_state(match_id, app, playback_context)
+        live_status = playback_context.presentation
+        if view_state is not None:
+            source = view_state.source or source
+    elif playback_context is not None and playback_context.viewer_state is not None:
         view_state = playback_context.viewer_state
         source = view_state.source or source
         live_status = "live" if playback_context.is_live else "completed"
@@ -900,10 +911,13 @@ def build_unity_live_payload_for_app(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frame could not be resolved."
         )
 
-    if state is not None:
+    if state is not None and not authoritative:
         live_status = state.snapshot.status
 
-    if playback_context is not None and playback_context.viewer_state is not None:
+    if authoritative and playback_context is not None:
+        frame = _sample_canonical_frame(view_state, playback_context)
+        live_status = playback_context.presentation
+    elif playback_context is not None and playback_context.viewer_state is not None:
         playback_span_seconds = max(
             float(view_state.duration_seconds),
             float(view_state.frames[-1].time_seconds),
@@ -922,34 +936,56 @@ def build_unity_live_payload_for_app(
     players_by_id = {player.player_id: player for player in frame.players}
     active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
     bounded_event_limit = _bounded_live_event_limit(event_limit)
-    payload_events = (
-        list(view_state.events)
-        if include_full_timeline
-        else _recent_view_events(view_state, active_event=active_event, event_limit=bounded_event_limit)
-    )
+    if authoritative and playback_context is not None and not include_full_timeline:
+        payload_events = _events_at_canonical_minute(
+            view_state,
+            playback_context,
+            event_limit=bounded_event_limit,
+        )
+    else:
+        payload_events = (
+            list(view_state.events)
+            if include_full_timeline
+            else _recent_view_events(view_state, active_event=active_event, event_limit=bounded_event_limit)
+        )
     view_state_payload = (
         view_state.model_dump(mode="json")
         if include_full_timeline
         else _compact_view_state_payload(view_state, frame=frame, events=payload_events)
     )
 
+    if authoritative and playback_context is not None:
+        unity_status = playback_context.presentation
+        unity_is_live = bool(playback_context.is_live)
+        unity_minute = float(playback_context.clock_minute)
+        unity_phase = playback_context.clock_phase or "pre_match"
+        unity_home = int(playback_context.home_score)
+        unity_away = int(playback_context.away_score)
+    else:
+        unity_status = live_status if state is not None else "completed"
+        unity_is_live = bool(state.is_live) if state is not None else False
+        unity_minute = round(_float_or_default(frame.clock_minute), 2)
+        unity_phase = _enum_value(frame.phase) or "open_play"
+        unity_home = int(frame.home_score)
+        unity_away = int(frame.away_score)
+
     return {
         "matchId": match_id,
         "source": view_state.source,
         "payloadMode": "full" if include_full_timeline else "live_compact",
-        "status": live_status if state is not None else "completed",
-        "isLive": bool(state.is_live) if state is not None else False,
+        "status": unity_status,
+        "isLive": unity_is_live,
         "frameId": frame.frame_id,
-        "clockMinute": round(_float_or_default(frame.clock_minute), 2),
-        "phase": _enum_value(frame.phase) or "open_play",
-        "homeScore": int(frame.home_score),
-        "awayScore": int(frame.away_score),
+        "clockMinute": unity_minute,
+        "phase": unity_phase,
+        "homeScore": unity_home,
+        "awayScore": unity_away,
         "possessionSide": _enum_value(frame.possession_side) or "home",
         "activeEventId": frame.active_event_id,
         "cameraPreset": _enum_value(frame.camera_preset) or "broadcast",
         "pitchLengthMeters": _UNITY_PITCH_LENGTH_METERS,
         "pitchWidthMeters": _UNITY_PITCH_WIDTH_METERS,
-        "score": {"home": int(frame.home_score), "away": int(frame.away_score)},
+        "score": {"home": unity_home, "away": unity_away},
         "players": [_unity_player_payload(player) for player in frame.players],
         "ballPosition": _unity_ball_payload(frame, active_event, players_by_id),
         "events": [_unity_event_payload(event) for event in payload_events],
@@ -1006,6 +1042,79 @@ def _ensure_strict_live_sources(view_state: MatchViewStateView, events: list[Any
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Strict live match state was not found.")
 
 
+def _viewer_clock_is_behind_playback(view_state: MatchViewStateView | None, playback_context) -> bool:
+    from app.live_matches.canonical_presentation import viewer_clock_is_behind
+
+    if view_state is None or not view_state.frames:
+        return True
+    return viewer_clock_is_behind(
+        last_clock_minute=float(view_state.frames[-1].clock_minute),
+        clock_minute=int(getattr(playback_context, "clock_minute", 0) or 0),
+    )
+
+
+def _rebuild_canonical_viewer_state(match_id: str, app) -> MatchViewStateView | None:
+    session_factory = getattr(getattr(app, "state", None), "session_factory", None)
+    if session_factory is None:
+        return None
+    try:
+        from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
+
+        with session_factory() as session:
+            db_match = session.get(CompetitionMatch, match_id)
+            service = CanonicalLiveExecutionService(session)
+            execution = service.get_execution(match_id)
+            checkpoint = dict(getattr(execution, "checkpoint_json", None) or {}) if execution is not None else {}
+            if (
+                db_match is None
+                or execution is None
+                or not checkpoint.get("home_state")
+                or not checkpoint.get("away_state")
+            ):
+                return None
+            return service.build_live_viewer_state(db_match, execution)
+    except Exception:
+        logger.exception("Failed rebuilding canonical viewer state for %s", match_id)
+        return None
+
+
+def _resolve_canonical_view_state(match_id: str, app, playback_context) -> MatchViewStateView | None:
+    """Prefer a checkpoint rebuild when the stored viewer ends before the execution minute."""
+
+    stored = _load_persisted_live_view_state(match_id, app)
+    if stored is not None and not _viewer_clock_is_behind_playback(stored, playback_context):
+        return stored
+    rebuilt = _rebuild_canonical_viewer_state(match_id, app)
+    return rebuilt or stored
+
+
+def _sample_canonical_frame(view_state: MatchViewStateView, playback_context) -> MatchTimelineFrameView:
+    from app.live_matches.canonical_presentation import canonical_sample_time_seconds
+
+    first = view_state.frames[0]
+    last = view_state.frames[-1]
+    sample_time = canonical_sample_time_seconds(
+        first_time_seconds=float(first.time_seconds),
+        last_time_seconds=float(last.time_seconds),
+        duration_seconds=float(view_state.duration_seconds or 0),
+        last_clock_minute=float(last.clock_minute),
+        clock_minute=int(getattr(playback_context, "clock_minute", 0) or 0),
+        target_end_minute=int(getattr(playback_context, "target_end_minute", 90) or 90),
+        presentation=str(getattr(playback_context, "presentation", "") or ""),
+    )
+    return _sample_viewer_frame(view_state, sample_time)
+
+
+def _events_at_canonical_minute(
+    view_state: MatchViewStateView, playback_context, *, event_limit: int = 40
+) -> list[Any]:
+    minute = float(getattr(playback_context, "clock_minute", 0) or 0)
+    visible = [event for event in view_state.events if float(getattr(event, "minute", 0) or 0) <= minute + 0.2]
+    if event_limit > 0:
+        return visible[-event_limit:]
+    return visible
+
+
 def _load_strict_live_view_state(
     match_id: str, app
 ) -> tuple[MatchViewStateView, MatchTimelineFrameView, list[Any], bool]:
@@ -1014,7 +1123,11 @@ def _load_strict_live_view_state(
     playback_context = hub.get_playback_context(match_id)
     view_state: MatchViewStateView | None = None
     is_live = False
-    if playback_context is not None and playback_context.viewer_state is not None:
+    authoritative = bool(playback_context is not None and getattr(playback_context, "authoritative", False))
+    if authoritative:
+        view_state = _resolve_canonical_view_state(match_id, app, playback_context)
+        is_live = bool(playback_context.is_live)
+    elif playback_context is not None and playback_context.viewer_state is not None:
         view_state = playback_context.viewer_state
         is_live = bool(playback_context.is_live)
     else:
@@ -1071,8 +1184,10 @@ def _load_strict_live_view_state(
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Live match frames are unavailable."
         )
-    frame = view_state.frames[-1]
-    if playback_context is not None and playback_context.viewer_state is not None:
+    if authoritative and playback_context is not None:
+        frame = _sample_canonical_frame(view_state, playback_context)
+        recent_events = _events_at_canonical_minute(view_state, playback_context)
+    elif playback_context is not None and playback_context.viewer_state is not None:
         playback_span_seconds = max(
             float(view_state.duration_seconds),
             float(view_state.frames[-1].time_seconds),
@@ -1083,8 +1198,13 @@ def _load_strict_live_view_state(
             max(0.0, playback_context.elapsed_runtime_seconds / max(playback_context.target_runtime_seconds, 1.0)),
         )
         frame = _sample_viewer_frame(view_state, round(playback_span_seconds * playback_ratio, 2))
-    active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
-    return view_state, frame, _recent_view_events(view_state, active_event=active_event, event_limit=40), is_live
+        active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
+        recent_events = _recent_view_events(view_state, active_event=active_event, event_limit=40)
+    else:
+        frame = view_state.frames[-1]
+        active_event = next((event for event in view_state.events if event.event_id == frame.active_event_id), None)
+        recent_events = _recent_view_events(view_state, active_event=active_event, event_limit=40)
+    return view_state, frame, recent_events, is_live
 
 
 def _v2_player_payload(player) -> dict[str, object]:
@@ -1834,7 +1954,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
                 broadcast_session_payload["assigned_duration_seconds"] = min(
                     max_broadcast_seconds, max(1, int(round(float(raw_assigned))))
                 )
-    return {
+    payload = {
         "match_id": view_state.match_id,
         "matchId": view_state.match_id,
         **_strict_live_runtime_flags(),
@@ -1890,6 +2010,41 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
             if _v2_event_type(event.event_type) in {"goal", "save", "red_card", "yellow_card", "substitution"}
         ],
     }
+    return _overlay_canonical_broadcast(payload, playback_context, frame)
+
+
+def _overlay_canonical_broadcast(payload: dict[str, object], playback_context, frame) -> dict[str, object]:
+    """The execution row wins over a precomputed frame's clock, score, and phase."""
+
+    if playback_context is None or not getattr(playback_context, "authoritative", False):
+        return payload
+    payload["status"] = playback_context.api_status
+    payload["is_live"] = bool(playback_context.is_live)
+    payload["isLive"] = bool(playback_context.is_live)
+    payload["phase"] = playback_context.clock_phase
+    payload["frame_phase"] = _enum_value(getattr(frame, "phase", None)) or payload.get("phase")
+    payload["minute"] = int(playback_context.clock_minute)
+    payload["time_seconds"] = round(float(playback_context.elapsed_runtime_seconds), 2)
+    payload["execution_revision"] = int(playback_context.execution_revision) or payload.get("execution_revision")
+    payload["commit_cursor"] = int(playback_context.commit_cursor)
+    home = payload.get("home")
+    away = payload.get("away")
+    if isinstance(home, dict):
+        home["score"] = int(playback_context.home_score)
+    if isinstance(away, dict):
+        away["score"] = int(playback_context.away_score)
+    session = payload.get("broadcast_session")
+    if not isinstance(session, dict):
+        session = {}
+        payload["broadcast_session"] = session
+    session["assigned_duration_seconds"] = int(round(float(playback_context.target_runtime_seconds)))
+    session["current_broadcast_position_seconds"] = round(float(playback_context.elapsed_runtime_seconds), 2)
+    session["status"] = playback_context.presentation
+    session["clock_phase"] = playback_context.clock_phase
+    session["pause_replay_enabled"] = False
+    session["sync_strategy"] = "canonical_live_execution"
+    session["execution_revision"] = int(playback_context.execution_revision)
+    return payload
 
 
 @api_router.get("/{match_id}/state")
