@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from datetime import datetime, timedelta
 from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
@@ -31,11 +32,146 @@ class ReferralRewardService:
         self.store = store
         self.session = session
 
-    def evaluate(self, attribution: AttributionRecord, *, milestone: str) -> list[RewardRecord]:
+    def evaluate(
+        self,
+        attribution: AttributionRecord,
+        *,
+        milestone: str,
+        deposit_context: dict[str, Any] | None = None,
+    ) -> list[RewardRecord]:
+        if milestone == "wallet_funded":
+            return self._create_first_deposit_rewards(attribution, deposit_context=deposit_context or {})
         created: list[RewardRecord] = []
         created.extend(self._create_for_referrer(attribution, milestone=milestone))
         created.extend(self._create_for_creator(attribution, milestone=milestone))
         return created
+
+    def _create_first_deposit_rewards(
+        self,
+        attribution: AttributionRecord,
+        *,
+        deposit_context: dict[str, Any],
+    ) -> list[RewardRecord]:
+        """Create the referred-user wallet bonus and the referrer's auditable commission."""
+        if self.session is None:
+            return []
+        order_id = str(deposit_context.get("purchase_order_id") or "").strip()
+        if not order_id:
+            return []
+        currency = str(deposit_context.get("currency_code") or "NGN").upper()
+        unit = str(deposit_context.get("unit") or "coin")
+        bonus_amount = Decimal(str(deposit_context.get("bonus_amount") or "0")).quantize(Decimal("0.0001"))
+        deposit_amount_fiat = Decimal(str(deposit_context.get("amount_fiat") or "0")).quantize(Decimal("0.01"))
+        commission_amount = (deposit_amount_fiat * Decimal("0.10")).quantize(Decimal("0.01"))
+        if bonus_amount <= Decimal("0.0000") or commission_amount <= Decimal("0.00"):
+            return []
+
+        created: list[RewardRecord] = []
+        created.append(
+            self._upsert_reward(
+                attribution=attribution,
+                beneficiary_user_id=attribution.referred_user_id,
+                beneficiary_creator_id=None,
+                reward_type="wallet_credit",
+                status="approved",
+                milestone="wallet_funded",
+                amount=bonus_amount,
+                unit=unit,
+                label="10% first deposit bonus",
+                hold_until=None,
+                review_reason="wallet_bonus_ledger_posting",
+                reward_payload={
+                    "reward_role": "referred_user_bonus",
+                    "first_deposit_order_id": order_id,
+                    "first_deposit_reference": str(deposit_context.get("order_reference") or ""),
+                    "deposit_amount_fiat": str(deposit_amount_fiat),
+                    "bonus_rate_bps": "1000",
+                },
+            )
+        )
+
+        partner_id = str(attribution.metadata.get("referral_partner_id") or "").strip() or None
+        if attribution.creator_profile_id is not None:
+            beneficiary_user_id = None
+            beneficiary_creator_id = attribution.creator_profile_id
+        elif attribution.referrer_user_id is not None:
+            beneficiary_user_id = attribution.referrer_user_id
+            beneficiary_creator_id = None
+        elif partner_id is not None:
+            beneficiary_user_id = None
+            beneficiary_creator_id = None
+        else:
+            return created
+
+        created.append(
+            self._upsert_reward(
+                attribution=attribution,
+                beneficiary_user_id=beneficiary_user_id,
+                beneficiary_creator_id=beneficiary_creator_id,
+                reward_type="creator_revshare",
+                status="pending",
+                milestone="wallet_funded",
+                amount=commission_amount,
+                unit=currency,
+                label="10% first deposit referral commission",
+                hold_until=utcnow() + timedelta(days=7),
+                review_reason="seven_day_fraud_and_reversal_hold",
+                reward_payload={
+                    "reward_role": "referrer_commission",
+                    "referral_partner_id": partner_id or "",
+                    "first_deposit_order_id": order_id,
+                    "first_deposit_reference": str(deposit_context.get("order_reference") or ""),
+                    "deposit_amount_fiat": str(deposit_amount_fiat),
+                    "commission_rate_bps": "1000",
+                    "payout_currency": currency,
+                },
+            )
+        )
+        return created
+
+    def mark_paid(
+        self,
+        *,
+        reward_id: str,
+        payment_reference: str,
+        admin_user_id: str | None = None,
+        enforce_hold: bool = True,
+    ) -> RewardRecord:
+        if self.session is None:
+            raise ReferralActionError("referral_database_required")
+        reward = self.session.get(ReferralReward, reward_id)
+        if reward is None:
+            raise ReferralActionError("reward_not_found")
+        if reward.status == ReferralRewardStatus.PAID:
+            if reward.reward_reference == payment_reference:
+                return self._from_model(reward)
+            raise ReferralActionError("reward_already_paid")
+        if reward.status != ReferralRewardStatus.APPROVED:
+            raise ReferralActionError("reward_must_be_approved_before_payout")
+        changed_at = utcnow()
+        if enforce_hold and reward.hold_until is not None and reward.hold_until > changed_at:
+            raise ReferralActionError("reward_hold_active")
+        reward.status = ReferralRewardStatus.PAID
+        reward.reward_reference = payment_reference[:64]
+        reward.paid_at = changed_at
+        reward.review_reason = None
+        reward.updated_at = changed_at
+        self.session.flush()
+        record = self._from_model(reward)
+        self._append_ledger_entry(
+            reward_id=record.reward_id,
+            entry_type="reward_paid",
+            amount=record.amount,
+            unit=record.unit,
+            status_after=record.status,
+            reference_id=payment_reference,
+            payload_json={
+                "payment_reference": payment_reference,
+                "admin_user_id": admin_user_id or "system",
+            },
+        )
+        self._cache_reward(record)
+        return record
 
     def list_for_owner(self, *, user_id: str, creator_id: str | None) -> list[RewardRecord]:
         if self.session is not None:
@@ -224,6 +360,7 @@ class ReferralRewardService:
         label: str,
         hold_until,
         review_reason: str | None,
+        reward_payload: dict[str, Any] | None = None,
     ) -> RewardRecord:
         if self.session is not None:
             reward_key = self._reward_key(
@@ -237,6 +374,7 @@ class ReferralRewardService:
             payload_json = {
                 "trigger_milestone": milestone,
                 "label": label,
+                **dict(reward_payload or {}),
             }
             source_event_id = self._resolve_source_event_id(
                 attribution_id=attribution.attribution_id,
