@@ -437,6 +437,23 @@ class AutonomousMatchExecutionService:
             )
             or 0
         )
+        active_executions = (
+            self.session.scalar(
+                select(func.count(CompetitionMatchExecution.id)).where(
+                    CompetitionMatchExecution.execution_status == "in_progress"
+                )
+            )
+            or 0
+        )
+        failed_executions = (
+            self.session.scalar(
+                select(func.count(CompetitionMatchExecution.id)).where(
+                    CompetitionMatchExecution.last_error.is_not(None),
+                    CompetitionMatchExecution.execution_status.notin_(["completed", "cancelled", "abandoned"]),
+                )
+            )
+            or 0
+        )
 
         return {
             "clock": {
@@ -457,9 +474,12 @@ class AutonomousMatchExecutionService:
                 "worker_mode": worker_mode,
             },
             "executions": {
+                "active_count": active_executions,
                 "paused_count": paused_executions,
                 "halted_count": halted_executions,
+                "failed_count": failed_executions,
                 "stalled_lease_count": stalled_leases,
+                "expired_lease_count": stalled_leases,
             },
         }
 
