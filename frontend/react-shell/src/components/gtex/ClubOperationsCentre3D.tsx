@@ -232,6 +232,9 @@ export function ClubOperationsCentre3D({
   const [renderMode, setRenderMode] = useState<"3d" | "2d">(() => (detectWebGLAvailable() ? "3d" : "2d"));
   const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "context_lost" | "fallback">("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
+  const [proceduralRoomCount, setProceduralRoomCount] = useState<number>(0);
+  const [departmentRoomsReady, setDepartmentRoomsReady] = useState<number>(0);
+  const [requiredGlbCount, setRequiredGlbCount] = useState<number>(0);
   const [failedGlbModels, setFailedGlbModels] = useState<string[]>([]);
   const [glbRetryCount, setGlbRetryCount] = useState<number>(0);
   const [perfTelemetry, setPerfTelemetry] = useState<OperationsPerfTelemetry | null>(null);
@@ -586,7 +589,19 @@ export function ClubOperationsCentre3D({
     const loader = new GLTFLoader();
     let mounted = true;
     const loadedDestKeys = new Set<string>();
+    const proceduralDestKeys = new Set<string>();
     const failedDestKeys = new Set<string>();
+    const requiredGlbKeys = sceneDestinations.filter((dest) => {
+      const rawGlbUrl = dest.glb_model || "";
+      return Boolean(rawGlbUrl) && !PROCEDURAL_ROOM_ONLY.test(rawGlbUrl);
+    }).length;
+    setRequiredGlbCount(requiredGlbKeys);
+    const publishAssetCounts = () => {
+      setLoadedGlbCount(loadedDestKeys.size);
+      setProceduralRoomCount(proceduralDestKeys.size);
+      setFailedGlbModels(Array.from(failedDestKeys));
+      setDepartmentRoomsReady(loadedDestKeys.size + proceduralDestKeys.size + failedDestKeys.size);
+    };
     const fallbackMeshes = new Map<string, THREE.Object3D>();
     let retryAttemptCount = 0;
     roomGroupsRef.current.clear();
@@ -597,9 +612,9 @@ export function ClubOperationsCentre3D({
       const rawGlbUrl = dest.glb_model || "";
       if (!rawGlbUrl || PROCEDURAL_ROOM_ONLY.test(rawGlbUrl)) {
         failedDestKeys.delete(dest.destination_key);
-        loadedDestKeys.add(dest.destination_key);
-        setFailedGlbModels(Array.from(failedDestKeys));
-        setLoadedGlbCount(loadedDestKeys.size);
+        loadedDestKeys.delete(dest.destination_key);
+        proceduralDestKeys.add(dest.destination_key);
+        publishAssetCounts();
         return;
       }
       const glbUrl = publicUrl(rawGlbUrl);
@@ -654,16 +669,17 @@ export function ClubOperationsCentre3D({
 
           group.add(model);
           failedDestKeys.delete(dest.destination_key);
+          proceduralDestKeys.delete(dest.destination_key);
           loadedDestKeys.add(dest.destination_key);
-          setFailedGlbModels(Array.from(failedDestKeys));
-          setLoadedGlbCount(loadedDestKeys.size);
+          publishAssetCounts();
         },
         undefined,
         (err) => {
           if (!mounted) return;
           console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
+          loadedDestKeys.delete(dest.destination_key);
           failedDestKeys.add(dest.destination_key);
-          setFailedGlbModels(Array.from(failedDestKeys));
+          publishAssetCounts();
 
           if (!fallbackMeshes.has(dest.destination_key)) {
             const fallbackGeo = new THREE.BoxGeometry(4.2, 2.8, 3.2);
@@ -846,6 +862,9 @@ export function ClubOperationsCentre3D({
         getTelemetry: () => ({
           ...latestTelemetry,
           loadedGlbs: loadedDestKeys.size,
+          proceduralRooms: proceduralDestKeys.size,
+          departmentRoomsReady: loadedDestKeys.size + proceduralDestKeys.size + failedDestKeys.size,
+          requiredGlbs: requiredGlbKeys,
           failedGlbs: failedDestKeys.size,
           retryAttempts: retryAttemptCount,
           contextLossCount,
@@ -1673,7 +1692,7 @@ export function ClubOperationsCentre3D({
                             : webglStatus === "fallback"
                               ? "Fallback"
                               : "Init"
-                      } · ${loadedGlbCount}/${destinations.length} GLB Assets Loaded`
+                      } · ${departmentRoomsReady}/${destinations.length} departments · ${loadedGlbCount}/${requiredGlbCount} GLB loaded · ${proceduralRoomCount} procedural`
                     : "2D Blueprint Active"}
                 </span>
                 {renderMode === "3d" && perfTelemetry && (

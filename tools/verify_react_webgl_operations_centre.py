@@ -2,8 +2,8 @@
 
 Verifies:
 1. Destination GLB URLs that the hub assigns resolve under /console.
-2. Those campus models load, and the three procedural offices count toward 6/6.
-3. Loaded-asset count reaches '6/6 GLB Assets Loaded'.
+2. The three campus models load. The three offices without a model stay procedural.
+3. Status reports 6/6 departments and 3/3 GLB loaded. Procedural rooms are not counted as GLBs.
 4. A failed asset triggers the warning state (data-testid="glb-asset-warning").
 5. Procedural wireframe fallback remains visible and interactive when an asset fails.
 6. 2D architectural floorplan fallback remains accessible and interactive.
@@ -321,7 +321,7 @@ def run_verification(headless: bool = True) -> int:
         # -------------------------------------------------------------
         # TEST 1: Full GLB loading under /console route
         # -------------------------------------------------------------
-        print("\n--- Test 1: Full 6/6 GLB Loading Under /console Route ---")
+        print("\n--- Test 1: Six departments, three real GLBs, under /console ---")
         loaded_glbs = []
 
         def track_glb_request(response):
@@ -365,7 +365,7 @@ def run_verification(headless: bool = True) -> int:
         t_start = time.perf_counter()
         while time.perf_counter() - t_start < 25.0:
             status_text = page.locator('[data-testid="glb-asset-status"]').inner_text()
-            if "6/6 GLB Assets Loaded" in status_text:
+            if "6/6 departments" in status_text and "3/3 GLB loaded" in status_text:
                 print(f"[PASS] Status indicator reached: '{status_text}'")
                 break
             time.sleep(0.5)
@@ -402,7 +402,7 @@ def run_verification(headless: bool = True) -> int:
             browser.close()
             server.shutdown()
             return 1
-        print("[PASS] No asset warning banner present during complete 6/6 load.")
+        print("[PASS] No asset warning banner present. Procedural offices were not reported as downloaded GLBs.")
 
         # Audit Stage 3 room screens, Stage 4 staff actors, and Stage 5 telemetry in WebGL scene
         scene_audit = page.evaluate("""() => {
@@ -419,7 +419,10 @@ def run_verification(headless: bool = True) -> int:
         assert scene_audit is not None, "Missing __GTEX_OPERATIONS_3D__ debug handle."
         assert scene_audit["roomScreens"] >= 6, f"Expected >= 6 room screens, got {scene_audit['roomScreens']}"
         assert scene_audit["roomActors"] >= 1, f"Expected >= 1 room staff actor, got {scene_audit['roomActors']}"
-        assert scene_audit["telemetry"] and scene_audit["telemetry"].get("loadedGlbs") == 6
+        assert scene_audit["telemetry"] and scene_audit["telemetry"].get("loadedGlbs") == 3
+        assert scene_audit["telemetry"].get("proceduralRooms") == 3
+        assert scene_audit["telemetry"].get("departmentRoomsReady") == 6
+        assert scene_audit["telemetry"].get("failedGlbs") == 0
         page.wait_for_selector('[data-testid="webgl-perf-telemetry"]', timeout=10000)
         print("[PASS] Stage 3 screens, Stage 4 staff actors, and Stage 5 FPS telemetry verified in live Chromium.")
 
@@ -473,7 +476,7 @@ def run_verification(headless: bool = True) -> int:
         page.wait_for_function(
             """() => {
                 const status = document.querySelector('[data-testid="glb-asset-status"]');
-                return Boolean(status && status.textContent.includes("6/6 GLB Assets Loaded"));
+                return Boolean(status && status.textContent.includes("6/6 departments") && status.textContent.includes("3/3 GLB loaded"));
             }""",
             timeout=30000,
         )
@@ -687,7 +690,7 @@ def run_verification(headless: bool = True) -> int:
             page_mobile.wait_for_function(
                 """() => {
                     const status = document.querySelector('[data-testid="glb-asset-status"]');
-                    return Boolean(status && (status.textContent || "").includes("6/6 GLB Assets Loaded"));
+                    return Boolean(status && (status.textContent || "").includes("6/6 departments") && (status.textContent || "").includes("3/3 GLB loaded"));
                 }""",
                 timeout=25000,
             )
@@ -701,7 +704,7 @@ def run_verification(headless: bool = True) -> int:
             ), f"Mobile horizontal overflow detected: {mobile_metrics}"
             page_mobile.locator('[data-testid="toggle-render-mode"]').click()
             page_mobile.wait_for_selector('[data-testid="club-operations-2d-floorplan"]', timeout=10000)
-            print("[PASS] Mobile 390x844 WebGL 6/6 GLB + zero overflow + 2D switch verified.")
+            print("[PASS] Mobile 390x844 WebGL departments and real GLBs + zero overflow + 2D switch verified.")
         finally:
             context_mobile.close()
             print("[INFO] Closed the mobile responsive browser context.")
