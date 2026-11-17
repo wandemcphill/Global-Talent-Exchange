@@ -169,6 +169,7 @@ class UserClubSignupRequest(BaseModel):
     # Default True keeps older clients working; easy signup FE always sends explicit.
     is_over_18: bool = Field(default=True)
     turnstile_token: str | None = Field(default=None, max_length=2048)
+    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
     club_name: str | None = Field(default=None, max_length=120)
     club_short_tag: str | None = Field(default=None, max_length=40)
     club_country: str | None = Field(default=None, max_length=120)
@@ -290,6 +291,7 @@ class CreatorSignupRequest(BaseModel):
     banner_asset_ref: str | None = Field(default=None, max_length=255)
     monetization: list[str] = Field(default_factory=list, max_length=4)
     turnstile_token: str | None = Field(default=None, max_length=2048)
+    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
     club_name: str | None = Field(default=None, max_length=160)
     club_short_tag: str | None = Field(default=None, max_length=40)
     club_type: ClubType | None = None
@@ -344,6 +346,7 @@ class TraderSignupRequest(BaseModel):
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
     turnstile_token: str | None = Field(default=None, max_length=2048)
+    referral_code: str | None = Field(default=None, min_length=4, max_length=32)
 
     @field_validator("email")
     @classmethod
