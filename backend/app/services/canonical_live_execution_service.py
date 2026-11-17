@@ -351,6 +351,47 @@ class CanonicalLiveExecutionService:
             select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
         )
 
+    def _copy_kickoff_team_sheet(self, match: CompetitionMatch, sim_request: MatchSimulationRequest) -> None:
+        """Freeze the manager XI, declined owner ids, and kickoff manager onto the fixture."""
+        from app.owner_console.models import OwnerClubState
+
+        club_ids = [str(match.home_club_id), str(match.away_club_id)]
+        states = {
+            str(row.club_id): row
+            for row in self.session.scalars(select(OwnerClubState).where(OwnerClubState.club_id.in_(club_ids))).all()
+        }
+        metadata = dict(match.metadata_json or {})
+        institutional = dict(metadata.get("institutional_match_context") or {})
+        sheets: dict[str, Any] = {}
+        for side, team, club_id in (
+            ("home", sim_request.home_team, str(match.home_club_id)),
+            ("away", sim_request.away_team, str(match.away_club_id)),
+        ):
+            state = states.get(club_id)
+            selection = {}
+            if state is not None:
+                selection = dict((state.facilities_json or {}).get("_last_manager_matchday_selection") or {})
+            preference = dict(selection.get("owner_preference_evaluation") or {})
+            side_context = dict(institutional.get(side) or {})
+            context_manager = dict(side_context.get("manager") or {})
+            sheets[club_id] = {
+                "side": side,
+                "starting_player_ids": [player.player_id for player in team.starters],
+                "bench_player_ids": [player.player_id for player in team.bench],
+                "owner_preferred_player_ids": list(selection.get("owner_preferred_player_ids") or []),
+                "declined_starter_ids": list(preference.get("declined_starter_ids") or []),
+                "decision_outcome": selection.get("decision_outcome"),
+                "verdict_reason": selection.get("verdict_reason"),
+                "manager": {
+                    "manager_id": selection.get("selected_by_manager_id") or context_manager.get("manager_id"),
+                    "manager_name": selection.get("selected_by_manager_name")
+                    or context_manager.get("name")
+                    or context_manager.get("display_name"),
+                },
+            }
+        metadata["kickoff_team_sheet"] = sheets
+        match.metadata_json = metadata
+
     def _build_simulation_request(
         self,
         competition: Competition,
@@ -608,6 +649,7 @@ class CanonicalLiveExecutionService:
 
         assert_transition(match.status, MatchStatus.IN_PROGRESS.value, match_id=match.id)
         sim_request = request or self._build_simulation_request(resolved_comp, match)  # type: ignore[arg-type]
+        self._copy_kickoff_team_sheet(match, sim_request)
         category_value, max_duration_seconds = _resolve_broadcast_bounds(sim_request)
         checkpoint = initialize_execution(self.event_generator, sim_request, revision=1)
         now = _utcnow()
@@ -1168,6 +1210,27 @@ class CanonicalLiveExecutionService:
             )
             for sub in normalized_subs
         ]
+
+        if adjustment_model is None and not sub_models:
+            side_snapshot = dict(execution.home_tactics_json if side_norm == "home" else execution.away_tactics_json)
+            return {
+                **side_snapshot,
+                "status": "unchanged",
+                "side": side_norm,
+                "execution_revision": int(execution.execution_revision),
+                "previous_revision": int(execution.execution_revision),
+                "tactic_revision": int(execution.execution_revision),
+                "submitted_at_minute": submitted_minute,
+                "effective_minute": submitted_minute,
+                "applied_immediately": False,
+                "idempotent_replay": False,
+                "applied_substitutions": [],
+                "tactical_impact_applied": False,
+                "noop": True,
+                "committed_event_count": len(checkpoint.committed_events),
+                "home": dict(execution.home_tactics_json),
+                "away": dict(execution.away_tactics_json),
+            }
 
         previous_revision = int(execution.execution_revision)
         new_revision = previous_revision + 1

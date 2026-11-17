@@ -932,6 +932,19 @@ class ClubGrowthService:
         )
 
     def _ensure_senior_player_for_prospect(self, *, club_id: str, prospect: AcademyProspect) -> Player:
+        from app.owner_console.models import OwnerSquadPlayer
+
+        linked = self.session.scalar(
+            select(OwnerSquadPlayer).where(
+                OwnerSquadPlayer.club_id == club_id,
+                OwnerSquadPlayer.name == prospect.display_name,
+                OwnerSquadPlayer.player_ref.is_not(None),
+            )
+        )
+        if linked is not None and linked.player_ref:
+            linked_player = self.session.get(Player, str(linked.player_ref))
+            if linked_player is not None:
+                return linked_player
         provider_external_id = f"academy:{prospect.id}"
         existing = self.session.scalar(
             select(Player).where(

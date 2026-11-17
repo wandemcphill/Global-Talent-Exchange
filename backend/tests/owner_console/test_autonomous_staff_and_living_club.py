@@ -557,6 +557,9 @@ def test_scenario_h_owner_cannot_control_live_match_coaching_and_lineup_is_non_b
         mgr_sel = pref_data["manager_selection"]
         assert mgr_sel["formation"] == "4-4-2"
         assert acad_id not in mgr_sel["starting_xi_ids"]
+        assert acad_id in mgr_sel["owner_preference_evaluation"]["declined_starter_ids"]
+        assert mgr_sel["decision_outcome"] == "declined"
+        assert acad_id in mgr_sel["owner_preferred_player_ids"]
     finally:
         session.close()
 

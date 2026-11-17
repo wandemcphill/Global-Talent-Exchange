@@ -313,7 +313,7 @@ class CompetitionAutoRunner:
             config = saved.get(team.team_id)
             if not isinstance(config, dict):
                 return team
-            mentality = str(config.get("mentality") or "").strip().lower()
+            mentality = str(config.get("effective_mentality") or config.get("mentality") or "").strip().lower()
             if mentality not in {"defensive", "balanced", "attacking"}:
                 return team
             style = TacticalStyle(mentality)

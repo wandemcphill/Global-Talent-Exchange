@@ -703,6 +703,36 @@ def _build_or_sync_daily_operational_decisions(
     return decisions
 
 
+def _active_canonical_injuries(
+    session: Session,
+    squad_players: list[OwnerSquadPlayer],
+) -> dict[str, tuple[int, str]]:
+    """Active player_injury_cases keyed by canonical player id. Owner-only rows are not invented here."""
+    from app.models.player_injury_case import PlayerInjuryCase
+
+    refs = [str(player.player_ref) for player in squad_players if player.player_ref]
+    if not refs:
+        return {}
+    today = datetime.now(timezone.utc).date()
+    rows = session.scalars(
+        select(PlayerInjuryCase).where(
+            PlayerInjuryCase.player_id.in_(refs),
+            PlayerInjuryCase.recovered_on.is_(None),
+        )
+    ).all()
+    found: dict[str, tuple[int, str]] = {}
+    for case in rows:
+        if case.expected_return_on is not None and case.expected_return_on < today:
+            continue
+        days = int(case.recovery_days or 0)
+        if days <= 0 and case.expected_return_on is not None:
+            days = max(0, (case.expected_return_on - today).days)
+        if days <= 0:
+            continue
+        found[str(case.player_id)] = (days, str(case.injury_type or "Match injury"))
+    return found
+
+
 def build_authoritative_daily_briefing(
     session: Session,
     user_id: str,
@@ -786,10 +816,16 @@ def build_authoritative_daily_briefing(
     avg_morale = int(sum(p.morale for p in squad_players) / max(1, squad_size))
     fitness_values = [_safe_int((p.personality_json or {}).get("fitness", 95), 95) for p in squad_players]
     avg_fitness = int(sum(fitness_values) / max(1, len(fitness_values)))
-    injured_players_rows = [p for p in squad_players if _safe_int(p.injured_days, 0) > 0]
-    available_players_rows = [p for p in squad_players if _safe_int(p.injured_days, 0) <= 0]
+    canonical_injuries = _active_canonical_injuries(session, squad_players)
+    injured_players_rows = [
+        p
+        for p in squad_players
+        if _safe_int(p.injured_days, 0) > 0 or (p.player_ref and str(p.player_ref) in canonical_injuries)
+    ]
+    injured_ids = {p.id for p in injured_players_rows}
+    available_players_rows = [p for p in squad_players if p.id not in injured_ids]
     regens = [p for p in squad_players if p.is_regen]
-    ready_prospects = [p for p in regens if p.rating >= 58 and _safe_int(p.injured_days, 0) <= 0]
+    ready_prospects = [p for p in regens if p.rating >= 58 and p.id not in injured_ids]
 
     # Medical recovery parameters (exact same formula as service.tick_club)
     med_expertise = staff["medical_director"]["medical_expertise"]
@@ -1259,10 +1295,15 @@ def build_authoritative_daily_briefing(
     # --- SECTION E: MEDICAL DIRECTOR'S REPORT ---
     injured_dossiers: list[dict[str, Any]] = []
     for p in injured_players_rows:
+        case = canonical_injuries.get(str(p.player_ref or ""))
         inj_d = _safe_int(p.injured_days, 0)
+        if inj_d <= 0 and case is not None:
+            inj_d = int(case[0])
         est_world_days = int(math.ceil(inj_d / max(1, daily_injury_heal_days)))
         pers = dict(p.personality_json or {})
         raw_injury_type = pers.get("last_injury_type")
+        if not raw_injury_type and case is not None:
+            raw_injury_type = case[1]
         injury_type = str(raw_injury_type).strip() if raw_injury_type else "Injury type not recorded"
         injured_dossiers.append(
             {
@@ -1809,6 +1850,33 @@ def get_club_operations_hub(
         state,
         requested_mentality=state.mentality,
     )
+    selection = dict((state.facilities_json or {}).get("_last_manager_matchday_selection") or {})
+    preference_eval = dict(selection.get("owner_preference_evaluation") or {})
+    disagreement = session.scalar(
+        select(OwnerClubEvent)
+        .where(
+            OwnerClubEvent.club_id == club_id,
+            OwnerClubEvent.event_type == "selection_disagreement",
+        )
+        .order_by(OwnerClubEvent.world_day.desc())
+    )
+    disagreement_payload = dict(disagreement.consequences_json or {}) if disagreement is not None else {}
+    matchday_decision = {
+        "declined_player_ids": list(
+            preference_eval.get("declined_starter_ids") or disagreement_payload.get("declined_player_ids") or []
+        ),
+        "declined_players": list(
+            disagreement_payload.get("players_who_did_not_appear")
+            or preference_eval.get("declined_starter_ids")
+            or []
+        ),
+        "verdict_reason": selection.get("verdict_reason") or disagreement_payload.get("verdict_reason"),
+        "decision_outcome": selection.get("decision_outcome"),
+        "manager_name": selection.get("selected_by_manager_name") or disagreement_payload.get("kickoff_manager_name"),
+        "match_manager_name": disagreement_payload.get("kickoff_manager_name")
+        or selection.get("selected_by_manager_name"),
+        "score": disagreement_payload.get("score"),
+    }
 
     staff_room_conv = session.scalar(
         select(OwnerClubConversation).where(
@@ -1903,6 +1971,7 @@ def get_club_operations_hub(
                     "offset": [-2.5, 1.5, -2.5],
                 },
             ],
+            "matchday_decision": matchday_decision,
             "report_section_key": "executive_briefing",
             "report": briefing["executive_briefing"],
             "open_decisions": [
@@ -1928,9 +1997,10 @@ def get_club_operations_hub(
             "communication_thread_id": "staff:first_team_manager",
             "communication_channel_mode": "direct" if staff["first_team_manager"]["is_appointed"] else "vacant",
             "wing_label": "West Sporting Wing · Floor 2",
-            "glb_model": "/models/campus/stadium_main.glb",
-            "model_glb_url": "/models/campus/stadium_main.glb",
-            "exterior_glb": "/models/campus/stadium_main.glb",
+            "glb_model": "",
+            "model_glb_url": "",
+            "exterior_glb": "",
+            "matchday_decision": matchday_decision,
             "accent_color": "#38bdf8",
             "position_3d": [-15, 0, 6],
             "camera_position": [-19, 10, 18],
@@ -1980,9 +2050,9 @@ def get_club_operations_hub(
             "communication_thread_id": "staff:general_manager",
             "communication_channel_mode": "direct" if staff["general_manager"]["is_appointed"] else "vacant",
             "wing_label": "East Executive Wing · Floor 3",
-            "glb_model": "/models/campus/vip_skybox_concourse.glb",
-            "model_glb_url": "/models/campus/vip_skybox_concourse.glb",
-            "exterior_glb": "/models/campus/vip_skybox_concourse.glb",
+            "glb_model": "",
+            "model_glb_url": "",
+            "exterior_glb": "",
             "accent_color": "#a855f7",
             "position_3d": [15, 0, 6],
             "camera_position": [19, 10, 18],
@@ -2148,9 +2218,9 @@ def get_club_operations_hub(
                 "direct" if staff["finance_commercial_director"]["is_appointed"] else "vacant"
             ),
             "wing_label": "East Treasury Vault · Floor 3",
-            "glb_model": "/models/campus/vip_hospitality.glb",
-            "model_glb_url": "/models/campus/vip_hospitality.glb",
-            "exterior_glb": "/models/campus/vip_hospitality.glb",
+            "glb_model": "",
+            "model_glb_url": "",
+            "exterior_glb": "",
             "accent_color": "#22d3ee",
             "position_3d": [0, 0, -18],
             "camera_position": [0, 11, -12],

@@ -168,6 +168,7 @@ function lerpAngle(from: number, to: number, alpha: number): number {
 export class SpatialInterpolator {
   private frames: SpectatorSafeFrameView[] = [];
   private tacticalConfig: TacticalVisualConfig | null = null;
+  private lockServerPositions = false;
 
   constructor(initialFrames: SpectatorSafeFrameView[] = []) {
     this.setFrames(initialFrames);
@@ -175,6 +176,10 @@ export class SpatialInterpolator {
 
   public setTacticalConfig(config: TacticalVisualConfig | null): void {
     this.tacticalConfig = config ? { ...config } : null;
+  }
+
+  public setLockServerPositions(locked: boolean): void {
+    this.lockServerPositions = locked;
   }
 
   public getTacticalConfig(): TacticalVisualConfig | null {
@@ -569,7 +574,7 @@ export class SpatialInterpolator {
       },
     };
 
-    if (effectiveTactics) {
+    if (effectiveTactics && !this.lockServerPositions) {
       this.applyTacticalShaping(resultState, effectiveTactics);
     }
 

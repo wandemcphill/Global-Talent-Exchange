@@ -3438,6 +3438,7 @@ class PlayerLifecycleService:
             player.id,
             reference_on=reference_on,
         )
+        lifecycle_age_months = state.get("lifecycle_age_months")
         age_unknown = state.get("virtual_age_months") is None or state.get("retirement_policy_status") == "age_unknown"
         if age_unknown:
             retired = bool(state.get("retired", False))
@@ -3464,6 +3465,9 @@ class PlayerLifecycleService:
             state["lifecycle_phase"] = "retired" if retired else phase
             state["retirement_pressure"] = phase == "retirement_pressure"
             state["career_stage"] = agency_state.career_stage
+        if str(regen.status or "").lower() == "retired" or bool(state.get("retired")):
+            retired = True
+            state["retired"] = True
         state["career_target_band"] = agency_state.career_target_band
         state["transfer_request_status"] = agency_state.transfer_request_status
         state["transfer_request_score"] = transfer_request.decision_score
@@ -3573,7 +3577,8 @@ class PlayerLifecycleService:
                     },
                 )
         else:
-            regen.status = "active"
+            if str(regen.status or "").lower() != "retired" and not state.get("retired"):
+                regen.status = "active"
             if agency_state.transfer_request_status == "public_unhappy_state":
                 state["agency_message"] = "Publicly unhappy and pushing for a move."
             elif agency_state.transfer_request_status == "agent_warning":

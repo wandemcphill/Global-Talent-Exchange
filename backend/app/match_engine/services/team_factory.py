@@ -381,6 +381,110 @@ class SyntheticSquadFactory:
             return None
         return best
 
+    def _lineup_from_manager_decision(
+        self,
+        session: Session | None,
+        team_id: str,
+        eligible: list[Player],
+        manager_profile: dict[str, object] | None,
+        *,
+        plan: ClubMatchPlan | None,
+    ) -> tuple[list[tuple[Player, PlayerRole]], list[tuple[Player, PlayerRole]], str] | None:
+        """Use the stored manager XI. A saved owner plan is only a preference input."""
+        if session is None:
+            return None
+        from sqlalchemy.orm.attributes import flag_modified
+
+        from app.owner_console.models import OwnerClubState, OwnerSquadPlayer
+
+        state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == team_id))
+        if state is None:
+            return None
+        facilities = dict(state.facilities_json or {})
+        selection = dict(facilities.get("_last_manager_matchday_selection") or {})
+        if not selection.get("starting_xi_ids"):
+            preference = dict(facilities.get("_owner_lineup_preference") or {})
+            plan_starters = self._starters_from_plan(plan, {str(player.id): player for player in eligible})
+            plan_ids = [str(player.id) for player, _role in plan_starters[0]] if plan_starters is not None else []
+            if plan_ids and not preference.get("preferred_player_ids"):
+                preference["preferred_player_ids"] = plan_ids
+                preference["preferred_formation"] = preference.get("preferred_formation") or (
+                    plan.formation if plan is not None else None
+                )
+                preference["is_non_binding_preference"] = True
+                facilities["_owner_lineup_preference"] = preference
+                state.facilities_json = facilities
+                flag_modified(state, "facilities_json")
+            if preference.get("preferred_player_ids"):
+                from app.owner_console.autonomous_staff_engine import select_manager_matchday_lineup
+
+                selection = select_manager_matchday_lineup(session, state)
+        starter_ids = [str(pid) for pid in (selection.get("starting_xi_ids") or [])]
+        if len(starter_ids) < 11:
+            return None
+
+        eligible_by_id = {str(player.id): player for player in eligible}
+        squad_rows = list(
+            session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == team_id)).all()
+        )
+        squad_by_id = {str(row.id): row for row in squad_rows}
+
+        def resolve_player(raw_id: str) -> Player | None:
+            if raw_id in eligible_by_id:
+                return eligible_by_id[raw_id]
+            row = squad_by_id.get(raw_id)
+            if row is not None and row.player_ref and str(row.player_ref) in eligible_by_id:
+                return eligible_by_id[str(row.player_ref)]
+            return None
+
+        resolved: list[Player] = []
+        used: set[str] = set()
+        for raw_id in starter_ids:
+            player = resolve_player(raw_id)
+            if player is None or str(player.id) in used:
+                return None
+            resolved.append(player)
+            used.add(str(player.id))
+        if len(resolved) != 11:
+            return None
+        keeper_index = next(
+            (index for index, player in enumerate(resolved) if self._resolve_player_role(player) is PlayerRole.GOALKEEPER),
+            None,
+        )
+        if keeper_index is None:
+            return None
+        if keeper_index != 0:
+            resolved.insert(0, resolved.pop(keeper_index))
+
+        formation = str(selection.get("formation") or self._formation_for_profile(manager_profile) or "4-3-3")
+        try:
+            roles = self._starter_roles(formation)
+        except (TypeError, ValueError):
+            formation = "4-3-3"
+            roles = self._starter_roles(formation)
+        if len(roles) != 11:
+            formation = "4-3-3"
+            roles = self._starter_roles(formation)
+        starters = list(zip(resolved, roles, strict=True))
+        bench: list[tuple[Player, PlayerRole]] = []
+        for raw_id in [str(pid) for pid in (selection.get("bench_ids") or [])]:
+            player = resolve_player(raw_id)
+            if player is None or str(player.id) in used:
+                continue
+            bench.append((player, self._resolve_player_role(player)))
+            used.add(str(player.id))
+            if len(bench) >= 7:
+                break
+        if len(bench) < 7:
+            for player in sorted(eligible, key=self._managed_player_sort_key, reverse=True):
+                if str(player.id) in used:
+                    continue
+                bench.append((player, self._resolve_player_role(player)))
+                used.add(str(player.id))
+                if len(bench) >= 7:
+                    break
+        return starters, bench, formation
+
     def _resolve_lineup(
         self,
         session: Session | None,
@@ -394,6 +498,15 @@ class SyntheticSquadFactory:
         coach formation -> manager-evaluated squad selection (evaluating any owner ClubMatchPlan
         strictly as a non-binding preference) -> 4-3-3 -> AI Coach auto-draft fallback."""
         plan = self._saved_match_plan(session, team_id)
+        manager_lineup = self._lineup_from_manager_decision(
+            session,
+            team_id,
+            eligible,
+            manager_profile,
+            plan=plan,
+        )
+        if manager_lineup is not None:
+            return manager_lineup
 
         candidates: list[str] = []
         coach_formation = self._formation_for_profile(manager_profile)

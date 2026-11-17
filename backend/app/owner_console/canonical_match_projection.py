@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.common.enums.match_status import MatchStatus
 from app.models.club_profile import ClubProfile
@@ -20,7 +21,7 @@ from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_match_event import CompetitionMatchEvent
 from app.owner_console import living_club_world, living_institution
-from app.owner_console.models import OwnerClubEvent, OwnerClubState
+from app.owner_console.models import OwnerClubEvent, OwnerClubState, OwnerSquadPlayer
 
 logger = logging.getLogger(__name__)
 
@@ -89,6 +90,139 @@ def normalize_authoritative_appearances(
             }
         )
     return output
+
+
+def resolved_substitute_ids(
+    session: Session,
+    club_id: str,
+    appearances: list[dict[str, Any]],
+) -> list[str]:
+    """Replay substitutes, addressed by canonical id and the owner squad row."""
+    canonical = {
+        str(item.get("player_id") or "")
+        for item in appearances
+        if item.get("player_id") and not item.get("started") and int(item.get("minutes_played") or 0) > 0
+    }
+    canonical.discard("")
+    if not canonical:
+        return []
+    resolved = set(canonical)
+    rows = session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
+    for row in rows:
+        keys = {str(row.id)}
+        if row.player_ref:
+            keys.add(str(row.player_ref))
+        if keys & canonical:
+            resolved.update(keys)
+    return sorted(resolved)
+
+
+def apply_canonical_injury_days(
+    session: Session,
+    *,
+    match_id: str,
+    club_id: str,
+    events: list[dict[str, Any]],
+    side_key: str,
+) -> list[str]:
+    """Add injured days only when this match recorded an injury event for the player."""
+    updated: list[str] = []
+    rows = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
+    by_key: dict[str, OwnerSquadPlayer] = {}
+    for row in rows:
+        by_key[str(row.id)] = row
+        if row.player_ref:
+            by_key.setdefault(str(row.player_ref), row)
+    for event in events:
+        event_type = str(event.get("type") or "")
+        if "injur" not in event_type or event.get("team") != side_key:
+            continue
+        player_key = str(event.get("player_id") or "")
+        row = by_key.get(player_key)
+        if row is None or not player_key:
+            continue
+        personality = dict(row.personality_json or {})
+        applied = {str(item) for item in (personality.get("canonical_injury_match_ids") or [])}
+        if str(match_id) in applied:
+            continue
+        metadata = event.get("metadata") if isinstance(event.get("metadata"), dict) else {}
+        raw_days = metadata.get("recovery_days", metadata.get("injured_days"))
+        try:
+            days = int(raw_days) if raw_days is not None else 14
+        except (TypeError, ValueError):
+            days = 14
+        if days <= 0:
+            continue
+        row.injured_days = int(row.injured_days or 0) + days
+        applied.add(str(match_id))
+        personality["canonical_injury_match_ids"] = sorted(applied)
+        if metadata.get("injury_type"):
+            personality["last_injury_type"] = metadata.get("injury_type")
+        row.personality_json = personality
+        flag_modified(row, "personality_json")
+        updated.append(str(row.id))
+    return updated
+
+
+def record_selection_disagreement(
+    session: Session,
+    *,
+    match: CompetitionMatch,
+    state: OwnerClubState,
+    appearances: list[dict[str, Any]],
+    world_day: int,
+) -> OwnerClubEvent | None:
+    """One club event when a declined player did not play. No new punishment scale."""
+    metadata = dict(match.metadata_json or {})
+    sheets = metadata.get("kickoff_team_sheet")
+    sheet = sheets.get(str(state.club_id)) if isinstance(sheets, dict) else None
+    if not isinstance(sheet, dict):
+        return None
+    declined = [str(pid) for pid in (sheet.get("declined_starter_ids") or []) if pid]
+    if not declined:
+        return None
+    appeared = {str(item.get("player_id") or "") for item in appearances if int(item.get("minutes_played") or 0) > 0}
+    rows = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
+    by_id = {str(row.id): row for row in rows}
+    missing: list[str] = []
+    for player_id in declined:
+        if player_id in appeared:
+            continue
+        row = by_id.get(player_id)
+        if row is not None and row.player_ref and str(row.player_ref) in appeared:
+            continue
+        label = row.name if row is not None else player_id
+        missing.append(label)
+    if not missing:
+        return None
+    manager = sheet.get("manager") if isinstance(sheet.get("manager"), dict) else {}
+    manager_name = str(manager.get("manager_name") or "the First-Team Manager")
+    reason = str(sheet.get("verdict_reason") or "The manager named a different XI.")
+    event, _created = living_club_world.create_club_event(
+        session,
+        club_id=state.club_id,
+        category="management",
+        event_type="selection_disagreement",
+        severity="notable",
+        title=f"{manager_name} declined an owner selection",
+        description=(
+            f"{manager_name} did not select {', '.join(missing)}. {reason} "
+            "The relationship effect was already recorded when the decision was made."
+        ),
+        world_day=world_day,
+        source_type="canonical_match",
+        source_id=str(match.id),
+        consequences={
+            "canonical_match_id": str(match.id),
+            "declined_player_ids": declined,
+            "players_who_did_not_appear": missing,
+            "kickoff_manager_name": manager_name,
+            "verdict_reason": reason,
+            "score": f"{int(match.home_score or 0)}-{int(match.away_score or 0)}",
+        },
+        idempotency_key=f"selection-disagreement:{match.id}:{state.club_id}",
+    )
+    return event
 
 
 def _club_name(session: Session, club_id: str) -> str:
@@ -240,6 +374,7 @@ def _project_one_club(
     side_context = context.get(side_key) if isinstance(context.get(side_key), dict) else {}
     world_day = max(1, int(side_context.get("world_day") or state.world_day or 1))
     appearances = normalize_authoritative_appearances(player_stats, state.club_id)
+    substitutes_used = resolved_substitute_ids(session, state.club_id, appearances)
     manager, manager_supplied = _manager_context(context, side_key)
     side = {
         "state": state,
@@ -247,6 +382,7 @@ def _project_one_club(
         "manager_snapshot": manager,
         "manager_snapshot_supplied": manager_supplied,
         "appearances": appearances,
+        "substitutes_used": substitutes_used,
         "xi": [item["player_id"] for item in appearances if item["started"]],
         "prior_head_to_head": _prior_head_to_head(session, match, state.club_id, opponent_id),
         "atmosphere_snapshot": side_context.get("atmosphere"),
@@ -255,6 +391,13 @@ def _project_one_club(
     }
     try:
         with session.begin_nested():
+            apply_canonical_injury_days(
+                session,
+                match_id=str(match.id),
+                club_id=str(state.club_id),
+                events=events,
+                side_key=side_key,
+            )
             impact = living_institution.record_match_institutional_impact(
                 session, match_view, competition_view, side, {"state": None}, is_home, gf, ga
             )
@@ -300,6 +443,13 @@ def _project_one_club(
                     idempotency_key=f"cma:{match.id}:{state.club_id}:{player_id}",
                     status="active",
                 )
+            record_selection_disagreement(
+                session,
+                match=match,
+                state=state,
+                appearances=appearances,
+                world_day=world_day,
+            )
             living_club_world.record_canonical_projection(
                 session,
                 source_event,

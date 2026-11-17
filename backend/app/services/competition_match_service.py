@@ -177,6 +177,17 @@ class CompetitionMatchService:
             home.losses += 1
             away.points += win_points
             home.points += loss_points
+        elif match.decided_by_penalties and match.winner_club_id in {match.home_club_id, match.away_club_id}:
+            if match.winner_club_id == match.home_club_id:
+                home.wins += 1
+                away.losses += 1
+                home.points += win_points
+                away.points += loss_points
+            else:
+                away.wins += 1
+                home.losses += 1
+                away.points += win_points
+                home.points += loss_points
         else:
             home.draws += 1
             away.draws += 1

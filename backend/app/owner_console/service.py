@@ -1251,6 +1251,26 @@ def _club_portrait_keys(session: Session, club_id: str) -> set[str]:
     return keys
 
 
+def _existing_canonical_player_id(session: Session, club_id: str, regen: dict[str, Any]) -> str | None:
+    from app.ingestion.models import Player
+
+    requested_ref = str(regen.get("player_ref") or "").strip()
+    if requested_ref:
+        existing = session.get(Player, requested_ref)
+        if existing is not None:
+            return str(existing.id)
+    name = str(regen.get("name") or "").strip()
+    if not name:
+        return None
+    match = session.scalar(
+        select(Player).where(
+            Player.current_club_profile_id == club_id,
+            Player.full_name == name,
+        )
+    )
+    return str(match.id) if match is not None else None
+
+
 def _add_regen(
     session: Session,
     club_id: str,
@@ -1258,8 +1278,19 @@ def _add_regen(
     *,
     used_portrait_keys: set[str] | None = None,
 ) -> OwnerSquadPlayer:
+    canonical_id = _existing_canonical_player_id(session, club_id, regen)
+    if canonical_id:
+        already = session.scalar(
+            select(OwnerSquadPlayer).where(
+                OwnerSquadPlayer.club_id == club_id,
+                OwnerSquadPlayer.player_ref == canonical_id,
+            )
+        )
+        if already is not None:
+            return already
     player = OwnerSquadPlayer(
         club_id=club_id,
+        player_ref=canonical_id,
         name=regen["name"],
         position=regen["position"],
         age=regen["age"],

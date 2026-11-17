@@ -66,6 +66,7 @@ import type { KitPattern } from "@/match2d/playerRig";
 import { sharedMatchAudio } from "@/match2d/matchAudio";
 import { MatchTimelineScrubber, buildTimelineModel } from "./match-center/MatchTimelineScrubber";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
+import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 
 const GIFTS = [
   { code: "stadium_roar", name: "Stadium Roar", cost: 10, rarity: "common" },
@@ -1618,7 +1619,7 @@ export default function MatchCenter() {
   const [tacticalBanner, setTacticalBanner] = useState<string | null>(null);
   const [dismissedNudgeId, setDismissedNudgeId] = useState<string | null>(null);
   const tacticalFlashTimerRef = useRef<number | null>(null);
-  const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom">("2.5d");
+  const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom" | "webgl">("2.5d");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
   // Lineup preview formation state (tactical parameters below reflect read-only authoritative backend state)
@@ -2503,6 +2504,7 @@ export default function MatchCenter() {
                   { id: "2d" as const, label: "2D TOP-DOWN" },
                   { id: "2.5d" as const, label: "2.5D TV BROADCAST" },
                   { id: "zoom" as const, label: "DIRECTOR ZOOM" },
+                  { id: "webgl" as const, label: "WEBGL" },
                 ].map((cam) => (
                   <button
                     key={cam.id}
@@ -2613,8 +2615,53 @@ export default function MatchCenter() {
               </div>
             )}
 
-            {/* Canonical 2D / 2.5D Broadcast Matchday Pitch */}
+            {/* Canonical 2D / 2.5D Broadcast Matchday Pitch. WebGL is the same frames. */}
             <div className="relative">
+              {cameraMode === "webgl" ? (
+                <MatchPitchLiveScene
+                  matchViewState={{
+                    match_id: String(id || m?.id || ""),
+                    canonical_match_id: String(id || m?.id || ""),
+                    source: sourceKind === "demo" ? "demo" : "canonical",
+                    match_label: `${m.home_name} vs ${m.away_name}`,
+                    home_team: {
+                      team_id: String(m.home_club_id || "home"),
+                      team_name: m.home_name,
+                      short_name: String(m.home_name || "HOM").slice(0, 3).toUpperCase(),
+                      formation: authoritativeTactics?.homeFormation || formation || "4-3-3",
+                      primary_color: homePrimaryColor,
+                      secondary_color: homeSecondaryColor,
+                      accent_color: homeAccentColor,
+                      goalkeeper_color: acceptedLive?.home?.goalkeeper_color || homeTeamMeta?.goalkeeper_color || "#f8fafc",
+                    },
+                    away_team: {
+                      team_id: String(m.away_club_id || "away"),
+                      team_name: m.away_name,
+                      short_name: String(m.away_name || "AWY").slice(0, 3).toUpperCase(),
+                      formation: authoritativeTactics?.awayFormation || "4-3-3",
+                      primary_color: awayPrimaryColor,
+                      secondary_color: awaySecondaryColor,
+                      accent_color: awayAccentColor,
+                      goalkeeper_color: acceptedLive?.away?.goalkeeper_color || awayTeamMeta?.goalkeeper_color || "#111827",
+                    },
+                    frames: recordedFrames,
+                    events: shown,
+                    is_owner_or_manager: false,
+                    duration_seconds: replayDurationSeconds,
+                  }}
+                  isLive={!canLocalReplay}
+                  liveFrame={spectatorStream.lastFrame}
+                  liveEvents={spectatorStream.recentEvents}
+                  liveScore={spectatorStream.latestScore ?? { home_score: score.home, away_score: score.away, minute }}
+                  tacticalConfig={authoritativeTactics}
+                  playbackTimeSeconds={playbackSeconds}
+                  playbackSpeed={canLocalReplay ? replaySpeed : 1}
+                  isPaused={canLocalReplay ? replayPaused : false}
+                  lockServerPositions
+                  className="h-[640px]"
+                  testId="match-webgl-scene"
+                />
+              ) : (
               <Pitch2DView
                 matchId={id}
                 frames={recordedFrames}
@@ -2674,6 +2721,7 @@ export default function MatchCenter() {
                 isInstantReplay={canLocalReplay && instantReplayActive}
                 onExitInstantReplay={canLocalReplay ? exitInstantReplay : undefined}
               />
+              )}
               {recentSubstitution && (
                 <div
                   data-testid="substitution-lower-third"

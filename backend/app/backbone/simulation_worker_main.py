@@ -115,11 +115,15 @@ def main() -> None:
                 try:
                     with context.database.session_factory() as session:
                         scanner = AutonomousMatchExecutionService(session)
-                        results = scanner.scan_and_execute_due_fixtures()
-                        if results.get("failed", 0) > 0:
+                        results = scanner.start_and_step_live_fixtures()
+                        if results.get("failed", 0) > 0 or results.get("errors"):
                             logger.error("simulation_worker.fixture_execution_failures results=%s", results)
-                        elif results.get("executed", 0) > 0 or results.get("settled_competitions"):
-                            logger.info("simulation_worker.executed_due_fixtures results=%s", results)
+                        elif (
+                            results.get("started", 0) > 0
+                            or results.get("advanced", 0) > 0
+                            or results.get("settled_competitions")
+                        ):
+                            logger.info("simulation_worker.stepped_live_fixtures results=%s", results)
                         session.commit()
                 except Exception as exc:
                     logger.exception("simulation_worker.autonomous_cycle_error error=%s", exc)
