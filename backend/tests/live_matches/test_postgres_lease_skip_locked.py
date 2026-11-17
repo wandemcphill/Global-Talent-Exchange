@@ -19,8 +19,10 @@ import threading
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.engine.url import make_url
+from sqlalchemy.sql.schema import DefaultClause
 
 from app.core.database import create_database_engine, create_session_factory, load_model_modules
+from app.models.base import Base
 from app.models.competition_match_execution import CompetitionMatchExecution
 from app.services.canonical_live_execution_service import CanonicalLiveExecutionService
 
@@ -72,30 +74,29 @@ def _phase1():
     return module
 
 
-def _migrate_disposable_database(url: str) -> None:
-    """Apply the real migrations.
+def _prepare_postgres_metadata() -> None:
+    """Let create_all emit a timestamp default PostgreSQL accepts.
 
-    Metadata.create_all quotes a model server_default that PostgreSQL rejects.
-    The migration uses an unquoted CURRENT_TIMESTAMP, which is the schema the
-    application actually runs.
+    Two models store the server default CURRENT_TIMESTAMP as a Python string.
+    SQLAlchemy then quotes it, and PostgreSQL rejects the quoted literal.
+    The migrations use an unquoted expression. This adjustment is in-memory
+    for the disposable test database and does not change the model source.
     """
 
-    from alembic import command
-    from alembic.config import Config
-
-    backend = Path(__file__).resolve().parents[2]
-    config = Config(str(backend / "migrations" / "alembic.ini"))
-    config.set_main_option("sqlalchemy.url", url)
-    command.upgrade(config, "head")
+    for table in Base.metadata.tables.values():
+        for column in table.columns:
+            default = column.server_default
+            if default is not None and getattr(default, "arg", None) == "CURRENT_TIMESTAMP":
+                column.server_default = DefaultClause(text("CURRENT_TIMESTAMP"))
 
 
 def test_two_workers_claim_one_canonical_execution() -> None:
     """Application-level claim. This is not the standalone SKIP LOCKED probe."""
 
-    url = _local_postgres_url()
-    _migrate_disposable_database(url)
-    engine = create_database_engine(url)
+    engine = create_database_engine(_local_postgres_url())
     load_model_modules()
+    _prepare_postgres_metadata()
+    Base.metadata.create_all(bind=engine)
     session_factory = create_session_factory(engine)
     helpers = _phase1()
     now = datetime.now(timezone.utc)

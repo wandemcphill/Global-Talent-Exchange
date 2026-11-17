@@ -850,10 +850,16 @@ export function ClubOperationsCentre3D({
     let adaptivePixelRatio = Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio);
     let adaptiveShadows = qualityProfile.shadowsEnabled;
     let sceneVisible = true;
+    let sceneHasBeenVisible = false;
     const visibilityObserver =
       typeof IntersectionObserver === "function"
         ? new IntersectionObserver((entries) => {
-            sceneVisible = entries.some((entry) => entry.isIntersecting);
+            const intersecting = entries.some((entry) => entry.isIntersecting);
+            if (intersecting) sceneHasBeenVisible = true;
+            // A first observation of "not intersecting" is not evidence the
+            // centre is hidden. Headless layout can report that before the
+            // canvas has a box. Pause only after it has actually been on screen.
+            sceneVisible = intersecting || !sceneHasBeenVisible;
             scheduleFrame();
           })
         : null;
