@@ -861,6 +861,7 @@ class CoinTraderService:
             "rate_value": quote.rate_value,
             "unit": quote.unit,
             "provider_key": quote.provider_key,
+            "bulk_bonus_amount": quote.bulk_bonus_amount,
         }
 
     def initiate_liquidity_purchase(

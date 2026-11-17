@@ -123,6 +123,11 @@ def get_my_referral_invites(
     return orchestrator.get_my_invites(current_user=current_user)
 
 
+from app.segments.referrals.segment_referral_affiliate import router as affiliate_public_router
+
+router.include_router(affiliate_public_router)
+
+
 def _to_http_error(exc: ReferralActionError) -> HTTPException:
     reason = str(exc)
     status_code = status.HTTP_400_BAD_REQUEST
@@ -134,6 +139,8 @@ def _to_http_error(exc: ReferralActionError) -> HTTPException:
         "share_code_expired",
         "share_code_exhausted",
         "share_code_not_started",
+        "attribution_locked",
+        "attribution_conflict",
     }:
         status_code = status.HTTP_409_CONFLICT
     elif reason in {"share_code_forbidden"}:

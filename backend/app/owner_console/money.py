@@ -350,6 +350,15 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
     intent.ledger_event_id = event.id
     intent.credited_amount_kobo = amount_kobo
     session.flush()
+    from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+    FirstDepositReferralService(session).on_owner_deposit_credited(
+        intent,
+        fiat_amount=ngn,
+        rate_value=Decimal(str(rates["deposit_rate"])),
+        rate_direction=rates["deposit_direction"],
+        wallet_credit=coins,
+    )
     return event
 
 

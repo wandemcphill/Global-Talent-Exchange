@@ -13,6 +13,7 @@ import app.models  # noqa: F401
 from app.auth.dependencies import get_session
 from app.auth.dependencies import get_current_user
 from app.models.base import Base
+from app.services.referral_orchestrator import ReferralOrchestrator
 from app.routes.admin_referrals import router as admin_referrals_router
 from app.routes.creators import router as creators_router
 from app.routes.referrals import router as referrals_router
@@ -321,3 +322,56 @@ def _redeem_and_progress(
             },
         )
         assert capture_response.status_code == 200, capture_response.text
+
+
+def test_admin_can_create_external_affiliate_partner_and_track_first_deposit_commission(admin_referral_api) -> None:
+    app, client, users, session_local = admin_referral_api
+    app.state.current_user = users["admin"]
+    response = client.post(
+        "/api/admin/referrals/partners",
+        json={
+            "display_name": "Social Creator",
+            "contact_email": "creator@example.com",
+            "social_handle": "@socialcreator",
+            "campaign_name": "November launch",
+            "payout_method": "bank_transfer",
+            "payout_destination_reference": "secure-payee-profile-42",
+            "vanity_code": "creator10",
+            "max_uses": 500,
+        },
+    )
+    assert response.status_code == 201
+    partner = response.json()
+    assert partner["share_code"] == "creator10"
+    assert partner["referral_path"] == "/signup?ref=creator10"
+    assert partner["is_active"] is True
+
+    app.state.current_user = users["referred_1"]
+    redeem = client.post(
+        "/api/referrals/share-codes/creator10/redeem",
+        json={"source_channel": "direct_link", "campaign_name": "November launch"},
+    )
+    assert redeem.status_code == 200
+
+    with session_local() as session:
+        orchestrator = ReferralOrchestrator(session=session)
+        attribution = orchestrator.attributions.get_for_user(users["referred_1"].id)
+        assert attribution is not None
+        assert attribution.metadata["referral_partner_id"] == partner["partner_id"]
+        rewards = orchestrator.rewards.evaluate(
+            attribution,
+            milestone="wallet_funded",
+            deposit_context={
+                "purchase_order_id": "purchase-order-external-referrer",
+                "order_reference": "PO-EXTERNAL-1",
+                "amount_fiat": "200000.00",
+                "currency_code": "NGN",
+                "unit": "coin",
+                "net_amount": "200.0000",
+                "bonus_amount": "20.0000",
+            },
+        )
+        commission = next(reward for reward in rewards if reward.label == "10% first deposit referral commission")
+        assert commission.status == "pending"
+        assert commission.amount == Decimal("20000.00")
+        assert commission.unit == "NGN"

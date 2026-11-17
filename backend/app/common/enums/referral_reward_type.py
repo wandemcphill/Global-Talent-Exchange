@@ -10,3 +10,5 @@ class ReferralRewardType(StrEnum):
     STARTER_PACK = "starter_pack"
     CREATOR_REVSHARE = "creator_revshare"
     FEE_DISCOUNT = "fee_discount"
+    FIRST_DEPOSIT_BONUS = "first_deposit_bonus"
+    FIRST_DEPOSIT_COMMISSION = "first_deposit_commission"

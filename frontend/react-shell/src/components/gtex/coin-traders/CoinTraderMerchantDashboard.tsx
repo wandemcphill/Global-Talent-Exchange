@@ -923,9 +923,11 @@ export function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => v
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h4 className="gx-label text-slate-300">Acquire Wholesale Trading Inventory</h4>
-          <p className="mt-1 text-xs text-slate-400">
-            Buy GTEX Coin (₦50/GTC, ₦200,000 minimum) or Fan Coin (₦2.50/FNC, ₦50,000 minimum)
-            inventory to back sell adverts.
+          <p className="mt-1 text-xs text-slate-400" data-testid="trader-bulk-packages">
+            Buy GTEX Coin at ₦50 per coin (₦200,000 minimum) or Fan Coin at ₦2.50 (₦50,000 minimum)
+            to back sell adverts. A ₦500,000 GTEX Coin purchase is 10,000 coins plus 300 extra. A
+            ₦1,000,000 purchase is 20,000 coins plus 700 extra. Those extras are for coin traders
+            only. Members get more value for money when they buy and sell through you.
           </p>
         </div>
         <div className="flex gap-2">
@@ -995,6 +997,14 @@ export function TraderLiquidityPurchase({ onPurchased }: { onPurchased?: () => v
                   {fmt(quote.processor_fee)} {unitInfo.code}
                 </b>
               </span>
+              {Number(quote.bulk_bonus_amount) > 0 && (
+                <span data-testid="trader-liquidity-bulk-bonus">
+                  Bulk bonus:{" "}
+                  <b className="text-amber-300">
+                    +{fmt(quote.bulk_bonus_amount)} {unitInfo.code}
+                  </b>
+                </span>
+              )}
               <span>
                 Net:{" "}
                 <b className="text-emerald-400">

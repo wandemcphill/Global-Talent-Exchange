@@ -389,6 +389,9 @@ class TreasuryService:
             resource_id=request.id,
             metadata={"reference": request.reference},
         )
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+        FirstDepositReferralService(session, self.wallet_service).on_treasury_deposit_confirmed(request)
         return request
 
     def reject_deposit(
@@ -596,8 +599,7 @@ class TreasuryService:
 
             trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             desk_frozen = trader_profile is not None and (
-                trader_profile.frozen_at is not None
-                or trader_profile.status == CoinTraderProfileStatus.FROZEN.value
+                trader_profile.frozen_at is not None or trader_profile.status == CoinTraderProfileStatus.FROZEN.value
             )
             requires_kyc = (not desk_frozen) and (
                 trader_profile is None

@@ -18,6 +18,7 @@ import {
   MessagesSquare,
   Newspaper,
   Search,
+  Share2,
   Shield,
   Shirt,
   ShoppingBag,
@@ -48,42 +49,181 @@ const NAV = [
 
   // 2. MY CLUB
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "MY CLUB" },
-  { to: "/app/showroom", label: "Club Prestige", icon: Sparkles, id: "showroom", category: "MY CLUB" },
-  { to: "/app/campus", label: "3D Campus Builder", icon: Compass, id: "campus", category: "MY CLUB" },
-  { to: "/app/story", label: "Club Story & Dynasty", icon: BookOpen, id: "story", category: "MY CLUB" },
-  { to: "/app/trophies", label: "Trophy Cabinet", icon: Trophy, id: "trophies", category: "MY CLUB" },
+  {
+    to: "/app/showroom",
+    label: "Club Prestige",
+    icon: Sparkles,
+    id: "showroom",
+    category: "MY CLUB",
+  },
+  {
+    to: "/app/campus",
+    label: "3D Campus Builder",
+    icon: Compass,
+    id: "campus",
+    category: "MY CLUB",
+  },
+  {
+    to: "/app/story",
+    label: "Club Story & Dynasty",
+    icon: BookOpen,
+    id: "story",
+    category: "MY CLUB",
+  },
+  {
+    to: "/app/trophies",
+    label: "Trophy Cabinet",
+    icon: Trophy,
+    id: "trophies",
+    category: "MY CLUB",
+  },
   { to: "/app/inbox", label: "Boardroom Inbox", icon: Inbox, id: "inbox", category: "MY CLUB" },
-  { to: "/app/governance", label: "Authority & Delegation", icon: Shield, id: "governance", category: "MY CLUB" },
+  {
+    to: "/app/governance",
+    label: "Authority & Delegation",
+    icon: Shield,
+    id: "governance",
+    category: "MY CLUB",
+  },
 
   // 3. TRANSFERS
-  { to: "/app/transfer-hub", label: "Player Transfers", icon: Compass, id: "transfers", category: "TRANSFERS" },
-  { to: "/app/market?tab=club-sales", label: "Club Equity Market", icon: Building2, id: "club-sale-market", category: "TRANSFERS" },
+  {
+    to: "/app/transfer-hub",
+    label: "Player Transfers",
+    icon: Compass,
+    id: "transfers",
+    category: "TRANSFERS",
+  },
+  {
+    to: "/app/market?tab=club-sales",
+    label: "Club Equity Market",
+    icon: Building2,
+    id: "club-sale-market",
+    category: "TRANSFERS",
+  },
 
   // 4. FOOTBALL
   { to: "/app/squad", label: "Squad & Management", icon: Shirt, id: "squad", category: "FOOTBALL" },
-  { to: "/app/staff-market", label: "Staff Market", icon: User, id: "staff-market", category: "FOOTBALL" },
-  { to: "/app/lineup", label: "Tactics & Lineup", icon: Swords, id: "lineup", category: "FOOTBALL" },
-  { to: "/app/competitions", label: "Competitions & Tournaments", icon: Trophy, id: "competitions", category: "FOOTBALL" },
-  { to: "/app/national", label: "National Teams", icon: Flag, id: "national", category: "FOOTBALL" },
+  {
+    to: "/app/staff-market",
+    label: "Staff Market",
+    icon: User,
+    id: "staff-market",
+    category: "FOOTBALL",
+  },
+  {
+    to: "/app/lineup",
+    label: "Tactics & Lineup",
+    icon: Swords,
+    id: "lineup",
+    category: "FOOTBALL",
+  },
+  {
+    to: "/app/competitions",
+    label: "Competitions & Tournaments",
+    icon: Trophy,
+    id: "competitions",
+    category: "FOOTBALL",
+  },
+  {
+    to: "/app/national",
+    label: "National Teams",
+    icon: Flag,
+    id: "national",
+    category: "FOOTBALL",
+  },
 
   // 5. TALENT & SCOUTING
-  { to: "/app/regen-world", label: "Scouting & Regen World", icon: Globe, id: "regen-world", category: "TALENT & SCOUTING" },
-  { to: "/app/awards", label: "Regen Awards", icon: Award, id: "awards", category: "TALENT & SCOUTING" },
-  { to: "/app/academy", label: "Youth Academy", icon: Sprout, id: "academy", category: "TALENT & SCOUTING" },
-  { to: "/app/build-a-son", label: "Build-a-Son Scion", icon: Award, id: "build-a-son", category: "TALENT & SCOUTING" },
+  {
+    to: "/app/regen-world",
+    label: "Scouting & Regen World",
+    icon: Globe,
+    id: "regen-world",
+    category: "TALENT & SCOUTING",
+  },
+  {
+    to: "/app/awards",
+    label: "Regen Awards",
+    icon: Award,
+    id: "awards",
+    category: "TALENT & SCOUTING",
+  },
+  {
+    to: "/app/academy",
+    label: "Youth Academy",
+    icon: Sprout,
+    id: "academy",
+    category: "TALENT & SCOUTING",
+  },
+  {
+    to: "/app/build-a-son",
+    label: "Build-a-Son Scion",
+    icon: Award,
+    id: "build-a-son",
+    category: "TALENT & SCOUTING",
+  },
 
   // 6. COMMUNITY & MEDIA
-  { to: "/app/community", label: "GTEX Community", icon: MessagesSquare, id: "community", category: "COMMUNITY & MEDIA" },
-  { to: "/app/newsroom", label: "Football Newsroom", icon: Newspaper, id: "newsroom", category: "COMMUNITY & MEDIA" },
+  {
+    to: "/app/community",
+    label: "GTEX Community",
+    icon: MessagesSquare,
+    id: "community",
+    category: "COMMUNITY & MEDIA",
+  },
+  {
+    to: "/app/newsroom",
+    label: "Football Newsroom",
+    icon: Newspaper,
+    id: "newsroom",
+    category: "COMMUNITY & MEDIA",
+  },
 
   // 7. WALLET & ECONOMY
-  { to: "/app/finance", label: "Wallet & Finance", icon: Wallet, id: "finance", category: "WALLET & ECONOMY" },
-  { to: "/app/market", label: "Player Shares Market", icon: ShoppingBag, id: "market", category: "WALLET & ECONOMY" },
-  { to: "/app/jackpot", label: "Global Jackpot", icon: Flame, id: "jackpot", category: "WALLET & ECONOMY" },
-  { to: "/app/coin-traders", label: "Buy & Sell GTEX Coin", icon: CandlestickChart, id: "coin-traders", category: "WALLET & ECONOMY" },
+  {
+    to: "/app/finance",
+    label: "Wallet & Finance",
+    icon: Wallet,
+    id: "finance",
+    category: "WALLET & ECONOMY",
+  },
+  {
+    to: "/app/referrals",
+    label: "Referrals",
+    icon: Share2,
+    id: "referrals",
+    category: "WALLET & ECONOMY",
+  },
+  {
+    to: "/app/market",
+    label: "Player Shares Market",
+    icon: ShoppingBag,
+    id: "market",
+    category: "WALLET & ECONOMY",
+  },
+  {
+    to: "/app/jackpot",
+    label: "Global Jackpot",
+    icon: Flame,
+    id: "jackpot",
+    category: "WALLET & ECONOMY",
+  },
+  {
+    to: "/app/coin-traders",
+    label: "Buy & Sell GTEX Coin",
+    icon: CandlestickChart,
+    id: "coin-traders",
+    category: "WALLET & ECONOMY",
+  },
 
   // 8. BUSINESS
-  { to: "/app/creator-access", label: "Creator Studio", icon: Video, id: "creator-access", category: "BUSINESS" },
+  {
+    to: "/app/creator-access",
+    label: "Creator Studio",
+    icon: Video,
+    id: "creator-access",
+    category: "BUSINESS",
+  },
 ];
 
 function NavItem({ item, badge, compact }: any) {
@@ -102,7 +242,10 @@ function NavItem({ item, badge, compact }: any) {
         }`
       }
     >
-      <Icon size={15} className="shrink-0 text-[#00C991] group-hover:text-[#00E8A8] transition-colors" />
+      <Icon
+        size={15}
+        className="shrink-0 text-[#00C991] group-hover:text-[#00E8A8] transition-colors"
+      />
       {!compact && <span className="truncate">{item.label}</span>}
       {badge > 0 && !compact && (
         <span className="gx-mono ml-auto rounded-md bg-[#E5B63F] px-1.5 py-0.2 text-[10px] font-black text-slate-950 shadow">
@@ -223,10 +366,16 @@ export default function AppShell() {
   const clubs: any[] = data?.clubs || [];
   const hasClubProfile = !isDedicatedAccount && clubs.length > 0;
   const hasActiveClub =
-    !isDedicatedAccount &&
-    clubs.some((c: any) => ["competition", "active"].includes(c.stage));
+    !isDedicatedAccount && clubs.some((c: any) => ["competition", "active"].includes(c.stage));
 
-  const traderAllowed = ["/app/coin-traders", "/app/finance", "/app/community", "/app/settings/appearance", "/app/appearance"];
+  const traderAllowed = [
+    "/app/coin-traders",
+    "/app/finance",
+    "/app/referrals",
+    "/app/community",
+    "/app/settings/appearance",
+    "/app/appearance",
+  ];
   const creatorAllowed = [
     "/app/creator-access",
     "/app/community",
@@ -238,6 +387,7 @@ export default function AppShell() {
     "/app/competitions",
     "/app/national",
     "/app/finance",
+    "/app/referrals",
     "/app/settings/appearance",
     "/app/appearance",
   ];
@@ -262,6 +412,7 @@ export default function AppShell() {
     "/app/clubs",
     "/app/national",
     "/app/finance",
+    "/app/referrals",
     "/app/market",
     "/app/transfer-hub",
     "/app/regen-world",
@@ -286,52 +437,61 @@ export default function AppShell() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const normalNav = isError || hasActiveClub
-    ? NAV
-    : NAV.filter((item) =>
-        [
-          "home",
-          "clubs",
-          "showroom",
-          "campus",
-          "trophies",
-          "jackpot",
-          "regen-world",
-          "awards",
-          "market",
-          "transfer-hub",
-          "transfers",
-          "competitions",
-          "national",
-          "newsroom",
-          "community",
-          "finance",
-          "creator-access",
-          "coin-traders",
-          "appearance-studio",
-          "inbox",
-        ].includes(item.id)
-      );
+  const normalNav =
+    isError || hasActiveClub
+      ? NAV
+      : NAV.filter((item) =>
+          [
+            "home",
+            "clubs",
+            "showroom",
+            "campus",
+            "trophies",
+            "jackpot",
+            "regen-world",
+            "awards",
+            "market",
+            "transfer-hub",
+            "transfers",
+            "competitions",
+            "national",
+            "newsroom",
+            "community",
+            "finance",
+            "referrals",
+            "creator-access",
+            "coin-traders",
+            "appearance-studio",
+            "inbox",
+          ].includes(item.id),
+        );
 
   const visibleNav = isTraderAccount
-    ? NAV.filter((item) => ["coin-traders", "finance", "community", "appearance-studio"].includes(item.id))
-    : isCreatorAccount
     ? NAV.filter((item) =>
-        [
-          "creator-access",
-          "community",
-          "newsroom",
-          "transfers",
-          "regen-world",
-          "awards",
-          "market",
-          "competitions",
-          "national",
-          "finance",
-          "appearance-studio",
-        ].includes(item.id)
-      ).map((item) => (item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item))
-    : normalNav;
+        ["coin-traders", "finance", "referrals", "community", "appearance-studio"].includes(
+          item.id,
+        ),
+      )
+    : isCreatorAccount
+      ? NAV.filter((item) =>
+          [
+            "creator-access",
+            "community",
+            "newsroom",
+            "transfers",
+            "regen-world",
+            "awards",
+            "market",
+            "competitions",
+            "national",
+            "finance",
+            "referrals",
+            "appearance-studio",
+          ].includes(item.id),
+        ).map((item) =>
+          item.id === "creator-access" ? { ...item, label: "Creator Studio" } : item,
+        )
+      : normalNav;
 
   const wallet = data?.economy?.wallet || {};
   const clubPrimary = active?.primary_color || "#00C991";
@@ -380,14 +540,15 @@ export default function AppShell() {
                 </span>
               </div>
             </div>
-            <p className="gx-eyebrow mt-1.5 !text-[9px] text-[#42B9EC]">
-              Matchday Luxury Universe
-            </p>
+            <p className="gx-eyebrow mt-1.5 !text-[9px] text-[#42B9EC]">Matchday Luxury Universe</p>
           </div>
         </div>
 
         {/* Navigation Groups */}
-        <nav className="gx-scroll flex-1 space-y-4 overflow-y-auto px-3 py-4" data-testid="primary-nav">
+        <nav
+          className="gx-scroll flex-1 space-y-4 overflow-y-auto px-3 py-4"
+          data-testid="primary-nav"
+        >
           {categories.map((cat) => (
             <div key={cat} className="space-y-1">
               <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#42B9EC]/80">
@@ -412,8 +573,25 @@ export default function AppShell() {
               <p className="px-3 text-[9px] font-extrabold uppercase tracking-[0.2em] text-[#E5B63F]/90">
                 ADMINISTRATION
               </p>
-              <NavItem item={{ to: "/app/admin/advertising", label: "Advertising Review", icon: Megaphone, id: "admin-advertising" }} />
-              <NavItem item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }} />
+              <NavItem
+                item={{
+                  to: "/app/admin/advertising",
+                  label: "Advertising Review",
+                  icon: Megaphone,
+                  id: "admin-advertising",
+                }}
+              />
+              <NavItem
+                item={{
+                  to: "/app/admin/referrals",
+                  label: "Referral & Affiliate",
+                  icon: Share2,
+                  id: "admin-referrals",
+                }}
+              />
+              <NavItem
+                item={{ to: "/app/admin", label: "Admin Godmode", icon: Shield, id: "admin" }}
+              />
             </div>
           )}
         </nav>
@@ -432,10 +610,10 @@ export default function AppShell() {
                 {isTraderAccount
                   ? "Coin Trader · Dedicated Lane"
                   : isCreatorAccount
-                  ? "Creator · Dedicated Lane"
-                  : hasActiveClub
-                  ? `Integrity ${data?.integrity?.score ?? 100}/100`
-                  : "Member · Club Ownership Optional"}
+                    ? "Creator · Dedicated Lane"
+                    : hasActiveClub
+                      ? `Integrity ${data?.integrity?.score ?? 100}/100`
+                      : "Member · Top up, then create your club"}
               </p>
             </div>
           </div>
@@ -453,7 +631,13 @@ export default function AppShell() {
       </aside>
 
       {/* Main Viewport */}
-      <div className={isCompactSidebar ? "lg:pl-20 transition-all duration-200" : "lg:pl-64 transition-all duration-200"}>
+      <div
+        className={
+          isCompactSidebar
+            ? "lg:pl-20 transition-all duration-200"
+            : "lg:pl-64 transition-all duration-200"
+        }
+      >
         {/* Matchday Top Control Strip */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/95 px-4 py-2.5 backdrop-blur-2xl sm:px-8 shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(0,201,145,0.18)]">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
@@ -505,25 +689,43 @@ export default function AppShell() {
               hasActiveClub={hasActiveClub}
             />
 
-            {/* GTEX Coin Treasury Balance */}
-            {hasActiveClub ? (
-              <span
-                data-testid="topbar-gtex-balance"
-                className="gx-mono inline-flex items-center gap-2 rounded-xl border border-[#42B9EC]/40 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-[0_0_14px_rgba(66,185,236,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:border-[#42B9EC]"
-              >
-                <span className="h-2 w-2 rounded-full bg-[#42B9EC] shadow-[0_0_8px_#42B9EC] animate-pulse" />
-                <span className="text-slate-400 text-[11px] font-bold">Treasury</span>
-                <b className="text-white font-mono text-xs">{fmt(wallet.gtex_total)}</b>
-                <span className="text-[#42B9EC] font-black text-xs">GTX</span>
-                <span className="text-[10px] text-slate-400">{nairaText(wallet.gtex_total, "GTEX")}</span>
+            {/* Personal GTEX Coin wallet. Club cash is a different balance. */}
+            <span
+              data-testid="topbar-gtex-balance"
+              className="gx-mono inline-flex items-center gap-2 rounded-xl border border-[#42B9EC]/40 bg-[#080F1C] px-3 py-1 text-slate-200 shadow-[0_0_14px_rgba(66,185,236,0.18),inset_0_1px_0_rgba(255,255,255,0.1)] transition hover:border-[#42B9EC]"
+              title="Personal GTEX Coin wallet. Admin credits and deposits appear here, not in club cash."
+            >
+              <span className="h-2 w-2 rounded-full bg-[#42B9EC] shadow-[0_0_8px_#42B9EC] animate-pulse" />
+              <span className="text-slate-400 text-[11px] font-bold">Your GTEX Coin</span>
+              <b className="text-white font-mono text-xs">{fmt(wallet.gtex_total)}</b>
+              <span className="text-[#42B9EC] font-black text-xs">GTX</span>
+              <span className="hidden text-[10px] text-slate-400 sm:inline">
+                {nairaText(wallet.gtex_total, "GTEX")}
               </span>
-            ) : (
-              <span data-testid="topbar-user-account" className="gx-mono text-slate-300 text-xs">
+            </span>
+            {hasActiveClub && (
+              <span
+                data-testid="topbar-club-cash"
+                className="gx-mono hidden items-center gap-2 rounded-xl border border-emerald-400/30 bg-[#080F1C] px-3 py-1 text-slate-200 md:inline-flex"
+                title="Club cash is separate from your personal GTEX Coin wallet."
+              >
+                <span className="text-slate-400 text-[11px] font-bold">Club cash</span>
+                <b className="text-white font-mono text-xs">
+                  {fmt(data?.economy?.club_cash_total)}
+                </b>
+                <span className="text-emerald-300 font-black text-xs">GTX</span>
+              </span>
+            )}
+            {!hasActiveClub && (
+              <span
+                data-testid="topbar-user-account"
+                className="gx-mono hidden text-slate-300 text-xs lg:inline"
+              >
                 {isTraderAccount
                   ? "Coin Trader account"
                   : isCreatorAccount
-                  ? "Creator account"
-                  : "Member account"}
+                    ? "Creator account"
+                    : "Member account"}
               </span>
             )}
 
@@ -535,9 +737,14 @@ export default function AppShell() {
               <span className="h-2 w-2 rounded-full bg-[#E5B63F] shadow-[0_0_8px_#E5B63F]" />
               <b className="text-white font-mono text-xs">{fmt(wallet.fan_total)}</b>
               <span className="text-[#E5B63F] font-black text-xs">FAN</span>
-              <span className="text-[10px] text-slate-400">{nairaText(wallet.fan_total, "FAN")}</span>
+              <span className="text-[10px] text-slate-400">
+                {nairaText(wallet.fan_total, "FAN")}
+              </span>
             </span>
-            <span className="hidden xl:inline text-[10px] font-semibold text-slate-500" data-testid="coin-naira-key">
+            <span
+              className="hidden xl:inline text-[10px] font-semibold text-slate-500"
+              data-testid="coin-naira-key"
+            >
               1 GTX = ₦{fmt(moneyRates.nairaPerGtex)} · 1 FAN = ₦{fmt(moneyRates.nairaPerFan, 2)}
             </span>
             <button

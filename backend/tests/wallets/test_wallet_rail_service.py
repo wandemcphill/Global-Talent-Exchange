@@ -12,6 +12,11 @@ from app.auth.service import AuthService
 from app.core.database import load_model_modules
 from app.models import AmlCase, Base, CountryFeaturePolicy, LedgerUnit
 from app.models.fancoin_purchase_order import PurchaseOrderStatus
+from app.common.enums.share_code_type import ShareCodeType
+from app.models.referral_reward import ReferralReward
+from app.models.share_code import ShareCode
+from app.schemas.referral_requests import ShareCodeRedeemRequest
+from app.services.referral_orchestrator import ReferralOrchestrator
 from app.models.risk_ops import SystemEvent
 from app.models.treasury import PaymentMode, RateDirection
 from app.treasury.service import TreasuryService
@@ -279,3 +284,93 @@ def test_provider_webhook_does_not_auto_settle_duplicate_provider_reference(sess
     assert duplicate_event is not None
     assert first_order.status == PurchaseOrderStatus.PROCESSING
     assert second_order.status == PurchaseOrderStatus.PROCESSING
+
+
+def test_first_deposit_referral_rewards_are_once_only_and_reversed_with_deposit(session) -> None:
+    referrer = _create_user(session)
+    referred = AuthService().register_user(
+        session,
+        email="referral-first-deposit@example.com",
+        username="referralfirstdeposit",
+        password=TEST_PASSWORD,
+    )
+    _configure_deposit_settings(session)
+    share_code = ShareCode(
+        id="referral-code-first-deposit",
+        code="referrer10",
+        vanity_code="referrer10",
+        code_type=ShareCodeType.USER_REFERRAL,
+        owner_user_id=referrer.id,
+        is_active=True,
+        max_uses=100,
+        current_uses=0,
+        metadata_json={"campaign": "test-first-deposit"},
+    )
+    session.add(share_code)
+    session.flush()
+    ReferralOrchestrator(session=session).redeem_share_code(
+        current_user=referred,
+        code="referrer10",
+        payload=ShareCodeRedeemRequest(source_channel="direct_link"),
+    )
+
+    treasury = TreasuryService()
+    settings = treasury.ensure_settings(session)
+    rail_service = WalletRailService(session)
+    first_order = rail_service.create_purchase_order(
+        user=referred,
+        settings=settings,
+        amount=Decimal("100.0000"),
+        input_unit="fiat",
+        provider_key="cards",
+        source_scope="wallet",
+        unit=LedgerUnit.CREDIT,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        purchase_purpose="wallet_top_up",
+    )
+    first_order = rail_service.settle_purchase_order(order=first_order, actor=referred)
+    referred_account = rail_service.wallet_service.get_user_account(session, referred, LedgerUnit.CREDIT)
+    assert rail_service.wallet_service.get_balance(session, referred_account) == Decimal("108.5000")
+
+    second_order = rail_service.create_purchase_order(
+        user=referred,
+        settings=settings,
+        amount=Decimal("50.0000"),
+        input_unit="fiat",
+        provider_key="cards",
+        source_scope="wallet",
+        unit=LedgerUnit.CREDIT,
+        processor_mode="automatic_gateway",
+        payout_channel="gateway",
+        purchase_purpose="wallet_top_up",
+    )
+    rail_service.settle_purchase_order(order=second_order, actor=referred)
+    referral_rewards = list(
+        session.scalars(
+            select(ReferralReward).where(
+                ReferralReward.referred_user_id == referred.id,
+                ReferralReward.trigger_event_type == "first_qualifying_deposit",
+            )
+        ).all()
+    )
+    assert len(referral_rewards) == 2
+    user_bonus = next(reward for reward in referral_rewards if reward.beneficiary_user_id == referred.id)
+    partner_commission = next(reward for reward in referral_rewards if reward.beneficiary_user_id == referrer.id)
+    assert user_bonus.status.value == "paid"
+    assert user_bonus.reward_amount == Decimal("10.0000")
+    assert partner_commission.status.value == "pending"
+    assert partner_commission.reward_amount == Decimal("10.00")
+    assert partner_commission.reward_unit == "NGN"
+
+    rail_service.reverse_purchase_order(
+        order=first_order,
+        status=PurchaseOrderStatus.REFUNDED,
+        actor=referred,
+    )
+    session.flush()
+    session.refresh(user_bonus)
+    session.refresh(partner_commission)
+    assert user_bonus.status.value == "reversed"
+    assert partner_commission.status.value == "blocked"
+    assert rail_service.wallet_service.get_balance(session, referred_account) == Decimal("49.2500")

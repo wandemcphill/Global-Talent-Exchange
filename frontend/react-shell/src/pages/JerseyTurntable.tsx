@@ -210,7 +210,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     const render = () => {
-      if (!draggingRef.current && !reducedMotion && !mount.matches(":hover")) shirt.rotation.y += 0;
+      if (!draggingRef.current && !reducedMotion && !mount.matches(":hover")) shirt.rotation.y += 0.003;
       if (typeof document === "undefined" || !document.hidden) renderer.render(scene, camera);
       frame = requestAnimationFrame(render);
     };

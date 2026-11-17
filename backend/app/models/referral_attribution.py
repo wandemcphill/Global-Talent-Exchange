@@ -12,9 +12,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 class ReferralAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "referral_attributions"
-    __table_args__ = (
-        UniqueConstraint("referred_user_id", name="uq_referral_attributions_referred_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("referred_user_id", name="uq_referral_attributions_referred_user_id"),)
 
     referred_user_id: Mapped[str] = mapped_column(
         String(36),
@@ -63,4 +61,12 @@ class ReferralAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     campaign_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     linked_competition_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    referral_partner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    referral_campaign_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("referral_campaigns.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    account_type_snapshot: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    locked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

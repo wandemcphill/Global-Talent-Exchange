@@ -75,7 +75,7 @@ function UserSearchSelector({
         />
         <input
           className="gx-input text-xs gx-mono"
-          placeholder="Selected or manual user ID"
+          placeholder="User ID or email"
           value={manualUserId}
           onChange={(e) => onManualUserIdChange(e.target.value)}
           data-testid={`${testIdPrefix}-id-input`}
@@ -196,8 +196,12 @@ export function AdminWalletAndPointsPanel() {
         idempotency_key: makeIdempotencyKey("admin-credit"),
       });
       setCreditResult(data);
+      const who = data.email || data.username || data.user_id;
+      const unitLabel = creditUnit === "coin" ? "GTEX Coin" : "Fan Coin";
       toast.success(
-        `Credited ${data.amount} ${creditUnit === "coin" ? "GTC" : "FNC"} to ${data.username || data.user_id}.`,
+        data.idempotent_replay
+          ? `Already credited. ${who} still has ${data.balance_after} in the personal ${unitLabel} wallet. No second credit was posted.`
+          : `Credited ${data.amount} ${unitLabel} to ${who}. It is in the personal wallet, shown as Your GTEX Coin. Club cash is separate.`,
       );
       await invalidateAdminEconomy();
     } catch (e) {
@@ -324,7 +328,8 @@ export function AdminWalletAndPointsPanel() {
           </div>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <span className="text-xs text-slate-400">
-              Crediting {unitDisplay(creditUnit)} via double-entry operations ledger.
+              Credits the personal wallet, not club cash. Paste the member email or user id. They
+              see it in the top bar as Your GTEX Coin.
             </span>
             <Btn onClick={handleGiveCoin} disabled={creditBusy} data-testid="give-coin-submit-btn">
               {creditBusy
@@ -337,9 +342,14 @@ export function AdminWalletAndPointsPanel() {
               className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-200"
               data-testid="give-coin-result"
             >
-              Tx <span className="gx-mono">{creditResult.transaction_id}</span> · Before:{" "}
+              {creditResult.idempotent_replay ? "Already credited. " : "Personal wallet credited. "}
+              {creditResult.email || creditResult.username} · Tx{" "}
+              <span className="gx-mono">{creditResult.transaction_id}</span> · Before:{" "}
               <b>{fmt(creditResult.balance_before)}</b> → After:{" "}
               <b>{fmt(creditResult.balance_after)}</b>
+              <span className="mt-1 block text-emerald-100/80">
+                This is the personal wallet. It does not appear as club cash.
+              </span>
             </div>
           )}
         </div>

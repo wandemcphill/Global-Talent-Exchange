@@ -103,6 +103,14 @@ jest.mock("./clubLocationCatalog", () => ({
   clubCreateErrorMessage: (e: any) => e?.message || "error",
 }));
 
+jest.mock("three/examples/jsm/loaders/GLTFLoader.js", () => ({
+  GLTFLoader: class {
+    load(_url: string, onLoad?: (gltf: { scene: object }) => void) {
+      onLoad?.({ scene: { traverse() {}, children: [] } });
+    }
+  },
+}));
+
 async function flush() {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));

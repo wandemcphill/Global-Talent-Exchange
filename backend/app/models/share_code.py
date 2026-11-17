@@ -42,4 +42,8 @@ class ShareCode(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     current_uses: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     starts_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    referral_partner_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("referral_partners.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    referral_campaign_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)

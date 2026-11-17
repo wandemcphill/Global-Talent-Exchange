@@ -13,3 +13,4 @@ class ReferralEventType(StrEnum):
     RETAINED_DAY_7 = "retained_day_7"
     RETAINED_DAY_30 = "retained_day_30"
     FIRST_TRADE = "first_trade"
+    FIRST_QUALIFYING_DEPOSIT = "first_qualifying_deposit"

@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.base import generate_uuid, utcnow
@@ -1424,7 +1424,10 @@ class AdminGodModeService:
         if len(reason) < 4:
             raise GodModeError("Reason must be at least 4 characters.")
         idempotency_key = self._normalize_idempotency_key(payload.idempotency_key)
-        target_user = session.get(User, payload.user_id)
+        lookup = payload.user_id.strip()
+        target_user = session.get(User, lookup)
+        if target_user is None and "@" in lookup:
+            target_user = session.scalar(select(User).where(func.lower(User.email) == lookup.lower()))
         if target_user is None:
             raise ResourceNotFoundError(f"User {payload.user_id} was not found.")
 
@@ -1446,6 +1449,8 @@ class AdminGodModeService:
                     reference=existing_tx.reference or idempotency_key,
                     user_id=target_user.id,
                     username=target_user.username,
+                    email=target_user.email,
+                    wallet_label="personal",
                     unit=payload.unit,
                     amount=amount,
                     balance_before=Decimal(str(meta.get("balance_before") or "0.0000")),
@@ -1524,6 +1529,8 @@ class AdminGodModeService:
             reference=reference,
             user_id=target_user.id,
             username=target_user.username,
+            email=target_user.email,
+            wallet_label="personal",
             unit=payload.unit,
             amount=amount,
             balance_before=balance_before,

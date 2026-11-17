@@ -20,6 +20,8 @@ from app.models.user import User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus, CoinTraderRate
 from app.models.user import PublicAccountType
+from app.models.referral_reward import ReferralReward
+from app.common.enums.referral_reward_status import ReferralRewardStatus
 from app.risk_ops_engine.service import RiskOpsService
 from app.wallets.providers.registry import get_provider_adapter
 from app.wallets.service import InsufficientBalanceError, LedgerPosting, WalletService
@@ -39,6 +41,27 @@ class WalletRailConflictError(WalletRailError):
     pass
 
 
+_TRADER_BULK_TIER_ONE_FIAT = Decimal("500000.00")
+_TRADER_BULK_TIER_ONE_BONUS = Decimal("300.0000")
+_TRADER_BULK_TIER_TWO_FIAT = Decimal("1000000.00")
+_TRADER_BULK_TIER_TWO_BONUS = Decimal("700.0000")
+
+
+def trader_gtex_bulk_bonus(amount_fiat: Decimal) -> Decimal:
+    """Extra GTEX Coin on a coin-trader inventory purchase only.
+
+    At the ₦50 trader rate, ₦500,000 buys 10,000 coins and grants 300 more.
+    ₦1,000,000 buys 20,000 coins and grants 700 more. The larger package
+    replaces the smaller one. Member deposits and Fan Coin get nothing.
+    """
+    fiat = Decimal(amount_fiat)
+    if fiat >= _TRADER_BULK_TIER_TWO_FIAT:
+        return _TRADER_BULK_TIER_TWO_BONUS
+    if fiat >= _TRADER_BULK_TIER_ONE_FIAT:
+        return _TRADER_BULK_TIER_ONE_BONUS
+    return Decimal("0.0000")
+
+
 @dataclass(frozen=True, slots=True)
 class PurchaseOrderQuote:
     amount_fiat: Decimal
@@ -56,6 +79,7 @@ class PurchaseOrderQuote:
     processor_fee: Decimal = Decimal("0.0000")
     total_fiat_charged: Decimal = Decimal("0.0000")
     merchant_bears_processor_fee: bool = True
+    bulk_bonus_amount: Decimal = Decimal("0.0000")
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +149,11 @@ class WalletRailService:
         fee_bps = int(self._commission_settings().get("buy_commission_bps", 0) or 0)
         fee_amount = self._normalize_amount(amount_coin * Decimal(fee_bps) / Decimal(10_000))
         net_amount = self._normalize_amount(amount_coin - fee_amount)
+        bulk_bonus_amount = Decimal("0.0000")
+        if source_scope == "trader_liquidity" and unit == LedgerUnit.COIN:
+            bulk_bonus_amount = trader_gtex_bulk_bonus(amount_fiat)
+            if bulk_bonus_amount > 0:
+                net_amount = self._normalize_amount(net_amount + bulk_bonus_amount)
 
         # Estimate processor fee from provider adapter if supported
         processor_fee_coin = Decimal("0.0000")
@@ -157,6 +186,7 @@ class WalletRailService:
             processor_fee=processor_fee_coin,
             total_fiat_charged=amount_fiat,
             merchant_bears_processor_fee=True,
+            bulk_bonus_amount=bulk_bonus_amount,
         )
 
     def create_purchase_order(
@@ -322,7 +352,24 @@ class WalletRailService:
                 },
             )
         )
+        self._apply_first_deposit_referral(order)
         return order
+
+    def _apply_first_deposit_referral(self, order: FancoinPurchaseOrder) -> None:
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+        FirstDepositReferralService(self.session, self.wallet_service).on_purchase_order_settled(order)
+
+    def _reverse_first_deposit_referral(
+        self, order: FancoinPurchaseOrder, reversal_status: str, wallet_reversal_completed: bool
+    ) -> None:
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
+
+        FirstDepositReferralService(self.session, self.wallet_service).on_purchase_order_reversed(
+            order,
+            reversal_status=reversal_status,
+            wallet_reversal_completed=wallet_reversal_completed,
+        )
 
     def _sync_trader_liquidity_on_settlement(self, *, user: User, order: FancoinPurchaseOrder) -> None:
         profile = self.session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
@@ -377,6 +424,7 @@ class WalletRailService:
             order.status in {PurchaseOrderStatus.REFUNDED, PurchaseOrderStatus.CHARGEBACK, PurchaseOrderStatus.REVERSED}
             and order.reversed_at
         ):
+            self._reverse_first_deposit_referral(order, status.value, True)
             return order
         if order.ledger_transaction_id is None:
             order.status = status
@@ -422,6 +470,7 @@ class WalletRailService:
             order.status = status
             order.notes = notes or order.notes
             order.reversed_at = utcnow()
+            self._reverse_first_deposit_referral(order, status.value, True)
         except InsufficientBalanceError:
             order.status = PurchaseOrderStatus.DISPUTED
             order.notes = notes or order.notes
@@ -438,8 +487,142 @@ class WalletRailService:
                     "status": status.value,
                 },
             )
+            self._reverse_first_deposit_referral(order, status.value, False)
         self.session.flush()
         return order
+
+    def _reverse_referral_rewards_for_order(
+        self,
+        *,
+        order: FancoinPurchaseOrder,
+        user: User,
+        actor: User | None,
+    ) -> None:
+        """Reverse unpaid referral liabilities and claw back a bonus when funds remain."""
+        rewards = self.session.scalars(select(ReferralReward).where(ReferralReward.referred_user_id == user.id)).all()
+        from app.services.referral_orchestrator import ReferralRuntimeStore
+        from app.services.referral_reward_service import ReferralRewardService
+
+        reward_service = ReferralRewardService(ReferralRuntimeStore(), session=self.session)
+        for reward in rewards:
+            payload = dict(reward.reward_payload_json or {})
+            if str(payload.get("first_deposit_order_id") or "") != order.id:
+                continue
+            role = str(payload.get("reward_role") or "")
+            if reward.status in {ReferralRewardStatus.REVERSED, ReferralRewardStatus.BLOCKED}:
+                continue
+            if role == "referrer_commission":
+                if reward.status == ReferralRewardStatus.PAID:
+                    self._create_system_event(
+                        event_key=f"referral-commission-paid-before-reversal-{reward.id}",
+                        severity=SystemEventSeverity.CRITICAL,
+                        title="Referral commission was paid before deposit reversal",
+                        body="A referred user's first deposit was reversed after the partner commission had already been paid. Manual recovery or offset is required.",
+                        subject_type="referral_reward",
+                        subject_id=reward.id,
+                        metadata={
+                            "purchase_order_id": order.id,
+                            "referral_reward_id": reward.id,
+                            "commission_amount": str(reward.reward_amount or 0),
+                            "commission_unit": reward.reward_unit or "",
+                        },
+                    )
+                    continue
+                reward.status = ReferralRewardStatus.REVERSED
+                reward.reversed_at = utcnow()
+                reward.review_reason = "first_deposit_reversed_before_commission_payout"
+                reward.updated_at = utcnow()
+                self.session.flush()
+                reward_service._append_ledger_entry(
+                    reward_id=reward.id,
+                    entry_type="reward_reversed",
+                    amount=reward.reward_amount,
+                    unit=reward.reward_unit,
+                    status_after=reward.status.value,
+                    reference_id=order.reference,
+                    payload_json={
+                        "purchase_order_id": order.id,
+                        "reason": "first_deposit_reversed",
+                    },
+                )
+                continue
+
+            if role != "referred_user_bonus" or reward.status != ReferralRewardStatus.PAID:
+                continue
+            bonus_amount = Decimal(str(reward.reward_amount or "0")).quantize(AMOUNT_QUANTUM)
+            if bonus_amount <= Decimal("0.0000"):
+                continue
+            user_account = self.wallet_service.get_user_account(self.session, user, order.unit)
+            current_balance = self.wallet_service.get_balance(self.session, user_account)
+            recovered = False
+            if current_balance >= bonus_amount:
+                operations_account = self.wallet_service.ensure_operations_account(self.session, order.unit)
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=user_account,
+                            amount=-bonus_amount,
+                            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                            transaction_type=LedgerTransactionType.ADJUSTMENT,
+                        ),
+                        LedgerPosting(
+                            account=operations_account,
+                            amount=bonus_amount,
+                            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                            transaction_type=LedgerTransactionType.ADJUSTMENT,
+                        ),
+                    ],
+                    reason=LedgerEntryReason.ADJUSTMENT,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    reference=f"referral-first-deposit-bonus-reversal:{order.reference}",
+                    description="Reverse referral bonus for a reversed first deposit",
+                    external_reference=order.provider_reference,
+                    actor=actor or user,
+                    idempotency_key=f"referral:first-deposit-bonus-reversal:{order.id}",
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                    metadata={
+                        "referral": {
+                            "purchase_order_id": order.id,
+                            "reward_id": reward.id,
+                            "reversal_amount": str(bonus_amount),
+                        }
+                    },
+                )
+                recovered = True
+            reward.status = ReferralRewardStatus.REVERSED
+            reward.reversed_at = utcnow()
+            reward.updated_at = utcnow()
+            reward.review_reason = None if recovered else "bonus_spent_before_deposit_reversal_manual_recovery_required"
+            self.session.flush()
+            reward_service._append_ledger_entry(
+                reward_id=reward.id,
+                entry_type="reward_reversed" if recovered else "reward_reversal_shortfall",
+                amount=bonus_amount,
+                unit=order.unit.value,
+                status_after=reward.status.value,
+                reference_id=order.reference,
+                payload_json={
+                    "purchase_order_id": order.id,
+                    "reason": "first_deposit_reversed",
+                    "recovered": str(recovered).lower(),
+                },
+            )
+            if not recovered:
+                self._create_system_event(
+                    event_key=f"referral-bonus-shortfall-{order.id}",
+                    severity=SystemEventSeverity.CRITICAL,
+                    title="First-deposit referral bonus requires recovery",
+                    body="The referred user had already spent the first-deposit bonus when the underlying deposit was reversed.",
+                    subject_type="purchase_order",
+                    subject_id=order.id,
+                    metadata={
+                        "user_id": user.id,
+                        "reward_id": reward.id,
+                        "bonus_amount": str(bonus_amount),
+                        "unit": order.unit.value,
+                    },
+                )
 
     def apply_purchase_order_status(
         self,

@@ -350,7 +350,7 @@ class GodModeBootstrapView(BaseModel):
 class AdminWalletCreditRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    user_id: str = Field(min_length=1, max_length=64)
+    user_id: str = Field(min_length=1, max_length=254)
     unit: LedgerUnit
     amount: Decimal = Field(gt=0)
     reason: str = Field(min_length=4, max_length=255)
@@ -364,6 +364,8 @@ class AdminWalletCreditView(BaseModel):
     reference: str
     user_id: str
     username: str | None = None
+    email: str | None = None
+    wallet_label: str = "personal"
     unit: LedgerUnit
     amount: Decimal
     balance_before: Decimal

@@ -4,7 +4,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
 
-from pydantic import ConfigDict, Field
+from pydantic import ConfigDict, Field, field_validator
 
 from app.common.enums.creator_profile_status import CreatorProfileStatus
 from app.common.enums.referral_reward_status import ReferralRewardStatus
@@ -204,6 +204,13 @@ class PendingRewardView(CommonSchema):
     attribution_id: str
     beneficiary_user_id: str | None = None
     beneficiary_creator_id: str | None = None
+    beneficiary_name: str | None = None
+    beneficiary_email: str | None = None
+    payout_method: str | None = None
+    payout_destination_reference: str | None = None
+    share_code: str | None = None
+    deposit_reference: str | None = None
+    deposit_amount_fiat: Decimal | None = None
     reward_type: str
     status: str
     trigger_milestone: str
@@ -248,3 +255,66 @@ class ReferralAdminDashboardView(CommonSchema):
     total_flags: int = 0
     high_severity_flags: int = 0
     recent_flags: list[ReferralFlagView] = Field(default_factory=list)
+
+
+class ReferralPartnerCreateRequest(CommonSchema):
+    display_name: str = Field(min_length=2, max_length=120)
+    contact_email: str | None = Field(default=None, max_length=320)
+    social_handle: str | None = Field(default=None, max_length=120)
+    campaign_name: str | None = Field(default=None, max_length=120)
+    payout_method: Literal["bank_transfer", "mobile_money", "crypto", "wallet", "manual", "other"] = "bank_transfer"
+    payout_destination_reference: str | None = Field(default=None, max_length=128)
+    vanity_code: str | None = Field(default=None, min_length=4, max_length=32)
+    max_uses: int = Field(default=100000, ge=1, le=1000000)
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    notes: str | None = Field(default=None, max_length=255)
+
+
+class ReferralPartnerView(CommonSchema):
+    partner_id: str
+    display_name: str
+    contact_email: str | None = None
+    social_handle: str | None = None
+    campaign_name: str | None = None
+    payout_method: str
+    payout_destination_reference: str | None = None
+    notes: str | None = None
+    is_active: bool
+    share_code_id: str | None = None
+    share_code: str | None = None
+    referral_path: str | None = None
+    current_uses: int = 0
+    max_uses: int = 0
+    attributed_signups: int = 0
+    pending_commission: Decimal = Decimal("0.0000")
+    approved_commission: Decimal = Decimal("0.0000")
+    paid_commission: Decimal = Decimal("0.0000")
+    created_at: datetime
+
+
+class ReferralPartnerStatusRequest(CommonSchema):
+    is_active: bool
+    reason: str = Field(min_length=3, max_length=255)
+
+
+class ReferralPayoutBatchRequest(CommonSchema):
+    reward_ids: list[str] = Field(min_length=1, max_length=100)
+    payment_reference: str = Field(min_length=3, max_length=128)
+
+    @field_validator("reward_ids")
+    @classmethod
+    def validate_reward_ids(cls, value: list[str]) -> list[str]:
+        cleaned = [item.strip() for item in value if item and item.strip()]
+        if not cleaned or len(cleaned) != len(set(cleaned)):
+            raise ValueError("Reward IDs must be unique and non-empty.")
+        return cleaned
+
+
+class ReferralPayoutBatchView(CommonSchema):
+    payment_reference: str
+    reward_count: int
+    total_amount: Decimal
+    currency: str
+    reward_ids: list[str]
+    paid_at: datetime

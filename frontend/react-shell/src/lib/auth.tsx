@@ -73,7 +73,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const { data } = await api.post(endpoint, signupPayload);
     if (data.access_token) tokens.set(data.access_token, data.refresh_token);
     else {
-      const res = await api.post("/v2/auth/login", { email: signupPayload.email, password: signupPayload.password });
+      const res = await api.post("/v2/auth/login", {
+        email: signupPayload.email,
+        password: signupPayload.password,
+      });
       tokens.set(res.data.access_token, res.data.refresh_token);
     }
     const currentUser = await loadMe();
@@ -86,7 +89,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   };
 
-  return <Ctx.Provider value={{ user, loading, login, signup, logout, refresh: loadMe }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, loading, login, signup, logout, refresh: loadMe }}>
+      {children}
+    </Ctx.Provider>
+  );
 }
 
 export const useAuth = () => useContext(Ctx);

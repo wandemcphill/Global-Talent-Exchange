@@ -604,6 +604,40 @@ def _submit_signup_compliance(
     )
 
 
+def _capture_signup_referral(
+    session: Session,
+    request: Request | None,
+    user: User,
+    code: str | None,
+    *,
+    account_type: str,
+    creates_club: bool,
+) -> None:
+    if code is None or not str(code).strip():
+        return
+    from app.services.first_deposit_referral_service import FirstDepositReferralError, FirstDepositReferralService
+
+    ip_address = extract_client_ip(request) if request is not None else None
+    user_agent = request.headers.get("user-agent") if request is not None else None
+    try:
+        FirstDepositReferralService(session).attribute_signup(
+            user,
+            str(code),
+            account_type=account_type,
+            creates_club=creates_club,
+            ip_address=ip_address,
+            user_agent=user_agent,
+        )
+    except FirstDepositReferralError as exc:
+        session.rollback()
+        try:
+            FirstDepositReferralService(session).record_failed_attempt(ip_address, exc.code)
+            session.commit()
+        except Exception:
+            session.rollback()
+        raise AuthError(exc.message) from exc
+
+
 @legacy_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 @api_v2_router.post("/signup/user", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
@@ -664,6 +698,14 @@ def signup_user(
                 primary_color=payload.primary_color,
                 secondary_color=payload.secondary_color,
             )
+        _capture_signup_referral(
+            session,
+            request,
+            user,
+            payload.referral_code,
+            account_type="user",
+            creates_club=payload.creates_club,
+        )
         user.preferred_position = payload.position
         user.nationality = payload.country
         # KYC is intentionally NOT submitted at signup. Users get instant access; KYC is
@@ -777,6 +819,14 @@ def signup_creator(
                 primary_color=payload.primary_color or "#0F766E",
                 secondary_color=payload.secondary_color or "#F8FAFC",
             )
+        _capture_signup_referral(
+            session,
+            request,
+            user,
+            payload.referral_code,
+            account_type="creator",
+            creates_club=payload.creates_club,
+        )
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
@@ -883,6 +933,14 @@ def signup_trader(
             session.add(coin_profile)
         # KYC is intentionally NOT submitted at signup. Traders get instant access; KYC is
         # required only when they initiate a withdrawal (enforced in the treasury flow).
+        _capture_signup_referral(
+            session,
+            request,
+            user,
+            payload.referral_code,
+            account_type="coin_trader",
+            creates_club=False,
+        )
         issued_session, confirmation_code = _issue_signup_session(
             service=service,
             session=session,
