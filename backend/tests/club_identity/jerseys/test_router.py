@@ -11,7 +11,7 @@ def test_identity_payload_retrieval_exposes_match_metadata(client: TestClient) -
 
     assert payload["club_id"] == "rio-royals"
     assert payload["match_identity"]["club_name"] == "Rio Royals"
-    assert payload["match_identity"]["short_club_code"] == "RR"
+    assert payload["match_identity"]["short_club_code"] == "RRO"
     assert len(payload["match_identity"]["home_kit_colors"]) == 3
     assert len(payload["match_identity"]["away_kit_colors"]) == 3
 

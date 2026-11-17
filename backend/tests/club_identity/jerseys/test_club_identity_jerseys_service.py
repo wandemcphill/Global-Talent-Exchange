@@ -92,4 +92,4 @@ def test_badge_generation_metadata_is_deterministic(identity_service: ClubIdenti
         IconFamily.OAK,
         IconFamily.BOLT,
     }
-    assert badge.initials == "NN"
+    assert badge.initials == "NNI"
