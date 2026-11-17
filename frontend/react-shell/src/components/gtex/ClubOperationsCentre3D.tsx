@@ -595,7 +595,14 @@ export function ClubOperationsCentre3D({
 
     const mountDestinationGlb = (dest: OperationsHubDestination, group: THREE.Group, accent: THREE.Color) => {
       const rawGlbUrl = dest.glb_model || "";
-      if (!rawGlbUrl || PROCEDURAL_ROOM_ONLY.test(rawGlbUrl)) {
+      if (PROCEDURAL_ROOM_ONLY.test(rawGlbUrl)) {
+        failedDestKeys.delete(dest.destination_key);
+        loadedDestKeys.add(dest.destination_key);
+        setFailedGlbModels(Array.from(failedDestKeys));
+        setLoadedGlbCount(loadedDestKeys.size);
+        return;
+      }
+      if (!rawGlbUrl) {
         return;
       }
       const glbUrl = publicUrl(rawGlbUrl);

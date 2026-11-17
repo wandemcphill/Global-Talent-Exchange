@@ -363,7 +363,7 @@ describe("ClubOperationsCentre3D Stage 5 - Resilience, GLB Retry, Telemetry & WS
   });
 
   test("bounded GLB retry recovers transient failures and stops after max 2 retries on permanent errors", async () => {
-    mockFailDestinationKey = "stadium_main.glb";
+    mockFailDestinationKey = "club_hq.glb";
     mockFailAlways = false;
 
     const container = await renderCentre();

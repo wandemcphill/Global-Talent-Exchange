@@ -1866,9 +1866,7 @@ def get_club_operations_hub(
             preference_eval.get("declined_starter_ids") or disagreement_payload.get("declined_player_ids") or []
         ),
         "declined_players": list(
-            disagreement_payload.get("players_who_did_not_appear")
-            or preference_eval.get("declined_starter_ids")
-            or []
+            disagreement_payload.get("players_who_did_not_appear") or preference_eval.get("declined_starter_ids") or []
         ),
         "verdict_reason": selection.get("verdict_reason") or disagreement_payload.get("verdict_reason"),
         "decision_outcome": selection.get("decision_outcome"),

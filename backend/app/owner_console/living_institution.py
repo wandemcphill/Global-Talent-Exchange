@@ -607,9 +607,7 @@ def record_history_entry(
 ) -> OwnerClubHistoryEntry:
     """Idempotently append an entry to the permanent club history ledger."""
     clean_idem = str(idempotency_key)[:160]
-    existing = session.scalar(
-        select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == clean_idem)
-    )
+    existing = session.scalar(select(OwnerClubHistoryEntry).where(OwnerClubHistoryEntry.idempotency_key == clean_idem))
     if existing is not None:
         return existing
 
@@ -2260,7 +2258,9 @@ def record_managerial_change(
     already_projected_tenures = has_canonical_projection(
         existing_canon, "club_history", "OwnerClubManagerialTenure"
     ) or (existing_canon is not None and any(r.manager_name == new_name for r in active_tenures))
-    prev_matches = int((existing_canon.consequences_json or {}).get("previous_tenure_matches") or 0) if existing_canon else 0
+    prev_matches = (
+        int((existing_canon.consequences_json or {}).get("previous_tenure_matches") or 0) if existing_canon else 0
+    )
     prev_wins = int((existing_canon.consequences_json or {}).get("previous_tenure_wins") or 0) if existing_canon else 0
     prev_trophies = 0
     closed_tenure_ids: list[str] = []
@@ -2517,12 +2517,16 @@ def record_executive_staff_change(
                 row.departure_reason = reason
                 row.severance_paid_gtex = Decimal(str(fee_gtex if action == "dismissed" else 0))
                 row.severance_paid_fan_coin = Decimal(str(fee_fan_coin if action == "dismissed" else 0))
-                row.tenure_summary = f"{row.manager_name} departed {clean_role} post on World Day {world_day} ({reason})."
+                row.tenure_summary = (
+                    f"{row.manager_name} departed {clean_role} post on World Day {world_day} ({reason})."
+                )
                 closed_names.append(row.manager_name)
                 closed_ids.append(row.id)
 
         if action == "hired":
-            existing_same = next((r for r in active_rows if r.manager_name == staff_name and r.status == "active"), None)
+            existing_same = next(
+                (r for r in active_rows if r.manager_name == staff_name and r.status == "active"), None
+            )
             if existing_same is None:
                 new_row = OwnerClubManagerialTenure(
                     club_id=state.club_id,
@@ -2555,7 +2559,9 @@ def record_executive_staff_change(
         if fee_fan_coin:
             summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason}) with {fee_fan_coin:,} Fan Coin severance."
         else:
-            summary = f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason})."
+            summary = (
+                f"{staff_name} left the {role_label} post at {state.club_name} on World Day {world_day} ({reason})."
+            )
 
     canonical_ev = emit_canonical_club_event(
         session,
@@ -2710,7 +2716,9 @@ def record_transfer_movement(
     idem = idempotency_key or f"transfer:{state.club_id}:{direction}:{player_id}:d{world_day}"
     clean_idem = idem[:160]
 
-    existing = session.scalar(select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == clean_idem))
+    existing = session.scalar(
+        select(OwnerClubTransferRecord).where(OwnerClubTransferRecord.idempotency_key == clean_idem)
+    )
     existing_canon = session.scalar(
         select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == f"canon:{idem}"[:120])
     )
@@ -3254,7 +3262,11 @@ def engage_supporters(
         description=summary,
         idempotency_key=f"canon:engage:{state.club_id}:{action_type}:{event_token}",
         visibility_classification=VISIBILITY_PUBLIC_OBSERVABLE,
-        severity="major" if contradiction_detected or action_type in ("community_initiative", "ticketing_decision") else "notable",
+        severity=(
+            "major"
+            if contradiction_detected or action_type in ("community_initiative", "ticketing_decision")
+            else "notable"
+        ),
         source_type="owner_engagement",
         source_id=event_token,
         correlation_id=corr_id,

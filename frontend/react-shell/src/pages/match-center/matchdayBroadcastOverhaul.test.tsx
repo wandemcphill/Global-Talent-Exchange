@@ -48,6 +48,7 @@ const mockApiPost = jest.fn();
 
 jest.mock("@/lib/api", () => ({
   __esModule: true,
+  API: "http://127.0.0.1:8000/api",
   api: {
     get: (...args: any[]) => mockApiGet(...args),
     post: (...args: any[]) => mockApiPost(...args),

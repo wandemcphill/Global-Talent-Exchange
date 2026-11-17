@@ -424,9 +424,7 @@ class SyntheticSquadFactory:
             return None
 
         eligible_by_id = {str(player.id): player for player in eligible}
-        squad_rows = list(
-            session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == team_id)).all()
-        )
+        squad_rows = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == team_id)).all())
         squad_by_id = {str(row.id): row for row in squad_rows}
 
         def resolve_player(raw_id: str) -> Player | None:
@@ -448,7 +446,11 @@ class SyntheticSquadFactory:
         if len(resolved) != 11:
             return None
         keeper_index = next(
-            (index for index, player in enumerate(resolved) if self._resolve_player_role(player) is PlayerRole.GOALKEEPER),
+            (
+                index
+                for index, player in enumerate(resolved)
+                if self._resolve_player_role(player) is PlayerRole.GOALKEEPER
+            ),
             None,
         )
         if keeper_index is None:

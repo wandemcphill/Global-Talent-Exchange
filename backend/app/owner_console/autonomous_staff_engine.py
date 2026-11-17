@@ -4138,9 +4138,7 @@ def select_manager_matchday_lineup(
     ]
     if len(eligible) < 11:
         eligible = [
-            p
-            for p in players
-            if int(p.injured_days or 0) <= 0 and str(p.player_ref or "") not in active_injury_refs
+            p for p in players if int(p.injured_days or 0) <= 0 and str(p.player_ref or "") not in active_injury_refs
         ]
 
     youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
@@ -4200,8 +4198,7 @@ def select_manager_matchday_lineup(
             bench.append(p)
 
     pref_ids = [
-        str(pid)
-        for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
+        str(pid) for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
     ]
     accepted_pref_ids = [pid for pid in pref_ids if pid in starter_ids]
     declined_pref_ids = [pid for pid in pref_ids if pid not in starter_ids]
