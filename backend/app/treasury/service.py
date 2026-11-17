@@ -599,8 +599,7 @@ class TreasuryService:
 
             trader_profile = session.scalar(select(CoinTraderProfile).where(CoinTraderProfile.user_id == user.id))
             desk_frozen = trader_profile is not None and (
-                trader_profile.frozen_at is not None
-                or trader_profile.status == CoinTraderProfileStatus.FROZEN.value
+                trader_profile.frozen_at is not None or trader_profile.status == CoinTraderProfileStatus.FROZEN.value
             )
             requires_kyc = (not desk_frozen) and (
                 trader_profile is None

@@ -12,9 +12,7 @@ from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
 class ReferralAttribution(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __tablename__ = "referral_attributions"
-    __table_args__ = (
-        UniqueConstraint("referred_user_id", name="uq_referral_attributions_referred_user_id"),
-    )
+    __table_args__ = (UniqueConstraint("referred_user_id", name="uq_referral_attributions_referred_user_id"),)
 
     referred_user_id: Mapped[str] = mapped_column(
         String(36),

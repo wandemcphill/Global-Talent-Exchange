@@ -271,12 +271,16 @@ def decide_affiliate_commission(
 
 
 @router.get("/affiliate/payouts/preview")
-def affiliate_payout_preview(session: Session = Depends(get_session), _: User = Depends(require_referral_admin)) -> list:
+def affiliate_payout_preview(
+    session: Session = Depends(get_session), _: User = Depends(require_referral_admin)
+) -> list:
     return _service(session).payout_preview()
 
 
 @router.get("/affiliate/payout-batches")
-def affiliate_payout_batches(session: Session = Depends(get_session), _: User = Depends(require_referral_admin)) -> list:
+def affiliate_payout_batches(
+    session: Session = Depends(get_session), _: User = Depends(require_referral_admin)
+) -> list:
     return _service(session).list_batches()
 
 
@@ -308,9 +312,7 @@ def confirm_affiliate_payout_batch(
 ) -> dict:
     return _run(
         session,
-        lambda: _service(session).confirm_payout_batch(
-            actor, batch_id, external_reference=payload.external_reference
-        ),
+        lambda: _service(session).confirm_payout_batch(actor, batch_id, external_reference=payload.external_reference),
     )
 
 

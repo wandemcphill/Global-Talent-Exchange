@@ -289,12 +289,20 @@ class ReferralAdminService:
                     attribution_id=reward.attribution_id,
                     beneficiary_user_id=reward.beneficiary_user_id,
                     beneficiary_creator_id=reward.beneficiary_creator_id,
-                    beneficiary_name=(partner.display_name if partner is not None else (
-                        beneficiary_user.display_name or beneficiary_user.username if beneficiary_user is not None else None
-                    )),
-                    beneficiary_email=(partner.contact_email if partner is not None else (
-                        beneficiary_user.email if beneficiary_user is not None else None
-                    )),
+                    beneficiary_name=(
+                        partner.display_name
+                        if partner is not None
+                        else (
+                            beneficiary_user.display_name or beneficiary_user.username
+                            if beneficiary_user is not None
+                            else None
+                        )
+                    ),
+                    beneficiary_email=(
+                        partner.contact_email
+                        if partner is not None
+                        else (beneficiary_user.email if beneficiary_user is not None else None)
+                    ),
                     payout_method=partner.payout_method if partner is not None else None,
                     payout_destination_reference=partner.payout_destination_reference if partner is not None else None,
                     share_code=share_code_model.code if share_code_model is not None else None,

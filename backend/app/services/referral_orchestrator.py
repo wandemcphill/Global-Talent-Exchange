@@ -390,7 +390,10 @@ class ReferralOrchestrator:
             metadata=payload.metadata,
         )
         if self.session is not None:
-            from app.services.first_deposit_referral_service import FirstDepositReferralError, FirstDepositReferralService
+            from app.services.first_deposit_referral_service import (
+                FirstDepositReferralError,
+                FirstDepositReferralService,
+            )
 
             try:
                 FirstDepositReferralService(self.session).prepare_redeem(
