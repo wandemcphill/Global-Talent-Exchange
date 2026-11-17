@@ -594,6 +594,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       # Admin user id that ingestion-time share-market issuance is attributed
       # to.  Unset means new players are ingested without a market and will not
       # appear in the market listing until the issuance job runs.
@@ -625,6 +629,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: CSV_URL
         sync: false
       - key: IMAGES
@@ -655,6 +663,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -682,6 +694,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -702,6 +718,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REGEN_TARGET
         value: "12000"
       - key: GTE_APP_ENV
@@ -724,6 +744,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -748,6 +772,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: SEEDS_PER_COUNTRY
         value: "70"
       - key: PRESEED_BATCH
@@ -775,6 +803,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       # Admin/super-admin user id issuance is attributed to in the audit trail.
       - key: ISSUANCE_ACTOR_USER_ID
         sync: false

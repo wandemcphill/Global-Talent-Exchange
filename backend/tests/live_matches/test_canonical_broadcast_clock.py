@@ -47,6 +47,44 @@ def _payload(session_factory, match_id: str) -> dict:
     return _v2_match_state_payload(match_id, _app(session_factory))
 
 
+def test_execution_states_map_to_one_presentation() -> None:
+    cases = [
+        ("scheduled", "scheduled", "pre_match", "pre_match", "SCHEDULED", False),
+        ("in_progress", "in_progress", "first_half", "live", "LIVE", True),
+        ("in_progress", "in_progress", "second_half", "live", "LIVE", True),
+        ("paused", "paused", "halftime", "paused", "HALFTIME", False),
+        ("paused", "paused", "paused", "paused", "PAUSED", False),
+        ("halted", "halted", "halted", "halted", "HALTED", False),
+        ("completed", "completed", "completed", "full_time", "FT", False),
+        ("cancelled", "cancelled", "cancelled", "cancelled", "CANCELLED", False),
+        ("abandoned", "abandoned", "abandoned", "abandoned", "ABANDONED", False),
+    ]
+    for match_status, execution_status, clock_phase, presentation, api_status, is_live in cases:
+        resolved = resolve_canonical_presentation(
+            match_status=match_status,
+            execution_status=execution_status,
+            clock_phase=clock_phase,
+        )
+        assert resolved.presentation == presentation
+        assert resolved.api_status == api_status
+        assert resolved.is_live is is_live
+        assert resolved.is_terminal is (presentation in {"full_time", "cancelled", "abandoned"})
+
+
+def test_postgresql_claim_statement_skips_locked_rows() -> None:
+    from sqlalchemy.dialects.postgresql import dialect as pg_dialect
+
+    from app.core.database import create_database_engine, create_session_factory
+
+    engine = create_database_engine("postgresql+psycopg://example.invalid:5432/gtex")
+    service = CanonicalLiveExecutionService(create_session_factory(engine)())
+    statement = service.due_execution_statement(datetime.now(timezone.utc), lease_owner="worker-b", limit=1)
+    compiled = str(statement.compile(dialect=pg_dialect()))
+    assert "FOR UPDATE" in compiled.upper()
+    assert "SKIP LOCKED" in compiled.upper()
+    engine.dispose()
+
+
 def test_unknown_execution_state_is_not_full_time() -> None:
     presentation = resolve_canonical_presentation(
         match_status="scheduled",
@@ -352,38 +390,60 @@ def test_a_new_worker_session_resumes_minute_15_without_duplicating_events() -> 
 def test_a_live_lease_blocks_a_second_worker() -> None:
     helpers = _phase1()
     session_factory = helpers._setup_session_factory()
+    now = datetime.now(timezone.utc)
     with session_factory() as session:
         _, match, _, _ = helpers._seed_canonical_fixture(session)
-        now = datetime.now(timezone.utc)
         match.scheduled_at = now - timedelta(minutes=5)
         service = CanonicalLiveExecutionService(session)
         service.start_live_execution(match.id, step_interval_seconds=0)
         _, execution, _ = service.step_execution(match.id, step_minutes=15, step_interval_seconds=0)
+        match_id = match.id
         execution.lease_owner = "worker-a"
         execution.lease_expires_at = now + timedelta(minutes=5)
         execution.next_step_at = now - timedelta(seconds=5)
+        committed_ids = [str(item.get("event_id")) for item in execution.committed_events_json or []]
         session.commit()
-        blocked = service.claim_and_advance_due_executions(
+
+    with session_factory() as session_b:
+        worker_b = CanonicalLiveExecutionService(session_b)
+        blocked = worker_b.claim_and_advance_due_executions(
             reference_at=now,
             step_minutes=15,
             lease_owner="worker-b",
             step_interval_seconds=0,
         )
-        session.refresh(execution)
-        held_minute = execution.current_minute
-        owner = service.claim_and_advance_due_executions(
+        session_b.commit()
+        blocked_row = session_b.scalar(
+            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+        )
+        assert blocked_row is not None
+        blocked_minute = blocked_row.current_minute
+        blocked_ids = [str(item.get("event_id")) for item in blocked_row.committed_events_json or []]
+
+    with session_factory() as session_a:
+        worker_a = CanonicalLiveExecutionService(session_a)
+        owner = worker_a.claim_and_advance_due_executions(
             reference_at=now,
             step_minutes=15,
             lease_owner="worker-a",
             step_interval_seconds=0,
         )
-        session.commit()
-        session.refresh(execution)
+        session_a.commit()
+        owned_row = session_a.scalar(
+            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match_id)
+        )
+        assert owned_row is not None
+        final_minute = owned_row.current_minute
+        final_owner = owned_row.lease_owner
+        final_ids = [str(item.get("event_id")) for item in owned_row.committed_events_json or []]
 
     assert blocked["discovered"] == 0
     assert blocked["advanced"] == 0
-    assert held_minute == 15
+    assert blocked_minute == 15
+    assert blocked_ids == committed_ids
     assert owner["advanced"] == 1
-    assert execution.current_minute == 30
-    # The lease covers the step itself and is released when the checkpoint commits.
-    assert execution.lease_owner is None
+    assert final_minute == 30
+    assert final_owner is None
+    assert final_ids[: len(committed_ids)] == committed_ids
+    assert len(final_ids) == len(set(final_ids))
+    assert len(final_ids) > len(committed_ids)

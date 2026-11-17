@@ -237,6 +237,14 @@ jobs:
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r backend/requirements.lock
       - run: python -m pip install pytest
+      - name: Execute canonical broadcast clock and database pool regressions
+        if: success() || failure()
+        run: |
+          echo "MODULE backend/tests/live_matches/test_canonical_broadcast_clock.py"
+          echo "MODULE backend/tests/app/test_database_engine_connect_args.py"
+          python -m pytest --tb=short \
+            backend/tests/live_matches/test_canonical_broadcast_clock.py \
+            backend/tests/app/test_database_engine_connect_args.py
       - run: >
           python -m pytest
           backend/tests/live_matches/test_live_match_router.py
@@ -253,6 +261,40 @@ jobs:
           backend/tests/match_engine/test_live_match_experience_contract.py
           backend/tests/test_match_timeline_service.py
           -q
+
+  backend-postgres-lease-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: gtex
+          POSTGRES_DB: gtex
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements.lock
+      - run: python -m pip install --upgrade pip
+      - run: python -m pip install -r backend/requirements.lock
+      - run: python -m pip install pytest
+      - name: Prove PostgreSQL SKIP LOCKED hides a row held by another connection
+        env:
+          GTE_TEST_POSTGRES_URL: postgresql+psycopg://postgres:gtex@localhost:5432/gtex
+        run: |
+          echo "MODULE backend/tests/live_matches/test_postgres_lease_skip_locked.py"
+          python -m pytest --tb=short backend/tests/live_matches/test_postgres_lease_skip_locked.py
 
   backend-payment-regressions:
     runs-on: ubuntu-latest

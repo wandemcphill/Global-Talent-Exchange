@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import threading
 import time
+import weakref
 
 from alembic import command
 from alembic.config import Config
@@ -90,7 +91,8 @@ RUNTIME_SCHEMA_SMOKE_TABLES = (
 )
 logger = logging.getLogger(__name__)
 _SCHEMA_MIGRATION_LOCK = threading.RLock()
-_ENGINE_POOL_STATS: dict[int, dict[str, float | int]] = {}
+_ENGINE_POOL_STATS: weakref.WeakKeyDictionary[Engine, dict[str, float | int]] = weakref.WeakKeyDictionary()
+_POOL_STATS_LOCK = threading.Lock()
 
 
 @lru_cache
@@ -189,12 +191,13 @@ def collect_database_pool_telemetry(engine: Engine) -> dict[str, object]:
     """Snapshot pool occupancy. SQLite pools do not expose checkout counters."""
 
     pool = engine.pool
-    stats = dict(_ENGINE_POOL_STATS.get(id(engine)) or {})
+    with _POOL_STATS_LOCK:
+        stats = dict(_ENGINE_POOL_STATS.get(engine) or {})
     snapshot: dict[str, object] = {
         "dialect": engine.dialect.name,
         "pool_class": type(pool).__name__,
         "checkout_timeouts": int(stats.get("checkout_timeouts", 0) or 0),
-        "long_transactions": int(stats.get("long_transactions", 0) or 0),
+        "long_connection_checkouts": int(stats.get("long_connection_checkouts", 0) or 0),
         "last_checkout_wait_ms": float(stats.get("last_checkout_wait_ms", 0.0) or 0.0),
         "max_checkout_wait_ms": float(stats.get("max_checkout_wait_ms", 0.0) or 0.0),
     }
@@ -220,12 +223,16 @@ def collect_database_pool_telemetry(engine: Engine) -> dict[str, object]:
 def _install_pool_telemetry(engine: Engine) -> None:
     stats = {
         "checkout_timeouts": 0,
-        "long_transactions": 0,
+        "long_connection_checkouts": 0,
         "last_checkout_wait_ms": 0.0,
         "max_checkout_wait_ms": 0.0,
     }
-    _ENGINE_POOL_STATS[id(engine)] = stats
-    long_seconds = _get_float_env("GTE_DB_LONG_TRANSACTION_SECONDS", 30.0, minimum=1.0)
+    with _POOL_STATS_LOCK:
+        _ENGINE_POOL_STATS[engine] = stats
+    if os.getenv("GTE_DB_LONG_CHECKOUT_SECONDS") is not None:
+        long_seconds = _get_float_env("GTE_DB_LONG_CHECKOUT_SECONDS", 30.0, minimum=1.0)
+    else:
+        long_seconds = _get_float_env("GTE_DB_LONG_TRANSACTION_SECONDS", 30.0, minimum=1.0)
     pool = engine.pool
     original_connect = pool.connect
 
@@ -235,7 +242,8 @@ def _install_pool_telemetry(engine: Engine) -> None:
             return original_connect(*args, **kwargs)
         except Exception as exc:
             if exc.__class__.__name__ == "TimeoutError" or "QueuePool limit" in str(exc):
-                stats["checkout_timeouts"] = int(stats["checkout_timeouts"]) + 1
+                with _POOL_STATS_LOCK:
+                    stats["checkout_timeouts"] = int(stats["checkout_timeouts"]) + 1
                 logger.warning(
                     "database.pool_checkout_timeout pool=%s timeout_seconds=%s error=%s",
                     type(pool).__name__,
@@ -245,20 +253,22 @@ def _install_pool_telemetry(engine: Engine) -> None:
             raise
         finally:
             waited_ms = (time.monotonic() - started) * 1000.0
-            stats["last_checkout_wait_ms"] = waited_ms
-            stats["max_checkout_wait_ms"] = max(float(stats["max_checkout_wait_ms"]), waited_ms)
+            with _POOL_STATS_LOCK:
+                stats["last_checkout_wait_ms"] = waited_ms
+                stats["max_checkout_wait_ms"] = max(float(stats["max_checkout_wait_ms"]), waited_ms)
 
     pool.connect = timed_connect  # type: ignore[method-assign]
 
     @event.listens_for(engine, "checkin")
-    def _note_long_transaction(dbapi_connection, connection_record) -> None:
+    def _note_long_connection_checkout(dbapi_connection, connection_record) -> None:
         started = connection_record.info.pop("gte_checked_out_at", None)
         if started is None:
             return
         held = time.monotonic() - float(started)
         if held >= long_seconds:
-            stats["long_transactions"] = int(stats["long_transactions"]) + 1
-            logger.warning("database.long_running_transaction held_seconds=%.2f", held)
+            with _POOL_STATS_LOCK:
+                stats["long_connection_checkouts"] = int(stats["long_connection_checkouts"]) + 1
+            logger.warning("database.long_connection_checkout held_seconds=%.2f", held)
 
     @event.listens_for(engine, "checkout")
     def _note_checkout(dbapi_connection, connection_record, connection_proxy) -> None:

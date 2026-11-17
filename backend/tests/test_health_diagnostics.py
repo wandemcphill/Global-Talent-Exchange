@@ -35,6 +35,13 @@ def test_diagnostics_endpoint_surfaces_config_and_dependency_issues() -> None:
     assert payload["runtime_mode"] == "degraded"
     assert "Redis is not configured" in payload["dependency_issues"]["redis"]
     assert "Kafka brokers are not configured" in payload["dependency_issues"]["kafka"]
+    pools = payload["database_pools"]
+    assert set(pools) == {"write"}
+    assert pools["write"]["long_connection_checkouts"] == 0
+    assert "url" not in pools["write"]
+    assert "password" not in pools["write"]
+    health = client.get("/health").json()
+    assert "database_pools" not in health
     missing_config_checks = {name for name, is_present in payload["config_checks"].items() if not is_present}
     assert set(payload["config_issues"]) == missing_config_checks
     for name, issue in payload["config_issues"].items():
