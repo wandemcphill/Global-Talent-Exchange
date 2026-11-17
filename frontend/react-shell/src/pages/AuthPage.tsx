@@ -315,9 +315,11 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     setBusy(true);
     try {
       if (mode === "login") {
-        const result = await login(userFields.email.trim(), userFields.password, {
-          totp_code: userFields.totp_code.trim(),
-        });
+        const email = userFields.email.trim();
+        const totpCode = userFields.totp_code.trim();
+        const result = totpCode
+          ? await login(email, userFields.password, { totp_code: totpCode })
+          : await login(email, userFields.password);
         const type = String(result.user?.account_type || result.user?.accountType || "user").toLowerCase();
         const landingRoute = String(result.landingRoute || "");
         navigate(
