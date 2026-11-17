@@ -38,6 +38,12 @@ import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
+import {
+  canonicalBroadcastPhase,
+  canonicalStatus,
+  isActiveCanonicalBroadcast,
+  shouldPollMatchState,
+} from "@/pages/match-center/broadcastLifecycle";
 import { useSkin } from "@/lib/skin-engine";
 import {
   MatchSponsorIdentificationBadge,
@@ -1487,12 +1493,7 @@ export default function MatchCenter() {
         return null;
       }
     },
-    refetchInterval: (query) => {
-      const data = query.state.data;
-      if (!data) return false;
-      const phase = String(data.phase || "").toLowerCase();
-      return phase === "completed" ? false : 2500;
-    },
+    refetchInterval: (query) => (shouldPollMatchState(query.state.data) ? 2500 : false),
     enabled: !!id && id !== "u2a-006-showcase",
     retry: false,
   });
@@ -1593,9 +1594,11 @@ export default function MatchCenter() {
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
-  const isMatchComplete = String(
-    spectatorStream.latestScore?.status || acceptedLive?.phase || liveState?.phase || "",
-  ).toLowerCase() === "completed";
+  const isMatchComplete =
+    canonicalBroadcastPhase({
+      status: acceptedLive?.status || liveState?.status || spectatorStream.latestScore?.status,
+      phase: acceptedLive?.phase || liveState?.phase,
+    }) === "full_time";
   useMatchFullTimeGovernance(
     id,
     spectatorStream.recentEvents,
@@ -1651,15 +1654,20 @@ export default function MatchCenter() {
     const sessionPos = deriveUniversalBroadcastPosition(liveState.broadcast_session);
     const candidateTime = sessionPos ?? Number(liveState.time_seconds);
     if (Number.isFinite(candidateTime)) {
-      setPlaybackSeconds((prev) => Math.max(prev, candidateTime));
+      if (isActiveCanonicalBroadcast(canonicalStatus(liveState))) {
+        setPlaybackSeconds(candidateTime);
+      } else {
+        setPlaybackSeconds((prev) => Math.max(prev, candidateTime));
+      }
     }
   }, [liveState, refetchAppliedTactics]);
 
   useEffect(() => {
+    if (isActiveCanonicalBroadcast(canonicalStatus(acceptedLive))) return;
     const streamTime = Number(spectatorStream.lastFrame?.time_seconds);
     if (!Number.isFinite(streamTime)) return;
     setPlaybackSeconds((prev) => Math.max(prev, streamTime));
-  }, [spectatorStream.lastFrame?.time_seconds]);
+  }, [acceptedLive, spectatorStream.lastFrame?.time_seconds]);
 
   const broadcastSession =
     acceptedLive?.broadcast_session || viewerData?.broadcast_session || (m as any)?.broadcast_session || null;
@@ -1695,17 +1703,16 @@ export default function MatchCenter() {
 
   // Universal shared broadcast (server-authoritative, strictly 1.0x, read-only) vs. recorded replay archive
   // (local inspection only: seek, pause, speed, instant replay never touch shared state).
-  const isSharedLiveBroadcast = Boolean(
-    acceptedLive ||
-      spectatorStream.lastFrame ||
-      broadcastSession?.pause_replay_enabled === false ||
-      (acceptedLive as any)?.pause_replay_enabled === false ||
-      (liveState as any)?.pause_replay_enabled === false ||
-      (viewerData as any)?.pause_replay_enabled === false ||
-      broadcastSession?.sync_strategy === "canonical_live_execution" ||
-      String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live" ||
-      (liveState && String(liveState.phase || "").toLowerCase() !== "completed"),
-  );
+  const lifecycleStatus = canonicalStatus(acceptedLive || liveState);
+  const isSharedLiveBroadcast = lifecycleStatus
+    ? isActiveCanonicalBroadcast(lifecycleStatus)
+    : Boolean(
+        spectatorStream.lastFrame ||
+          broadcastSession?.pause_replay_enabled === false ||
+          (viewerData as any)?.pause_replay_enabled === false ||
+          broadcastSession?.sync_strategy === "canonical_live_execution" ||
+          String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live",
+      );
   const canLocalReplay = !isSharedLiveBroadcast && timedRecordedFrames.length >= 2;
   const [replayPaused, setReplayPaused] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 2>(1);
@@ -1816,6 +1823,13 @@ export default function MatchCenter() {
   );
 
   const minute = useMemo(() => {
+    if (
+      acceptedLive &&
+      isActiveCanonicalBroadcast(canonicalStatus(acceptedLive)) &&
+      acceptedLive.minute !== undefined
+    ) {
+      return Math.max(0, Math.round(Number(acceptedLive.minute)));
+    }
     if (spectatorStream.latestScore?.minute !== undefined) {
       return Math.max(0, Math.round(Number(spectatorStream.latestScore.minute)));
     }
@@ -1833,14 +1847,14 @@ export default function MatchCenter() {
     return 0;
   }, [spectatorStream.latestScore?.minute, spectatorStream.lastFrame?.clock_minute, acceptedLive?.minute, replayPair]);
 
-  const phaseName = String(
-    spectatorStream.latestScore?.status ||
-      spectatorStream.lastFrame?.phase ||
-      acceptedLive?.phase ||
-      liveState?.phase ||
-      activeReplayFrame?.phase ||
-      "",
-  ).toLowerCase();
+  const phaseName = (acceptedLive || liveState)
+    ? canonicalBroadcastPhase(acceptedLive || liveState)
+    : String(
+        spectatorStream.latestScore?.status ||
+          spectatorStream.lastFrame?.phase ||
+          activeReplayFrame?.phase ||
+          "",
+      ).toLowerCase();
   // Only the real half-time break counts; "first_half" / "second_half" merely contain the word "half".
   const isHalftime = /^(half_?time|half_time_break|ht|break)$/.test(phaseName.replace(/[\s-]+/g, "_"));
   const matchAds = useMatchCommercialInventory(id, true);
@@ -2046,8 +2060,10 @@ export default function MatchCenter() {
       away: 0,
     });
 
+  const canonicalScore = isActiveCanonicalBroadcast(canonicalStatus(acceptedLive)) ? acceptedLive : null;
   const score = {
     home:
+      canonicalScore?.home?.score ??
       spectatorStream.latestScore?.home_score ??
       spectatorStream.lastFrame?.home_score ??
       acceptedLive?.home?.score ??
@@ -2055,6 +2071,7 @@ export default function MatchCenter() {
       activeReplayFrame?.home_score ??
       fallbackScore.home,
     away:
+      canonicalScore?.away?.score ??
       spectatorStream.latestScore?.away_score ??
       spectatorStream.lastFrame?.away_score ??
       acceptedLive?.away?.score ??
@@ -2282,6 +2299,12 @@ export default function MatchCenter() {
                   "Full time"
                 ) : isScheduled ? (
                   "Pre-Match Briefing"
+                ) : isHalftime ? (
+                  <>Halftime · {minute}'</>
+                ) : phaseName === "paused" ? (
+                  <>Paused · {minute}'</>
+                ) : phaseName === "halted" ? (
+                  "Halted"
                 ) : (
                   <>
                     <Radio size={10} className="gx-live-dot" /> Live · {minute}'
