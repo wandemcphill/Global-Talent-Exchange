@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { API } from "@/lib/api";
 import { Link } from "react-router-dom";
-import { GtexLiveWorldPulse } from "@/components/landing/landingModels";
 import { GtexHomeNav } from "@/components/landing/GtexHomeNav";
 import { HeroSection } from "@/components/landing/HeroSection";
 import { ClarityStrip } from "@/components/landing/ClarityStrip";
@@ -19,36 +18,15 @@ import { TrustAndIntegritySection } from "@/components/landing/TrustAndIntegrity
 import { ConversionAndFooterSection } from "@/components/landing/ConversionAndFooterSection";
 import { GtexTopAdvertisingRail, GtexHomepageAdvertising } from "@/components/advertising/GtexAdvertising";
 import { PublicTrafficStatsStrip } from "@/components/landing/PublicTrafficStatsStrip";
+import { useLiveWorldPulse } from "@/components/landing/useLiveWorldPulse";
 import { NigeriaPlaySection } from "@/components/landing/NigeriaPlaySection";
 import { DocumentHead } from "@/components/seo/DocumentHead";
 
 export default function Landing() {
-  const [pulse, setPulse] = useState<GtexLiveWorldPulse | null>(null);
+  const pulse = useLiveWorldPulse();
   const [jackpotLabel, setJackpotLabel] = useState<string | null>(null);
   const [jackpotBalance, setJackpotBalance] = useState<string | null>(null);
   const [failsafeAt, setFailsafeAt] = useState<string | null>(null);
-
-  const loadPulse = async () => {
-    try {
-      const res = await axios.get(`${API}/public/live-stats`, { timeout: 3000 });
-      const data = res.data?.data || res.data;
-      if (data) {
-        setPulse({
-          clubsOnGtex: data.clubs_on_gtex ?? data.clubsOnGtex ?? 0,
-          usersOnline: data.users_online ?? data.usersOnline ?? 0,
-          playersOnline: data.players_online ?? data.playersOnline ?? 0,
-          visitorsToday: data.visitors_today ?? data.visitorsToday ?? null,
-          pageViewsToday: data.page_views_today ?? data.pageViewsToday ?? null,
-          registeredUsers: data.registered_users ?? data.registeredUsers ?? null,
-          usersOnlineWindowSeconds: data.users_online_window_seconds ?? 90,
-          generatedAt: data.generated_at,
-          labels: data.labels,
-        });
-      }
-    } catch {
-      // Gracefully silent: never invent fake numbers when network is unreachable
-    }
-  };
 
   const loadJackpot = async () => {
     try {
@@ -119,10 +97,8 @@ export default function Landing() {
   };
 
   useEffect(() => {
-    loadPulse();
     loadJackpot();
     const interval = setInterval(() => {
-      loadPulse();
       loadJackpot();
     }, 30000);
     return () => clearInterval(interval);

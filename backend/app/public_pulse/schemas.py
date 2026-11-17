@@ -12,7 +12,13 @@ class LiveWorldPulseView(BaseModel):
     players_online: int = Field(ge=0)
     users_online_window_seconds: int = Field(ge=60)
     visitors_today: int = Field(ge=0, default=0)
+    visitors_last_7_days: int = Field(ge=0, default=0)
+    visitors_last_30_days: int = Field(ge=0, default=0)
+    visitors_all_time: int = Field(ge=0, default=0)
     page_views_today: int = Field(ge=0, default=0)
+    page_views_last_7_days: int = Field(ge=0, default=0)
+    page_views_last_30_days: int = Field(ge=0, default=0)
+    page_views_all_time: int = Field(ge=0, default=0)
     registered_users: int = Field(ge=0, default=0)
     generated_at: datetime
     labels: dict[str, str] = Field(default_factory=dict)

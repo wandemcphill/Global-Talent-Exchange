@@ -7,6 +7,7 @@ declare const jest: any;
 
 import React, { act } from "react";
 import { createRoot, Root } from "react-dom/client";
+import axios from "axios";
 import { api } from "@/lib/api";
 import { formatNairaFromKobo, resolveCommercialMediaUrl, validateCommercialMediaFile } from "@/lib/commercial/api";
 import CommercialPublicPortal from "./CommercialPublicPortal";
@@ -131,6 +132,27 @@ describe("GTEX Commercial Network Public Portal, Auth & Match Broadcast Ads", ()
       if (url === "/v2/public/ads/packages") return Promise.resolve({ data: samplePackages });
       return Promise.resolve({ data: [] });
     }) as any);
+    jest.spyOn(axios, "get").mockImplementation(((url: string) => {
+      if (String(url).includes("/public/live-stats")) {
+        return Promise.resolve({
+          data: {
+            clubs_on_gtex: 2,
+            users_online: 1,
+            players_online: 0,
+            visitors_today: 20,
+            visitors_last_7_days: 33,
+            visitors_last_30_days: 33,
+            visitors_all_time: 33,
+            page_views_today: 73,
+            page_views_last_7_days: 247,
+            page_views_last_30_days: 247,
+            page_views_all_time: 247,
+            registered_users: 14,
+          },
+        });
+      }
+      return Promise.resolve({ data: {} });
+    }) as any);
 
     root = createRoot(container);
     await act(async () => {
@@ -144,6 +166,12 @@ describe("GTEX Commercial Network Public Portal, Auth & Match Broadcast Ads", ()
 
     const headline = container.querySelector('[data-testid="commercial-hero-headline"]');
     expect(headline?.textContent).toBe("Reach the GTEX audience.");
+    expect(container.querySelector('[data-testid="public-traffic-visitors-all-time"]')?.textContent).toContain("33");
+    expect(container.querySelector('[data-testid="public-traffic-visitors-today"]')?.textContent).toContain("20");
+    expect(container.querySelector('[data-testid="public-traffic-page-views-7-days"]')?.textContent).toContain("247");
+    expect(container.querySelector('[data-testid="public-traffic-page-views-today"]')?.textContent).toContain("73");
+    expect(container.textContent).toContain("Unique browsers");
+    expect(container.textContent).toContain("One visitor can create many page views");
     expect(container.querySelector('[data-testid="division-brand-advertising"]')).toBeTruthy();
     expect(container.querySelector('[data-testid="division-music-promotion"]')).toBeTruthy();
     expect(container.textContent).toContain("₦250,000.00");
