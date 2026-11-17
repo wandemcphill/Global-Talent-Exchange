@@ -11,6 +11,9 @@ from sqlalchemy.orm import Session
 from app.auth.dependencies import get_session
 from app.models.admin_runtime_state import AdminRuntimeState
 from app.models.share_code import ShareCode
+from app.models.referral_partner import ReferralPartner
+from app.models.referral_reward import ReferralReward
+from app.models.user import User
 
 from app.schemas.referral_admin import (
     AttributionChainEntryView,
@@ -254,12 +257,49 @@ class ReferralAdminService:
             creator_id = reward.beneficiary_creator_id or (
                 attribution.creator_profile_id if attribution is not None else None
             )
+            reward_model = self.session.get(ReferralReward, reward.reward_id) if self.session is not None else None
+            reward_payload = dict(reward_model.reward_payload_json or {}) if reward_model is not None else {}
+            partner_id = str(
+                reward_payload.get("referral_partner_id")
+                or (attribution.metadata.get("referral_partner_id") if attribution is not None else "")
+                or ""
+            ).strip()
+            partner = self.session.get(ReferralPartner, partner_id) if self.session is not None and partner_id else None
+            beneficiary_user = (
+                self.session.get(User, reward.beneficiary_user_id)
+                if self.session is not None and reward.beneficiary_user_id
+                else None
+            )
+            share_code_model = (
+                self.session.get(ShareCode, attribution.share_code_id)
+                if self.session is not None and attribution is not None and attribution.share_code_id
+                else None
+            )
+            try:
+                deposit_amount_fiat = (
+                    Decimal(str(reward_payload["deposit_amount_fiat"]))
+                    if reward_payload.get("deposit_amount_fiat") is not None
+                    else None
+                )
+            except (TypeError, ValueError):
+                deposit_amount_fiat = None
             items.append(
                 PendingRewardView(
                     reward_id=reward.reward_id,
                     attribution_id=reward.attribution_id,
                     beneficiary_user_id=reward.beneficiary_user_id,
                     beneficiary_creator_id=reward.beneficiary_creator_id,
+                    beneficiary_name=(partner.display_name if partner is not None else (
+                        beneficiary_user.display_name or beneficiary_user.username if beneficiary_user is not None else None
+                    )),
+                    beneficiary_email=(partner.contact_email if partner is not None else (
+                        beneficiary_user.email if beneficiary_user is not None else None
+                    )),
+                    payout_method=partner.payout_method if partner is not None else None,
+                    payout_destination_reference=partner.payout_destination_reference if partner is not None else None,
+                    share_code=share_code_model.code if share_code_model is not None else None,
+                    deposit_reference=reward_payload.get("first_deposit_reference"),
+                    deposit_amount_fiat=deposit_amount_fiat,
                     reward_type=reward.reward_type,
                     status=reward.status,
                     trigger_milestone=reward.trigger_milestone,
@@ -291,6 +331,8 @@ class ReferralAdminService:
         )
         if payload.action == "approve" and self._creator_frozen(creator_id):
             raise ReferralActionError("creator_rewards_frozen")
+        if payload.action == "approve" and reward.hold_until is not None and reward.hold_until > utcnow():
+            raise ReferralActionError("reward_hold_active")
         updated = self.orchestrator.rewards.apply_review_decision(
             reward_id=reward_id,
             action=payload.action,
