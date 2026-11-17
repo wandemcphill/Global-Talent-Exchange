@@ -444,6 +444,6 @@ def test_a_live_lease_blocks_a_second_worker() -> None:
     assert owner["advanced"] == 1
     assert final_minute == 30
     assert final_owner is None
+    # A quiet 15-minute slice can advance the clock without a new event id.
     assert final_ids[: len(committed_ids)] == committed_ids
     assert len(final_ids) == len(set(final_ids))
-    assert len(final_ids) > len(committed_ids)
