@@ -478,6 +478,15 @@ export interface OperationsHubDestination {
   communication_channel_mode?: "office_wide" | "direct" | "vacant";
   staff_lead: DepartmentStaffProfile;
   tactical_authority?: ManagerTacticalAuthorityDecision | null;
+  matchday_decision?: {
+    declined_player_ids?: string[];
+    declined_players?: string[];
+    verdict_reason?: string | null;
+    decision_outcome?: string | null;
+    manager_name?: string | null;
+    match_manager_name?: string | null;
+    score?: string | null;
+  } | null;
   glb_model: string;
   exterior_glb: string;
   accent_color: string;

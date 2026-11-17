@@ -138,6 +138,8 @@ export interface MatchPitchLiveSceneProps {
   liveScore?: SpectatorLiveScoreUpdate | null;
   /** Live tactical configuration (formation, defensive line, pressing, width, tempo) */
   tacticalConfig?: TacticalVisualConfig | null;
+  /** Keep player marks on the server frame. Foot offset and the pass arc stay. */
+  lockServerPositions?: boolean;
   /** Custom or club/competition stadium LED advertising campaigns */
   stadiumCampaigns?: StadiumLedCampaign[];
   /** Active GTEX public brand campaigns from GtexAdvertising */
@@ -199,6 +201,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   liveEvents = [],
   liveScore,
   tacticalConfig = null,
+  lockServerPositions = false,
   stadiumCampaigns,
   publicBrandCampaigns,
   adRotationIntervalSec = 10,
@@ -449,10 +452,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   useEffect(() => {
     interpolator.setTacticalConfig(tacticalConfig ?? null);
-    if (tacticalConfig) {
+    interpolator.setLockServerPositions(lockServerPositions);
+    if (tacticalConfig && !lockServerPositions) {
       touchlineManagerRef.current?.notifyTacticalChange("both");
     }
-  }, [tacticalConfig, interpolator]);
+  }, [tacticalConfig, interpolator, lockServerPositions]);
 
   useEffect(() => {
     if (stadiumArenaRef.current && stadiumCampaigns) {
@@ -588,6 +592,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const handleContextLost = (e: Event) => {
       e.preventDefault();
       setContextLost(true);
+      // The match clock stays on the server frame. Context loss only marks the canvas.
     };
     const handleContextRestored = () => {
       setContextLost(false);

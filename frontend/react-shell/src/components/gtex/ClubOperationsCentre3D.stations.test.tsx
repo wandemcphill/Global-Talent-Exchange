@@ -358,6 +358,12 @@ function buildSixDepartmentHub(opts?: { protocolExecutedToday?: boolean; vacantA
         camera_position: [-19, 10, 18],
         camera_target: [-14, 2, 4],
         staff_lead: { role_key: "first_team_manager", role_label: "First-Team Manager", name: "Finidi George", mood: 82, is_appointed: true },
+        matchday_decision: {
+          declined_players: ["Lucas Vance"],
+          verdict_reason: "The manager kept the senior striker.",
+          score: "1-1",
+          match_manager_name: "Finidi George",
+        },
         alert_count: 0,
         status_badge: "Matchday: Balanced",
         hotspots: [
@@ -676,6 +682,7 @@ describe("Stage 2: Physical 3D stations & operational completeness", () => {
       mgrCard.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     });
     expect(container!.querySelector('[data-testid="room-panel-managers-office"]')).not.toBeNull();
+    expect(container!.textContent).toContain("Lucas Vance");
     expect(container!.querySelector('[data-testid="manager-squad-readiness"]')).not.toBeNull();
 
     // Direct 2D click on Finance 2nd station (`sponsor_wall`) preserves station without resetting to `ledger_vault`

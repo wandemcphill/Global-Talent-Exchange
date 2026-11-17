@@ -62,7 +62,13 @@ function patternCode(pattern: string): number {
   return 0;
 }
 
-function patternedCloth(primary: string, secondary: string, pattern: string, freq: THREE.Vector2): THREE.MeshStandardMaterial {
+function patternedCloth(
+  primary: string,
+  secondary: string,
+  pattern: string,
+  freq: THREE.Vector2,
+  chestMark: THREE.Texture,
+): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     color: primary,
     roughness: 0.62,
@@ -75,10 +81,14 @@ function patternedCloth(primary: string, secondary: string, pattern: string, fre
     shader.uniforms.uSecondary = { value: new THREE.Color(secondary) };
     shader.uniforms.uPattern = { value: code };
     shader.uniforms.uFreq = { value: freq };
+    shader.uniforms.uChestMark = { value: chestMark };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vChestPos;")
+      .replace("#include <begin_vertex>", "vChestPos = position;\n#include <begin_vertex>");
     shader.fragmentShader = shader.fragmentShader
       .replace(
         "#include <common>",
-        "#include <common>\nuniform vec3 uSecondary;\nuniform float uPattern;\nuniform vec2 uFreq;",
+        "#include <common>\nuniform vec3 uSecondary;\nuniform float uPattern;\nuniform vec2 uFreq;\nuniform sampler2D uChestMark;\nvarying vec3 vChestPos;",
       )
       .replace(
         "#include <color_fragment>",
@@ -96,48 +106,54 @@ function patternedCloth(primary: string, secondary: string, pattern: string, fre
         else if (uPattern > 4.5 && uPattern < 5.5) {
           float fade = clamp(vUv.y, 0.0, 1.0);
           diffuseColor.rgb = mix(base, alt, fade);
-        }`,
+        }
+        vec2 markUv = vec2((vChestPos.x + 0.09) / 0.20, (vChestPos.y - 1.12) / 0.30);
+        float onFront = step(0.11, vChestPos.z);
+        float inside = step(0.0, markUv.x) * step(markUv.x, 1.0) * step(0.0, markUv.y) * step(markUv.y, 1.0);
+        vec4 mark = texture2D(uChestMark, clamp(markUv, 0.0, 1.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, mark.rgb, mark.a * onFront * inside);`,
       );
   };
   material.customProgramCacheKey = () => `gtex-kit-${material.uuid}`;
   return material;
 }
 
-function chestPlate(text: string, ink: string): THREE.Mesh {
+function paintChestMark(canvas: HTMLCanvasElement, text: string, crest: HTMLImageElement | null): void {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  if (crest) {
+    context.drawImage(crest, 300, 28, 150, 168);
+  }
+  context.fillStyle = "rgba(15, 23, 42, 0.72)";
+  context.fillRect(36, 230, 440, 92);
+  context.fillStyle = "#F8FAFC";
+  context.strokeStyle = "#111827";
+  context.lineWidth = 8;
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${text.length > 12 ? 36 : text.length > 8 ? 46 : 54}px Arial`;
+  context.strokeText(text, 256, 276);
+  context.fillText(text, 256, 276);
+}
+
+function chestMarkTexture(text: string, crestDataUri?: string | null): THREE.CanvasTexture {
   const canvas = document.createElement("canvas");
   canvas.width = 512;
-  canvas.height = 160;
-  const context = canvas.getContext("2d");
-  if (context) {
-    context.clearRect(0, 0, canvas.width, canvas.height);
-    context.fillStyle = "rgba(15, 23, 42, 0.55)";
-    context.fillRect(16, 28, canvas.width - 32, 104);
-    context.fillStyle = ink;
-    context.strokeStyle = "#111827";
-    context.lineWidth = 10;
-    context.textAlign = "center";
-    context.textBaseline = "middle";
-    context.font = `900 ${text.length > 12 ? 54 : text.length > 8 ? 68 : 78}px Arial`;
-    context.strokeText(text, 256, 84);
-    context.fillText(text, 256, 84);
-  }
+  canvas.height = 512;
+  paintChestMark(canvas, text, null);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  const plate = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.46, 0.14),
-    new THREE.MeshBasicMaterial({
-      map: texture,
-      transparent: true,
-      depthWrite: false,
-      depthTest: true,
-      side: THREE.FrontSide,
-      polygonOffset: true,
-      polygonOffsetFactor: -4,
-    }),
-  );
-  plate.frustumCulled = false;
-  plate.name = "ChestText";
-  return plate;
+  texture.needsUpdate = true;
+  if (crestDataUri) {
+    const image = new Image();
+    image.onload = () => {
+      paintChestMark(canvas, text, image);
+      texture.needsUpdate = true;
+    };
+    image.src = crestDataUri;
+  }
+  return texture;
 }
 
 function partName(mesh: THREE.Mesh): string {
@@ -194,7 +210,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
     const reducedMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ?? false;
     let frame = 0;
     const render = () => {
-      if (!draggingRef.current && !reducedMotion && !mount.matches(":hover")) shirt.rotation.y += 0.003;
+      if (!draggingRef.current && !reducedMotion && !mount.matches(":hover")) shirt.rotation.y += 0;
       if (typeof document === "undefined" || !document.hidden) renderer.render(scene, camera);
       frame = requestAnimationFrame(render);
     };
@@ -222,6 +238,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
     if (!shirt) return;
     let cancelled = false;
     const added: THREE.Object3D[] = [];
+    const marks: THREE.Texture[] = [];
 
     loadKitTemplate()
       .then((template) => {
@@ -238,7 +255,8 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
         root.rotation.y = -Math.PI / 2;
         root.updateMatrixWorld(true);
         const freq = new THREE.Vector2(7, 5);
-        const shirtMaterial = patternedCloth(kit.primary_color, kit.secondary_color, kit.pattern_type, freq);
+        const chestMark = chestMarkTexture(chestText, crestDataUri);
+        const shirtMaterial = patternedCloth(kit.primary_color, kit.secondary_color, kit.pattern_type, freq, chestMark);
         const shortsMaterial = new THREE.MeshStandardMaterial({
           color: kit.shorts_color || kit.primary_color,
           roughness: 0.64,
@@ -263,42 +281,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
         root.updateMatrixWorld(true);
         draggingRef.current = false;
         shirt.rotation.set(0, Math.PI - 1.15, 0);
-
-        const chest = findBone(root, "mixamorigSpine2") || findBone(root, "mixamorigSpine1");
-        if (chest) {
-          const plate = chestPlate(chestText, "#F8FAFC");
-          plate.scale.setScalar(0.78);
-          plate.position.set(0, -0.02, 0.18);
-          plate.rotation.set(0, 0, 0);
-          plate.renderOrder = 2;
-          chest.add(plate);
-
-          if (crestDataUri) {
-            const crestTexture = new THREE.TextureLoader().load(crestDataUri, (loaded) => {
-              if (cancelled) loaded.dispose();
-            });
-            crestTexture.colorSpace = THREE.SRGBColorSpace;
-            const crest = new THREE.Mesh(
-              new THREE.PlaneGeometry(1, 1.15),
-              new THREE.MeshBasicMaterial({
-                map: crestTexture,
-                transparent: true,
-                depthWrite: false,
-                depthTest: true,
-                side: THREE.FrontSide,
-                polygonOffset: true,
-                polygonOffsetFactor: -4,
-              }),
-            );
-            crest.frustumCulled = false;
-            crest.scale.setScalar(0.16);
-            crest.position.set(0.09, 0.1, 0.185);
-            crest.rotation.set(0, 0, 0);
-            crest.renderOrder = 2;
-            chest.add(crest);
-          }
-        }
-
+        marks.push(chestMark);
         added.push(root);
       })
       .catch(() => {
@@ -307,6 +290,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
 
     return () => {
       cancelled = true;
+      marks.forEach((mark) => mark.dispose());
       added.forEach((object) => {
         shirt.remove(object);
         object.traverse((child) => {

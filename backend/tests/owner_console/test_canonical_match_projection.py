@@ -5,9 +5,13 @@ from __future__ import annotations
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 
-from app.owner_console.canonical_match_projection import normalize_authoritative_appearances
+from app.owner_console.canonical_match_projection import (
+    apply_canonical_injury_days,
+    normalize_authoritative_appearances,
+    resolved_substitute_ids,
+)
 from app.owner_console.living_club_world import emit_canonical_club_event
-from app.owner_console.models import OwnerClubEvent
+from app.owner_console.models import OwnerClubEvent, OwnerSquadPlayer
 
 
 def test_authoritative_appearances_include_used_substitutes_and_exclude_unused_bench() -> None:
@@ -78,3 +82,89 @@ def test_canonical_source_events_are_idempotent_per_club() -> None:
         assert home.club_id == "home-club"
         assert away.club_id == "away-club"
         assert home.source_id == away.source_id == "canonical-match-1"
+
+
+def test_used_substitute_resolves_through_player_ref_and_unused_bench_does_not() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OwnerSquadPlayer.__table__.create(engine)
+    with Session(engine) as session:
+        session.add(
+            OwnerSquadPlayer(
+                id="owner-sub",
+                club_id="club-a",
+                player_ref="canon-sub",
+                name="Used Sub",
+                position="MID",
+                age=18,
+                rating=70,
+            )
+        )
+        session.add(
+            OwnerSquadPlayer(
+                id="owner-bench",
+                club_id="club-a",
+                player_ref="canon-bench",
+                name="Unused Bench",
+                position="MID",
+                age=18,
+                rating=68,
+            )
+        )
+        session.commit()
+        resolved = resolved_substitute_ids(
+            session,
+            "club-a",
+            [
+                {"player_id": "canon-start", "started": True, "minutes_played": 90},
+                {"player_id": "canon-sub", "started": False, "minutes_played": 24},
+                {"player_id": "canon-bench", "started": False, "minutes_played": 0},
+            ],
+        )
+        assert "canon-sub" in resolved
+        assert "owner-sub" in resolved
+        assert "canon-bench" not in resolved
+        assert "owner-bench" not in resolved
+
+
+def test_canonical_injury_days_are_applied_once_per_match() -> None:
+    engine = create_engine("sqlite+pysqlite:///:memory:")
+    OwnerSquadPlayer.__table__.create(engine)
+    with Session(engine) as session:
+        session.add(
+            OwnerSquadPlayer(
+                id="owner-forward",
+                club_id="club-a",
+                player_ref="canon-forward",
+                name="Forward",
+                position="FWD",
+                age=24,
+                rating=80,
+                injured_days=0,
+            )
+        )
+        session.commit()
+        events = [
+            {
+                "type": "injury",
+                "team": "home",
+                "player_id": "canon-forward",
+                "metadata": {"recovery_days": 12, "injury_type": "hamstring"},
+            }
+        ]
+        apply_canonical_injury_days(
+            session, match_id="match-1", club_id="club-a", events=events, side_key="home"
+        )
+        apply_canonical_injury_days(
+            session, match_id="match-1", club_id="club-a", events=events, side_key="home"
+        )
+        player = session.get(OwnerSquadPlayer, "owner-forward")
+        assert player is not None
+        assert player.injured_days == 12
+        apply_canonical_injury_days(
+            session,
+            match_id="match-1",
+            club_id="club-a",
+            events=[{"type": "goal", "team": "home", "player_id": "canon-forward", "metadata": {}}],
+            side_key="home",
+        )
+        assert player.injured_days == 12

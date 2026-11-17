@@ -102,16 +102,12 @@ export default function Lineup() {
     setSaving(true);
     try {
       const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload)).data;
-      void Promise.resolve(
-        api.post?.("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
-          preferred_formation: formation,
-          preferred_player_ids: payload.starter_player_ids,
-          note: "Owner non-binding lineup preference submitted from Squad Lineup Preference page",
-        }),
-      ).catch(() => {
-        // Ignore if endpoint unavailable in mock test
-      });
       queryClient.setQueryData(["lineup-plan", clubId], normalizeLineupPlan(saved));
+      await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
+        preferred_formation: formation,
+        preferred_player_ids: payload.starter_player_ids,
+        note: "Owner non-binding lineup preference submitted from Squad Lineup Preference page",
+      });
       toast.success("Non-binding owner lineup preference saved and forwarded to First-Team Manager.");
     } catch (error) {
       toast.error(errMsg(error));

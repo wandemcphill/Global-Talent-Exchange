@@ -588,10 +588,37 @@ class OwnerCompetitionLifecycleMappingService:
                 "kickoff_already_due", "Pre-match instructions must be saved before the scheduled virtual kickoff."
             )
 
+        from sqlalchemy.orm.attributes import flag_modified
+
+        from app.models.club_match_plan import ClubMatchPlan
+        from app.owner_console.autonomous_staff_engine import (
+            evaluate_manager_mentality_authority,
+            select_manager_matchday_lineup,
+        )
+
+        facilities = dict(owner_state.facilities_json or {})
+        preference = dict(facilities.get("_owner_lineup_preference") or {})
+        if not preference.get("preferred_player_ids"):
+            plan = self.session.scalar(select(ClubMatchPlan).where(ClubMatchPlan.club_id == club_id))
+            if plan is not None and plan.starter_player_ids_json:
+                preference["preferred_player_ids"] = [str(pid) for pid in plan.starter_player_ids_json]
+                preference["preferred_formation"] = preference.get("preferred_formation") or plan.formation
+                preference["is_non_binding_preference"] = True
+                facilities["_owner_lineup_preference"] = preference
+                owner_state.facilities_json = facilities
+                flag_modified(owner_state, "facilities_json")
+        mentality_decision = evaluate_manager_mentality_authority(
+            self.session, owner_state, requested_mentality=mentality
+        )
+        select_manager_matchday_lineup(self.session, owner_state)
+
         metadata = dict(canonical_match.metadata_json or {})
         owner_tactics = dict(metadata.get("owner_pre_match_tactics") or {})
         owner_tactics[club_id] = {
             "mentality": mentality,
+            "effective_mentality": mentality_decision["effective_mentality"],
+            "manager_decision_status": mentality_decision["decision_status"],
+            "manager_verdict_reason": mentality_decision["reasoning"],
             "lineup_mode": lineup_mode,
             "saved_by_user_id": user_id,
             "saved_at_virtual_time": now_virtual.isoformat(),

@@ -4117,9 +4117,31 @@ def select_manager_matchday_lineup(
     owner_pref = dict(fac.get("_owner_lineup_preference") or {})
 
     players = list(db.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
-    eligible = [p for p in players if int(p.injured_days or 0) <= 0 and str(p.id) not in exclusions]
+    from app.models.player_injury_case import PlayerInjuryCase
+
+    canonical_refs = [str(p.player_ref) for p in players if p.player_ref]
+    active_injury_refs: set[str] = set()
+    if canonical_refs:
+        injury_rows = db.scalars(
+            select(PlayerInjuryCase).where(
+                PlayerInjuryCase.player_id.in_(canonical_refs),
+                PlayerInjuryCase.recovered_on.is_(None),
+            )
+        ).all()
+        active_injury_refs = {str(row.player_id) for row in injury_rows}
+    eligible = [
+        p
+        for p in players
+        if int(p.injured_days or 0) <= 0
+        and str(p.id) not in exclusions
+        and str(p.player_ref or "") not in active_injury_refs
+    ]
     if len(eligible) < 11:
-        eligible = [p for p in players if int(p.injured_days or 0) <= 0] or list(players)
+        eligible = [
+            p
+            for p in players
+            if int(p.injured_days or 0) <= 0 and str(p.player_ref or "") not in active_injury_refs
+        ]
 
     youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
     veteran_pref = int(mgr_profile.get("preference_for_experienced_players", 55))
@@ -4177,9 +4199,30 @@ def select_manager_matchday_lineup(
         if p not in bench and len(bench) < 7:
             bench.append(p)
 
-    pref_ids = [str(pid) for pid in (owner_pref.get("preferred_starter_ids") or [])]
+    pref_ids = [
+        str(pid)
+        for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
+    ]
     accepted_pref_ids = [pid for pid in pref_ids if pid in starter_ids]
     declined_pref_ids = [pid for pid in pref_ids if pid not in starter_ids]
+    if declined_pref_ids:
+        decision_outcome = "declined"
+        verdict_reason = (
+            f"{mgr['name']} declined owner-preferred players {', '.join(declined_pref_ids)} "
+            f"and named the matchday XI ({chosen_formation}, {chosen_mentality})."
+        )
+    elif pref_ids:
+        decision_outcome = "accepted"
+        verdict_reason = (
+            f"{mgr['name']} accepted the owner's preferred players into the matchday XI "
+            f"({chosen_formation}, {chosen_mentality})."
+        )
+    else:
+        decision_outcome = "manager_selection"
+        verdict_reason = (
+            f"{mgr['name']} selected the authoritative matchday XI ({chosen_formation}, {chosen_mentality}) "
+            f"based on tactical philosophy, fitness, and readiness."
+        )
 
     selection_payload = {
         "selected_by_manager_id": mgr.get("id"),
@@ -4189,8 +4232,12 @@ def select_manager_matchday_lineup(
         "mentality": chosen_mentality,
         "mentality_authority": mentality_authority,
         "tactical_philosophy": mgr_profile.get("preferred_tactical_philosophy"),
+        "owner_preferred_player_ids": pref_ids,
+        "manager_starting_ids": [p.id for p in starters],
         "starting_xi_ids": [p.id for p in starters],
         "bench_ids": [p.id for p in bench],
+        "decision_outcome": decision_outcome,
+        "verdict_reason": verdict_reason,
         "starting_xi": [
             {
                 "id": p.id,
@@ -4220,10 +4267,7 @@ def select_manager_matchday_lineup(
             "is_non_binding": True,
             "accepted_starter_ids": accepted_pref_ids,
             "declined_starter_ids": declined_pref_ids,
-            "manager_note": (
-                f"{mgr['name']} selected the authoritative matchday XI ({chosen_formation}, {chosen_mentality}) "
-                f"based on tactical philosophy, fitness, and readiness."
-            ),
+            "manager_note": verdict_reason,
         },
         "selected_at": _utcnow().isoformat(),
     }

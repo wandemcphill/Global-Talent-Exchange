@@ -791,15 +791,15 @@ class LiveMatchHub:
         )
 
     def get_state(self, match_id: str) -> LiveMatchStateView | None:
-        with self._lock:
-            runtime = self._matches.get(match_id)
-            if runtime is not None and runtime.last_snapshot is not None:
-                return self._build_state_view(runtime)
         bundle = self._canonical_execution_bundle(match_id)
         if bundle is not None:
             match, execution = bundle
             events = self._build_canonical_stream_events(match, execution)
             return self._build_canonical_state_view(match, execution, events)
+        with self._lock:
+            runtime = self._matches.get(match_id)
+            if runtime is not None and runtime.last_snapshot is not None:
+                return self._build_state_view(runtime)
         cached_state = self._safe_hot_cache_call(
             "get_match_state",
             lambda: self._hot_cache.get_match_state(match_id),
@@ -815,15 +815,15 @@ class LiveMatchHub:
         # A negative cursor would slice from the end of the log and silently replay the
         # tail of the match to a reconnecting spectator, so clamp before indexing.
         cursor = max(0, int(cursor or 0))
-        with self._lock:
-            runtime = self._matches.get(match_id)
-            if runtime is not None:
-                return list(runtime.published_events[cursor:]), len(runtime.published_events)
         bundle = self._canonical_execution_bundle(match_id)
         if bundle is not None:
             match, execution = bundle
             canonical_events = self._build_canonical_stream_events(match, execution)
             return list(canonical_events[cursor:]), len(canonical_events)
+        with self._lock:
+            runtime = self._matches.get(match_id)
+            if runtime is not None:
+                return list(runtime.published_events[cursor:]), len(runtime.published_events)
         cached_events = self._safe_hot_cache_call(
             "get_match_events",
             lambda: self._hot_cache.get_match_events(match_id, cursor=0),

@@ -131,16 +131,25 @@ class AutonomousMatchExecutionService:
                 failed += 1
                 errors.append(f"Match {match.id}: {exc}")
                 logger.exception("Error executing due fixture %s in competition %s", match.id, comp.id)
-                # Atomic savepoint rollback: clean up partial writes, restore SCHEDULED status, record retry
+                # A committed checkpoint must stay where it is. Only a fixture that
+                # never started a canonical execution is returned to scheduled.
                 try:
+                    from app.models.competition_match_execution import CompetitionMatchExecution
+
                     with self.session.begin_nested():
                         self.session.refresh(match)
-                        match.status = MatchStatus.SCHEDULED.value
+                        execution = self.session.scalar(
+                            select(CompetitionMatchExecution).where(CompetitionMatchExecution.match_id == match.id)
+                        )
                         meta = dict(match.metadata_json or {})
                         meta["execution_attempts"] = int(meta.get("execution_attempts", 0)) + 1
                         meta["last_execution_error"] = str(exc)
                         meta["last_attempt_virtual_at"] = eval_time.isoformat()
                         match.metadata_json = meta
+                        if execution is None or execution.execution_status not in {"in_progress", "paused", "halted"}:
+                            match.status = MatchStatus.SCHEDULED.value
+                        elif execution.last_error is None:
+                            execution.last_error = str(exc)[:500]
                         self.session.flush()
                 except Exception as meta_exc:
                     logger.warning("Failed to record retry metadata on match %s: %s", match.id, meta_exc)

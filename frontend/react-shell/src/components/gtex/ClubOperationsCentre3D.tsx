@@ -170,6 +170,31 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
 };
 
 const MAX_GLB_RETRIES = 2;
+const PROCEDURAL_ROOM_ONLY = /stadium_main\.glb|vip_skybox_concourse\.glb|vip_hospitality\.glb/;
+
+function MatchdayDecisionCard({
+  decision,
+}: {
+  decision?: OperationsHubDestination["matchday_decision"];
+}) {
+  const declined = decision?.declined_players?.length
+    ? decision.declined_players
+    : decision?.declined_player_ids || [];
+  const line = (value?: string | null) => (value && value.trim() ? value : "DATA UNAVAILABLE");
+  return (
+    <div data-testid="matchday-decision-panel" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-1">
+      <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Matchday decision</p>
+      <p className="text-xs text-slate-200" data-testid="matchday-declined-players">
+        Declined: {declined.length ? declined.join(", ") : "DATA UNAVAILABLE"}
+      </p>
+      <p className="text-xs text-slate-300">Reason: {line(decision?.verdict_reason)}</p>
+      <p className="text-xs text-slate-300">Score: {line(decision?.score)}</p>
+      <p className="text-xs text-slate-300" data-testid="matchday-manager-name">
+        Match manager: {line(decision?.match_manager_name || decision?.manager_name)}
+      </p>
+    </div>
+  );
+}
 
 const OVERVIEW_CAMERA_POS: [number, number, number] = [0, 34, 42];
 const OVERVIEW_CAMERA_TARGET: [number, number, number] = [0, 1.5, 0];
@@ -569,7 +594,10 @@ export function ClubOperationsCentre3D({
     roomActorsRef.current = [];
 
     const mountDestinationGlb = (dest: OperationsHubDestination, group: THREE.Group, accent: THREE.Color) => {
-      const rawGlbUrl = dest.glb_model || "/models/campus/club_hq.glb";
+      const rawGlbUrl = dest.glb_model || "";
+      if (!rawGlbUrl || PROCEDURAL_ROOM_ONLY.test(rawGlbUrl)) {
+        return;
+      }
       const glbUrl = publicUrl(rawGlbUrl);
       const fallbackName = `fallback-wireframe-${dest.destination_key}`;
 
@@ -2131,6 +2159,7 @@ export function ClubOperationsCentre3D({
             {/* 1. EXECUTIVE OFFICE VIEW */}
             {activeDestination.destination_key === "executive_office" && (
               <div className="space-y-3.5" data-testid="room-panel-executive-office">
+                <MatchdayDecisionCard decision={activeDestination.matchday_decision} />
                 <div
                   tabIndex={-1}
                   data-testid="executive-briefing-summary"
@@ -2322,16 +2351,21 @@ export function ClubOperationsCentre3D({
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Team Strength</p>
                     <p className="gx-mono text-sm font-black text-sky-300 mt-0.5">
-                      {rpt.first_team_performance?.team_strength ?? 68} OVR
+                      {rpt.first_team_performance?.team_strength != null
+                        ? `${rpt.first_team_performance.team_strength} OVR`
+                        : "DATA UNAVAILABLE"}
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Dressing Room Morale</p>
                     <p className="gx-mono text-sm font-black text-emerald-300 mt-0.5">
-                      {rpt.player_morale?.avg_morale ?? 75}%
+                      {rpt.player_morale?.avg_morale != null
+                        ? `${rpt.player_morale.avg_morale}%`
+                        : "DATA UNAVAILABLE"}
                     </p>
                   </div>
                 </div>
+                <MatchdayDecisionCard decision={activeDestination.matchday_decision} />
 
                 {/* Tactical Mentality Control & Manager Authority Split */}
                 {(() => {

@@ -72,11 +72,35 @@ describe("authoritative tactical mapping (GET /matches/{id}/tactics contract)", 
 describe("MatchCenter canonical 2D/2.5D broadcast & authoritative tactics contract", () => {
   const src = fs.readFileSync(path.resolve(__dirname, "../../../pages/MatchCenter.tsx"), "utf-8");
 
-  test("2D/2.5D camera and shader toolbars remain active without closed 3D runtime toggles", () => {
+  test("2D/2.5D stays the default and WebGL receives the same Match Center frames", () => {
     expect(src).toContain("2D TOP-DOWN");
     expect(src).toContain("VORONOI");
+    expect(src).toContain("<MatchPitchLiveScene");
+    expect(src).toContain("frames: recordedFrames");
+    expect(src).toContain("liveFrame={spectatorStream.lastFrame}");
+    expect(src).toContain("tacticalConfig={authoritativeTactics}");
+    expect(src).toContain("lockServerPositions");
+    expect(src).toContain('if (id === "u2a-006-showcase")');
     expect(src).not.toContain("view3DBroadcast");
-    expect(src).not.toContain("<MatchPitchLiveScene");
+    expect(src).toContain("{canLocalReplay && (");
+    expect(src).toContain("match-pause-toggle");
+    const scene = fs.readFileSync(path.resolve(__dirname, "./MatchPitchLiveScene.tsx"), "utf-8");
+    expect(scene).toContain("The match clock stays on the server frame");
+    expect(scene).toContain("setContextLost(true)");
+  });
+
+  test("a locked match-page interpolator keeps server coordinates when tactics change", () => {
+    const fixture = buildFiveMinuteHumanoidMatchFixture(60);
+    const base = new SpatialInterpolator(fixture.frames);
+    base.setLockServerPositions(true);
+    const plain = base.interpolate(12)!;
+    const shaped = new SpatialInterpolator(fixture.frames);
+    shaped.setLockServerPositions(true);
+    shaped.setTacticalConfig(mapAuthoritativeTactics({ home: { defensive_line: 90 } }));
+    const shifted = shaped.interpolate(12)!;
+    const idx = plain.players.findIndex((p) => p.side === "home" && p.role === "DEF" && !p.has_possession);
+    expect(idx).toBeGreaterThanOrEqual(0);
+    expect(shifted.players[idx].position3D[0]).toBeCloseTo(plain.players[idx].position3D[0], 5);
   });
 
   test("tactical HUD consumes authoritative tactics without mutable owner controls or risk-derived width", () => {

@@ -1598,7 +1598,10 @@ def record_match_institutional_impact(
             grad.first_team_minutes = int(grad.first_team_minutes or 0) + minutes_played
             grad.first_team_goals = int(grad.first_team_goals or 0) + scored_in_match
             grad.current_rating = int(sq_player.rating)
-            sub_debut = str(sq_player.id) in sub_used_ids and str(sq_player.id) not in xi_ids
+            identity_ids = {str(sq_player.id)}
+            if sq_player.player_ref:
+                identity_ids.add(str(sq_player.player_ref))
+            sub_debut = bool(identity_ids & sub_used_ids) and not bool(identity_ids & xi_ids)
             if grad.debut_match_id is None:
                 grad.debut_match_id = match.id
                 grad.debut_world_day = world_day
