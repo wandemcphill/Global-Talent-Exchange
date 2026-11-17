@@ -395,7 +395,14 @@ class ReferralOrchestrator:
             source_channel=payload.source_channel,
             campaign_name=payload.campaign_name,
             linked_competition_id=payload.linked_competition_id,
-            metadata=payload.metadata,
+            metadata={
+                **dict(payload.metadata or {}),
+                **(
+                    {"referral_partner_id": str(share_code.metadata.get("referral_partner_id"))}
+                    if share_code.metadata.get("referral_partner_id")
+                    else {}
+                ),
+            },
         )
         if self.session is not None:
             persisted_share_code = self.session.get(ShareCode, share_code.share_code_id)
