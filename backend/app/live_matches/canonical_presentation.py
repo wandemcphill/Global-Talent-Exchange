@@ -152,6 +152,26 @@ def canonical_sample_time_seconds(
     return round(span * ratio, 2)
 
 
+def broadcast_duration_cap_seconds(category: str | None) -> int:
+    """Cap the shared clock with the stored broadcast category.
+
+    Ordinary matches stay at 10 minutes. Finals, semi-finals, and designated
+    major knockouts stay at 15. A competition name is not enough to lengthen
+    the broadcast.
+    """
+
+    from app.match_engine.simulation.offside_var import (
+        BROADCAST_CATEGORY_MAX_SECONDS,
+        MatchBroadcastCategory,
+    )
+
+    key = str(category or "").strip().lower()
+    try:
+        return int(BROADCAST_CATEGORY_MAX_SECONDS[MatchBroadcastCategory(key)])
+    except (KeyError, ValueError):
+        return 600
+
+
 def viewer_clock_is_behind(*, last_clock_minute: float | None, clock_minute: int) -> bool:
     """A stored viewer that ends before the execution checkpoint cannot be the authority."""
 

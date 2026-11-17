@@ -13,6 +13,7 @@ from sqlalchemy.orm.attributes import flag_modified
 from app.common.enums.match_status import MatchStatus
 from app.core.cache import NullCacheBackend
 from app.live_matches.canonical_presentation import (
+    broadcast_duration_cap_seconds,
     canonical_sample_time_seconds,
     resolve_canonical_presentation,
 )
@@ -94,6 +95,15 @@ def test_sampling_uses_the_canonical_minute_not_the_final_frame() -> None:
         presentation="live",
     )
     assert midpoint == 200
+
+
+def test_broadcast_cap_follows_the_stored_category() -> None:
+    assert broadcast_duration_cap_seconds("ordinary_league") == 600
+    assert broadcast_duration_cap_seconds("final") == 900
+    assert broadcast_duration_cap_seconds("semi_final") == 900
+    assert broadcast_duration_cap_seconds("major_knockout") == 900
+    assert broadcast_duration_cap_seconds("cup") == 600
+    assert broadcast_duration_cap_seconds(None) == 600
 
 
 def test_scheduled_match_stays_at_minute_zero_without_an_in_memory_runtime() -> None:
@@ -310,3 +320,70 @@ def test_expired_lease_can_be_recovered_without_duplicating_events() -> None:
     assert recovered_ids[: len(committed_ids)] == committed_ids
     assert len(recovered_ids) == len(set(recovered_ids))
     assert execution.lease_owner != "crashed-worker"
+
+
+def test_a_new_worker_session_resumes_minute_15_without_duplicating_events() -> None:
+    helpers = _phase1()
+    session_factory = helpers._setup_session_factory()
+    with session_factory() as session:
+        _, match, _, _ = helpers._seed_canonical_fixture(session)
+        match.scheduled_at = datetime.now(timezone.utc) - timedelta(minutes=5)
+        service = CanonicalLiveExecutionService(session)
+        service.start_live_execution(match.id, step_interval_seconds=0)
+        _, execution, _ = service.step_execution(match.id, step_minutes=15, step_interval_seconds=0)
+        match_id = match.id
+        committed_ids = [str(item.get("event_id")) for item in execution.committed_events_json or []]
+        assert execution.current_minute == 15
+        session.commit()
+
+    with session_factory() as session:
+        resumed = CanonicalLiveExecutionService(session)
+        _, execution, _ = resumed.step_execution(match_id, step_minutes=15, step_interval_seconds=0)
+        session.commit()
+        resumed_ids = [str(item.get("event_id")) for item in execution.committed_events_json or []]
+
+    assert execution.current_minute == 30
+    assert execution.execution_status == "in_progress"
+    assert resumed_ids[: len(committed_ids)] == committed_ids
+    assert len(resumed_ids) == len(set(resumed_ids))
+    assert len(resumed_ids) > len(committed_ids)
+
+
+def test_a_live_lease_blocks_a_second_worker() -> None:
+    helpers = _phase1()
+    session_factory = helpers._setup_session_factory()
+    with session_factory() as session:
+        _, match, _, _ = helpers._seed_canonical_fixture(session)
+        now = datetime.now(timezone.utc)
+        match.scheduled_at = now - timedelta(minutes=5)
+        service = CanonicalLiveExecutionService(session)
+        service.start_live_execution(match.id, step_interval_seconds=0)
+        _, execution, _ = service.step_execution(match.id, step_minutes=15, step_interval_seconds=0)
+        execution.lease_owner = "worker-a"
+        execution.lease_expires_at = now + timedelta(minutes=5)
+        execution.next_step_at = now - timedelta(seconds=5)
+        session.commit()
+        blocked = service.claim_and_advance_due_executions(
+            reference_at=now,
+            step_minutes=15,
+            lease_owner="worker-b",
+            step_interval_seconds=0,
+        )
+        session.refresh(execution)
+        held_minute = execution.current_minute
+        owner = service.claim_and_advance_due_executions(
+            reference_at=now,
+            step_minutes=15,
+            lease_owner="worker-a",
+            step_interval_seconds=0,
+        )
+        session.commit()
+        session.refresh(execution)
+
+    assert blocked["discovered"] == 0
+    assert blocked["advanced"] == 0
+    assert held_minute == 15
+    assert owner["advanced"] == 1
+    assert execution.current_minute == 30
+    # The lease covers the step itself and is released when the checkpoint commits.
+    assert execution.lease_owner is None

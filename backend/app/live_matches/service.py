@@ -14,10 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.cache import HotPathCache
-from app.config.competition_constants import (
-    KNOCKOUT_BROADCAST_MAX_SECONDS,
-    STANDARD_BROADCAST_MAX_SECONDS,
-)
+from app.config.competition_constants import STANDARD_BROADCAST_MAX_SECONDS
 from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher
 from app.broadcast_network.stadium_service import StadiumImmersionProfile, StadiumImmersionService
@@ -643,7 +640,10 @@ class LiveMatchHub:
         away_team = dict(sim_req.get("away_team") or {})
         home_name = str(home_team.get("team_name") or match.home_club_id)
         away_name = str(away_team.get("team_name") or match.away_club_id)
-        from app.live_matches.canonical_presentation import resolve_canonical_presentation
+        from app.live_matches.canonical_presentation import (
+            broadcast_duration_cap_seconds,
+            resolve_canonical_presentation,
+        )
 
         presentation = resolve_canonical_presentation(
             match_status=getattr(match, "status", None),
@@ -686,22 +686,9 @@ class LiveMatchHub:
             read_only=True,
         )
         last_seq = events[-1].sequence if events else 0
-        broadcast_category = str(getattr(execution, "broadcast_category", None) or "").strip().lower()
-        comp_type = (
-            str(getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or "")
-            .strip()
-            .lower()
-        )
-        stage = str(getattr(match, "stage", None) or "").strip().lower()
-        is_major_knockout = bool(
-            broadcast_category == "major_knockout"
-            or getattr(match, "requires_winner", False)
-            or comp_type in {"champions_league", "world_cup", "knockout", "cup", "final"}
-            or stage in {"final", "semi_final", "quarter_final", "knockout"}
-        )
-        max_duration = KNOCKOUT_BROADCAST_MAX_SECONDS if is_major_knockout else STANDARD_BROADCAST_MAX_SECONDS
+        max_duration = broadcast_duration_cap_seconds(getattr(execution, "broadcast_category", None))
         raw_duration = getattr(execution, "assigned_duration_seconds", None)
-        assigned_duration = min(max_duration, max(1, int(raw_duration or max_duration)))
+        assigned_duration = min(max_duration, max(1, int(raw_duration or STANDARD_BROADCAST_MAX_SECONDS)))
         if presentation.presentation == "pre_match":
             shared_clock_second = 0
         elif presentation.presentation == "full_time":
@@ -904,7 +891,10 @@ class LiveMatchHub:
     def _playback_context_from_canonical(self, bundle: tuple[Any, Any]) -> LiveMatchPlaybackContext:
         """Rebuild the broadcast position from the execution row. An empty in-memory runtime is not completion."""
 
-        from app.live_matches.canonical_presentation import resolve_canonical_presentation
+        from app.live_matches.canonical_presentation import (
+            broadcast_duration_cap_seconds,
+            resolve_canonical_presentation,
+        )
 
         match, execution = bundle
         presentation = resolve_canonical_presentation(
@@ -912,22 +902,11 @@ class LiveMatchHub:
             execution_status=execution.execution_status,
             clock_phase=getattr(execution, "clock_phase", None),
         )
-        assigned = max(1, int(getattr(execution, "assigned_duration_seconds", None) or 600))
-        broadcast_category = str(getattr(execution, "broadcast_category", None) or "").strip().lower()
-        comp_type = (
-            str(getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or "")
-            .strip()
-            .lower()
+        max_duration = broadcast_duration_cap_seconds(getattr(execution, "broadcast_category", None))
+        assigned = min(
+            max_duration,
+            max(1, int(getattr(execution, "assigned_duration_seconds", None) or STANDARD_BROADCAST_MAX_SECONDS)),
         )
-        stage = str(getattr(match, "stage", None) or "").strip().lower()
-        is_major_knockout = bool(
-            broadcast_category == "major_knockout"
-            or getattr(match, "requires_winner", False)
-            or comp_type in {"champions_league", "world_cup", "knockout", "cup", "final"}
-            or stage in {"final", "semi_final", "quarter_final", "knockout"}
-        )
-        max_duration = KNOCKOUT_BROADCAST_MAX_SECONDS if is_major_knockout else STANDARD_BROADCAST_MAX_SECONDS
-        assigned = min(max_duration, assigned)
         target_end = max(1, int(getattr(execution, "target_end_minute", None) or 90))
         minute = 0 if presentation.presentation == "pre_match" else max(0, int(execution.current_minute or 0))
         elapsed = (

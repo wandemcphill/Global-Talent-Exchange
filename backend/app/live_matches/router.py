@@ -1927,7 +1927,9 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
             .strip()
             .lower()
         )
-        max_broadcast_seconds = 900 if comp_category == "major_knockout" else 600
+        from app.live_matches.canonical_presentation import broadcast_duration_cap_seconds
+
+        max_broadcast_seconds = broadcast_duration_cap_seconds(comp_category)
         broadcast_session_payload["pause_replay_enabled"] = False
         if playback_context is not None:
             assigned_dur = min(
