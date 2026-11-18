@@ -54,10 +54,7 @@ def main() -> None:
     for asset in assets:
         counts[asset["ethnicity"]] = counts.get(asset["ethnicity"], 0) + 1
     manifest["asset_count"] = len(assets)
-    manifest["usage"] = (
-        "unique regen cutouts divided across ethnicities; "
-        "each file lives in one pool only"
-    )
+    manifest["usage"] = "unique regen cutouts divided across ethnicities; " "each file lives in one pool only"
     manifest["ethnicity_counts"] = dict(sorted(counts.items()))
     manifest["assets"] = sorted(assets, key=lambda asset: asset["local_path"])
     MANIFEST.write_text(json.dumps(manifest), encoding="utf-8")

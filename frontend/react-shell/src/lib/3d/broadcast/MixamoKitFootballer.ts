@@ -265,7 +265,7 @@ export class MixamoKitFootballer {
   public readonly appearanceProfile: PlayerAppearanceProfile;
   private readonly modelContainer: THREE.Group;
   private mixer: THREE.AnimationMixer | null = null;
-  private readonly actions = new Map<FootballAnimationState, THREE.AnimationAction>();
+  private readonly actions = new Map<string, THREE.AnimationAction>();
   private currentState: FootballAnimationState = "idle";
   private clipKey: string = "idle";
   private timeInCurrentStateSec = 0;

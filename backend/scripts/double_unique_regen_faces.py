@@ -3,6 +3,7 @@
 Each new face is an eye-aligned mix of two cutouts in the same ethnicity and
 hair folder. The original file is not changed. Cloudinary is not contacted.
 """
+
 from __future__ import annotations
 
 import json
@@ -67,7 +68,9 @@ def eye_pair(image: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     )
 
 
-def align(donor: np.ndarray, host_eyes: tuple[np.ndarray, np.ndarray], donor_eyes: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
+def align(
+    donor: np.ndarray, host_eyes: tuple[np.ndarray, np.ndarray], donor_eyes: tuple[np.ndarray, np.ndarray]
+) -> np.ndarray:
     host_left, host_right = host_eyes
     donor_left, donor_right = donor_eyes
     host_gap = max(8.0, float(np.linalg.norm(host_right - host_left)))
@@ -99,7 +102,12 @@ def align(donor: np.ndarray, host_eyes: tuple[np.ndarray, np.ndarray], donor_eye
     return mixed
 
 
-def mix_faces(host: np.ndarray, donor: np.ndarray, host_eyes: tuple[np.ndarray, np.ndarray], donor_eyes: tuple[np.ndarray, np.ndarray]) -> np.ndarray:
+def mix_faces(
+    host: np.ndarray,
+    donor: np.ndarray,
+    host_eyes: tuple[np.ndarray, np.ndarray],
+    donor_eyes: tuple[np.ndarray, np.ndarray],
+) -> np.ndarray:
     aligned = align(donor, host_eyes, donor_eyes)
     alpha = host[:, :, 3]
     x0, _y0, x1, y1 = face_box(alpha)
@@ -114,9 +122,12 @@ def mix_faces(host: np.ndarray, donor: np.ndarray, host_eyes: tuple[np.ndarray, 
     side = np.clip((0.92 - radial) / 0.28, 0.0, 1.0)
     side = side * side * (3.0 - 2.0 * side)
     mask = vertical * side * (alpha > 40) * np.clip(aligned[:, :, 3] / 255.0, 0.0, 1.0)
-    soft = np.array(
-        Image.fromarray(np.clip(mask * 255.0, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(3))
-    ).astype(np.float32) / 255.0
+    soft = (
+        np.array(
+            Image.fromarray(np.clip(mask * 255.0, 0, 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(3))
+        ).astype(np.float32)
+        / 255.0
+    )
     weight = soft[:, :, None] * 0.5
     mixed = host.astype(np.float32) * (1.0 - weight) + aligned * weight
     mixed[:, :, 3] = alpha
