@@ -107,12 +107,67 @@ export class GtexCelebrationAudioEngine {
 
     try {
       this.playCue(ctx, now, cue);
-      if ((rarity || "").toLowerCase() === "mythic" && cue !== "ceremony") {
+      const rank = (rarity || "").toLowerCase();
+      if (rank === "rare" || rank === "epic" || rank === "legendary" || rank === "mythic") {
+        this.playScreenExplosion(ctx, now);
+      }
+      if (rank === "legendary" || rank === "mythic") {
+        this.playPyroFireworkBurst(ctx, now + 0.42);
+      }
+      if (rank === "mythic" && cue !== "ceremony") {
         this.playCeremony(ctx, now + 0.05);
       }
     } catch {
       // Ignore Web Audio autoplay restriction errors
     }
+  }
+
+  public static playExitCue(): void {
+    if (this.muted) return;
+    const ctx = this.getContext();
+    if (!ctx) return;
+    const now = ctx.currentTime;
+    try {
+      this.playWhoosh(ctx, now);
+      this.playSnap(ctx, now + 0.05);
+    } catch {
+      // Ignore Web Audio autoplay restriction errors
+    }
+  }
+
+  private static playScreenExplosion(ctx: AudioContext, startTime: number): void {
+    const duration = 0.55;
+    const sampleRate = ctx.sampleRate || 44100;
+    const buffer = ctx.createBuffer(1, Math.floor(sampleRate * duration), sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) data[i] = Math.random() * 2 - 1;
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+    const filter = ctx.createBiquadFilter();
+    filter.type = "lowpass";
+    filter.frequency.setValueAtTime(2400, startTime);
+    filter.frequency.exponentialRampToValueAtTime(180, startTime + duration);
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.28, startTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(ctx.destination);
+    noise.start(startTime);
+    noise.stop(startTime + duration);
+
+    const sub = ctx.createOscillator();
+    const subGain = ctx.createGain();
+    sub.type = "sine";
+    sub.frequency.setValueAtTime(140, startTime);
+    sub.frequency.exponentialRampToValueAtTime(42, startTime + 0.38);
+    subGain.gain.setValueAtTime(0.22, startTime);
+    subGain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.42);
+    sub.connect(subGain);
+    subGain.connect(ctx.destination);
+    sub.start(startTime);
+    sub.stop(startTime + 0.42);
   }
 
   private static playCue(ctx: AudioContext, startTime: number, cue: string): void {

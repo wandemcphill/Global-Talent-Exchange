@@ -21,7 +21,7 @@ from app.gift_engine.schemas import (
 )
 from app.economy.conversion_service import EconomicConversionError, FanCoinGiftConversionService
 from app.gift_engine.canonical_service import GiftEngineError, GiftEngineService
-from app.models.club_profile import ClubProfile
+from app.gift_engine.targets import resolve_gift_recipient_club
 from app.models.economic_conversion import EconomicConversion
 from app.models.economy_config import GiftCatalogItem
 from app.models.gift_transaction import GiftAbuseFlag, GiftStats, GiftTransactionStatus
@@ -53,15 +53,16 @@ def _resolve_recipient_context(
     if recipient_club_id is None:
         return recipient_user_id, None
 
-    club = session.get(ClubProfile, recipient_club_id)
-    if club is None or club.owner_user_id is None:
+    resolved = resolve_gift_recipient_club(session, recipient_club_id)
+    if resolved is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recipient club was not found.")
-    if recipient_user_id is not None and recipient_user_id != club.owner_user_id:
+    owner_user_id, resolved_club_id = resolved
+    if recipient_user_id is not None and recipient_user_id != owner_user_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Recipient profile does not own the selected recipient club.",
         )
-    return club.owner_user_id, club.id
+    return owner_user_id, resolved_club_id
 
 
 def _validate_existing_gift_identity(

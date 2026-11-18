@@ -10,6 +10,9 @@ import 'package:gte_frontend/models/match_view_state.dart';
 import 'package:gte_frontend/models/platform/gtex_platform_experience.dart';
 import 'package:gte_frontend/services/match_3d_monetization_service.dart';
 import 'package:gte_frontend/services/match_viewer_mapper.dart';
+import 'package:gte_frontend/data/match_gift_api.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gift_delivery_dialog.dart';
+import 'package:gte_frontend/widgets/match/broadcast/gtex_gifting_sheet.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_broadcast_hud_layer.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_match_broadcast_app_bar.dart';
 import 'package:gte_frontend/widgets/match/broadcast/gtex_match_canvas_layer.dart';
@@ -38,6 +41,7 @@ class GtexMatchBroadcastScreen extends StatefulWidget {
     this.titleOverride,
     this.competitionLabel,
     this.onOpenHighlights,
+    this.giftClient,
     this.platformMode = GtexPlatformMode.mobile,
     this.platformController,
     this.multiMatchViewStateLoader,
@@ -59,6 +63,7 @@ class GtexMatchBroadcastScreen extends StatefulWidget {
   final String? titleOverride;
   final String? competitionLabel;
   final VoidCallback? onOpenHighlights;
+  final MatchGiftClient? giftClient;
   final GtexPlatformMode platformMode;
   final GtexPlatformExperienceController? platformController;
   final GtexBroadcastMultiMatchLoader? multiMatchViewStateLoader;
@@ -310,6 +315,36 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
         current.lastFrame.timeSeconds == next.lastFrame.timeSeconds;
   }
 
+  Future<void> _openGift(BuildContext context, MatchViewState viewState) async {
+    final MatchGiftClient? client = widget.giftClient;
+    final MatchGiftTarget? target = MatchGiftTarget.fromMetadata(viewState.monetization.metadata);
+    if (client == null || target == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gifting is not open for this broadcast.')),
+      );
+      return;
+    }
+    await GtexGiftingSheet.show(
+      context,
+      recipientLabel: target.recipientLabel,
+      catalogLoader: client is MatchGiftCatalogProvider
+          ? () => (client as MatchGiftCatalogProvider).fetchCatalog()
+          : null,
+      onSelected: (MatchGiftCatalogItem gift) async {
+        try {
+          final MatchGiftReceipt receipt = await client.sendGift(target: target, gift: gift);
+          if (!context.mounted) return;
+          await GtexGiftDeliveryDialog.show(context, gift: gift, receipt: receipt);
+        } catch (_) {
+          if (!context.mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Gift could not be sent.')),
+          );
+        }
+      },
+    );
+  }
+
   void _toggleViewType(GtexMatchBroadcastController controller) {
     if (!controller.canUsePseudo3D) {
       return;
@@ -385,7 +420,7 @@ class _GtexMatchBroadcastScreenState extends State<GtexMatchBroadcastScreen>
               onTogglePause: controller.togglePause,
               onCycleSpeed: controller.cycleSpeed,
               onReplay: controller.replay,
-              onGiftTap: () {},
+              onGiftTap: () => _openGift(context, viewState),
               onOpenHighlights: widget.onOpenHighlights,
             ),
           ],

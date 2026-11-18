@@ -50,6 +50,21 @@ def test_cannot_pair_a_club_with_a_different_profile() -> None:
     assert exc_info.value.detail == "Recipient profile does not own the selected recipient club."
 
 
+def test_owner_console_club_resolves_through_the_owner_profile() -> None:
+    session = MagicMock()
+    session.get.return_value = None
+    session.scalar.side_effect = [
+        MagicMock(owner_user_id="owner-user", club_id="owner-club"),
+        MagicMock(owner_user_id="owner-user", id="profile-club"),
+    ]
+    payload = GiftSendRequest(recipient_club_id="owner-club", gift_key="fan_chant")
+
+    recipient_user_id, recipient_club_id = _resolve_recipient_context(payload=payload, session=session)
+
+    assert recipient_user_id == "owner-user"
+    assert recipient_club_id == "profile-club"
+
+
 def test_missing_club_is_rejected() -> None:
     session = MagicMock()
     session.get.return_value = None
