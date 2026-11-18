@@ -13,7 +13,9 @@ function shouldRetryControlCenter(failureCount: number, error: any): boolean {
 }
 
 export function useControlCenter() {
-  const { user, loading } = useAuth();
+  const auth = useAuth();
+  const user = auth?.user ?? null;
+  const loading = Boolean(auth?.loading);
   const userId = user?.id ? String(user.id) : null;
   const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
   return useQuery({

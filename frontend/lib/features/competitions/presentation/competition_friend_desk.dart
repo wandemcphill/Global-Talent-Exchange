@@ -53,7 +53,7 @@ class _CompetitionFriendDeskState extends ConsumerState<CompetitionFriendDesk> {
       return;
     }
     final Map<String, dynamic> payload = await _api.getMap(
-      '/api/community/discovery/clubs',
+      '/api/discovery/clubs',
       auth: false,
       query: <String, Object?>{'q': query, 'limit': 8},
     );
@@ -72,7 +72,7 @@ class _CompetitionFriendDeskState extends ConsumerState<CompetitionFriendDesk> {
       return;
     }
     try {
-      final Map<String, dynamic> owned = await _api.getMap('/api/owner/clubs');
+      final Map<String, dynamic> owned = await _api.getMap('/api/owner/onboarding');
       final List<dynamic> clubs = owned['clubs'] as List<dynamic>? ?? <dynamic>[];
       if (clubs.isEmpty) {
         widget.onHostCanonical();
@@ -115,7 +115,7 @@ class _CompetitionFriendDeskState extends ConsumerState<CompetitionFriendDesk> {
       widget.onOpenLogin();
       return;
     }
-    final Map<String, dynamic> owned = await _api.getMap('/api/owner/clubs');
+    final Map<String, dynamic> owned = await _api.getMap('/api/owner/onboarding');
     final List<dynamic> clubs = owned['clubs'] as List<dynamic>? ?? <dynamic>[];
     if (clubs.isEmpty) {
       setState(() => _note = 'A club is required to join a friend cup. You can still host a user competition.');

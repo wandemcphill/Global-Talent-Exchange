@@ -830,25 +830,6 @@ class TransferCenterApi {
     );
   }
 
-  Future<void> submitContractOffer({
-    required String listingId,
-    required String clubId,
-    required double wageOfferAmount,
-    required int contractYears,
-    String? expectedRole,
-  }) async {
-    await client.post(
-      '/api/transfer-market/listings/$listingId/contract-offer',
-      body: <String, Object?>{
-        'bidder_club_id': clubId,
-        'wage_offer_amount': wageOfferAmount,
-        'contract_years': contractYears,
-        if (expectedRole != null && expectedRole.trim().isNotEmpty)
-          'expected_role': expectedRole.trim(),
-        'notes': 'Submitted from transfer center route.',
-      },
-    );
-  }
 }
 
 final Provider<TransferCenterApi> transferCenterApiProvider =

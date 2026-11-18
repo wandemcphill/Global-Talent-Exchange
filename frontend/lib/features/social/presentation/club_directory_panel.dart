@@ -73,7 +73,7 @@ class _ClubDirectoryPanelState extends State<ClubDirectoryPanel> {
       mode: widget.backendMode,
     );
     final Map<String, dynamic> payload = await client.getMap(
-      '/api/community/discovery/clubs',
+      '/api/discovery/clubs',
       auth: false,
       query: <String, Object?>{
         if (query.trim().isNotEmpty) 'q': query.trim(),
