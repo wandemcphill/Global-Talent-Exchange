@@ -74,7 +74,9 @@ def _delete_old_harcourt(conn: sa.Connection, tables: set[str]) -> None:
     )
 
 
-def _apply_rating(conn: sa.Connection, tables: set[str], player_id: str, old_gsi: int, gsi: int, potential: int) -> None:
+def _apply_rating(
+    conn: sa.Connection, tables: set[str], player_id: str, old_gsi: int, gsi: int, potential: int
+) -> None:
     price = _calc_price(gsi, potential)
     patch = {
         "gsi": gsi,

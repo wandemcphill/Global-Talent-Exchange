@@ -30,10 +30,7 @@ TRANSFERMARKT_URL = "https://www.transfermarkt.com/kennet-eichhorn/profil/spiele
 CLUB = "Bayer 04 Leverkusen"
 LEAGUE = "Bundesliga"
 DOB = "2009-07-27"
-PLAYSTYLE = (
-    "Composed deep-lying playmaker who protects the ball, switches play, "
-    "and carries it through pressure"
-)
+PLAYSTYLE = "Composed deep-lying playmaker who protects the ball, switches play, " "and carries it through pressure"
 TRAITS = [
     "Dictates Tempo",
     "First Touch",
