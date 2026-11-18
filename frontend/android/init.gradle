@@ -1,19 +1,16 @@
-// Flutter's included Gradle build resolves Kotlin plugins from the Gradle Plugin
-// Portal. The portal copy of Kotlin 2.2.21 imports kotlin-gradle-plugins-bom,
-// which is published on Maven Central only. Gradle will not cross repositories
-// to load that BOM, so the Android build stops before it compiles.
+// Flutter's included Gradle build takes Kotlin from the Plugin Portal. That copy
+// imports kotlin-gradle-plugins-bom, which exists on Maven Central only, and
+// Gradle will not cross repositories to load the BOM. Exclusive repository
+// content is not an option: Flutter plugins add their own buildscript
+// repositories, and Gradle rejects that combination.
 gradle.beforeSettings { settings ->
     settings.pluginManagement.repositories {
-        exclusiveContent {
-            forRepository {
-                mavenCentral()
-            }
-            filter {
-                includeGroup("org.jetbrains.kotlin")
-            }
-        }
         mavenCentral()
         google()
-        gradlePluginPortal()
+        gradlePluginPortal {
+            content {
+                excludeGroup("org.jetbrains.kotlin")
+            }
+        }
     }
 }
