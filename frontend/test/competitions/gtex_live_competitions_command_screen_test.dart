@@ -45,6 +45,8 @@ void main() {
     expect(find.text('Creator tournaments'), findsOneWidget);
     expect(find.text('GTEX Test Cup'), findsOneWidget);
 
+    await tester.ensureVisible(find.text('Hosted competitions'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Hosted competitions'));
     await tester.pumpAndSettle();
     expect(find.text('User Competitions are quiet'), findsOneWidget);
@@ -80,6 +82,8 @@ void main() {
           ),
         ),
       );
+      await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('GTEX Test Cup'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('GTEX Test Cup'));
       await tester.pumpAndSettle();

@@ -123,94 +123,24 @@ class _GtexLiveTransferRoomState extends State<GtexLiveTransferRoom> {
       );
       return;
     }
-    String playerId = widget.squad.first.id;
-    final TextEditingController price = TextEditingController();
-    final TextEditingController wage = TextEditingController();
-    String visibility = 'public';
-    final bool? submit = await showDialog<bool>(
+    final _ListedPlayer? listed = await showDialog<_ListedPlayer>(
       context: context,
       builder: (BuildContext dialogContext) {
-        return StatefulBuilder(
-          builder: (BuildContext context, StateSetter setLocal) {
-            return AlertDialog(
-              title: const Text('List a player for sale'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  DropdownButton<String>(
-                    key: const Key('gtex-list-player-picker'),
-                    isExpanded: true,
-                    value: playerId,
-                    items: widget.squad
-                        .map(
-                          (GtexClubMember player) => DropdownMenuItem<String>(
-                            value: player.id,
-                            child: Text('${player.name} · ${player.position}'),
-                          ),
-                        )
-                        .toList(growable: false),
-                    onChanged: (String? value) {
-                      if (value != null) {
-                        setLocal(() => playerId = value);
-                      }
-                    },
-                  ),
-                  TextField(
-                    key: const Key('gtex-list-player-price'),
-                    controller: price,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Asking price'),
-                  ),
-                  TextField(
-                    controller: wage,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(labelText: 'Weekly wage'),
-                  ),
-                  DropdownButton<String>(
-                    isExpanded: true,
-                    value: visibility,
-                    items: const <DropdownMenuItem<String>>[
-                      DropdownMenuItem(value: 'public', child: Text('Public')),
-                      DropdownMenuItem(value: 'private', child: Text('Private')),
-                      DropdownMenuItem(value: 'invite_only', child: Text('Invite only')),
-                    ],
-                    onChanged: (String? value) {
-                      if (value != null) {
-                        setLocal(() => visibility = value);
-                      }
-                    },
-                  ),
-                ],
-              ),
-              actions: <Widget>[
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
-                FilledButton(
-                  key: const Key('gtex-list-player-submit'),
-                  onPressed: () => Navigator.pop(dialogContext, true),
-                  child: const Text('List for sale'),
-                ),
-              ],
-            );
-          },
-        );
+        return _ListPlayerDialog(squad: widget.squad, initialPlayerId: widget.squad.first.id);
       },
     );
-    final double? asking = double.tryParse(price.text.trim());
-    final double? salary = double.tryParse(wage.text.trim());
-    price.dispose();
-    wage.dispose();
-    if (submit != true || asking == null) {
+    if (listed == null) {
       return;
     }
     try {
       await _api.createListing(
-        playerId: playerId,
+        playerId: listed.playerId,
         sellingClubId: widget.clubId,
-        basePrice: asking,
+        basePrice: listed.asking,
         expiresAt: DateTime.now().toUtc().add(const Duration(days: 14)),
-        visibility: visibility,
-        salaryAmount: salary,
-        contractYears: salary == null ? null : 3,
+        visibility: listed.visibility,
+        salaryAmount: listed.salary,
+        contractYears: listed.salary == null ? null : 3,
       );
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -282,27 +212,11 @@ class _GtexLiveTransferRoomState extends State<GtexLiveTransferRoom> {
         return;
       }
       if (accepted.settlement == 'contract_needed') {
-        final TextEditingController wage = TextEditingController();
-        final bool? send = await showDialog<bool>(
+        final double? wageAmount = await showDialog<double>(
           context: context,
-          builder: (BuildContext dialogContext) {
-            return AlertDialog(
-              title: const Text('Agree the contract'),
-              content: TextField(
-                controller: wage,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Weekly wage'),
-              ),
-              actions: <Widget>[
-                TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Later')),
-                FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Submit contract')),
-              ],
-            );
-          },
+          builder: (BuildContext dialogContext) => const _ContractWageDialog(),
         );
-        final double? wageAmount = double.tryParse(wage.text.trim());
-        wage.dispose();
-        if (send == true && wageAmount != null) {
+        if (wageAmount != null) {
           await _api.submitContractOffer(
             listingId: accepted.listingId,
             bidderClubId: accepted.bidderClubId,
@@ -411,6 +325,166 @@ class _GtexLiveTransferRoomState extends State<GtexLiveTransferRoom> {
             await _load();
           },
           onOpenFinancialMarket: widget.onOpenFinancialMarket,
+        ),
+      ],
+    );
+  }
+}
+
+class _ListedPlayer {
+  const _ListedPlayer({
+    required this.playerId,
+    required this.asking,
+    required this.salary,
+    required this.visibility,
+  });
+
+  final String playerId;
+  final double asking;
+  final double? salary;
+  final String visibility;
+}
+
+class _ListPlayerDialog extends StatefulWidget {
+  const _ListPlayerDialog({required this.squad, required this.initialPlayerId});
+
+  final List<GtexClubMember> squad;
+  final String initialPlayerId;
+
+  @override
+  State<_ListPlayerDialog> createState() => _ListPlayerDialogState();
+}
+
+class _ListPlayerDialogState extends State<_ListPlayerDialog> {
+  late String _playerId = widget.initialPlayerId;
+  final TextEditingController _price = TextEditingController();
+  final TextEditingController _wage = TextEditingController();
+  String _visibility = 'public';
+
+  @override
+  void dispose() {
+    _price.dispose();
+    _wage.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final double? asking = double.tryParse(_price.text.trim());
+    if (asking == null) {
+      return;
+    }
+    final String wageText = _wage.text.trim();
+    Navigator.pop(
+      context,
+      _ListedPlayer(
+        playerId: _playerId,
+        asking: asking,
+        salary: wageText.isEmpty ? null : double.tryParse(wageText),
+        visibility: _visibility,
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('List a player for sale'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          DropdownButton<String>(
+            key: const Key('gtex-list-player-picker'),
+            isExpanded: true,
+            value: _playerId,
+            items: widget.squad
+                .map(
+                  (GtexClubMember player) => DropdownMenuItem<String>(
+                    value: player.id,
+                    child: Text('${player.name} · ${player.position}'),
+                  ),
+                )
+                .toList(growable: false),
+            onChanged: (String? value) {
+              if (value != null) {
+                setState(() => _playerId = value);
+              }
+            },
+          ),
+          TextField(
+            key: const Key('gtex-list-player-price'),
+            controller: _price,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Asking price'),
+          ),
+          TextField(
+            controller: _wage,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(labelText: 'Weekly wage'),
+          ),
+          DropdownButton<String>(
+            isExpanded: true,
+            value: _visibility,
+            items: const <DropdownMenuItem<String>>[
+              DropdownMenuItem(value: 'public', child: Text('Public')),
+              DropdownMenuItem(value: 'private', child: Text('Private')),
+              DropdownMenuItem(value: 'invite_only', child: Text('Invite only')),
+            ],
+            onChanged: (String? value) {
+              if (value != null) {
+                setState(() => _visibility = value);
+              }
+            },
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+        FilledButton(
+          key: const Key('gtex-list-player-submit'),
+          onPressed: _submit,
+          child: const Text('List for sale'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContractWageDialog extends StatefulWidget {
+  const _ContractWageDialog();
+
+  @override
+  State<_ContractWageDialog> createState() => _ContractWageDialogState();
+}
+
+class _ContractWageDialogState extends State<_ContractWageDialog> {
+  final TextEditingController _wage = TextEditingController();
+
+  @override
+  void dispose() {
+    _wage.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Agree the contract'),
+      content: TextField(
+        controller: _wage,
+        keyboardType: TextInputType.number,
+        decoration: const InputDecoration(labelText: 'Weekly wage'),
+      ),
+      actions: <Widget>[
+        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Later')),
+        FilledButton(
+          onPressed: () {
+            final double? amount = double.tryParse(_wage.text.trim());
+            if (amount == null) {
+              return;
+            }
+            Navigator.pop(context, amount);
+          },
+          child: const Text('Submit contract'),
         ),
       ],
     );
