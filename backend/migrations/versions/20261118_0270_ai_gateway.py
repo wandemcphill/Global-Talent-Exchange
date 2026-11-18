@@ -41,8 +41,12 @@ def upgrade() -> None:
         sa.Column("user_requests_per_minute", sa.Integer(), nullable=False),
         sa.Column("global_requests_per_minute", sa.Integer(), nullable=False),
         sa.Column("updated_by_user_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("provider", name="uq_ai_provider_settings_provider"),
     )
@@ -56,8 +60,12 @@ def upgrade() -> None:
         sa.Column("max_output_tokens", sa.Integer(), nullable=False),
         sa.Column("cache_ttl_seconds", sa.Integer(), nullable=False),
         sa.Column("updated_by_user_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("feature_key", name="uq_ai_feature_settings_feature_key"),
     )
@@ -69,8 +77,12 @@ def upgrade() -> None:
         sa.Column("max_requests", sa.Integer(), nullable=False),
         sa.Column("window_seconds", sa.Integer(), server_default="60", nullable=False),
         sa.Column("updated_by_user_id", sa.String(length=36), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
+        sa.Column(
+            "updated_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("subject_type", "subject_key", name="uq_ai_request_limits_subject"),
     )
@@ -90,7 +102,9 @@ def upgrade() -> None:
         sa.Column("latency_ms", sa.Integer(), server_default="0", nullable=False),
         sa.Column("cache_hit", sa.Boolean(), server_default="0", nullable=False),
         sa.Column("request_hash", sa.String(length=64), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False),
+        sa.Column(
+            "created_at", sa.DateTime(timezone=True), server_default=sa.text("CURRENT_TIMESTAMP"), nullable=False
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_ai_usage_logs_feature_key", "ai_usage_logs", ["feature_key"])

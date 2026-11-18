@@ -70,7 +70,12 @@ def scrub_context(value: Any, *, string_limit: int = 500, list_limit: int = 8, k
         cleaned: dict[str, Any] = {}
         for key, item in list(value.items())[:key_limit]:
             normalized = str(key).strip().lower()
-            if normalized in BLOCKED_KEYS or "password" in normalized or "token" in normalized or "secret" in normalized:
+            if (
+                normalized in BLOCKED_KEYS
+                or "password" in normalized
+                or "token" in normalized
+                or "secret" in normalized
+            ):
                 continue
             scrubbed = scrub_context(item, string_limit=string_limit, list_limit=list_limit, key_limit=key_limit)
             if scrubbed is not None:

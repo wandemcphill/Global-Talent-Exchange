@@ -180,7 +180,9 @@ def test_retry_on_rate_limit_and_stop_on_auth_quota_and_timeout() -> None:
     provider = OpenAiSdkProvider(make_config(max_retries=1), client=client, sleeper=sleeps.append)
     from app.ai_gateway.provider import ProviderRequest
 
-    result = provider.complete(ProviderRequest(model="gpt-4o-mini", instructions="Be brief", user_input="hi", max_output_tokens=20))
+    result = provider.complete(
+        ProviderRequest(model="gpt-4o-mini", instructions="Be brief", user_input="hi", max_output_tokens=20)
+    )
     assert result.text == "Recovered line"
     assert client.responses.calls == 2
     assert sleeps == [0.5]
@@ -188,21 +190,27 @@ def test_retry_on_rate_limit_and_stop_on_auth_quota_and_timeout() -> None:
     auth_client = ScriptedClient([AuthenticationError("no")])
     auth_provider = OpenAiSdkProvider(make_config(max_retries=3), client=auth_client, sleeper=lambda _: None)
     with pytest.raises(AiProviderError) as auth_error:
-        auth_provider.complete(ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20))
+        auth_provider.complete(
+            ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20)
+        )
     assert auth_error.value.code == "authentication_failed"
     assert auth_client.responses.calls == 1
 
     quota_client = ScriptedClient([QuotaError("quota")])
     quota_provider = OpenAiSdkProvider(make_config(max_retries=3), client=quota_client, sleeper=lambda _: None)
     with pytest.raises(AiProviderError) as quota_error:
-        quota_provider.complete(ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20))
+        quota_provider.complete(
+            ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20)
+        )
     assert quota_error.value.code == "insufficient_credits"
     assert quota_client.responses.calls == 1
 
     timeout_client = ScriptedClient([APITimeoutError("late"), APITimeoutError("late again")])
     timeout_provider = OpenAiSdkProvider(make_config(max_retries=1), client=timeout_client, sleeper=lambda _: None)
     with pytest.raises(AiProviderError) as timeout_error:
-        timeout_provider.complete(ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20))
+        timeout_provider.complete(
+            ProviderRequest(model="gpt-4o-mini", instructions="x", user_input="y", max_output_tokens=20)
+        )
     assert timeout_error.value.code == "timeout"
     assert timeout_client.responses.calls == 2
     assert classify_openai_error(APITimeoutError())[1] is True
@@ -215,7 +223,12 @@ def test_schema_validation_tool_policy_and_moderation() -> None:
         feature="match_report",
         user_content="report",
         facts={"score": "1-0"},
-        schema={"type": "object", "additionalProperties": False, "properties": {"headline": {"type": "string"}}, "required": ["headline"]},
+        schema={
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {"headline": {"type": "string"}},
+            "required": ["headline"],
+        },
         schema_name="gtex_match_report",
         validator=__import__("app.ai_gateway.schemas", fromlist=["MatchReportOut"]).MatchReportOut,
     )
@@ -312,7 +325,9 @@ def test_budget_rate_limit_cache_and_redaction() -> None:
 
     cached, cached_provider, _ = make_service()
     cached.generate_text(feature="match_report", user_content="Same facts", facts={"score": "1-0"}, user_id="user-2")
-    hit = cached.generate_text(feature="match_report", user_content="Same facts", facts={"score": "1-0"}, user_id="user-2")
+    hit = cached.generate_text(
+        feature="match_report", user_content="Same facts", facts={"score": "1-0"}, user_id="user-2"
+    )
     assert hit.cache_hit is True
     assert len(cached_provider.requests) == 1
 
@@ -341,7 +356,9 @@ def test_provider_failure_does_not_break_the_next_call() -> None:
     failed = service.generate_text(feature="club_announcement", user_content="Draft a note", user_id="user-4")
     assert failed.ok is False
     assert failed.error_code == "timeout"
-    provider.completion = ProviderCompletion(text="A short safe note for the club.", input_tokens=3, output_tokens=7, model="gpt-4o-mini")
+    provider.completion = ProviderCompletion(
+        text="A short safe note for the club.", input_tokens=3, output_tokens=7, model="gpt-4o-mini"
+    )
     recovered = service.generate_text(feature="club_announcement", user_content="Draft a note", user_id="user-5")
     assert recovered.ok is True
     assert recovered.authoritative is False
@@ -434,7 +451,11 @@ def test_legacy_routing_and_staff_fallback(monkeypatch: pytest.MonkeyPatch) -> N
             staff_title="Manager",
             personality={"communication_style": "measured_analytical"},
             intent_data={"raw_text": "Play the kids"},
-            layer_a_result={"decision_outcome": "declined", "intent": "academy_player_opportunity", "reasoning_trace": {}},
+            layer_a_result={
+                "decision_outcome": "declined",
+                "intent": "academy_player_opportunity",
+                "reasoning_trace": {},
+            },
             conversation_turn_count=1,
         )
         is None
@@ -509,7 +530,12 @@ def test_gateway_is_registered_and_admin_routes_are_protected(monkeypatch: pytes
 def test_admin_settings_round_trip_never_returns_a_key(tmp_path: object) -> None:
     database_path = tmp_path / "ai-gateway.db"  # type: ignore[operator]
     engine = create_engine(f"sqlite:///{database_path}")
-    for table in (AiProviderSetting.__table__, AiFeatureSetting.__table__, AiRequestLimit.__table__, AiUsageLog.__table__):
+    for table in (
+        AiProviderSetting.__table__,
+        AiFeatureSetting.__table__,
+        AiRequestLimit.__table__,
+        AiUsageLog.__table__,
+    ):
         table.create(engine)
     factory = sessionmaker(bind=engine)
     service, _, _ = make_service()

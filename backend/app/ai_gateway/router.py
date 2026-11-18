@@ -208,7 +208,9 @@ def put_ai_settings(
 ) -> AiStatusView:
     _reject_secret_model(payload.model)
     if payload.monthly_budget_usd < payload.daily_budget_usd:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Monthly budget must cover the daily budget.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Monthly budget must cover the daily budget."
+        )
     AiSettingsRepository(session).upsert_provider(
         {
             "enabled": payload.enabled,
