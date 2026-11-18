@@ -1,0 +1,100 @@
+[
+  {
+    "name": "Luca Scanlon",
+    "first": "Luca",
+    "last": "Scanlon",
+    "legal_name": "Luca Robert Scanlon",
+    "country": "Gibraltar",
+    "country_names": [
+      "Gibraltar"
+    ],
+    "club": "Burnley",
+    "league": "EFL Championship",
+    "dob": "2009-07-13",
+    "height": 180,
+    "foot": "Left",
+    "position": "AM",
+    "secondary": [
+      "LW",
+      "RW",
+      "CM"
+    ],
+    "gsi": 71,
+    "potential": 86,
+    "shirt": 74,
+    "playstyle": "Left-footed attacking midfielder who plays on the right, shifts the ball onto his left foot, and creates.",
+    "traits": [
+      "Cuts Inside From Wing",
+      "Shifts Onto Left Foot",
+      "Technical Dribbler",
+      "Vision"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "tm": "https://www.transfermarkt.com/luca-scanlon/profil/spieler/1195212",
+    "image": null,
+    "notes": "Born in Leicester. Gibraltar senior international. No published solo portrait on Transfermarkt.",
+    "id": "56677e4a-816e-5664-8f9a-b5c64de315c2",
+    "external_id": "u18_luca_scanlon",
+    "short": "L. Scanlon",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "AM",
+      "LW",
+      "RW",
+      "CM"
+    ],
+    "position_display": "AM/LW/RW/CM",
+    "portrait": null,
+    "birth_year": 2009
+  },
+  {
+    "name": "Marc Santos",
+    "first": "Marc",
+    "last": "Santos",
+    "legal_name": "Marc Santos Gavilán",
+    "aliases": [
+      "Marc Santos Gavilán"
+    ],
+    "country": "Spain",
+    "country_names": [
+      "Spain"
+    ],
+    "club": "Levante",
+    "league": "La Liga",
+    "dob": "2010-11-09",
+    "height": 178,
+    "foot": "Left",
+    "position": "LB",
+    "secondary": [
+      "LW"
+    ],
+    "gsi": 69,
+    "potential": 84,
+    "shirt": 33,
+    "playstyle": "Left-footed full-back who also plays as a winger and joins the attack.",
+    "traits": [
+      "Overlaps",
+      "Takes On Defenders",
+      "Early Cross",
+      "Quick Step"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "tm": "https://www.transfermarkt.com/marc-santos/profil/spieler/1476132",
+    "image": "https://img.a.transfermarkt.technology/portrait/big/1476132-1794217459.jpg?lm=4711",
+    "notes": "Youngest debutant in Levante history. Spain U17.",
+    "id": "e2732550-8b15-5deb-993d-fb2e54d35cab",
+    "external_id": "u18_marc_santos",
+    "short": "M. Santos",
+    "age": 16,
+    "positions": [
+      "LB",
+      "LW"
+    ],
+    "position_display": "LB/LW",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794960359/players/portraits/p_e2732550_marc_santos.jpg",
+    "birth_year": 2010
+  }
+]
