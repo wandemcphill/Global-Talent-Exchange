@@ -213,7 +213,7 @@ Honest blockers:
 
 ### 3. Complete The KoraPay Deployment Contract Using The Correct Webhook Route
 Priority: `P0`
-Repo-side status: `PASSED` (`.env.production.example`, `backend/.env.example`, `ops/k8s/base/secret.example.yaml`, `backend/app/admin_finance/router.py`; pinned by `backend/scripts/audit_group6_production_readiness.py`)
+Repo-side status: `PASSED` (`.env.production.example`, `backend/.env.example`, `ops/k8s/base/secret.example.yaml`, `backend/app/admin_finance/router.py`; pinned by `backend/scripts/audit_group6_production_readiness.py`) <!-- pragma: allowlist secret -->
 
 Files:
 - `backend/.env.example`
