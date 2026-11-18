@@ -160,6 +160,19 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Central OpenAI gateway. Set OPENAI_API_KEY in the Render dashboard. It is not committed.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_ENABLED
+        value: "true"
+      - key: OPENAI_MAX_RETRIES
+        value: "3"
+      - key: OPENAI_TIMEOUT_MS
+        value: "60000"
+      - key: OPENAI_ROUTE_LEGACY_CLIENTS
+        value: "true"
 
   - name: gtex-web
     type: web
@@ -306,6 +319,19 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Central OpenAI gateway. Set OPENAI_API_KEY in the Render dashboard. It is not committed.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_ENABLED
+        value: "true"
+      - key: OPENAI_MAX_RETRIES
+        value: "3"
+      - key: OPENAI_TIMEOUT_MS
+        value: "60000"
+      - key: OPENAI_ROUTE_LEGACY_CLIENTS
+        value: "true"
       # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
       - key: GTE_S3_BUCKET
         sync: false
@@ -385,6 +411,19 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Central OpenAI gateway. Set OPENAI_API_KEY in the Render dashboard. It is not committed.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_ENABLED
+        value: "true"
+      - key: OPENAI_MAX_RETRIES
+        value: "3"
+      - key: OPENAI_TIMEOUT_MS
+        value: "60000"
+      - key: OPENAI_ROUTE_LEGACY_CLIENTS
+        value: "true"
       # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
       - key: GTE_S3_BUCKET
         sync: false
@@ -492,6 +531,19 @@ services:
         sync: false
       - key: GTE_SOCIAL_CONTENT_LLM_TIMEOUT_SECONDS
         value: "8"
+      # Central OpenAI gateway. Set OPENAI_API_KEY in the Render dashboard. It is not committed.
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: gpt-4o-mini
+      - key: OPENAI_ENABLED
+        value: "true"
+      - key: OPENAI_MAX_RETRIES
+        value: "3"
+      - key: OPENAI_TIMEOUT_MS
+        value: "60000"
+      - key: OPENAI_ROUTE_LEGACY_CLIENTS
+        value: "true"
       # Durable Cloud Object Storage (AWS S3 / Cloudflare R2 / MinIO)
       - key: GTE_S3_BUCKET
         sync: false

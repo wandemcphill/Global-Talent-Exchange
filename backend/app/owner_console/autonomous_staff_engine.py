@@ -7,8 +7,6 @@ import re
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
-from urllib import request as urllib_request
-from urllib.error import URLError
 from uuid import uuid4
 
 from sqlalchemy import select
@@ -2806,10 +2804,10 @@ def generate_layer_b_staff_response(
     effects = dict(layer_a_result.get("state_effects") or {})
     rel_snap = dict(layer_a_result.get("relationship_snapshot") or {})
 
-    api_key = (os.getenv("GTEX_AI_API_KEY") or os.getenv("OPENAI_API_KEY") or "").strip()
-    if api_key and os.getenv("GTEX_ENABLE_LIVE_LLM_COMMS", "0") == "1":
+    from app.ai_gateway.legacy_bridge import staff_dialogue_should_run
+
+    if staff_dialogue_should_run():
         llm_reply = _try_grounded_external_ai(
-            api_key=api_key,
             staff_name=staff_name,
             staff_title=staff_title,
             personality=personality,
@@ -3025,7 +3023,6 @@ def generate_layer_b_staff_response(
 
 def _try_grounded_external_ai(
     *,
-    api_key: str,
     staff_name: str,
     staff_title: str,
     personality: dict[str, Any],
@@ -3033,48 +3030,50 @@ def _try_grounded_external_ai(
     layer_a_result: dict[str, Any],
     conversation_turn_count: int,
 ) -> str | None:
+    """Ask the central AI gateway for wording. Layer A remains the decision."""
     prompt_payload = {
         "staff_name": staff_name,
         "staff_title": staff_title,
-        "personality": personality,
-        "owner_message": intent_data.get("raw_text"),
+        "communication_style": personality.get("communication_style"),
+        "archetype": personality.get("archetype_label"),
+        "owner_message": str(intent_data.get("raw_text") or "")[:500],
         "authoritative_decision_outcome": layer_a_result.get("decision_outcome"),
-        "reasoning_trace": layer_a_result.get("reasoning_trace"),
-        "state_effects": layer_a_result.get("state_effects"),
+        "intent": layer_a_result.get("intent"),
+        "reasoning_trace": _compact_staff_context(layer_a_result.get("reasoning_trace")),
+        "state_effects": _compact_staff_context(layer_a_result.get("state_effects")),
         "turn": conversation_turn_count,
     }
-    req_body = json.dumps(
-        {
-            "model": os.getenv("GTEX_AI_MODEL", "gpt-4o-mini"),
-            "temperature": 0.4,
-            "messages": [
-                {
-                    "role": "system",
-                    "content": (
-                        "You are generating a football club staff member's reply in GTEX. "
-                        "You MUST strictly adhere to `authoritative_decision_outcome` and `reasoning_trace`. "
-                        "Never invent players, transfers, budgets, or agreements not in the JSON. Return plain text only (2-4 sentences)."
-                    ),
-                },
-                {"role": "user", "content": json.dumps(prompt_payload)},
-            ],
-        }
-    ).encode("utf-8")
-    req = urllib_request.Request(
-        os.getenv("GTEX_AI_ENDPOINT", "https://api.openai.com/v1/chat/completions"),
-        data=req_body,
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        method="POST",
-    )
     try:
-        with urllib_request.urlopen(req, timeout=3.5) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-            text = str(data["choices"][0]["message"]["content"]).strip()
-            if len(text) >= 20:
-                return text
-    except (URLError, TimeoutError, KeyError, ValueError, OSError):
+        from app.ai_gateway.service import GtexAiService
+
+        result = GtexAiService().generate_text(
+            feature="staff_dialogue",
+            user_content=json.dumps(prompt_payload, default=str),
+            facts={"decision_outcome": layer_a_result.get("decision_outcome"), "intent": layer_a_result.get("intent")},
+            extra_instructions=(
+                "Write the staff member's reply in 2-4 sentences. "
+                "Adhere to authoritative_decision_outcome. Do not invent players, fees, or agreements."
+            ),
+            max_output_tokens=220,
+            temperature=0.4,
+        )
+    except Exception:
         return None
+    if result.ok and result.text and len(result.text.strip()) >= 20:
+        return result.text.strip()
     return None
+
+
+def _compact_staff_context(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {}
+    compact: dict[str, Any] = {}
+    for key, item in list(value.items())[:12]:
+        if isinstance(item, (int, float, bool)) or item is None:
+            compact[str(key)[:40]] = item
+        elif isinstance(item, str):
+            compact[str(key)[:40]] = item[:180]
+    return compact
 
 
 # ---------------------------------------------------------------------------

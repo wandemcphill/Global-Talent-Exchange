@@ -25,6 +25,17 @@ from app.story_feed_engine.service import StoryFeedService
 REPORTER_NAME = "GTEX Wire"
 AI_PROVIDER = "local-template-reporter"
 COST_TIER = "zero-cost"
+
+
+def _polish_reporter_body(title: str, body: str) -> str | None:
+    try:
+        from app.ai_gateway.features import polish_reporter_copy
+
+        return polish_reporter_copy(title=title, body=body)
+    except Exception:
+        return None
+
+
 DEFAULT_BEATS = (
     "regen_awards",
     "regen_rising",
@@ -81,6 +92,9 @@ class AIReporterService:
         skipped = 0
         story_service = StoryFeedService(self.session)
         for draft in drafts:
+            polished = _polish_reporter_body(draft.title, draft.body)
+            if polished:
+                draft.body = polished
             if self._already_reported(draft):
                 skipped += 1
                 continue

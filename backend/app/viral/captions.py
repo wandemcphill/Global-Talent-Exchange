@@ -109,6 +109,19 @@ class RemoteCaptionLLMClient:
             "Keep it dramatic, concise, social-first, and emoji-ready."
         )
         user_text = json.dumps(prompt, ensure_ascii=True)
+        from app.ai_gateway.legacy_bridge import LEGACY_NOT_ROUTED, route_legacy_openai_text
+
+        routed = route_legacy_openai_text(
+            endpoint_url=self.endpoint_url,
+            model=self.model,
+            feature="social_caption",
+            instructions=system_text,
+            payload=prompt,
+            max_output_tokens=80,
+            temperature=0.9,
+        )
+        if routed is not LEGACY_NOT_ROUTED:
+            return routed if isinstance(routed, str) else None
         lower_url = (self.endpoint_url or "").lower()
         if any(
             token in lower_url

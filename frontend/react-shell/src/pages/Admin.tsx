@@ -7,7 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
-import { CompetitionsTab, EconomyTab, GameClockPanel, NamedCupPrizePanel, PlayersTab, QueuesTab, RailsAndTreasuryTab, UsersTab } from "./AdminControls";
+import { AdminAiPanel } from "./AdminAiPanel";
 
 function GodModeControlDesk() {
   const qc = useQueryClient();
@@ -281,6 +281,7 @@ const ADMIN_TABS = [
   { id: "competitions", label: "Competitions and jackpot" },
   { id: "economy", label: "Give coin, transfers & points" },
   { id: "users", label: "People and admin log" },
+  { id: "ai", label: "AI" },
 ] as const;
 
 export default function Admin() {
@@ -362,6 +363,7 @@ export default function Admin() {
       {tab === "competitions" && <CompetitionsTab />}
       {tab === "economy" && <EconomyTab />}
       {tab === "users" && <UsersTab />}
+      {tab === "ai" && <AdminAiPanel />}
       {tab === "overview" && <>
       <GodModeControlDesk />
       <Panel eyebrow="Cash-outs waiting" title={`Withdrawals (${data.withdrawals.length})`} testid="admin-withdrawals">
