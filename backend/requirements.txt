@@ -10,6 +10,7 @@ pydantic-settings>=2.3,<3.0
 requests>=2.31,<3.0
 Pillow>=13.0,<14.0
 httpx>=0.25,<1.0
+openai>=1.99,<3
 redis>=5.0,<6.0
 rq>=1.16,<2.0
 kafka-python>=2.0,<3.0

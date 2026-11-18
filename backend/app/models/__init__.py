@@ -13,6 +13,7 @@ from app.models.academy_player_progress import AcademyPlayerProgress
 from app.models.academy_program import AcademyProgram
 from app.models.academy_training_cycle import AcademyTrainingCycle
 from app.models.analytics_event import AnalyticsEvent
+from app.models.ai_gateway import AiFeatureSetting, AiProviderSetting, AiRequestLimit, AiUsageLog
 from app.models.access_control import (
     AccessAuditLog,
     Organization,
@@ -850,6 +851,10 @@ __all__ = [
     "AcademyProgram",
     "AcademyTrainingCycle",
     "AnalyticsEvent",
+    "AiFeatureSetting",
+    "AiProviderSetting",
+    "AiRequestLimit",
+    "AiUsageLog",
     "AccessAuditLog",
     "AuthEmailToken",
     "AuthEmailTokenPurpose",

@@ -241,6 +241,19 @@ class RemoteViralityInsightLLMClient:
             "Answer the question 'Why did this clip go viral?' in 2 concise sentences."
         )
         user_text = json.dumps(prompt, ensure_ascii=True)
+        from app.ai_gateway.legacy_bridge import LEGACY_NOT_ROUTED, route_legacy_openai_text
+
+        routed = route_legacy_openai_text(
+            endpoint_url=self.endpoint_url,
+            model=self.model,
+            feature="social_analytics",
+            instructions=system_text,
+            payload=prompt,
+            max_output_tokens=120,
+            temperature=0.4,
+        )
+        if routed is not LEGACY_NOT_ROUTED:
+            return routed if isinstance(routed, str) else None
         lower_url = (self.endpoint_url or "").lower()
         if any(
             token in lower_url

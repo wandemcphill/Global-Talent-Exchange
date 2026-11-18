@@ -632,6 +632,7 @@ DOMAIN_MODULES = (
         on_startup=("app.ai_reporter.worker:bind_ai_reporter_scheduler",),
         on_shutdown=("app.ai_reporter.worker:shutdown_ai_reporter_scheduler",),
     ),
+    _module("ai_gateway", router_path="app.ai_gateway.router:router", api_only=True),
     _module(
         "gtex_news_engine",
         router_path="app.news_engine.router:router",
