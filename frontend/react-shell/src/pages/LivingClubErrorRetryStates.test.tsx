@@ -42,8 +42,8 @@ jest.mock("sonner", () => ({
   },
 }));
 
-jest.mock("@/components/gtex/Cinema3DStage", () => ({
-  Cinema3DStage: ({ title }: any) => {
+jest.mock("@/lib/3d/GtexSceneViewport", () => ({
+  GtexSceneViewport: ({ title }: any) => {
     const ReactModule = require("react");
     return ReactModule.createElement("div", { "data-testid": "mock-cinema-3d-stage" }, title);
   },

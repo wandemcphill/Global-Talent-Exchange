@@ -14,7 +14,7 @@ import { fmt, useClub } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
 import { MarketTable } from "@/components/gtex/MarketTable";
 import { posShort } from "@/components/gtex/PlayerCard";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { ClubCoinTraderFundingPanel } from "@/components/gtex/CoinTraderDesk";
 
 const STEPS = [
@@ -68,14 +68,17 @@ function IdentityStep({ club, onboarding, onDone }: any) {
   return (
     <Panel eyebrow="Step 1" title={`Confirm ${club.club_name}`} testid="onboarding-identity-step">
       <div className="mb-5">
-        <Cinema3DStage
-          scene="club_takeover"
+        <GtexSceneViewport
+          sceneId="club_takeover"
           compact
           title={`3D Keys to the Club · ${club.club_name}`}
           subtitle="Official Founding Charter & Stadium Center-Circle Walkout"
           badgeText="3D OWNER TAKEOVER"
           clubName={club.club_name}
           subjectName={club.club_name}
+          crestUrl={club?.crest_asset_ref || club?.crest_url || club?.identity?.crest_asset_ref}
+          primaryColor={club?.primary_color || club?.identity?.primary_color}
+          secondaryColor={club?.secondary_color || club?.identity?.secondary_color}
           quote="A new era begins under your executive stewardship."
           stats={[
             { label: "Founding Squad Grant", value: `${fmt(launchGrant)} GTX`, accent: "#00E676" },
@@ -725,8 +728,8 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
       }
     >
       <div className="mb-6">
-        <Cinema3DStage
-          scene="academy_upgrade"
+        <GtexSceneViewport
+          sceneId="academy_upgrade"
           compact
           title={`3D Youth Academy Campus · Genesis Intake`}
           subtitle={`${club?.club_name || "GTEX Club"} · Inaugural Class of Homegrown Wonderkids`}

@@ -5,7 +5,7 @@ import { api } from "@/lib/api";
 import { RegenCard } from "@/components/gtex/RegenCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { toast } from "sonner";
 
 export function RegenAwards() {
@@ -86,8 +86,8 @@ export function RegenAwards() {
       </section>
 
       {/* 3D World Player of the Year & Ballon d'Or Stage */}
-      <Cinema3DStage
-        scene="world_gala"
+      <GtexSceneViewport
+        sceneId="world_gala"
         title={`3D GTEX Ballon d'Or de Demain · ${featuredWinner?.player_name || "World #1 Laureate"}`}
         subtitle="Monaco Theatre · Volumetric 3D Golden Globe Pedestal & Spotlight Sweep"
         badgeText="3D BALLON D'OR GALA"

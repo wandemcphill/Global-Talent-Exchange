@@ -32,11 +32,15 @@ describe("GtexSceneRegistry", () => {
     expect(campus?.supportsInteraction).toBe(true);
   });
 
-  test("retrieves cinema stage scenes by alias", () => {
+  test("resolves presentation scenes as Three.js environments", () => {
     const walkout = GtexSceneRegistry.getScene("signing_walkout");
-    expect(walkout).toBeDefined();
-    expect(walkout?.cinemaSceneType).toBe("signing_walkout");
-    expect(walkout?.category).toBe("cinema");
+    const takeover = GtexSceneRegistry.getScene("club_takeover");
+    const announcement = GtexSceneRegistry.getScene("club_announcement");
+    expect(walkout?.renderBackend).toBe("threejs");
+    expect(walkout?.defaultCamera?.position[2]).toBeLessThan(100);
+    expect(takeover?.requiredModels).toContain("/models/presentation/cc0_football_stadium.glb");
+    expect(announcement?.renderBackend).toBe("react_editorial");
+    expect(JSON.stringify(GtexSceneRegistry.listScenes())).not.toContain("cinema_volumetric");
   });
 
   test("allows registration of new custom ecosystem scenes", () => {

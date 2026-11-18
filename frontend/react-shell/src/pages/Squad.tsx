@@ -31,7 +31,7 @@ import { coinWithNaira } from "@/lib/money";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { HolographicPlayerCard, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
 import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
 import { useSkin } from "@/lib/skin-engine";
@@ -54,8 +54,8 @@ function ManagerSheet({ club }: any) {
     <Panel eyebrow="Manager realism engine" title={m.name} testid="manager-sheet" className="lg:col-span-5"
       action={<Btn variant="danger" onClick={fire} data-testid="fire-manager-button">Dismiss</Btn>}>
       <div className="mb-4">
-        <Cinema3DStage
-          scene="manager_arrival"
+        <GtexSceneViewport
+          sceneId="manager_arrival"
           compact
           title={`3D First-Day Training Ground & Press Suite · ${m.name || "Head Coach"}`}
           subtitle={`${club.club_name} · ${m.tactical_preference || "Balanced"} · Temperament: ${m.temperament || "Composed"}`}

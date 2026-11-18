@@ -128,7 +128,10 @@ export class StadiumEnvironmentLighting {
   }
 
   /** Replaces the procedural dome with a Poly Haven HDR when it loads. */
-  public async loadPolyHaven(url = polyHavenUrlForWeather("clear_night")): Promise<boolean> {
+  public async loadPolyHaven(
+    url = polyHavenUrlForWeather("clear_night"),
+    options?: { background?: boolean }
+  ): Promise<boolean> {
     const request = ++this.hdrRequest;
     try {
       const { RGBELoader } = await import("three/examples/jsm/loaders/RGBELoader.js");
@@ -151,7 +154,7 @@ export class StadiumEnvironmentLighting {
       this.envTarget = next;
       this.hdrTexture = hdr;
       this.scene.environment = next.texture;
-      this.scene.background = hdr;
+      if (options?.background !== false) this.scene.background = hdr;
       previous?.dispose();
       previousHdr?.dispose();
       this.isActive = true;

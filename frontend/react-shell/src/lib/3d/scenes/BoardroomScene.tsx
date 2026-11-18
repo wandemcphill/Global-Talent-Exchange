@@ -14,6 +14,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from "react"
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { disposeScene } from "../disposeScene";
+import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
 import { useQuery } from "@tanstack/react-query";
 import {
   Building2,
@@ -133,10 +134,13 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
   qualityTier = "high",
   activeQuality,
   sceneProps,
+  sceneId,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const [activePreset, setActivePreset] = useState<BoardroomCameraPreset>("overview");
-  const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
+  const [lightingMode, setLightingMode] = useState<"day" | "night">(
+    sceneId === "boardroom_clash" ? "night" : "day"
+  );
   const [hoveredPersona, setHoveredPersona] = useState<BoardroomPersonaConfig | null>(null);
   const [isHoveringDilemma, setIsHoveringDilemma] = useState<boolean>(false);
   const [selectedPersonaRole, setSelectedPersonaRole] = useState<string | null>(null);
@@ -604,6 +608,25 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
     renderer.domElement.addEventListener("mousemove", handlePointerMove);
     renderer.domElement.addEventListener("pointerdown", handlePointerDown);
 
+    let hqCancelled = false;
+    if (typeof navigator === "undefined" || !/jsdom/i.test(navigator.userAgent || "")) {
+      void AssetStreamingCache.getInstance()
+        .loadGltf("/models/campus/club_hq.glb", renderer)
+        .then((gltf) => {
+          if (hqCancelled || !gltf?.scene) return;
+          const hq = gltf.scene.clone(true);
+          const box = new THREE.Box3().setFromObject(hq);
+          const size = box.getSize(new THREE.Vector3());
+          const maxDim = Math.max(size.x, size.y, size.z, 0.001);
+          hq.scale.multiplyScalar(36 / maxDim);
+          hq.position.set(0, 0, -28);
+          scene.add(hq);
+        })
+        .catch(() => {
+          // The furnished boardroom stays in place when the headquarters model is unavailable.
+        });
+    }
+
     // -----------------------------------------------------------------------
     // Animation Loop
     // -----------------------------------------------------------------------
@@ -658,6 +681,7 @@ export const BoardroomScene: React.FC<BoardroomSceneProps> = ({
 
     // Cleanup
     return () => {
+      hqCancelled = true;
       cancelAnimationFrame(animId);
       resizeObserver.disconnect();
       renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);

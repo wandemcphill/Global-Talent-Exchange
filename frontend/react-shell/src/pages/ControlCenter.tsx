@@ -49,7 +49,7 @@ import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
 import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
 import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D";
-import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
   HolographicPlayerCard,
   TacticalPitch25D,
@@ -231,7 +231,7 @@ export function ControlCenter() {
     "Victory performance bonus for the starting squad.",
   );
   const [pledgingBonus, setPledgingBonus] = useState(false);
-  const [active3DScene, setActive3DScene] = useState<Cinema3DSceneType>("manager_arrival");
+  const [active3DScene, setActive3DScene] = useState("manager_arrival");
   const [pressConferenceOpen, setPressConferenceOpen] = useState(false);
   const [pressTone, setPressTone] = useState<"ambitious" | "calm" | "assertive" | "defiant">(
     "assertive",
@@ -698,15 +698,15 @@ export function ControlCenter() {
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[
-              { id: "manager_arrival" as Cinema3DSceneType, label: "3D Manager Day 1" },
-              { id: "signing_walkout" as Cinema3DSceneType, label: "3D Signing Walkout" },
-              { id: "world_gala" as Cinema3DSceneType, label: "3D World Player Gala" },
-              { id: "luxury_turntable" as Cinema3DSceneType, label: "3D Luxury Vault" },
-              { id: "boardroom_clash" as Cinema3DSceneType, label: "3D Boardroom Clash" },
-              { id: "club_takeover" as Cinema3DSceneType, label: "3D Takeover Keys" },
-              { id: "facility_upgrade" as Cinema3DSceneType, label: "3D Stadium Upgrade" },
-              { id: "competition_final" as Cinema3DSceneType, label: "3D Finals Plinth" },
-              { id: "private_jet_flex" as Cinema3DSceneType, label: "3D Jet Flex" },
+              { id: "manager_arrival", label: "Manager arrival" },
+              { id: "signing_walkout", label: "Signing walkout" },
+              { id: "world_gala", label: "Awards gala" },
+              { id: "luxury_turntable", label: "Luxury vault" },
+              { id: "boardroom_clash", label: "Boardroom" },
+              { id: "club_takeover", label: "Club takeover" },
+              { id: "facility_upgrade", label: "Stadium campus" },
+              { id: "competition_final", label: "Finals plinth" },
+              { id: "private_jet_flex", label: "Executive jet" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -724,8 +724,9 @@ export function ControlCenter() {
           </div>
         </div>
 
-        <Cinema3DStage
-          scene={active3DScene}
+        <GtexSceneViewport
+          sceneId={active3DScene}
+          qualityTier="medium"
           compact
           title={
             active3DScene === "manager_arrival"

@@ -19,7 +19,7 @@ import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, TraitBar } from "@/
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PackReveal } from "@/components/gtex/PackReveal";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 
 const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
 const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
@@ -263,8 +263,8 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
       testid="build-a-son-panel"
     >
       <div className="mb-6">
-        <Cinema3DStage
-          scene="build_a_son"
+        <GtexSceneViewport
+          sceneId="build_a_son"
           compact
           title={`Bloodline induction · ${heirLabel}`}
           subtitle={
@@ -856,8 +856,8 @@ export default function Academy() {
 
       {/* 1A. 3D Generational Wonderkid Emergence & Youth Campus Diorama */}
       <div className="grid gap-6 lg:grid-cols-2">
-        <Cinema3DStage
-          scene="wonderkid_emergence"
+        <GtexSceneViewport
+          sceneId="wonderkid_emergence"
           compact
           title={`3D Generational Wonderkid Walkout · ${regens[0]?.name || "Crown Jewel #10"}`}
           subtitle={`HOYD Report: "Cancel all transfer plans — a generational talent has emerged on Pitch 3."`}
@@ -872,8 +872,8 @@ export default function Academy() {
             { label: "HOYD Rating", value: `${hoydRating}/100`, accent: "#00E676" },
           ]}
         />
-        <Cinema3DStage
-          scene="academy_upgrade"
+        <GtexSceneViewport
+          sceneId="academy_upgrade"
           compact
           title={`3D Youth Academy Campus · Level ${facilityLevel}/5`}
           subtitle={`${club.club_name} Biomechanics, 3G Domes & DNA Scouting Complex`}

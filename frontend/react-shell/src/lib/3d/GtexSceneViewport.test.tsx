@@ -199,8 +199,7 @@ describe("GtexSceneViewport", () => {
     expect(container.querySelector('[data-testid="broadcast-tier"]')?.textContent).toBe("ultra");
   });
 
-  test("renders honest fallback for threejs scene when no renderer is registered", async () => {
-    // academy_training_pitch is registered as renderBackend: "threejs" with no CustomRenderer registered
+  test("loads the registered academy renderer instead of a pending card", async () => {
     await act(async () => {
       root.render(
         <GtexSceneViewport
@@ -209,11 +208,49 @@ describe("GtexSceneViewport", () => {
         />
       );
     });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 30));
+    });
 
-    // Should NOT silently render stadium_sponsor; should render honest fallback
-    expect(container.textContent).toContain("Academy Youth Training Ground");
+    expect(container.querySelector('[data-testid="academy-ground-scene"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("RENDERER PENDING");
+  });
+
+  test("renders an honest pending card for an unknown scene id", async () => {
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="unregistered_custom_stage"
+          forceWebGL={true}
+          clubName="Harbour Athletic"
+        />
+      );
+    });
+
     expect(container.textContent).toContain("3D COMPANION MODE (RENDERER PENDING)");
-    expect(container.textContent).toContain("Operating in companion mode");
+    expect(container.textContent).toContain("Harbour Athletic");
+    expect(container.querySelector("[data-scene-kind]")).toBeNull();
+  });
+
+  test("falls back when WebGL is unavailable", async () => {
+    const original = (window as any).WebGLRenderingContext;
+    delete (window as any).WebGLRenderingContext;
+    try {
+      await act(async () => {
+        root.render(
+          <GtexSceneViewport
+            sceneId="club_takeover"
+            clubName="Harbour Athletic"
+            title="The club is yours"
+          />
+        );
+      });
+      expect(container.querySelector('[data-testid="gtex-scene-viewport-fallback-2d"]')).not.toBeNull();
+      expect(container.textContent).toContain("Harbour Athletic");
+      expect(container.textContent).toContain("2D COMPANION MODE");
+    } finally {
+      (window as any).WebGLRenderingContext = original;
+    }
   });
 
   test("renders dedicated Three.js renderer for boardroom_meeting when registered in Stage 2", async () => {
@@ -256,5 +293,49 @@ describe("GtexSceneViewport", () => {
     expect(viewportEl?.hasAttribute("data-measured-fps")).toBe(true);
     expect(viewportEl?.hasAttribute("data-frame-time-ms")).toBe(true);
     expect(viewportEl?.getAttribute("data-context-lost")).toBe("false");
+  });
+
+  test("shows the club fallback when a renderer reports an asset failure", async () => {
+    const BrokenRenderer: React.FC<any> = ({ onPresentationFailure }) => {
+      React.useEffect(() => {
+        onPresentationFailure?.("asset");
+      }, [onPresentationFailure]);
+      return <div data-testid="broken-scene" />;
+    };
+    GtexSceneRegistry.registerRenderer("club_takeover", BrokenRenderer);
+
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="club_takeover"
+          forceWebGL={true}
+          clubName="Harbour Athletic"
+        />
+      );
+    });
+
+    expect(container.textContent).toContain("could not be loaded");
+    expect(container.textContent).toContain("Harbour Athletic");
+  });
+
+  test("marks the viewport when the WebGL context is lost and restored", async () => {
+    await act(async () => {
+      root.render(
+        <GtexSceneViewport
+          sceneId="stadium_sponsor"
+          forceWebGL={true}
+          qualityTier="low"
+        />
+      );
+    });
+    const viewportEl = container.querySelector('[data-testid="gtex-scene-viewport"]') as HTMLElement;
+    await act(async () => {
+      viewportEl.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+    });
+    expect(viewportEl.getAttribute("data-context-lost")).toBe("true");
+    await act(async () => {
+      viewportEl.dispatchEvent(new Event("webglcontextrestored"));
+    });
+    expect(viewportEl.getAttribute("data-context-lost")).toBe("false");
   });
 });

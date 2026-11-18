@@ -6,7 +6,7 @@ import { CheckCircle2, Coins, Crown, Flame, Medal, Sparkles, Tv, Trophy } from "
 import { api, errMsg } from "@/lib/api";
 import { fmt, label, useControlCenter, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel } from "@/components/gtex/ui";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { MatchdayLineupBroadcast } from "@/components/gtex/MatchdayLineupBroadcast";
 
 function Standings({ rows, myIds }: any) {
@@ -144,8 +144,8 @@ export default function CompetitionDetail() {
     <div data-testid="competition-detail-page" className="space-y-6">
       <PageHeader eyebrow={`${comp.host_type === "gtex" ? "GTEX-hosted" : "User-hosted"} · ${comp.format}`} title={comp.name} sub={comp.description}
         action={<div className="flex gap-4"><div><p className="text-[10px] uppercase text-slate-500">Prize pool</p><Coin amount={comp.prize_pool} /></div><div><p className="text-[10px] uppercase text-slate-500">Round</p><span className="gx-mono text-white">{comp.current_round}/{comp.total_rounds || "-"}</span></div></div>} />
-      <Cinema3DStage
-        scene="competition_final"
+      <GtexSceneViewport
+        sceneId="competition_final"
         compact
         title={`3D Competition Finals Plinth & Trophy Lift · ${comp.name}`}
         subtitle={`Current Podium Leader: ${leaderClub} vs ${runnerUpClub} · Round ${comp.current_round}/${comp.total_rounds || "-"}`}

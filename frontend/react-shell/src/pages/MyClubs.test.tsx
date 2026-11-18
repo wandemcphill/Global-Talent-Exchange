@@ -28,8 +28,8 @@ jest.mock("react-router-dom", () => {
   };
 });
 
-jest.mock("@/components/gtex/Cinema3DStage", () => ({
-  Cinema3DStage: ({ title, badgeText }: any) => {
+jest.mock("@/lib/3d/GtexSceneViewport", () => ({
+  GtexSceneViewport: ({ title, badgeText }: any) => {
     const ReactModule = require("react");
     return ReactModule.createElement(
       "div",

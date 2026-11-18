@@ -4,7 +4,6 @@
  */
 
 import React from "react";
-import { Cinema3DSceneType, Cinema3DStageProps } from "@/components/gtex/Cinema3DStage";
 import { MatchViewerContractInput } from "./broadcast/spectatorContract";
 
 export type DeviceQualityTier = "low" | "medium" | "high" | "ultra";
@@ -89,7 +88,13 @@ export type SceneCategory =
   | "showroom"
   | "competition";
 
-export type RenderBackendType = "threejs" | "cinema_volumetric" | "hybrid";
+export type RenderBackendType = "threejs" | "react_editorial" | "hybrid";
+
+export interface GtexStat {
+  label: string;
+  value: string;
+  accent?: string;
+}
 
 export type FallbackMode = "2d_diorama" | "static_card" | "simplified_canvas";
 
@@ -122,17 +127,45 @@ export interface GtexSceneDescriptor {
   fallbackMode: FallbackMode;
   /** Whether the scene accepts orbit/pan/zoom or touch gestures */
   supportsInteraction: boolean;
-  /** Associated Cinema3DSceneType if backed by Cinema3DStage */
-  cinemaSceneType?: Cinema3DSceneType;
   /** Search and classification tags */
   tags: string[];
   /** Metadata and customization flags */
   meta?: Record<string, any>;
 }
 
-export interface GtexSceneViewportProps extends Partial<Cinema3DStageProps> {
-  /** Scene ID registered in GtexSceneRegistry (or Cinema3DSceneType) */
+export interface GtexSceneViewportProps {
+  /** Scene ID registered in GtexSceneRegistry */
   sceneId: string;
+  title?: string;
+  subtitle?: string;
+  badgeText?: string;
+  clubName?: string;
+  subjectName?: string;
+  subjectRole?: string;
+  subjectLabel?: string;
+  quote?: string;
+  stats?: GtexStat[];
+  overallRating?: number | string;
+  potentialRating?: number | string;
+  jerseyNumber?: number | string;
+  primaryColor?: string;
+  secondaryColor?: string;
+  crestUrl?: string;
+  shot?: string;
+  sponsorName?: string;
+  ownerName?: string;
+  adSurfaceZone?: string;
+  facilityLevel?: number;
+  assetCategory?: string;
+  assetName?: string;
+  meshArchetype?: string;
+  modelPath?: string;
+  compact?: boolean;
+  agentMood?: string;
+  spectacleTier?: string;
+  enableSocialSalute?: boolean;
+  actionLabel?: string;
+  onActionClick?: () => void;
   /** Optional quality tier override (if omitted, auto-detected from device) */
   qualityTier?: DeviceQualityTier;
   /** Optional quality preset alias */

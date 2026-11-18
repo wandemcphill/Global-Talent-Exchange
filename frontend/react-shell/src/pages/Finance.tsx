@@ -9,7 +9,7 @@ import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { nairaText, setMoneyRates, useMoneyRates } from "@/lib/money";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { TelemetrySparklineCard } from "@/components/gtex/ApexWidgets";
 
 function Balances({ w, rates }: any) {
@@ -579,8 +579,8 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
 
       {sponsorData?.offers?.length > 0 && (
         <div className="my-4 grid gap-4 lg:grid-cols-2">
-          <Cinema3DStage
-            scene="new_ad_deal"
+          <GtexSceneViewport
+            sceneId="new_ad_deal"
             compact
             title={`3D New Sponsor Deal Unveil · ${sponsorData.offers[0]?.sponsor_name || "Global Partner"}`}
             subtitle={`Executive Handshake & #10 Shirt Launch · Negotiated by ${sponsorData.gm_name || "General Manager"}`}
@@ -604,8 +604,8 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
               },
             ]}
           />
-          <Cinema3DStage
-            scene="stadium_ad_display"
+          <GtexSceneViewport
+            sceneId="stadium_ad_display"
             compact
             title="3D In-Stadium Ad Surfaces & LED Perimeter Bowl"
             subtitle="4 Active Zones: Roof Naming Halo · Pitchside 360° LED · Jumbotron · Center-Circle Carpet"
