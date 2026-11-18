@@ -9,6 +9,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.club_finance.service import ClubFinanceService, DRAW_BONUS, WIN_BONUS
+from app.models.club_profile import ClubProfile
+from app.models.creator_share_market import CreatorClubShareMarket
 from app.club_ownership.schemas import (
     ClubDividendDistributionView,
     ClubGovernanceActionView,
@@ -21,6 +23,8 @@ from app.club_ownership.schemas import (
     ClubOwnershipView,
     ClubPortfolioHoldingView,
     ClubPortfolioView,
+    ClubShareDirectoryItem,
+    ClubShareDirectoryView,
     ClubTokenTradeResultView,
     ClubTokenView,
     ClubTreasuryEntryView,
@@ -159,6 +163,59 @@ class ClubOwnershipService:
             total_unrealized_pl_coin=(total_market - total_cost).quantize(DECIMAL_QUANTUM),
             holdings=views,
         )
+
+    def list_share_directory(self, *, q: str | None = None, limit: int = 50) -> ClubShareDirectoryView:
+        """Public clubs that already have fractional tokens or an open fan-share market."""
+        name_query = (q or "").strip()
+        term = f"%{name_query}%" if name_query else None
+        items: list[ClubShareDirectoryItem] = []
+        token_stmt = (
+            select(ClubToken, ClubProfile)
+            .join(ClubProfile, ClubProfile.id == ClubToken.club_id)
+            .where(ClubProfile.visibility == "public")
+            .order_by(ClubProfile.club_name.asc())
+        )
+        if term is not None:
+            token_stmt = token_stmt.where(ClubProfile.club_name.ilike(term))
+        for token, club in self.session.execute(token_stmt.limit(limit)).all():
+            available = max(int(token.total_supply) - int(token.circulating_supply), 0)
+            items.append(
+                ClubShareDirectoryItem(
+                    club_id=club.id,
+                    club_name=club.club_name,
+                    market_kind="token",
+                    unit_price=Decimal(token.price),
+                    available=available,
+                    total_supply=int(token.total_supply),
+                )
+            )
+        fan_stmt = (
+            select(CreatorClubShareMarket, ClubProfile)
+            .join(ClubProfile, ClubProfile.id == CreatorClubShareMarket.club_id)
+            .where(
+                ClubProfile.visibility == "public",
+                CreatorClubShareMarket.status == "active",
+            )
+            .order_by(ClubProfile.club_name.asc())
+        )
+        if term is not None:
+            fan_stmt = fan_stmt.where(ClubProfile.club_name.ilike(term))
+        seen = {item.club_id for item in items if item.market_kind == "fan_share"}
+        for market, club in self.session.execute(fan_stmt.limit(limit)).all():
+            if club.id in seen:
+                continue
+            available = max(int(market.max_shares_issued) - int(market.shares_sold), 0)
+            items.append(
+                ClubShareDirectoryItem(
+                    club_id=club.id,
+                    club_name=club.club_name,
+                    market_kind="fan_share",
+                    unit_price=Decimal(market.share_price_coin),
+                    available=available,
+                    total_supply=int(market.max_shares_issued),
+                )
+            )
+        return ClubShareDirectoryView(items=items[:limit])
 
     def buy_tokens(self, *, club_id: str, buyer: User, quantity: int) -> ClubTokenTradeResultView:
         if quantity <= 0:

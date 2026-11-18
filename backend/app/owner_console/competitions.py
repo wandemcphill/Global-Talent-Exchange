@@ -625,7 +625,128 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
     )
     session.add(comp)
     session.flush()
+    host_club_id = str(payload.get("club_id") or "").strip()
+    if host_club_id:
+        try:
+            enter_competition(session, user_id, comp.id, host_club_id)
+        except OwnerError:
+            # The competition still exists. The host can enter once the squad is ready.
+            pass
+    opponent_club_id = str(payload.get("opponent_club_id") or "").strip()
+    if opponent_club_id and host_club_id and opponent_club_id != host_club_id:
+        from app.club_social.service import ClubSocialService
+        from app.models.user import User
+
+        actor = session.get(User, user_id)
+        if actor is not None:
+            from app.club_social.service import ClubSocialError
+
+            try:
+                ClubSocialService(session).create_challenge(
+                actor=actor,
+                club_id=host_club_id,
+                title=f"Join {comp.name}"[:160],
+                message=f"You are invited to {comp.name}. Use pin {comp.invite_code} to enter with your club.",
+                stakes_text="Friend competition",
+                target_club_id=opponent_club_id,
+                visibility="private",
+                country_code=None,
+                region_name=None,
+                city_name=None,
+                competition_id=comp.id,
+                accept_by=None,
+                scheduled_for=None,
+                metadata_json={"invite_code": comp.invite_code, "source": "friend_competition"},
+                )
+            except ClubSocialError:
+                pass
     return comp
+
+
+def search_fixtures(
+    session: Session,
+    user_id: str,
+    *,
+    q: str | None = None,
+    club: str | None = None,
+    opponent: str | None = None,
+    status: str | None = None,
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    """Owner-console fixtures the caller hosts, has entered, or that belong to GTEX."""
+    comps = list(session.scalars(select(OwnerCompetition).order_by(OwnerCompetition.created_at.desc())).all())
+    visible_ids: set[str] = set()
+    names: dict[str, str] = {}
+    for comp in comps:
+        rows = entries(session, comp.id)
+        involved = comp.host_type == "gtex" or comp.host_user_id == user_id or user_id in {
+            entry.owner_user_id for entry in rows
+        }
+        if not involved:
+            continue
+        visible_ids.add(comp.id)
+        names[comp.id] = comp.name
+    if not visible_ids:
+        return []
+    matches = list(
+        session.scalars(
+            select(OwnerMatch)
+            .where(OwnerMatch.competition_id.in_(tuple(visible_ids)))
+            .order_by(OwnerMatch.round_number.asc())
+        ).all()
+    )
+    name_query = (q or "").strip().lower()
+    club_query = (club or "").strip().lower()
+    opponent_query = (opponent or "").strip().lower()
+    status_query = (status or "").strip().lower()
+    found: list[dict[str, Any]] = []
+    for match in matches:
+        if status_query and match.status != status_query:
+            continue
+        competition_name = names.get(match.competition_id, "")
+        if name_query and name_query not in " ".join(
+            (competition_name, match.home_name, match.away_name)
+        ).lower():
+            continue
+        home_hit = _side_matches(club_query, match.home_club_id, match.home_name)
+        away_hit = _side_matches(club_query, match.away_club_id, match.away_name)
+        if club_query and not (home_hit or away_hit):
+            continue
+        if opponent_query:
+            if club_query and home_hit and not away_hit:
+                if not _side_matches(opponent_query, match.away_club_id, match.away_name):
+                    continue
+            elif club_query and away_hit and not home_hit:
+                if not _side_matches(opponent_query, match.home_club_id, match.home_name):
+                    continue
+            elif not (
+                _side_matches(opponent_query, match.home_club_id, match.home_name)
+                or _side_matches(opponent_query, match.away_club_id, match.away_name)
+            ):
+                continue
+        found.append(
+            {
+                "id": match.id,
+                "competition_id": match.competition_id,
+                "competition_name": competition_name,
+                "home_club_id": match.home_club_id,
+                "away_club_id": match.away_club_id,
+                "home_name": match.home_name,
+                "away_name": match.away_name,
+                "status": match.status,
+                "round_number": match.round_number,
+                "route": f"/app/match/{match.id}",
+            }
+        )
+        if len(found) >= limit:
+            break
+    return found
+
+
+def _side_matches(query: str, club_id: str, club_name: str) -> bool:
+    if not query:
+        return False
+    return query == str(club_id).lower() or query in str(club_name).lower()
 
 
 def join_by_code(session: Session, user_id: str, code: str, club_id: str) -> OwnerCompetitionEntry:

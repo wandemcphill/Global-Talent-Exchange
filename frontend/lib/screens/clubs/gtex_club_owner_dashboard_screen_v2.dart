@@ -259,10 +259,12 @@ class _GtexClubOwnerDashboardScreenV2State
           clubName: widget.clubName,
           baseUrl: widget.baseUrl,
           backendMode: widget.backendMode,
+          accessToken: widget.accessToken,
           isAuthenticated: widget.isAuthenticated,
           onOpenLogin: widget.onOpenLogin,
           onOpenMarket:
               () => context.go(const GteNavigationRoute.market().path),
+
           onCreateCompetition:
               () => context.go(const GteNavigationRoute.competitions().path),
           onOpenLineup:

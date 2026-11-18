@@ -128,6 +128,19 @@ class ClubOwnershipView(CommonSchema):
     proposals: list[ClubGovernanceProposalView] = Field(default_factory=list)
 
 
+class ClubShareDirectoryItem(CommonSchema):
+    club_id: str
+    club_name: str
+    market_kind: str
+    unit_price: Decimal
+    available: int = Field(ge=0)
+    total_supply: int = Field(ge=0)
+
+
+class ClubShareDirectoryView(CommonSchema):
+    items: list[ClubShareDirectoryItem] = Field(default_factory=list)
+
+
 class ClubTokenTradeRequest(CommonSchema):
     quantity: int = Field(gt=0)
 

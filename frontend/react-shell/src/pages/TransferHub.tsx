@@ -49,6 +49,9 @@ export function TransferHub() {
   const [lane, setLane] = useState<TransferLane>(journeyParams.lane || "listings");
   const [targetPlayerId, setTargetPlayerId] = useState<string | null>(journeyParams.player);
   const [search, setSearch] = useState("");
+  const [minGsi, setMinGsi] = useState("");
+  const [maxGsi, setMaxGsi] = useState("");
+  const [listingVisibility, setListingVisibility] = useState("public");
   const [selectedPosition, setSelectedPosition] = useState("ALL");
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
 
@@ -103,10 +106,13 @@ export function TransferHub() {
     error: listingsError,
     refetch: refetchListings,
   } = useQuery({
-    queryKey: ["transfer-listings", selectedPosition],
+    queryKey: ["transfer-listings", selectedPosition, search, minGsi, maxGsi],
     queryFn: async () => {
-      const params: any = { status: "open" };
+      const params: any = { status: "open", public_board: true };
       if (selectedPosition !== "ALL") params.position = selectedPosition;
+      if (search.trim()) params.q = search.trim();
+      if (minGsi.trim()) params.min_gsi = Number(minGsi);
+      if (maxGsi.trim()) params.max_gsi = Number(maxGsi);
       const { data } = await api.get("/transfer-hub/listings", { params });
       return data || [];
     },
@@ -222,6 +228,9 @@ export function TransferHub() {
         selling_club_id: activeClub.club_id,
         base_price: Number(listingPrice),
         expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+        visibility: listingVisibility,
+        salary_amount: 0,
+        contract_years_remaining: 3,
       });
       toast.success("Player listed. Offers can come in.");
       setListingPrice("");
@@ -565,6 +574,8 @@ export function TransferHub() {
                 className="gx-input pl-9"
               />
             </div>
+            <input className="gx-input" type="number" min="1" max="99" placeholder="Min GSI" value={minGsi} onChange={(e) => setMinGsi(e.target.value)} data-testid="listing-min-gsi" />
+            <input className="gx-input" type="number" min="1" max="99" placeholder="Max GSI" value={maxGsi} onChange={(e) => setMaxGsi(e.target.value)} data-testid="listing-max-gsi" />
             <div>
               <select
                 value={selectedPosition}
@@ -709,6 +720,14 @@ export function TransferHub() {
                   value={listingPrice}
                   onChange={(event) => setListingPrice(event.target.value)}
                 />
+              </label>
+              <label className="text-xs text-slate-300">
+                Who can see it
+                <select className="gx-input mt-1" value={listingVisibility} onChange={(event) => setListingVisibility(event.target.value)}>
+                  <option value="public">Public</option>
+                  <option value="private">Private</option>
+                  <option value="invite_only">Invite only</option>
+                </select>
               </label>
               <button type="submit" className="gx-btn gx-btn-primary text-xs">List for offers</button>
             </form>

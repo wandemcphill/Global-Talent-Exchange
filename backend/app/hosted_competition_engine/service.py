@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Iterable
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -492,13 +492,62 @@ class HostedCompetitionService:
             gtex_hosted=gtex_hosted,
         )
 
-    def list_public_competitions(self) -> list[UserHostedCompetition]:
-        stmt = (
-            select(UserHostedCompetition)
-            .where(UserHostedCompetition.visibility.in_(("public", "passcode")))
-            .order_by(UserHostedCompetition.created_at.desc())
-        )
-        return list(self.session.scalars(stmt).all())
+    def list_public_competitions(
+        self,
+        *,
+        q: str | None = None,
+        club: str | None = None,
+        status: str | None = None,
+        viewer: User | None = None,
+    ) -> list[UserHostedCompetition]:
+        visibility = ["public", "passcode"]
+        stmt = select(UserHostedCompetition).order_by(UserHostedCompetition.created_at.desc())
+        name_query = (q or "").strip()
+        if name_query:
+            term = f"%{name_query}%"
+            stmt = stmt.where(
+                or_(UserHostedCompetition.title.ilike(term), UserHostedCompetition.description.ilike(term))
+            )
+        rows = list(self.session.scalars(stmt).all())
+        if status:
+            wanted = status.strip().lower()
+            rows = [
+                competition
+                for competition in rows
+                if str(getattr(competition.status, "value", competition.status)).lower() == wanted
+            ]
+        club_query = (club or "").strip().lower()
+        visible: list[UserHostedCompetition] = []
+        for competition in rows:
+            participant_ids = {
+                item.user_id
+                for item in self.participants_for_competition(competition.id)
+            }
+            is_public = competition.visibility in visibility
+            is_insider = viewer is not None and (
+                competition.host_user_id == viewer.id or viewer.id in participant_ids
+            )
+            if not is_public and not is_insider:
+                continue
+            if club_query and club_query not in self._hosted_club_haystack(competition).lower():
+                continue
+            visible.append(competition)
+        return visible
+
+    def _hosted_club_haystack(self, competition: UserHostedCompetition) -> str:
+        parts = [competition.title, competition.description or ""]
+        metadata = competition.metadata_json if isinstance(competition.metadata_json, dict) else {}
+        for key in ("club_name", "club_id", "opponent_club_name", "opponent_club_id"):
+            value = metadata.get(key)
+            if value:
+                parts.append(str(value))
+        for participant in self.participants_for_competition(competition.id):
+            participant_meta = participant.metadata_json if isinstance(participant.metadata_json, dict) else {}
+            for key in ("club_name", "club_id"):
+                value = participant_meta.get(key)
+                if value:
+                    parts.append(str(value))
+        return " ".join(parts)
 
     def list_for_host(self, *, user: User) -> list[UserHostedCompetition]:
         stmt = (

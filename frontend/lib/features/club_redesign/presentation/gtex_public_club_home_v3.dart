@@ -3,6 +3,8 @@ import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/data/club_api.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
 import 'package:gte_frontend/widgets/creator_club_follow_panel.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/club_challenge_bar.dart';
+import 'package:gte_frontend/features/club_redesign/presentation/club_fixture_strip.dart';
 import 'package:gte_frontend/features/club_redesign/models/gtex_public_club_profile_models.dart';
 import 'package:gte_frontend/features/player_detail/gtex_player_navigator.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
@@ -94,6 +96,24 @@ class GtexPublicClubHomeV3 extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 14),
+                    ClubChallengeBar(
+                      targetClubId: profile.clubId,
+                      targetClubName: profile.name,
+                      baseUrl: baseUrl,
+                      backendMode: backendMode ?? GteBackendMode.live,
+                      accessToken: accessToken,
+                      isAuthenticated: isAuthenticated,
+                      onOpenLogin: onOpenLogin,
+                    ),
+                    const SizedBox(height: 10),
+                    ClubFixtureStrip(
+                      clubId: profile.clubId,
+                      clubName: profile.name,
+                      baseUrl: baseUrl,
+                      backendMode: backendMode ?? GteBackendMode.live,
+                      accessToken: accessToken,
+                    ),
+                    const SizedBox(height: 10),
                     CreatorClubFollowPanel(
                       baseUrl: baseUrl,
                       backendMode: backendMode ?? GteBackendMode.live,

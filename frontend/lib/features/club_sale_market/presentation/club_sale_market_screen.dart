@@ -10,6 +10,7 @@ import '../../../widgets/gte_surface_panel.dart';
 import '../../../widgets/gtex_branding.dart';
 import '../data/club_sale_market_models.dart';
 import 'club_sale_market_controller.dart';
+import 'club_share_directory_panel.dart';
 
 class ClubSaleMarketScreen extends StatefulWidget {
   const ClubSaleMarketScreen({
@@ -44,6 +45,7 @@ class ClubSaleMarketScreen extends StatefulWidget {
 class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   late final ClubSaleMarketController _controller;
   late final TextEditingController _clubLookupController;
+  late final TextEditingController _nameQuery;
   late final bool _ownsController;
 
   bool get _hasAuth => widget.accessToken?.trim().isNotEmpty == true;
@@ -60,6 +62,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
           accessToken: widget.accessToken,
         );
     _clubLookupController = TextEditingController(text: widget.clubId ?? '');
+    _nameQuery = TextEditingController();
     if (widget.clubId == null) {
       _controller.loadPublicListings();
     } else {
@@ -73,6 +76,7 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
   @override
   void dispose() {
     _clubLookupController.dispose();
+    _nameQuery.dispose();
     if (_ownsController) {
       _controller.dispose();
     }
@@ -206,6 +210,30 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
             ),
           ),
           const SizedBox(height: 20),
+          TextField(
+            key: const Key('gtex-club-sale-search'),
+            controller: _nameQuery,
+            decoration: const InputDecoration(
+              labelText: 'Search clubs by name',
+              border: OutlineInputBorder(),
+            ),
+            onSubmitted: (String value) {
+              _controller.loadPublicListings(
+                query: ClubSaleListingsQuery(query: value),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton(
+              onPressed: () => _controller.loadPublicListings(
+                query: ClubSaleListingsQuery(query: _nameQuery.text),
+              ),
+              child: const Text('Search clubs for sale'),
+            ),
+          ),
+          const SizedBox(height: 20),
           if (_controller.listingsError != null && listings.isEmpty)
             GteStatePanel(
               eyebrow: 'TRANSFER MARKET',
@@ -243,7 +271,14 @@ class _ClubSaleMarketScreenState extends State<ClubSaleMarketScreen> {
                 ),
               ),
             ),
+          const SizedBox(height: 24),
+          ClubShareDirectoryPanel(
+            baseUrl: widget.baseUrl,
+            backendMode: widget.backendMode,
+            accessToken: widget.accessToken,
+          ),
         ],
+
       ),
     );
   }

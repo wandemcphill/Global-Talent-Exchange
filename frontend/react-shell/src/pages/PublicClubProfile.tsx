@@ -27,7 +27,8 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { API, api } from "@/lib/api";
+import { API, api, errMsg } from "@/lib/api";
+import { useActiveClub } from "@/lib/owner";
 import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
   StadiumPerimeterLEDShowcase,
@@ -188,6 +189,7 @@ function normalizePositionGroup(position?: string | null): "GK" | "DEF" | "MID" 
 
 export default function PublicClubProfile() {
   const { clubSlug } = useParams<{ clubSlug: string }>();
+  const { active } = useActiveClub();
   const [crestFailed, setCrestFailed] = useState(false);
   const [positionFilter, setPositionFilter] = useState<string>("ALL");
   const [ownerModalOpen, setOwnerModalOpen] = useState(false);
@@ -277,6 +279,34 @@ export default function PublicClubProfile() {
   React.useEffect(() => {
     setCrestFailed(false);
   }, [data?.club?.crest_url]);
+
+  const handleChallenge = async () => {
+    const targetId = data?.club?.id;
+    if (!active?.club_id || !targetId) {
+      toast.error("Select your club in the console before sending a challenge.");
+      return;
+    }
+    if (active.club_id === targetId) {
+      toast.error("Choose a different club.");
+      return;
+    }
+    try {
+      const created = await api.post(`/clubs/${active.club_id}/challenges`, {
+        title: `Challenge ${data?.club?.name || "club"}`.slice(0, 160),
+        message: `${active.club_name || "Our club"} wants a match against ${data?.club?.name || "your club"}.`,
+        target_club_id: targetId,
+        visibility: "private",
+        stakes_text: "Friendly",
+      });
+      const challengeId = created.data?.challenge?.id || created.data?.card?.challenge_id;
+      if (challengeId) {
+        await api.post(`/challenges/${challengeId}/publish`);
+      }
+      toast.success("Challenge sent. They can accept it from their club.");
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
 
   const handleShare = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
@@ -379,6 +409,14 @@ export default function PublicClubProfile() {
               GTEX<span className="text-emerald-400">.</span>
             </Link>
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={handleChallenge}
+                className="gx-btn gx-btn-primary text-xs"
+                data-testid="challenge-club"
+              >
+                Challenge this club
+              </button>
               <button
                 type="button"
                 onClick={handleShare}

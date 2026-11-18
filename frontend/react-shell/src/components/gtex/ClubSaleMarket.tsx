@@ -21,17 +21,21 @@ interface ClubListing {
 
 export function ClubSaleMarket() {
   const [tier, setTier] = useState<string>("");
+  const [nameQuery, setNameQuery] = useState("");
+  const [shareQuery, setShareQuery] = useState("");
+  const [shareQty, setShareQty] = useState("1");
   const [inquireModal, setInquireModal] = useState<ClubListing | null>(null);
   const [offerAmount, setOfferAmount] = useState<string>("");
   const [inquiryMessage, setInquiryMessage] = useState<string>("");
   const [submitting, setSubmitting] = useState(false);
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ["club-sale-market-listings", tier],
+    queryKey: ["club-sale-market-listings", tier, nameQuery],
     queryFn: async () => {
       try {
         const params: any = { limit: 50 };
         if (tier) params.league_tier = Number(tier);
+        if (nameQuery.trim()) params.q = nameQuery.trim();
         const res = await api.get("/api/clubs/sale-market/listings", { params });
         return res.data?.items || res.data?.listings || [];
       } catch (e) {
@@ -48,6 +52,32 @@ export function ClubSaleMarket() {
   });
 
   const listings: ClubListing[] = (data as any) || [];
+  const { data: shareDirectory } = useQuery({
+    queryKey: ["club-share-directory", shareQuery],
+    queryFn: async () => {
+      const res = await api.get("/clubs/ownership-market", {
+        params: { q: shareQuery.trim() || undefined, limit: 40 },
+      });
+      return res.data?.items || [];
+    },
+  });
+  const tradeShares = async (item: any, buy: boolean) => {
+    const quantity = Number(shareQty);
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      toast.error("Enter a quantity above zero.");
+      return;
+    }
+    try {
+      if (item.market_kind === "fan_share") {
+        await api.post(`/creator/clubs/${item.club_id}/fan-share-market/purchase`, { share_count: quantity });
+      } else {
+        await api.post(`/clubs/${item.club_id}/${buy ? "buy-tokens" : "sell-tokens"}`, { quantity });
+      }
+      toast.success(buy ? "Shares purchased." : "Shares sold.");
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
 
   const handleInquire = async () => {
     if (!inquireModal) return;
@@ -76,6 +106,13 @@ export function ClubSaleMarket() {
           <span className="text-sm font-semibold text-white">Live Club Acquisition Desk</span>
         </div>
         <div className="flex items-center gap-2">
+          <input
+            data-testid="club-sale-name-search"
+            className="gx-input text-xs"
+            placeholder="Search clubs by name"
+            value={nameQuery}
+            onChange={(e) => setNameQuery(e.target.value)}
+          />
           <select
             data-testid="club-sale-tier-filter"
             className="gx-input text-xs"
@@ -93,7 +130,33 @@ export function ClubSaleMarket() {
         </div>
       </div>
 
+      <Panel eyebrow="Club shares" title="Buy a slice of a club" testid="club-share-directory">
+        <div className="mb-3 flex flex-wrap gap-2">
+          <input className="gx-input text-xs" placeholder="Search club shares" value={shareQuery} onChange={(e) => setShareQuery(e.target.value)} data-testid="club-share-search" />
+          <input className="gx-input w-24 text-xs" type="number" min="1" value={shareQty} onChange={(e) => setShareQty(e.target.value)} />
+        </div>
+        {(shareDirectory || []).length === 0 ? (
+          <Empty title="No club shares listed" body="Clubs with token or fan-share markets appear here." />
+        ) : (
+          <div className="space-y-2">
+            {(shareDirectory || []).map((item: any) => (
+              <div key={`${item.market_kind}-${item.club_id}`} className="flex flex-wrap items-center justify-between gap-2 rounded border border-white/10 px-3 py-2">
+                <div>
+                  <p className="font-semibold text-white">{item.club_name}</p>
+                  <p className="text-xs text-slate-400">{item.market_kind === "fan_share" ? "Fan shares" : "Club tokens"} · {item.unit_price} · {item.available} available</p>
+                </div>
+                <div className="flex gap-2">
+                  <Btn onClick={() => tradeShares(item, true)}>Buy</Btn>
+                  {item.market_kind !== "fan_share" && <Btn variant="secondary" onClick={() => tradeShares(item, false)}>Sell</Btn>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </Panel>
+
       {isLoading ? (
+
         <Loading />
       ) : listings.length === 0 ? (
         <Empty

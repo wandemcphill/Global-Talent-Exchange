@@ -96,6 +96,7 @@ export default function CompetitionDetail() {
     enabled: Boolean(id),
   });
   const [settling, setSettling] = useState(false);
+  const [fixtureQuery, setFixtureQuery] = useState("");
   const [lineupMode, setLineupMode] = useState<"strongest" | "rotate">("strongest");
 
   if (isLoading || !comp) return <Loading />;
@@ -109,8 +110,13 @@ export default function CompetitionDetail() {
     comp.fixtures.find(
       (m: any) => m.status === "scheduled" && [m.home_club_id, m.away_club_id].includes(myClub),
     ) || comp.fixtures.find((m: any) => m.status === "scheduled");
+  const fixtureNeedle = fixtureQuery.trim().toLowerCase();
+  const visibleFixtures = (comp.fixtures || []).filter((m: any) => {
+    if (!fixtureNeedle) return true;
+    return `${m.home_name} ${m.away_name} ${m.status}`.toLowerCase().includes(fixtureNeedle);
+  });
   const rounds: Record<string, any[]> = {};
-  comp.fixtures.forEach((m: any) => { (rounds[m.round] = rounds[m.round] || []).push(m); });
+  visibleFixtures.forEach((m: any) => { (rounds[m.round] = rounds[m.round] || []).push(m); });
 
   const totalPool = Number(hostedFinance?.net_reward_pool ?? comp.prize_pool ?? 0);
   const firstPrize = Math.round(totalPool * 0.5);
@@ -259,12 +265,13 @@ export default function CompetitionDetail() {
           </div>
         </Panel>
         <Panel eyebrow="Schedule" title="Fixtures" className="lg:col-span-12" testid="fixtures-panel">
+          <input className="gx-input mb-3" placeholder="Filter by club or opponent" value={fixtureQuery} onChange={(e) => setFixtureQuery(e.target.value)} data-testid="fixture-filter" />
           <div className="grid gap-4 md:grid-cols-3">
             {Object.entries(rounds).map(([r, ms]) => (
               <div key={r}>
                 <p className="gx-eyebrow mb-2">Round {r}</p>
                 {ms.map((m: any) => (
-                  <Link key={m.id} to={m.status === "scheduled" ? "#" : `/app/match/${m.id}?club=${myClub}`} className="mb-1 flex justify-between rounded-sm border border-white/5 px-3 py-2 text-sm hover:border-emerald-500/30" data-testid={`fixture-${m.id}`}>
+                  <Link key={m.id} to={`/app/match/${m.id}?club=${myClub || ""}`} className="mb-1 flex justify-between rounded-sm border border-white/5 px-3 py-2 text-sm hover:border-emerald-500/30" data-testid={`fixture-${m.id}`}>
                     <span className="truncate">{m.home_name} – {m.away_name}</span>
                     <span className="gx-mono text-emerald-300">{m.status === "scheduled" ? "vs" : `${m.home_goals}-${m.away_goals}`}</span>
                   </Link>

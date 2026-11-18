@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/data/gte_models.dart';
 import 'package:gte_frontend/features/competitions/live_competitions_provider.dart';
+import 'package:gte_frontend/features/competitions/presentation/competition_friend_desk.dart';
 import 'package:gte_frontend/features/national_teams/live_national_teams_provider.dart';
 import 'package:gte_frontend/features/shared/data/gte_feature_support.dart';
 import 'package:gte_frontend/features/streamer_tournament_engine/data/streamer_tournament_engine_models.dart';
@@ -58,6 +59,7 @@ class _GtexLiveCompetitionsCommandScreenState
   CompetitionFamilyRoute _family = CompetitionFamilyRoute.gtex;
   String? _selectedCompetitionId;
   bool _joining = false;
+  String _matchQuery = '';
 
   @override
   void initState() {
@@ -156,7 +158,16 @@ class _GtexLiveCompetitionsCommandScreenState
   );
 
   Widget _buildLoaded(CompetitionHubData data) {
-    final List<_CompetitionCardData> cards = _cardsFor(data, _family);
+    final String needle = _matchQuery.trim().toLowerCase();
+    final List<_CompetitionCardData> cards = _cardsFor(data, _family)
+        .where(
+          (_CompetitionCardData card) =>
+              needle.isEmpty ||
+              card.title.toLowerCase().contains(needle) ||
+              card.detail.toLowerCase().contains(needle) ||
+              card.status.toLowerCase().contains(needle),
+        )
+        .toList(growable: false);
     final String? selection =
         cards.any(
               (_CompetitionCardData item) => item.id == _selectedCompetitionId,
@@ -201,6 +212,13 @@ class _GtexLiveCompetitionsCommandScreenState
         ),
         const SizedBox(height: GtexSpacing.lg),
         if (_subTab == GtexMatchdaySubTab.competitions) ...<Widget>[
+          CompetitionFriendDesk(
+            isAuthenticated: widget.isAuthenticated,
+            onOpenLogin: widget.onOpenLogin,
+            onHostCanonical: () => context.push('/competitions/create'),
+            onQueryChanged: (String value) => setState(() => _matchQuery = value),
+          ),
+          const SizedBox(height: GtexSpacing.md),
           GtexCompetitionFamilySelector<CompetitionFamilyRoute>(
             value: _family,
             onChanged:
@@ -737,18 +755,104 @@ class _HostedCompetitionDetailState
         icon: Icons.verified_user_outlined,
       );
     }
-    return _CompetitionStatePanel(
-      title: competition.title,
-      detail:
-          'Participation is open. ${bundle.standings.length} standings records were reported.',
-      icon: Icons.groups_outlined,
-      action: GtexCommandAction(
-        label: _joining ? 'Joiningâ€¦' : 'Join hosted competition',
-        icon: Icons.how_to_reg_rounded,
-        onPressed: _joining ? null : () => _join(competition.id),
-      ),
+    final String? userId = ref.watch(currentUserIdProvider);
+    final bool isHost = userId != null && userId == competition.hostUserId;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        _CompetitionStatePanel(
+          title: competition.title,
+          detail:
+              'Participation is open. ${bundle.standings.length} standings records were reported.',
+          icon: Icons.groups_outlined,
+          action: GtexCommandAction(
+            label: _joining ? 'Joining' : 'Join hosted competition',
+            icon: Icons.how_to_reg_rounded,
+            onPressed: _joining ? null : () => _join(competition.id),
+          ),
+        ),
+        if (isHost) ...<Widget>[
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 8,
+            children: <Widget>[
+              OutlinedButton(
+                key: const Key('gtex-hosted-invite'),
+                onPressed: () => _invite(competition.id),
+                child: const Text('Invite'),
+              ),
+              FilledButton(
+                key: const Key('gtex-hosted-launch'),
+                onPressed: () => _launch(competition.id),
+                child: const Text('Launch'),
+              ),
+            ],
+          ),
+        ],
+      ],
     );
   }
+
+  Future<void> _invite(String competitionId) async {
+    final TextEditingController email = TextEditingController();
+    final bool? send = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Invite a player'),
+          content: TextField(
+            controller: email,
+            decoration: const InputDecoration(labelText: 'Email'),
+          ),
+          actions: <Widget>[
+            TextButton(onPressed: () => Navigator.pop(dialogContext, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(dialogContext, true), child: const Text('Send invite')),
+          ],
+        );
+      },
+    );
+    final String recipient = email.text.trim();
+    email.dispose();
+    if (send != true || recipient.isEmpty) {
+      return;
+    }
+    try {
+      await ref.read(hostedCompetitionApiProvider).createInvites(
+        competitionId: competitionId,
+        recipientEmails: <String>[recipient],
+      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Invite sent.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The invite could not be sent.')),
+        );
+      }
+    }
+  }
+
+  Future<void> _launch(String competitionId) async {
+    try {
+      await ref.read(hostedCompetitionApiProvider).launchCompetition(competitionId);
+      ref.invalidate(hostedCompetitionDetailProvider(competitionId));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Competition launched.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('The competition could not be launched.')),
+        );
+      }
+    }
+  }
+
 
   Future<void> _join(String competitionId) async {
     setState(() => _joining = true);
