@@ -11,7 +11,7 @@ from typing import Any, Iterable
 
 from fastapi import Depends, Request
 from pydantic import ValidationError
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -565,6 +565,11 @@ class CompetitionOrchestrator:
         start_to: datetime | None = None,
         min_entry_fee: float | None = None,
         max_entry_fee: float | None = None,
+        q: str | None = None,
+        club: str | None = None,
+        status: str | None = None,
+        viewer_user_id: str | None = None,
+        restrict_private: bool = False,
         filters: CompetitionDiscoveryFilter | None = None,
     ) -> CompetitionListResponse:
         if filters is not None:
@@ -637,6 +642,35 @@ class CompetitionOrchestrator:
             stmt = stmt.where(Competition.scheduled_start_at >= start_from)
         if start_to is not None:
             stmt = stmt.where(Competition.scheduled_start_at <= start_to)
+        name_query = (q or "").strip()
+        if name_query:
+            term = f"%{name_query}%"
+            stmt = stmt.where(or_(Competition.name.ilike(term), Competition.description.ilike(term)))
+        if status:
+            stmt = stmt.where(Competition.status == status.strip())
+        club_query = (club or "").strip()
+        if club_query:
+            club_ids = select(ClubProfile.id).where(
+                or_(ClubProfile.id == club_query, ClubProfile.club_name.ilike(f"%{club_query}%"))
+            )
+            participating = select(CompetitionParticipant.competition_id).where(
+                CompetitionParticipant.club_id.in_(club_ids)
+            )
+            stmt = stmt.where(Competition.id.in_(participating))
+        if restrict_private:
+            if viewer_user_id:
+                entered = select(CompetitionParticipant.competition_id).where(
+                    CompetitionParticipant.user_id == viewer_user_id
+                )
+                stmt = stmt.where(
+                    or_(
+                        Competition.visibility == CompetitionVisibility.PUBLIC.value,
+                        Competition.host_user_id == viewer_user_id,
+                        Competition.id.in_(entered),
+                    )
+                )
+            else:
+                stmt = stmt.where(Competition.visibility == CompetitionVisibility.PUBLIC.value)
         if sort == "new":
             stmt = stmt.order_by(Competition.created_at.desc())
         competitions = list(self.session.scalars(stmt).all())
@@ -687,6 +721,98 @@ class CompetitionOrchestrator:
             )
 
         return CompetitionListResponse(total=len(items), items=tuple(items))
+
+    def search_fixtures(
+        self,
+        *,
+        q: str | None = None,
+        club: str | None = None,
+        opponent: str | None = None,
+        status: str | None = None,
+        viewer_user_id: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        """Fixtures a viewer is allowed to see, including scheduled matches."""
+        stmt = (
+            select(CompetitionMatch, Competition)
+            .join(Competition, Competition.id == CompetitionMatch.competition_id)
+            .order_by(CompetitionMatch.scheduled_at.desc().nulls_last(), CompetitionMatch.created_at.desc())
+        )
+        if viewer_user_id:
+            entered = select(CompetitionParticipant.competition_id).where(
+                CompetitionParticipant.user_id == viewer_user_id
+            )
+            stmt = stmt.where(
+                or_(
+                    Competition.visibility == CompetitionVisibility.PUBLIC.value,
+                    Competition.host_user_id == viewer_user_id,
+                    Competition.id.in_(entered),
+                )
+            )
+        else:
+            stmt = stmt.where(Competition.visibility == CompetitionVisibility.PUBLIC.value)
+        if status:
+            stmt = stmt.where(CompetitionMatch.status == status.strip())
+        rows = list(self.session.execute(stmt.limit(max(limit * 4, limit))).all())
+        club_ids = {match.home_club_id for match, _competition in rows} | {
+            match.away_club_id for match, _competition in rows
+        }
+        names = {}
+        if club_ids:
+            names = {
+                club.id: club.club_name
+                for club in self.session.scalars(select(ClubProfile).where(ClubProfile.id.in_(tuple(club_ids)))).all()
+            }
+        name_query = (q or "").strip().lower()
+        club_query = (club or "").strip().lower()
+        opponent_query = (opponent or "").strip().lower()
+        fixtures: list[dict[str, Any]] = []
+        for match, competition in rows:
+            home_name = names.get(match.home_club_id, match.home_club_id)
+            away_name = names.get(match.away_club_id, match.away_club_id)
+            if name_query and name_query not in " ".join(
+                (competition.name, home_name, away_name)
+            ).lower():
+                continue
+            home_hit = self._fixture_side_matches(club_query, match.home_club_id, home_name)
+            away_hit = self._fixture_side_matches(club_query, match.away_club_id, away_name)
+            if club_query and not (home_hit or away_hit):
+                continue
+            if opponent_query:
+                if club_query and home_hit and not away_hit:
+                    if not self._fixture_side_matches(opponent_query, match.away_club_id, away_name):
+                        continue
+                elif club_query and away_hit and not home_hit:
+                    if not self._fixture_side_matches(opponent_query, match.home_club_id, home_name):
+                        continue
+                elif not (
+                    self._fixture_side_matches(opponent_query, match.home_club_id, home_name)
+                    or self._fixture_side_matches(opponent_query, match.away_club_id, away_name)
+                ):
+                    continue
+            fixtures.append(
+                {
+                    "id": match.id,
+                    "competition_id": competition.id,
+                    "competition_name": competition.name,
+                    "home_club_id": match.home_club_id,
+                    "away_club_id": match.away_club_id,
+                    "home_name": home_name,
+                    "away_name": away_name,
+                    "status": match.status,
+                    "round_number": match.round_number,
+                    "route": f"/app/match/{match.id}",
+                }
+            )
+            if len(fixtures) >= limit:
+                break
+        return fixtures
+
+    @staticmethod
+    def _fixture_side_matches(query: str, club_id: str, club_name: str) -> bool:
+        if not query:
+            return False
+        return query == club_id.lower() or query in club_name.lower()
 
     def join(
         self,

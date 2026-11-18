@@ -1,4 +1,5 @@
-import { RIG_ACTIONS, ATLAS_ROWS, poseFor, presentationAction, cellUv, footSpread } from "./playerRig";
+import { RIG_ACTIONS, ATLAS_FRAMES, ATLAS_ROWS, poseFor, presentationAction, cellUv, footSpread, gaitPhaseAdvance, stableFacingDirection } from "./playerRig";
+import { footOnSprite } from "./bakedAtlas";
 import {
   animationFor,
   computeLiveXgTotals,
@@ -7,6 +8,7 @@ import {
   isWoodworkPosition,
   momentumAt,
   passArcColor,
+  phasePresentation,
   predictPassReceiver,
   progressivePassMeters,
   staminaWarning,
@@ -137,12 +139,55 @@ describe("gameplay feel: broadcast director camera AI", () => {
     expect(deriveDirectorShot({ phase: "full_time" }).focus).toEqual({ x: 0.5, y: 0.5 });
   });
 
+  test("walk-on starts from the tunnel side and half-time gathers in front of the own goal", () => {
+    const walkOn = phasePresentation({ x: 0.5, y: 0.5, side: "home", phase: "pre_match", ageSec: 0 });
+    expect(walkOn?.y).toBeGreaterThan(0.7);
+    expect(walkOn?.rig).toBe("walk");
+    const settled = phasePresentation({ x: 0.5, y: 0.5, side: "home", phase: "pre_match", ageSec: 8 });
+    expect(settled?.y).toBeCloseTo(0.5);
+    expect(settled?.rig).toBe("idle");
+
+    const homeHold = phasePresentation({ x: 0.5, y: 0.5, side: "home", phase: "halftime", ageSec: 8 });
+    const awayHold = phasePresentation({ x: 0.5, y: 0.5, side: "away", phase: "halftime", ageSec: 8 });
+    expect(homeHold?.x).toBeLessThan(0.3);
+    expect(awayHold?.x).toBeGreaterThan(0.7);
+    expect(homeHold?.rig).toBe("idle");
+  });
+
+  test("a conceded goal leaves the beaten keeper slumped once the shot is over", () => {
+    const keeper = player({ playerId: "a1", side: "away", x: 0.95, y: 0.5, role: "GK", isGoalkeeper: true });
+    const ctx = { ball: { x: 0.99, y: 0.5 }, celebrationSide: "home" as const, homeAttacksRight: true };
+    expect(animationFor(keeper, "goal", ctx)).toBe("dive");
+    expect(animationFor(keeper, "goal", { ...ctx, stage: "post_event" })).toBe("frustrated");
+  });
+
   test("injury time drifts toward trailing side's attacking goal", () => {
     const shot = deriveDirectorShot({ minute: 92, leadingSide: "home", homeAttacksRight: true });
     expect(shot.kind).toBe("injury_time");
     expect(shot.focus).toEqual({ x: 0.3, y: 0.5 });
   });
 });
+
+  test("a stride finishes when the body has covered one step", () => {
+    expect(gaitPhaseAdvance("walk", 1.35, 0.2)).toBeCloseTo(ATLAS_FRAMES);
+    expect(gaitPhaseAdvance("sprint", 0, 0.5)).toBe(0);
+    expect(gaitPhaseAdvance("idle", 0, 1)).toBeGreaterThan(2);
+  });
+
+  test("facing stays on its picture until the turn has clearly crossed", () => {
+    expect(stableFacingDirection(0, 0)).toBe(0);
+    expect(stableFacingDirection((22 * Math.PI) / 180, 0)).toBe(0);
+    expect(stableFacingDirection((34 * Math.PI) / 180, 0)).toBe(1);
+  });
+
+  test("a grounded boot stays under the painted body and a lifted boot rises in the cell", () => {
+    const planted = footOnSprite({ x: 0.62, y: 0.01 });
+    const lifted = footOnSprite({ x: 0.8, y: 0.2 });
+    expect(planted.localY).toBeLessThan(-1.8);
+    expect(planted.heightM).toBeLessThan(0.05);
+    expect(lifted.localY).toBeGreaterThan(planted.localY);
+    expect(lifted.localX).toBeGreaterThan(planted.localX);
+  });
 
 describe("gameplay feel: pass presentation & stamina warnings", () => {
   test("progressivePassMeters measures forward territory gain per side", () => {

@@ -38,6 +38,24 @@ export function bakedAction(action: string, manifest: BakedManifest): string {
   return manifest.actions.includes("idle") ? "idle" : manifest.actions[0];
 }
 
+/** Camera frame used by bake_match_atlas.mjs. Anchor y is foot height / frame height, not a pixel row. */
+const SPRITE_FRAME_H = 2.05;
+const SPRITE_FRAME_TOP = 1.95;
+
+/**
+ * Where the painted boot sits on the player quad. localY is metres above the
+ * quad centre (the head is positive). heightM is how far that boot is off the grass.
+ */
+export function footOnSprite(anchor: { x: number; y: number }, quadM = 4.85) {
+  const heightM = Math.max(0, anchor.y) * SPRITE_FRAME_H;
+  const fromTop = (SPRITE_FRAME_TOP - heightM) / SPRITE_FRAME_H;
+  return {
+    localX: (anchor.x - 0.5) * quadM,
+    localY: (0.5 - fromTop) * quadM,
+    heightM,
+  };
+}
+
 export function bakedUv(manifest: BakedManifest, action: string, direction: number, phase: number) {
   const name = bakedAction(action, manifest);
   const row = Math.max(0, manifest.actions.indexOf(name));

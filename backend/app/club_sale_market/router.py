@@ -100,6 +100,7 @@ def list_public_club_sale_market_listings(
     max_squad_strength: int | None = Query(default=None, ge=1, le=100),
     min_fanbase_size: int | None = Query(default=None, ge=0),
     max_fanbase_size: int | None = Query(default=None, ge=0),
+    q: str | None = Query(default=None),
     service: ClubSaleMarketService = Depends(get_service),
 ) -> ClubSaleListingCollectionView:
     payload = service.list_public_listings(
@@ -112,6 +113,7 @@ def list_public_club_sale_market_listings(
         max_squad_strength=max_squad_strength,
         min_fanbase_size=min_fanbase_size,
         max_fanbase_size=max_fanbase_size,
+        q=q,
     )
     return ClubSaleListingCollectionView.model_validate(payload)
 

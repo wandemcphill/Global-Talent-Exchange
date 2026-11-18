@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.auth.dependencies import get_current_user, get_session
+
 from app.club_ownership.schemas import (
     ClubGovernanceActionView,
     ClubGovernanceProposalRequest,
     ClubGovernanceVoteRequest,
     ClubOwnershipView,
     ClubPortfolioView,
+    ClubShareDirectoryView,
     ClubTokenTradeRequest,
     ClubTokenTradeResultView,
     ClubTreasuryView,
@@ -34,6 +36,15 @@ def get_my_club_portfolio(
     renders these as an explicitly-labelled club-ownership section.
     """
     return ClubOwnershipService(session).list_user_club_portfolio(user=user)
+
+
+@api_router.get("/ownership-market", response_model=ClubShareDirectoryView)
+def list_club_share_directory(
+    q: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=100),
+    session: Session = Depends(get_session),
+) -> ClubShareDirectoryView:
+    return ClubOwnershipService(session).list_share_directory(q=q, limit=limit)
 
 
 @legacy_router.get("/{club_id}/ownership", response_model=ClubOwnershipView)

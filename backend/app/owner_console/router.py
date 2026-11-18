@@ -222,6 +222,7 @@ class HostRequest(BaseModel):
     pin: str | None = Field(default=None, max_length=12)
     template_key: str | None = None
     club_id: str | None = None
+    opponent_club_id: str | None = None
     max_clubs: int = Field(ge=2, le=32, default=4)
     allow_same_owner: bool = False
     description: str | None = None
@@ -1044,6 +1045,29 @@ def join_code(
 ) -> dict[str, Any]:
     entry = _run(session, comps.join_by_code, session, user.id, body.code, body.club_id)
     return {"competition_id": entry.competition_id, "club_id": entry.club_id}
+
+
+@router.get("/competitions/fixtures")
+def competition_fixtures(
+    q: str | None = None,
+    club: str | None = None,
+    opponent: str | None = None,
+    status_filter: str | None = Query(default=None, alias="status"),
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return {
+        "fixtures": _run(
+            session,
+            comps.search_fixtures,
+            session,
+            user.id,
+            q=q,
+            club=club,
+            opponent=opponent,
+            status=status_filter,
+        )
+    }
 
 
 @router.get("/competitions/{competition_id}")

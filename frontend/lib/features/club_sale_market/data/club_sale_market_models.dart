@@ -4,13 +4,20 @@ class ClubSaleListingsQuery {
   const ClubSaleListingsQuery({
     this.limit = 50,
     this.offset = 0,
+    this.query,
   });
 
   final int limit;
   final int offset;
+  final String? query;
 
-  JsonMap toQuery() => <String, Object?>{'limit': limit, 'offset': offset};
+  JsonMap toQuery() => <String, Object?>{
+    'limit': limit,
+    'offset': offset,
+    if (query != null && query!.trim().isNotEmpty) 'q': query!.trim(),
+  };
 }
+
 
 class ClubSaleHistoryQuery {
   const ClubSaleHistoryQuery({this.limit = 50});

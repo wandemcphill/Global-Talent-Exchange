@@ -143,6 +143,9 @@ function HostForm() {
     contribution: "0",
     template_key: "",
   });
+  const [opponentQuery, setOpponentQuery] = useState("");
+  const [opponents, setOpponents] = useState<any[]>([]);
+  const [opponent, setOpponent] = useState<any | null>(null);
   const [savedName, setSavedName] = useState("");
   const [saved, setSaved] = useState<any[]>(() => {
     try {
@@ -171,6 +174,19 @@ function HostForm() {
     setSavedName("");
     toast.success(`Saved template ${name}.`);
   };
+  const searchOpponents = async (value: string) => {
+    setOpponentQuery(value);
+    if (value.trim().length < 2) {
+      setOpponents([]);
+      return;
+    }
+    try {
+      const { data } = await api.get("/community/discovery/clubs", { params: { q: value.trim(), limit: 8 } });
+      setOpponents(data.clubs || []);
+    } catch {
+      setOpponents([]);
+    }
+  };
   const submit = async (e: any) => {
     e.preventDefault();
     try {
@@ -180,9 +196,10 @@ function HostForm() {
         max_clubs: Number(f.max_clubs),
         pin: f.pin || null,
         winner_prize: Number(f.winner_prize || 0),
-        contribution: Number(f.contribution || 0),
+        contribution: 0,
         template_key: f.template_key || null,
         club_id: active?.club_id || null,
+        opponent_club_id: opponent?.id || null,
       });
       toast.success(`Hosted. Pin ${data.invite_code}.`);
       refresh();
@@ -201,15 +218,25 @@ function HostForm() {
       <input required minLength={3} data-testid="host-name-input" className="gx-input md:col-span-2" placeholder="Adekunle and Friends Cup" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, template_key: "" })} />
       <select data-testid="host-format-select" className="gx-input" value={f.format} onChange={(e) => setF({ ...f, format: e.target.value })}><option value="league">League</option><option value="knockout">Cup</option></select>
       <select data-testid="host-size-select" className="gx-input" value={f.max_clubs} onChange={(e) => setF({ ...f, max_clubs: e.target.value })}>{[2, 4, 6, 8, 10, 12, 16].map((n) => <option key={n} value={n}>{n} clubs</option>)}</select>
+      <input data-testid="host-opponent-input" className="gx-input md:col-span-2" placeholder="Opponent club" value={opponentQuery} onChange={(e) => searchOpponents(e.target.value)} />
+      {opponents.length > 0 && (
+        <div className="md:col-span-4 rounded border border-white/10 bg-black/40" data-testid="host-opponent-results">
+          {opponents.map((club) => (
+            <button type="button" key={club.id} className="block w-full px-3 py-2 text-left text-sm text-white hover:bg-white/5" onClick={() => { setOpponent(club); setOpponentQuery(club.club_name); setOpponents([]); }}>
+              {club.club_name}{club.city_name ? ` · ${club.city_name}` : ""}
+            </button>
+          ))}
+        </div>
+      )}
+      {opponent && <p className="text-xs text-emerald-300 md:col-span-4">Opponent: {opponent.club_name}. They receive the pin with the challenge.</p>}
       <input data-testid="host-pin-input" className="gx-input uppercase" placeholder="Pin (optional)" maxLength={12} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.toUpperCase() })} />
-      <input data-testid="host-prize-input" className="gx-input" type="number" min="0" placeholder="Winner takes" value={f.winner_prize} onChange={(e) => setF({ ...f, winner_prize: e.target.value })} />
-      <input data-testid="host-contribution-input" className="gx-input" type="number" min="0" placeholder="Entry contribution" value={f.contribution} onChange={(e) => setF({ ...f, contribution: e.target.value })} />
+      <input data-testid="host-prize-input" className="gx-input" type="number" min="0" placeholder="Winner purse" value={f.winner_prize} onChange={(e) => setF({ ...f, winner_prize: e.target.value })} />
       <Btn type="submit" data-testid="host-submit-button">Host</Btn>
       <div className="flex gap-2 md:col-span-3">
         <input className="gx-input" placeholder="Save these settings as my template" value={savedName} onChange={(e) => setSavedName(e.target.value)} />
         <Btn type="button" variant="secondary" onClick={saveTemplate}>Save template</Btn>
       </div>
-      <p className="text-xs text-slate-400 md:col-span-4">Official GTEX competitions stay free. A friends cup can stay at zero, or you can set a pin, a winner purse funded by your club, and an optional contribution from each entrant.</p>
+      <p className="text-xs text-slate-400 md:col-span-4">Entering is free. Set a pin so a friend can join, and GTEX funds the winner purse.</p>
     </form>
   );
 }
@@ -545,8 +572,26 @@ export default function Competitions() {
     },
   });
 
+  const [fixtureQuery, setFixtureQuery] = useState("");
+  const [fixtures, setFixtures] = useState<any[]>([]);
+  const searchFixtures = async () => {
+    const q = fixtureQuery.trim();
+    if (!q) {
+      setFixtures([]);
+      return;
+    }
+    try {
+      const { data: found } = await api.get("/owner/competitions/fixtures", { params: { q } });
+      setFixtures(found.fixtures || []);
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
   const gtex = (data || []).filter((c: any) => c.host_type === "gtex");
   const user = (data || []).filter((c: any) => c.host_type === "user");
+  const needle = fixtureQuery.trim().toLowerCase();
+  const visibleGtex = needle ? gtex.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle)) : gtex;
+  const visibleUser = needle ? user.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle)) : user;
   return (
     <div data-testid="competitions-page" className="space-y-6">
       <PageHeader
@@ -584,13 +629,26 @@ export default function Competitions() {
       />
       {isLoading ? <Loading /> : (
         <>
+          <div className="flex flex-wrap gap-2" data-testid="competition-search">
+            <input className="gx-input min-w-64 flex-1" placeholder="Find a match by competition, club, or opponent" value={fixtureQuery} onChange={(e) => setFixtureQuery(e.target.value)} />
+            <Btn variant="secondary" onClick={searchFixtures}>Search matches</Btn>
+          </div>
+          {fixtures.length > 0 && (
+            <Panel eyebrow="Fixtures" title="Matching matches">
+              {fixtures.map((fixture) => (
+                <Link key={fixture.id} to={fixture.route || `/app/match/${fixture.id}`} className="block rounded border border-white/5 px-3 py-2 text-sm text-white hover:border-emerald-500/40">
+                  {fixture.home_name} vs {fixture.away_name} · {fixture.competition_name} · {fixture.status}
+                </Link>
+              ))}
+            </Panel>
+          )}
           <QuickMatchmakingDesk activeClub={active} />
           <Panel eyebrow="GTEX-hosted" title="Platform competitions" testid="gtex-competitions-panel">
             {compView === "table" ? (
-              <CompetitionsTableView competitions={gtex} clubId={active?.club_id} />
+              <CompetitionsTableView competitions={visibleGtex} clubId={active?.club_id} />
             ) : (
               <div className="grid gap-4 md:grid-cols-3" data-testid="competitions-cards-grid">
-                {gtex.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}
+                {visibleGtex.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}
               </div>
             )}
           </Panel>
@@ -599,7 +657,8 @@ export default function Competitions() {
             <Panel eyebrow="Invite" title="Join with a code" className="lg:col-span-4" testid="join-panel"><JoinCode clubId={active?.club_id} /></Panel>
           </div>
           <Panel eyebrow="Friends & hosted" title="Your user-hosted competitions" testid="user-competitions-panel">
-            {user.length === 0 ? <Empty title="None yet" body="Host one above or join with an invite code." /> : <div className="grid gap-4 md:grid-cols-3">{user.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}</div>}
+            {visibleUser.length === 0 ? <Empty title="None yet" body="Host one above or join with an invite code." /> : <div className="grid gap-4 md:grid-cols-3">{visibleUser.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}</div>}
+
           </Panel>
           <GlobalLeaderboardPanel worldClubs={worldClubs} />
         </>

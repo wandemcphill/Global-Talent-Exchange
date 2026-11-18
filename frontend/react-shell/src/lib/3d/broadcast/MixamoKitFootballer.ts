@@ -120,16 +120,23 @@ const GAIT_FROM_TRAVEL = new Set<FootballAnimationState>([
   "blocking",
 ]);
 
-/** Metres per second a clip looks right at timescale 1. */
-const GAIT_NOMINAL_MPS: Partial<Record<FootballAnimationState, number>> = {
+/** Metres one cycle of the clip should carry the body. */
+const STRIDE_METERS: Partial<Record<FootballAnimationState, number>> = {
   walk: 1.35,
-  jog: 3.0,
-  run: 5.0,
-  sprint: 6.6,
-  dribble: 2.6,
-  dribble_run: 5.2,
-  shield_ball: 0.4,
+  jog: 2.15,
+  run: 3.1,
+  sprint: 3.7,
+  dribble: 1.85,
+  dribble_run: 3.05,
+  shield_ball: 0.7,
 };
+
+/** Play the clip once per stride of travel, so the feet land with the body. */
+export function clipTimeScale(metersPerSecond: number, strideMeters: number, clipDurationSec: number): number {
+  const duration = Math.max(0.2, clipDurationSec);
+  const cyclesPerSec = Math.max(0, metersPerSecond) / Math.max(0.4, strideMeters);
+  return Math.min(1.85, Math.max(0.4, cyclesPerSec * duration));
+}
 
 const BALL_RELEASE_STATES = new Set<string>([
   "short_pass",
@@ -281,6 +288,9 @@ export class MixamoKitFootballer {
   private readonly leftFootWorld = new THREE.Vector3();
   private readonly rightFootWorld = new THREE.Vector3();
   private readonly forwardScratch = new THREE.Vector3();
+  private supportSide: "left" | "right" | null = null;
+  private readonly supportLock = new THREE.Vector3();
+  private readonly visualSlip = new THREE.Vector3();
 
   constructor(kitConfig: HumanoidKitConfig) {
     this.playerId = kitConfig.playerId;
@@ -484,16 +494,17 @@ export class MixamoKitFootballer {
 
     const action = this.actions.get(this.clipKey);
     if (action) {
-      const nominal = GAIT_NOMINAL_MPS[this.currentState];
-      if (nominal) {
-        const pace = this.smoothedSpeed / nominal;
-        action.setEffectiveTimeScale(Math.min(1.45, Math.max(0.62, pace)));
+      const stride = STRIDE_METERS[this.currentState];
+      if (stride) {
+        action.setEffectiveTimeScale(clipTimeScale(this.smoothedSpeed, stride, action.getClip().duration));
       } else {
         action.setEffectiveTimeScale(1);
       }
     }
     this.mixer?.update(deltaSec);
+    this.leanIntoTurn(yawDelta);
     this.plantFeet();
+    this.settleSupportFoot();
   }
 
   /** Drops a near-ground stride onto the pitch. Jumps and headers are left in the air. */
@@ -504,6 +515,55 @@ export class MixamoKitFootballer {
     const lowest = Math.min(this.leftFootWorld.y, this.rightFootWorld.y);
     const error = this.rootGroup.position.y + 0.02 - lowest;
     if (error > -0.26 && error < 0.2) this.modelContainer.position.y += error;
+  }
+
+  /** Rolls the shoulders into a turn instead of spinning the body like a turret. */
+  private leanIntoTurn(yawDelta: number): void {
+    const lean = Math.max(-0.08, Math.min(0.08, -yawDelta * 0.12));
+    this.modelContainer.rotation.z += (lean - this.modelContainer.rotation.z) * 0.18;
+  }
+
+  /**
+   * Holds the stance foot where it landed, up to a short slip, so the cycle
+   * does not skate under a body the match is moving.
+   */
+  private settleSupportFoot(): void {
+    const stride = STRIDE_METERS[this.currentState];
+    if (!stride || !this.leftFoot || !this.rightFoot) {
+      this.releaseSupport();
+      return;
+    }
+    this.leftFoot.getWorldPosition(this.leftFootWorld);
+    this.rightFoot.getWorldPosition(this.rightFootWorld);
+    const leftLow = this.leftFootWorld.y < 0.16;
+    const rightLow = this.rightFootWorld.y < 0.16;
+    let side: "left" | "right" | null = null;
+    let foot = this.leftFootWorld;
+    if (leftLow || rightLow) {
+      side = rightLow && (!leftLow || this.rightFootWorld.y < this.leftFootWorld.y) ? "right" : "left";
+      foot = side === "left" ? this.leftFootWorld : this.rightFootWorld;
+    }
+    if (side && side === this.supportSide) {
+      this.visualSlip.x = Math.max(-0.16, Math.min(0.16, this.visualSlip.x + (this.supportLock.x - foot.x)));
+      this.visualSlip.z = Math.max(-0.16, Math.min(0.16, this.visualSlip.z + (this.supportLock.z - foot.z)));
+      this.modelContainer.position.x = this.visualSlip.x;
+      this.modelContainer.position.z = this.visualSlip.z;
+      return;
+    }
+    if (side) {
+      this.supportSide = side;
+      this.supportLock.set(foot.x, 0, foot.z);
+      return;
+    }
+    this.releaseSupport();
+  }
+
+  private releaseSupport(): void {
+    this.supportSide = null;
+    this.visualSlip.x *= 0.55;
+    this.visualSlip.z *= 0.55;
+    this.modelContainer.position.x = this.visualSlip.x;
+    this.modelContainer.position.z = this.visualSlip.z;
   }
 
   /** Keeps a controlled ball on the leading foot until a kick's contact frame. */

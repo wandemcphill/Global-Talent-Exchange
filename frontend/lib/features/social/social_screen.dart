@@ -8,6 +8,7 @@ import '../../data/community_api.dart';
 import '../../data/gte_api_repository.dart';
 import '../../models/community_models.dart';
 import '../../widgets/creator_club_follow_panel.dart';
+import 'presentation/club_directory_panel.dart';
 import '../../widgets/gte_formatters.dart';
 import '../../widgets/gte_shell_theme.dart';
 import '../../widgets/gte_state_panel.dart';
@@ -900,6 +901,12 @@ class _CommunityScreenState extends State<CommunityScreen> {
       case _CommunityModule.footballWorld:
         return _CommunityDetailScroll(
           children: <Widget>[
+            ClubDirectoryPanel(
+              baseUrl: widget.baseUrl,
+              backendMode: widget.backendMode,
+              accessToken: widget.accessToken,
+            ),
+            const SizedBox(height: 16),
             GtexCommunityPulsePanel(
               onOpenLogin: widget.onOpenLogin,
               onOpenClub: widget.onOpenClub,

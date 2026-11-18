@@ -567,3 +567,33 @@ def test_settled_transfer_amounts_are_immutable(session) -> None:
     transfer_row.platform_fee_amount = Decimal("0.0000")
     with pytest.raises(ValueError, match="immutable"):
         session.flush()
+
+
+def test_public_sale_search_matches_club_name(session) -> None:
+    seller = _create_user(session, user_id="seller-name", email="seller-name@example.com", username="sellername")
+    other = _create_user(session, user_id="other-name", email="other-name@example.com", username="othername")
+    comets = _create_club(session, club_id="club-comets", owner_user_id=seller.id)
+    harbor = _create_club(session, club_id="club-harbor", owner_user_id=other.id)
+    harbor.club_name = "Harbor Athletic"
+    session.flush()
+    service = ClubSaleMarketService(session=session)
+    service.create_listing(
+        actor=seller,
+        club_id=comets.id,
+        asking_price=Decimal("40.0000"),
+        visibility="public",
+        note="Comets are for sale.",
+    )
+    service.create_listing(
+        actor=other,
+        club_id=harbor.id,
+        asking_price=Decimal("55.0000"),
+        visibility="public",
+        note="Harbor is for sale.",
+    )
+
+    found = service.list_public_listings(q="harbor")
+
+    assert found["total"] == 1
+    assert found["items"][0]["club_id"] == harbor.id
+    assert found["items"][0]["club_name"] == "Harbor Athletic"

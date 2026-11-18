@@ -151,6 +151,10 @@ def list_transfer_market_listings(
     league_id: str | None = Query(default=None),
     club_profile_id: str | None = Query(default=None),
     real_player_only: bool | None = Query(default=None),
+    q: str | None = Query(default=None),
+    min_gsi: int | None = Query(default=None, ge=1, le=99),
+    max_gsi: int | None = Query(default=None, ge=1, le=99),
+    public_board: bool = Query(default=False),
     service: TransferMarketService = Depends(_service),
 ) -> list[TransferListingView]:
     return service.list_listings(
@@ -171,6 +175,10 @@ def list_transfer_market_listings(
         league_id=league_id,
         club_profile_id=club_profile_id,
         real_player_only=real_player_only,
+        q=q,
+        min_gsi=min_gsi,
+        max_gsi=max_gsi,
+        public_board=public_board,
     )
 
 

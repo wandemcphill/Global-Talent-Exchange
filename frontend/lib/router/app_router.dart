@@ -158,6 +158,7 @@ GoRouter buildGtexAppRouter({
               clubId: clubId,
               baseUrl: config.apiBaseUrl,
               backendMode: config.activeShellBackendMode,
+              accessToken: controller.accessToken,
               isAuthenticated: controller.isAuthenticated,
               onOpenLogin: () => context.go(gtexLoginRoute),
             ),

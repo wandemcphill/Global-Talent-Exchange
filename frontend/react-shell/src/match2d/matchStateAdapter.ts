@@ -1036,7 +1036,8 @@ export function animationFor(
       }
       return "jog";
     }
-    if (isDefendingKeeperNearBall && context?.stage !== "post_event" && context?.stage !== "reset") {
+    if (isDefendingKeeperNearBall) {
+      if (context?.stage === "post_event" || context?.stage === "reset") return "frustrated";
       return "dive";
     }
     return resolveIndividualMovementAction(player);
@@ -2045,15 +2046,15 @@ export function phasePresentation(input: {
   const mix = (from: number, to: number, seconds: number) => from + (to - from) * Math.min(1, age / seconds);
 
   if (phase === "pre_match" || phase === "scheduled") {
-    const fromY = Math.min(0.98, y + 0.12);
-    const walking = age < 6;
-    return { x, y: mix(fromY, y, 6), football: walking ? "walk" : "idle", rig: walking ? "walk" : "idle" };
+    const fromY = Math.min(0.98, y + 0.22);
+    const walking = age < 8;
+    return { x, y: mix(fromY, y, 8), football: walking ? "walk" : "idle", rig: walking ? "walk" : "idle" };
   }
   if (phase === "halftime" || phase === "half_time") {
     const ownGoal = side === "home" ? 0.08 : 0.92;
     const walking = age < 8;
     return {
-      x: mix(x, x + (ownGoal - x) * 0.35, 8),
+      x: mix(x, x + (ownGoal - x) * 0.62, 8),
       y,
       football: walking ? "walk" : "idle",
       rig: walking ? "walk" : "idle",

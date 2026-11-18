@@ -8,7 +8,7 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import FastAPI
-from sqlalchemy import func, inspect, select, update
+from sqlalchemy import func, inspect, or_, select, update
 from sqlalchemy.orm import Session
 
 from app.access_control.service import AccessControlService
@@ -391,6 +391,10 @@ class TransferMarketService:
         league_id: str | None = None,
         club_profile_id: str | None = None,
         real_player_only: bool | None = None,
+        q: str | None = None,
+        min_gsi: int | None = None,
+        max_gsi: int | None = None,
+        public_board: bool = False,
         reference_at: datetime | None = None,
     ) -> list[TransferListingView]:
         statement = select(TransferListing).order_by(TransferListing.created_at.desc())
@@ -420,7 +424,10 @@ class TransferMarketService:
             statement = statement.where(TransferListing.contract_years_remaining >= min_contract_years)
         if max_contract_years is not None:
             statement = statement.where(TransferListing.contract_years_remaining <= max_contract_years)
-        if any(value is not None for value in (position, country_id, league_id, club_profile_id, real_player_only)):
+        if any(
+            value is not None
+            for value in (position, country_id, league_id, club_profile_id, real_player_only, q, min_gsi, max_gsi)
+        ):
             statement = statement.join(Player, Player.id == TransferListing.player_id)
             if position is not None:
                 requested_position = position.strip()
@@ -437,6 +444,30 @@ class TransferMarketService:
                 statement = statement.where(Player.current_club_profile_id == club_profile_id)
             if real_player_only is not None:
                 statement = statement.where(Player.is_real_player.is_(real_player_only))
+            name_query = (q or "").strip()
+            if name_query:
+                term = f"%{name_query}%"
+                statement = statement.where(
+                    or_(
+                        Player.full_name.ilike(term),
+                        Player.canonical_display_name.ilike(term),
+                        Player.short_name.ilike(term),
+                    )
+                )
+            if min_gsi is not None:
+                statement = statement.where(Player.governed_gsi >= min_gsi)
+            if max_gsi is not None:
+                statement = statement.where(Player.governed_gsi <= max_gsi)
+        if public_board and visibility is None:
+            if club_id is not None:
+                statement = statement.where(
+                    or_(
+                        TransferListing.visibility == "public",
+                        TransferListing.selling_club_id == club_id,
+                    )
+                )
+            else:
+                statement = statement.where(TransferListing.visibility == "public")
         effective_at = self._coerce_utc(reference_at or utcnow())
         return [self.to_listing_view(item, reference_at=effective_at) for item in self.session.scalars(statement).all()]
 
@@ -665,6 +696,167 @@ class TransferMarketService:
         )
         return self.to_hub_offer_view(offer)
 
+    def _hub_deal_kind(self, offer: TransferHubOffer, listing: TransferListing) -> str:
+        kind = str(offer.offer_type or listing.listing_type or "transfer").strip().lower()
+        if offer.offered_player_ids_json or kind in {"swap", "swap_plus_cash"}:
+            return "swap"
+        if kind in {"loan", "loan_to_buy", "temporary_rental"} or offer.loan_terms_json or listing.loan_terms_json:
+            return "loan"
+        if kind in HUB_CASH_DEAL_TYPES or kind == "transfer":
+            return "cash"
+        return "unsupported"
+
+    def _loan_terms(self, offer: TransferHubOffer, listing: TransferListing) -> dict[str, Any]:
+        terms = dict(listing.loan_terms_json or {})
+        terms.update(dict(offer.loan_terms_json or {}))
+        return terms
+
+    def _require_loan_return(self, offer: TransferHubOffer, listing: TransferListing) -> None:
+        if self._loan_return_on(self._loan_terms(offer, listing), on_date=utcnow().date()) is None:
+            raise TransferMarketValidationError(
+                "Loan offers need a return date before they can be accepted."
+            )
+
+    def _loan_return_on(self, terms: dict[str, Any], *, on_date: date) -> date | None:
+        for key in ("ends_on", "return_on", "loan_end"):
+            raw = terms.get(key)
+            if raw:
+                try:
+                    return date.fromisoformat(str(raw)[:10])
+                except ValueError:
+                    continue
+        raw_days = terms.get("duration_days")
+        if raw_days is None:
+            return None
+        try:
+            days = int(raw_days)
+        except (TypeError, ValueError):
+            return None
+        if days <= 0:
+            return None
+        return on_date + timedelta(days=days)
+
+    def _require_swap_player_at_bidder(self, offer: TransferHubOffer, *, reference_at: datetime) -> None:
+        offered_ids = [str(item) for item in (offer.offered_player_ids_json or []) if item]
+        if not offered_ids:
+            raise TransferMarketValidationError("Swap offers need the player being offered.")
+        incoming_club = self._current_player_club_id(offered_ids[0], on_date=reference_at.date())
+        if incoming_club != offer.bidder_club_id:
+            raise TransferMarketValidationError("The offered player is not at the bidding club.")
+
+    def _settle_accepted_offer(
+        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
+    ) -> None:
+        kind = self._hub_deal_kind(offer, listing)
+        if kind == "loan":
+            self._settle_loan_offer(offer, listing, effective_at)
+        elif kind == "swap":
+            self._settle_swap_offer(offer, effective_at)
+        elif self._cash_terms_ready(listing):
+            self._settle_cash_offer(offer, listing, effective_at)
+        else:
+            metadata = dict(offer.metadata_json or {})
+            metadata["settlement"] = "contract_needed"
+            offer.metadata_json = metadata
+
+    @staticmethod
+    def _cash_terms_ready(listing: TransferListing) -> bool:
+        years = listing.contract_years_remaining
+        return listing.salary_amount is not None and years is not None and Decimal(years) > 0
+
+    def _settle_cash_offer(
+        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
+    ) -> None:
+        years = max(1, min(5, int(Decimal(listing.contract_years_remaining or 1))))
+        wage = Decimal(listing.salary_amount or 0)
+        lifecycle_service = PlayerLifecycleService(self.session)
+        window_id, outside_window = self._resolve_window_id(listing=listing, reference_at=effective_at.date())
+        bid = lifecycle_service.create_bid(
+            window_id,
+            TransferBidCreateRequest(
+                player_id=listing.player_id,
+                selling_club_id=listing.selling_club_id,
+                buying_club_id=offer.bidder_club_id,
+                bid_amount=offer.cash_amount or listing.base_price,
+                wage_offer_amount=wage,
+                contract_years=years,
+                notes="Accepted from the transfer hub.",
+                allow_outside_window=outside_window,
+                exemption_reason="transfer_market_auction" if outside_window else None,
+            ),
+            submitted_on=effective_at.date(),
+        )
+        contract_ends_on = effective_at.date() + timedelta(days=(365 * years) - 1)
+        lifecycle_service.accept_bid(
+            window_id,
+            bid.id,
+            TransferBidAcceptRequest(
+                contract_ends_on=contract_ends_on,
+                contract_starts_on=effective_at.date(),
+                wage_amount=wage,
+                signed_on=effective_at.date(),
+            ),
+        )
+        metadata = dict(offer.metadata_json or {})
+        metadata["settlement"] = "completed"
+        offer.metadata_json = metadata
+
+    def _settle_loan_offer(
+        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
+    ) -> None:
+        terms = self._loan_terms(offer, listing)
+        return_on = self._loan_return_on(terms, on_date=effective_at.date())
+        if return_on is None:
+            raise TransferMarketValidationError("Loan offers need a return date before they can be accepted.")
+        if offer.cash_amount and offer.cash_amount > 0:
+            self._assert_bidder_can_fund(
+                offer.bidder_club_id, offer.cash_amount, subject="loan fee", player_or_id=listing.player_id
+            )
+        origin = self._move_player_club(listing.player_id, offer.bidder_club_id, on_date=effective_at.date())
+        player = self._require_player(listing.player_id)
+        dna = dict(player.dna_profile or {})
+        dna["gtex_loan"] = {
+            "origin_club_id": origin,
+            "destination_club_id": offer.bidder_club_id,
+            "return_on": return_on.isoformat(),
+            "listing_id": listing.id,
+            "offer_id": offer.id,
+        }
+        player.dna_profile = dna
+        metadata = dict(offer.metadata_json or {})
+        metadata["settlement"] = "loan_active"
+        metadata["loan"] = dna["gtex_loan"]
+        offer.metadata_json = metadata
+
+    def _settle_swap_offer(self, offer: TransferHubOffer, effective_at: datetime) -> None:
+        offered_ids = [str(item) for item in (offer.offered_player_ids_json or []) if item]
+        if not offered_ids:
+            raise TransferMarketValidationError("Swap offers need the player being offered.")
+        incoming_id = offered_ids[0]
+        incoming_club = self._current_player_club_id(incoming_id, on_date=effective_at.date())
+        if incoming_club != offer.bidder_club_id:
+            raise TransferMarketValidationError("The offered player is not at the bidding club.")
+        listing = self._require_listing(offer.listing_id)
+        if offer.cash_amount and offer.cash_amount > 0:
+            self._assert_bidder_can_fund(
+                offer.bidder_club_id, offer.cash_amount, subject="swap fee", player_or_id=listing.player_id
+            )
+        self._move_player_club(listing.player_id, offer.bidder_club_id, on_date=effective_at.date())
+        self._move_player_club(incoming_id, offer.seller_club_id, on_date=effective_at.date())
+        metadata = dict(offer.metadata_json or {})
+        metadata["settlement"] = "swapped"
+        metadata["swap"] = {"incoming_player_id": incoming_id, "outgoing_player_id": listing.player_id}
+        offer.metadata_json = metadata
+
+    def _move_player_club(self, player_id: str, destination_club_id: str, *, on_date: date) -> str | None:
+        player = self._require_player(player_id)
+        contract = self.context_service.get_current_contract(player_id, reference_on=on_date)
+        origin = contract.club_id if contract is not None else player.current_club_profile_id
+        if contract is not None:
+            contract.club_id = destination_club_id
+        player.current_club_profile_id = destination_club_id
+        return origin
+
     def accept_hub_offer(
         self,
         offer_id: str,
@@ -682,13 +874,14 @@ class TransferMarketService:
         )
         if offer.status not in {"open", "countered"}:
             raise TransferMarketValidationError("Only open or countered offers can be accepted.")
-        if (
-            offer.offer_type not in HUB_CASH_DEAL_TYPES
-            or listing.listing_type not in HUB_CASH_DEAL_TYPES
-            or offer.offered_player_ids_json
-        ):
+        deal_kind = self._hub_deal_kind(offer, listing)
+        if deal_kind == "loan":
+            self._require_loan_return(offer, listing)
+        elif deal_kind == "swap":
+            self._require_swap_player_at_bidder(offer, reference_at=self._coerce_utc(reference_at or utcnow()))
+        elif deal_kind != "cash":
             raise TransferMarketValidationError(
-                "Loan and swap Transfer Hub offers cannot be accepted yet; only cash transfer offers settle."
+                "This offer cannot be accepted. Use a cash transfer, a loan with a return date, or a swap of a player at the bidding club."
             )
         from app.services.club_governance_policy import ClubGovernancePolicyService
 
@@ -741,7 +934,14 @@ class TransferMarketService:
         ).all():
             sibling.status = "rejected"
             sibling.resolved_at = effective_at
-        self.session.commit()
+        try:
+            self._settle_accepted_offer(offer, listing, effective_at)
+            self.session.commit()
+        except (PlayerLifecycleError, PlayerLifecycleValidationError, TransferMarketValidationError) as exc:
+            self.session.rollback()
+            if isinstance(exc, TransferMarketValidationError):
+                raise
+            raise TransferMarketValidationError(str(exc)) from exc
         self.session.refresh(offer)
         self._push_listing_event(
             listing.id,

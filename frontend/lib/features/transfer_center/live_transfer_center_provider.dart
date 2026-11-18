@@ -155,6 +155,7 @@ class TransferHubOfferRecord {
     this.resolvedAt,
     this.playerId = '',
     this.playerName = '',
+    this.settlement,
   });
 
   final String id;
@@ -171,8 +172,10 @@ class TransferHubOfferRecord {
   final String? resolvedAt;
   final String playerId;
   final String playerName;
+  final String? settlement;
 
   String get normalizedStatus => GtexStatusPresenter.normalize(status);
+
 
   GtexPresentedStatus get statusView =>
       GtexStatusPresenter.present(status, context: GtexStatusContext.offer);
@@ -431,6 +434,7 @@ class TransferHubOfferRecord {
       playerName:
           stringOrNullValue(json['player_name']) ??
           stringValue(metadata['player_name']),
+      settlement: stringOrNullValue(metadata['settlement']),
     );
   }
 }
@@ -622,6 +626,11 @@ class TransferCenterApi {
   Future<List<TransferCenterListingRecord>> listListings({
     String? status,
     String? playerId,
+    String? query,
+    int? minGsi,
+    int? maxGsi,
+    bool publicBoard = false,
+    String? clubId,
   }) async {
     final List<dynamic> payload = await client.getList(
       '/api/transfer-market/listings',
@@ -629,11 +638,59 @@ class TransferCenterApi {
       query: compactQuery(<String, Object?>{
         'status': status,
         'player_id': playerId,
+        'q': query,
+        'min_gsi': minGsi,
+        'max_gsi': maxGsi,
+        'public_board': publicBoard ? true : null,
+        'club_id': clubId,
       }),
     );
     return payload
         .map(TransferCenterListingRecord.fromJson)
         .toList(growable: false);
+  }
+
+  Future<JsonMap> createListing({
+    required String playerId,
+    required String sellingClubId,
+    required double basePrice,
+    required DateTime expiresAt,
+    String visibility = 'public',
+    double? salaryAmount,
+    double? contractYears,
+  }) async {
+    final Object? response = await client.request(
+      'POST',
+      '/api/transfer-hub/listings',
+      body: <String, Object?>{
+        'player_id': playerId,
+        'selling_club_id': sellingClubId,
+        'base_price': basePrice,
+        'expires_at': expiresAt.toUtc().toIso8601String(),
+        'visibility': visibility,
+        if (salaryAmount != null) 'salary_amount': salaryAmount,
+        if (contractYears != null) 'contract_years_remaining': contractYears,
+      },
+    );
+    return jsonMap(response, label: 'created transfer listing');
+  }
+
+  Future<JsonMap> submitContractOffer({
+    required String listingId,
+    required String bidderClubId,
+    required double wageOfferAmount,
+    int contractYears = 3,
+  }) async {
+    final Object? response = await client.request(
+      'POST',
+      '/api/transfer-hub/listings/$listingId/contract-offer',
+      body: <String, Object?>{
+        'bidder_club_id': bidderClubId,
+        'wage_offer_amount': wageOfferAmount,
+        'contract_years': contractYears,
+      },
+    );
+    return jsonMap(response, label: 'contract offer');
   }
 
   Future<JsonMap> fetchListing(String listingId) {

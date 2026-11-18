@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, status
 from sqlalchemy.orm import Session
 
 from app.admin_godmode.service import AdminGodModeService, PermissionDeniedError
-from app.auth.dependencies import get_current_admin, get_current_user, get_session
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user, get_session
+from app.models.user import User
 from app.hosted_competition_engine.coin_aware_service import (
     CoinAwareHostedCompetitionService as HostedCompetitionService,
 )
@@ -114,10 +115,21 @@ def list_templates(session: Session = Depends(get_session)) -> list[CompetitionT
 
 
 @router.get("", response_model=HostedCompetitionListResponse)
-def list_public_competitions(session: Session = Depends(get_session)) -> HostedCompetitionListResponse:
+def list_public_competitions(
+    q: str | None = Query(default=None),
+    club: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    viewer: User | None = Depends(get_optional_current_user),
+    session: Session = Depends(get_session),
+) -> HostedCompetitionListResponse:
     service = HostedCompetitionService(session)
     return HostedCompetitionListResponse(
-        competitions=[_competition_view(item) for item in service.list_public_competitions()]
+        competitions=[
+            _competition_view(item)
+            for item in service.list_public_competitions(
+                q=q, club=club, status=status_filter, viewer=viewer
+            )
+        ]
     )
 
 

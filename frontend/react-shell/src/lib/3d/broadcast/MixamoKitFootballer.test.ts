@@ -3,7 +3,7 @@ jest.mock("three/examples/jsm/utils/SkeletonUtils.js", () => ({
 }));
 
 import * as THREE from "three";
-import { everyFootballStateHasMixamoClip, gaitForGroundSpeed, MIXAMO_CLIP_BY_STATE, retargetMixamoClip } from "./MixamoKitFootballer";
+import { clipTimeScale, everyFootballStateHasMixamoClip, gaitForGroundSpeed, MIXAMO_CLIP_BY_STATE, retargetMixamoClip } from "./MixamoKitFootballer";
 import { ALL_FOOTBALL_ANIMATION_STATES } from "./FootballAnimationStateMachine";
 
 describe("MixamoKitFootballer clip map", () => {
@@ -22,6 +22,12 @@ describe("MixamoKitFootballer clip map", () => {
     expect(gaitForGroundSpeed(4.4, false)).toBe("run");
     expect(gaitForGroundSpeed(7, true)).toBe("dribble_run");
     expect(gaitForGroundSpeed(7, false)).toBe("sprint");
+  });
+
+  test("plays one clip cycle per stride of travel", () => {
+    expect(clipTimeScale(1.35, 1.35, 1)).toBeCloseTo(1);
+    expect(clipTimeScale(0, 1.35, 1)).toBeCloseTo(0.4);
+    expect(clipTimeScale(12, 1.35, 1)).toBeCloseTo(1.85);
   });
 
   test("keeps the moving strike, standing tackle, and celebration distinct from the set-piece clips", () => {

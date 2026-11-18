@@ -6,7 +6,7 @@ from typing import Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.admin.capabilities import AdminCapability, assert_admin_capability
-from app.auth.dependencies import get_current_admin, get_current_user
+from app.auth.dependencies import get_current_admin, get_current_user, get_optional_current_user
 from app.competitions.creator_league_router import router as creator_league_router
 from app.common.enums.competition_format import CompetitionFormat
 from app.models.user import User
@@ -280,6 +280,27 @@ def join_random_competition(
     )
 
 
+@router.get("/fixtures")
+def search_competition_fixtures(
+    q: str | None = Query(default=None),
+    club: str | None = Query(default=None),
+    opponent: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    limit: int = Query(default=50, ge=1, le=100),
+    viewer: User | None = Depends(get_optional_current_user),
+    orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
+) -> dict[str, object]:
+    fixtures = orchestrator.search_fixtures(
+        q=q,
+        club=club,
+        opponent=opponent,
+        status=status_filter,
+        viewer_user_id=viewer.id if viewer is not None else None,
+        limit=limit,
+    )
+    return {"fixtures": fixtures}
+
+
 @router.get("/{competition_id}", response_model=CompetitionSummaryView, response_model_exclude_none=True)
 def get_competition(
     competition_id: str,
@@ -316,8 +337,13 @@ def list_competitions(
     start_to: datetime | None = Query(default=None),
     min_entry_fee: float | None = Query(default=None, ge=0),
     max_entry_fee: float | None = Query(default=None, ge=0),
+    q: str | None = Query(default=None),
+    club: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    viewer: User | None = Depends(get_optional_current_user),
     orchestrator: CompetitionOrchestrator = Depends(get_competition_orchestrator),
 ) -> CompetitionListResponse:
+    discovery_requested = any(value not in (None, "") for value in (q, club, status_filter))
     return orchestrator.list(
         public_only=public_only,
         format=format,
@@ -334,6 +360,11 @@ def list_competitions(
         start_to=start_to,
         min_entry_fee=min_entry_fee,
         max_entry_fee=max_entry_fee,
+        q=q,
+        club=club,
+        status=status_filter,
+        viewer_user_id=viewer.id if viewer is not None else None,
+        restrict_private=discovery_requested,
     )
 
 

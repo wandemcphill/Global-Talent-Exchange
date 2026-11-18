@@ -1109,6 +1109,7 @@ class ClubSaleMarketService:
         max_squad_strength: int | None = None,
         min_fanbase_size: int | None = None,
         max_fanbase_size: int | None = None,
+        q: str | None = None,
     ) -> dict[str, Any]:
         items = list(
             self.session.scalars(
@@ -1140,6 +1141,9 @@ class ClubSaleMarketService:
             if min_fanbase_size is not None and fanbase_size < min_fanbase_size:
                 continue
             if max_fanbase_size is not None and fanbase_size > max_fanbase_size:
+                continue
+            name_query = (q or "").strip().lower()
+            if name_query and name_query not in str(payload.get("club_name") or "").lower():
                 continue
             filtered.append(payload)
         total = len(filtered)

@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import 'package:gte_frontend/features/club_growth_redesign/club_growth_redesign.dart';
 import 'package:gte_frontend/features/club_lifecycle_redesign/club_lifecycle_redesign.dart';
 import 'package:gte_frontend/features/owner_console/widgets/gtex_boardroom_delegation_panel.dart';
+import 'package:gte_frontend/features/transfer_center/presentation/gtex_live_transfer_room.dart';
 import 'package:gte_frontend/features/transfer_center/presentation/gtex_transfers_hub_panel.dart';
 import 'package:gte_frontend/ui_gtex/ui_gtex.dart';
 import 'package:gte_frontend/data/gte_api_repository.dart';
@@ -22,6 +23,7 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
     this.clubName,
     this.baseUrl,
     this.backendMode,
+    this.accessToken,
     this.isAuthenticated = true,
     this.onOpenLogin,
     this.initialSnapshot,
@@ -58,6 +60,7 @@ class GtexClubOwnerDashboardV2 extends StatefulWidget {
   final String? clubName;
   final String? baseUrl;
   final Object? backendMode;
+  final String? accessToken;
   final bool isAuthenticated;
   final VoidCallback? onOpenLogin;
   final GtexClubWorkspaceSnapshot? initialSnapshot;
@@ -261,6 +264,9 @@ class _GtexClubOwnerDashboardV2State extends State<GtexClubOwnerDashboardV2> {
                   clubOwnershipError: widget.clubOwnershipError,
                   onRefreshClubOwnership: widget.onRefreshClubOwnership,
                   onOpenClubShareMarket: widget.onOpenClubShareMarket,
+                  baseUrl: widget.baseUrl,
+                  backendMode: widget.backendMode,
+                  accessToken: widget.accessToken,
                   onOpenLineup: widget.onOpenLineup,
                   onOpenCoachMarket: widget.onOpenCoachMarket,
                   onSelectSection: _controller.selectOwnerSection,
@@ -367,6 +373,9 @@ class _OwnerDetail extends StatelessWidget {
     required this.clubOwnershipError,
     required this.onRefreshClubOwnership,
     required this.onOpenClubShareMarket,
+    this.baseUrl,
+    this.backendMode,
+    this.accessToken,
     required this.onOpenLineup,
     required this.onOpenCoachMarket,
     required this.onSelectSection,
@@ -396,6 +405,9 @@ class _OwnerDetail extends StatelessWidget {
   final String? clubOwnershipError;
   final VoidCallback? onRefreshClubOwnership;
   final VoidCallback? onOpenClubShareMarket;
+  final String? baseUrl;
+  final Object? backendMode;
+  final String? accessToken;
   final VoidCallback? onOpenLineup;
   final VoidCallback? onOpenCoachMarket;
   final ValueChanged<GtexClubOwnerSection> onSelectSection;
@@ -520,10 +532,22 @@ class _OwnerDetail extends StatelessWidget {
             icon: Icons.swap_horiz_outlined,
           ),
           const SizedBox(height: GtexSpacing.md),
-          GtexTransfersHubPanel(
-            activeClubId: snapshot.clubId,
-            onOpenFinancialMarket: onOpenClubShareMarket,
-          ),
+          if ((baseUrl ?? '').trim().isEmpty)
+            GtexTransfersHubPanel(
+              activeClubId: snapshot.clubId,
+              onOpenFinancialMarket: onOpenClubShareMarket,
+            )
+          else
+            GtexLiveTransferRoom(
+              clubId: snapshot.clubId,
+              squad: snapshot.squad,
+              baseUrl: baseUrl!,
+              backendMode: backendMode is GteBackendMode
+                  ? backendMode as GteBackendMode
+                  : GteBackendMode.live,
+              accessToken: accessToken,
+              onOpenFinancialMarket: onOpenClubShareMarket,
+            ),
           const SizedBox(height: GtexSpacing.md),
           GtexPanel(
             title: 'Player Cards & Collectibles Marketplace',

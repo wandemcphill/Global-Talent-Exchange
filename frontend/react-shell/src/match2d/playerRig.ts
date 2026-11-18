@@ -1,6 +1,48 @@
 export const CELL = 64;
 export const ATLAS_DIRECTIONS = 8;
 export const ATLAS_FRAMES = 4;
+
+/** Metres one full step-cycle should cover. Matches the 105×68 pitch. */
+const STRIDE_METERS: Record<string, number> = {
+  walk: 1.35,
+  turn: 1.15,
+  jog: 2.15,
+  run: 3.1,
+  dribble: 1.85,
+  accelerate: 2.4,
+  decelerate: 1.7,
+  sprint: 3.7,
+  dribble_run: 3.05,
+};
+
+/**
+ * Advance the atlas phase by the ground the body just covered, so a stride
+ * finishes as the feet would have landed. Contact clips stay on the clock.
+ */
+export function gaitPhaseAdvance(action: string, meters: number, dtSec: number, cadence = 1): number {
+  const stride = STRIDE_METERS[action];
+  if (stride) {
+    const capped = Math.min(8, Math.max(0, meters));
+    return (capped / stride) * ATLAS_FRAMES * cadence;
+  }
+  const hz =
+    action === "idle" || action === "celebrate" || action === "frustrated"
+      ? 2.4
+      : action === "shoot" || action === "pass" || action === "tackle" || action === "header"
+        ? 4.2
+        : 3.5;
+  return Math.max(0.008, dtSec) * hz * cadence;
+}
+
+/** Stay on the current picture until the body has clearly entered the next eighth. */
+export function stableFacingDirection(facing: number, previous: number, directions = ATLAS_DIRECTIONS): number {
+  const count = Math.max(1, directions);
+  const sector = (Math.PI * 2) / count;
+  const prev = ((Math.round(previous) % count) + count) % count;
+  const wrap = (angle: number) => Math.atan2(Math.sin(angle), Math.cos(angle));
+  if (Math.abs(wrap(facing - prev * sector)) <= sector * 0.62) return prev;
+  return ((Math.round(wrap(facing) / sector) % count) + count) % count;
+}
 export const RIG_ACTIONS = [
   "idle",
   "walk",
@@ -630,6 +672,7 @@ export class PlayerMotionTracker {
     const dx = x - existing.sampleX;
     const dy = existing.sampleY - y;
     const distance = Math.hypot(dx, dy);
+    const stepMeters = Math.hypot(dx * 105, dy * 68);
     const dtSampleSec = Math.max(0.016, (nowMs - existing.sampleTimeMs) / 1000);
 
     if (distance > 0.00035) {
@@ -700,20 +743,11 @@ export class PlayerMotionTracker {
       existing.actionChangedAtMs = nowMs;
     }
 
-    existing.direction =
-      ((Math.round((existing.facing / (Math.PI * 2)) * ATLAS_DIRECTIONS) % ATLAS_DIRECTIONS) + ATLAS_DIRECTIONS) %
-      ATLAS_DIRECTIONS;
+    existing.direction = stableFacingDirection(existing.facing, existing.direction);
 
-    const baseCycleHz =
-      existing.action === "sprint" || existing.action === "accelerate"
-        ? 9.5
-        : existing.action === "jog" || existing.action === "dribble"
-          ? 7.2
-          : existing.action === "walk" || existing.action === "turn"
-            ? 5.2
-            : 3.5;
-    const cycleHz = baseCycleHz * cadenceVariance;
-    existing.gaitPhase = (existing.gaitPhase + Math.max(0.008, dtFrameSec) * cycleHz) % ATLAS_FRAMES;
+    const coastMeters = Math.hypot(existing.vx * 105, existing.vy * 68) * dtFrameSec;
+    const covered = distance > 0.00035 ? stepMeters : coastMeters;
+    existing.gaitPhase = (existing.gaitPhase + gaitPhaseAdvance(existing.action, covered, dtFrameSec, cadenceVariance)) % ATLAS_FRAMES;
     existing.frame = Math.floor(existing.gaitPhase) % ATLAS_FRAMES;
 
     return existing;

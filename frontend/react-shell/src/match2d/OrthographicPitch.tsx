@@ -24,7 +24,7 @@ import {
   type PitchSide,
   type VarReviewSummary,
 } from "./matchStateAdapter";
-import { BAKED_ATLAS, bakedUv, type BakedManifest } from "./bakedAtlas";
+import { BAKED_ATLAS, bakedUv, footOnSprite, type BakedManifest } from "./bakedAtlas";
 import {
   ATLAS_COLUMNS,
   ATLAS_ROWS,
@@ -1581,10 +1581,11 @@ function OrthographicPitchComponent({
           const motion = motionTracker.get(playerIdentityKey(resolvedBall.carrier));
           if (motion) {
             const foot = bakedUv(bakedManifest, motion.action, motion.direction, motion.gaitPhase).anchor;
+            const sprite = footOnSprite(foot);
             const baseX = carrierPose?.x ?? resolvedBall.carrier.x;
             const baseY = carrierPose?.y ?? resolvedBall.carrier.y;
-            ballX = baseX + (foot.x - 0.5) * (4.85 / PITCH_W);
-            ballY = baseY + (0.5 - foot.y) * (4.85 / PITCH_H);
+            ballX = baseX + sprite.localX / PITCH_W;
+            ballY = baseY - sprite.localY / PITCH_H;
           }
         }
         const shadowWorld = toWorld(resolvedBall?.shadowX ?? ballX, resolvedBall?.shadowY ?? ballY, activeMode);
