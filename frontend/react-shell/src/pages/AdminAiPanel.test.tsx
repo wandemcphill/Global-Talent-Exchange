@@ -77,6 +77,7 @@ describe("AdminAiPanel", () => {
     for (let i = 0; i < 6; i += 1) {
       await act(async () => {
         await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
     }
   }
