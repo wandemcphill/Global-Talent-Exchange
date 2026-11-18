@@ -442,3 +442,24 @@ FOOTBALL_GIFT_CATALOG: tuple[dict[str, object], ...] = (
         "sort_order": 1630,
     },
 )
+
+# Match-rail codes that predate the canonical catalogue. Sending one of these
+# settles the mapped catalogue item instead of 400/404.
+LEGACY_GIFT_KEY_ALIASES: dict[str, str] = {
+    "stadium_roar": "fan_chant",
+    "captains_armband": "legend_card_reveal",
+    "home_end_banner": "fan_chant",
+    "golden_boot": "golden_boot_king",
+    "floodlights": "goal_celebration",
+    "legendary_stadium": "golden_stadium",
+    "cheer": "fan_chant",
+    "flare": "goal_celebration",
+    "drum": "fan_chant",
+    "banner": "fan_chant",
+    "club_coach": "golden_manager",
+}
+
+
+def canonical_gift_key(gift_key: str) -> str:
+    normalized = gift_key.strip()
+    return LEGACY_GIFT_KEY_ALIASES.get(normalized, normalized)

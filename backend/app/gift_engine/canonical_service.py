@@ -15,6 +15,8 @@ from app.gift_engine.service import (
     GiftEngineError,
     GiftEngineService as LegacyGiftEngineService,
 )
+from app.gift_engine.catalog import canonical_gift_key
+from app.gift_engine.targets import resolve_gift_recipient_club
 from app.models.base import generate_uuid, utcnow
 from app.models.club_profile import ClubProfile
 from app.models.community_engine import LiveThread
@@ -76,15 +78,16 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
         if recipient_club_id is None:
             return recipient_user_id, None
 
-        club = self.session.get(ClubProfile, recipient_club_id)
-        if club is None or club.owner_user_id is None:
+        resolved = resolve_gift_recipient_club(self.session, recipient_club_id)
+        if resolved is None:
             raise GiftEngineError("Recipient club was not found.", reason="recipient_club_not_found")
-        if recipient_user_id is not None and recipient_user_id != club.owner_user_id:
+        owner_user_id, resolved_club_id = resolved
+        if recipient_user_id is not None and recipient_user_id != owner_user_id:
             raise GiftEngineError(
                 "Recipient profile does not own the selected recipient club.",
                 reason="recipient_club_identity_mismatch",
             )
-        return club.owner_user_id, club.id
+        return owner_user_id, resolved_club_id
 
     def _resolve_authoritative_match_context(
         self,
@@ -313,7 +316,7 @@ class CanonicalGiftEngineService(LegacyGiftEngineService):
             discussion_thread_id=str(discussion_thread_id) if discussion_thread_id else None,
         )
 
-        requested_gift_key = str(kwargs.get("gift_key") or "").strip()
+        requested_gift_key = canonical_gift_key(str(kwargs.get("gift_key") or ""))
         requested_catalog_item = self.session.scalar(
             select(GiftCatalogItem).where(GiftCatalogItem.key == requested_gift_key)
         )

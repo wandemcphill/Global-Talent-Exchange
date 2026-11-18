@@ -75,21 +75,29 @@ import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 
 const GIFTS = [
-  { code: "stadium_roar", name: "Stadium Roar", cost: 10, rarity: "common" },
-  { code: "captains_armband", name: "Captain's Armband", cost: 20, rarity: "rare" },
-  { code: "home_end_banner", name: "Home End Banner", cost: 30, rarity: "rare" },
-  { code: "golden_boot", name: "Golden Boot", cost: 50, rarity: "epic" },
-  { code: "floodlights", name: "Floodlights", cost: 100, rarity: "epic" },
-  { code: "last_minute_winner", name: "Last-Minute Winner", cost: 350, rarity: "epic" },
-  { code: "paris_skyline", name: "Eiffel Tower Paris", cost: 750, rarity: "legendary" },
-  { code: "wembley_stadium", name: "Wembley Stadium", cost: 2500, rarity: "legendary" },
-  { code: "private_jet", name: "Private Jet Flyby", cost: 3500, rarity: "mythic" },
-  { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 10000, rarity: "mythic" },
+  { code: "fan_chant", name: "Stadium Roar", cost: 2, rarity: "common", anim: "fan_chant", animation_key: "fan_chant", sound_key: "crowd_roar", duration_ms: 4200 },
+  { code: "goal_celebration", name: "Goal Celebration", cost: 10, rarity: "rare", anim: "goal_celebration", animation_key: "goal_celebration", sound_key: "goal_roar", duration_ms: 5200 },
+  { code: "last_minute_winner", name: "Last-Minute Winner", cost: 350, rarity: "epic", anim: "last_minute_winner", animation_key: "last_minute_winner", sound_key: "golden_goal_explosion", duration_ms: 6400 },
+  { code: "golden_boot_king", name: "Golden Boot", cost: 900, rarity: "legendary", anim: "golden_boot_spark", animation_key: "golden_boot_spark", sound_key: "net_ripple_roar", duration_ms: 6400 },
+  { code: "paris_skyline", name: "Eiffel Tower Paris", cost: 750, rarity: "legendary", anim: "paris_skyline", animation_key: "city_paris", sound_key: "paris_lights_twinkle", duration_ms: 7000 },
+  { code: "wembley_stadium", name: "Wembley Stadium", cost: 2500, rarity: "legendary", anim: "wembley_stadium", animation_key: "stadium_wembley", sound_key: "wembley_arch_roar", duration_ms: 7600 },
+  { code: "private_jet", name: "Private Jet Flyby", cost: 3500, rarity: "mythic", anim: "private_jet", animation_key: "luxury_private_jet", sound_key: "jet_turbine_flyby", duration_ms: 8000 },
+  { code: "ballon_dor", name: "Golden Ballon d'Or", cost: 10000, rarity: "mythic", anim: "ballon_dor", animation_key: "world_best_award", sound_key: "stadium_award_roar", duration_ms: 8000 },
   { code: "super_eagle", name: "Super Eagle", cost: 500, rarity: "legendary", anim: "super_eagle", animation_key: "super_eagle", sound_key: "eagle_scream", duration_ms: 8000 },
   { code: "black_jaguar", name: "Black Jaguar", cost: 700, rarity: "legendary", anim: "black_jaguar", animation_key: "black_jaguar", sound_key: "jaguar_roar", duration_ms: 8000 },
   { code: "white_tiger", name: "White Tiger", cost: 800, rarity: "legendary", anim: "white_tiger", animation_key: "white_tiger", sound_key: "white_tiger_roar", duration_ms: 8000 },
   { code: "polar_bear", name: "Polar Bear", cost: 900, rarity: "legendary", anim: "polar_bear", animation_key: "polar_bear", sound_key: "polar_bear_roar", duration_ms: 8000 },
 ];
+
+function absentGiftRoute(err: { response?: { status?: number; data?: { detail?: unknown } } }): boolean {
+  const status = err?.response?.status;
+  if (status !== 404 && status !== 405) return false;
+  const detail = err?.response?.data?.detail;
+  if (typeof detail === "string") {
+    return detail === "Not Found" || detail === "Method Not Allowed";
+  }
+  return detail == null;
+}
 
 // Tactical Style Presets
 const TACTICAL_PRESETS = [
@@ -197,27 +205,25 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
         ? crypto.randomUUID()
         : `gift-${match.id}-${g.code}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     try {
+      const recipientName = target === match.home_club_id ? match.home_name : match.away_name;
       let data: any;
       try {
         const res = await api.post("/gifts/send", {
           recipient_club_id: target,
           gift_key: g.code,
-          match_id: match.id,
+          match_id: match.id || match.match_id,
           quantity: 1,
           source_scope: "gtex_competition",
           idempotency_key: idempotencyKey,
         });
         data = res.data;
       } catch (err: any) {
-        const status = err?.response?.status;
-        if (status && ![404, 405].includes(status)) {
-          throw err;
-        }
-        // Fallback to legacy owner endpoint only when canonical endpoint is absent (404/405 or test mock)
+        if (!absentGiftRoute(err)) throw err;
+        // Older servers only exposed the owner-console gift route.
         const res = await api.post("/owner/gifts/send", {
           club_id: target,
           gift_code: g.code,
-          match_id: match.id,
+          match_id: match.id || match.match_id,
           idempotency_key: idempotencyKey,
         });
         data = res.data;
@@ -231,6 +237,7 @@ function GiftRail({ match, clubId, onGiftSent }: any) {
       onGiftSent?.({
         id: txId,
         sender: senderName,
+        recipient: data.recipient_display_name || recipientName || "the club",
         name: g.name,
         gift_name: g.name,
         code: g.code,

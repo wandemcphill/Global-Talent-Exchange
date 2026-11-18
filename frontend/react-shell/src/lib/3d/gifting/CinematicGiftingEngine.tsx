@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { GtexCelebrationAudioEngine } from "./GtexCelebrationAudioEngine";
+import { GiftCinematicFx } from "./GiftCinematicFx";
 import { ShowroomInspectionReel } from "@/components/gtex/ShowroomInspectionReel";
 import { inspectionFramesFor } from "@/lib/showroomInspection";
 import { giftConceptFilm } from "./giftConceptFilms";
@@ -244,6 +245,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
   className = "",
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const composerRef = useRef<{
     setSize: (width: number, height: number) => void;
@@ -467,6 +469,9 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
       !isReducedMotion && hasGiftFilm
         ? Math.max(baseDuration, VIDEO_GIFT_DURATION_MS)
         : baseDuration;
+    const stage = stageRef.current;
+    if (stage) stage.setAttribute("data-gift-beat", isReducedMotion ? "hold" : "entrance");
+    let exitTimer: number | null = null;
     if (
       soundEnabled &&
       !mutedRef.current &&
@@ -479,10 +484,16 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
         activeGift.rarity
       );
       audioGiftKeyRef.current = giftInstanceKey;
+      exitTimer = window.setTimeout(() => {
+        if (!mutedRef.current) GtexCelebrationAudioEngine.playExitCue();
+      }, Math.max(900, duration * 0.82));
     }
     if (!sceneRef.current || isReducedMotion) {
       const fallbackTimer = setTimeout(() => onCompleteRef.current?.(), duration);
-      return () => clearTimeout(fallbackTimer);
+      return () => {
+        clearTimeout(fallbackTimer);
+        if (exitTimer) window.clearTimeout(exitTimer);
+      };
     }
 
     let cancelled = false;
@@ -567,6 +578,9 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
     const animateFrame = (time: number) => {
       if (cancelled) return;
+      const elapsed = time - openedAt;
+      const beat = elapsed < 1100 ? "entrance" : duration - elapsed < 1000 ? "exit" : "hold";
+      stageRef.current?.setAttribute("data-gift-beat", beat);
       const deltaSec = Math.min(Math.max((time - prevTime) / 1000, 0.001), 0.1);
       prevTime = time;
       if (!startTime.value) {
@@ -600,6 +614,7 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
     return () => {
       cancelled = true;
+      if (exitTimer) window.clearTimeout(exitTimer);
       if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       scene.remove(director.root);
       director.dispose();
@@ -622,10 +637,12 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
 
   return (
     <div
+      ref={stageRef}
       data-testid="on-pitch-gift-animation"
       data-webgl-context={contextLost ? "lost" : "ready"}
       data-gift-visual={visualReady ? "ready" : "loading"}
       data-gift-shot={shot}
+      data-gift-beat="entrance"
       data-gift-film={giftFilm[0]?.src || ""}
       data-gift-media={hasGiftFilm ? "film" : "webgl"}
       className={`absolute inset-0 z-30 pointer-events-none flex flex-col items-center justify-end overflow-hidden ${className}`}
@@ -643,6 +660,68 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           0%, 100% { opacity: .3; }
           50% { opacity: .52; }
         }
+        @keyframes gtex-gift-caption-out {
+          to { opacity: 0; transform: translate3d(0, 28px, 0); filter: blur(6px); }
+        }
+        @keyframes gtex-gift-flash {
+          0% { opacity: .0; }
+          8% { opacity: .92; }
+          22% { opacity: .18; }
+          100% { opacity: 0; }
+        }
+        @keyframes gtex-gift-shock {
+          0% { opacity: .85; transform: translate(-50%, -50%) scale(.2); }
+          100% { opacity: 0; transform: translate(-50%, -50%) scale(1); }
+        }
+        .gtex-gift-film {
+          opacity: 0;
+          transform: scale(1.07);
+          transition: opacity 480ms ease, transform 1100ms cubic-bezier(.16,.84,.22,1), filter 520ms ease;
+        }
+        [data-gift-beat="hold"] .gtex-gift-film {
+          opacity: 1;
+          transform: scale(1);
+        }
+        [data-gift-beat="exit"] .gtex-gift-film {
+          opacity: 0;
+          transform: scale(1.16);
+          filter: blur(12px);
+        }
+        [data-gift-beat="exit"] .gtex-gift-caption {
+          animation: gtex-gift-caption-out 620ms cubic-bezier(.4,0,.2,1) forwards;
+        }
+        .gtex-gift-flash {
+          position: absolute;
+          inset: 0;
+          z-index: 34;
+          pointer-events: none;
+          background:
+            radial-gradient(circle at 50% 42%, rgba(255,244,214,.95), rgba(255,186,72,.28) 28%, transparent 62%);
+          mix-blend-mode: screen;
+          animation: gtex-gift-flash 900ms ease-out both;
+        }
+        .gtex-gift-shock {
+          position: absolute;
+          left: 50%;
+          top: 42%;
+          z-index: 33;
+          width: min(92vw, 920px);
+          height: min(92vw, 920px);
+          border-radius: 999px;
+          border: 2px solid rgba(255, 236, 196, .8);
+          box-shadow: 0 0 40px rgba(255, 210, 120, .35), inset 0 0 30px rgba(255,255,255,.25);
+          pointer-events: none;
+          animation: gtex-gift-shock 1100ms cubic-bezier(.16,.7,.2,1) both;
+        }
+        .gtex-gift-shock-late { animation-delay: 280ms; border-color: rgba(255,255,255,.55); }
+        .gtex-gift-burst {
+          position: absolute;
+          inset: 0;
+          z-index: 35;
+          width: 100%;
+          height: 100%;
+          pointer-events: none;
+        }
         .gtex-gift-caption {
           animation: gtex-gift-caption-in 680ms cubic-bezier(.18,.72,.2,1) both;
           text-shadow: 0 2px 24px rgba(0,0,0,.62), 0 1px 3px rgba(0,0,0,.85);
@@ -656,12 +735,14 @@ export const CinematicGiftingEngine: React.FC<CinematicGiftingEngineProps> = ({
           mix-blend-mode: screen;
         }
         @media (prefers-reduced-motion: reduce) {
-          .gtex-gift-caption, .gtex-gift-caption-rule, .gtex-gift-lens { animation: none; }
+          .gtex-gift-caption, .gtex-gift-caption-rule, .gtex-gift-lens, .gtex-gift-flash, .gtex-gift-shock { animation: none; }
+          .gtex-gift-film { opacity: 1; transform: none; filter: none; }
         }
       `}</style>
       <div ref={mountRef} className="absolute inset-0 pointer-events-none" />
+      <GiftCinematicFx giftKey={giftInstanceKey} rarity={activeGift.rarity} active={!prefersReducedMotion} />
       {hasGiftFilm ? (
-        <div className="absolute inset-0 z-20">
+        <div className="gtex-gift-film absolute inset-0 z-20">
           <ShowroomInspectionReel
             key={`${giftInstanceKey}:${giftFilmKey}`}
             frames={giftFilm}
