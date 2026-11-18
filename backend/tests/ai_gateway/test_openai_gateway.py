@@ -25,7 +25,7 @@ from app.models.user import UserRole
 from app.modules import DOMAIN_MODULES
 from app.owner_console.autonomous_staff_engine import _try_grounded_external_ai
 
-SECRET = "sk-test-secret-value-should-not-leak"
+SECRET = "sk-test-secret-value-should-not-leak"  # pragma: allowlist secret
 
 
 class RateLimitError(Exception):
