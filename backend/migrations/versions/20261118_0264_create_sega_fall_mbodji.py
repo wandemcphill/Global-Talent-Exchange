@@ -107,15 +107,13 @@ def apply_sega_fall_mbodji(conn: sa.Connection) -> None:
     price = _calc_price(CURRENT_GSI, POTENTIAL_GSI)
     country_id = None
     if "ingestion_countries" in tables:
-        country_id = conn.execute(
-            sa.text("""
+        country_id = conn.execute(sa.text("""
                 SELECT id
                 FROM ingestion_countries
                 WHERE lower(name) = 'senegal' OR alpha2_code = 'SN'
                 ORDER BY CASE WHEN lower(name) = 'senegal' THEN 0 ELSE 1 END
                 LIMIT 1
-                """)
-        ).scalar()
+                """)).scalar()
 
     dna = {
         "age": 16,

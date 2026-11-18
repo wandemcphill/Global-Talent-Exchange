@@ -29,10 +29,7 @@ DOB = "2011-02-19"
 CURRENT_GSI = 68
 POTENTIAL_GSI = 86
 TOTAL_SHARES = 400
-PLAYSTYLE = (
-    "Explosive left-footed winger who usually plays on the right "
-    "and can also play left wing or as a striker"
-)
+PLAYSTYLE = "Explosive left-footed winger who usually plays on the right " "and can also play left wing or as a striker"
 TRAITS = [
     "Speed Dribbler",
     "Rapid",
@@ -107,14 +104,12 @@ def apply_hector_asumu(conn: sa.Connection) -> None:
     price = _calc_price(CURRENT_GSI, POTENTIAL_GSI)
     country_id = None
     if "ingestion_countries" in tables:
-        country_id = conn.execute(
-            sa.text("""
+        country_id = conn.execute(sa.text("""
                 SELECT id
                 FROM ingestion_countries
                 WHERE lower(name) = 'spain'
                 LIMIT 1
-                """)
-        ).scalar()
+                """)).scalar()
 
     dna = {
         "age": 15,

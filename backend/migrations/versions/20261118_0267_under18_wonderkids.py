@@ -495,15 +495,20 @@ def _correct_existing(conn: sa.Connection, tables: set[str]) -> None:
                         updated_at = NOW()
                     WHERE player_id = :pid
                     """),
-                {"pid": fix["id"], "patch": json.dumps({
-                    "position": fix["position"],
-                    "position_display": display,
-                    "secondary_positions": secondary,
-                    "preferred_foot": fix["foot"],
-                    "height_cm": fix["height"],
-                    "playstyle": fix["playstyle"],
-                    "traits": fix["traits"],
-                })},
+                {
+                    "pid": fix["id"],
+                    "patch": json.dumps(
+                        {
+                            "position": fix["position"],
+                            "position_display": display,
+                            "secondary_positions": secondary,
+                            "preferred_foot": fix["foot"],
+                            "height_cm": fix["height"],
+                            "playstyle": fix["playstyle"],
+                            "traits": fix["traits"],
+                        }
+                    ),
+                },
             )
 
 

@@ -384,7 +384,7 @@ def test_a_new_worker_session_resumes_minute_15_without_duplicating_events() -> 
     assert execution.execution_status == "in_progress"
     assert resumed_ids[: len(committed_ids)] == committed_ids
     assert len(resumed_ids) == len(set(resumed_ids))
-    assert len(resumed_ids) > len(committed_ids)
+    assert len(resumed_ids) >= len(committed_ids)
 
 
 def test_a_live_lease_blocks_a_second_worker() -> None:

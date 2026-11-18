@@ -150,7 +150,11 @@ def apply_next_generation(conn: sa.Connection) -> None:
             "skill_moves": player["skill_moves"],
             "weak_foot": player["weak_foot"],
             "source": "guardian_next_generation_2026",
-            **{key: attrs[key] for key in ("pace", "shooting", "passing", "dribbling", "defending", "physical") if key in attrs},
+            **{
+                key: attrs[key]
+                for key in ("pace", "shooting", "passing", "dribbling", "defending", "physical")
+                if key in attrs
+            },
         }
         if player.get("height") is not None:
             dna["height_cm"] = player["height"]
