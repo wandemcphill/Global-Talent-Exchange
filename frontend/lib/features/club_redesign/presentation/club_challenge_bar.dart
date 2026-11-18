@@ -38,7 +38,7 @@ class ClubChallengeBar extends StatelessWidget {
       return;
     }
     final GteAuthedApi client = _client();
-    final Map<String, dynamic> owned = await client.getMap('/api/owner/clubs');
+    final Map<String, dynamic> owned = await client.getMap('/api/owner/onboarding');
     final List<Map<String, dynamic>> clubs = ((owned['clubs'] as List<dynamic>?) ?? <dynamic>[])
         .whereType<Map>()
         .map((Map row) => Map<String, dynamic>.from(row))

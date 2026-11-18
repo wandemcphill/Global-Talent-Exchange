@@ -4,7 +4,12 @@ from app.ingestion.models import Player
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
 from app.models.competition_round import CompetitionRound
-from app.models.transfer_market import TransferListing
+from app.models.transfer_market import (
+    MarketWatchlistEntry,
+    TransferListing,
+    TransferListingBid,
+    TransferNegotiation,
+)
 from app.models.user import User
 from app.services.competition_orchestrator import CompetitionOrchestrator
 from app.transfer_market.service import TransferMarketService
@@ -57,7 +62,9 @@ def test_fixture_search_hides_private_competitions_from_outsiders(session) -> No
 
 
 def test_listing_search_filters_name_gsi_and_keeps_private_listings_off_the_board(session) -> None:
-    TransferListing.__table__.create(session.get_bind(), checkfirst=True)
+    bind = session.get_bind()
+    for model in (TransferListing, TransferListingBid, TransferNegotiation, MarketWatchlistEntry):
+        model.__table__.create(bind, checkfirst=True)
     session.add_all(
         [
             Player(

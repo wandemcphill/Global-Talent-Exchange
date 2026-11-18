@@ -36,7 +36,7 @@ export function ClubSaleMarket() {
         const params: any = { limit: 50 };
         if (tier) params.league_tier = Number(tier);
         if (nameQuery.trim()) params.q = nameQuery.trim();
-        const res = await api.get("/api/clubs/sale-market/listings", { params });
+        const res = await api.get("/clubs/sale-market/listings", { params });
         return res.data?.items || res.data?.listings || [];
       } catch (e) {
         // Fallback to legacy or empty
@@ -83,9 +83,9 @@ export function ClubSaleMarket() {
     if (!inquireModal) return;
     setSubmitting(true);
     try {
-      await api.post(`/api/clubs/${inquireModal.club_id}/inquiries`, {
+      await api.post(`/clubs/${inquireModal.club_id}/sale-market/inquiries`, {
         message: inquiryMessage || "Interested in acquisition discussions.",
-        offer_amount: offerAmount ? Number(offerAmount) : undefined,
+        metadata_json: offerAmount ? { offer_amount: Number(offerAmount) } : {},
       });
       toast.success(`Acquisition inquiry submitted for ${inquireModal.club_name}!`);
       setInquireModal(null);

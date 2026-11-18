@@ -229,8 +229,6 @@ export function TransferHub() {
         base_price: Number(listingPrice),
         expires_at: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
         visibility: listingVisibility,
-        salary_amount: 0,
-        contract_years_remaining: 3,
       });
       toast.success("Player listed. Offers can come in.");
       setListingPrice("");
