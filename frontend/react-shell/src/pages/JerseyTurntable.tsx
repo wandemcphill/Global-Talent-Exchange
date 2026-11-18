@@ -107,8 +107,8 @@ function patternedCloth(
           float fade = clamp(vUv.y, 0.0, 1.0);
           diffuseColor.rgb = mix(base, alt, fade);
         }
-        vec2 markUv = vec2((vChestPos.x + 0.09) / 0.20, (vChestPos.y - 1.12) / 0.30);
-        float onFront = step(0.11, vChestPos.z);
+        vec2 markUv = vec2((vChestPos.x + 0.09) / 0.20, (vChestPos.y - 1.20) / 0.18);
+        float onFront = step(0.105, vChestPos.z);
         float inside = step(0.0, markUv.x) * step(markUv.x, 1.0) * step(0.0, markUv.y) * step(markUv.y, 1.0);
         vec4 mark = texture2D(uChestMark, clamp(markUv, 0.0, 1.0));
         diffuseColor.rgb = mix(diffuseColor.rgb, mark.rgb, mark.a * onFront * inside);`,
@@ -118,42 +118,168 @@ function patternedCloth(
   return material;
 }
 
+const PREVIEW_SQUAD_NUMBER = "10";
+
 function paintChestMark(canvas: HTMLCanvasElement, text: string, crest: HTMLImageElement | null): void {
   const context = canvas.getContext("2d");
   if (!context) return;
   context.clearRect(0, 0, canvas.width, canvas.height);
-  if (crest) {
-    context.drawImage(crest, 300, 28, 150, 168);
-  }
-  context.fillStyle = "rgba(15, 23, 42, 0.72)";
-  context.fillRect(36, 230, 440, 92);
+  context.fillStyle = "#0B1220";
+  context.fillRect(24, 370, 520, 300);
   context.fillStyle = "#F8FAFC";
   context.strokeStyle = "#111827";
-  context.lineWidth = 8;
+  context.lineWidth = 16;
+  context.lineJoin = "round";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `900 ${text.length > 12 ? 36 : text.length > 8 ? 46 : 54}px Arial`;
-  context.strokeText(text, 256, 276);
-  context.fillText(text, 256, 276);
+  context.font = `900 ${text.length > 12 ? 64 : text.length > 8 ? 88 : 108}px Arial`;
+  context.strokeText(text, 284, 520);
+  context.fillText(text, 284, 520);
+  if (crest) {
+    context.drawImage(crest, 620, 280, 380, 460);
+  }
 }
 
-function chestMarkTexture(text: string, crestDataUri?: string | null): THREE.CanvasTexture {
+function paintSquadNumber(canvas: HTMLCanvasElement, number: string): void {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  context.clearRect(0, 0, canvas.width, canvas.height);
+  context.fillStyle = "#F8FAFC";
+  context.strokeStyle = "#111827";
+  context.lineWidth = 36;
+  context.lineJoin = "round";
+  context.textAlign = "center";
+  context.textBaseline = "middle";
+  context.font = `900 ${number.length > 1 ? 340 : 420}px Arial`;
+  context.strokeText(number, canvas.width / 2, canvas.height / 2);
+  context.fillText(number, canvas.width / 2, canvas.height / 2);
+}
+
+function paintRoundCrest(canvas: HTMLCanvasElement, crest: HTMLImageElement | null): void {
+  const context = canvas.getContext("2d");
+  if (!context) return;
+  const size = canvas.width;
+  context.clearRect(0, 0, size, size);
+  context.save();
+  context.beginPath();
+  context.arc(size / 2, size / 2, size / 2 - 18, 0, Math.PI * 2);
+  context.clip();
+  if (crest) {
+    context.drawImage(crest, 28, 28, size - 56, size - 56);
+  } else {
+    context.fillStyle = "#0B1220";
+    context.fillRect(0, 0, size, size);
+  }
+  context.restore();
+  context.beginPath();
+  context.arc(size / 2, size / 2, size / 2 - 20, 0, Math.PI * 2);
+  context.lineWidth = 28;
+  context.strokeStyle = "#F8FAFC";
+  context.stroke();
+}
+
+function markTexture(size: number, paint: (canvas: HTMLCanvasElement) => void): { texture: THREE.CanvasTexture; canvas: HTMLCanvasElement } {
   const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 512;
-  paintChestMark(canvas, text, null);
+  canvas.width = size;
+  canvas.height = size;
+  paint(canvas);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.needsUpdate = true;
-  if (crestDataUri) {
-    const image = new Image();
-    image.onload = () => {
-      paintChestMark(canvas, text, image);
-      texture.needsUpdate = true;
-    };
-    image.src = crestDataUri;
-  }
-  return texture;
+  return { texture, canvas };
+}
+
+function shortsCloth(
+  primary: string,
+  secondary: string,
+  accent: string,
+  pattern: string,
+  squadNumber: THREE.Texture,
+  crest: THREE.Texture,
+): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    color: primary,
+    roughness: 0.64,
+    metalness: 0.02,
+    side: THREE.DoubleSide,
+  });
+  const code = patternCode(pattern);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSecondary = { value: new THREE.Color(secondary) };
+    shader.uniforms.uAccent = { value: new THREE.Color(accent) };
+    shader.uniforms.uPattern = { value: code };
+    shader.uniforms.uNumber = { value: squadNumber };
+    shader.uniforms.uCrest = { value: crest };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vShortPos;")
+      .replace("#include <begin_vertex>", "vShortPos = position;\n#include <begin_vertex>");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 uSecondary;\nuniform vec3 uAccent;\nuniform float uPattern;\nuniform sampler2D uNumber;\nuniform sampler2D uCrest;\nvarying vec3 vShortPos;",
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float side = step(0.145, abs(vShortPos.x));
+        float hem = step(vShortPos.y, 0.63) * step(0.57, vShortPos.y);
+        float hoop = step(0.70, vShortPos.y) * step(vShortPos.y, 0.76);
+        float sash = step(0.45, fract(vShortPos.x * 3.0 + vShortPos.y * 2.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, uSecondary, side);
+        if (uPattern > 1.5 && uPattern < 2.5) diffuseColor.rgb = mix(diffuseColor.rgb, uSecondary, hoop);
+        else if (uPattern > 2.5 && uPattern < 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, uSecondary, sash * step(0.08, vShortPos.z));
+        else if (uPattern > 4.5) diffuseColor.rgb = mix(diffuseColor.rgb, uSecondary, clamp((0.85 - vShortPos.y) * 2.2, 0.0, 1.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, uAccent, hem);
+        float front = step(0.085, vShortPos.z);
+        vec2 numUv = vec2((vShortPos.x + 0.175) / 0.14, (vShortPos.y - 0.60) / 0.22);
+        float numInside = step(0.0, numUv.x) * step(numUv.x, 1.0) * step(0.0, numUv.y) * step(numUv.y, 1.0);
+        vec4 num = texture2D(uNumber, clamp(numUv, 0.0, 1.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, num.rgb, num.a * numInside * front);
+        vec2 crestUv = vec2((vShortPos.x - 0.035) / 0.14, (vShortPos.y - 0.62) / 0.18);
+        float crestInside = step(0.0, crestUv.x) * step(crestUv.x, 1.0) * step(0.0, crestUv.y) * step(crestUv.y, 1.0);
+        vec4 badge = texture2D(uCrest, clamp(crestUv, 0.0, 1.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, badge.rgb, badge.a * crestInside * front);`,
+      );
+  };
+  material.customProgramCacheKey = () => `gtex-shorts-${material.uuid}`;
+  return material;
+}
+
+function sockCloth(socks: string, secondary: string, accent: string): THREE.MeshStandardMaterial {
+  const material = new THREE.MeshStandardMaterial({
+    color: "#C4A484",
+    roughness: 0.72,
+    metalness: 0.0,
+    side: THREE.DoubleSide,
+  });
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uSock = { value: new THREE.Color(socks) };
+    shader.uniforms.uSecondary = { value: new THREE.Color(secondary) };
+    shader.uniforms.uAccent = { value: new THREE.Color(accent) };
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying vec3 vLegPos;")
+      .replace("#include <begin_vertex>", "vLegPos = position;\n#include <begin_vertex>");
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 uSock;\nuniform vec3 uSecondary;\nuniform vec3 uAccent;\nvarying vec3 vLegPos;",
+      )
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        float sock = step(0.09, vLegPos.y) * step(vLegPos.y, 0.54);
+        float cuff = step(0.46, vLegPos.y) * step(vLegPos.y, 0.54);
+        float hoop = step(0.36, vLegPos.y) * step(vLegPos.y, 0.41);
+        float boot = step(vLegPos.y, 0.09);
+        vec3 cloth = uSock;
+        cloth = mix(cloth, uSecondary, hoop);
+        cloth = mix(cloth, uAccent, cuff);
+        diffuseColor.rgb = mix(diffuseColor.rgb, cloth, sock);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.09, 0.08, 0.07), boot);`,
+      );
+  };
+  material.customProgramCacheKey = () => `gtex-sock-${material.uuid}`;
+  return material;
 }
 
 function partName(mesh: THREE.Mesh): string {
@@ -255,20 +381,36 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
         root.rotation.y = -Math.PI / 2;
         root.updateMatrixWorld(true);
         const freq = new THREE.Vector2(7, 5);
-        const chestMark = chestMarkTexture(chestText, crestDataUri);
-        const shirtMaterial = patternedCloth(kit.primary_color, kit.secondary_color, kit.pattern_type, freq, chestMark);
-        const shortsMaterial = new THREE.MeshStandardMaterial({
-          color: kit.shorts_color || kit.primary_color,
-          roughness: 0.64,
-          metalness: 0.02,
-          side: THREE.DoubleSide,
-        });
+        const chest = markTexture(1024, (canvas) => paintChestMark(canvas, chestText, null));
+        const number = markTexture(512, (canvas) => paintSquadNumber(canvas, PREVIEW_SQUAD_NUMBER));
+        const badge = markTexture(512, (canvas) => paintRoundCrest(canvas, null));
+        if (crestDataUri) {
+          const image = new Image();
+          image.onload = () => {
+            paintChestMark(chest.canvas, chestText, image);
+            paintRoundCrest(badge.canvas, image);
+            chest.texture.needsUpdate = true;
+            badge.texture.needsUpdate = true;
+          };
+          image.src = crestDataUri;
+        }
+        const shirtMaterial = patternedCloth(kit.primary_color, kit.secondary_color, kit.pattern_type, freq, chest.texture);
+        const shortsMaterial = shortsCloth(
+          kit.shorts_color || kit.primary_color,
+          kit.secondary_color,
+          kit.accent_color,
+          kit.pattern_type,
+          number.texture,
+          badge.texture,
+        );
+        const socksMaterial = sockCloth(kit.socks_color || kit.secondary_color, kit.secondary_color, kit.accent_color);
         root.traverse((obj) => {
           const mesh = obj as THREE.Mesh;
           if (!mesh.isMesh || !mesh.visible) return;
           const label = partName(mesh);
           if (label.includes("short")) mesh.material = shortsMaterial;
           else if (label.includes("tshirt") || label.includes("shirt")) mesh.material = shirtMaterial;
+          else if (label.includes("leg")) mesh.material = socksMaterial;
         });
 
         const fitted = new THREE.Box3().setFromObject(root);
@@ -281,7 +423,7 @@ export function JerseyTurntable({ kit, crestDataUri, chestText }: JerseyTurntabl
         root.updateMatrixWorld(true);
         draggingRef.current = false;
         shirt.rotation.set(0, Math.PI - 1.15, 0);
-        marks.push(chestMark);
+        marks.push(chest.texture, number.texture, badge.texture);
         added.push(root);
       })
       .catch(() => {

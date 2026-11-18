@@ -523,7 +523,7 @@ export function kitSwatchDataUri(kit: KitVariant): string {
   const chest = xmlSafe(kit.front_text.slice(0, 20));
   const fontSize = chest.length > 12 ? 6.5 : chest.length > 8 ? 8 : 10;
   const letterFill = isLight(kit.secondary_color) ? kit.secondary_color : "#F8FAFC";
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 124 130" width="124" height="130">
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 124 188" width="124" height="188">
     <defs>
       <linearGradient id="kit-gradient" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${kit.secondary_color}" stop-opacity=".1"/><stop offset="1" stop-color="${kit.secondary_color}" stop-opacity=".95"/></linearGradient>
       <linearGradient id="kit-shade" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity=".2"/><stop offset=".55" stop-color="#000000" stop-opacity="0"/><stop offset="1" stop-color="#000000" stop-opacity=".35"/></linearGradient>
@@ -539,7 +539,13 @@ export function kitSwatchDataUri(kit: KitVariant): string {
       </g>
       ${collarMarkup(kit)}
       ${sleeveMarkup(kit)}
-      <circle cx="78" cy="48" r="6" fill="${kit.secondary_color}" stroke="${kit.accent_color}" stroke-width="1.4"/>
+      <circle cx="86" cy="42" r="11" fill="${kit.secondary_color}" stroke="${kit.accent_color}" stroke-width="1.6"/>
+      <path d="M38 114 H58 V148 H42 Z M66 114 H86 V148 H70 Z" fill="${kit.shorts_color}" stroke="${kit.accent_color}" stroke-width="2"/>
+      <path d="M38 142 H58 M66 142 H86" stroke="${kit.accent_color}" stroke-width="3"/>
+      <text x="48" y="134" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="11" font-weight="900" fill="#F8FAFC" stroke="#111827" stroke-width=".6">10</text>
+      <circle cx="76" cy="130" r="7" fill="${kit.secondary_color}" stroke="#F8FAFC" stroke-width="1.4"/>
+      <path d="M40 150 H56 V176 H44 Z M68 150 H84 V176 H72 Z" fill="${kit.socks_color}"/>
+      <path d="M40 150 H56 M68 150 H84" stroke="${kit.accent_color}" stroke-width="3"/>
     </g>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
