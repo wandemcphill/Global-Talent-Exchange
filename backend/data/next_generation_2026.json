@@ -1,0 +1,1384 @@
+[
+  {
+    "name": "Eduardo Conceição",
+    "first": "Eduardo",
+    "last": "Conceição",
+    "country": "Brazil",
+    "country_names": [
+      "Brazil"
+    ],
+    "club": "Palmeiras",
+    "league": "Brasileiro Série A",
+    "dob": "2009-12-07",
+    "height": 180,
+    "foot": "Right",
+    "position": "LW",
+    "secondary": [
+      "AM"
+    ],
+    "gsi": 70,
+    "potential": 86,
+    "playstyle": "Explosive left winger with pace and close dribbling",
+    "traits": [
+      "Explosive Pace",
+      "Technical Dribbler",
+      "Flair",
+      "Quick Step"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "8b846c16-dd3c-52a6-ade1-e1e634cbeef1",
+    "external_id": "ng2026_eduardo_conceição",
+    "short": "E. Conceição",
+    "aliases": [],
+    "age": 16,
+    "positions": [
+      "LW",
+      "AM"
+    ],
+    "position_display": "LW/AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959206/players/portraits/p_8b846c16_eduardo_concei%C3%A7%C3%A3o.jpg",
+    "attributes": {
+      "pace": 76,
+      "shooting": 68,
+      "passing": 68,
+      "dribbling": 79,
+      "defending": 36,
+      "physical": 66,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "vision": 69,
+      "short_passing": 68,
+      "agility": 78
+    },
+    "source_image": "https://media.guim.co.uk/6f87b7c5e6dff01a4f09dfe32a3758b09772cc6d/1180_327_1720_1376/500.jpg"
+  },
+  {
+    "name": "Zhao Songyuan",
+    "first": "Songyuan",
+    "last": "Zhao",
+    "country": "China",
+    "country_names": [
+      "China"
+    ],
+    "club": "Tsinghua University High School",
+    "league": "Chinese youth football",
+    "dob": "2009-04-07",
+    "height": 194,
+    "foot": "Both",
+    "position": "ST",
+    "secondary": [],
+    "gsi": 71,
+    "potential": 84,
+    "playstyle": "Two-footed target forward who is technical and hard-working",
+    "traits": [
+      "Aerial Fortress",
+      "Two-Footed",
+      "Hold-Up Play",
+      "Work Rate"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 5,
+    "id": "8ab2f04e-a7a2-52d7-9b62-bfb69c72cea5",
+    "external_id": "ng2026_zhao_songyuan",
+    "short": "S. Zhao",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "ST"
+    ],
+    "position_display": "ST",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959207/players/portraits/p_8ab2f04e_zhao_songyuan.jpg",
+    "attributes": {
+      "pace": 75,
+      "shooting": 75,
+      "passing": 65,
+      "dribbling": 71,
+      "defending": 35,
+      "physical": 73,
+      "skill_moves": 3,
+      "weak_foot": 5,
+      "finishing": 76,
+      "positioning": 75
+    },
+    "source_image": "https://media.guim.co.uk/1ff1224391b43cee7496b4518fdfa1ae7db2e48a/797_311_1875_1501/500.jpg"
+  },
+  {
+    "name": "Shuai Weihao",
+    "first": "Weihao",
+    "last": "Shuai",
+    "aliases": [
+      "Weihao Shuai"
+    ],
+    "country": "China",
+    "country_names": [
+      "China"
+    ],
+    "club": "Chengdu Rongcheng",
+    "league": "Chinese Super League",
+    "dob": "2009-01-05",
+    "height": 178,
+    "foot": "Right",
+    "position": "ST",
+    "secondary": [
+      "AM"
+    ],
+    "gsi": 71,
+    "potential": 84,
+    "playstyle": "Striker who links play, dribbles and sees the pass",
+    "traits": [
+      "Technical Dribbler",
+      "Vision",
+      "Link-Up Play",
+      "First Touch"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "f4007a7f-e09d-584b-8b2a-565b3e5f2072",
+    "external_id": "ng2026_shuai_weihao",
+    "short": "W. Shuai",
+    "age": 17,
+    "positions": [
+      "ST",
+      "AM"
+    ],
+    "position_display": "ST/AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959208/players/portraits/p_f4007a7f_shuai_weihao.jpg",
+    "attributes": {
+      "pace": 75,
+      "shooting": 75,
+      "passing": 65,
+      "dribbling": 73,
+      "defending": 35,
+      "physical": 73,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "finishing": 76,
+      "positioning": 75,
+      "agility": 77
+    },
+    "source_image": "https://media.guim.co.uk/77d5eb234b6078753c171e3a342e4d5ebdb2c264/194_0_3333_2667/500.jpg"
+  },
+  {
+    "name": "Samuel Martínez",
+    "first": "Samuel",
+    "last": "Martínez",
+    "country": "Colombia",
+    "country_names": [
+      "Colombia"
+    ],
+    "club": "Atlético Nacional",
+    "league": "Categoría Primera A",
+    "dob": "2009-04-05",
+    "height": 184,
+    "foot": "Right",
+    "position": "AM",
+    "secondary": [
+      "CM"
+    ],
+    "gsi": 74,
+    "potential": 89,
+    "playstyle": "Attacking midfielder who bursts forward and weights his passes",
+    "traits": [
+      "Explodes Forward",
+      "Incisive Pass",
+      "Game Intelligence",
+      "First Touch"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "055b0f05-9c03-5607-9820-7ca1d9dbff70",
+    "external_id": "ng2026_samuel_martínez",
+    "short": "S. Martínez",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "AM",
+      "CM"
+    ],
+    "position_display": "AM/CM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959209/players/portraits/p_055b0f05_samuel_mart%C3%ADnez.jpg",
+    "attributes": {
+      "pace": 76,
+      "shooting": 74,
+      "passing": 79,
+      "dribbling": 80,
+      "defending": 46,
+      "physical": 70,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "vision": 80,
+      "short_passing": 79
+    },
+    "source_image": "https://media.guim.co.uk/5b7b01d42e5b7618bbbec492825776aaeafde665/1284_454_3838_3070/500.jpg"
+  },
+  {
+    "name": "Hubert Yao Kouassi",
+    "first": "Hubert",
+    "last": "Yao Kouassi",
+    "aliases": [
+      "Hubert Yao"
+    ],
+    "country": "Côte d'Ivoire",
+    "country_names": [
+      "Ivory Coast",
+      "Côte d'Ivoire",
+      "Cote d'Ivoire"
+    ],
+    "club": "Nordsjælland",
+    "league": "Superliga",
+    "dob": "2009-11-05",
+    "height": 190,
+    "foot": null,
+    "position": "LW",
+    "secondary": [
+      "LM"
+    ],
+    "gsi": 71,
+    "potential": 85,
+    "playstyle": "Left-sided forward who creates width and beats his full-back",
+    "traits": [
+      "Speed Dribbler",
+      "Takes On Defenders",
+      "Holds Width",
+      "Flair"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "78ac1470-92b2-5d4d-9e3d-52d25b94161f",
+    "external_id": "ng2026_hubert_yao_kouassi",
+    "short": "H. Yao Kouassi",
+    "age": 17,
+    "positions": [
+      "LW",
+      "LM"
+    ],
+    "position_display": "LW/LM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959210/players/portraits/p_78ac1470_hubert_yao_kouassi.jpg",
+    "attributes": {
+      "pace": 77,
+      "shooting": 69,
+      "passing": 69,
+      "dribbling": 80,
+      "defending": 37,
+      "physical": 67,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "vision": 70,
+      "short_passing": 69,
+      "agility": 79
+    },
+    "source_image": "https://media.guim.co.uk/b4cd4daa1317b0ad01c0b25206a5e6a986df7428/534_77_3120_2496/500.jpg"
+  },
+  {
+    "name": "Christ Batola",
+    "first": "Christ",
+    "last": "Batola",
+    "country": "France",
+    "country_names": [
+      "France"
+    ],
+    "club": "Troyes",
+    "league": "Ligue 2",
+    "dob": "2009-06-03",
+    "height": 187,
+    "foot": "Right",
+    "position": "ST",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 85,
+    "playstyle": "Powerful striker who scores and creates",
+    "traits": [
+      "Power Shot",
+      "Clinical Finisher",
+      "Aerial Fortress",
+      "Creates Chances"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "ae0ec363-cfbc-5959-8a9c-a61a8ebd32e4",
+    "external_id": "ng2026_christ_batola",
+    "short": "C. Batola",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "ST"
+    ],
+    "position_display": "ST",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959212/players/portraits/p_ae0ec363_christ_batola.jpg",
+    "attributes": {
+      "pace": 74,
+      "shooting": 74,
+      "passing": 64,
+      "dribbling": 70,
+      "defending": 34,
+      "physical": 72,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "finishing": 75,
+      "positioning": 74
+    },
+    "source_image": "https://media.guim.co.uk/184fdd3e808421f312ba5e901ddf50d340da7fcd/389_0_3652_2923/500.jpg"
+  },
+  {
+    "name": "Riccardo Cassano",
+    "first": "Riccardo",
+    "last": "Cassano",
+    "aliases": [
+      "Ricky Cassano"
+    ],
+    "country": "Italy",
+    "country_names": [
+      "Italy"
+    ],
+    "club": "Como",
+    "league": "Serie A",
+    "dob": "2009-03-18",
+    "height": 182,
+    "foot": "Right",
+    "position": "CM",
+    "secondary": [
+      "DM"
+    ],
+    "gsi": 71,
+    "potential": 86,
+    "playstyle": "Deep midfielder who controls the tempo of the team",
+    "traits": [
+      "Dictates Tempo",
+      "Press Resistant",
+      "Vision",
+      "Composure"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "cdc1e71b-27ad-5362-bd6c-e9e0085f2227",
+    "external_id": "ng2026_riccardo_cassano",
+    "short": "R. Cassano",
+    "age": 17,
+    "positions": [
+      "CM",
+      "DM"
+    ],
+    "position_display": "CM/DM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959213/players/portraits/p_cdc1e71b_riccardo_cassano.jpg",
+    "attributes": {
+      "pace": 71,
+      "shooting": 65,
+      "passing": 77,
+      "dribbling": 74,
+      "defending": 67,
+      "physical": 71,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "vision": 78,
+      "short_passing": 77
+    },
+    "source_image": "https://media.guim.co.uk/a5da285c67f36da89bcfcacf5518dbfadca9abf5/230_198_2059_1647/500.jpg"
+  },
+  {
+    "name": "Jahmarie Nolan",
+    "first": "Jahmarie",
+    "last": "Nolan",
+    "country": "Jamaica",
+    "country_names": [
+      "Jamaica"
+    ],
+    "club": "Toronto FC",
+    "league": "MLS",
+    "dob": "2009-11-11",
+    "height": 183,
+    "foot": "Right",
+    "position": "ST",
+    "secondary": [
+      "CF"
+    ],
+    "gsi": 71,
+    "potential": 85,
+    "playstyle": "Quick forward who holds the ball up and times his movement",
+    "traits": [
+      "Rapid",
+      "Off The Ball",
+      "Holds Up Play",
+      "Trickster"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "de011a8a-0852-558c-aa00-946dcfefda17",
+    "external_id": "ng2026_jahmarie_nolan",
+    "short": "J. Nolan",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "ST",
+      "CF"
+    ],
+    "position_display": "ST/CF",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959214/players/portraits/p_de011a8a_jahmarie_nolan.jpg",
+    "attributes": {
+      "pace": 75,
+      "shooting": 75,
+      "passing": 65,
+      "dribbling": 71,
+      "defending": 35,
+      "physical": 73,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "finishing": 76,
+      "positioning": 75
+    },
+    "source_image": "https://media.guim.co.uk/5db180a70eb00a9880fa9899e25844092bc5db92/1525_23_2926_2341/500.jpg"
+  },
+  {
+    "name": "Maki Kitahara",
+    "first": "Maki",
+    "last": "Kitahara",
+    "country": "Japan",
+    "country_names": [
+      "Japan"
+    ],
+    "club": "Fujieda MYFC",
+    "league": "J2 League",
+    "dob": "2009-07-07",
+    "height": 175,
+    "foot": "Right",
+    "position": "CM",
+    "secondary": [
+      "AM"
+    ],
+    "gsi": 73,
+    "potential": 87,
+    "playstyle": "Technical midfielder who finishes with either foot after carrying the ball",
+    "traits": [
+      "Two-Footed Finisher",
+      "Technical Dribbler",
+      "Vision",
+      "Press Proven"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 4,
+    "notes": "On loan from FC Tokyo",
+    "id": "07e874ed-598e-57c8-a976-5fe7dfe631e2",
+    "external_id": "ng2026_maki_kitahara",
+    "short": "M. Kitahara",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "CM",
+      "AM"
+    ],
+    "position_display": "CM/AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959215/players/portraits/p_07e874ed_maki_kitahara.jpg",
+    "attributes": {
+      "pace": 73,
+      "shooting": 67,
+      "passing": 79,
+      "dribbling": 78,
+      "defending": 69,
+      "physical": 73,
+      "skill_moves": 4,
+      "weak_foot": 4,
+      "vision": 80,
+      "short_passing": 79,
+      "agility": 75
+    },
+    "source_image": "https://media.guim.co.uk/949c144452626986d61e4f225dd9f5b55358cee6/783_60_4755_3804/500.jpg"
+  },
+  {
+    "name": "Ismaël Kamissoko",
+    "first": "Ismaël",
+    "last": "Kamissoko",
+    "country": "Mali",
+    "country_names": [
+      "Mali"
+    ],
+    "club": "Étoiles du Mandé",
+    "league": "Malien Première Division",
+    "dob": "2009-01-04",
+    "height": 183,
+    "foot": null,
+    "position": "CM",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Central midfielder who moves the ball forward through his teammates",
+    "traits": [
+      "Incisive Pass",
+      "Dictates Tempo",
+      "Leadership",
+      "Press Proven"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "3d938b70-c36d-57ed-9a9f-f5bb2774bff0",
+    "external_id": "ng2026_ismaël_kamissoko",
+    "short": "I. Kamissoko",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "CM"
+    ],
+    "position_display": "CM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959216/players/portraits/p_3d938b70_isma%C3%ABl_kamissoko.jpg",
+    "attributes": {
+      "pace": 70,
+      "shooting": 64,
+      "passing": 76,
+      "dribbling": 73,
+      "defending": 66,
+      "physical": 70,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "vision": 77,
+      "short_passing": 76
+    },
+    "source_image": "https://media.guim.co.uk/2e92dde03e552202de383470198e17c52f4c6f35/0_318_2891_2312/500.jpg"
+  },
+  {
+    "name": "Alberto Santiago Cisneros",
+    "first": "Alberto Santiago",
+    "last": "Cisneros",
+    "aliases": [
+      "Santiago Cisneros"
+    ],
+    "country": "Mexico",
+    "country_names": [
+      "Mexico"
+    ],
+    "club": "Club León",
+    "league": "Liga MX",
+    "dob": "2009-08-11",
+    "height": 170,
+    "foot": null,
+    "position": "AM",
+    "secondary": [
+      "RW"
+    ],
+    "gsi": 70,
+    "potential": 85,
+    "playstyle": "Inverted attacker who cuts inside and shoots from distance",
+    "traits": [
+      "Cuts Inside From Wing",
+      "Long Shot Taker",
+      "Two-Footed",
+      "Dictates Tempo"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 4,
+    "id": "b04be261-c8ef-5d12-b80b-3d1573c18d7c",
+    "external_id": "ng2026_alberto_santiago_cisneros",
+    "short": "A. Cisneros",
+    "age": 17,
+    "positions": [
+      "AM",
+      "RW"
+    ],
+    "position_display": "AM/RW",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959217/players/portraits/p_b04be261_alberto_santiago_cisneros.jpg",
+    "attributes": {
+      "pace": 72,
+      "shooting": 70,
+      "passing": 75,
+      "dribbling": 76,
+      "defending": 42,
+      "physical": 66,
+      "skill_moves": 4,
+      "weak_foot": 4,
+      "vision": 76,
+      "short_passing": 75
+    },
+    "source_image": "https://media.guim.co.uk/9f0c9aa47a87e33e2d5a966269dc5d33a1aa7f53/0_58_1800_1440/500.jpg"
+  },
+  {
+    "name": "Elías Díaz",
+    "first": "Elías",
+    "last": "Díaz",
+    "country": "Paraguay",
+    "country_names": [
+      "Paraguay"
+    ],
+    "club": "Libertad",
+    "league": "Primera División (Paraguay)",
+    "dob": "2009-01-20",
+    "height": 190,
+    "foot": "Right",
+    "position": "CB",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Tall centre-back who wins the ball in the air and on the ground",
+    "traits": [
+      "Aerial Fortress",
+      "Ball Winner",
+      "Quick Step",
+      "Strength"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 2,
+    "id": "5bd5a4ca-c340-54dc-889d-0df1f0d1afba",
+    "external_id": "ng2026_elías_díaz",
+    "short": "E. Díaz",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "CB"
+    ],
+    "position_display": "CB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959219/players/portraits/p_5bd5a4ca_el%C3%ADas_d%C3%ADaz.jpg",
+    "attributes": {
+      "pace": 66,
+      "shooting": 40,
+      "passing": 66,
+      "dribbling": 62,
+      "defending": 74,
+      "physical": 74,
+      "skill_moves": 2,
+      "weak_foot": 2,
+      "tackling": 74,
+      "interceptions": 75
+    },
+    "source_image": "https://media.guim.co.uk/e2949fa9c399e5299d410e4dd77df4a6ccc83da9/6_185_4411_3528/500.jpg"
+  },
+  {
+    "name": "Mezian Mesloub Soares",
+    "first": "Mezian",
+    "last": "Mesloub Soares",
+    "aliases": [
+      "Mezian Mesloub"
+    ],
+    "country": "Portugal",
+    "country_names": [
+      "Portugal"
+    ],
+    "club": "Lens",
+    "league": "Ligue 1",
+    "dob": "2009-11-08",
+    "height": 180,
+    "foot": "Left",
+    "position": "AM",
+    "secondary": [
+      "ST"
+    ],
+    "gsi": 74,
+    "potential": 88,
+    "playstyle": "Left-footed attacking midfielder who strikes immediately when he arrives",
+    "traits": [
+      "Impact Substitute",
+      "Clinical Finisher",
+      "Composure",
+      "First Touch"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "72b67aaa-9fb8-574c-99d1-621d218ddaf9",
+    "external_id": "ng2026_mezian_mesloub_soares",
+    "short": "M. Mesloub Soares",
+    "age": 17,
+    "positions": [
+      "AM",
+      "ST"
+    ],
+    "position_display": "AM/ST",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959220/players/portraits/p_72b67aaa_mezian_mesloub_soares.jpg",
+    "attributes": {
+      "pace": 76,
+      "shooting": 74,
+      "passing": 79,
+      "dribbling": 80,
+      "defending": 46,
+      "physical": 70,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "vision": 80,
+      "short_passing": 79
+    },
+    "source_image": "https://media.guim.co.uk/23116b9d48b03ec6454f284afad77173412685ac/113_17_2291_1833/500.jpg"
+  },
+  {
+    "name": "Caleb Simmons",
+    "first": "Caleb",
+    "last": "Simmons",
+    "country": "Puerto Rico",
+    "country_names": [
+      "Puerto Rico"
+    ],
+    "club": "New York Red Bulls",
+    "league": "MLS",
+    "dob": "2009-05-08",
+    "height": 183,
+    "foot": "Right",
+    "position": "DM",
+    "secondary": [
+      "CB"
+    ],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Defensive midfielder who intercepts and distributes from deep",
+    "traits": [
+      "Intercept",
+      "Dictates Tempo",
+      "Progressive Passing",
+      "Leadership"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "d585a610-bdc0-5b48-9623-4b504dee187c",
+    "external_id": "ng2026_caleb_simmons",
+    "short": "C. Simmons",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "DM",
+      "CB"
+    ],
+    "position_display": "DM/CB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959221/players/portraits/p_d585a610_caleb_simmons.jpg",
+    "attributes": {
+      "pace": 68,
+      "shooting": 60,
+      "passing": 76,
+      "dribbling": 72,
+      "defending": 74,
+      "physical": 72,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "tackling": 74,
+      "interceptions": 75,
+      "vision": 77,
+      "short_passing": 76
+    },
+    "source_image": "https://media.guim.co.uk/3abbc17d626b66c967d9ce533ebfd2b1acf4d922/516_431_2182_1746/500.jpg"
+  },
+  {
+    "name": "Eduardo Corlat",
+    "first": "Eduardo",
+    "last": "Corlat",
+    "aliases": [
+      "Edu Corlat"
+    ],
+    "country": "Romania",
+    "country_names": [
+      "Romania"
+    ],
+    "club": "Real Madrid",
+    "league": "Real Madrid youth",
+    "dob": "2009-02-17",
+    "height": 185,
+    "foot": null,
+    "position": "CB",
+    "secondary": [],
+    "gsi": 71,
+    "potential": 86,
+    "playstyle": "Centre-back who steps out and plays through pressure",
+    "traits": [
+      "Plays Out From The Back",
+      "Positioning",
+      "Composure",
+      "Leadership"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 3,
+    "id": "ca68a26c-2cc6-51dc-9d34-739054d33011",
+    "external_id": "ng2026_eduardo_corlat",
+    "short": "E. Corlat",
+    "age": 17,
+    "positions": [
+      "CB"
+    ],
+    "position_display": "CB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959222/players/portraits/p_ca68a26c_eduardo_corlat.jpg",
+    "attributes": {
+      "pace": 67,
+      "shooting": 41,
+      "passing": 67,
+      "dribbling": 63,
+      "defending": 75,
+      "physical": 75,
+      "skill_moves": 2,
+      "weak_foot": 3,
+      "tackling": 75,
+      "interceptions": 76
+    },
+    "source_image": "https://media.guim.co.uk/b5ab3c0f02fbfab8e2ced36ae5c4dd321d620b15/397_106_2273_1818/500.jpg"
+  },
+  {
+    "name": "Cheikh Dieng",
+    "first": "Cheikh",
+    "last": "Dieng",
+    "country": "Senegal",
+    "country_names": [
+      "Senegal"
+    ],
+    "club": "Diambars FC",
+    "league": "Senegal Premier League",
+    "dob": "2009-03-07",
+    "height": 182,
+    "foot": "Left",
+    "position": "CB",
+    "secondary": [],
+    "gsi": 71,
+    "potential": 85,
+    "playstyle": "Left-footed centre-back who wins duels and organises the line",
+    "traits": [
+      "Ball Winner",
+      "Leadership",
+      "Tactical Discipline",
+      "Strength"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 2,
+    "id": "de9a95c8-935e-5b4b-b7fe-1ab326959d1a",
+    "external_id": "ng2026_cheikh_dieng",
+    "short": "C. Dieng",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "CB"
+    ],
+    "position_display": "CB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959223/players/portraits/p_de9a95c8_cheikh_dieng.jpg",
+    "attributes": {
+      "pace": 67,
+      "shooting": 41,
+      "passing": 67,
+      "dribbling": 63,
+      "defending": 75,
+      "physical": 75,
+      "skill_moves": 2,
+      "weak_foot": 2,
+      "tackling": 75,
+      "interceptions": 76
+    },
+    "source_image": "https://media.guim.co.uk/3da7c8a1231876fd707a84854effc529c6744f71/77_273_6498_5199/500.jpg"
+  },
+  {
+    "name": "Tiago Rodrigues",
+    "first": "Tiago",
+    "last": "Rodrigues",
+    "country": "Portugal",
+    "country_names": [
+      "Portugal"
+    ],
+    "club": "Benfica",
+    "league": "Liga Portugal 2",
+    "dob": "2009-01-25",
+    "height": null,
+    "foot": "Left",
+    "position": "LW",
+    "secondary": [
+      "AM"
+    ],
+    "gsi": 71,
+    "potential": 85,
+    "playstyle": "Left-footed winger and No 10 with a smooth touch",
+    "traits": [
+      "Technical Dribbler",
+      "Left Foot",
+      "Composure",
+      "First Touch"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 2,
+    "notes": "Benfica B / under-23 winger",
+    "id": "48fead83-f1e1-535d-9cb7-353c443c2d2a",
+    "external_id": "ng2026_tiago_rodrigues",
+    "short": "T. Rodrigues",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "LW",
+      "AM"
+    ],
+    "position_display": "LW/AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959224/players/portraits/p_48fead83_tiago_rodrigues.jpg",
+    "attributes": {
+      "pace": 77,
+      "shooting": 69,
+      "passing": 69,
+      "dribbling": 80,
+      "defending": 37,
+      "physical": 67,
+      "skill_moves": 4,
+      "weak_foot": 2,
+      "vision": 70,
+      "short_passing": 69,
+      "agility": 79
+    },
+    "source_image": "https://media.guim.co.uk/1277663f389d3fd2f163858bb2da222e17db0720/1367_594_2470_1976/500.jpg"
+  },
+  {
+    "name": "Miha Matjasec",
+    "first": "Miha",
+    "last": "Matjasec",
+    "aliases": [
+      "Miha Matjašec"
+    ],
+    "country": "Slovenia",
+    "country_names": [
+      "Slovenia"
+    ],
+    "club": "FC Liefering",
+    "league": "2. Liga (Austria)",
+    "dob": "2009-02-22",
+    "height": 184,
+    "foot": "Left",
+    "position": "RW",
+    "secondary": [
+      "CM",
+      "AM"
+    ],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Left-footed wide midfielder with a box-to-box engine",
+    "traits": [
+      "Relentless",
+      "Technical Dribbler",
+      "Leadership",
+      "Versatile"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "30eba2ac-c794-50b7-a26e-ad4c6b96f537",
+    "external_id": "ng2026_miha_matjasec",
+    "short": "M. Matjasec",
+    "age": 17,
+    "positions": [
+      "RW",
+      "CM",
+      "AM"
+    ],
+    "position_display": "RW/CM/AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959225/players/portraits/p_30eba2ac_miha_matjasec.jpg",
+    "attributes": {
+      "pace": 76,
+      "shooting": 68,
+      "passing": 68,
+      "dribbling": 79,
+      "defending": 36,
+      "physical": 66,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "vision": 69,
+      "short_passing": 68,
+      "agility": 78
+    },
+    "source_image": "https://media.guim.co.uk/ceb0f919bc9b9ec281bb240f337b4f08ac824f92/2472_538_3763_3010/500.jpg"
+  },
+  {
+    "name": "Jorge Domínguez",
+    "first": "Jorge",
+    "last": "Domínguez",
+    "country": "Spain",
+    "country_names": [
+      "Spain"
+    ],
+    "club": "Atlético Madrid",
+    "league": "La Liga",
+    "dob": "2009-12-21",
+    "height": 195,
+    "foot": "Right",
+    "position": "CB",
+    "secondary": [
+      "RB"
+    ],
+    "gsi": 73,
+    "potential": 87,
+    "playstyle": "Tall, quick centre-back who can also play right-back",
+    "traits": [
+      "Aerial Fortress",
+      "Quick Step",
+      "Strength",
+      "Plays Out From The Back"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 2,
+    "id": "7cc80b52-2f13-5448-b2aa-80f7b999bd82",
+    "external_id": "ng2026_jorge_domínguez",
+    "short": "J. Domínguez",
+    "aliases": [],
+    "age": 16,
+    "positions": [
+      "CB",
+      "RB"
+    ],
+    "position_display": "CB/RB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959226/players/portraits/p_7cc80b52_jorge_dom%C3%ADnguez.jpg",
+    "attributes": {
+      "pace": 69,
+      "shooting": 43,
+      "passing": 69,
+      "dribbling": 65,
+      "defending": 77,
+      "physical": 77,
+      "skill_moves": 2,
+      "weak_foot": 2,
+      "tackling": 77,
+      "interceptions": 78
+    },
+    "source_image": "https://media.guim.co.uk/6b64ce50e90b549ed03d62c8573283550579867c/486_220_4199_3360/500.jpg"
+  },
+  {
+    "name": "Oliver Månsson",
+    "first": "Oliver",
+    "last": "Månsson",
+    "country": "Sweden",
+    "country_names": [
+      "Sweden"
+    ],
+    "club": "IFK Gothenburg",
+    "league": "Allsvenskan",
+    "dob": "2009-08-04",
+    "height": 184,
+    "foot": null,
+    "position": "DM",
+    "secondary": [
+      "CM"
+    ],
+    "gsi": 70,
+    "potential": 83,
+    "playstyle": "No 6 who can also step higher and keeps working",
+    "traits": [
+      "Holding Anchor",
+      "Hard Working",
+      "Composure",
+      "Positioning"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 3,
+    "id": "6b4cfd01-5a2f-571d-8bbc-254ca7adf1b0",
+    "external_id": "ng2026_oliver_månsson",
+    "short": "O. Månsson",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "DM",
+      "CM"
+    ],
+    "position_display": "DM/CM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959226/players/portraits/p_6b4cfd01_oliver_m%C3%A5nsson.jpg",
+    "attributes": {
+      "pace": 68,
+      "shooting": 60,
+      "passing": 76,
+      "dribbling": 72,
+      "defending": 74,
+      "physical": 72,
+      "skill_moves": 2,
+      "weak_foot": 3,
+      "tackling": 74,
+      "interceptions": 75,
+      "vision": 77,
+      "short_passing": 76
+    },
+    "source_image": "https://media.guim.co.uk/095b607c5b456f60321642ad559ae5c7dce73e90/0_248_2000_1600/500.jpg"
+  },
+  {
+    "name": "Altin Azemi",
+    "first": "Altin",
+    "last": "Azemi",
+    "country": "Switzerland",
+    "country_names": [
+      "Switzerland"
+    ],
+    "club": "Neuchâtel Xamax",
+    "league": "Challenge League",
+    "dob": "2009-04-29",
+    "height": 178,
+    "foot": "Right",
+    "position": "AM",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Elegant attacking midfielder and dead-ball specialist",
+    "traits": [
+      "Dead Ball Specialist",
+      "Finesse Shot",
+      "Technique",
+      "Vision"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "04781f48-20f5-5cef-98ce-31c2c832ef6b",
+    "external_id": "ng2026_altin_azemi",
+    "short": "A. Azemi",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "AM"
+    ],
+    "position_display": "AM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959227/players/portraits/p_04781f48_altin_azemi.jpg",
+    "attributes": {
+      "pace": 72,
+      "shooting": 70,
+      "passing": 75,
+      "dribbling": 76,
+      "defending": 42,
+      "physical": 66,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "vision": 76,
+      "short_passing": 75
+    },
+    "source_image": "https://media.guim.co.uk/382f9e358de9a27bad28b9e3060d8054533af908/267_166_2894_2316/500.jpg"
+  },
+  {
+    "name": "Mekhrubon Odilzoda",
+    "first": "Mekhrubon",
+    "last": "Odilzoda",
+    "country": "Tajikistan",
+    "country_names": [
+      "Tajikistan"
+    ],
+    "club": "Istiklol",
+    "league": "Tajikistan Higher League",
+    "dob": "2009-09-15",
+    "height": 178,
+    "foot": "Right",
+    "position": "DM",
+    "secondary": [],
+    "gsi": 69,
+    "potential": 83,
+    "playstyle": "Composed defensive midfielder who arrives late and splits the line",
+    "traits": [
+      "Composure",
+      "Arrives Late In Box",
+      "Incisive Pass",
+      "Intercept"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 3,
+    "id": "68a9a8cf-93ef-56df-87da-9dcdd599a6c1",
+    "external_id": "ng2026_mekhrubon_odilzoda",
+    "short": "M. Odilzoda",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "DM"
+    ],
+    "position_display": "DM",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959228/players/portraits/p_68a9a8cf_mekhrubon_odilzoda.jpg",
+    "attributes": {
+      "pace": 67,
+      "shooting": 59,
+      "passing": 75,
+      "dribbling": 71,
+      "defending": 73,
+      "physical": 71,
+      "skill_moves": 2,
+      "weak_foot": 3,
+      "tackling": 73,
+      "interceptions": 74,
+      "vision": 76,
+      "short_passing": 75
+    },
+    "source_image": "https://media.guim.co.uk/575af8feab675b51c63800f865d01c6c219ebc75/0_48_3367_2692/500.jpg"
+  },
+  {
+    "name": "Slim Bouaskar",
+    "first": "Slim",
+    "last": "Bouaskar",
+    "country": "Tunisia",
+    "country_names": [
+      "Tunisia"
+    ],
+    "club": "AS Roma",
+    "league": "Roma youth",
+    "dob": "2009-06-24",
+    "height": 188,
+    "foot": null,
+    "position": "GK",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Goalkeeper who commands the box, reads the game and reacts sharply",
+    "traits": [
+      "Commands Area",
+      "Rushes Out Of Goal",
+      "Reflexes",
+      "Reads The Game"
+    ],
+    "skill_moves": 1,
+    "weak_foot": 3,
+    "id": "b0bc73e1-42fb-5a29-9cab-29d42ea5c7b3",
+    "external_id": "ng2026_slim_bouaskar",
+    "short": "S. Bouaskar",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "GK"
+    ],
+    "position_display": "GK",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959230/players/portraits/p_b0bc73e1_slim_bouaskar.jpg",
+    "attributes": {
+      "pace": 48,
+      "shooting": 28,
+      "passing": 58,
+      "dribbling": 40,
+      "defending": 62,
+      "physical": 72,
+      "skill_moves": 1,
+      "weak_foot": 3,
+      "reflexes": 76,
+      "handling": 74,
+      "kicking": 68,
+      "positioning": 72
+    },
+    "source_image": "https://media.guim.co.uk/9aa3129c2addfc715d17b790d9391b4dbfe45ffd/0_283_2949_2357/500.jpg"
+  },
+  {
+    "name": "Ali Demirbilek",
+    "first": "Ali",
+    "last": "Demirbilek",
+    "country": "Turkey",
+    "country_names": [
+      "Turkey"
+    ],
+    "club": "Fenerbahçe",
+    "league": "Süper Lig",
+    "dob": "2009-01-05",
+    "height": 175,
+    "foot": "Right",
+    "position": "RW",
+    "secondary": [
+      "LW"
+    ],
+    "gsi": 69,
+    "potential": 83,
+    "playstyle": "Winger who can play on either flank",
+    "traits": [
+      "Versatile Winger",
+      "Flair",
+      "Quick Step",
+      "Direct Runner"
+    ],
+    "skill_moves": 4,
+    "weak_foot": 3,
+    "id": "dcebb0ed-c78a-51de-93a3-4b4de00166f7",
+    "external_id": "ng2026_ali_demirbilek",
+    "short": "A. Demirbilek",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "RW",
+      "LW"
+    ],
+    "position_display": "RW/LW",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959231/players/portraits/p_dcebb0ed_ali_demirbilek.jpg",
+    "attributes": {
+      "pace": 75,
+      "shooting": 67,
+      "passing": 67,
+      "dribbling": 78,
+      "defending": 35,
+      "physical": 65,
+      "skill_moves": 4,
+      "weak_foot": 3,
+      "vision": 68,
+      "short_passing": 67,
+      "agility": 77
+    },
+    "source_image": "https://media.guim.co.uk/bf476b04a047a14f00f424e1f74a065a956791f8/444_4_4523_3621/500.jpg"
+  },
+  {
+    "name": "Ada Yüzgeç",
+    "first": "Ada",
+    "last": "Yüzgeç",
+    "aliases": [
+      "Ada Yuzgec"
+    ],
+    "country": "Turkey",
+    "country_names": [
+      "Turkey"
+    ],
+    "club": "Galatasaray",
+    "league": "Süper Lig",
+    "dob": "2009-04-03",
+    "height": 180,
+    "foot": null,
+    "position": "ST",
+    "secondary": [],
+    "gsi": 71,
+    "potential": 84,
+    "playstyle": "Centre-forward already strong enough for senior minutes",
+    "traits": [
+      "Physical Striker",
+      "Clinical Finisher",
+      "Strength",
+      "Work Rate"
+    ],
+    "skill_moves": 3,
+    "weak_foot": 3,
+    "id": "260371db-2bb3-5d7a-86e2-437c3edb1806",
+    "external_id": "ng2026_ada_yüzgeç",
+    "short": "A. Yüzgeç",
+    "age": 17,
+    "positions": [
+      "ST"
+    ],
+    "position_display": "ST",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959232/players/portraits/p_260371db_ada_y%C3%BCzge%C3%A7.jpg",
+    "attributes": {
+      "pace": 75,
+      "shooting": 75,
+      "passing": 65,
+      "dribbling": 71,
+      "defending": 35,
+      "physical": 73,
+      "skill_moves": 3,
+      "weak_foot": 3,
+      "finishing": 76,
+      "positioning": 75
+    },
+    "source_image": "https://media.guim.co.uk/5e2603418332bf8add47cc8851508381829e06a5/393_0_3933_3146/500.jpg"
+  },
+  {
+    "name": "Gabriel da Silva",
+    "first": "Gabriel",
+    "last": "da Silva",
+    "country": "Uruguay",
+    "country_names": [
+      "Uruguay"
+    ],
+    "club": "Peñarol",
+    "league": "Primera División (Uruguay)",
+    "dob": "2009-01-13",
+    "height": 183,
+    "foot": null,
+    "position": "CB",
+    "secondary": [],
+    "gsi": 70,
+    "potential": 84,
+    "playstyle": "Centre-back who covers the line, intercepts and plays forward",
+    "traits": [
+      "Covers The Backline",
+      "Intercept",
+      "Plays Vertical",
+      "Times Tackles"
+    ],
+    "skill_moves": 2,
+    "weak_foot": 3,
+    "id": "d8c82f73-3981-5065-8cd9-18125875b986",
+    "external_id": "ng2026_gabriel_da_silva",
+    "short": "G. da Silva",
+    "aliases": [],
+    "age": 17,
+    "positions": [
+      "CB"
+    ],
+    "position_display": "CB",
+    "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959233/players/portraits/p_d8c82f73_gabriel_da_silva.jpg",
+    "attributes": {
+      "pace": 66,
+      "shooting": 40,
+      "passing": 66,
+      "dribbling": 62,
+      "defending": 74,
+      "physical": 74,
+      "skill_moves": 2,
+      "weak_foot": 3,
+      "tackling": 74,
+      "interceptions": 75
+    },
+    "source_image": "https://media.guim.co.uk/fd942b85e5331fa0941a6303e6c5b8abc74adc44/339_1659_3446_2757/500.jpg"
+  }
+]
