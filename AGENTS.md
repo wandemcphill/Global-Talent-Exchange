@@ -8,6 +8,7 @@
 - Matchday 3D visual bar: Football Manager 23 class (not Flutter 2.5D)
 
 ## Rules
+- Canonical production API is `https://gtex-api-2gtu.onrender.com`. Do not use `https://gtex-api.onrender.com`.
 - Never break batchmode builds
 - Avoid heavy assets unless necessary
 - Prioritize performance over realism

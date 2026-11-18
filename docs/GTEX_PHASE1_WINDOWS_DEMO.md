@@ -65,7 +65,7 @@ Format:
   "matchId": "",
   "environment": "local",
   "localBaseUrl": "http://127.0.0.1:8000",
-  "productionBaseUrl": "https://gtex-api.onrender.com",
+  "productionBaseUrl": "https://gtex-api-2gtu.onrender.com",
   "customBaseUrl": "",
   "liveAccessToken": "",
   "liveRefreshToken": "",

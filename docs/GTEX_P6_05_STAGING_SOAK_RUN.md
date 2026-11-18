@@ -98,7 +98,7 @@ Repo-side completion:
 - summary/log artifact format is now defined
 
 Accepted executed evidence on the production lane:
-- the same soak runner was exercised against `https://gtex-api.onrender.com` with a production profile
+- the same soak runner was exercised against `https://gtex-api-2gtu.onrender.com` with a production profile
 - the shipped Windows player remained alive through the full `900s` capture window and produced saved checkpoints at:
   - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0015s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0015s.png>)
   - [C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tmp\gtex_production_soak\capture\gtex_production_soak_t0300s.png](</C:/Users/ayomc/Desktop/GLOBAL TALENT EXCHANGE/tmp/gtex_production_soak/capture/gtex_production_soak_t0300s.png>)

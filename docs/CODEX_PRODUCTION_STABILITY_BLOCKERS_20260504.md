@@ -4,7 +4,7 @@ Date: May 4, 2026
 
 ## Scope
 
-This handoff captures the production stability issues observed during live verification against [https://gtex-api.onrender.com](https://gtex-api.onrender.com), with emphasis on wallet read concurrency, host recovery after burst load, and live match/websocket readiness.
+This handoff captures the production stability issues observed during live verification against [https://gtex-api-2gtu.onrender.com](https://gtex-api-2gtu.onrender.com), with emphasis on wallet read concurrency, host recovery after burst load, and live match/websocket readiness.
 
 ## Executive Summary
 

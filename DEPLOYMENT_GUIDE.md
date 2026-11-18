@@ -117,7 +117,7 @@ The workflow reads the same variable names in both environments, but GitHub reso
 Run this after any manual Render rollout or when validating a hosted incident:
 
 ```powershell
-python ops/render/verify_unity_routes.py --url "https://gtex-api.onrender.com/health"
+python ops/render/verify_unity_routes.py --url "https://gtex-api-2gtu.onrender.com/health"
 ```
 
 This accepts either the API base URL or the health URL and fails if the hosted deployment does not expose the Unity access and refresh routes expected by the GTEX Unity runtime.
@@ -127,7 +127,7 @@ To verify hosted live playback end-to-end without mutating local Unity files:
 ```powershell
 python tools/provision_gtex_live_match.py `
   --profile staging `
-  --base-url "https://gtex-api.onrender.com" `
+  --base-url "https://gtex-api-2gtu.onrender.com" `
   --user-email "<viewer-email>" `
   --user-password "<viewer-password>" `
   --allow-match-generation `

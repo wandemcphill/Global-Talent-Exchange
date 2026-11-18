@@ -85,14 +85,14 @@ Execution date:
 - `2026-04-22`
 
 Executed target:
-- production API at `https://gtex-api.onrender.com`
+- production API at `https://gtex-api-2gtu.onrender.com`
 
 Runner command:
 
 ```powershell
 & 'C:\Users\ayomc\Desktop\GLOBAL TALENT EXCHANGE\tools\run_gtex_hosted_live_verification.ps1' `
   -Profile production `
-  -BaseUrl 'https://gtex-api.onrender.com' `
+  -BaseUrl 'https://gtex-api-2gtu.onrender.com' `
   -UserEmail '<provided verification account>' `
   -UserPassword '<provided verification password>' `
   -AllowMatchGeneration

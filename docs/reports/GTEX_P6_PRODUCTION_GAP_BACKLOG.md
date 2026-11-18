@@ -17,7 +17,7 @@ It does not replace phase gating. It translates the verified frontend, backend, 
 These values and decisions were provided by the user and can now be treated as real project inputs unless later changed explicitly.
 
 - Staging API base URL: `https://gtex-api-69rq.onrender.com`
-- Production API base URL: `https://gtex-api.onrender.com`
+- Production API base URL: `https://gtex-api-2gtu.onrender.com`
 - Non-canonical production backend hostname received earlier:
   - `https://api.gtex.onrender.com`
   - Treat this as superseded for production config unless the user explicitly reactivates it later.
@@ -29,7 +29,7 @@ These values and decisions were provided by the user and can now be treated as r
   - `redirect_url` is for the user browser, not the server-to-server webhook
   - `notification_url` is for KoraPay's server-to-server callback
   - provided redirect URL: `https://gtex-web.onrender.com/`
-  - resolved production notification URL: `https://gtex-api.onrender.com/integrations/payments/korapay/webhook`
+  - resolved production notification URL: `https://gtex-api-2gtu.onrender.com/integrations/payments/korapay/webhook`
   - note: this final URL is derived by applying the user-confirmed canonical production backend hostname to the repo-verified webhook route
   - do not point `GTE_KORAPAY_REDIRECT_URL` at the webhook endpoint
 - Bootstrap admin plan provided:
@@ -534,7 +534,7 @@ Honest blockers:
 
 These are the real inputs still missing after the 2026-04-23 update:
 
-1. Confirm that deployed production config now uses `https://gtex-api.onrender.com` as the canonical backend hostname for frontend builds, payment callbacks, and operator docs.
+1. Confirm that deployed production config now uses `https://gtex-api-2gtu.onrender.com` as the canonical backend hostname for frontend builds, payment callbacks, and operator docs.
 2. Confirm that the bootstrap admin password is present in vault and injected into the real staging and production environments.
 
 ## P6-11 Repo-Side Verification & Final Gate Review Note (`2026-10-21`)
@@ -546,7 +546,7 @@ All repository-side `P6` current-engine hardening checks (`P6-01` through `P6-10
   - `P6-02` (`docs/GTEX_P6_02_CURRENT_ENGINE_OWNERSHIP_AUDIT.md`): `PASSED` — `LegacyBootstrap` remains the default shipped ownership path in `GtexMatchController`, with GTEX seams owning runtime/atmosphere/scoreboard integration.
   - `P6-03` (`docs/GTEX_P6_03_FULL_SESSION_PLAYBACK_VALIDATION.md`): `PASSED` — Full `0'`–`90'` live playback session verified on the shipped Windows player with moving players, moving ball, monotonic clock/score, and stable camera presets.
   - `P6-04` (`docs/GTEX_P6_04_RELEASE_PATH_AUDIT.md`): `PASSED` — Production `GTEX_PROD` player suppresses `GtexLiveStartupOverlay`, hides `TeamTacticsUI`, and eliminates kinematic ball rigidbody warnings.
-  - `P6-05` (`docs/GTEX_P6_05_STAGING_SOAK_RUN.md`): `PASSED` — Continuous 15-minute (`900s`) soak verified against the deployed production lane (`https://gtex-api.onrender.com`) via `tools/run_gtex_staging_soak.ps1`.
+  - `P6-05` (`docs/GTEX_P6_05_STAGING_SOAK_RUN.md`): `PASSED` — Continuous 15-minute (`900s`) soak verified against the deployed production lane (`https://gtex-api-2gtu.onrender.com`) via `tools/run_gtex_staging_soak.ps1`.
   - `P6-06` (`docs/GTEX_P6_06_HOSTED_LIVE_VERIFICATION.md`): `PASSED` — Post-deploy match provisioning, Unity access/refresh issuance, live payload hydration, and websocket frame advancement verified via `tools/run_gtex_hosted_live_verification.ps1`.
   - `P6-07` (`docs/GTEX_P6_07_LIVE_OBSERVABILITY.md`): `PASSED` — GTEX live playback metrics, Grafana dashboard (`ops/observability/grafana/dashboards/gtex-live-playback.json`), and Prometheus alert rules (`ops/observability/prometheus/rules/gtex-alerts.yml`) committed and tested.
   - `P6-08` (`ops/gtex-live-playback-rollback-runbook.md`): `PASSED` — Operator rollback runbook with triggers `R1`–`R5`, manual rollback order, and post-rollback verification committed.

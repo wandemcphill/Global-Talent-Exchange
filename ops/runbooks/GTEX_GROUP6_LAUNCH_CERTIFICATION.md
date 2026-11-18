@@ -12,7 +12,7 @@ A lane must not be marked complete from evidence belonging to another lane.
 
 ## Mandatory runtime inputs
 
-- Canonical backend URL: `https://gtex-api.onrender.com` unless the deployment record explicitly supersedes it.
+- Canonical backend URL: `https://gtex-api-2gtu.onrender.com` unless the deployment record explicitly supersedes it.
 - Bootstrap admin secret stored in the deployment vault and injected into staging/production.
 - Live KoraPay secret, webhook secret, redirect URL and public notification URL.
 - Approved 5000+ real-player import cohort plus issuance rules and liquidity policy.

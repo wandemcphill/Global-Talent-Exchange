@@ -543,7 +543,7 @@ def _render_env_audit(frontend_calls: list[dict]) -> str:
             "",
             "## Backend / Web Deploy",
             "",
-            "- `render.yaml` configures `gtex-web` with `GTE_API_BASE_URL=https://gtex-api.onrender.com` and `GTE_BACKEND_MODE=live`.",
+            "- `render.yaml` configures `gtex-web` with `GTE_API_BASE_URL=https://gtex-api-2gtu.onrender.com` and `GTE_BACKEND_MODE=live`.",
             "- `render.yaml` configures `gtex-api` as the single backend origin for production traffic.",
             "",
             "## Flutter Runtime Config",
