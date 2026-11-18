@@ -130,7 +130,9 @@ class AIReporterService:
             story_types = BEAT_STORY_TYPES.get(beat.strip().lower(), ())
             if story_types:
                 stmt = stmt.where(StoryFeedItem.story_type.in_(story_types))
-        stmt = stmt.order_by(StoryFeedItem.featured.desc(), StoryFeedItem.created_at.desc()).limit(max(1, min(limit, 100)))
+        stmt = stmt.order_by(StoryFeedItem.featured.desc(), StoryFeedItem.created_at.desc()).limit(
+            max(1, min(limit, 100))
+        )
         return [self._item_view(item) for item in self.session.scalars(stmt).all()]
 
     def _drafts_for_beat(self, beat: str, *, limit: int) -> list[ReporterDraft]:
@@ -218,7 +220,9 @@ class AIReporterService:
         ).all()
         drafts: list[ReporterDraft] = []
         for regen, player, club in rows:
-            potential = dict(regen.potential_range_json or {}).get("maximum") or dict(regen.potential_range_json or {}).get("max")
+            potential = dict(regen.potential_range_json or {}).get("maximum") or dict(
+                regen.potential_range_json or {}
+            ).get("max")
             club_name = club.club_name if club is not None else "an unsigned pathway"
             player_name = self._player_name(player)
             title = f"Rare-gem watch: {player_name}"

@@ -78,7 +78,9 @@ class MemoryUsageStore:
 
     def spend_since(self, start: datetime) -> float:
         return round(
-            sum(entry.estimated_cost_usd for entry in self.entries if entry.created_at >= start and not entry.cache_hit),
+            sum(
+                entry.estimated_cost_usd for entry in self.entries if entry.created_at >= start and not entry.cache_hit
+            ),
             6,
         )
 
@@ -108,7 +110,9 @@ class MemoryUsageStore:
 
 
 class SqlUsageStore:
-    def __init__(self, session_factory: Callable[[], Any] | None = None, fallback: MemoryUsageStore | None = None) -> None:
+    def __init__(
+        self, session_factory: Callable[[], Any] | None = None, fallback: MemoryUsageStore | None = None
+    ) -> None:
         self._session_factory = session_factory
         self.fallback = fallback or MemoryUsageStore()
 

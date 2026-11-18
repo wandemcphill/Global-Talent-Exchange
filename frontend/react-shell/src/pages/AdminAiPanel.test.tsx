@@ -24,7 +24,10 @@ jest.mock("@/lib/api", () => ({
 }));
 
 jest.mock("sonner", () => ({
-  toast: { success: mockToastSuccess, error: mockToastError },
+  toast: {
+    success: (...args: any[]) => mockToastSuccess(...args),
+    error: (...args: any[]) => mockToastError(...args),
+  },
 }));
 
 const status = {

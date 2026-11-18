@@ -103,7 +103,9 @@ def scouting_brief(service: GtexAiService, payload: ScoutingBriefRequest, user_i
     )
 
 
-def competition_summary(service: GtexAiService, payload: CompetitionSummaryRequest, user_id: str | None) -> AiCallResult:
+def competition_summary(
+    service: GtexAiService, payload: CompetitionSummaryRequest, user_id: str | None
+) -> AiCallResult:
     return service.summarize(
         feature="competition_summary",
         user_content="Summarize this competition snapshot.",

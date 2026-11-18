@@ -22,7 +22,7 @@ from app.ai_gateway.guardrails import (
     tool_is_allowed,
 )
 from app.ai_gateway.provider import ProviderRequest, provider_failure
-from app.ai_gateway.usage import MemoryUsageStore, SqlUsageStore, UsageEntry, estimate_cost_usd
+from app.ai_gateway.usage import SqlUsageStore, UsageEntry, estimate_cost_usd
 
 logger = logging.getLogger(__name__)
 
@@ -369,7 +369,9 @@ class GtexAiService:
                 model=cached.model,
                 cache_hit=True,
             )
-            self._record(feature, user_id, "success", None, cached.model, 0, 0, 0, time.perf_counter(), True, prepared.digest)
+            self._record(
+                feature, user_id, "success", None, cached.model, 0, 0, 0, time.perf_counter(), True, prepared.digest
+            )
             return hit
         request = ProviderRequest(
             model=prepared.model,
@@ -532,7 +534,9 @@ class GtexAiService:
             cache_hit=result.cache_hit,
         )
 
-    def _validate_tool_payload(self, result: AiCallResult, validator: type[BaseModel], allowlist: set[str]) -> AiCallResult:
+    def _validate_tool_payload(
+        self, result: AiCallResult, validator: type[BaseModel], allowlist: set[str]
+    ) -> AiCallResult:
         calls = list((result.data or {}).get("tool_calls") or [])
         if len(calls) != 1 or not tool_is_allowed(str(calls[0].get("name")), allowlist):
             return self._result(result.feature, ok=False, error_code="invalid_tool", model=result.model)
