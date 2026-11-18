@@ -12,6 +12,7 @@ import {
   predictPassReceiver,
   progressivePassMeters,
   resolveBallPresentation,
+  phasePresentation,
   sceneObjectCount,
   type CardDetailSummary,
   type FeedPresentationStatus,
@@ -23,6 +24,7 @@ import {
   type PitchSide,
   type VarReviewSummary,
 } from "./matchStateAdapter";
+import { BAKED_ATLAS, bakedUv, type BakedManifest } from "./bakedAtlas";
 import {
   ATLAS_COLUMNS,
   ATLAS_ROWS,
@@ -187,6 +189,7 @@ const FRAGMENT = `
   uniform vec2 uOffset;
   uniform vec2 uRepeat;
   uniform float uShirt;
+  uniform float uBaked;
   varying vec2 vUv;
   void main() {
     vec4 body = texture2D(uBody, vUv);
@@ -235,7 +238,9 @@ const FRAGMENT = `
     float alpha = max(body.a, kit.a);
     float digitAlpha = 0.0;
     float digitShadow = 0.0;
-    if (localUv.y > 0.41 && localUv.y < 0.63 && localUv.x > 0.35 && localUv.x < 0.65) {
+    float bandLow = uBaked > 0.5 ? 0.55 : 0.41;
+    float bandHigh = uBaked > 0.5 ? 0.76 : 0.63;
+    if (localUv.y > bandLow && localUv.y < bandHigh && localUv.x > 0.35 && localUv.x < 0.65) {
       float span = uShirt >= 10.0 ? 0.12 : 0.16;
       float ones = mod(floor(uShirt + 0.5), 10.0);
       float tens = floor(uShirt / 10.0);
@@ -246,10 +251,10 @@ const FRAGMENT = `
         start = localUv.x < 0.5 ? 0.5 - span : 0.5;
       }
       float gx = clamp((localUv.x - start) / span, 0.0, 0.999);
-      float gy = clamp((0.62 - localUv.y) / 0.2, 0.0, 0.999);
+      float gy = clamp((bandHigh - 0.01 - localUv.y) / (bandHigh - bandLow), 0.0, 0.999);
       digitAlpha = texture2D(uDigits, vec2((which + gx) / 10.0, 1.0 - gy)).a;
       float sx = clamp((localUv.x - 0.012 - start) / span, 0.0, 0.999);
-      float sy = clamp((0.62 - (localUv.y - 0.012)) / 0.2, 0.0, 0.999);
+      float sy = clamp((bandHigh - 0.01 - (localUv.y - 0.012)) / (bandHigh - bandLow), 0.0, 0.999);
       digitShadow = texture2D(uDigits, vec2((which + sx) / 10.0, 1.0 - sy)).a * (1.0 - digitAlpha);
     }
     color = mix(color, vec3(0.05, 0.08, 0.12), digitShadow * 0.75);
@@ -893,6 +898,8 @@ function OrthographicPitchComponent({
     const assignedShadow = new Map<string, THREE.Mesh>();
     const free: THREE.Mesh[] = [];
     const freeShadow: THREE.Mesh[] = [];
+    const playerMaterials: THREE.ShaderMaterial[] = [];
+    let bakedManifest: BakedManifest | null = null;
     const sharedGeometry = new THREE.PlaneGeometry(4.85, 4.85);
     const playerShadowGeometry = new THREE.PlaneGeometry(2.7, 1.15);
     const playerShadowMaterial = new THREE.MeshBasicMaterial({
@@ -925,10 +932,12 @@ function OrthographicPitchComponent({
           uOffset: { value: new THREE.Vector2() },
           uRepeat: { value: new THREE.Vector2(1 / ATLAS_COLUMNS, 1 / ATLAS_ROWS) },
           uShirt: { value: 0 },
+          uBaked: { value: 0 },
         },
         vertexShader: VERTEX,
         fragmentShader: FRAGMENT,
       });
+      playerMaterials.push(material);
       const mesh = new THREE.Mesh(sharedGeometry, material);
       mesh.visible = false;
       scene.add(mesh);
@@ -943,6 +952,32 @@ function OrthographicPitchComponent({
     }
 
     const motionTracker = new PlayerMotionTracker();
+    let phaseStamp = "";
+    let phaseStartedMs = performance.now();
+    const loader = new THREE.TextureLoader();
+    void fetch(BAKED_ATLAS.manifest)
+      .then((response) => (response.ok ? response.json() : null))
+      .then((manifest: BakedManifest | null) => {
+        if (!manifest?.actions?.length || stopped) return;
+        const bodyMap = loader.load(BAKED_ATLAS.body);
+        const kitMap = loader.load(BAKED_ATLAS.kit);
+        const partsMap = loader.load(BAKED_ATLAS.parts);
+        for (const map of [bodyMap, kitMap, partsMap]) {
+          map.magFilter = THREE.LinearFilter;
+          map.minFilter = THREE.LinearFilter;
+          map.generateMipmaps = false;
+          map.colorSpace = THREE.SRGBColorSpace;
+        }
+        partsMap.colorSpace = THREE.NoColorSpace;
+        for (const material of playerMaterials) {
+          material.uniforms.uBody.value = bodyMap;
+          material.uniforms.uKit.value = kitMap;
+          material.uniforms.uParts.value = partsMap;
+          material.uniforms.uBaked.value = 1;
+        }
+        bakedManifest = manifest;
+      })
+      .catch(() => undefined);
     const seenKeys = new Set<string>();
     const heatmapBins = new Float32Array(GRID_W * GRID_H);
     let heatmapSeeded = false;
@@ -1298,7 +1333,15 @@ function OrthographicPitchComponent({
         secondaryPlayerId: activeSecondaryId,
         stage: activeStage,
         homeAttacksRight: activeHomeAttacksRight,
+        phase: activePhase,
+        phaseAgeSec: (frameStart - phaseStartedMs) / 1000,
+        homeScore: current.homeScore,
+        awayScore: current.awayScore,
       };
+      if (String(activePhase || "") !== phaseStamp) {
+        phaseStamp = String(activePhase || "");
+        phaseStartedMs = frameStart;
+      }
 
       activePlayers.forEach((player) => {
         const key = playerIdentityKey(player);
@@ -1308,8 +1351,19 @@ function OrthographicPitchComponent({
           Boolean(player.hasBall) ||
           Boolean(resolvedBall?.carrier && playerIdentityKey(resolvedBall.carrier) === key);
 
-        const tracked = motionTracker.update(key, player.x, player.y, frameStart, {
-          baseAction: animationFor(player, activeEvent, animContext),
+        const phased = phasePresentation({
+          x: player.x,
+          y: player.y,
+          side: player.side,
+          phase: activePhase,
+          ageSec: (frameStart - phaseStartedMs) / 1000,
+          homeScore: current.homeScore,
+          awayScore: current.awayScore,
+        });
+        const drawX = phased?.x ?? player.x;
+        const drawY = phased?.y ?? player.y;
+        const tracked = motionTracker.update(key, drawX, drawY, frameStart, {
+          baseAction: phased?.rig || animationFor(player, activeEvent, animContext),
           hasBall: isCarrier,
           side: player.side,
           velocityHint: player.velocity,
@@ -1343,15 +1397,18 @@ function OrthographicPitchComponent({
           (isHome ? current.homeSocksColor || current.homeColor : current.awaySocksColor || current.awayColor);
         const buildScale = buildScaleForProfile(player.buildProfile);
 
-        const point = toWorld(player.x, player.y, activeMode);
+        const point = toWorld(drawX, drawY, activeMode);
         const liftY = activeMode === "2.5d" ? 0.62 * point.depthScale : 0;
         const mesh = acquire(key);
         if (mesh) {
           mesh.position.set(point.x, point.y + liftY, 1 + point.zOrder * 0.55);
           mesh.scale.set(point.depthScale * buildScale, point.depthScale * buildScale, 1);
           const material = mesh.material as THREE.ShaderMaterial;
-          const uv = cellUv(tracked.action, tracked.direction, tracked.frame);
+          const uv = bakedManifest
+            ? bakedUv(bakedManifest, tracked.action, tracked.direction, tracked.gaitPhase)
+            : cellUv(tracked.action, tracked.direction, tracked.frame);
           material.uniforms.uOffset.value.set(uv.offsetX, uv.offsetY);
+          material.uniforms.uRepeat.value.set(uv.repeatX, uv.repeatY);
           material.uniforms.uKitColor.value.set(baseKitColor);
           material.uniforms.uSecondaryColor.value.set(resolvedSecondary);
           material.uniforms.uAccentColor.value.set(resolvedAccent);
@@ -1509,12 +1566,29 @@ function OrthographicPitchComponent({
 
       const cue = effectFor(activeEvent);
       if (ballPoint) {
-        const shadowWorld = toWorld(
-          resolvedBall?.shadowX ?? ballPoint.x,
-          resolvedBall?.shadowY ?? ballPoint.y,
-          activeMode,
-        );
-        const point = toWorld(ballPoint.x, ballPoint.y, activeMode);
+        let ballX = ballPoint.x;
+        let ballY = ballPoint.y;
+        if (bakedManifest && resolvedBall && !resolvedBall.inFlight && resolvedBall.flightKind === "dribble" && resolvedBall.carrier) {
+          const carrierPose = phasePresentation({
+            x: resolvedBall.carrier.x,
+            y: resolvedBall.carrier.y,
+            side: resolvedBall.carrier.side,
+            phase: activePhase,
+            ageSec: (frameStart - phaseStartedMs) / 1000,
+            homeScore: current.homeScore,
+            awayScore: current.awayScore,
+          });
+          const motion = motionTracker.get(playerIdentityKey(resolvedBall.carrier));
+          if (motion) {
+            const foot = bakedUv(bakedManifest, motion.action, motion.direction, motion.gaitPhase).anchor;
+            const baseX = carrierPose?.x ?? resolvedBall.carrier.x;
+            const baseY = carrierPose?.y ?? resolvedBall.carrier.y;
+            ballX = baseX + (foot.x - 0.5) * (4.85 / PITCH_W);
+            ballY = baseY + (0.5 - foot.y) * (4.85 / PITCH_H);
+          }
+        }
+        const shadowWorld = toWorld(resolvedBall?.shadowX ?? ballX, resolvedBall?.shadowY ?? ballY, activeMode);
+        const point = toWorld(ballX, ballY, activeMode);
         const elev = resolvedBall?.heightMeters ?? 0;
         const liftY = Math.min(4.8, elev * (activeMode === "2.5d" ? 1.12 : 0.92)) * point.depthScale;
         const scaleBoost = (1 + Math.min(0.32, elev * 0.09)) * point.depthScale;

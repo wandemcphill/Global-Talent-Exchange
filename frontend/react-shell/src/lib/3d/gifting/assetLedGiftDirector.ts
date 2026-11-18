@@ -19,7 +19,7 @@ const ASSETS = {
   matchStadium: "/models/match/football-stadium.glb",
   goal: "/models/match/goal_frame.glb",
   ball: "/models/match/football_pbr.glb",
-  kit: "/models/footballer/gtex_home_kit_mixamo.glb",
+  kit: "/models/footballer/gtex_gt_mixamo_kit.glb",
   clips: "/models/footballer/gtex_mixamo_clips.glb",
 };
 

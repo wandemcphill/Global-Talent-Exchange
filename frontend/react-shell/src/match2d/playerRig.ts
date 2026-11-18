@@ -18,6 +18,7 @@ export const RIG_ACTIONS = [
   "jump",
   "header",
   "dribble",
+  "dribble_run",
   "pass",
   "shoot",
   "cross",
@@ -181,6 +182,7 @@ export function poseFor(action: RigAction, frame: number): Pose {
   if (action === "jog") return gait(0.78, 0.2, 0.72);
   if (action === "sprint") return gait(1.12, 0.38, 1.05, 0.18);
   if (action === "dribble") return { ...gait(0.56, 0.18, 0.34, 0.22), headLift: -0.6 };
+  if (action === "dribble_run") return { ...gait(0.96, 0.32, 0.7, 0.18), headLift: -0.4 };
   if (action === "accelerate") return { ...gait(0.96, 0.58, 0.84, 0.16), torsoTilt: 0.15 + step * 0.05 };
   if (action === "turn") return { ...gait(0.36, 0.12, 0.58), torsoTilt: 0.7 * (step || 0.6) };
   if (action === "pass") {
@@ -497,11 +499,17 @@ export function presentationAction(
   if (Math.abs(motion.facingDelta) > 0.9 && motion.speed > 0.002) return "turn";
   if (motion.speed - motion.previousSpeed > 0.008 && motion.speed > 0.006) return "accelerate";
   if (motion.previousSpeed - motion.speed > 0.008 && motion.speed > 0.004) return "decelerate";
+  if (motion.hasBall && motion.speed > 0.012) return "dribble_run";
   if (motion.hasBall && motion.speed > 0.0035) return "dribble";
   if (motion.speed > 0.02) return "sprint";
   if (motion.speed > 0.01) return "jog";
   if (motion.speed > 0.0035) return "walk";
-  return action === "sprint" || action === "run" || action === "jog" || action === "walk" || action === "dribble"
+  return action === "sprint" ||
+    action === "run" ||
+    action === "jog" ||
+    action === "walk" ||
+    action === "dribble" ||
+    action === "dribble_run"
     ? action
     : "idle";
 }

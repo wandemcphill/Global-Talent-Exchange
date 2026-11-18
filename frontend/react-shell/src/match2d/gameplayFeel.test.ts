@@ -130,6 +130,13 @@ describe("gameplay feel: broadcast director camera AI", () => {
     expect(corner.focus).toEqual({ x: 0.86, y: 0.5 });
   });
 
+  test("pre-match, half-time, and full-time hold a wide centre-circle shot", () => {
+    expect(deriveDirectorShot({ phase: "pre_match" }).kind).toBe("walk_on");
+    expect(deriveDirectorShot({ phase: "halftime" }).kind).toBe("halftime_wide");
+    expect(deriveDirectorShot({ phase: "full_time" }).kind).toBe("fulltime_wide");
+    expect(deriveDirectorShot({ phase: "full_time" }).focus).toEqual({ x: 0.5, y: 0.5 });
+  });
+
   test("injury time drifts toward trailing side's attacking goal", () => {
     const shot = deriveDirectorShot({ minute: 92, leadingSide: "home", homeAttacksRight: true });
     expect(shot.kind).toBe("injury_time");

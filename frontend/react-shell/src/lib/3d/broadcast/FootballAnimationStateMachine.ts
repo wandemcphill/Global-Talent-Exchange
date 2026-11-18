@@ -97,6 +97,7 @@ export type BallInteractionAnimationState =
   | "long_pass"
   | "through_ball"
   | "dribble"
+  | "dribble_run"
   | "shield_ball"
   | "cross"
   | "shoot"
@@ -301,6 +302,16 @@ export const FOOTBALL_ANIMATION_STATE_META: Record<FootballAnimationState, Footb
     defaultDurationSec: 0.53,
     crossFadeSec: 0.14,
     minHoldSec: 0.2,
+    ballContactPhase: 0.5,
+    mocapSourceClip: "mocap_dribble",
+  },
+  dribble_run: {
+    state: "dribble_run",
+    category: "ball_interaction",
+    loop: true,
+    defaultDurationSec: 0.53,
+    crossFadeSec: 0.14,
+    minHoldSec: 0.16,
     ballContactPhase: 0.5,
     mocapSourceClip: "mocap_dribble",
   },
@@ -1343,7 +1354,7 @@ export function buildClipForFootballState(
   // Locomotion & Ball-Carrying (idle, walk, jog, run, sprint, dribble, receive_ball, first_touch, shield_ball, turns)
   const isIdle = state === "idle";
   const isSprint = state === "sprint" || state === "accelerate";
-  const isRun = state === "run" || state === "dribble" || state === "substitution_enter" || isSprint;
+  const isRun = state === "run" || state === "dribble" || state === "dribble_run" || state === "substitution_enter" || isSprint;
   const isJog = state === "jog" || state === "turn_left" || state === "turn_right";
   const legSwing = isIdle ? 0.04 : isSprint ? 0.92 : isRun ? 0.72 : isJog ? 0.48 : 0.28;
   const kneeBend = isIdle ? 0.08 : isSprint ? 1.15 : isRun ? 0.92 : isJog ? 0.62 : 0.35;
@@ -1756,6 +1767,9 @@ export class FootballAnimationStateMachine {
 
       if (nearestOpponentDist <= 2.6 && player.speed_ratio < 0.45) {
         return "shield_ball";
+      }
+      if (player.speed_ratio >= 0.72) {
+        return "dribble_run";
       }
       if (player.speed_ratio >= 0.12) {
         return "dribble";

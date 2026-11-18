@@ -27,13 +27,13 @@ export interface PlayerImpostorSummary {
 
 /**
  * Camera distance beyond which a player becomes an impostor.
- * High stays at 85 m: the closer broadcast camera is about 38 m away, so those
- * bodies stay real meshes, and a player past 110 m still batches into the impostor.
+ * A normal TV camera sits around 38 m, so the threshold stays beyond that shot.
+ * High still batches a player past about 110 m, which is the far-touchline case.
  */
 export const IMPOSTOR_DISTANCE_BY_TIER: Record<DeviceQualityTier, number> = {
-  low: 70,
-  medium: 92,
-  high: 100,
+  low: 80,
+  medium: 96,
+  high: 106,
   ultra: Number.POSITIVE_INFINITY,
 };
 

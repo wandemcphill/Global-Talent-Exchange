@@ -18,7 +18,7 @@ export const ACADEMY_GLB = "/models/campus/elite_academy_complex.glb";
 export const YOUTH_PITCH_GLB = "/models/campus/academy_youth_pitch.glb";
 export const TRAINING_PITCH_GLB = "/models/campus/training_pitch.glb";
 export const TROPHY_GLB = "/assets/showroom/trophy_plinth.glb";
-export const KIT_GLB = "/models/footballer/gtex_home_kit_mixamo.glb";
+export const KIT_GLB = "/models/footballer/gtex_gt_mixamo_kit.glb";
 export const KIT_CLIPS_GLB = "/models/footballer/gtex_mixamo_clips.glb";
 
 export type PresentationKind =

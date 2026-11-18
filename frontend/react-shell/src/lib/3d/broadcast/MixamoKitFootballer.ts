@@ -18,9 +18,11 @@ import {
   type PlayerAppearanceProfile,
 } from "./HumanoidFootballerRig";
 import type { DeviceQualityTier } from "../GtexSceneTypes";
+import clipContact from "./clipContact.json";
 
-export const MIXAMO_KIT_URL = "/models/footballer/gtex_home_kit_mixamo.glb";
+export const MIXAMO_KIT_URL = "/models/footballer/gtex_gt_mixamo_kit.glb";
 export const MIXAMO_CLIP_URL = "/models/footballer/gtex_mixamo_clips.glb";
+export const CLIP_CONTACT_PHASE: Record<string, number> = clipContact;
 
 /** Every match state plays one baked Mixamo clip. Names match the GLB clip names. */
 export const MIXAMO_CLIP_BY_STATE: Record<FootballAnimationState, string> = {
@@ -40,11 +42,12 @@ export const MIXAMO_CLIP_BY_STATE: Record<FootballAnimationState, string> = {
   long_pass: "Jogging_And_Kicking_A_Soccerball_Forward",
   through_ball: "Soccer_Chip_Shot_While_Jogging",
   dribble: "Forward_Jog_Dribbling_Soccer_Ball",
+  dribble_run: "Gtex_Dribble_Run",
   shield_ball: "Playing_With_Ball_Idle",
   cross: "Soccer_Chip_Shot_While_Jogging",
-  shoot: "Male_Soccer_Penalty_Kick",
+  shoot: "Gtex_Strike",
   volley: "Soccer_Scissor_Kick_To_Goal",
-  standing_tackle: "Soccer_Slide_Tackle",
+  standing_tackle: "Gtex_Standing_Tackle",
   sliding_tackle: "Soccer_Slide_Tackle",
   interception: "Soccer_Strafe_Left",
   blocking: "Goalkeeper_Left_Body_Block",
@@ -58,9 +61,9 @@ export const MIXAMO_CLIP_BY_STATE: Record<FootballAnimationState, string> = {
   gk_parry: "Goalkeeper_Right_Body_Block",
   gk_punch: "Goalkeeper_Far_Overhand_Throw",
   gk_distribution: "Goalkeeper_Drop_Kicking_Ball",
-  goal_celebration: "Soccer_360_Spin",
-  disappointment: "Goalkeeper_Jump_And_Miss",
-  team_celebration: "Kicking_Up_A_Soccer_Ball",
+  goal_celebration: "Kicking_Up_A_Soccer_Ball",
+  disappointment: "Gtex_Slump",
+  team_celebration: "Soccer_360_Spin",
   injury_reaction: "Hurt_Ground_Idle_From_A_Soccer_Fall",
   foul_reaction: "Tripping_Over_A_Soccer_Tackle",
   substitution_exit: "Walking_Forwards",
@@ -110,6 +113,7 @@ const GAIT_FROM_TRAVEL = new Set<FootballAnimationState>([
   "decelerate",
   "stop_change_direction",
   "dribble",
+  "dribble_run",
   "shield_ball",
   "standing_tackle",
   "interception",
@@ -123,8 +127,31 @@ const GAIT_NOMINAL_MPS: Partial<Record<FootballAnimationState, number>> = {
   run: 5.0,
   sprint: 6.6,
   dribble: 2.6,
+  dribble_run: 5.2,
   shield_ball: 0.4,
 };
+
+const BALL_RELEASE_STATES = new Set<string>([
+  "short_pass",
+  "long_pass",
+  "through_ball",
+  "cross",
+  "shoot",
+  "volley",
+  "gk_distribution",
+  "penalty_kick",
+]);
+
+export const PENALTY_CLIP = "Male_Soccer_Penalty_Kick";
+
+export function contactPhaseFor(clipOrState: string): number {
+  const clip =
+    clipOrState === "penalty_kick"
+      ? PENALTY_CLIP
+      : MIXAMO_CLIP_BY_STATE[clipOrState as FootballAnimationState] || clipOrState;
+  const phase = CLIP_CONTACT_PHASE[clip];
+  return typeof phase === "number" ? phase : 0.45;
+}
 
 /**
  * Pick the clip from measured travel. The fixture's speed_ratio is inflated so a
@@ -138,8 +165,8 @@ export function gaitForGroundSpeed(
   if (speed < 0.45) return hasPossession ? "shield_ball" : "idle";
   if (speed < 1.65) return "walk";
   if (speed < 3.4) return hasPossession ? "dribble" : "jog";
-  if (speed < 5.5) return hasPossession ? "dribble" : "run";
-  return hasPossession ? "dribble" : "sprint";
+  if (speed < 5.5) return hasPossession ? "dribble_run" : "run";
+  return hasPossession ? "dribble_run" : "sprint";
 }
 
 function boneKey(name: string): string {
@@ -180,7 +207,35 @@ function boneNamesOf(root: THREE.Object3D): string[] {
 }
 
 function clipForThisRig(clip: THREE.AnimationClip, root: THREE.Object3D): THREE.AnimationClip {
-  return retargetMixamoClip(clip, boneNamesOf(root));
+  const renamed = retargetMixamoClip(clip, boneNamesOf(root));
+  const bones = new Map<string, THREE.Object3D>();
+  root.traverse((obj) => {
+    if (obj.name) bones.set(obj.name, obj);
+  });
+  const tracks = renamed.tracks.map((track) => {
+    const dot = track.name.lastIndexOf(".");
+    if (!track.name.endsWith(".quaternion") || dot <= 0) return track;
+    const bone = bones.get(track.name.slice(0, dot));
+    if (!bone) return track;
+    const next = track.clone();
+    const source = new THREE.Quaternion(next.values[0], next.values[1], next.values[2], next.values[3]);
+    if (source.lengthSq() < 0.5) return next;
+    source.normalize();
+    const inv = source.invert();
+    const rest = bone.quaternion.clone();
+    const keyframe = new THREE.Quaternion();
+    const posed = new THREE.Quaternion();
+    for (let i = 0; i < next.values.length; i += 4) {
+      keyframe.set(next.values[i], next.values[i + 1], next.values[i + 2], next.values[i + 3]).normalize();
+      posed.copy(rest).multiply(inv.clone().multiply(keyframe)).normalize();
+      next.values[i] = posed.x;
+      next.values[i + 1] = posed.y;
+      next.values[i + 2] = posed.z;
+      next.values[i + 3] = posed.w;
+    }
+    return next;
+  });
+  return new THREE.AnimationClip(renamed.name, renamed.duration, tracks);
 }
 
 function findBone(root: THREE.Object3D, suffix: string): THREE.Object3D | null {
@@ -212,6 +267,7 @@ export class MixamoKitFootballer {
   private mixer: THREE.AnimationMixer | null = null;
   private readonly actions = new Map<FootballAnimationState, THREE.AnimationAction>();
   private currentState: FootballAnimationState = "idle";
+  private clipKey: string = "idle";
   private timeInCurrentStateSec = 0;
   private lastPosition: [number, number, number] | null = null;
   private smoothedSpeed = 0;
@@ -224,6 +280,7 @@ export class MixamoKitFootballer {
   private rightFoot: THREE.Object3D | null = null;
   private readonly leftFootWorld = new THREE.Vector3();
   private readonly rightFootWorld = new THREE.Vector3();
+  private readonly forwardScratch = new THREE.Vector3();
 
   constructor(kitConfig: HumanoidKitConfig) {
     this.playerId = kitConfig.playerId;
@@ -276,6 +333,13 @@ export class MixamoKitFootballer {
         action.loop = meta.loop ? THREE.LoopRepeat : THREE.LoopOnce;
         action.clampWhenFinished = !meta.loop;
         this.actions.set(state, action);
+      }
+      const penalty = shared.clips.get(PENALTY_CLIP);
+      if (penalty) {
+        const action = this.mixer.clipAction(clipForThisRig(penalty, visual));
+        action.loop = THREE.LoopOnce;
+        action.clampWhenFinished = true;
+        this.actions.set("penalty_kick", action);
       }
       this.play(this.currentState, true);
       this.applyShadowCasting();
@@ -344,6 +408,7 @@ export class MixamoKitFootballer {
     cameraPosition3D: [number, number, number];
     qualityTier?: DeviceQualityTier;
     angularVelocityRad?: number;
+    eventType?: string | null;
   }): void {
     const { deltaSec, targetState, position3D, facingAngleRad, cameraPosition3D, hasPossession, qualityTier } = params;
     const angular = params.angularVelocityRad ?? 0;
@@ -412,10 +477,12 @@ export class MixamoKitFootballer {
     ) {
       visualState = angular > 0 ? "turn_right" : "turn_left";
     }
-    if (visualState !== this.currentState) this.play(visualState, false);
+    const eventName = String(params.eventType || "").toLowerCase();
+    const clipId = visualState === "shoot" && eventName === "penalty" ? "penalty_kick" : visualState;
+    if (clipId !== this.clipKey || visualState !== this.currentState) this.play(visualState, false, clipId);
     this.timeInCurrentStateSec += deltaSec;
 
-    const action = this.actions.get(this.currentState);
+    const action = this.actions.get(this.clipKey);
     if (action) {
       const nominal = GAIT_NOMINAL_MPS[this.currentState];
       if (nominal) {
@@ -439,11 +506,42 @@ export class MixamoKitFootballer {
     if (error > -0.26 && error < 0.2) this.modelContainer.position.y += error;
   }
 
-  private play(state: FootballAnimationState, immediate: boolean): void {
-    const next = this.actions.get(state) || this.actions.get("idle");
-    const prev = this.actions.get(this.currentState);
+  /** Keeps a controlled ball on the leading foot until a kick's contact frame. */
+  public holdsBall(): boolean {
+    if (BALL_RELEASE_STATES.has(this.clipKey)) {
+      const action = this.actions.get(this.clipKey);
+      const duration = action?.getClip().duration || 1;
+      return this.timeInCurrentStateSec < contactPhaseFor(this.clipKey) * duration;
+    }
+    return (
+      this.currentState === "dribble" ||
+      this.currentState === "dribble_run" ||
+      this.currentState === "shield_ball" ||
+      this.currentState === "receive_ball" ||
+      this.currentState === "first_touch"
+    );
+  }
+
+  public placeBall(out: THREE.Vector3): boolean {
+    if (!this.leftFoot || !this.rightFoot) return false;
+    this.leftFoot.getWorldPosition(this.leftFootWorld);
+    this.rightFoot.getWorldPosition(this.rightFootWorld);
+    this.forwardScratch.set(0, 0, 1).applyQuaternion(this.rootGroup.quaternion);
+    const leftLead = this.leftFootWorld.dot(this.forwardScratch);
+    const rightLead = this.rightFootWorld.dot(this.forwardScratch);
+    const foot = leftLead >= rightLead ? this.leftFootWorld : this.rightFootWorld;
+    out.copy(foot);
+    out.addScaledVector(this.forwardScratch, 0.11);
+    out.y = Math.max(0.1, foot.y);
+    return true;
+  }
+
+  private play(state: FootballAnimationState, immediate: boolean, clipId: string = state): void {
+    const next = this.actions.get(clipId) || this.actions.get(state) || this.actions.get("idle");
+    const prev = this.actions.get(this.clipKey);
     if (!next) {
       this.currentState = state;
+      this.clipKey = clipId;
       this.timeInCurrentStateSec = 0;
       return;
     }
@@ -460,6 +558,7 @@ export class MixamoKitFootballer {
       else next.fadeIn(fade).play();
     }
     this.currentState = state;
+    this.clipKey = clipId;
     this.timeInCurrentStateSec = 0;
   }
 

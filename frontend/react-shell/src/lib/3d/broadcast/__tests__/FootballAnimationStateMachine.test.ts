@@ -94,10 +94,10 @@ describe("FootballAnimationStateMachine", () => {
     expect(GTEX_HUMANOID_BONE_NAMES).toContain("RightHand");
   });
 
-  it("builds valid 26-bone AnimationClips for all 41 football animation states across all 5 categories", () => {
-    expect(ALL_FOOTBALL_ANIMATION_STATES).toHaveLength(41);
+  it("builds valid 26-bone AnimationClips for all 42 football animation states across all 5 categories", () => {
+    expect(ALL_FOOTBALL_ANIMATION_STATES).toHaveLength(42);
     const clipLib = buildFootballAnimationClipLibrary([]);
-    expect(clipLib.size).toBe(41);
+    expect(clipLib.size).toBe(42);
 
     const validBoneSet = new Set(GTEX_HUMANOID_BONE_NAMES);
     for (const state of ALL_FOOTBALL_ANIMATION_STATES) {

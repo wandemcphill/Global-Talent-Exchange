@@ -1,0 +1,13 @@
+{
+  "Forward_Jog_Dribbling_Soccer_Ball": 0.66,
+  "Gtex_Dribble_Run": 0.81,
+  "Soccer_Pass_From_Idle_Pose": 0.41,
+  "Jogging_And_Kicking_A_Soccerball_Forward": 0.47,
+  "Gtex_Strike": 0.47,
+  "Male_Soccer_Penalty_Kick": 0.56,
+  "Soccer_Slide_Tackle": 0.5,
+  "Gtex_Standing_Tackle": 0.5,
+  "Kicking_Up_A_Soccer_Ball": 0.56,
+  "Gtex_Slump": 0.34,
+  "Soccer_Chip_Shot_While_Jogging": 0.22
+}

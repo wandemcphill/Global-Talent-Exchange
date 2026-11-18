@@ -7,6 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import { useActiveClub } from "@/lib/owner";
 import { Btn, Chip, Empty, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 import { MatchdayLineupBroadcast } from "@/components/gtex/MatchdayLineupBroadcast";
+import { KitBakedMark } from "@/components/gtex/KitBakedMark";
 import {
   buildLineupPayload,
   LINEUP_FORMATIONS,
@@ -199,7 +200,8 @@ export default function Lineup() {
                         const player = players.find((item) => item.player_id === starters[slotIndex]);
                         return (
                           <div key={slotIndex} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md">
-                            <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full border border-emerald-300/40 bg-emerald-400/10 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slotIndex + 1}</span>
+                            <KitBakedMark size={28} />
+                            <span className="mb-1 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slotIndex + 1}</span>
                             <span className="w-full truncate text-[10px] font-semibold text-white">{player?.player_name || role}</span>
                             <span className="w-full truncate text-[9px] text-slate-400">{role}</span>
                           </div>

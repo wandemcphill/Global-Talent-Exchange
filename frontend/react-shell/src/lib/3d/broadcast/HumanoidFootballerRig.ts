@@ -8,7 +8,7 @@
  * 2. Native glTF 2.0 binary (`.glb`) parser & skeletal cloner (zero external loader friction,
  *    supports both async browser fetch and synchronous/buffer parsing).
  * 3. `THREE.AnimationMixer` controller with smooth `crossFadeTo` transitions across all
- *    41 football animation states and velocity-synchronized stride cadence (`timeScale`).
+ *    42 football animation states and velocity-synchronized stride cadence (`timeScale`).
  * 4. Anatomical 8-zone kit & appearance mapping (Jersey Primary, Jersey Trim, Shorts,
  *    Socks, Boots, Skin Tone, Hair Style/Color, Goalkeeper Gloves).
  * 5. Spine-bound 3D Shirt Number badge (`#1`–`#99`) and possession ground indicator ring.

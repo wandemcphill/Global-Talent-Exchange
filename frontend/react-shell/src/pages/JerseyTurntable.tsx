@@ -11,7 +11,7 @@ type JerseyTurntableProps = {
   chestText: string;
 };
 
-const KIT_MODEL_URL = "/models/footballer/gtex_home_kit_mixamo.glb?kit=1";
+const KIT_MODEL_URL = "/models/footballer/gtex_gt_mixamo_kit.glb?kit=1";
 
 let kitTemplate: Promise<THREE.Group> | null = null;
 

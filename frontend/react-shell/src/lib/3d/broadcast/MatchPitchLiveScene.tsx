@@ -16,6 +16,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import * as THREE from "three";
 import { FIFA_PITCH_DIMENSIONS, pitchTo3D, PITCH_BOUNDS } from "./matchCoordinates";
+import { phasePresentation } from "../../../match2d/matchStateAdapter";
 import {
   calculateTimelineAdvanceSeconds,
   SpatialInterpolator,
@@ -994,6 +995,9 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const observedCameraPresetsHistory = new Set<string>();
     const activePlayerIdsScratch = new Set<string>();
     let lastUiStateUpdateMs = 0;
+    let phaseStamp = "";
+    let phaseStartedMs = performance.now();
+    const ballAnchor = new THREE.Vector3();
 
     if (typeof window !== "undefined") {
       (window as any).__GTEX_BROADCAST_CONTROL__ = {
@@ -1371,22 +1375,6 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         const ballOwner = state.players.find(
           (p) => p.has_possession || state.ball.owner_player_id === p.player_id
         );
-        if (ballOwner && state.ball.state === "controlled") {
-          const forwardX = Math.cos(ballOwner.facingAngleRad);
-          const forwardZ = Math.sin(ballOwner.facingAngleRad);
-          const stride = 0.36 + Math.sin(localTime * 6.2) * 0.035;
-          const lateral = Math.cos(localTime * 6.2) * 0.05;
-          const footX = ballOwner.position3D[0] + forwardX * stride - forwardZ * lateral;
-          const footZ = ballOwner.position3D[2] + forwardZ * stride + forwardX * lateral;
-          const gap = Math.hypot(bx - footX, bz - footZ);
-          // Close a small visual gap to the controlling foot. Passes and shots stay on the authoritative arc.
-          if (gap < 1.15 && gap > 0.001) {
-            const pull = Math.min(0.42, gap * 0.55);
-            bx += ((footX - bx) / gap) * pull;
-            bz += ((footZ - bz) / gap) * pull;
-            by = Math.min(by, 0.1);
-          }
-        }
         if (by < 0) by = 0;
 
         ballMesh.position.set(bx, by + ballLift, bz);
@@ -1496,20 +1484,46 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           );
 
           rig.rootGroup.visible = true;
-          const targetAnimState = animationStateMachine.resolvePlayerState({
-            player: p,
-            allPlayers: state.players,
-            ball: state.ball,
-            matchState: state,
-            activeEvent,
-            previousState: rig.getCurrentState(),
-            timeInCurrentStateSec: rig.getTimeInCurrentState(),
+          const phaseName = String(state.phase || "");
+          if (phaseName !== phaseStamp) {
+            phaseStamp = phaseName;
+            phaseStartedMs = performance.now();
+          }
+          const phaseAgeSec = (performance.now() - phaseStartedMs) / 1000;
+          const nx = (p.position3D[0] + FIFA_PITCH_DIMENSIONS.length / 2) / FIFA_PITCH_DIMENSIONS.length;
+          const nz = (p.position3D[2] + FIFA_PITCH_DIMENSIONS.width / 2) / FIFA_PITCH_DIMENSIONS.width;
+          const phased = phasePresentation({
+            x: nx,
+            y: nz,
+            side: p.side,
+            phase: phaseName,
+            ageSec: phaseAgeSec,
+            homeScore: state.home_score,
+            awayScore: state.away_score,
           });
+          const posed: [number, number, number] = phased
+            ? [
+                phased.x * FIFA_PITCH_DIMENSIONS.length - FIFA_PITCH_DIMENSIONS.length / 2,
+                p.position3D[1],
+                phased.y * FIFA_PITCH_DIMENSIONS.width - FIFA_PITCH_DIMENSIONS.width / 2,
+              ]
+            : p.position3D;
+          const targetAnimState = phased?.football
+            ? phased.football
+            : animationStateMachine.resolvePlayerState({
+                player: p,
+                allPlayers: state.players,
+                ball: state.ball,
+                matchState: state,
+                activeEvent,
+                previousState: rig.getCurrentState(),
+                timeInCurrentStateSec: rig.getTimeInCurrentState(),
+              });
 
           rig.update({
             deltaSec,
             targetState: targetAnimState,
-            position3D: p.position3D,
+            position3D: posed,
             facingAngleRad: p.facingAngleRad,
             speedRatio: p.speed_ratio,
             angularVelocityRad: p.angular_velocity_rad,
@@ -1517,11 +1531,23 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
             ballPosition3D: [bx, by, bz],
             cameraPosition3D: pose.position,
             qualityTier,
+            eventType: activeEvent?.event_type || null,
           });
 
           const resolvedState = rig.getCurrentState();
           activeStatesSnapshot[p.player_id] = resolvedState;
           observedStatesHistory.add(resolvedState);
+        }
+
+        if (ballOwner) {
+          const ownerRig = playerRigs.get(ballOwner.player_id);
+          if (ownerRig && "holdsBall" in ownerRig && ownerRig.holdsBall() && ownerRig.placeBall(ballAnchor)) {
+            bx = ballAnchor.x;
+            by = ballAnchor.y;
+            bz = ballAnchor.z;
+            ballMesh.position.set(bx, by + ballLift, bz);
+            ballShadowMesh.position.set(bx, 0.03, bz);
+          }
         }
 
         // Hide inactive/substituted player rigs

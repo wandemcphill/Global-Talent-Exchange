@@ -13,6 +13,7 @@ import {
 } from "@/pages/lineupModel";
 import { buildSilhouetteDataUri, posShort, sanitizeRealPlayerImage } from "./PlayerCard";
 import { KitPlayerPortrait } from "./KitPlayerPortrait";
+import { KitBakedMark } from "./KitBakedMark";
 import { staminaWarning } from "@/match2d/matchStateAdapter";
 
 export interface MatchdaySquadMember {
@@ -249,11 +250,29 @@ function buildTeamSheetFromRoster(opts: {
   }
 
   // Fill any remaining slots up to 11 starters with deterministic matchday squad call-ups
+  const liveXiOnPitch = Array.isArray(pitchPlayers) && pitchPlayers.length >= 11;
+  if (liveXiOnPitch) {
+    for (const pp of pitchPlayers) {
+      if (starters.length >= 11) break;
+      if (pp.player_id && starters.some((starter) => starter.player_id === pp.player_id)) continue;
+      const fullName = pp.name || `Player ${starters.length + 1}`;
+      starters.push({
+        player_id: pp.player_id || `live-${clubId}-${starters.length}`,
+        full_name: fullName,
+        short_name: extractBroadcastSurname(fullName),
+        shirt_number: pp.shirt_number || DEFAULT_NUMBERS[starters.length] || starters.length + 1,
+        position: pp.role || "MID",
+        rating: 78,
+        portrait_url: null,
+        is_signed: true,
+      });
+    }
+  }
   const usedNames = new Set(starters.map((s) => s.short_name.toLowerCase()));
   const usedNumbers = new Set(starters.map((s) => s.shirt_number));
   let poolCursor = seed % ACADEMY_SURNAMES_POOL.length;
 
-  if (starters.length > 0 && !starters.some((s) => s.position === "GK")) {
+  if (!liveXiOnPitch && starters.length > 0 && !starters.some((s) => s.position === "GK")) {
     // Ensure slot 0 has a goalkeeper if club roster lacked one
     if (starters.length < 11) {
       const gkEntry = ACADEMY_SURNAMES_POOL.find((e) => e.pos === "GK") || ACADEMY_SURNAMES_POOL[0];
@@ -272,7 +291,7 @@ function buildTeamSheetFromRoster(opts: {
     }
   }
 
-  while (starters.length < 11) {
+  while (!liveXiOnPitch && starters.length < 11) {
     const idx = starters.length;
     const candidate = ACADEMY_SURNAMES_POOL[poolCursor % ACADEMY_SURNAMES_POOL.length];
     poolCursor += 1;
@@ -547,6 +566,7 @@ export function TunnelStartingXICard({
                     key={player.player_id}
                     className="group flex items-baseline gap-2.5 rounded px-1 py-0.5 transition-colors hover:bg-white/[0.04]"
                   >
+                    <KitBakedMark color="#38bdf8" size={22} />
                     <span className="gx-mono w-5 shrink-0 text-right text-[11px] font-bold text-sky-300/80">
                       {player.shirt_number}
                     </span>
@@ -749,6 +769,7 @@ export function EditorialLineupPosterCard({
                     key={player.player_id}
                     className="flex items-baseline justify-center gap-2 leading-none"
                   >
+                    <KitBakedMark color={accent.badgeBg} size={22} />
                     <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
                       {String(player.shirt_number).padStart(2, "0")}
                     </span>

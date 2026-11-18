@@ -897,6 +897,10 @@ export type AnimationResolutionContext = {
   celebrationSide?: PitchSide | null;
   stage?: string | null;
   homeAttacksRight?: boolean;
+  phase?: string | null;
+  phaseAgeSec?: number;
+  homeScore?: number | null;
+  awayScore?: number | null;
 };
 
 function resolveIndividualMovementAction(player: {
@@ -921,7 +925,12 @@ function resolveIndividualMovementAction(player: {
   if (combinedState.includes("jump") || combinedState.includes("aerial")) return "jump";
   if (combinedState.includes("turn")) return "turn";
   if (combinedState.includes("accel")) return "accelerate";
-  if (combinedState.includes("dribble") || player.hasBall) return "dribble";
+  if (combinedState.includes("dribble") || player.hasBall) {
+    const fast =
+      (player.speedRatio ?? 0) >= 0.72 ||
+      (player.velocity ? Math.hypot(player.velocity.x, player.velocity.y) > 0.05 : false);
+    return fast ? "dribble_run" : "dribble";
+  }
   if (combinedState.includes("sprint") || combinedState.includes("attacking") || combinedState.includes("counter")) {
     return "sprint";
   }
@@ -1103,8 +1112,21 @@ export function animationFor(
     return resolveIndividualMovementAction(player);
   }
 
-  if (event === "substitution" || event === "halftime" || event === "fulltime") {
+  if (event === "substitution") {
     return "idle";
+  }
+
+  const phased = phasePresentation({
+    x: typeof player.x === "number" ? player.x : 0.5,
+    y: typeof player.y === "number" ? player.y : 0.5,
+    side: player.side,
+    phase: context?.phase || (event === "halftime" ? "halftime" : event === "fulltime" ? "full_time" : null),
+    ageSec: context?.phaseAgeSec ?? (event === "halftime" || event === "fulltime" ? 0 : undefined),
+    homeScore: context?.homeScore,
+    awayScore: context?.awayScore,
+  });
+  if (phased?.rig && (context?.phase || event === "halftime" || event === "fulltime")) {
+    return phased.rig;
   }
 
   // First-touch / ball-control: receiver cushioning an incoming pass or cross
@@ -1974,6 +1996,9 @@ export function momentumAt(values: ReadonlyArray<number> | null | undefined, min
 export type DirectorShot = {
   kind:
     | "kickoff_wide"
+    | "walk_on"
+    | "halftime_wide"
+    | "fulltime_wide"
     | "goal_cut"
     | "set_piece"
     | "injury_time"
@@ -1994,6 +2019,65 @@ export type DirectorShot = {
  * Picks a TV-director camera shot from the authoritative frame. Pure and stateless:
  * `eventAgeMs` is how long the current event has been on screen (supplied by the renderer).
  */
+export type PhaseFootballAction = "walk" | "idle" | "goal_celebration" | "disappointment";
+
+/**
+ * Walk-on, half-time hold, and full-time celebration share one pitch-space pose
+ * for the 2D atlas and the WebGL body.
+ */
+export function phasePresentation(input: {
+  x: number;
+  y: number;
+  side?: PitchSide | null;
+  phase?: string | null;
+  ageSec?: number;
+  homeScore?: number | null;
+  awayScore?: number | null;
+}): { x: number; y: number; football: PhaseFootballAction; rig: "walk" | "idle" | "celebrate" | "frustrated" } | null {
+  const phase = String(input.phase || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  const age = Math.max(0, input.ageSec || 0);
+  const x = clampUnit(input.x);
+  const y = clampUnit(input.y);
+  const side = input.side === "away" ? "away" : "home";
+  const mix = (from: number, to: number, seconds: number) => from + (to - from) * Math.min(1, age / seconds);
+
+  if (phase === "pre_match" || phase === "scheduled") {
+    const fromY = Math.min(0.98, y + 0.12);
+    const walking = age < 6;
+    return { x, y: mix(fromY, y, 6), football: walking ? "walk" : "idle", rig: walking ? "walk" : "idle" };
+  }
+  if (phase === "halftime" || phase === "half_time") {
+    const ownGoal = side === "home" ? 0.08 : 0.92;
+    const walking = age < 8;
+    return {
+      x: mix(x, x + (ownGoal - x) * 0.35, 8),
+      y,
+      football: walking ? "walk" : "idle",
+      rig: walking ? "walk" : "idle",
+    };
+  }
+  if (phase === "full_time" || phase === "fulltime" || phase === "completed") {
+    const home = Number(input.homeScore || 0);
+    const away = Number(input.awayScore || 0);
+    const scoring = home === away ? true : side === "home" ? home >= away : away >= home;
+    if (age < 3.2) {
+      return {
+        x,
+        y,
+        football: scoring ? "goal_celebration" : "disappointment",
+        rig: scoring ? "celebrate" : "frustrated",
+      };
+    }
+    const walking = age < 9;
+    const offY = Math.min(0.98, y + 0.16);
+    return { x, y: mix(y, offY, 6), football: walking ? "walk" : "idle", rig: walking ? "walk" : "idle" };
+  }
+  return null;
+}
+
 export function deriveDirectorShot(input: {
   eventType?: string | null;
   phase?: string | null;
@@ -2009,6 +2093,19 @@ export function deriveDirectorShot(input: {
 }): DirectorShot {
   const ev = String(input.eventType || "").toLowerCase();
   const age = input.eventAgeMs ?? 0;
+  const phaseKey = String(input.phase || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[\s-]+/g, "_");
+  if (phaseKey === "pre_match" || phaseKey === "scheduled") {
+    return { kind: "walk_on", zoomMultiplier: 0.78, focus: { x: 0.5, y: 0.5 } };
+  }
+  if (phaseKey === "halftime" || phaseKey === "half_time") {
+    return { kind: "halftime_wide", zoomMultiplier: 0.76, focus: { x: 0.5, y: 0.5 } };
+  }
+  if (phaseKey === "full_time" || phaseKey === "fulltime" || phaseKey === "completed") {
+    return { kind: "fulltime_wide", zoomMultiplier: 0.74, focus: { x: 0.5, y: 0.5 } };
+  }
   const t = input.timeSeconds ?? null;
   const bx = input.ball?.x ?? 0.5;
   const by = input.ball?.y ?? 0.5;

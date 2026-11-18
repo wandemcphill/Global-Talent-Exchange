@@ -2532,7 +2532,7 @@ export default function MatchCenter() {
         </div>
 
         {/* Tab 1: 2D / 2.5D Match Pitch Board */}
-        <div className={`${activeTab === "pitch" ? "block" : "hidden"} order-2 space-y-4 max-md:block`}>
+        <div className={`${activeTab === "pitch" || (activeTab === "post_match" && done) ? "block" : "hidden"} order-2 space-y-4 max-md:block`}>
             {/* Pitch Camera & Tactical Shader Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-slate-900/85 p-2.5">
               {/* Camera Perspective Switcher */}

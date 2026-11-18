@@ -62,6 +62,17 @@ Commercial use is allowed. Credit is not required. Keep this note with the files
 - Outfield set: spin, headers, tackles, falls, penalty, juggling, receive, idles, scissor, chip, throw-in, dribble, jog, and strafe
 - Goalkeeper set: short and long placement, high and low catches, scoop, drop kick, diving saves, sidesteps, body blocks, throws, directing, and idle with and without the ball
 - The raw FBX files stay here. The match plays the baked clip library at `frontend/react-shell/public/models/footballer/gtex_mixamo_clips.glb`.
+- No further Mixamo titles were downloaded for the run-dribble, moving strike, standing tackle, or slumped reaction. Those four takes come from the Unity football FBX already in the repo, retargeted onto `mixamorig` bones with hip translation removed: `Gtex_Dribble_Run`, `Gtex_Strike`, `Gtex_Standing_Tackle`, `Gtex_Slump`. The rebaked library has 69 clips. Raw FBX was not copied into `mixamo/`.
+- Goal celebration stays the existing Mixamo clip `Kicking_Up_A_Soccer_Ball`. The tunnel walk-off uses `Walking_Forwards`. The penalty clip `Male_Soccer_Penalty_Kick` plays only for a penalty. Contact phases for ball release are in `frontend/react-shell/src/lib/3d/broadcast/clipContact.json`.
+- Licence reminder, also recorded in `frontend/react-shell/src/lib/3d/gifting/GIFTING_ASSET_LICENSES.md`: Adobe Mixamo allows commercial use. Do not redistribute the raw FBX.
+
+## GT Mixamo footballer
+
+- Source folder: `C:\Users\ayomc\Desktop\GT` (`MIXAMO RIG.glb` inside `MIXAMO+RIG.zip`)
+- Copied to `frontend/react-shell/public/models/footballer/gtex_gt_mixamo_kit.glb`
+- 65 joints named `mixamorig:Hips` and the rest of the Mixamo set, one skinned mesh, materials HEAD, TSHIRT, SHORT, HAND, LEG
+- The kit file has no animation clips. Clips stay in `gtex_mixamo_clips.glb`.
+- The 2D and 2.5D pitch samples `frontend/react-shell/public/models/footballer/atlas/` (body, kit, parts, and foot-anchor manifest). The procedural capsule atlas remains the fallback when that PNG is missing.
 
 ## Not downloaded
 
