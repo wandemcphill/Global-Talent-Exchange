@@ -28,7 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { API, api } from "@/lib/api";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
   StadiumPerimeterLEDShowcase,
   StadiumMatchdaySoundscape,
@@ -1141,8 +1141,8 @@ export default function PublicClubProfile() {
 
         {/* SECTION H: 3D SHOWCASE & INSPECTION */}
         <section aria-label="3D Club Inspection">
-          <Cinema3DStage
-            scene="facility_upgrade"
+          <GtexSceneViewport
+            sceneId="facility_upgrade"
             compact
             enableSocialSalute
             title={`3D Match & Hangar Inspection · ${club.name}`}

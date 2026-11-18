@@ -127,9 +127,9 @@ jest.mock("@/lib/3d/broadcast/useMatchFullTimeGovernance", () => ({
   useMatchFullTimeGovernance: () => undefined,
 }));
 
-jest.mock("@/components/gtex/Cinema3DStage", () => ({
+jest.mock("@/lib/3d/GtexSceneViewport", () => ({
   __esModule: true,
-  Cinema3DStage: () => null,
+  GtexSceneViewport: () => null,
 }));
 
 jest.mock("@/components/gtex/PressRoomStage", () => ({

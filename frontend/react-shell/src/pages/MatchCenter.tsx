@@ -30,7 +30,7 @@ import {
 import { api, errMsg, tokens } from "@/lib/api";
 import { useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
-import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { PressRoomStage } from "@/components/gtex/PressRoomStage";
 import { useMatchSpectatorStream } from "@/lib/3d/broadcast/useMatchSpectatorStream";
 import { useMatchFullTimeGovernance } from "@/lib/3d/broadcast/useMatchFullTimeGovernance";
@@ -817,7 +817,7 @@ function TacticalHUD({
 function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?: any; matchId: string }) {
   const [pollVote, setPollVote] = useState<string | null>(null);
   const [predictionData, setPredictionData] = useState<any>(preMatch?.fan_predictions);
-  const [preMatch3DScene, setPreMatch3DScene] = useState<Cinema3DSceneType>("facility_upgrade");
+  const [preMatch3DScene, setPreMatch3DScene] = useState("facility_upgrade");
 
   const { data: initialPreds } = useQuery({
     queryKey: ["predictions", matchId],
@@ -903,9 +903,9 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
           </p>
           <div className="flex items-center gap-1.5">
             {[
-              { id: "facility_upgrade" as Cinema3DSceneType, label: "3D STADIUM FLYOVER" },
-              { id: "signing_walkout" as Cinema3DSceneType, label: "3D TUNNEL WALKOUT" },
-              { id: "competition_final" as Cinema3DSceneType, label: "3D TROPHY PLINTH" },
+              { id: "facility_upgrade", label: "3D STADIUM FLYOVER" },
+              { id: "signing_walkout", label: "3D TUNNEL WALKOUT" },
+              { id: "competition_final", label: "3D TROPHY PLINTH" },
             ].map((s) => (
               <button
                 key={s.id}
@@ -921,8 +921,8 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
             ))}
           </div>
         </div>
-        <Cinema3DStage
-          scene={preMatch3DScene}
+        <GtexSceneViewport
+          sceneId={preMatch3DScene}
           title={
             preMatch3DScene === "facility_upgrade"
               ? `${match.home_name} STADIUM BOWL`
@@ -933,6 +933,12 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
           subtitle="Pre-Match 3D Broadcast Inspection · Drag 360° or Toggle Director Cut"
           badgeText="PRE-MATCH 3D STAGE"
           clubName={match.home_name}
+          subjectLabel={
+            preMatch3DScene === "signing_walkout"
+              ? keyDuel?.home_player?.name || match.home_name
+              : match.home_name
+          }
+          qualityTier="medium"
           compact
         />
       </Panel>
@@ -1226,14 +1232,16 @@ function PostMatchAnalytics({
 
         {show3DMotmStage && (
           <div className="mb-4 overflow-hidden rounded-lg">
-            <Cinema3DStage
-              scene="world_gala"
+            <GtexSceneViewport
+              sceneId="world_gala"
               title={motm?.player_name || "VICTOR OSIMHEN"}
               subtitle={`${motm?.team_name || match.home_name} · Official Man of the Match Honors`}
               badgeText="3D MOTM TROPHY PLINTH"
               subjectName={motm?.player_name || "VICTOR OSIMHEN"}
+              subjectLabel={motm?.player_name || "Man of the Match"}
               overallRating={motm?.rating ? Number(motm.rating).toFixed(1) : "9.2"}
               clubName={motm?.team_name || match.home_name}
+              qualityTier="medium"
               compact
             />
           </div>

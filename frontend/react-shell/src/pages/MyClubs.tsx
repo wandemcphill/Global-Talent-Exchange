@@ -17,7 +17,7 @@ import {
   useRefreshOwner,
 } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
   Building,
   Gift,
@@ -114,8 +114,8 @@ function Facilities({ club }: any) {
       </div>
 
       <div className="mb-6">
-        <Cinema3DStage
-          scene="facility_upgrade"
+        <GtexSceneViewport
+          sceneId="facility_upgrade"
           compact
           title={`3D Stadium Cathedral & Campus Cutaway · ${club.club_name}`}
           subtitle="Interactive 3D Architectural Blueprint-to-Cathedral Morph · Stadium, Academy & Medical"

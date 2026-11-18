@@ -6,6 +6,7 @@ import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader
 import { PressRoomStage } from "@/components/gtex/PressRoomStage";
 import { CinematicGiftingEngine } from "@/lib/3d/gifting/CinematicGiftingEngine";
 import { PrestigeShowroomScene } from "@/lib/3d/scenes/PrestigeShowroomScene";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import type { SpectatorSafeMatchView } from "@/lib/3d/broadcast/spectatorContract";
 
 function KitCloseUp() {
@@ -106,10 +107,28 @@ function KitCloseUp() {
 
 export default function VisualReviewPage() {
   const [match, setMatch] = useState<SpectatorSafeMatchView | null>(null);
+  const only = new URLSearchParams(window.location.search).get("scene");
 
   useEffect(() => {
+    if (only) return;
     void loadFiveMinuteShowcaseFixture(300).then(setMatch);
-  }, []);
+  }, [only]);
+
+  if (only === "takeover") {
+    return (
+      <main className="min-h-screen bg-[#07111c] text-white">
+        <GtexSceneViewport
+          sceneId="club_takeover"
+          clubName="Harbour Athletic"
+          primaryColor="#0f766e"
+          secondaryColor="#d4a24c"
+          title="The club is yours"
+          badgeText="OWNERSHIP"
+          className="!h-screen !min-h-0"
+        />
+      </main>
+    );
+  }
 
   return (
     <main className="min-h-screen bg-slate-950 text-white">
@@ -156,6 +175,17 @@ export default function VisualReviewPage() {
             rarity: "legendary",
             duration_ms: 600000,
           }}
+        />
+      </section>
+
+      <section id="takeover" className="border-t border-white/10 bg-[#07111c] p-4">
+        <GtexSceneViewport
+          sceneId="club_takeover"
+          clubName="Harbour Athletic"
+          primaryColor="#0f766e"
+          secondaryColor="#d4a24c"
+          title="The club is yours"
+          badgeText="OWNERSHIP"
         />
       </section>
 

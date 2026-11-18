@@ -65,7 +65,7 @@ const STORAGE_QUALITY_KEY = "gtex_3d_quality_tier_override";
 
 /**
  * Canonical GTEX Initial Scene Catalog.
- * Registers CampusBuilder, all 17 Cinema3DStage scenes, and next-gen Living Ecosystem destinations.
+ * Registers campus, presentation, broadcast, and showroom environments.
  */
 const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
   // 1. Campus Builder
@@ -87,19 +87,18 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     tags: ["campus", "facilities", "construction", "headquarters", "infrastructure"],
   },
 
-  // 2. Cinema Stage Scenes (Mapped to Cinema3DStage - All 17 scenes)
+  // 2. Presentation environments. Each id resolves through productSceneLoaders.
   {
     id: "signing_walkout",
     title: "Player Signing Walkout",
     category: "cinema",
     description: "Director Cut 3-shot walkout presentation with floodlight reveal, confetti, and kit customization.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 850], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 2.2, 16], target: [0, 1.6, 0], fov: 32 },
+    requiredModels: ["/models/match/football-stadium.glb", "/models/footballer/gtex_home_kit_mixamo.glb"],
     requiredAudio: ["walkout_sub_bass", "pyro_pop", "shutter_click"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "signing_walkout",
     tags: ["walkout", "signing", "player", "celebration", "reveal"],
   },
   {
@@ -107,12 +106,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Executive Negotiation Table",
     category: "club",
     description: "Tense boardroom contract negotiations between owner, manager, player, and representative.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 2, 780], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 5, 18], target: [0, 2, 0], fov: 40 },
+    requiredModels: ["/models/campus/club_hq.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "negotiation_table",
     tags: ["contract", "boardroom", "negotiations", "transfer", "agent"],
   },
   {
@@ -120,8 +118,8 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Prestige Luxury Turntable",
     category: "showroom",
     description: "Reflective 360-degree turntable for private jets, hypercars, luxury SUVs, and horology inspection.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 10, 820], target: [0, 0, 0], fov: 42 },
+    renderBackend: "threejs",
+    defaultCamera: { position: [6.5, 3.2, 8.5], target: [0, 1.1, 0], fov: 38 },
     requiredModels: [
       "/assets/showroom/sovereign_900x_jet.glb",
       "/assets/showroom/veloce_gt9_hypercar.glb",
@@ -130,7 +128,6 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     ],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "luxury_turntable",
     tags: ["showroom", "prestige", "turntable", "luxury", "jet", "car"],
   },
   {
@@ -138,12 +135,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "World Football Awards Gala",
     category: "cinema",
     description: "Black-tie awards ceremony stage with red carpet, flashbulbs, and trophy presentations.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 800], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [16, 6, 22], target: [0, 2.2, 0], fov: 36 },
+    requiredModels: ["/models/match/football-stadium.glb", "/assets/showroom/trophy_plinth.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "world_gala",
     tags: ["gala", "awards", "red_carpet", "ballon_dor", "prestige"],
   },
   {
@@ -151,12 +147,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Build-A-Son Academy Lab",
     category: "academy",
     description: "Futuristic genetics and youth development laboratory for personalized youth prodigies.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 820], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [12, 6, 14], target: [0, 1.2, 0], fov: 38 },
+    requiredModels: ["/models/campus/elite_academy_complex.glb", "/models/campus/academy_youth_pitch.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "build_a_son",
     tags: ["academy", "build_a_son", "regen", "youth", "custom_prodigy"],
   },
   {
@@ -164,12 +159,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Manager Tactical Arrival",
     category: "club",
     description: "High-profile manager unveiling press conference with stadium tactical board backdrop.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 800], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [8, 3.2, 12], target: [0, 1.5, 0], fov: 36 },
+    requiredModels: ["/models/campus/training_pitch.glb", "/models/footballer/gtex_home_kit_mixamo.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "manager_arrival",
     tags: ["manager", "arrival", "press", "unveiling", "tactics"],
   },
   {
@@ -177,12 +171,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Stadium Sponsorship & Naming Rights",
     category: "cinema",
     description: "Immersive stadium floodlight overview showcasing 360 LED perimeter ribbons and naming halo.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 15, 890], target: [0, 0, 0], fov: 45 },
-    requiredModels: ["/models/campus/stadium_main.glb"],
+    renderBackend: "threejs",
+    defaultCamera: { position: [24, 8, 22], target: [0, 4, 8], fov: 38 },
+    requiredModels: ["/models/match/football-stadium.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "stadium_sponsor",
     tags: ["stadium", "sponsor", "advertising", "led_ribbon", "broadcast"],
   },
   {
@@ -190,25 +183,23 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Boardroom Strategic Clash",
     category: "club",
     description: "High-stakes executive discussion on club philosophy, transfer budgets, and manager tenure.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 780], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 4.2, 14], target: [0, 1.6, 0], fov: 40 },
+    requiredModels: ["/models/campus/club_hq.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "boardroom_clash",
     tags: ["boardroom", "executive", "owner", "dispute", "strategy"],
   },
   {
     id: "club_takeover",
     title: "Club Ownership Takeover",
     category: "club",
-    description: "Billionaire consortium takeover announcement with corporate crest and helicopter arrival.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 10, 840], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    description: "Night stadium takeover. The club name and crest are carried on the bowl display.",
+    renderBackend: "threejs",
+    defaultCamera: { position: [78, 40, 92], target: [0, 12, 0], fov: 38 },
+    requiredModels: ["/models/presentation/cc0_football_stadium.glb", "/models/campus/club_hq.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "club_takeover",
     tags: ["takeover", "ownership", "consortium", "executive", "club"],
   },
   {
@@ -216,12 +207,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Campus Facility Upgrade",
     category: "campus",
     description: "Ribbon-cutting ceremony for newly constructed elite training centers and analytics suites.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 5, 820], target: [0, 0, 0], fov: 45 },
+    renderBackend: "threejs",
+    defaultCamera: { position: [90, 42, 70], target: [0, 8, 0], fov: 38 },
     requiredModels: ["/models/campus/club_hq.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "facility_upgrade",
     tags: ["facility", "campus", "upgrade", "infrastructure", "construction"],
   },
   {
@@ -229,12 +219,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Youth Academy Expansion",
     category: "academy",
     description: "Unveiling modern youth development pitches, scouting hubs, and boarding dorms.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 5, 820], target: [0, 0, 0], fov: 45 },
+    renderBackend: "threejs",
+    defaultCamera: { position: [40, 22, 36], target: [0, 4, 0], fov: 40 },
     requiredModels: ["/models/campus/academy_complex.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "academy_upgrade",
     tags: ["academy", "expansion", "youth", "campus", "upgrade"],
   },
   {
@@ -242,12 +231,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Academy Wonderkid Emergence",
     category: "academy",
     description: "Youth prospect emergence with golden potential aura and youth academy crest presentation.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 820], target: [0, 0, 0], fov: 45 },
+    renderBackend: "threejs",
+    defaultCamera: { position: [8, 2.4, 10], target: [0, 1.4, 0], fov: 34 },
     requiredModels: ["/models/campus/academy_complex.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "wonderkid_emergence",
     tags: ["academy", "wonderkid", "regen", "youth", "potential"],
   },
   {
@@ -255,12 +243,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Championship Trophy Ceremony",
     category: "competition",
     description: "Golden confetti storm and podium celebration for tournament champions and trophy holders.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 800], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [28, 14, 36], target: [0, 3, 0], fov: 36 },
+    requiredModels: ["/models/match/football-stadium.glb", "/assets/showroom/trophy_plinth.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "competition_final",
     tags: ["competition", "trophy", "cup", "champion", "podium"],
   },
   {
@@ -268,12 +255,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Dynamic Pitchside LED Campaign",
     category: "cinema",
     description: "Full stadium in-match advertising showcase with animated LED brand placements.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 10, 850], target: [0, 0, 0], fov: 45 },
-    requiredModels: ["/models/campus/stadium_main.glb"],
+    renderBackend: "threejs",
+    defaultCamera: { position: [24, 8, 22], target: [0, 4, 8], fov: 36 },
+    requiredModels: ["/models/match/football-stadium.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "stadium_ad_display",
     tags: ["ad", "advertising", "led", "commercial", "sponsor"],
   },
   {
@@ -281,25 +267,23 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Commercial Partnership Signing",
     category: "cinema",
     description: "Global corporate brand partnership announcement with co-branded jersey and digital displays.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 800], target: [0, 0, 0], fov: 45 },
-    requiredModels: [],
+    renderBackend: "threejs",
+    defaultCamera: { position: [0, 5, 18], target: [0, 4, 6], fov: 36 },
+    requiredModels: ["/models/match/football-stadium.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "new_ad_deal",
     tags: ["commercial", "partnership", "deal", "brand", "revenue"],
   },
   {
     id: "club_announcement",
     title: "Club Breaking Announcement",
     category: "club",
-    description: "Official club broadcast statement with press conference lighting and official media backdrop.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 0, 800], target: [0, 0, 0], fov: 45 },
+    description: "Official club broadcast statement set as an editorial communiqué.",
+    renderBackend: "react_editorial",
+    defaultCamera: { position: [0, 2, 8], target: [0, 1.4, 0], fov: 40 },
     requiredModels: [],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "club_announcement",
     tags: ["announcement", "club", "press", "breaking", "statement"],
   },
   {
@@ -307,12 +291,11 @@ const INITIAL_SCENE_CATALOG: GtexSceneDescriptor[] = [
     title: "Executive Private Jet Runway",
     category: "showroom",
     description: "Tarmac presentation for VIP private jets with heat shimmer, turbine glow, and boarding stairs.",
-    renderBackend: "cinema_volumetric",
-    defaultCamera: { position: [0, 10, 860], target: [0, 0, 0], fov: 42 },
+    renderBackend: "threejs",
+    defaultCamera: { position: [6.5, 3.2, 8.5], target: [0, 1.1, 0], fov: 38 },
     requiredModels: ["/assets/showroom/sovereign_900x_jet.glb"],
     fallbackMode: "2d_diorama",
     supportsInteraction: true,
-    cinemaSceneType: "private_jet_flex",
     tags: ["jet", "runway", "vip", "luxury", "flex", "showroom"],
   },
 
@@ -453,18 +436,9 @@ class SceneRegistryStore {
     this.scenes.set(descriptor.id, { ...descriptor });
   }
 
-  /** Look up a scene by its unique identifier or Cinema3DSceneType alias */
+  /** Look up a scene by its unique identifier. */
   public getScene(id: string): GtexSceneDescriptor | undefined {
-    if (this.scenes.has(id)) {
-      return this.scenes.get(id);
-    }
-    // Check cinemaSceneType alias
-    for (const desc of this.scenes.values()) {
-      if (desc.cinemaSceneType === id) {
-        return desc;
-      }
-    }
-    return undefined;
+    return this.scenes.get(id);
   }
 
   /** Returns true if a scene with the specified ID exists */

@@ -25,7 +25,7 @@ import { coinWithNaira } from "@/lib/money";
 import { Loading } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
   describeNegotiation,
   describeOffer,
@@ -1243,8 +1243,9 @@ export function TransferHub() {
               Offering from: <b className="text-emerald-400">{activeClub?.club_name}</b>
             </p>
 
-            <Cinema3DStage
-              scene="negotiation_table"
+            <GtexSceneViewport
+              sceneId="negotiation_table"
+              qualityTier="medium"
               compact
               title={`3D Executive War Room · ${offerListing.player?.full_name || offerListing.player_id}`}
               subtitle={`Asking Reference: ${fmt(offerListing.base_price || 0)} GTX · Current Offer: ${fmt(Number(offerAmount || 0))} GTX`}
@@ -1320,8 +1321,9 @@ export function TransferHub() {
               {" · "}Listing {String(contractOfferNegotiation.listing_id).slice(0, 8)}
             </p>
 
-            <Cinema3DStage
-              scene="negotiation_table"
+            <GtexSceneViewport
+              sceneId="negotiation_table"
+              qualityTier="medium"
               compact
               title={`3D Contract Suite · ${contractOfferNegotiation.player_name || contractOfferNegotiation.player_id}`}
               subtitle={`${contractYears}-Year Deal · Squad Role: ${contractExpectedRole || "Starter"}`}
@@ -1419,8 +1421,9 @@ export function TransferHub() {
             </h3>
 
             {/* Live 3D Signing Walkout & Kit Reveal Stage */}
-            <Cinema3DStage
-              scene="signing_walkout"
+            <GtexSceneViewport
+              sceneId="signing_walkout"
+              qualityTier="medium"
               compact
               title={`${unveilingPlayer.name} · Official #${shirtNumber || 9} Kit Unveil`}
               subtitle={`${activeClub?.club_name || "GTEX FC"} · ${
@@ -1542,8 +1545,9 @@ export function TransferHub() {
           data-testid="signing-unveiled-receipt"
         >
           <div className="w-full max-w-xl rounded-2xl border border-emerald-400/50 bg-gradient-to-br from-slate-900 via-slate-950 to-emerald-950/40 p-6 text-center shadow-2xl space-y-4 my-auto">
-            <Cinema3DStage
-              scene="signing_walkout"
+            <GtexSceneViewport
+              sceneId="signing_walkout"
+              qualityTier="medium"
               compact
               title={`${unveiledReceipt.player.name} (#${unveiledReceipt.shirtNumber}) Unveiled`}
               subtitle={`Official ${activeClub?.club_name || "GTEX FC"} Broadcast Feed`}

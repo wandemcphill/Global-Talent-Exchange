@@ -24,7 +24,7 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { Loading } from "@/components/gtex/ui";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 
 const resolveNewsImage = (raw?: string, category?: string) => {
   if (raw && (raw.startsWith("http") || raw.startsWith("data:"))) return raw;
@@ -437,8 +437,8 @@ export function Newsroom() {
 
       {/* 3D Global Flex Wire & 3D Official Club Announcement Studio */}
       <div className="grid gap-6 lg:grid-cols-2" data-testid="newsroom-3d-broadcast-row">
-        <Cinema3DStage
-          scene="private_jet_flex"
+        <GtexSceneViewport
+          sceneId="private_jet_flex"
           compact
           enableSocialSalute
           title="3D Global Aviation Flex · Sovereign 900X Executive Jet"
@@ -453,8 +453,8 @@ export function Newsroom() {
             { label: "Verified Ledger", value: "4,800 GTX", accent: "#F5B83D" },
           ]}
         />
-        <Cinema3DStage
-          scene="club_announcement"
+        <GtexSceneViewport
+          sceneId="club_announcement"
           compact
           enableSocialSalute
           title={leadStory?.headline || "3D Official Club Communiqué & Breaking News Desk"}

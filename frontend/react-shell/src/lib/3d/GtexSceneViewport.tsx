@@ -8,18 +8,10 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { GtexSceneRegistry, QUALITY_PROFILES } from "./GtexSceneRegistry";
 import { DeviceQualityTier, GtexSceneViewportProps } from "./GtexSceneTypes";
 import { useQualityTelemetry } from "./qualityTelemetry";
-import { Cinema3DStage, Cinema3DSceneType } from "@/components/gtex/Cinema3DStage";
-import {
-  Sparkles,
-  Layers,
-  Cpu,
-  Monitor,
-  Eye,
-  AlertCircle,
-  ShieldCheck,
-  ChevronRight,
-  Activity,
-} from "lucide-react";
+import { EditorialAnnouncement } from "./scenes/EditorialAnnouncement";
+import { hasProductSceneLoader, PRODUCT_SCENE_LOADERS } from "./productSceneLoaders";
+import type { GtexCustomSceneRenderer } from "./GtexSceneTypes";
+import { AlertCircle, ChevronRight, Cpu, Sparkles } from "lucide-react";
 
 /**
  * Utility to test whether WebGL context creation is supported in the current environment.
@@ -40,6 +32,7 @@ export function isWebGLSupported(): boolean {
 export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
   sceneId,
   qualityTier: explicitQualityTier,
+  qualityPreset,
   forceFallback2D = false,
   forceWebGL = false,
   className = "",
@@ -49,12 +42,15 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
   onQualityTelemetryUpdate,
   onQualityTierChange,
   children,
-  ...cinemaProps
+  ...presentation
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [hasWebGL, setHasWebGL] = useState<boolean>(true);
+  const presetTier = (["low", "medium", "high", "ultra"] as const).includes(qualityPreset as DeviceQualityTier)
+    ? (qualityPreset as DeviceQualityTier)
+    : undefined;
   const [selectedTier, setSelectedTier] = useState<DeviceQualityTier>(
-    explicitQualityTier || GtexSceneRegistry.detectDeviceQuality().tier
+    explicitQualityTier || presetTier || GtexSceneRegistry.detectDeviceQuality().tier
   );
 
   useEffect(() => {
@@ -71,17 +67,17 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
     return (
       GtexSceneRegistry.getScene(sceneId) || {
         id: sceneId,
-        title: cinemaProps.title || "GTEX 3D Environment",
-        category: "cinema" as const,
-        description: "Authoritative GTEX Football Ecosystem 3D Viewport",
-        renderBackend: "cinema_volumetric" as const,
+        title: presentation.title || "GTEX 3D Environment",
+        category: "club" as const,
+        description: "A dedicated renderer is not registered for this scene.",
+        renderBackend: "threejs" as const,
         requiredModels: [],
         fallbackMode: "2d_diorama" as const,
-        supportsInteraction: true,
+        supportsInteraction: false,
         tags: ["general"],
       }
     );
-  }, [sceneId, cinemaProps.title]);
+  }, [sceneId, presentation.title]);
 
   const activeQuality = QUALITY_PROFILES[selectedTier] || QUALITY_PROFILES.high;
 
@@ -98,7 +94,31 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
     },
   });
 
-  const shouldRenderFallback = forceFallback2D || (!hasWebGL && !forceWebGL);
+  const [asyncRenderer, setAsyncRenderer] = useState<GtexCustomSceneRenderer | null>(null);
+  const [loaderFailed, setLoaderFailed] = useState(false);
+  const [failureSceneId, setFailureSceneId] = useState<string | null>(null);
+  const presentationFailed = failureSceneId === descriptor.id;
+
+  useEffect(() => {
+    setAsyncRenderer(null);
+    setLoaderFailed(false);
+    if (GtexSceneRegistry.getRenderer(descriptor.id) || descriptor.renderBackend === "react_editorial") return;
+    if (!hasProductSceneLoader(descriptor.id)) return;
+    let cancelled = false;
+    PRODUCT_SCENE_LOADERS[descriptor.id]()
+      .then((renderer) => {
+        if (!cancelled) setAsyncRenderer(() => renderer);
+      })
+      .catch(() => {
+        if (!cancelled) setLoaderFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [descriptor.id, descriptor.renderBackend]);
+
+  const editorial = descriptor.renderBackend === "react_editorial";
+  const shouldRenderFallback = forceFallback2D || (!hasWebGL && !forceWebGL && !editorial);
 
   // Helper to render conventional 2D fallback presentation
   const renderFallbackView = (badgeLabel: string, explanationNote?: string) => (
@@ -122,7 +142,7 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
           <div className="flex items-center gap-2">
             <span className="flex h-7 items-center rounded-full bg-emerald-500/10 px-3 py-0.5 text-xs font-semibold text-emerald-400 ring-1 ring-emerald-500/30">
               <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              {cinemaProps.badgeText || descriptor.category.toUpperCase()}
+              {presentation.badgeText || descriptor.category.toUpperCase()}
             </span>
             <span className="rounded bg-amber-500/10 px-2 py-0.5 text-[11px] font-mono font-medium text-amber-400 ring-1 ring-amber-500/20">
               {badgeLabel}
@@ -138,10 +158,10 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
         {/* Title & Subject */}
         <div>
           <h3 className="text-xl font-bold tracking-tight text-slate-100">
-            {fallbackHeadline || cinemaProps.title || descriptor.title}
+            {fallbackHeadline || presentation.title || descriptor.title}
           </h3>
           <p className="mt-1 text-xs text-slate-400">
-            {fallbackDescription || cinemaProps.subtitle || descriptor.description}
+            {fallbackDescription || presentation.subtitle || descriptor.description}
           </p>
           {explanationNote && (
             <p className="mt-2 rounded border border-amber-500/20 bg-amber-500/10 px-2.5 py-1 text-[11px] text-amber-300">
@@ -151,35 +171,35 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
         </div>
 
         {/* Subject Badge / Details */}
-        {(cinemaProps.subjectName || cinemaProps.clubName) && (
+        {(presentation.subjectName || presentation.clubName) && (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-white/5 bg-white/[0.02] p-3 text-xs">
-            {cinemaProps.clubName && (
+            {presentation.clubName && (
               <div>
                 <span className="text-[10px] uppercase tracking-wider text-slate-400">Club</span>
-                <p className="font-semibold text-emerald-300">{cinemaProps.clubName}</p>
+                <p className="font-semibold text-emerald-300">{presentation.clubName}</p>
               </div>
             )}
-            {cinemaProps.subjectName && (
+            {presentation.subjectName && (
               <div className="border-l border-white/10 pl-3">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400">
-                  {cinemaProps.subjectRole || "Subject"}
+                  {presentation.subjectRole || "Subject"}
                 </span>
-                <p className="font-semibold text-white">{cinemaProps.subjectName}</p>
+                <p className="font-semibold text-white">{presentation.subjectName}</p>
               </div>
             )}
-            {cinemaProps.overallRating && (
+            {presentation.overallRating && (
               <div className="border-l border-white/10 pl-3">
                 <span className="text-[10px] uppercase tracking-wider text-slate-400">Rating</span>
-                <p className="font-bold text-amber-400 font-mono">{cinemaProps.overallRating} OVR</p>
+                <p className="font-bold text-amber-400 font-mono">{presentation.overallRating} OVR</p>
               </div>
             )}
           </div>
         )}
 
         {/* Key Stats Grid */}
-        {cinemaProps.stats && cinemaProps.stats.length > 0 && (
+        {presentation.stats && presentation.stats.length > 0 && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {cinemaProps.stats.map((stat, idx) => (
+            {presentation.stats.map((stat, idx) => (
               <div
                 key={idx}
                 className="rounded-lg border border-white/5 bg-white/[0.03] p-2.5 text-center"
@@ -197,21 +217,21 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
         )}
 
         {/* Quote / Narrative */}
-        {cinemaProps.quote && (
+        {presentation.quote && (
           <blockquote className="border-l-2 border-emerald-500/40 pl-3 italic text-xs text-slate-300">
-            "{cinemaProps.quote}"
+            "{presentation.quote}"
           </blockquote>
         )}
 
         {/* Action Row */}
-        {cinemaProps.onActionClick && cinemaProps.actionLabel && (
+        {presentation.onActionClick && presentation.actionLabel && (
           <div className="pt-2">
             <button
               type="button"
-              onClick={cinemaProps.onActionClick}
+              onClick={presentation.onActionClick}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-emerald-500 px-4 py-2 text-xs font-semibold text-slate-950 transition-colors hover:bg-emerald-400"
             >
-              <span>{cinemaProps.actionLabel}</span>
+              <span>{presentation.actionLabel}</span>
               <ChevronRight className="h-4 w-4" />
             </button>
           </div>
@@ -230,16 +250,31 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
   // -------------------------------------------------------------------------
   // 2. WEBGL HARDWARE-ACCELERATED PRESENTATION
   // -------------------------------------------------------------------------
-  const resolvedSceneType: Cinema3DSceneType =
-    descriptor.cinemaSceneType || (sceneId as Cinema3DSceneType);
+  if (editorial) {
+    return (
+      <div ref={containerRef} data-testid={testId} className={`relative w-full ${className}`} data-render-backend="react_editorial">
+        <EditorialAnnouncement
+          sceneId={descriptor.id}
+          qualityTier={selectedTier}
+          activeQuality={activeQuality}
+          title={presentation.title || descriptor.title}
+          subtitle={presentation.subtitle || descriptor.description}
+          {...presentation}
+        />
+      </div>
+    );
+  }
 
-  const CustomRenderer = GtexSceneRegistry.getRenderer(descriptor.id);
+  const CustomRenderer = GtexSceneRegistry.getRenderer(descriptor.id) || asyncRenderer;
+  const stageHeight = presentation.compact
+    ? "min-h-[220px] h-[34vh] md:h-[360px]"
+    : "min-h-[280px] h-[42vh] md:h-[480px]";
 
   return (
     <div
       ref={containerRef}
       data-testid={testId}
-      className={`relative w-full ${className}`}
+      className={`relative w-full ${stageHeight} ${className}`}
       data-quality-tier={selectedTier}
       data-target-fps={activeQuality.targetFps}
       data-measured-fps={telemetry.measuredFps}
@@ -266,16 +301,27 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
       {/* Underlying 3D Stage Delegation via Registry or Props */}
       {(() => {
         // Priority 1: Registered Custom Renderer (Matchday or Non-Matchday)
+        if (loaderFailed || presentationFailed) {
+          return renderFallbackView(
+            "3D COMPANION MODE",
+            `The ${descriptor.title} environment could not be loaded. The club record is unchanged.`
+          );
+        }
+
         if (CustomRenderer) {
-          if (descriptor.id === "stadium_match_broadcast" || cinemaProps.matchViewState) {
+          const failureProps = {
+            onPresentationFailure: () => setFailureSceneId(descriptor.id),
+          };
+          if (descriptor.id === "stadium_match_broadcast" || presentation.matchViewState) {
             return (
               <CustomRenderer
-                matchViewState={cinemaProps.matchViewState}
+                matchViewState={presentation.matchViewState}
                 qualityTier={selectedTier}
                 activeQuality={activeQuality}
                 telemetry={telemetry}
                 sceneId={descriptor.id}
-                {...cinemaProps}
+                {...presentation}
+                {...failureProps}
               />
             );
           }
@@ -285,8 +331,9 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
               qualityTier={selectedTier}
               activeQuality={activeQuality}
               telemetry={telemetry}
-              sceneProps={cinemaProps.sceneProps}
-              {...cinemaProps}
+              sceneProps={presentation.sceneProps}
+              {...presentation}
+              {...failureProps}
             />
           );
         }
@@ -300,23 +347,17 @@ export const GtexSceneViewport: React.FC<GtexSceneViewportProps> = ({
           );
         }
 
-        // Priority 3: Authentic Volumetric Cinema Scenes (17 scenes)
-        if (descriptor.renderBackend === "cinema_volumetric" || descriptor.cinemaSceneType) {
-          return (
-            <Cinema3DStage
-              scene={resolvedSceneType}
-              title={cinemaProps.title || descriptor.title}
-              subtitle={cinemaProps.subtitle || descriptor.description}
-              {...cinemaProps}
-            />
+        if (!hasProductSceneLoader(descriptor.id)) {
+          return renderFallbackView(
+            "3D COMPANION MODE (RENDERER PENDING)",
+            `A dedicated Three.js renderer is not yet registered for "${descriptor.title}". Operating in companion mode.`
           );
         }
 
-        // Priority 4: Three.js scene without registered renderer — Honest fallback
-        // Never pretend it's genuine Three.js by routing to stadium_sponsor
-        return renderFallbackView(
-          "3D COMPANION MODE (RENDERER PENDING)",
-          `A dedicated Three.js renderer is not yet registered for "${descriptor.title}". Operating in companion mode.`
+        return (
+          <div className="flex h-full min-h-[220px] items-center justify-center rounded-xl border border-white/10 bg-[#07111c] text-xs uppercase tracking-wider text-slate-400">
+            Preparing {descriptor.title}
+          </div>
         );
       })()}
     </div>

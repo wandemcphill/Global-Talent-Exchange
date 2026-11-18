@@ -354,15 +354,6 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     podium.position.set(0, 0.75, 0.6);
     scene.add(podium);
 
-    // 3D Biometric Medical Scanner Ring (Right Stage)
-    const medicalScanner = new THREE.Mesh(
-      new THREE.TorusGeometry(0.85, 0.04, 16, 32),
-      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.75 })
-    );
-    medicalScanner.rotation.x = Math.PI / 2;
-    medicalScanner.position.set(1.6, 1.2, 0);
-    scene.add(medicalScanner);
-
     // VIP Transport Tarmac & Arrival Runway Marker + 3D VIP Vehicle (Left Stage)
     const tarmacMarker = new THREE.Mesh(
       new THREE.BoxGeometry(5.0, 0.04, 1.4),
@@ -438,44 +429,27 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
         .catch(() => {});
     }
 
-    // 3D Humanoid Appointed Manager/Staff Figure (Center-Left) & Club Owner Figure (Center-Right)
-    const figuresGroup = new THREE.Group();
-    const buildHumanoid = (xPos: number, suitColor: number) => {
-      const g = new THREE.Group();
-      g.position.set(xPos, 0.25, -0.35);
-      const torso = new THREE.Mesh(
-        new THREE.BoxGeometry(0.65, 1.0, 0.38),
-        new THREE.MeshStandardMaterial({ color: suitColor, roughness: 0.5 })
-      );
-      torso.position.y = 1.25;
-      g.add(torso);
-
-      const head = new THREE.Mesh(
-        new THREE.SphereGeometry(0.22, 18, 18),
-        new THREE.MeshStandardMaterial({ color: 0xd4a373, roughness: 0.65 })
-      );
-      head.position.y = 1.98;
-      g.add(head);
-      return g;
-    };
-
-    const managerFigure = buildHumanoid(-0.55, resolvedPrimaryHex);
-    const ownerFigure = buildHumanoid(0.55, 0x0f172a);
-    figuresGroup.add(managerFigure);
-    figuresGroup.add(ownerFigure);
-
-    // Club Presentation Scarf / Contract Plaque Held Between Figures
-    const scarf = new THREE.Mesh(
-      new THREE.BoxGeometry(1.35, 0.26, 0.06),
-      new THREE.MeshStandardMaterial({
-        color: resolvedPrimaryHex,
-        emissive: resolvedPrimaryHex,
-        emissiveIntensity: 0.35,
-      })
-    );
-    scarf.position.set(0, 1.55, -0.08);
-    figuresGroup.add(scarf);
-    scene.add(figuresGroup);
+    let presentationMixer: THREE.AnimationMixer | null = null;
+    if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
+      void (async () => {
+        try {
+          const { loadFramedModel, loadPresentationFigure, TRAINING_PITCH_GLB } = await import("../sceneKit");
+          const pitch = await loadFramedModel(TRAINING_PITCH_GLB, renderer, 28);
+          if (!cancelled) {
+            pitch.position.set(0, 0, -6);
+            scene.add(pitch);
+          }
+          const figure = await loadPresentationFigure(renderer);
+          if (!cancelled) {
+            figure.object.position.set(0, 0, 0.4);
+            scene.add(figure.object);
+            presentationMixer = figure.mixer;
+          }
+        } catch {
+          // The press set remains if the training-ground assets fail.
+        }
+      })();
+    }
 
     let animId: number;
     const clock = new THREE.Clock();
@@ -494,9 +468,7 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
       if (typeof document !== "undefined" && document.hidden) return;
       const dt = clock.getDelta();
 
-      // Subtle breathing / presentation pose motion
-      figuresGroup.position.y = Math.sin(clock.getElapsedTime() * 2.2) * 0.02;
-      medicalScanner.position.y = 1.2 + Math.sin(clock.getElapsedTime() * 2.8) * 0.3;
+      presentationMixer?.update(dt);
 
       if (isTransitioningRef.current) {
         camera.position.lerp(cameraGoalPosRef.current, dt * 3.8);

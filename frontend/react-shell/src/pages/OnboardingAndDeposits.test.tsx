@@ -70,8 +70,8 @@ jest.mock("sonner", () => ({
   },
 }));
 
-jest.mock("@/components/gtex/Cinema3DStage", () => ({
-  Cinema3DStage: ({ title, stats }: any) => (
+jest.mock("@/lib/3d/GtexSceneViewport", () => ({
+  GtexSceneViewport: ({ title, stats }: any) => (
     <div data-testid="cinema-stage">
       <span>{title}</span>
       {(stats || []).map((s: any) => (

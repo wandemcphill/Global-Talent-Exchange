@@ -11,7 +11,7 @@ import { ScoutingTableView, ScoutingTableItem } from "@/components/gtex/Scouting
 import { ScoutingDevelopmentView } from "@/components/gtex/ScoutingDevelopmentView";
 import { PlayerDossier } from "@/components/gtex/PlayerDossier";
 import { Loading } from "@/components/gtex/ui";
-import { Cinema3DStage } from "@/components/gtex/Cinema3DStage";
+import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { toast } from "sonner";
 
 export function RegenWorld() {
@@ -554,8 +554,8 @@ export function RegenWorld() {
         </div>
       ) : tab === "rankings" ? (
         <div className="space-y-4" data-testid="regen-rankings-view">
-          <Cinema3DStage
-            scene="world_gala"
+          <GtexSceneViewport
+            sceneId="world_gala"
             compact
             title={`3D GTEX World Player of the Year Gala · ${rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "Global #1 Laureate"}`}
             subtitle="Monaco Theatre · Official GTEX d'Or & Golden Boy 3D Presentation"
@@ -611,8 +611,8 @@ export function RegenWorld() {
         </div>
       ) : (
         <div className="space-y-4" data-testid="regen-hall-view">
-          <Cinema3DStage
-            scene="world_gala"
+          <GtexSceneViewport
+            sceneId="world_gala"
             compact
             title={`3D Immortalized Legend Ceremony · ${hallData?.[0]?.player_name || hallData?.[0]?.name || "GTEX Founding Icon"}`}
             subtitle="3D Golden Globe & Hall of Fame Bust Unveiling"
