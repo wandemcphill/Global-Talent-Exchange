@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { AdminAiPanel } from "./AdminAiPanel";
+import { CompetitionsTab, EconomyTab, GameClockPanel, NamedCupPrizePanel, PlayersTab, QueuesTab, RailsAndTreasuryTab, UsersTab } from "./AdminControls";
 
 function GodModeControlDesk() {
   const qc = useQueryClient();

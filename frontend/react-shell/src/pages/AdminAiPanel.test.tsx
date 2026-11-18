@@ -12,6 +12,8 @@ declare const jest: any;
 
 const mockApiGet = jest.fn();
 const mockApiPut = jest.fn();
+const mockToastSuccess = jest.fn();
+const mockToastError = jest.fn();
 
 jest.mock("@/lib/api", () => ({
   errMsg: (error: any) => error?.message || "error",
@@ -22,7 +24,7 @@ jest.mock("@/lib/api", () => ({
 }));
 
 jest.mock("sonner", () => ({
-  toast: { success: jest.fn(), error: jest.fn() },
+  toast: { success: mockToastSuccess, error: mockToastError },
 }));
 
 const status = {
