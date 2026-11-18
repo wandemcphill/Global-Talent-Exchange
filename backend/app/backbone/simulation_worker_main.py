@@ -4,6 +4,8 @@ import logging
 from threading import Event as ThreadEvent
 
 from app.backbone.kafka import KafkaJsonConsumer
+from app.backbone.worker_health import note_worker_mode, record_worker_cycle, worker_health_snapshot
+from app.core.database import collect_database_pool_telemetry
 from app.backbone.queue_runtime import SimulationQueueConsumerService
 from app.competition_engine.match_dispatcher import MatchDispatcher
 from app.competition_engine.queue_contracts import DurableQueuePublisher
@@ -86,6 +88,7 @@ def main() -> None:
         )
         context.event_publisher.subscribe(replay_archive.handle_event)
         if use_kafka_consumer:
+            note_worker_mode("kafka_consumer")
             consumer = KafkaJsonConsumer(
                 brokers=settings.kafka_brokers,
                 group_id=f"{settings.kafka_queue_consumer_group}-simulation",
@@ -107,12 +110,14 @@ def main() -> None:
 
             stop_event = ThreadEvent()
             interval = max(1, getattr(settings, "autonomous_fixture_interval_seconds", 30) or 30)
+            note_worker_mode("autonomous_fixture_scanner")
             logger.info(
                 "simulation_worker.running mode=autonomous_fixture_scanner interval_seconds=%s",
                 interval,
             )
             while not stop_event.is_set():
                 try:
+                    pool_snapshot: dict[str, object] | None = None
                     with context.database.session_factory() as session:
                         scanner = AutonomousMatchExecutionService(session)
                         results = scanner.start_and_step_live_fixtures()
@@ -125,7 +130,29 @@ def main() -> None:
                         ):
                             logger.info("simulation_worker.stepped_live_fixtures results=%s", results)
                         session.commit()
+                        try:
+                            db_health = scanner.get_health_telemetry()
+                        except Exception:
+                            logger.exception("simulation_worker.health_query_failed")
+                            db_health = {}
+                        bind = session.get_bind()
+                        engine = getattr(bind, "engine", bind)
+                        if engine is not None:
+                            pool_snapshot = collect_database_pool_telemetry(engine)
+                    record_worker_cycle(
+                        advanced=int(results.get("advanced") or 0),
+                        started=int(results.get("started") or 0),
+                        failed=int(results.get("failed") or 0) + len(results.get("errors") or []),
+                    )
+                    logger.info(
+                        "simulation_worker.health process=%s executions=%s fixtures=%s pool=%s",
+                        worker_health_snapshot(),
+                        (db_health.get("executions") if isinstance(db_health, dict) else None),
+                        (db_health.get("fixtures") if isinstance(db_health, dict) else None),
+                        pool_snapshot,
+                    )
                 except Exception as exc:
+                    record_worker_cycle(error=str(exc))
                     logger.exception("simulation_worker.autonomous_cycle_error error=%s", exc)
 
                 # Owner-console regen growth, injuries and owner decisions must

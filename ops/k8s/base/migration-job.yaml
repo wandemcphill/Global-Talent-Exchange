@@ -30,3 +30,8 @@ spec:
               value: "false"
             - name: GTE_PROJECTION_WORKERS_ENABLED
               value: "false"
+            # One short-lived process. The pool is explicit so the job does not inherit 3+2.
+            - name: GTE_DB_POOL_SIZE
+              value: "1"
+            - name: GTE_DB_MAX_OVERFLOW
+              value: "1"

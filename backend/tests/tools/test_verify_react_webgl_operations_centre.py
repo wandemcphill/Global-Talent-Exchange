@@ -9,7 +9,9 @@ from tools.verify_react_webgl_operations_centre import (
     EXPECTED_DESTINATIONS,
     EXPECTED_GLBS,
     PROCEDURAL_DESTINATIONS,
+    REALTIME_SOCKET_GLOB,
     ConsoleSPARequestHandler,
+    hold_realtime_off_production,
 )
 
 
@@ -30,6 +32,15 @@ class VerifyReactWebglOperationsCentreTests(unittest.TestCase):
             set(EXPECTED_GLBS) | set(PROCEDURAL_DESTINATIONS),
             set(EXPECTED_DESTINATIONS),
         )
+
+    def test_asset_test_does_not_open_the_production_realtime_socket(self) -> None:
+        page = MagicMock()
+        hold_realtime_off_production(page)
+        page.route_web_socket.assert_called_once_with(REALTIME_SOCKET_GLOB, unittest.mock.ANY)
+        handler = page.route_web_socket.call_args.args[1]
+        socket = MagicMock()
+        handler(socket)
+        socket.connect_to_server.assert_not_called()
 
     def test_spa_handler_glb_mime_type(self) -> None:
         """Verify that GLB models are served with the correct model/gltf-binary MIME type."""

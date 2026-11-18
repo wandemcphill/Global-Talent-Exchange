@@ -48,6 +48,11 @@ spec:
               value: "9101"
             - name: GTE_OTEL_SERVICE_NAME
               value: gtex-simulation-worker
+            # One process per pod. replicas 2, HPA max 12, pool 2 + overflow 1.
+            - name: GTE_DB_POOL_SIZE
+              value: "2"
+            - name: GTE_DB_MAX_OVERFLOW
+              value: "1"
           resources:
             requests:
               cpu: 500m

@@ -306,7 +306,7 @@ describe("ClubOperationsCentre3D Stage 5 - Resilience, GLB Retry, Telemetry & WS
       });
       if (
         activeContainer.querySelector('[data-testid="webgl-perf-telemetry"]') &&
-        (activeContainer.querySelector('[data-testid="glb-asset-status"]')?.textContent || "").includes("6/6")
+        (activeContainer.querySelector('[data-testid="glb-asset-status"]')?.textContent || "").includes("6/6 departments")
       ) {
         break;
       }
@@ -324,9 +324,21 @@ describe("ClubOperationsCentre3D Stage 5 - Resilience, GLB Retry, Telemetry & WS
     expect(telemetryBadge?.textContent).toContain("FPS");
 
     const ops3d = (window as unknown as {
-      __GTEX_OPERATIONS_3D__?: { getTelemetry?: () => { loadedGlbs: number; contextLossCount: number } };
+      __GTEX_OPERATIONS_3D__?: {
+        getTelemetry?: () => {
+          loadedGlbs: number;
+          proceduralRooms: number;
+          departmentRoomsReady: number;
+          failedGlbs: number;
+          contextLossCount: number;
+        };
+      };
     }).__GTEX_OPERATIONS_3D__;
-    expect(ops3d?.getTelemetry?.().loadedGlbs).toBe(6);
+    const telemetry = ops3d?.getTelemetry?.();
+    expect(telemetry?.loadedGlbs).toBe(3);
+    expect(telemetry?.proceduralRooms).toBe(3);
+    expect(telemetry?.departmentRoomsReady).toBe(6);
+    expect(telemetry?.failedGlbs).toBe(0);
 
     // 1st context loss -> shows context lost status + banner + pauses render calls
     const lostEvent1 = new Event("webglcontextlost", { cancelable: true });
@@ -367,7 +379,7 @@ describe("ClubOperationsCentre3D Stage 5 - Resilience, GLB Retry, Telemetry & WS
     mockFailAlways = false;
 
     const container = await renderCentre();
-    expect(container.querySelector('[data-testid="glb-asset-status"]')?.textContent).toContain("5/6 GLB Assets Loaded");
+    expect(container.querySelector('[data-testid="glb-asset-status"]')?.textContent).toContain("2/3 GLB loaded");
     const retryBtn = container.querySelector('[data-testid="retry-failed-glb-btn"]') as HTMLButtonElement | null;
     expect(retryBtn).not.toBeNull();
     expect(retryBtn?.textContent).toContain("Retry Failed Assets (0/2)");
@@ -381,7 +393,7 @@ describe("ClubOperationsCentre3D Stage 5 - Resilience, GLB Retry, Telemetry & WS
       await new Promise((r) => setTimeout(r, 25));
     });
     expect(mockGlbLoadCalls.length).toBe(callsBeforeRetry + 1);
-    expect(container.querySelector('[data-testid="glb-asset-status"]')?.textContent).toContain("6/6 GLB Assets Loaded");
+    expect(container.querySelector('[data-testid="glb-asset-status"]')?.textContent).toContain("3/3 GLB loaded");
     expect(container.querySelector('[data-testid="glb-asset-warning"]')).toBeNull();
 
     // Now test bounded cap when failures persist across max retries

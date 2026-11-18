@@ -351,6 +351,8 @@ async function main() {
   const pool = new Pool({
     connectionString: config.databaseUrl,
     ssl: config.databaseSsl ? { rejectUnauthorized: false } : false,
+    max: 1,
+    connectionTimeoutMillis: Number(process.env.PG_POOL_TIMEOUT_MS || 30000),
   });
   const client = await pool.connect();
   try {

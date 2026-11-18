@@ -89,6 +89,30 @@ def test_unparsable_keepalive_env_falls_back_to_the_default(
     assert captured_engine_kwargs["connect_args"]["keepalives_idle"] == 30
 
 
+def test_postgres_pool_timeout_stays_enabled(
+    captured_engine_kwargs: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("GTE_DB_POOL_TIMEOUT", raising=False)
+    database.create_database_engine("postgresql+psycopg://example.invalid:6543/gtex")
+    assert captured_engine_kwargs["pool_pre_ping"] is True
+    assert captured_engine_kwargs["pool_timeout"] == 30
+
+
+def test_same_database_target_reuses_one_engine(tmp_path: Any) -> None:
+    url = f"sqlite:///{tmp_path / 'shared.db'}"
+    write_engine = database.create_database_engine(url)
+    assert database.resolve_read_engine(write_engine, write_url=url, read_url=url) is write_engine
+    other = database.resolve_read_engine(
+        write_engine,
+        write_url=url,
+        read_url=f"sqlite:///{tmp_path / 'other.db'}",
+    )
+    assert other is not write_engine
+    snapshot = database.collect_database_pool_telemetry(write_engine)
+    assert snapshot["dialect"] == "sqlite"
+    assert snapshot["checkout_timeouts"] == 0
+
+
 def test_sqlite_engine_gets_no_libpq_connect_args(captured_engine_kwargs: dict[str, Any], tmp_path: Any) -> None:
     """libpq keys on a SQLite DBAPI raise on connect, so the branch must not widen."""
     database.create_database_engine(f"sqlite:///{tmp_path / 'guard.db'}")
@@ -100,3 +124,4 @@ def test_sqlite_engine_gets_no_libpq_connect_args(captured_engine_kwargs: dict[s
     # Pool sizing is a pooler concern; SQLite must not inherit it either.
     assert "pool_size" not in captured_engine_kwargs
     assert "max_overflow" not in captured_engine_kwargs
+    assert "pool_timeout" not in captured_engine_kwargs

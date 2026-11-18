@@ -1991,19 +1991,9 @@ class CanonicalLiveExecutionService:
         )
         return match
 
-    def claim_and_advance_due_executions(
-        self,
-        *,
-        reference_at: datetime | None = None,
-        step_minutes: int = 15,
-        limit: int = 50,
-        lease_owner: str = "canonical-live-worker",
-        step_interval_seconds: int = DEFAULT_STEP_INTERVAL_SECONDS,
-        halftime_pause_seconds: int = DEFAULT_HALFTIME_PAUSE_SECONDS,
-    ) -> dict[str, Any]:
-        """Advance due active executions and recover stalled expired leases without losing state."""
+    def due_execution_statement(self, now: datetime, *, lease_owner: str, limit: int):
+        """Select due executions. PostgreSQL locks the chosen rows and skips rows another worker holds."""
 
-        now = _as_utc(reference_at) or _utcnow()
         stmt = (
             select(CompetitionMatchExecution)
             .where(
@@ -2039,6 +2029,22 @@ class CanonicalLiveExecutionService:
         bind = self.session.get_bind()
         if bind is not None and bind.dialect.name == "postgresql":
             stmt = stmt.with_for_update(skip_locked=True)
+        return stmt
+
+    def claim_and_advance_due_executions(
+        self,
+        *,
+        reference_at: datetime | None = None,
+        step_minutes: int = 15,
+        limit: int = 50,
+        lease_owner: str = "canonical-live-worker",
+        step_interval_seconds: int = DEFAULT_STEP_INTERVAL_SECONDS,
+        halftime_pause_seconds: int = DEFAULT_HALFTIME_PAUSE_SECONDS,
+    ) -> dict[str, Any]:
+        """Advance due active executions and recover stalled expired leases without losing state."""
+
+        now = _as_utc(reference_at) or _utcnow()
+        stmt = self.due_execution_statement(now, lease_owner=lease_owner, limit=limit)
         candidates = list(self.session.scalars(stmt).all())
         advanced = 0
         settled = 0

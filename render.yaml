@@ -16,11 +16,10 @@ services:
     preDeployCommand: "PGOPTIONS='-c default_transaction_read_only=off' bash -lc 'source ops/render/production-preflight.sh && cd backend && alembic -c migrations/alembic.ini upgrade head'"
     startCommand: "cd backend && gunicorn app.asgi:app --worker-class uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --timeout 180 --graceful-timeout 120 --max-requests 1000 --max-requests-jitter 100"
     envVars:
-      # Two workers so a slow request cannot monopolize the whole API.  Each
-      # worker builds a write engine and a read engine, so the pooler budget is
-      # pool_size x 2 engines x 2 workers = 16 base + max_overflow x 2 x 2 = 8,
-      # i.e. 24 connections at full stretch, under the 30-connection Supabase
-      # session-pooler limit.  Raise these together or not at all.
+      # One API worker. When GTE_DATABASE_READ_URL is unset the read engine is
+      # the write engine, so this process holds at most pool_size + max_overflow
+      # = 6 connections. Background workers are budgeted separately and the
+      # Supabase session pooler limit is about 30. Raise these together or not at all.
       - key: WEB_CONCURRENCY
         value: "1"
       - key: GTE_DB_POOL_SIZE
@@ -208,6 +207,10 @@ services:
       # database and security values used by gtex-api.
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -246,6 +249,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -321,6 +328,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "2"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -396,6 +407,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -428,6 +443,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -496,6 +515,8 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: PG_POOL_MAX
+        value: "2"
       - key: REDIS_ENABLED
         value: "true"
       - key: GTE_REDIS_URL
@@ -573,6 +594,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       # Admin user id that ingestion-time share-market issuance is attributed
       # to.  Unset means new players are ingested without a market and will not
       # appear in the market listing until the issuance job runs.
@@ -604,6 +629,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: CSV_URL
         sync: false
       - key: IMAGES
@@ -634,6 +663,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -661,6 +694,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -681,6 +718,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: REGEN_TARGET
         value: "12000"
       - key: GTE_APP_ENV
@@ -703,6 +744,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: GTE_APP_ENV
         value: production
       - key: GTE_AUTH_SECRET
@@ -727,6 +772,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       - key: SEEDS_PER_COUNTRY
         value: "70"
       - key: PRESEED_BATCH
@@ -754,6 +803,10 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: GTE_DB_POOL_SIZE
+        value: "1"
+      - key: GTE_DB_MAX_OVERFLOW
+        value: "1"
       # Admin/super-admin user id issuance is attributed to in the audit trail.
       - key: ISSUANCE_ACTOR_USER_ID
         sync: false

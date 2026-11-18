@@ -9,6 +9,10 @@ const logger = require("./logger");
 const pool = new Pool({
   connectionString: config.databaseUrl,
   ssl: config.databaseSsl ? { rejectUnauthorized: false } : false,
+  // The Supabase session pooler is shared with the API and the Python workers.
+  // The node default of 10 would consume a third of that budget by itself.
+  max: Number(process.env.PG_POOL_MAX || 2),
+  connectionTimeoutMillis: Number(process.env.PG_POOL_TIMEOUT_MS || 30000),
 });
 
 pool.on("error", (error) => {

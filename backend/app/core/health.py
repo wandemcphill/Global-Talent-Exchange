@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Literal
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 
 from app.auth.dependencies import get_optional_current_user
 from app.core.config import Settings, get_settings
-from app.core.database import DatabaseRuntime
+from app.core.database import DatabaseRuntime, collect_database_pool_telemetry
 from app.models.user import User, UserRole
 
 router = APIRouter(tags=["health"])
@@ -58,6 +58,7 @@ class DiagnosticsResponse(BaseModel):
     dependency_issues: dict[str, str] = Field(default_factory=dict)
     dependency_notes: list[str]
     scaffolding_gaps: list[str]
+    database_pools: dict[str, dict[str, Any]] = Field(default_factory=dict)
 
 
 class RootResponse(BaseModel):
@@ -163,6 +164,10 @@ class SystemStatusService:
             if all(checks.values()) and not scaffolding_gaps and not has_dependency_errors and runtime_mode == "normal"
             else "warning"
         )
+        database = request.app.state.context.database
+        database_pools = {"write": collect_database_pool_telemetry(database.engine)}
+        if database.read_engine is not database.engine:
+            database_pools["read"] = collect_database_pool_telemetry(database.read_engine)
         return DiagnosticsResponse(
             status=status_value,
             app_name=settings.app_name,
@@ -178,6 +183,7 @@ class SystemStatusService:
             dependency_issues=self._dependency_issues_from_checks(dependency_checks),
             dependency_notes=dependency_notes,
             scaffolding_gaps=scaffolding_gaps,
+            database_pools=database_pools,
         )
 
     def _build_dependency_checks(self, request: Request, *, include_ingestion: bool = False) -> dict[str, ServiceCheck]:

@@ -9,12 +9,13 @@ import os
 from pathlib import Path
 import threading
 import time
+import weakref
 
 from alembic import command
 from alembic.config import Config
 from alembic.runtime.migration import MigrationContext
 from alembic.script import ScriptDirectory
-from sqlalchemy import MetaData, create_engine, inspect, text
+from sqlalchemy import MetaData, create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.engine.url import make_url
 from sqlalchemy.exc import DBAPIError, OperationalError
@@ -90,6 +91,8 @@ RUNTIME_SCHEMA_SMOKE_TABLES = (
 )
 logger = logging.getLogger(__name__)
 _SCHEMA_MIGRATION_LOCK = threading.RLock()
+_ENGINE_POOL_STATS: weakref.WeakKeyDictionary[Engine, dict[str, float | int]] = weakref.WeakKeyDictionary()
+_POOL_STATS_LOCK = threading.Lock()
 
 
 @lru_cache
@@ -143,10 +146,11 @@ def create_database_engine(database_url: str | None = None) -> Engine:
         connect_args.setdefault("keepalives_count", _get_int_env("GTE_DATABASE_KEEPALIVES_COUNT", 3, minimum=1))
         engine_kwargs["pool_pre_ping"] = True
         engine_kwargs["pool_recycle"] = _get_int_env("GTE_DB_POOL_RECYCLE", 300, minimum=30)
-        # Cap pool size to avoid exhausting the Supabase session-mode pooler
-        # (limit: 30 connections shared across all workers).  With WEB_CONCURRENCY=2
-        # and two engines per worker: 3 × 2 engines × 2 workers = 12 base + 4 overflow
-        # headroom = well under 30.
+        engine_kwargs["pool_timeout"] = _get_int_env("GTE_DB_POOL_TIMEOUT", 30, minimum=1)
+        # Supabase session-mode pooler limit is about 30 connections, shared by the
+        # API and every always-on worker. Read and write URLs that point at the same
+        # database reuse one engine (see DatabaseRuntime.build). Do not raise these
+        # defaults to hide a leak: size the Render workers explicitly instead.
         engine_kwargs["pool_size"] = _get_int_env("GTE_DB_POOL_SIZE", 3, minimum=1)
         engine_kwargs["max_overflow"] = _get_int_env("GTE_DB_MAX_OVERFLOW", 2, minimum=0)
         # Disable psycopg3 server-side prepared statements.  The Supabase
@@ -157,7 +161,123 @@ def create_database_engine(database_url: str | None = None) -> Engine:
         # never auto-prepare, which is required for transaction-pooled Postgres.
         if "psycopg" in resolved_url and "prepare_threshold" not in resolved_engine_url.query:
             connect_args["prepare_threshold"] = None
-    return create_engine(resolved_url, **engine_kwargs)
+    engine = create_engine(resolved_url, **engine_kwargs)
+    if isinstance(engine, Engine):
+        _install_pool_telemetry(engine)
+    return engine
+
+
+def same_database_target(left: str, right: str) -> bool:
+    return normalize_database_url(left) == normalize_database_url(right)
+
+
+def resolve_read_engine(
+    write_engine: Engine,
+    *,
+    write_url: str,
+    read_url: str,
+    read_engine: Engine | None = None,
+) -> Engine:
+    """A read URL that is the primary database must not open a second pool."""
+
+    if read_engine is not None:
+        return read_engine
+    if same_database_target(write_url, read_url):
+        return write_engine
+    return create_database_engine(read_url)
+
+
+def collect_database_pool_telemetry(engine: Engine) -> dict[str, object]:
+    """Snapshot pool occupancy.
+
+    long_connection_checkouts counts how long a connection stayed checked out
+    of the pool. It is not a database transaction duration.
+    SQLite pools do not expose checkout counters.
+    """
+
+    pool = engine.pool
+    with _POOL_STATS_LOCK:
+        stats = dict(_ENGINE_POOL_STATS.get(engine) or {})
+    snapshot: dict[str, object] = {
+        "dialect": engine.dialect.name,
+        "pool_class": type(pool).__name__,
+        "checkout_timeouts": int(stats.get("checkout_timeouts", 0) or 0),
+        "long_connection_checkouts": int(stats.get("long_connection_checkouts", 0) or 0),
+        "last_checkout_wait_ms": float(stats.get("last_checkout_wait_ms", 0.0) or 0.0),
+        "max_checkout_wait_ms": float(stats.get("max_checkout_wait_ms", 0.0) or 0.0),
+    }
+    timeout = getattr(pool, "_timeout", None)
+    if isinstance(timeout, (int, float)):
+        snapshot["pool_timeout_seconds"] = timeout
+    for method_name, key in (
+        ("size", "pool_size"),
+        ("checkedout", "checked_out"),
+        ("checkedin", "checked_in"),
+        ("overflow", "overflow"),
+    ):
+        method = getattr(pool, method_name, None)
+        if not callable(method):
+            continue
+        try:
+            snapshot[key] = method()
+        except Exception:
+            logger.debug("database.pool_telemetry_unavailable method=%s", method_name, exc_info=True)
+    return snapshot
+
+
+def _install_pool_telemetry(engine: Engine) -> None:
+    stats = {
+        "checkout_timeouts": 0,
+        "long_connection_checkouts": 0,
+        "last_checkout_wait_ms": 0.0,
+        "max_checkout_wait_ms": 0.0,
+    }
+    with _POOL_STATS_LOCK:
+        _ENGINE_POOL_STATS[engine] = stats
+    if os.getenv("GTE_DB_LONG_CHECKOUT_SECONDS") is not None:
+        long_seconds = _get_float_env("GTE_DB_LONG_CHECKOUT_SECONDS", 30.0, minimum=1.0)
+    else:
+        long_seconds = _get_float_env("GTE_DB_LONG_TRANSACTION_SECONDS", 30.0, minimum=1.0)
+    pool = engine.pool
+    original_connect = pool.connect
+
+    def timed_connect(*args, **kwargs):
+        started = time.monotonic()
+        try:
+            return original_connect(*args, **kwargs)
+        except Exception as exc:
+            if exc.__class__.__name__ == "TimeoutError" or "QueuePool limit" in str(exc):
+                with _POOL_STATS_LOCK:
+                    stats["checkout_timeouts"] = int(stats["checkout_timeouts"]) + 1
+                logger.warning(
+                    "database.pool_checkout_timeout pool=%s timeout_seconds=%s error=%s",
+                    type(pool).__name__,
+                    getattr(pool, "_timeout", None),
+                    exc,
+                )
+            raise
+        finally:
+            waited_ms = (time.monotonic() - started) * 1000.0
+            with _POOL_STATS_LOCK:
+                stats["last_checkout_wait_ms"] = waited_ms
+                stats["max_checkout_wait_ms"] = max(float(stats["max_checkout_wait_ms"]), waited_ms)
+
+    pool.connect = timed_connect  # type: ignore[method-assign]
+
+    @event.listens_for(engine, "checkin")
+    def _note_long_connection_checkout(dbapi_connection, connection_record) -> None:
+        started = connection_record.info.pop("gte_checked_out_at", None)
+        if started is None:
+            return
+        held = time.monotonic() - float(started)
+        if held >= long_seconds:
+            with _POOL_STATS_LOCK:
+                stats["long_connection_checkouts"] = int(stats["long_connection_checkouts"]) + 1
+            logger.warning("database.long_connection_checkout held_seconds=%.2f", held)
+
+    @event.listens_for(engine, "checkout")
+    def _note_checkout(dbapi_connection, connection_record, connection_proxy) -> None:
+        connection_record.info["gte_checked_out_at"] = time.monotonic()
 
 
 def create_session_factory(engine: Engine | None = None) -> sessionmaker[Session]:
@@ -179,6 +299,10 @@ def create_read_database_engine(database_url: str | None = None) -> Engine:
 
 @lru_cache
 def get_read_engine() -> Engine:
+    write_url = get_database_url()
+    read_url = get_database_read_url()
+    if same_database_target(write_url, read_url):
+        return get_engine()
     return create_read_database_engine()
 
 
@@ -423,8 +547,18 @@ class DatabaseRuntime:
         resolved_settings = settings or get_settings()
         resolved_engine = engine or create_database_engine(resolved_settings.database_url)
         resolved_session_factory = session_factory or create_session_factory(resolved_engine)
-        resolved_read_engine = read_engine or create_read_database_engine(resolved_settings.database_read_url)
-        resolved_read_session_factory = read_session_factory or create_read_session_factory(resolved_read_engine)
+        resolved_read_engine = resolve_read_engine(
+            resolved_engine,
+            write_url=resolved_settings.database_url,
+            read_url=resolved_settings.database_read_url,
+            read_engine=read_engine,
+        )
+        if read_session_factory is not None:
+            resolved_read_session_factory = read_session_factory
+        elif resolved_read_engine is resolved_engine:
+            resolved_read_session_factory = resolved_session_factory
+        else:
+            resolved_read_session_factory = create_read_session_factory(resolved_read_engine)
         return cls(
             settings=resolved_settings,
             engine=resolved_engine,

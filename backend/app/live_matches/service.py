@@ -14,10 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.cache import HotPathCache
-from app.config.competition_constants import (
-    KNOCKOUT_BROADCAST_MAX_SECONDS,
-    STANDARD_BROADCAST_MAX_SECONDS,
-)
+from app.config.competition_constants import STANDARD_BROADCAST_MAX_SECONDS
 from app.core.cache import CacheBackend, NullCacheBackend
 from app.core.events import DomainEvent, EventPublisher
 from app.broadcast_network.stadium_service import StadiumImmersionProfile, StadiumImmersionService
@@ -228,6 +225,19 @@ class LiveMatchPlaybackContext:
     elapsed_runtime_seconds: float
     target_runtime_seconds: float
     is_live: bool
+    presentation: str = "live"
+    clock_phase: str = ""
+    clock_minute: int = 0
+    target_end_minute: int = 90
+    home_score: int = 0
+    away_score: int = 0
+    execution_revision: int = 0
+    execution_status: str = ""
+    match_status: str = ""
+    commit_cursor: int = 0
+    api_status: str = ""
+    authoritative: bool = False
+    inconsistent: bool = False
 
 
 @dataclass(slots=True)
@@ -630,11 +640,21 @@ class LiveMatchHub:
         away_team = dict(sim_req.get("away_team") or {})
         home_name = str(home_team.get("team_name") or match.home_club_id)
         away_name = str(away_team.get("team_name") or match.away_club_id)
-        status_str = str(execution.execution_status or "scheduled")
-        is_live = status_str in {"in_progress", "paused"}
-        minute = int(execution.current_minute or 0)
-        home_score = int(match.home_score or 0)
-        away_score = int(match.away_score or 0)
+        from app.live_matches.canonical_presentation import (
+            broadcast_duration_cap_seconds,
+            resolve_canonical_presentation,
+        )
+
+        presentation = resolve_canonical_presentation(
+            match_status=getattr(match, "status", None),
+            execution_status=execution.execution_status,
+            clock_phase=getattr(execution, "clock_phase", None),
+        )
+        is_live = presentation.is_live
+        minute = 0 if presentation.presentation == "pre_match" else int(execution.current_minute or 0)
+        minute = max(0, min(120, minute))
+        home_score = 0 if presentation.presentation == "pre_match" else int(match.home_score or 0)
+        away_score = 0 if presentation.presentation == "pre_match" else int(match.away_score or 0)
         home_poss = 50
         away_poss = 50
         recent = events[-3:]
@@ -649,7 +669,7 @@ class LiveMatchHub:
             home_possession=home_poss,
             dramatic_event=dramatic,
         )
-        snapshot_status = "halted" if status_str == "halted" else ("live" if is_live else "completed")
+        snapshot_status = presentation.presentation
         snapshot = LiveMatchSnapshotView(
             score=LiveMatchScoreView(home=home_score, away=away_score),
             possession_estimate=LiveMatchPossessionEstimateView(home=home_poss, away=away_poss),
@@ -666,23 +686,18 @@ class LiveMatchHub:
             read_only=True,
         )
         last_seq = events[-1].sequence if events else 0
-        broadcast_category = str(getattr(execution, "broadcast_category", None) or "").strip().lower()
-        comp_type = (
-            str(getattr(execution, "competition_type", None) or getattr(match, "competition_type", None) or "")
-            .strip()
-            .lower()
-        )
-        stage = str(getattr(match, "stage", None) or "").strip().lower()
-        is_major_knockout = bool(
-            broadcast_category == "major_knockout"
-            or getattr(match, "requires_winner", False)
-            or comp_type in {"champions_league", "world_cup", "knockout", "cup", "final"}
-            or stage in {"final", "semi_final", "quarter_final", "knockout"}
-        )
-        max_duration = KNOCKOUT_BROADCAST_MAX_SECONDS if is_major_knockout else STANDARD_BROADCAST_MAX_SECONDS
+        max_duration = broadcast_duration_cap_seconds(getattr(execution, "broadcast_category", None))
         raw_duration = getattr(execution, "assigned_duration_seconds", None)
-        assigned_duration = min(max_duration, max(1, int(raw_duration or max_duration)))
-        shared_clock_second = min(assigned_duration, max(0, int(execution.elapsed_broadcast_seconds or 0)))
+        assigned_duration = min(max_duration, max(1, int(raw_duration or STANDARD_BROADCAST_MAX_SECONDS)))
+        if presentation.presentation == "pre_match":
+            shared_clock_second = 0
+        elif presentation.presentation == "full_time":
+            shared_clock_second = assigned_duration
+        else:
+            shared_clock_second = min(assigned_duration, max(0, int(execution.elapsed_broadcast_seconds or 0)))
+            if shared_clock_second <= 0 and minute > 0:
+                target_end = max(1, int(execution.target_end_minute or 90))
+                shared_clock_second = min(assigned_duration, int(round((minute / target_end) * assigned_duration)))
         revision = int(execution.execution_revision)
         commit_cursor = len(events)
         return LiveMatchStateView(
@@ -852,6 +867,9 @@ class LiveMatchHub:
         return events, len(cached_events)
 
     def get_playback_context(self, match_id: str) -> LiveMatchPlaybackContext | None:
+        bundle = self._canonical_execution_bundle(match_id)
+        if bundle is not None:
+            return self._playback_context_from_canonical(bundle)
         with self._lock:
             runtime = self._matches.get(match_id)
             if runtime is None:
@@ -868,6 +886,71 @@ class LiveMatchHub:
             elapsed_runtime_seconds=min(elapsed_runtime_seconds, target_runtime_seconds),
             target_runtime_seconds=target_runtime_seconds,
             is_live=is_live,
+        )
+
+    def _playback_context_from_canonical(self, bundle: tuple[Any, Any]) -> LiveMatchPlaybackContext:
+        """Rebuild the broadcast position from the execution row. An empty in-memory runtime is not completion."""
+
+        from app.live_matches.canonical_presentation import (
+            broadcast_duration_cap_seconds,
+            resolve_canonical_presentation,
+        )
+
+        match, execution = bundle
+        presentation = resolve_canonical_presentation(
+            match_status=getattr(match, "status", None),
+            execution_status=execution.execution_status,
+            clock_phase=getattr(execution, "clock_phase", None),
+        )
+        max_duration = broadcast_duration_cap_seconds(getattr(execution, "broadcast_category", None))
+        assigned = min(
+            max_duration,
+            max(1, int(getattr(execution, "assigned_duration_seconds", None) or STANDARD_BROADCAST_MAX_SECONDS)),
+        )
+        target_end = max(1, int(getattr(execution, "target_end_minute", None) or 90))
+        minute = 0 if presentation.presentation == "pre_match" else max(0, int(execution.current_minute or 0))
+        elapsed = (
+            0 if presentation.presentation == "pre_match" else max(0, int(execution.elapsed_broadcast_seconds or 0))
+        )
+        if presentation.presentation == "full_time":
+            elapsed = assigned
+            minute = max(minute, min(target_end, 120))
+        elif elapsed <= 0 and minute > 0:
+            elapsed = int(round(min(1.0, minute / target_end) * assigned))
+        elapsed = min(assigned, elapsed)
+        if presentation.presentation == "pre_match":
+            home_score = 0
+            away_score = 0
+        else:
+            home_score = int(getattr(match, "home_score", 0) or 0)
+            away_score = int(getattr(match, "away_score", 0) or 0)
+        if presentation.inconsistent:
+            logger.warning(
+                "live_match.canonical_state_inconsistent match_id=%s match_status=%s execution_status=%s clock_phase=%s presentation=%s",
+                getattr(match, "id", None),
+                getattr(match, "status", None),
+                execution.execution_status,
+                execution.clock_phase,
+                presentation.presentation,
+            )
+        return LiveMatchPlaybackContext(
+            viewer_state=None,
+            elapsed_runtime_seconds=float(elapsed),
+            target_runtime_seconds=float(assigned),
+            is_live=presentation.is_live,
+            presentation=presentation.presentation,
+            clock_phase=presentation.broadcast_phase,
+            clock_minute=min(120, minute),
+            target_end_minute=target_end,
+            home_score=home_score,
+            away_score=away_score,
+            execution_revision=int(execution.execution_revision or 0),
+            execution_status=str(execution.execution_status or ""),
+            match_status=str(getattr(match, "status", "") or ""),
+            commit_cursor=len(list(execution.committed_events_json or [])),
+            api_status=presentation.api_status,
+            authoritative=True,
+            inconsistent=presentation.inconsistent,
         )
 
     def list_active_matches(self) -> list[str]:
