@@ -1,8 +1,3 @@
-import 'dart:convert';
-import 'dart:math' as math;
-import 'dart:typed_data';
-
-import 'package:crypto/crypto.dart' as crypto;
 import 'package:flutter/material.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
@@ -17,62 +12,6 @@ import 'package:gte_frontend/widgets/turnstile_challenge.dart';
 
 const String _gtexTurnstileSiteKey =
     String.fromEnvironment('GTE_TURNSTILE_SITE_KEY');
-
-final String _totpSetupAlphabet = String.fromCharCodes(<int>[
-  for (var code = 65; code <= 90; code += 1) code,
-  for (var code = 50; code <= 55; code += 1) code,
-]);
-
-String _generateTotpSetupSecret({int length = 32}) {
-  final random = math.Random.secure();
-  return String.fromCharCodes(
-    List<int>.generate(
-      length,
-      (_) => _totpSetupAlphabet.codeUnitAt(
-        random.nextInt(_totpSetupAlphabet.length),
-      ),
-    ),
-  );
-}
-
-Uint8List _decodeBase32Secret(String input) {
-  const String alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'; // pragma: allowlist secret
-  final List<int> bytes = <int>[];
-  int buffer = 0;
-  int bits = 0;
-  for (final String character in input.replaceAll('=', '').toUpperCase().split('')) {
-    final int value = alphabet.indexOf(character);
-    if (value < 0) throw const FormatException('Invalid authenticator setup key.');
-    buffer = (buffer << 5) | value;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      bytes.add((buffer >> bits) & 0xff);
-    }
-  }
-  return Uint8List.fromList(bytes);
-}
-
-bool _verifyTraderTotp(String secret, String code, {DateTime? now}) {
-  final String candidate = code.trim();
-  if (!RegExp(r'^\d{6}$').hasMatch(candidate)) return false;
-  final Uint8List key = _decodeBase32Secret(secret);
-  final int counter = (now ?? DateTime.now()).millisecondsSinceEpoch ~/ 30000;
-  for (int drift = -1; drift <= 1; drift += 1) {
-    final ByteData counterBytes = ByteData(8)..setUint64(0, counter + drift, Endian.big);
-    final List<int> digest = crypto.Hmac(crypto.sha1, key)
-        .convert(counterBytes.buffer.asUint8List())
-        .bytes;
-    final int offset = digest.last & 0x0f;
-    final int binary = ((digest[offset] & 0x7f) << 24) |
-        ((digest[offset + 1] & 0xff) << 16) |
-        ((digest[offset + 2] & 0xff) << 8) |
-        (digest[offset + 3] & 0xff);
-    final String expected = (binary % 1000000).toString().padLeft(6, '0');
-    if (expected == candidate) return true;
-  }
-  return false;
-}
 
 String _formatSignupApiError(Object error) {
   if (error is GteApiException) {
@@ -595,28 +534,11 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   final _phone = TextEditingController();
   final _country = TextEditingController(text: 'NG');
   final _currency = TextEditingController(text: 'NGN');
-  final _totpCode = TextEditingController();
   final _walletLabel = TextEditingController(text: 'GTEX Trading Wallet');
   String _experience = 'beginner';
   bool _submitting = false;
-  bool _totpVerified = false;
   String? _error;
   String? _turnstileToken;
-  late final String _setupSecret = _generateTotpSetupSecret();
-
-  @override
-  void initState() {
-    super.initState();
-    _totpCode.addListener(_handleTotpCodeChanged);
-  }
-
-  void _handleTotpCodeChanged() {
-    if (!mounted) return;
-    setState(() {
-      _totpVerified = false;
-      _error = null;
-    });
-  }
 
   @override
   void dispose() {
@@ -627,8 +549,6 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
     _phone.dispose();
     _country.dispose();
     _currency.dispose();
-    _totpCode.removeListener(_handleTotpCodeChanged);
-    _totpCode.dispose();
     _walletLabel.dispose();
     super.dispose();
   }
@@ -636,7 +556,7 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
   @override
   Widget build(BuildContext context) => _SignupScaffold(
     title: 'Trader',
-    subtitle: 'Create your trading desk with a verified authenticator.',
+    subtitle: 'Create your trading desk with email and password. GTEX Coin, Fan Coin, P2P, and Escrow are included.',
     icon: Icons.candlestick_chart_rounded,
     error: _error,
     submitting: _submitting,
@@ -658,33 +578,11 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
         const <String>['beginner', 'intermediate', 'professional'],
         (value) => setState(() => _experience = value),
       ),
-      _sectionLabel(context, '03', 'Authenticator setup'),
-      SelectableText(
-        'GTEX setup key: $_setupSecret',
-        style: const TextStyle(color: Color(0xFF93A0AA), fontSize: 11),
+      _sectionLabel(context, '03', 'Required desk coverage'),
+      const Text(
+        'GTEX Coin, Fan Coin, P2P, and Escrow are included with every coin trader desk.',
+        style: TextStyle(color: Color(0xFF93A0AA), fontSize: 12),
       ),
-      _field(
-        _totpCode,
-        'Current 6-digit authenticator code',
-        keyboardType: TextInputType.number,
-        validator: (String? value) {
-          return RegExp(r'^\d{6}$').hasMatch((value ?? '').trim())
-              ? null
-              : 'Enter the current 6-digit authenticator code';
-        },
-      ),
-      OutlinedButton.icon(
-        onPressed: _totpVerified || !RegExp(r'^\d{6}$').hasMatch(_totpCode.text.trim())
-            ? null
-            : _verifyAuthenticator,
-        icon: Icon(_totpVerified ? Icons.verified_rounded : Icons.verified_user_outlined),
-        label: Text(_totpVerified ? 'Authenticator verified' : 'Verify authenticator'),
-      ),
-      if (_totpVerified)
-        const Text(
-          'Authenticator verified. GTEX will check the code again during registration.',
-          style: TextStyle(color: Color(0xFF36E38A), fontSize: 11),
-        ),
       _field(_walletLabel, 'Wallet Label'),
       const SizedBox(height: 8),
       TurnstileChallenge(
@@ -696,29 +594,8 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
     ],
   );
 
-  void _verifyAuthenticator() {
-    try {
-      final bool valid = _verifyTraderTotp(_setupSecret, _totpCode.text.trim());
-      setState(() {
-        _totpVerified = valid;
-        _error = valid
-            ? null
-            : 'That code does not match the GTEX setup key. Check your phone time and try the latest code.';
-      });
-    } catch (_) {
-      setState(() {
-        _totpVerified = false;
-        _error = 'The authenticator code could not be checked. Review the setup key and try again.';
-      });
-    }
-  }
-
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    if (!_totpVerified) {
-      setState(() => _error = 'Verify your authenticator code before creating your Coin Trader account.');
-      return;
-    }
     if (_gtexTurnstileSiteKey.isNotEmpty && _turnstileToken?.isNotEmpty != true) {
       setState(() => _error = 'Complete the security check to continue.');
       return;
@@ -742,12 +619,10 @@ class _GtexTraderSignupScreenState extends State<GtexTraderSignupScreen> {
           country: _country.text.trim(),
           preferredCurrency: _currency.text.trim(),
           tradingExperience: _experience,
-          interests: const <String>['GTEX Coin', 'Fan Coins', 'P2P'],
+          interests: const <String>['GTEX Coin', 'Fan Coins', 'P2P', 'Escrow'],
           walletLabel: _walletLabel.text.trim().isEmpty
               ? 'GTEX Trading Wallet'
               : _walletLabel.text.trim(),
-          totpSecret: _setupSecret,
-          totpCode: _totpCode.text.trim(),
           turnstileToken: _turnstileToken,
         ),
       );

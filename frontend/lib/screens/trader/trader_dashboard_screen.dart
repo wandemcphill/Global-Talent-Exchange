@@ -231,6 +231,7 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
                             return const _TraderLoadingPanel();
                           }
                           return _TraderOverviewBody(
+                            api: widget.api,
                             overview: overview,
                             selectedSection: _selectedSection,
                             securityFuture: _securityFuture,
@@ -260,6 +261,7 @@ class _TraderDashboardSurfaceState extends State<_TraderDashboardSurface> {
 
 class _TraderOverviewBody extends StatelessWidget {
   const _TraderOverviewBody({
+    required this.api,
     required this.overview,
     required this.selectedSection,
     required this.securityFuture,
@@ -268,6 +270,7 @@ class _TraderOverviewBody extends StatelessWidget {
     required this.onTradeTabChanged,
   });
 
+  final TraderApi api;
   final TraderOverview overview;
   final String selectedSection;
   final Future<TraderSecurityStatus> securityFuture;
@@ -302,7 +305,7 @@ class _TraderOverviewBody extends StatelessWidget {
           if (security == null) {
             return const _TraderLoadingPanel();
           }
-          return _SecurityPanel(security: security);
+          return _SecurityPanel(api: api, security: security, onChanged: onSecurityRetry);
         },
       );
     }
@@ -1017,9 +1020,15 @@ class _BookPanel extends StatelessWidget {
 }
 
 class _SecurityPanel extends StatelessWidget {
-  const _SecurityPanel({required this.security});
+  const _SecurityPanel({
+    required this.api,
+    required this.security,
+    required this.onChanged,
+  });
 
+  final TraderApi api;
   final TraderSecurityStatus security;
+  final VoidCallback onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -1069,8 +1078,8 @@ class _SecurityPanel extends StatelessWidget {
                     value: security.totpEnabled ? 'Enabled' : 'Disabled',
                     detail:
                         security.totpEnabled
-                            ? 'Authenticator required'
-                            : 'Setup required',
+                            ? 'Authenticator is on'
+                            : 'Optional. Email sign-in still works',
                   ),
                   _SecurityMetric(
                     label: 'Backup Codes',
@@ -1088,12 +1097,18 @@ class _SecurityPanel extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 16),
+              _OptionalAuthenticatorSetup(
+                api: api,
+                enabled: security.totpEnabled,
+                onChanged: onChanged,
+              ),
+              const SizedBox(height: 16),
               _BookPanel(
                 title: 'Trade gate',
                 rows: <String>[
                   security.totpEnabled
-                      ? '2FA enabled for orders and withdrawals'
-                      : 'Enable 2FA before high-risk actions',
+                      ? 'Authenticator is on for this account'
+                      : 'Authenticator is optional. Sign in with email and password',
                   '${security.backupCodeCount} backup codes remaining',
                   'Secrets stay inside setup and verification only',
                 ],
@@ -1118,6 +1133,127 @@ class _SecurityPanel extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+class _OptionalAuthenticatorSetup extends StatefulWidget {
+  const _OptionalAuthenticatorSetup({
+    required this.api,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  final TraderApi api;
+  final bool enabled;
+  final VoidCallback onChanged;
+
+  @override
+  State<_OptionalAuthenticatorSetup> createState() =>
+      _OptionalAuthenticatorSetupState();
+}
+
+class _OptionalAuthenticatorSetupState extends State<_OptionalAuthenticatorSetup> {
+  final TextEditingController _code = TextEditingController();
+  String? _secret;
+  String? _error;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _code.dispose();
+    super.dispose();
+  }
+
+  Future<void> _start() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final TraderTotpSetup setup = await widget.api.setupTotp();
+      if (!mounted) return;
+      setState(() => _secret = setup.secret);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _verify() async {
+    final String secret = _secret ?? '';
+    final String code = _code.text.trim();
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      setState(() => _error = 'Enter the current 6-digit authenticator code.');
+      return;
+    }
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      await widget.api.verifyTotp(TraderTotpVerify(secret: secret, code: code));
+      if (!mounted) return;
+      setState(() {
+        _secret = null;
+        _code.clear();
+      });
+      widget.onChanged();
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _error = error.toString());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.enabled) {
+      return const Text(
+        'Authenticator is on. Email and password still sign you in, and this account also asks for the code.',
+        style: TextStyle(fontSize: 12),
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        const Text(
+          'Authenticator is optional. Use it only if you already have an authenticator app.',
+          style: TextStyle(fontSize: 12),
+        ),
+        const SizedBox(height: 8),
+        if (_secret == null)
+          OutlinedButton(
+            onPressed: _busy ? null : _start,
+            child: Text(_busy ? 'Preparing…' : 'Set up authenticator'),
+          )
+        else ...<Widget>[
+          SelectableText(
+            'Setup key: $_secret',
+            style: const TextStyle(fontSize: 12),
+          ),
+          const SizedBox(height: 8),
+          TextField(
+            controller: _code,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Current 6-digit code',
+            ),
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton(
+            onPressed: _busy ? null : _verify,
+            child: Text(_busy ? 'Checking…' : 'Turn on authenticator'),
+          ),
+        ],
+        if (_error != null) ...<Widget>[
+          const SizedBox(height: 8),
+          Text(_error!, style: const TextStyle(color: Color(0xFFFF8B8B), fontSize: 12)),
+        ],
+      ],
     );
   }
 }

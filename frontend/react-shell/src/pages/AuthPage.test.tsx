@@ -122,10 +122,6 @@ function fillTraderBasics(container: HTMLDivElement) {
     "Lagos Main Desk",
   );
   setInput(
-    container.querySelector('[data-testid="trader-totp-code-input"]') as HTMLInputElement,
-    "123456",
-  );
-  setInput(
     container.querySelector('[data-testid="signup-email-input"]') as HTMLInputElement,
     "ade@example.com",
   );
@@ -138,7 +134,7 @@ function fillTraderBasics(container: HTMLDivElement) {
   );
 }
 
-describe("GTEX signup and trader authenticator flow", () => {
+describe("GTEX signup and coin trader desk flow", () => {
   let container: HTMLDivElement;
   let root: Root;
 
@@ -192,20 +188,17 @@ describe("GTEX signup and trader authenticator flow", () => {
     ).toContain("Coin Trader");
   });
 
-  it("submits a Coin Trader account after a valid six-digit TOTP check without extra phrase or PIN", async () => {
+  it("submits a Coin Trader account with email and password and every required desk", async () => {
     mockSignup.mockResolvedValueOnce({ user: { id: "trader-1", account_type: "coin_trader" } });
     act(() => root.render(<AuthPage mode="signup" />));
     selectTrader(container);
     fillTraderBasics(container);
-
-    await act(async () => {
-      (
-        container.querySelector('[data-testid="trader-verify-totp-button"]') as HTMLButtonElement
-      ).click();
-    });
-    expect(
-      container.querySelector('[data-testid="trader-verify-totp-button"]')?.textContent,
-    ).toContain("Authenticator verified");
+    expect(container.querySelector('[data-testid="trader-totp-code-input"]')).toBeNull();
+    expect(container.querySelector('[data-testid="signup-totp-secret"]')).toBeNull();
+    expect(container.textContent).toContain("GTEX Coin");
+    expect(container.textContent).toContain("Fan Coin");
+    expect(container.textContent).toContain("P2P");
+    expect(container.textContent).toContain("Escrow");
 
     await act(async () => {
       (container.querySelector('[data-testid="signup-form"]') as HTMLFormElement).dispatchEvent(
@@ -219,29 +212,16 @@ describe("GTEX signup and trader authenticator flow", () => {
         account_type: "coin_trader",
         full_name: "Ade Ola",
         trading_alias: "AdeFX",
-        totp_code: "123456",
+        interests: ["GTEX Coin", "Fan Coins", "P2P", "Escrow"],
       }),
     );
+    expect(payload).not.toHaveProperty("totp_secret");
+    expect(payload).not.toHaveProperty("totp_code");
     expect(payload).not.toHaveProperty("recovery_phrase_hash");
     expect(payload).not.toHaveProperty("security_pin_hash");
     expect(payload).not.toHaveProperty("recovery_phrase");
     expect(payload).not.toHaveProperty("security_pin");
     expect(mockNavigate).toHaveBeenCalledWith("/app/coin-traders");
-  });
-
-  it("does not submit a trader signup until the authenticator has been verified", async () => {
-    act(() => root.render(<AuthPage mode="signup" />));
-    selectTrader(container);
-    fillTraderBasics(container);
-    await act(async () => {
-      (container.querySelector('[data-testid="signup-form"]') as HTMLFormElement).dispatchEvent(
-        new Event("submit", { bubbles: true, cancelable: true }),
-      );
-    });
-    expect(mockSignup).not.toHaveBeenCalled();
-    expect(container.textContent).toContain(
-      "Verify your authenticator code before creating your account.",
-    );
   });
 
   it("clears a stale top-level error when the user edits a field", async () => {
