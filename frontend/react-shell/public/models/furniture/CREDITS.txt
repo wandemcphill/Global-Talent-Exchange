@@ -1,0 +1,9 @@
+Kenney Furniture Kit
+Author: Kenney (https://kenney.nl/assets/furniture-kit)
+License: CC0 1.0 Universal
+Models: desk, chairDesk, laptop, computerScreen, loungeChair, books
+
+Grass texture
+Author: Poly Haven (https://polyhaven.com/a/aerial_grass_rock)
+License: CC0 1.0 Universal
+File: public/textures/ground/aerial_grass_rock_diff_1k.jpg

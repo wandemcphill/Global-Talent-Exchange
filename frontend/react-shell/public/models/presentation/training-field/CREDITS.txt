@@ -1,0 +1,3 @@
+ExtrudedField mesh, color map, and normal map
+Source: Gtex_Test_Migration/Assets/Arts/TrainingField
+Football Simulator training ground, used by the GTEX browser scenes.

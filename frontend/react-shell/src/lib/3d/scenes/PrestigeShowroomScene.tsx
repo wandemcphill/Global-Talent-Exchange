@@ -83,8 +83,8 @@ const CAMERA_PRESETS: Record<
 > = {
   exterior_front: {
     label: "Hero Front",
-    position: [6.5, 3.2, 8.5],
-    target: [0, 1.1, 0],
+    position: [4.6, 2.15, 5.8],
+    target: [0, 0.85, 0],
   },
   profile_side: {
     label: "Side Profile",
@@ -274,16 +274,9 @@ async function dressShowroomMaterials(root: THREE.Object3D): Promise<void> {
         standard.metalness = 0.04;
         standard.roughness = ground ? 0.86 : 0.62;
       } else {
-        standard.map = null;
-        standard.roughnessMap = null;
-        standard.metalnessMap = null;
-        standard.normalMap = null;
-        if (standard.color.r > 0.85 && standard.color.g > 0.85 && standard.color.b > 0.85) {
-          standard.color.set(0x1c2838);
-        }
-        standard.metalness = 0.62;
-        standard.roughness = 0.28;
-        standard.envMapIntensity = 1.35;
+        standard.metalness = Math.max(standard.metalness, 0.28);
+        standard.roughness = THREE.MathUtils.clamp(standard.roughness, 0.18, 0.55);
+        standard.envMapIntensity = 1.2;
       }
       standard.needsUpdate = true;
     });
@@ -456,6 +449,7 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
   clubName = "GTEX FC",
   specs,
   compact = false,
+  className,
   activeQuality,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
@@ -706,7 +700,7 @@ export const PrestigeShowroomScene: React.FC<PrestigeShowroomSceneProps> = ({
     <div
       data-testid="prestige-showroom-3d-scene"
       className={`relative w-full overflow-hidden rounded-2xl border border-amber-400/30 bg-slate-950 ${
-        compact ? "h-64" : "h-80"
+        className || (compact ? "h-64" : "h-[32rem]")
       }`}
     >
       {/* 3D WebGL Mount */}

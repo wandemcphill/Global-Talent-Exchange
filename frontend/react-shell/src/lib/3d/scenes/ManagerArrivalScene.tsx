@@ -18,6 +18,13 @@ import { GtexSceneRegistry } from "../GtexSceneRegistry";
 import { disposeScene } from "../disposeScene";
 import { AssetStreamingCache } from "../broadcast/AssetStreamingCache";
 import { resolvePublicAssetPath } from "@/lib/publicPath";
+import { StadiumEnvironmentLighting } from "../broadcast/StadiumEnvironmentLighting";
+import {
+  loadFramedModel,
+  loadTrainingField,
+  loadPresentationFigure,
+  paintIdentityBoard,
+} from "../sceneKit";
 import type { GtexSceneRendererProps } from "../GtexSceneTypes";
 import type { CinematicEventPayload } from "@/lib/ownerBriefing";
 
@@ -50,33 +57,33 @@ const SHOT_PRESETS: Record<
 > = {
   vip_transport_touchdown: {
     label: "VIP Tarmac",
-    position: [-7.0, 3.2, 11.5],
-    target: [-2.0, 1.2, 0],
+    position: [-0.6, 3.6, 17.4],
+    target: [-8.2, 1.05, 7.2],
   },
   medical_clearance_scan: {
     label: "Medical Scan",
-    position: [2.8, 2.2, 4.8],
-    target: [1.2, 1.6, 0],
+    position: [2.35, 1.42, 7.15],
+    target: [0, 1.22, 2.1],
   },
   tunnel_emergence: {
     label: "1. Tunnel Walkout",
-    position: [0, 2.8, 9.5],
-    target: [0, 1.8, -1.5],
+    position: [0.4, 1.85, 8.4],
+    target: [0, 1.15, 2.1],
   },
   press_flashbulbs: {
     label: "2. Press Stage",
-    position: [-4.2, 2.5, 6.8],
-    target: [0, 1.9, 0],
+    position: [-2.7, 1.65, 5.5],
+    target: [0.1, 1.2, 2.1],
   },
   contract_handover: {
     label: "3. Contract Handover",
-    position: [0.4, 2.2, 4.6],
-    target: [0, 1.85, 0],
+    position: [3.1, 1.5, 6.5],
+    target: [0.15, 1.15, 2.1],
   },
   tactical_board_pose: {
     label: "4. Tactical Vision",
-    position: [3.8, 2.4, 5.4],
-    target: [1.5, 1.9, -1.2],
+    position: [7.2, 5.6, 9.2],
+    target: [0, 0.4, 1.2],
   },
 };
 
@@ -260,7 +267,9 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
       Math.min(window.devicePixelRatio || 1, activeQuality?.pixelRatio || 1.5)
     );
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.18;
+    renderer.toneMappingExposure = 1.02;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 
     container.innerHTML = "";
     renderer.domElement.setAttribute("data-testid", "manager-arrival-3d-canvas");
@@ -270,7 +279,10 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050b16);
+    scene.background = new THREE.Color(0xb7c9d6);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    const daylight = new StadiumEnvironmentLighting(renderer, scene, "high");
+    void daylight.loadPolyHaven("/textures/env/kloofendal_43d_clear_puresky_2k.hdr", { background: true });
 
     const camera = new THREE.PerspectiveCamera(40, width / height, 0.3, 120);
     camera.position.copy(cameraGoalPosRef.current);
@@ -282,130 +294,55 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     controls.target.copy(cameraGoalTargetRef.current);
     controlsRef.current = controls;
 
-    // Stage Lighting
-    const ambient = new THREE.HemisphereLight(0xe0f2fe, 0x0f172a, 0.95);
+    const ambient = new THREE.HemisphereLight(0xd7e8ff, 0x3c6a42, 0.38);
     scene.add(ambient);
 
-    const keySpot = new THREE.DirectionalLight(0xfffbeb, 2.0);
-    keySpot.position.set(5, 12, 8);
+    const keySpot = new THREE.DirectionalLight(0xfff3df, 2.5);
+    keySpot.position.set(12, 22, 8);
+    keySpot.castShadow = true;
+    keySpot.shadow.mapSize.set(1024, 1024);
+    keySpot.shadow.bias = -0.0006;
+    keySpot.shadow.normalBias = 0.04;
+    const shadowCam = keySpot.shadow.camera as THREE.OrthographicCamera;
+    shadowCam.left = -18;
+    shadowCam.right = 18;
+    shadowCam.top = 18;
+    shadowCam.bottom = -18;
+    shadowCam.near = 0.5;
+    shadowCam.far = 60;
+    shadowCam.updateProjectionMatrix();
     scene.add(keySpot);
 
-    const clubAccentLight = new THREE.PointLight(resolvedPrimaryHex, 2.2, 18);
-    clubAccentLight.position.set(0, 4.5, -2.0);
-    scene.add(clubAccentLight);
-
-    // Stage Carpet & Podium Floor
-    const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(20, 16),
+    const nameCanvas = paintIdentityBoard({
+      clubName: resolvedClub,
+      headline: resolvedName,
+      primary: `#${resolvedPrimaryHex.toString(16).padStart(6, "0")}`,
+      secondary: `#${resolvedSecondaryHex.toString(16).padStart(6, "0")}`,
+    });
+    const nameTexture = new THREE.CanvasTexture(nameCanvas);
+    nameTexture.colorSpace = THREE.SRGBColorSpace;
+    const nameBoard = new THREE.Mesh(
+      new THREE.PlaneGeometry(8, 2),
       new THREE.MeshStandardMaterial({
-        color: 0x0f172a,
-        roughness: 0.35,
-        metalness: 0.25,
+        map: nameTexture,
+        roughness: 0.45,
+        metalness: 0.05,
+        side: THREE.DoubleSide,
       })
     );
-    floor.rotation.x = -Math.PI / 2;
-    scene.add(floor);
-
-    const riser = new THREE.Mesh(
-      new THREE.CylinderGeometry(3.8, 4.1, 0.25, 40),
-      new THREE.MeshStandardMaterial({
-        color: resolvedSecondaryHex,
-        metalness: 0.5,
-        roughness: 0.3,
-      })
-    );
-    riser.position.y = 0.125;
-    scene.add(riser);
-
-    // Illuminated Club Media Backdrop Wall
-    const backdropWall = new THREE.Mesh(
-      new THREE.BoxGeometry(8.5, 4.2, 0.22),
-      new THREE.MeshStandardMaterial({
-        color: resolvedPrimaryHex,
-        metalness: 0.35,
-        roughness: 0.4,
-      })
-    );
-    backdropWall.position.set(0, 2.2, -2.4);
-    scene.add(backdropWall);
-
-    // Tactical Hologram Display Board on Right Side of Stage
-    const tacticalBoard = new THREE.Mesh(
-      new THREE.BoxGeometry(2.4, 1.5, 0.1),
-      new THREE.MeshBasicMaterial({
-        color: 0x38bdf8,
-        transparent: true,
-        opacity: 0.8,
-      })
-    );
-    tacticalBoard.position.set(2.4, 2.1, -1.4);
-    tacticalBoard.rotation.y = -Math.PI / 6;
-    scene.add(tacticalBoard);
-
-    // Press Conference Podium & Dual Microphones
-    const podium = new THREE.Mesh(
-      new THREE.BoxGeometry(2.2, 1.05, 0.75),
-      new THREE.MeshStandardMaterial({
-        color: 0x1e293b,
-        metalness: 0.6,
-        roughness: 0.3,
-      })
-    );
-    podium.position.set(0, 0.75, 0.6);
-    scene.add(podium);
-
-    // VIP Transport Tarmac & Arrival Runway Marker + 3D VIP Vehicle (Left Stage)
-    const tarmacMarker = new THREE.Mesh(
-      new THREE.BoxGeometry(5.0, 0.04, 1.4),
-      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.3, metalness: 0.5 })
-    );
-    tarmacMarker.position.set(-5.5, 0.02, 2.5);
-    scene.add(tarmacMarker);
+    nameBoard.position.set(0, 3.2, -7.5);
+    scene.add(nameBoard);
 
     const vipVehicleGroup = new THREE.Group();
-    vipVehicleGroup.position.set(-5.5, 0.38, 2.5);
-    const vehicleArchetype = vipTransport?.mesh_archetype || "private_jet";
-    if (vehicleArchetype === "private_jet") {
-      const fuselage = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.28, 0.28, 3.2, 20),
-        new THREE.MeshStandardMaterial({ color: 0xf8fafc, metalness: 0.65, roughness: 0.2 })
-      );
-      fuselage.rotation.z = Math.PI / 2;
-      vipVehicleGroup.add(fuselage);
-
-      const wings = new THREE.Mesh(
-        new THREE.BoxGeometry(0.9, 0.05, 2.6),
-        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, metalness: 0.55, roughness: 0.25 })
-      );
-      vipVehicleGroup.add(wings);
-
-      const tailFin = new THREE.Mesh(
-        new THREE.BoxGeometry(0.45, 0.65, 0.06),
-        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, metalness: 0.5, roughness: 0.3 })
-      );
-      tailFin.position.set(-1.35, 0.35, 0);
-      vipVehicleGroup.add(tailFin);
-    } else {
-      const chassis = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 0.55, 1.05),
-        new THREE.MeshStandardMaterial({ color: resolvedSecondaryHex, metalness: 0.7, roughness: 0.2 })
-      );
-      vipVehicleGroup.add(chassis);
-
-      const liveryStripe = new THREE.Mesh(
-        new THREE.BoxGeometry(2.42, 0.12, 1.07),
-        new THREE.MeshStandardMaterial({ color: resolvedPrimaryHex, emissive: resolvedPrimaryHex, emissiveIntensity: 0.25 })
-      );
-      liveryStripe.position.y = 0.08;
-      vipVehicleGroup.add(liveryStripe);
-    }
+    vipVehicleGroup.position.set(-8.2, 0, 7.2);
     scene.add(vipVehicleGroup);
 
     let cancelled = false;
+    const vehicleArchetype = vipTransport?.mesh_archetype || "private_jet";
     if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
       const transportGlb =
         vehicleArchetype === "private_jet"
-          ? "/assets/showroom/sovereign_900x_jet.glb"
+          ? "/assets/showroom/gulfstream_g700_exec_jet.glb"
           : "/assets/showroom/vanguard_xii_coach.glb";
       AssetStreamingCache.getInstance()
         .loadGltf(resolvePublicAssetPath(transportGlb), renderer)
@@ -418,9 +355,20 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
           box.getSize(size);
           box.getCenter(center);
           const maxDim = Math.max(size.x, size.y, size.z, 0.001);
-          const scale = 3.4 / maxDim;
+          const scale = 7.5 / maxDim;
           imported.scale.setScalar(scale);
           imported.position.set(-center.x * scale, -box.min.y * scale, -center.z * scale);
+          imported.traverse((obj) => {
+            const mesh = obj as THREE.Mesh;
+            if (!mesh.isMesh) return;
+            const material = mesh.material as THREE.MeshStandardMaterial;
+            if (!material?.isMeshStandardMaterial) return;
+            material.metalness = Math.max(material.metalness, 0.35);
+            material.roughness = Math.min(material.roughness, 0.38);
+            material.envMapIntensity = 1.35;
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+          });
           while (vipVehicleGroup.children.length > 0) {
             vipVehicleGroup.remove(vipVehicleGroup.children[0]);
           }
@@ -433,20 +381,46 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
     if (typeof window !== "undefined" && !/jsdom/i.test(window.navigator?.userAgent || "")) {
       void (async () => {
         try {
-          const { loadFramedModel, loadPresentationFigure, TRAINING_PITCH_GLB } = await import("../sceneKit");
-          const pitch = await loadFramedModel(TRAINING_PITCH_GLB, renderer, 28);
-          if (!cancelled) {
-            pitch.position.set(0, 0, -6);
-            scene.add(pitch);
-          }
+          const pitch = await loadTrainingField();
+          if (!cancelled) scene.add(pitch);
           const figure = await loadPresentationFigure(renderer);
           if (!cancelled) {
-            figure.object.position.set(0, 0, 0.4);
+            figure.object.position.z += 2.1;
             scene.add(figure.object);
             presentationMixer = figure.mixer;
           }
+          const desk = await loadFramedModel("/models/furniture/desk.glb", renderer, 1.7);
+          if (!cancelled) {
+            desk.position.x -= 2.7;
+            desk.position.z += 1.15;
+            desk.traverse((obj) => {
+              const mesh = obj as THREE.Mesh;
+              if (mesh.isMesh) mesh.castShadow = true;
+            });
+            scene.add(desk);
+            desk.updateMatrixWorld(true);
+            const deskTop = new THREE.Box3().setFromObject(desk).max.y;
+            const laptop = await loadFramedModel("/models/furniture/laptop.glb", renderer, 0.42);
+            if (!cancelled) {
+              laptop.position.x -= 2.7;
+              laptop.position.z += 1.05;
+              laptop.position.y += deskTop;
+              scene.add(laptop);
+            }
+          }
+          const chair = await loadFramedModel("/models/furniture/chairDesk.glb", renderer, 1.05);
+          if (!cancelled) {
+            chair.position.x -= 2.7;
+            chair.position.z += 2.05;
+            chair.rotation.y = Math.PI;
+            chair.traverse((obj) => {
+              const mesh = obj as THREE.Mesh;
+              if (mesh.isMesh) mesh.castShadow = true;
+            });
+            scene.add(chair);
+          }
         } catch {
-          // The press set remains if the training-ground assets fail.
+          // The name board remains if a model fails to load.
         }
       })();
     }
@@ -489,18 +463,19 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
       renderer.domElement.removeEventListener("webglcontextlost", handleContextLost);
       renderer.domElement.removeEventListener("webglcontextrestored", handleContextRestored);
       controls.dispose();
+      daylight.dispose();
       disposeScene(scene, renderer);
     };
-  }, [activeQuality, resolvedPrimaryHex, resolvedSecondaryHex]);
+  }, [activeQuality, resolvedClub, resolvedName, resolvedPrimaryHex, resolvedSecondaryHex, vipTransport]);
 
   return (
     <div
       data-testid="manager-arrival-3d-scene"
       className="relative w-full overflow-hidden rounded-2xl border border-emerald-500/40 bg-slate-950 shadow-2xl"
-      style={{ minHeight: 420 }}
+      style={{ minHeight: 560 }}
     >
       {/* 3D WebGL Canvas Mount */}
-      <div ref={mountRef} className="h-[420px] w-full" />
+      <div ref={mountRef} className="h-[560px] w-full" />
 
       {/* Honest 2D Fallback View when WebGL context is unavailable */}
       {!webglActive && (
@@ -656,7 +631,7 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
       )}
 
       {/* Bottom Verified Contract Summary & Return Action */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-center justify-between gap-4 border-t border-white/10 bg-gradient-to-t from-slate-950 via-slate-950/90 to-transparent p-4">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 bg-slate-950/80 px-4 py-2 backdrop-blur-sm">
         <div>
           <div className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
             {resolvedClub} • Official Unveiling
