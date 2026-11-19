@@ -49,7 +49,7 @@ def test_empty_marketplace_truthful_empty_state(client) -> None:
     data = resp.json()
     assert data["total"] == 0
     assert data["offers"] == []
-    assert Decimal(str(data["market_reference"]["min_p2p_buy_fiat"])) == Decimal("200000.00")
+    assert Decimal(str(data["market_reference"]["min_p2p_buy_fiat"])) == Decimal("0.0000")
     assert Decimal(str(data["market_reference"]["platform_fee_fiat"])) == Decimal("0.0000")
 
     ref_resp = client.get("/api/coin-traders/market-reference")

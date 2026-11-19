@@ -1384,11 +1384,6 @@ class _CreateCoinTradeOrderSheetState
     final bool isCredit = widget.coinUnit.trim().toUpperCase() == 'CREDIT';
     final String coinLabel = rate?.coinLabel ?? (isCredit ? 'FNC' : 'GTC');
     final String fiatCurrency = rate?.fiatCurrency ?? 'NGN';
-    final double minBuyerNgn = isCredit ? 50000 : 200000;
-    final bool belowBuyerMin =
-        !userSells &&
-        fiatCurrency.toUpperCase() == 'NGN' &&
-        fiatTotal < minBuyerNgn;
     return SafeArea(
       child: Padding(
         padding: EdgeInsets.only(
@@ -1413,8 +1408,8 @@ class _CreateCoinTradeOrderSheetState
             const SizedBox(height: GtexSpacing.xs),
             Text(
               userSells
-                  ? 'You send $coinLabel into escrow; the trader pays you after acceptance.'
-                  : 'The trader locks $coinLabel for you after accepting the live order.',
+                  ? 'Placing the sale locks your $coinLabel in escrow. The trader has 30 minutes to accept, then pays you.'
+                  : 'Placing the order locks the trader\'s $coinLabel in escrow. The trader has 30 minutes to accept, then you pay.',
               style: const TextStyle(color: GtexColors.textMuted),
             ),
             const SizedBox(height: GtexSpacing.md),
@@ -1486,19 +1481,7 @@ class _CreateCoinTradeOrderSheetState
               const SizedBox(height: GtexSpacing.xs),
               Text(
                 'Live quote: ${_coin(amount)} $coinLabel = ${_money(fiatTotal)} $fiatCurrency',
-                style: TextStyle(
-                  color: belowBuyerMin ? GtexColors.gold : GtexColors.textMuted,
-                ),
-              ),
-            ],
-            if (!userSells && fiatCurrency.toUpperCase() == 'NGN') ...<Widget>[
-              const SizedBox(height: GtexSpacing.xs),
-              Text(
-                'NGN buyer minimum for $coinLabel: NGN ${minBuyerNgn.toStringAsFixed(0)}',
-                style: TextStyle(
-                  color: belowBuyerMin ? GtexColors.red : GtexColors.textMuted,
-                  fontSize: 12,
-                ),
+                style: const TextStyle(color: GtexColors.textMuted),
               ),
             ],
             const SizedBox(height: GtexSpacing.sm),
@@ -1576,23 +1559,6 @@ class _CreateCoinTradeOrderSheetState
       return;
     }
     if (rate != null) {
-      final bool isCredit = widget.coinUnit.trim().toUpperCase() == 'CREDIT';
-      final double quotedRate =
-          widget.direction == 'user_sells'
-              ? rate.buyRateFiat
-              : rate.sellRateFiat;
-      final double fiatTotal = amount * quotedRate;
-      final double minBuyerNgn = isCredit ? 50000 : 200000;
-      if (widget.direction == 'user_buys' &&
-          rate.fiatCurrency.toUpperCase() == 'NGN' &&
-          fiatTotal < minBuyerNgn) {
-        setState(
-          () =>
-              _error =
-                  'Minimum buyer order for ${rate.coinName} is NGN ${minBuyerNgn.toStringAsFixed(0)}.',
-        );
-        return;
-      }
       if (rate.minCoinAmount > 0 && amount < rate.minCoinAmount) {
         setState(
           () =>
@@ -2980,7 +2946,7 @@ class _OrdersPanelState extends State<_OrdersPanel> {
                         onPressed:
                             () => _run(
                               widget.api.acceptOrder(order.id),
-                              success: 'Order accepted and escrow locked.',
+                              success: 'Order accepted. Escrow was locked when the order was placed.',
                             ),
                       ),
                     if (order.canSubmitProofFor(isTrader: widget.isTrader) &&

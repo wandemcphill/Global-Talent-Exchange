@@ -50,10 +50,6 @@ from app.models.user import PublicAccountType, User
 from app.models.wallet import LedgerUnit
 from app.treasury.service import TreasuryService
 
-NGN_BUY_MIN_COIN = Decimal("200000.00")
-NGN_BUY_MIN_CREDIT = Decimal("50000.00")
-
-
 def _q4(value: Decimal | int | float | str) -> Decimal:
     return Decimal(str(value or "0")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
@@ -117,7 +113,7 @@ class CoinTraderMarketplaceHelper:
                 direct_buy_rate_fiat=_q4(settings.deposit_rate_value),
                 direct_sell_rate_fiat=_q4(settings.withdrawal_rate_value),
                 trader_wholesale_rate_fiat=_q4(settings.trader_withdrawal_rate_value),
-                min_p2p_buy_fiat=NGN_BUY_MIN_COIN,
+                min_p2p_buy_fiat=Decimal("0.0000"),
                 min_trader_buy_rate_fiat=res.min_trader_buy_rate_fiat,
                 max_trader_buy_rate_fiat=res.max_trader_buy_rate_fiat,
                 min_trader_sell_rate_fiat=res.min_trader_sell_rate_fiat,
@@ -138,7 +134,7 @@ class CoinTraderMarketplaceHelper:
             direct_buy_rate_fiat=_q4(settings.fan_coin_deposit_rate_value),
             direct_sell_rate_fiat=None,
             trader_wholesale_rate_fiat=_q4(settings.trader_fan_coin_purchase_rate_value),
-            min_p2p_buy_fiat=NGN_BUY_MIN_CREDIT,
+            min_p2p_buy_fiat=Decimal("0.0000"),
             min_trader_buy_rate_fiat=res.min_trader_buy_rate_fiat,
             max_trader_buy_rate_fiat=res.max_trader_buy_rate_fiat,
             min_trader_sell_rate_fiat=res.min_trader_sell_rate_fiat,
@@ -222,9 +218,6 @@ class CoinTraderMarketplaceHelper:
         avail = self.effective_advert_available_coin(advert, profile)
         daily_rem = self.daily_remaining_coin(advert)
         min_fiat = _q2(Decimal(advert.min_coin_amount) * effective_price)
-        if advert.side == CoinAdvertSide.SELL.value and advert.fiat_currency.upper() == "NGN":
-            floor_fiat = NGN_BUY_MIN_COIN if advert.coin_unit == LedgerUnit.COIN else NGN_BUY_MIN_CREDIT
-            min_fiat = max(min_fiat, floor_fiat)
         max_coin_for_fiat = advert.max_coin_amount if advert.max_coin_amount > Decimal("0") else avail
         if advert.side == CoinAdvertSide.SELL.value:
             max_coin_for_fiat = min(max_coin_for_fiat, avail) if max_coin_for_fiat > Decimal("0") else avail
@@ -334,9 +327,6 @@ class CoinTraderMarketplaceHelper:
                 continue
 
             min_fiat = _q2(Decimal(advert.min_coin_amount) * effective_price)
-            if normalized_side == CoinAdvertSide.SELL.value and fiat_currency.upper() == "NGN":
-                floor_fiat = NGN_BUY_MIN_COIN if coin_unit == LedgerUnit.COIN else NGN_BUY_MIN_CREDIT
-                min_fiat = max(min_fiat, floor_fiat)
             max_coin_cap = (
                 min(Decimal(advert.max_coin_amount), avail_coin)
                 if advert.max_coin_amount > Decimal("0")
@@ -464,8 +454,6 @@ class CoinTraderMarketplaceHelper:
 
         avail_coin = self.effective_advert_available_coin(advert, profile)
         min_fiat = _q2(Decimal(advert.min_coin_amount) * effective_price)
-        if advert.side == CoinAdvertSide.SELL.value and advert.fiat_currency.upper() == "NGN":
-            min_fiat = max(min_fiat, NGN_BUY_MIN_COIN if advert.coin_unit == LedgerUnit.COIN else NGN_BUY_MIN_CREDIT)
         max_coin_cap = (
             min(Decimal(advert.max_coin_amount), avail_coin) if advert.max_coin_amount > Decimal("0") else avail_coin
         )

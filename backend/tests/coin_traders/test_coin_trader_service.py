@@ -993,6 +993,103 @@ def test_normal_user_can_apply_and_is_promoted_on_admin_approval(
     assert normal_user.account_type == PublicAccountType.COIN_TRADER
 
 
+def test_user_can_buy_1000_gtex_coin_without_the_trader_inventory_floor(
+    coin_trader_session: Session,
+) -> None:
+    from datetime import datetime, timedelta, timezone
+
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-small-buy",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["buyer"],
+        amount=Decimal("2000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:buyer-existing",
+        description="Seed buyer balance",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+
+    order = service.create_order(
+        CoinTradeOrderCreateRequest(
+            trader_profile_id=profile.id,
+            direction="user_buys",
+            coin_unit=LedgerUnit.COIN,
+            coin_amount=Decimal("1000"),
+            fiat_currency="NGN",
+            payment_method="bank_transfer",
+            idempotency_key="user-small-buy-1000",
+        ),
+        actor=users["buyer"],
+    )
+
+    assert order.fiat_total == Decimal("56000.00")
+    assert order.escrow_owner_user_id == users["trader"].id
+    buyer_summary = wallet_service.get_wallet_summary(coin_trader_session, users["buyer"], currency=LedgerUnit.COIN)
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert buyer_summary.available_balance == Decimal("2000.0000")
+    assert buyer_summary.reserved_balance == Decimal("0.0000")
+    assert trader_summary.reserved_balance == Decimal("1000.0000")
+    expires_at = order.quote_expires_at
+    assert expires_at is not None
+    if expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+    assert expires_at - datetime.now(timezone.utc) >= timedelta(minutes=29)
+    assert service.expire_stale_orders() == []
+
+
+def test_coin_trader_account_still_has_the_inventory_buy_floor(coin_trader_session: Session) -> None:
+    users = _seed_users(coin_trader_session)
+    wallet_service = WalletService()
+    service = CoinTraderService(coin_trader_session, wallet_service=wallet_service)
+    wallet_service.credit_trade_proceeds(
+        coin_trader_session,
+        user=users["trader"],
+        amount=Decimal("100000.0000"),
+        unit=LedgerUnit.COIN,
+        reference="seed:trader-floor",
+        description="Seed trader liquidity",
+        external_reference="seed",
+        source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+    )
+    coin_trader_session.commit()
+    profile = _approve_trader_with_rate(service, users)
+    users["second_buyer"].account_type = PublicAccountType.COIN_TRADER
+    coin_trader_session.commit()
+
+    with pytest.raises(CoinTraderValidationError, match="Minimum coin-trader order value"):
+        service.create_order(
+            CoinTradeOrderCreateRequest(
+                trader_profile_id=profile.id,
+                direction="user_buys",
+                coin_unit=LedgerUnit.COIN,
+                coin_amount=Decimal("1000"),
+                fiat_currency="NGN",
+                payment_method="bank_transfer",
+                idempotency_key="trader-small-buy-1000",
+            ),
+            actor=users["second_buyer"],
+        )
+
+    trader_summary = wallet_service.get_wallet_summary(coin_trader_session, users["trader"], currency=LedgerUnit.COIN)
+    assert trader_summary.available_balance == Decimal("100000.0000")
+    assert trader_summary.reserved_balance == Decimal("0.0000")
+
+
 def test_expire_stale_orders_sweeps_and_refunds_escrow(
     coin_trader_session: Session,
 ) -> None:

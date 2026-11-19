@@ -37,7 +37,7 @@ def escrow_session() -> Session:
         session.close()
 
 
-# (unit, coins that clear the buyer minimum: GTEX >= N200,000 / Fan >= N50,000)
+# Desk sizes used by the escrow round-trip. Users are not held to the coin-trader inventory floor.
 UNITS = [(LedgerUnit.COIN, Decimal("5000")), (LedgerUnit.CREDIT, Decimal("20000"))]
 
 
