@@ -56,7 +56,7 @@ def _user(
     return User(
         email=email,
         username=username,
-        password_hash="test-hash",
+        password_hash="test-hash",  # pragma: allowlist secret
         full_name=username,
         role=role,
         account_type=account_type,
@@ -122,7 +122,7 @@ def test_signup_schemas_accept_referral_codes() -> None:
             "full_name": "Club Owner",
             "username": "club_owner",
             "email": "club@gtex.test",
-            "password": "ValidPassword123!",
+            "password": "ValidPassword123!",  # pragma: allowlist secret
             "is_over_18": True,
             "country": "Nigeria",
             "referral_code": " creator10 ",
@@ -136,7 +136,7 @@ def test_signup_schemas_accept_referral_codes() -> None:
             "creator_name": "Creator",
             "username": "creator_one",
             "email": "creator@gtex.test",
-            "password": "ValidPassword123!",
+            "password": "ValidPassword123!",  # pragma: allowlist secret
             "country": "NG",
             "category": "football",
             "primary_language": "en",
@@ -148,12 +148,12 @@ def test_signup_schemas_accept_referral_codes() -> None:
             "full_name": "Trader",
             "trading_alias": "Desk",
             "email": "trader@gtex.test",
-            "password": "ValidPassword123!",
+            "password": "ValidPassword123!",  # pragma: allowlist secret
             "phone_number": "+2348012345678",
             "country": "NG",
             "preferred_currency": "NGN",
             "trading_experience": "beginner",
-            "totp_secret": "JBSWY3DPEHPK3PXP",
+            "totp_secret": "JBSWY3DPEHPK3PXP",  # pragma: allowlist secret
             "totp_code": "123456",
             "referral_code": "creator10",
         }
