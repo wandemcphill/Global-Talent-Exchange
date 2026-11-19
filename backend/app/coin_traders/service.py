@@ -466,12 +466,18 @@ class CoinTraderService:
             terms_snapshot = dict(profile.terms_json or {})
             payment_window_minutes = 45
         fiat_total = (payload.coin_amount * quoted_rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        if direction == CoinTradeDirection.USER_BUYS.value and payload.fiat_currency.upper() == "NGN":
+        # The ₦200,000 / ₦50,000 floors are coin-trader inventory buys only.
+        # A user or club owner buying from a desk is limited by that trader's own min/max.
+        if (
+            direction == CoinTradeDirection.USER_BUYS.value
+            and payload.fiat_currency.upper() == "NGN"
+            and actor.account_type == PublicAccountType.COIN_TRADER
+        ):
             minimum_fiat = Decimal("200000.00") if payload.coin_unit == LedgerUnit.COIN else Decimal("50000.00")
             if fiat_total < minimum_fiat:
                 unit_label = "GTEX Coin" if payload.coin_unit == LedgerUnit.COIN else "Fan Coin"
                 raise CoinTraderValidationError(
-                    f"Minimum buyer order value for {unit_label} purchases is ₦{minimum_fiat:,.0f}."
+                    f"Minimum coin-trader order value for {unit_label} purchases is ₦{minimum_fiat:,.0f}."
                 )
         order_meta: dict[str, object] = {}
         if direction == CoinTradeDirection.USER_SELLS.value and payload.customer_payout_details:
@@ -489,7 +495,7 @@ class CoinTraderService:
             payment_method=payload.payment_method,
             advert_id=advert.id if advert is not None else None,
             payment_window_minutes=payment_window_minutes,
-            quote_expires_at=utcnow() + timedelta(seconds=60),
+            quote_expires_at=utcnow() + timedelta(minutes=self.UNACCEPTED_ORDER_TTL_MINUTES),
             fee_coin=Decimal("0.0000"),
             fee_fiat=Decimal("0.0000"),
             idempotency_key=payload.idempotency_key,
