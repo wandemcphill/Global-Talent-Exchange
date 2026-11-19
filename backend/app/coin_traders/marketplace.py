@@ -50,6 +50,7 @@ from app.models.user import PublicAccountType, User
 from app.models.wallet import LedgerUnit
 from app.treasury.service import TreasuryService
 
+
 def _q4(value: Decimal | int | float | str) -> Decimal:
     return Decimal(str(value or "0")).quantize(Decimal("0.0001"), rounding=ROUND_HALF_UP)
 
@@ -690,7 +691,9 @@ class CoinTraderMarketplaceHelper:
             if advert.side == CoinAdvertSide.BUY.value:
                 rate.buy_rate_fiat = effective_price if advert.status == CoinAdvertStatus.ACTIVE.value else Decimal("0")
             else:
-                rate.sell_rate_fiat = effective_price if advert.status == CoinAdvertStatus.ACTIVE.value else Decimal("0")
+                rate.sell_rate_fiat = (
+                    effective_price if advert.status == CoinAdvertStatus.ACTIVE.value else Decimal("0")
+                )
             rate.min_coin_amount = advert.min_coin_amount
             rate.max_coin_amount = advert.max_coin_amount
             if advert.status == CoinAdvertStatus.ACTIVE.value:
