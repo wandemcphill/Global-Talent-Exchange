@@ -12,6 +12,11 @@ import type { GtexSceneController, GtexWebGLContext } from "./GtexWebGLHost";
 export const STADIUM_GLB = "/models/presentation/cc0_football_stadium.glb";
 /** CC0 3DAssets club ground: marked pitch, stands, and training pieces at human scale. */
 export const CLUB_GROUND_GLB = "/models/presentation/cc0_club_ground.glb";
+/** Football Simulator training ground. The FBX is in centimeters. */
+export const TRAINING_FIELD_FBX = "/models/presentation/training-field/ExtrudedField.fbx";
+const TRAINING_FIELD_COLOR = "/models/presentation/training-field/ExtrudedField_Color.png";
+const TRAINING_FIELD_NORMAL = "/models/presentation/training-field/ExtrudedField_Normal.png";
+const TRAINING_FIELD_GRASS = "/models/presentation/training-field/pitch_grass.jpg";
 export const TRAINING_CORNER_GLB = "/models/presentation/cc0_training_corner.glb";
 export const CLUB_HQ_GLB = "/models/campus/club_hq.glb";
 export const ACADEMY_GLB = "/models/campus/elite_academy_complex.glb";
@@ -111,6 +116,122 @@ export function frameObject(object: THREE.Object3D, targetSize: number): void {
   object.position.y -= fitted.min.y;
 }
 
+export async function loadTrainingField(maxSpan?: number): Promise<THREE.Group> {
+  const { FBXLoader } = await import("three/examples/jsm/loaders/FBXLoader.js");
+  const object = await new FBXLoader().loadAsync(TRAINING_FIELD_FBX);
+  const group = new THREE.Group();
+  group.add(object);
+  object.scale.setScalar(0.01);
+  const color = new THREE.TextureLoader().load(TRAINING_FIELD_COLOR);
+  const normal = new THREE.TextureLoader().load(TRAINING_FIELD_NORMAL);
+  color.colorSpace = THREE.SRGBColorSpace;
+  color.flipY = false;
+  normal.flipY = false;
+  color.anisotropy = 8;
+  normal.anisotropy = 8;
+  group.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const geometry = mesh.geometry as THREE.BufferGeometry;
+    if (geometry.getAttribute("uv") && geometry.index) {
+      try {
+        geometry.computeTangents();
+      } catch {
+        // A missing tangent set still shows the color map.
+      }
+    }
+    mesh.material = new THREE.MeshStandardMaterial({
+      map: color,
+      normalMap: normal,
+      roughness: 0.88,
+      metalness: 0.02,
+    });
+  });
+  group.updateMatrixWorld(true);
+  const surfaceY = densestSurfaceY(group);
+  const fitted = new THREE.Box3().setFromObject(group);
+  const center = fitted.getCenter(new THREE.Vector3());
+  group.position.x -= center.x;
+  group.position.z -= center.z;
+  group.position.y -= surfaceY;
+  addTrainingPitch(group);
+  if (maxSpan) frameObject(group, maxSpan);
+  return group;
+}
+
+function addTrainingPitch(group: THREE.Group): void {
+  const length = 100;
+  const width = 64;
+  const grass = new THREE.TextureLoader().load(TRAINING_FIELD_GRASS);
+  grass.colorSpace = THREE.SRGBColorSpace;
+  grass.wrapS = THREE.RepeatWrapping;
+  grass.wrapT = THREE.RepeatWrapping;
+  grass.repeat.set(width / 6, length / 6);
+  grass.anisotropy = 8;
+  const pitch = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, length),
+    new THREE.MeshStandardMaterial({ map: grass, roughness: 0.94, metalness: 0, side: THREE.DoubleSide })
+  );
+  pitch.rotation.x = -Math.PI / 2;
+  pitch.position.y = 0.05;
+  pitch.receiveShadow = true;
+  group.add(pitch);
+
+  const paint = new THREE.MeshBasicMaterial({ color: 0xf4f7f2 });
+  const mark = (spanX: number, spanZ: number, x: number, z: number) => {
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(spanX, spanZ), paint);
+    line.rotation.x = -Math.PI / 2;
+    line.position.set(x, 0.04, z);
+    group.add(line);
+  };
+  const halfW = width / 2 - 3.5;
+  const halfL = length / 2 - 3.5;
+  mark(halfW * 2, 0.14, 0, -halfL);
+  mark(halfW * 2, 0.14, 0, halfL);
+  mark(0.14, halfL * 2, -halfW, 0);
+  mark(0.14, halfL * 2, halfW, 0);
+  mark(0.14, halfL * 2, 0, 0);
+  const circle = new THREE.Mesh(new THREE.RingGeometry(9.15, 9.32, 64), paint);
+  circle.rotation.x = -Math.PI / 2;
+  circle.position.y = 0.04;
+  group.add(circle);
+  const boxW = 40.3;
+  const boxD = 16.5;
+  for (const end of [-1, 1]) {
+    const goal = end * halfL;
+    mark(boxW, 0.14, 0, goal - end * boxD);
+    mark(0.14, boxD, -boxW / 2, goal - end * boxD / 2);
+    mark(0.14, boxD, boxW / 2, goal - end * boxD / 2);
+  }
+}
+
+function densestSurfaceY(root: THREE.Object3D): number {
+  const buckets = new Map<number, number>();
+  const point = new THREE.Vector3();
+  root.traverse((child) => {
+    const mesh = child as THREE.Mesh;
+    if (!mesh.isMesh) return;
+    const positions = mesh.geometry.getAttribute("position");
+    if (!positions) return;
+    for (let index = 0; index < positions.count; index += 1) {
+      point.fromBufferAttribute(positions, index).applyMatrix4(mesh.matrixWorld);
+      const band = Math.round(point.y * 20) / 20;
+      buckets.set(band, (buckets.get(band) || 0) + 1);
+    }
+  });
+  let surface = 0;
+  let count = 0;
+  buckets.forEach((bandCount, band) => {
+    if (bandCount > count) {
+      count = bandCount;
+      surface = band;
+    }
+  });
+  return surface;
+}
+
 export async function loadFramedModel(
   url: string,
   renderer: THREE.WebGLRenderer,
@@ -146,6 +267,14 @@ export async function loadPresentationFigure(
   }
   const { clone } = await import("three/examples/jsm/utils/SkeletonUtils.js");
   const object = clone(kit.scene) as THREE.Object3D;
+  object.traverse((child) => {
+    if (child.name === "Armature") child.rotation.x = 0;
+    const mesh = child as THREE.Mesh;
+    if (mesh.isMesh) {
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+    }
+  });
   frameObject(object, 1.9);
   const mixer = new THREE.AnimationMixer(object);
   const clip = clips.animations?.[0];
@@ -173,6 +302,29 @@ function sampleCamera(keys: CameraKey[], elapsed: number, camera: THREE.Perspect
     THREE.MathUtils.lerp(from.target[1], to.target[1], eased),
     THREE.MathUtils.lerp(from.target[2], to.target[2], eased)
   );
+}
+
+function fitSunShadow(light: THREE.DirectionalLight, span: number): void {
+  light.castShadow = true;
+  light.shadow.mapSize.set(1024, 1024);
+  light.shadow.bias = -0.0006;
+  light.shadow.normalBias = 0.035;
+  const cam = light.shadow.camera as THREE.OrthographicCamera;
+  cam.left = -span;
+  cam.right = span;
+  cam.top = span;
+  cam.bottom = -span;
+  cam.near = 0.5;
+  cam.far = span * 4;
+  cam.updateProjectionMatrix();
+}
+
+function addDayRig(scene: THREE.Scene): void {
+  scene.add(new THREE.HemisphereLight(0xd7e8ff, 0x3c6a42, 0.42));
+  const sun = new THREE.DirectionalLight(0xfff3df, 2.6);
+  sun.position.set(16, 26, 10);
+  fitSunShadow(sun, 22);
+  scene.add(sun);
 }
 
 function addNightRig(scene: THREE.Scene, qualityShadows: boolean, emerald: number, gold: number): void {
@@ -209,8 +361,8 @@ function boardMesh(canvas: HTMLCanvasElement, width: number, height: number): TH
 }
 
 function humanScaleFog(kind: PresentationKind): number {
-  if (kind === "academy") return 0.008;
-  if (kind === "walkout" || kind === "gala" || kind === "ceremony" || kind === "sponsorship") return 0.012;
+  if (kind === "academy" || kind === "walkout") return 0.003;
+  if (kind === "gala" || kind === "ceremony" || kind === "sponsorship") return 0.012;
   return 0.0016;
 }
 
@@ -233,9 +385,9 @@ function keysFor(kind: PresentationKind, shot?: string): CameraKey[] {
   if (kind === "academy") {
     if (shot === "emergence") {
       return [
-        { t: 0, position: [8, 2.4, 10], target: [0, 1.4, 0] },
-        { t: 8, position: [3, 2.2, 7], target: [0, 1.5, 0] },
-        { t: 14, position: [8, 2.4, 10], target: [0, 1.4, 0] },
+        { t: 0, position: [0.85, 1.38, 6.35], target: [0, 1.15, 2.45] },
+        { t: 8, position: [-0.85, 1.42, 6.15], target: [0, 1.18, 2.45] },
+        { t: 14, position: [0.85, 1.38, 6.35], target: [0, 1.15, 2.45] },
       ];
     }
     if (shot === "bloodline") {
@@ -246,9 +398,9 @@ function keysFor(kind: PresentationKind, shot?: string): CameraKey[] {
       ];
     }
     return [
-      { t: 0, position: [40, 22, 36], target: [0, 4, 0] },
-      { t: 8, position: [-24, 12, 28], target: [0, 3, 0] },
-      { t: 16, position: [40, 22, 36], target: [0, 4, 0] },
+      { t: 0, position: [7.2, 4.4, 11.2], target: [0, 1.0, 2.3] },
+      { t: 8, position: [-6.4, 3.8, 10.4], target: [0, 1.05, 2.3] },
+      { t: 16, position: [7.2, 4.4, 11.2], target: [0, 1.0, 2.3] },
     ];
   }
   if (kind === "gala") {
@@ -297,40 +449,50 @@ export function createPresentationController(
       const secondary = new THREE.Color(identity.secondaryColor || "#d4a24c");
       const night = kind !== "academy";
       ctx.scene.background = new THREE.Color(kind === "gala" ? 0x07060d : night ? 0x07101a : 0x9eb4c4);
-      ctx.scene.fog = new THREE.FogExp2(
-        kind === "gala" ? 0x07060d : night ? 0x07101a : 0xb7c6d2,
-        humanScaleFog(kind)
-      );
-      ctx.renderer.toneMappingExposure = kind === "gala" ? 1.05 : 1.28;
-      addNightRig(ctx.scene, ctx.quality.shadowsEnabled, primary.getHex(), secondary.getHex());
-      if (ctx.quality.tier !== "low") {
-        lighting = new StadiumEnvironmentLighting(ctx.renderer, ctx.scene, ctx.quality.tier);
-        void lighting.loadPolyHaven(
-          night ? "/textures/env/modern_buildings_night_2k.hdr" : "/textures/env/kloofendal_43d_clear_puresky_2k.hdr",
-          { background: false }
+      if (kind !== "academy") {
+        ctx.scene.fog = new THREE.FogExp2(
+          kind === "gala" ? 0x07060d : 0x07101a,
+          humanScaleFog(kind)
         );
       }
+      ctx.renderer.toneMappingExposure = kind === "gala" ? 1.05 : kind === "academy" ? 1.05 : 1.28;
       if (kind === "academy") {
-        const sun = ctx.scene.children.find((child) => child instanceof THREE.DirectionalLight) as THREE.DirectionalLight | undefined;
-        if (sun) sun.intensity = 1.8;
+        ctx.renderer.shadowMap.enabled = true;
+        ctx.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        addDayRig(ctx.scene);
+      } else {
+        addNightRig(ctx.scene, ctx.quality.shadowsEnabled, primary.getHex(), secondary.getHex());
+      }
+      if (ctx.quality.tier !== "low" || kind === "academy") {
+        lighting = new StadiumEnvironmentLighting(ctx.renderer, ctx.scene, kind === "academy" ? "high" : ctx.quality.tier);
+        void lighting.loadPolyHaven(
+          night ? "/textures/env/modern_buildings_night_2k.hdr" : "/textures/env/kloofendal_43d_clear_puresky_2k.hdr",
+          { background: kind === "academy" }
+        );
       }
       if (kind === "gala") {
         ctx.renderer.toneMappingExposure = 1.05;
       }
 
       const humanScale = kind === "academy" || kind === "walkout";
-      const required = humanScale ? (kind === "academy" && identity.shot ? TRAINING_CORNER_GLB : CLUB_GROUND_GLB) : STADIUM_GLB;
-      const heroSize = humanScale ? 72 : 200;
-      const hero = await loadFramedModel(required, ctx.renderer, heroSize);
+      const hero = humanScale
+        ? await loadTrainingField()
+        : await loadFramedModel(STADIUM_GLB, ctx.renderer, 200);
       if (ctx.aborted()) return;
       ctx.scene.add(hero);
+      if (humanScale) {
+        hero.traverse((obj) => {
+          const mesh = obj as THREE.Mesh;
+          if (mesh.isMesh) mesh.castShadow = true;
+        });
+      }
 
       const extras: Array<{ url: string; size: number; position: [number, number, number] }> = [];
       if (kind === "campus") {
         extras.push({ url: CLUB_HQ_GLB, size: 36, position: [150, 0, 30] });
       }
-      if (kind === "academy") {
-        extras.push({ url: YOUTH_PITCH_GLB, size: 36, position: [0, 0, 8] });
+      if (kind === "academy" && identity.shot) {
+        extras.push({ url: TRAINING_CORNER_GLB, size: 16, position: [9, 0, -1] });
       }
       if (kind === "ceremony" || kind === "gala") {
         extras.push({ url: TROPHY_GLB, size: kind === "gala" ? 3.2 : 4.2, position: [0, 0, 6] });
@@ -339,7 +501,7 @@ export function createPresentationController(
         try {
           const figure = await loadPresentationFigure(ctx.renderer);
           if (!ctx.aborted()) {
-            figure.object.position.set(0, 0, kind === "walkout" ? 4 : 2);
+            figure.object.position.z += kind === "walkout" ? 3 : 1.5;
             ctx.scene.add(figure.object);
             if (figure.mixer) mixers.push(figure.mixer);
           }
@@ -352,7 +514,9 @@ export function createPresentationController(
         try {
           const model = await loadFramedModel(extra.url, ctx.renderer, extra.size);
           if (ctx.aborted()) return;
-          model.position.set(extra.position[0], extra.position[1], extra.position[2]);
+          model.position.x += extra.position[0];
+          model.position.y += extra.position[1];
+          model.position.z += extra.position[2];
           ctx.scene.add(model);
         } catch {
           // Optional campus and trophy models must not blank the required environment.
@@ -375,13 +539,13 @@ export function createPresentationController(
       });
       const board = boardMesh(
         canvas,
-        kind === "takeover" ? 90 : kind === "sponsorship" ? 22 : 28,
-        kind === "takeover" ? 24 : kind === "sponsorship" ? 6 : 7
+        kind === "takeover" ? 90 : humanScale ? 8 : kind === "sponsorship" ? 22 : 28,
+        kind === "takeover" ? 24 : humanScale ? 2 : kind === "sponsorship" ? 6 : 7
       );
       (board.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
       if (kind === "sponsorship") board.position.set(0, 8, 22);
-      else if (kind === "academy") board.position.set(0, 8, 16);
-      else if (kind === "walkout") board.position.set(0, 6, 8);
+      else if (kind === "academy") board.position.set(0, 3.1, -8);
+      else if (kind === "walkout") board.position.set(0, 3.1, -6);
       else if (kind === "takeover") {
         board.position.set(0, 72, 0);
         nameBoard = board;

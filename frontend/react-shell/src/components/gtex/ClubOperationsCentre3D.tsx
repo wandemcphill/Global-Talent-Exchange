@@ -215,11 +215,13 @@ export function ClubOperationsCentre3D({
   selectedDestinationKey,
   onSelectDestinationKey,
   onHubUpdated,
+  previewHub,
 }: {
   clubId: string;
   selectedDestinationKey?: string;
   onSelectDestinationKey?: (key: string) => void;
   onHubUpdated?: () => void;
+  previewHub?: ClubOperationsHubPayload | null;
 }) {
   const queryClient = useQueryClient();
   const [internalDestKey, setInternalDestKey] = useState<string>("executive_office");
@@ -298,7 +300,7 @@ export function ClubOperationsCentre3D({
   });
 
   const {
-    data: hub,
+    data: fetchedHub,
     isLoading,
     isError: isHubError,
     error: hubError,
@@ -310,8 +312,9 @@ export function ClubOperationsCentre3D({
       const { data } = await api.get(clubOperationsHubEndpoint(clubId));
       return data as ClubOperationsHubPayload;
     },
-    enabled: Boolean(clubId),
+    enabled: Boolean(clubId) && previewHub == null,
   });
+  const hub = previewHub ?? fetchedHub;
 
   const destinations = useMemo(() => hub?.destinations || [], [hub?.destinations]);
   const sceneConfigurationKey = useMemo(
@@ -503,7 +506,7 @@ export function ClubOperationsCentre3D({
     const width = Math.max(320, container.clientWidth || 960);
     const height = Math.max(380, container.clientHeight || 520);
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio, 1.25));
     renderer.shadowMap.enabled = qualityProfile.shadowsEnabled;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -550,7 +553,7 @@ export function ClubOperationsCentre3D({
     );
     sunLight.position.set(28, 42, 24);
     sunLight.castShadow = qualityProfile.shadowsEnabled;
-    const shadowMapSize = qualityTier === "ultra" ? 2048 : qualityTier === "high" ? 1024 : 512;
+    const shadowMapSize = qualityTier === "low" ? 512 : 1024;
     sunLight.shadow.mapSize.set(shadowMapSize, shadowMapSize);
     sunLight.shadow.camera.near = 2;
     sunLight.shadow.camera.far = 120;
@@ -830,7 +833,7 @@ export function ClubOperationsCentre3D({
     const onWebglContextRestored = () => {
       if (!mounted) return;
       isContextLost = false;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio));
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio, 1.25));
       onResize();
       setWebglStatus("ready");
       scheduleFrame();

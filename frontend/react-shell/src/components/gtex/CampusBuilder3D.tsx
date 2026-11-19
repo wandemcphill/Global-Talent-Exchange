@@ -25,6 +25,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { publicAssetPath } from "@/lib/publicPath";
+import { loadTrainingField } from "@/lib/3d/sceneKit";
 
 export interface CampusZone {
   zone_id: string;
@@ -610,8 +611,17 @@ export const CampusBuilder3D: React.FC<CampusBuilder3DProps> = ({
 
     // Ground & Landscaped Terrain Plinth
     const outerGroundGeo = new THREE.PlaneGeometry(72, 60);
+    const grassTexture = new THREE.TextureLoader().load(
+      normalizeUrl("/textures/ground/aerial_grass_rock_diff_1k.jpg")
+    );
+    grassTexture.colorSpace = THREE.SRGBColorSpace;
+    grassTexture.wrapS = THREE.RepeatWrapping;
+    grassTexture.wrapT = THREE.RepeatWrapping;
+    grassTexture.repeat.set(10, 8);
+    grassTexture.anisotropy = 4;
     const outerGroundMat = new THREE.MeshStandardMaterial({
-      color: 0x0b2619,
+      map: grassTexture,
+      color: 0xffffff,
       roughness: 0.94,
       metalness: 0.02,
     });
@@ -636,7 +646,8 @@ export const CampusBuilder3D: React.FC<CampusBuilder3DProps> = ({
     // Raycastable Authoritative 24x18 Ground Plane (Y = 0)
     const rayPlaneGeo = new THREE.PlaneGeometry(gridWidth, gridHeight);
     const rayPlaneMat = new THREE.MeshStandardMaterial({
-      color: 0x16442b,
+      map: grassTexture,
+      color: 0xffffff,
       roughness: 0.88,
       metalness: 0.04,
     });
@@ -728,6 +739,19 @@ export const CampusBuilder3D: React.FC<CampusBuilder3DProps> = ({
       domeClone.position.set(-8.5, 0, -10.8);
       domeClone.scale.set(0.9, 0.9, 0.9);
       infraGroup.add(domeClone);
+    });
+
+    void loadTrainingField(18).then((homeGround) => {
+      if (!sceneRef.current) return;
+      homeGround.position.z -= 2.5;
+      homeGround.position.y += 0.03;
+      homeGround.name = "home-ground";
+      homeGround.traverse((child) => {
+        child.userData.scenery = true;
+      });
+      infraGroup.add(homeGround);
+    }).catch(() => {
+      // The builder grid still works if the training field is missing.
     });
 
     scene.add(infraGroup);
