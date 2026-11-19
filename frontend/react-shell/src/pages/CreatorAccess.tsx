@@ -231,8 +231,11 @@ export default function CreatorAccess() {
           {affiliate.data && (
             <div data-testid="creator-affiliate-summary">
               <p className="text-sm text-slate-300">
-                Code {affiliate.data.code}. Registrations {affiliate.data.registrations}. Qualifying
-                deposits {affiliate.data.qualifying_deposits}.
+                You earn {affiliate.data.your_rate_percent || "25"}% of each referred first deposit
+                in GTEX Coin. The person you refer still receives{" "}
+                {affiliate.data.their_rate_percent || "10"}%. Code {affiliate.data.code}.
+                Registrations {affiliate.data.registrations}. Qualifying deposits{" "}
+                {affiliate.data.qualifying_deposits}.
               </p>
               <Link
                 to="/app/referrals"

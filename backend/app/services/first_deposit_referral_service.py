@@ -69,7 +69,7 @@ from app.models.referral_reward import ReferralReward
 from app.models.referral_reward_ledger import ReferralRewardLedger
 from app.models.share_code import ShareCode
 from app.models.treasury import DepositRequest, DepositStatus, RateDirection
-from app.models.user import User
+from app.models.user import PublicAccountType, User
 from app.models.wallet import LedgerEntryReason, LedgerSourceTag, LedgerTransactionType, LedgerUnit
 from app.wallets.service import LedgerPosting, WalletService
 
@@ -116,11 +116,25 @@ def referral_link(code: str) -> str:
     return f"{PUBLIC_SIGNUP_URL}?ref={code}"
 
 
+def _percent_label(bps: int) -> str:
+    value = (Decimal(int(bps)) / Decimal(100)).quantize(FIAT_QUANTUM, rounding=ROUND_HALF_UP)
+    text = format(value, "f")
+    if text.endswith(".00"):
+        return text[:-3]
+    return text.rstrip("0").rstrip(".")
+
+
 def bonus_explanation(bonus_bps: int) -> str:
-    if int(bonus_bps) == 1000:
-        return "Register with this referral code and receive a 10% bonus on your first qualifying deposit."
-    percent = (Decimal(int(bonus_bps)) / Decimal(100)).quantize(FIAT_QUANTUM, rounding=ROUND_HALF_UP)
+    percent = _percent_label(bonus_bps)
     return f"Register with this referral code and receive a {percent}% bonus on your first qualifying deposit."
+
+
+def referrer_explanation(commission_bps: int) -> str:
+    percent = _percent_label(commission_bps)
+    return (
+        f"You earn {percent}% of that first deposit in GTEX Coin, paid into your balance. "
+        "You can withdraw it or sell it to a coin trader."
+    )
 
 
 def _money(value: Decimal | int | str | None) -> Decimal:
@@ -197,6 +211,7 @@ class FirstDepositReferralService:
             is_active=True,
             user_bonus_bps=1000,
             referrer_commission_bps=1000,
+            creator_commission_bps=2500,
             hold_days=7,
             payout_weekday=0,
             min_payout_thresholds_json={"NGN": "10000.00"},
@@ -214,6 +229,8 @@ class FirstDepositReferralService:
             settings.user_bonus_bps = self._bps(payload["user_bonus_bps"])
         if "referrer_commission_bps" in payload:
             settings.referrer_commission_bps = self._bps(payload["referrer_commission_bps"])
+        if "creator_commission_bps" in payload:
+            settings.creator_commission_bps = self._bps(payload["creator_commission_bps"])
         if "is_active" in payload:
             settings.is_active = bool(payload["is_active"])
         if "hold_days" in payload:
@@ -497,6 +514,9 @@ class FirstDepositReferralService:
         rewards = self._first_deposit_rewards(deposit.user_id)
         bonus = next(item for item in rewards if item.reward_type == BONUS_TYPE)
         self._credit_bonus(bonus, deposit)
+        commission = next(item for item in rewards if item.reward_type == COMMISSION_TYPE)
+        if commission.beneficiary_user_id and str(commission.reward_unit) == LedgerUnit.COIN.value:
+            self._credit_referrer_coin(commission)
         self._screen_fraud(attribution, bonus)
         attribution.locked_at = utcnow()
         attribution.attribution_status = "qualified"
@@ -1335,14 +1355,29 @@ class FirstDepositReferralService:
             for reward in commissions:
                 if reward.status != status:
                     continue
-                currency = reward.qualifying_currency or ""
-                amounts[currency] = _money(amounts.get(currency, Decimal("0")) + _money(reward.reward_amount))
+                if str(reward.reward_unit or "") == LedgerUnit.COIN.value:
+                    label = "GTEX Coin"
+                    amount = _coin(reward.reward_amount)
+                    quantum = _coin
+                else:
+                    label = reward.qualifying_currency or ""
+                    amount = _money(reward.reward_amount)
+                    quantum = _money
+                amounts[label] = quantum(amounts.get(label, Decimal("0")) + amount)
             return {currency: format(amount, "f") for currency, amount in amounts.items()}
 
+        settings = self.ensure_programme()
+        your_bps = self._commission_bps_for(user, settings)
+        their_bps = int(settings.user_bonus_bps)
         return {
             "code": share.code,
             "link": referral_link(share.code),
-            "explanation": bonus_explanation(self.ensure_programme().user_bonus_bps),
+            "explanation": bonus_explanation(their_bps),
+            "referrer_explanation": referrer_explanation(your_bps),
+            "your_rate_bps": your_bps,
+            "their_rate_bps": their_bps,
+            "your_rate_percent": _percent_label(your_bps),
+            "their_rate_percent": _percent_label(their_bps),
             "registrations": len(attributions),
             "qualifying_deposits": len(bonuses),
             "referred_deposit_volume": {currency: format(amount, "f") for currency, amount in volume.items()},
@@ -1371,16 +1406,19 @@ class FirstDepositReferralService:
         settings: ReferralProgrammeSettings,
     ) -> bool:
         bonus_bps = int(settings.user_bonus_bps)
-        commission_bps = int(settings.referrer_commission_bps)
-        bonus_fiat = _percent(deposit.gross_fiat, bonus_bps)
-        commission_fiat = _percent(deposit.gross_fiat, commission_bps)
-        bonus_wallet = fiat_to_wallet(bonus_fiat, deposit.rate_value, deposit.rate_direction)
         partner = (
             self.session.get(ReferralPartner, attribution.referral_partner_id)
             if attribution.referral_partner_id
             else None
         )
         beneficiary_user_id = attribution.referrer_user_id or (partner.owner_user_id if partner else None)
+        referrer = self.session.get(User, beneficiary_user_id) if beneficiary_user_id else None
+        commission_bps = self._commission_bps_for(referrer, settings)
+        bonus_fiat = _percent(deposit.gross_fiat, bonus_bps)
+        commission_fiat = _percent(deposit.gross_fiat, commission_bps)
+        bonus_wallet = fiat_to_wallet(bonus_fiat, deposit.rate_value, deposit.rate_direction)
+        pay_coin = referrer is not None
+        commission_coin = self._gtex_amount(commission_fiat, deposit) if pay_coin else None
         payload = {
             "qualifying_base": "gross_verified_fiat",
             "gross_fiat": format(deposit.gross_fiat, "f"),
@@ -1401,9 +1439,11 @@ class FirstDepositReferralService:
             "referrer_commission_bps": commission_bps,
             "shared_bonus_fiat": format(bonus_fiat, "f"),
             "shared_commission_fiat": format(commission_fiat, "f"),
+            "commission_payout": "immediate_gtex_coin" if pay_coin else "fiat_hold",
+            "commission_gtex_coin": format(commission_coin, "f") if commission_coin is not None else None,
             "settled_at": deposit.settled_at.isoformat(),
         }
-        hold_until = deposit.settled_at + timedelta(days=int(settings.hold_days or 0))
+        hold_until = None if pay_coin else deposit.settled_at + timedelta(days=int(settings.hold_days or 0))
         bonus = ReferralReward(
             reward_key=f"first_deposit_bonus:{deposit.user_id}",
             referral_attribution_id=attribution.id,
@@ -1433,10 +1473,10 @@ class FirstDepositReferralService:
             trigger_event_type=ReferralEventType.FIRST_QUALIFYING_DEPOSIT,
             reward_type=COMMISSION_TYPE,
             status=ReferralRewardStatus.PENDING,
-            reward_amount=commission_fiat,
-            reward_unit=deposit.currency_code,
+            reward_amount=commission_coin if pay_coin else commission_fiat,
+            reward_unit=LedgerUnit.COIN.value if pay_coin else deposit.currency_code,
             hold_until=hold_until,
-            review_reason="fraud_hold",
+            review_reason=None if pay_coin else "fraud_hold",
             referral_partner_id=attribution.referral_partner_id,
             qualifying_amount=deposit.gross_fiat,
             qualifying_currency=deposit.currency_code,
@@ -1464,7 +1504,8 @@ class FirstDepositReferralService:
         )
         self._ledger(bonus, "reward_created", bonus.status, deposit.deposit_id)
         self._ledger(commission, "reward_created", commission.status, deposit.deposit_id)
-        self._ledger(commission, "hold_applied", commission.status, hold_until.isoformat())
+        if hold_until is not None:
+            self._ledger(commission, "hold_applied", commission.status, hold_until.isoformat())
         return True
 
     def _credit_bonus(self, reward: ReferralReward, deposit: SettledDeposit) -> None:
@@ -1518,8 +1559,62 @@ class FirstDepositReferralService:
         reward.reward_payload_json = payload
         self._ledger(reward, "bonus_credited", reward.status, reward.reward_reference)
 
+    def _credit_referrer_coin(self, reward: ReferralReward) -> None:
+        amount = _coin(reward.reward_amount)
+        referrer = self.session.get(User, reward.beneficiary_user_id) if reward.beneficiary_user_id else None
+        if referrer is None:
+            raise FirstDepositReferralError("user_not_found", "Referrer is missing.")
+        if amount <= 0:
+            reward.status = ReferralRewardStatus.PAID
+            reward.paid_at = utcnow()
+            reward.reward_payload_json = {**(reward.reward_payload_json or {}), "rounding_to_zero": True}
+            self._ledger(reward, "commission_credited", reward.status, "zero")
+            return
+        account = self.wallet_service.get_user_account(self.session, referrer, LedgerUnit.COIN)
+        operations = self.wallet_service.ensure_operations_account(self.session, LedgerUnit.COIN)
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=[
+                LedgerPosting(
+                    account=account,
+                    amount=amount,
+                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                ),
+                LedgerPosting(
+                    account=operations,
+                    amount=-amount,
+                    transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+                ),
+            ],
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+            transaction_type=LedgerTransactionType.PROMO_POOL_CREDIT,
+            reference=f"referral-commission:{reward.referred_user_id}",
+            description="First-deposit referral paid in GTEX Coin",
+            actor=referrer,
+            idempotency_key=f"referral-first-deposit-commission:{reward.referred_user_id}",
+            metadata={
+                "referral_reward_id": reward.id,
+                "source_scope": "trade",
+                "withdrawable": True,
+                "deposit_id": reward.deposit_id,
+                "commission_fiat": (reward.reward_payload_json or {}).get("shared_commission_fiat"),
+            },
+        )
+        reward.status = ReferralRewardStatus.PAID
+        reward.paid_at = utcnow()
+        reward.approved_at = reward.paid_at
+        reward.reward_reference = entries[0].transaction_id if entries else None
+        payload = dict(reward.reward_payload_json or {})
+        payload["ledger_transaction_id"] = reward.reward_reference
+        reward.reward_payload_json = payload
+        self._ledger(reward, "commission_credited", reward.status, reward.reward_reference)
+
     def _reverse_commission(self, reward: ReferralReward, reversal_status: str, wallet_completed: bool) -> None:
         note = f"{reversal_status}:wallet_reversed={wallet_completed}"
+        if reward.status == ReferralRewardStatus.PAID and str(reward.reward_unit or "") == LedgerUnit.COIN.value:
+            self._claw_back_referrer_coin(reward, reversal_status, wallet_completed, note)
+            return
         if reward.status == ReferralRewardStatus.PAID:
             self._open_recovery(
                 reward,
@@ -1544,6 +1639,64 @@ class FirstDepositReferralService:
             reward.reversed_at = utcnow()
         reward.review_reason = "deposit_reversed"
         self._ledger(reward, "deposit_reversed", reward.status, note)
+
+    def _claw_back_referrer_coin(
+        self,
+        reward: ReferralReward,
+        reversal_status: str,
+        wallet_completed: bool,
+        note: str,
+    ) -> None:
+        amount = _coin(reward.reward_amount)
+        clawed = Decimal("0.0000")
+        referrer = self.session.get(User, reward.beneficiary_user_id) if reward.beneficiary_user_id else None
+        if amount > 0 and referrer is not None and reward.reward_reference:
+            account = self.wallet_service.get_user_account(self.session, referrer, LedgerUnit.COIN)
+            available = _coin(self.wallet_service.get_balance(self.session, account))
+            clawed = min(available, amount)
+            if clawed > 0:
+                operations = self.wallet_service.ensure_operations_account(self.session, LedgerUnit.COIN)
+                self.wallet_service.append_transaction(
+                    self.session,
+                    postings=[
+                        LedgerPosting(
+                            account=account, amount=-clawed, transaction_type=LedgerTransactionType.ADJUSTMENT
+                        ),
+                        LedgerPosting(
+                            account=operations, amount=clawed, transaction_type=LedgerTransactionType.ADJUSTMENT
+                        ),
+                    ],
+                    reason=LedgerEntryReason.ADJUSTMENT,
+                    source_tag=LedgerSourceTag.PROMO_POOL_CREDIT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                    reference=f"referral-commission-reversal:{reward.referred_user_id}",
+                    description="Reverse first-deposit referral GTEX Coin",
+                    actor=referrer,
+                    idempotency_key=f"referral-first-deposit-commission-clawback:{reward.referred_user_id}",
+                    metadata={"referral_reward_id": reward.id, "reversal_status": reversal_status},
+                )
+        shortfall = _coin(amount - clawed)
+        payload = dict(reward.reward_payload_json or {})
+        payload["clawback_amount"] = format(clawed, "f")
+        payload["shortfall_amount"] = format(shortfall, "f")
+        reward.reward_payload_json = payload
+        if shortfall > 0:
+            self._open_recovery(
+                reward,
+                kind="paid_commission_recovery",
+                amount=shortfall,
+                currency=LedgerUnit.COIN.value,
+                notes=note,
+            )
+            self._flag("paid_commission_recovery", "high", "referral_reward", reward.id, ["commission_spent"])
+            self._ledger(reward, "shortfall_recorded", reward.status, format(shortfall, "f"))
+        if shortfall == 0:
+            reward.status = ReferralRewardStatus.REVERSED
+            reward.reversed_at = utcnow()
+        reward.review_reason = "deposit_reversed"
+        self._ledger(reward, "commission_clawback", reward.status, note)
+        if not wallet_completed:
+            self._flag("deposit_reversal_incomplete", "high", "referral_reward", reward.id, ["wallet_debit_incomplete"])
 
     def _reverse_bonus(self, reward: ReferralReward, reversal_status: str, wallet_completed: bool) -> None:
         note = f"{reversal_status}:wallet_reversed={wallet_completed}"
@@ -2124,6 +2277,23 @@ class FirstDepositReferralService:
             return code
         raise FirstDepositReferralError("code_generation_failed", "Could not generate a unique referral code.")
 
+    def _commission_bps_for(self, referrer: User | None, settings: ReferralProgrammeSettings) -> int:
+        account_type = str(
+            getattr(getattr(referrer, "account_type", None), "value", getattr(referrer, "account_type", "")) or ""
+        )
+        if account_type == PublicAccountType.CREATOR.value:
+            return int(settings.creator_commission_bps or 2500)
+        return int(settings.referrer_commission_bps)
+
+    def _gtex_amount(self, fiat_amount: Decimal, deposit: SettledDeposit) -> Decimal:
+        """Convert the referrer's fiat share into GTEX Coin at the GTEX deposit rate."""
+        if _unit(deposit.wallet_unit) is LedgerUnit.COIN:
+            return fiat_to_wallet(fiat_amount, deposit.rate_value, deposit.rate_direction)
+        from app.treasury.service import TreasuryService
+
+        treasury = TreasuryService().ensure_settings(self.session)
+        return fiat_to_wallet(fiat_amount, Decimal(treasury.deposit_rate_value), treasury.deposit_rate_direction)
+
     def _bps(self, value: Any) -> int:
         bps = int(value)
         if bps < 0 or bps > 5000:
@@ -2156,8 +2326,10 @@ class FirstDepositReferralService:
             "is_active": settings.is_active,
             "user_bonus_bps": settings.user_bonus_bps,
             "referrer_commission_bps": settings.referrer_commission_bps,
+            "creator_commission_bps": settings.creator_commission_bps,
             "user_bonus_percent": format(Decimal(settings.user_bonus_bps) / Decimal(100), "f"),
             "referrer_commission_percent": format(Decimal(settings.referrer_commission_bps) / Decimal(100), "f"),
+            "creator_commission_percent": format(Decimal(settings.creator_commission_bps) / Decimal(100), "f"),
             "hold_days": settings.hold_days,
             "payout_weekday": settings.payout_weekday,
             "min_payout_thresholds": dict(settings.min_payout_thresholds_json or {}),

@@ -60,9 +60,11 @@ export default function Referrals() {
         </p>
         <h1 className="mt-2 text-3xl font-black text-white">Your referral programme</h1>
         <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
-          Members, club owners, creators, and coin traders share the same first-deposit programme.
-          Someone who registers with your code receives a 10% bonus on their first qualifying
-          deposit. You earn a 10% commission on that same deposit after review.
+          Members, club owners, creators, and coin traders can each generate a code and a link.
+          Anyone who registers with the code, or through the link, is linked to you. On their first
+          deposit they receive a {data?.their_rate_percent || "10"}% bonus. You receive{" "}
+          {data?.your_rate_percent || "10"}% of that deposit in GTEX Coin, paid straight into your
+          balance. You can withdraw it or sell it to a coin trader.
         </p>
       </section>
 
@@ -119,7 +121,7 @@ export default function Referrals() {
               <p className="text-xs text-slate-400">Gross verified fiat, not wallet credit</p>
             </Panel>
             <Panel eyebrow="Pending" title={money(data.pending_commission)}>
-              <p className="text-xs text-slate-400">Held for review</p>
+              <p className="text-xs text-slate-400">Not yet in your balance</p>
             </Panel>
           </div>
           <div className="grid gap-4 md:grid-cols-3">
@@ -127,7 +129,7 @@ export default function Referrals() {
               <p className="text-xs text-slate-400">Eligible for the weekly payout</p>
             </Panel>
             <Panel eyebrow="Paid" title={money(data.paid_commission)}>
-              <p className="text-xs text-slate-400">Recorded after a real payment reference</p>
+              <p className="text-xs text-slate-400">GTEX Coin in your balance. Withdraw it or sell it to a coin trader.</p>
             </Panel>
             <Panel eyebrow="Reversed" title={money(data.reversed_commission)}>
               <p className="text-xs text-slate-400">Deposit reversed before payment</p>

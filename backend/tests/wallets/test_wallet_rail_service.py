@@ -359,9 +359,11 @@ def test_first_deposit_referral_rewards_are_once_only_and_reversed_with_deposit(
     partner_commission = next(reward for reward in referral_rewards if reward.beneficiary_user_id == referrer.id)
     assert user_bonus.status.value == "paid"
     assert user_bonus.reward_amount == Decimal("10.0000")
-    assert partner_commission.status.value == "pending"
-    assert partner_commission.reward_amount == Decimal("10.00")
-    assert partner_commission.reward_unit == "NGN"
+    assert partner_commission.status.value == "paid"
+    assert partner_commission.reward_amount == Decimal("10.0000")
+    assert partner_commission.reward_unit == "coin"
+    referrer_account = rail_service.wallet_service.get_user_account(session, referrer, LedgerUnit.COIN)
+    assert rail_service.wallet_service.get_balance(session, referrer_account) == Decimal("10.0000")
 
     rail_service.reverse_purchase_order(
         order=first_order,
@@ -372,5 +374,6 @@ def test_first_deposit_referral_rewards_are_once_only_and_reversed_with_deposit(
     session.refresh(user_bonus)
     session.refresh(partner_commission)
     assert user_bonus.status.value == "reversed"
-    assert partner_commission.status.value == "blocked"
+    assert partner_commission.status.value == "reversed"
     assert rail_service.wallet_service.get_balance(session, referred_account) == Decimal("49.2500")
+    assert rail_service.wallet_service.get_balance(session, referrer_account) == Decimal("0.0000")

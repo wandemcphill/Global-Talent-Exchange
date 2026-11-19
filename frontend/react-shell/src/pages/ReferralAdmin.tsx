@@ -184,6 +184,7 @@ export default function ReferralAdmin() {
       await api.put("/admin/referrals/affiliate/settings", {
         user_bonus_bps: Number(settingsForm.user_bonus_bps),
         referrer_commission_bps: Number(settingsForm.referrer_commission_bps),
+        creator_commission_bps: Number(settingsForm.creator_commission_bps),
         is_active: Boolean(settingsForm.is_active),
         hold_days: Number(settingsForm.hold_days),
         payout_weekday: Number(settingsForm.payout_weekday),
@@ -581,6 +582,16 @@ export default function ReferralAdmin() {
               value={settings.referrer_commission_bps}
               onChange={(event) =>
                 setSettingsForm({ ...settings, referrer_commission_bps: event.target.value })
+              }
+            />
+          </label>
+          <label className="text-xs text-slate-400">
+            Creator commission basis points
+            <input
+              className="gx-input mt-1"
+              value={settings.creator_commission_bps}
+              onChange={(event) =>
+                setSettingsForm({ ...settings, creator_commission_bps: event.target.value })
               }
             />
           </label>

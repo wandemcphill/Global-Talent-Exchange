@@ -472,32 +472,22 @@ def test_hold_approval_and_beneficiary_currency_payout(db) -> None:
     )
     assert internal_commission.beneficiary_user_id == referrer.id
     assert internal_commission.referral_partner_id == internal["id"]
+    assert internal_commission.status == ReferralRewardStatus.PAID
+    assert internal_commission.reward_unit == LedgerUnit.COIN.value
+    assert internal_commission.reward_amount == Decimal("100.0000")
+    referrer_wallet = WalletService()
+    assert referrer_wallet.get_balance(
+        session, referrer_wallet.get_user_account(session, referrer, LedgerUnit.COIN)
+    ) == Decimal("100.0000")
+    with pytest.raises(FirstDepositReferralError) as already_paid:
+        service.decide_commission(admin, internal_commission.id, decision="approve", reason="Already in the wallet")
+    assert already_paid.value.code == "reward_not_pending"
     with pytest.raises(FirstDepositReferralError) as early:
         service.decide_commission(admin, external_commission.id, decision="approve", reason="Too early")
     assert early.value.code == "hold_active"
     external_commission.hold_until = datetime.now(timezone.utc) - timedelta(seconds=1)
-    internal_commission.hold_until = datetime.now(timezone.utc) - timedelta(seconds=1)
     session.flush()
     service.decide_commission(admin, external_commission.id, decision="approve", reason="Hold elapsed")
-    service.decide_commission(admin, internal_commission.id, decision="approve", reason="Hold elapsed")
-
-    with pytest.raises(FirstDepositReferralError) as mismatch:
-        service.create_payout_batch(
-            admin,
-            reward_ids=[external_commission.id, internal_commission.id],
-            payout_method="external_transfer",
-            off_cycle_reason="Reconciliation",
-        )
-    assert mismatch.value.code == "payout_beneficiary_mismatch"
-
-    with pytest.raises(FirstDepositReferralError) as missing_threshold:
-        service.create_payout_batch(
-            admin,
-            reward_ids=[internal_commission.id],
-            payout_method="external_transfer",
-            off_cycle_reason="Reconciliation",
-        )
-    assert missing_threshold.value.code == "threshold_not_configured"
 
     service.update_settings(admin, {"min_payout_thresholds": {"NGN": "10000.00", "USD": "10.00"}})
     batch = service.create_payout_batch(
@@ -646,6 +636,69 @@ def test_concurrent_settlement_creates_one_reward_pair(db) -> None:
         select(func.count()).select_from(ReferralReward).where(ReferralReward.referred_user_id == member.id)
     )
     assert count == 2
+
+
+def test_app_accounts_share_a_link_and_creators_earn_25_percent_in_gtex_coin(db) -> None:
+    session, _, _, referrer = db
+    service = _service(session)
+    share = service.ensure_personal_code(referrer)
+    dashboard = service.my_affiliate(referrer)
+    assert dashboard["link"] == f"https://playgtex.app/signup?ref={share.code}"
+    assert dashboard["your_rate_percent"] == "10"
+    assert dashboard["their_rate_percent"] == "10"
+
+    member = _user("buyer@gtex.test", "buyer")
+    session.add(member)
+    session.flush()
+    service.attribute_signup(member, share.code, account_type="user")
+    order = _order(member, amount_fiat="6000.00", rate="60", reference="PO-APP")
+    session.add(order)
+    session.commit()
+    WalletRailService(session=session).settle_purchase_order(order=order, actor=member)
+    session.commit()
+
+    rewards = list(session.scalars(select(ReferralReward).where(ReferralReward.referred_user_id == member.id)).all())
+    bonus = next(item for item in rewards if item.reward_type == ReferralRewardType.FIRST_DEPOSIT_BONUS)
+    commission = next(item for item in rewards if item.reward_type == ReferralRewardType.FIRST_DEPOSIT_COMMISSION)
+    assert bonus.applied_rate_bps == 1000
+    assert bonus.status == ReferralRewardStatus.PAID
+    assert commission.applied_rate_bps == 1000
+    assert commission.status == ReferralRewardStatus.PAID
+    assert commission.reward_unit == LedgerUnit.COIN.value
+    assert commission.reward_amount == Decimal("10.0000")
+    wallet = WalletService()
+    assert wallet.get_balance(session, wallet.get_user_account(session, referrer, LedgerUnit.COIN)) == Decimal("10.0000")
+
+    creator = _user("creator-ref@gtex.test", "creatorref", account_type=PublicAccountType.CREATOR)
+    trader = _user("trader-ref@gtex.test", "traderref", account_type=PublicAccountType.COIN_TRADER)
+    session.add_all([creator, trader])
+    session.flush()
+    assert service.my_affiliate(trader)["your_rate_percent"] == "10"
+    creator_share = service.ensure_personal_code(creator)
+    assert service.my_affiliate(creator)["your_rate_percent"] == "25"
+    assert service.my_affiliate(creator)["their_rate_percent"] == "10"
+    referred = _user("referred-by-creator@gtex.test", "referredcreator")
+    session.add(referred)
+    session.flush()
+    service.attribute_signup(referred, creator_share.code, account_type="coin_trader")
+    creator_order = _order(referred, amount_fiat="6000.00", rate="60", reference="PO-CREATOR")
+    session.add(creator_order)
+    session.commit()
+    WalletRailService(session=session).settle_purchase_order(order=creator_order, actor=referred)
+    session.commit()
+
+    creator_rewards = list(
+        session.scalars(select(ReferralReward).where(ReferralReward.referred_user_id == referred.id)).all()
+    )
+    creator_bonus = next(item for item in creator_rewards if item.reward_type == ReferralRewardType.FIRST_DEPOSIT_BONUS)
+    creator_commission = next(
+        item for item in creator_rewards if item.reward_type == ReferralRewardType.FIRST_DEPOSIT_COMMISSION
+    )
+    assert creator_bonus.applied_rate_bps == 1000
+    assert creator_commission.applied_rate_bps == 2500
+    assert creator_commission.status == ReferralRewardStatus.PAID
+    assert creator_commission.reward_amount == Decimal("25.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, creator, LedgerUnit.COIN)) == Decimal("25.0000")
 
 
 def test_admin_routes_reject_non_admins_and_serve_records(db) -> None:

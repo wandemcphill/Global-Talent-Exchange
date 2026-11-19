@@ -69,6 +69,7 @@ class ReferralProgrammeSettings(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     user_bonus_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=1000, server_default="1000")
     referrer_commission_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=1000, server_default="1000")
+    creator_commission_bps: Mapped[int] = mapped_column(Integer, nullable=False, default=2500, server_default="2500")
     hold_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7, server_default="7")
     payout_weekday: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     min_payout_thresholds_json: Mapped[dict[str, str]] = mapped_column(JSON, nullable=False, default=dict)
