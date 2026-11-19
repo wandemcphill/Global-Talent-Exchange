@@ -171,7 +171,9 @@ def build_front(people) -> Image.Image:
         draw.text((cx - tw / 2, cy + face // 2 + 46), tag.upper(), font=tag_font, fill=ring[tag])
 
     footer_y = H - 250
-    draw.rounded_rectangle((MARGIN, footer_y, W - MARGIN, H - 40), radius=18, fill=(10, 18, 28), outline=EMERALD, width=3)
+    draw.rounded_rectangle(
+        (MARGIN, footer_y, W - MARGIN, H - 40), radius=18, fill=(10, 18, 28), outline=EMERALD, width=3
+    )
     qr_img = make_qr(190)
     canvas.paste(qr_img, (MARGIN + 18, footer_y + 16))
     draw.text((MARGIN + 230, footer_y + 22), "QR CODE", font=F_BOLD(22), fill=EMERALD)
@@ -278,7 +280,9 @@ def build_back(_regen_photos) -> Image.Image:
     )
 
     bar_top = H - 430
-    draw.rounded_rectangle((MARGIN, bar_top, W - MARGIN, H - 36), radius=18, fill=(10, 18, 28), outline=EMERALD, width=4)
+    draw.rounded_rectangle(
+        (MARGIN, bar_top, W - MARGIN, H - 36), radius=18, fill=(10, 18, 28), outline=EMERALD, width=4
+    )
     qr_img = make_qr(300)
     canvas.paste(qr_img, (MARGIN + 22, bar_top + 28))
     draw.text((MARGIN + 350, bar_top + 28), "SCAN THIS QR CODE", font=F_BOLD(26), fill=EMERALD)

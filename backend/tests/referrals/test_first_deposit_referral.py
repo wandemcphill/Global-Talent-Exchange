@@ -667,7 +667,9 @@ def test_app_accounts_share_a_link_and_creators_earn_25_percent_in_gtex_coin(db)
     assert commission.reward_unit == LedgerUnit.COIN.value
     assert commission.reward_amount == Decimal("10.0000")
     wallet = WalletService()
-    assert wallet.get_balance(session, wallet.get_user_account(session, referrer, LedgerUnit.COIN)) == Decimal("10.0000")
+    assert wallet.get_balance(session, wallet.get_user_account(session, referrer, LedgerUnit.COIN)) == Decimal(
+        "10.0000"
+    )
 
     creator = _user("creator-ref@gtex.test", "creatorref", account_type=PublicAccountType.CREATOR)
     trader = _user("trader-ref@gtex.test", "traderref", account_type=PublicAccountType.COIN_TRADER)
