@@ -6,6 +6,7 @@ import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Panel } from "@/components/gtex/ui";
+import { TraderOptionalAuthenticator } from "./coin-traders/TraderOptionalAuthenticator";
 import { CoinTraderMarketplaceView } from "./coin-traders/CoinTraderMarketplaceView";
 import { CoinTraderMerchantDashboard } from "./coin-traders/CoinTraderMerchantDashboard";
 import { CoinTraderOrderRoom } from "./coin-traders/CoinTraderOrderRoom";
@@ -254,6 +255,8 @@ export function CoinTraderDesk() {
         and Fan Coin buyer orders start at ₦50,000, with canonical GTEX escrow and zero P2P platform
         fees.
       </p>
+
+      {isDedicatedTraderAccount && <TraderOptionalAuthenticator />}
 
       {/* Top Section Tabs */}
       <div className="mb-5 flex flex-wrap gap-2 border-b border-white/10 pb-3">

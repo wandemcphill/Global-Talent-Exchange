@@ -267,6 +267,24 @@ def test_trader_security_read_hides_backup_codes(session) -> None:
     assert len(summary["recent_events"]) == 1
 
 
+def test_trader_signup_allows_email_without_authenticator_and_locks_desk_interests() -> None:
+    payload = TraderSignupRequest(
+        full_name="Trader User",
+        trading_alias="open_desk",
+        email="open-desk@example.com",
+        password=TEST_PASSWORD,
+        phone_number="+2348012345678",
+        country="NG",
+        preferred_currency="NGN",
+        trading_experience="beginner",
+        interests=["GTEX Coin"],
+    )
+
+    assert payload.totp_secret is None
+    assert payload.totp_code is None
+    assert payload.interests == ["GTEX Coin", "Fan Coins", "P2P", "Escrow"]
+
+
 def test_trader_signup_schema_no_longer_requires_recovery_phrase_or_security_pin() -> None:
     payload = TraderSignupRequest(
         full_name="Trader User",

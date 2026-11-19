@@ -898,13 +898,14 @@ def signup_trader(
             interests=payload.interests,
             wallet_label=payload.wallet_label,
         )
-        trader_service.ensure_security(
-            user,
-            totp_secret=payload.totp_secret,
-            totp_code=payload.totp_code,
-            recovery_phrase_hash=payload.recovery_phrase_hash,
-            security_pin_hash=payload.security_pin_hash,
-        )
+        if payload.totp_secret and payload.totp_code:
+            trader_service.ensure_security(
+                user,
+                totp_secret=payload.totp_secret,
+                totp_code=payload.totp_code,
+                recovery_phrase_hash=payload.recovery_phrase_hash,
+                security_pin_hash=payload.security_pin_hash,
+            )
         # ARCH-002: Ensure modern CoinTraderProfile exists so trader is ready on the OTC desk
         from app.models.coin_trader import CoinTraderProfile, CoinTraderProfileStatus
 

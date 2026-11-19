@@ -341,6 +341,9 @@ class CreatorSignupRequest(BaseModel):
         return bool(self.club_name and self.club_name.strip())
 
 
+REQUIRED_TRADER_DESK_INTERESTS = ("GTEX Coin", "Fan Coins", "P2P", "Escrow")
+
+
 class TraderSignupRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -354,10 +357,10 @@ class TraderSignupRequest(BaseModel):
     trading_experience: str = Field(min_length=2, max_length=32)
     interests: list[str] = Field(default_factory=list, max_length=4)
     wallet_label: str = Field(default="GTEX Trading Wallet", max_length=120)
-    totp_secret: str = Field(min_length=16, max_length=128)
+    totp_secret: str | None = Field(default=None, min_length=16, max_length=128)
     recovery_phrase_hash: str | None = Field(default=None, min_length=16, max_length=255)
     security_pin_hash: str | None = Field(default=None, min_length=16, max_length=255)
-    totp_code: str = Field(min_length=6, max_length=6, pattern=r"^\d{6}$")
+    totp_code: str | None = Field(default=None, min_length=6, max_length=6, pattern=r"^\d{6}$")
     # KYC is no longer collected at signup (only required when a trader withdraws).
     # Optional so older clients that still POST compliance don't 400; it is ignored.
     compliance: ComplianceSubmissionRequest | None = None
@@ -387,8 +390,20 @@ class TraderSignupRequest(BaseModel):
 
     @field_validator("totp_secret")
     @classmethod
-    def validate_totp_secret(cls, value: str) -> str:
+    def validate_totp_secret(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
         return validate_trader_totp_secret(value)
+
+    @model_validator(mode="after")
+    def lock_desk_interests_and_optional_totp(self) -> "TraderSignupRequest":
+        # Every coin-trader desk includes the four built markets. Signup cannot drop one.
+        self.interests = list(REQUIRED_TRADER_DESK_INTERESTS)
+        if bool(self.totp_secret) != bool(self.totp_code):
+            raise ValueError(
+                "Authenticator setup requires both the setup key and the current 6-digit code."
+            )
+        return self
 
     @field_validator("recovery_phrase_hash")
     @classmethod

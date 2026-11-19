@@ -699,8 +699,8 @@ class GteTraderSignupRequest {
     required this.tradingExperience,
     required this.interests,
     this.walletLabel = 'GTEX Trading Wallet',
-    required this.totpSecret,
-    required this.totpCode,
+    this.totpSecret,
+    this.totpCode,
     this.recoveryPhraseHash,
     this.securityPinHash,
     this.turnstileToken,
@@ -717,8 +717,8 @@ class GteTraderSignupRequest {
   final String tradingExperience;
   final List<String> interests;
   final String walletLabel;
-  final String totpSecret;
-  final String totpCode;
+  final String? totpSecret;
+  final String? totpCode;
   final String? recoveryPhraseHash;
   final String? securityPinHash;
   final String? turnstileToken;
@@ -733,10 +733,10 @@ class GteTraderSignupRequest {
     'country': country,
     'preferred_currency': preferredCurrency,
     'trading_experience': tradingExperience,
-    'interests': interests,
     'wallet_label': walletLabel,
-    'totp_secret': totpSecret,
-    'totp_code': totpCode,
+    'interests': const <String>['GTEX Coin', 'Fan Coins', 'P2P', 'Escrow'],
+    if (totpSecret != null && totpSecret!.trim().isNotEmpty) 'totp_secret': totpSecret,
+    if (totpCode != null && totpCode!.trim().isNotEmpty) 'totp_code': totpCode,
     if (recoveryPhraseHash != null) 'recovery_phrase_hash': recoveryPhraseHash,
     if (securityPinHash != null) 'security_pin_hash': securityPinHash,
     if (turnstileToken != null) 'turnstile_token': turnstileToken,

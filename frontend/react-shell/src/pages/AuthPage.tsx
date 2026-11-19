@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
-import { ArrowRight, Building2, Copy, Megaphone, ShieldCheck } from "lucide-react";
+import { ArrowRight, Building2, Megaphone } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { errMsg } from "@/lib/api";
 import { publicUrl } from "@/lib/publicPath";
@@ -12,7 +12,7 @@ import { DocumentHead } from "@/components/seo/DocumentHead";
 
 type AccountType = "user" | "creator" | "coin_trader";
 
-const TRADER_INTEREST_OPTIONS = ["GTEX Coin", "Fan Coins", "P2P", "Escrow"] as const;
+const REQUIRED_TRADER_DESKS = ["GTEX Coin", "Fan Coins", "P2P", "Escrow"] as const;
 
 function Field({
   label,
@@ -34,73 +34,6 @@ function Field({
       )}
     </label>
   );
-}
-
-function generateBase32Secret(): string {
-  const bytes = new Uint8Array(20);
-  window.crypto.getRandomValues(bytes);
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret
-  let bits = 0;
-  let value = 0;
-  let output = "";
-  for (const byte of bytes) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      output += alphabet[(value >>> (bits - 5)) & 31];
-      bits -= 5;
-    }
-  }
-  if (bits > 0) output += alphabet[(value << (5 - bits)) & 31];
-  return output;
-}
-
-function decodeBase32Secret(secret: string): Uint8Array {
-  const alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567"; // pragma: allowlist secret
-  const output: number[] = [];
-  let buffer = 0;
-  let bits = 0;
-  for (const character of secret.replace(/=+$/g, "").toUpperCase()) {
-    const value = alphabet.indexOf(character);
-    if (value < 0) throw new Error("Invalid authenticator setup key.");
-    buffer = (buffer << 5) | value;
-    bits += 5;
-    if (bits >= 8) {
-      bits -= 8;
-      output.push((buffer >>> bits) & 0xff);
-    }
-  }
-  return new Uint8Array(output);
-}
-
-async function verifyTotpCode(secret: string, code: string): Promise<boolean> {
-  const candidate = code.trim();
-  if (!/^\d{6}$/.test(candidate)) return false;
-  const key = await window.crypto.subtle.importKey(
-    "raw",
-    decodeBase32Secret(secret),
-    { name: "HMAC", hash: "SHA-1" },
-    false,
-    ["sign"],
-  );
-  const counter = Math.floor(Date.now() / 30_000);
-  for (let drift = -1; drift <= 1; drift += 1) {
-    let value = counter + drift;
-    const counterBytes = new Uint8Array(8);
-    for (let i = 7; i >= 0; i -= 1) {
-      counterBytes[i] = value & 0xff;
-      value = Math.floor(value / 256);
-    }
-    const digest = new Uint8Array(await window.crypto.subtle.sign("HMAC", key, counterBytes));
-    const offset = digest[digest.length - 1] & 0x0f;
-    const binary =
-      ((digest[offset] & 0x7f) << 24) |
-      ((digest[offset + 1] & 0xff) << 16) |
-      ((digest[offset + 2] & 0xff) << 8) |
-      (digest[offset + 3] & 0xff);
-    if (String(binary % 1_000_000).padStart(6, "0") === candidate) return true;
-  }
-  return false;
 }
 
 function parseAuthError(error: any): { summary: string; fieldErrors: Record<string, string> } {
@@ -198,13 +131,9 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
     preferred_currency: "NGN",
     trading_experience: "beginner",
     wallet_label: "GTEX Trading Wallet",
-    interests: ["GTEX Coin", "Fan Coins", "P2P"] as string[],
-    totp_code: "",
   });
-  const [totpSecret] = useState(() => generateBase32Secret());
-  const [totpVerified, setTotpVerified] = useState(false);
-  const [totpVerifying, setTotpVerifying] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [needsAuthenticator, setNeedsAuthenticator] = useState(false);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -240,29 +169,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       clearFieldError(key);
       setTraderFields((previous) => ({ ...previous, [key]: event.target.value }));
     };
-
-  const toggleTraderInterest = (interest: string) => {
-    clearFieldError("interests");
-    setTraderFields((previous) => {
-      const exists = previous.interests.includes(interest);
-      if (exists) {
-        return { ...previous, interests: previous.interests.filter((item) => item !== interest) };
-      }
-      if (previous.interests.length >= 4) {
-        return previous;
-      }
-      return { ...previous, interests: [...previous.interests, interest] };
-    });
-  };
-
-  const copyTotpSecret = async () => {
-    try {
-      await navigator.clipboard.writeText(totpSecret);
-      toast.success("Authenticator setup key copied.");
-    } catch {
-      toast.error("Copy was blocked by this browser. Select and copy the setup key instead.");
-    }
-  };
 
   const validateSignupBeforeSubmit = (): {
     valid: boolean;
@@ -328,11 +234,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       }
       if (!traderFields.wallet_label.trim()) {
         errors.wallet_label = "Enter a label for your trading wallet.";
-      }
-      if (!/^\d{6}$/.test(traderFields.totp_code.trim())) {
-        errors.totp_code = "Enter the current 6-digit code from your authenticator app.";
-      } else if (!totpVerified) {
-        errors.totp_code = "Verify your authenticator code before creating your account.";
       }
     }
 
@@ -412,10 +313,8 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           country: traderFields.country.trim(),
           preferred_currency: traderFields.preferred_currency.trim().toUpperCase(),
           trading_experience: traderFields.trading_experience,
-          interests: traderFields.interests.length > 0 ? traderFields.interests : ["GTEX Coin"],
+          interests: [...REQUIRED_TRADER_DESKS],
           wallet_label: traderFields.wallet_label.trim() || "GTEX Trading Wallet",
-          totp_secret: totpSecret,
-          totp_code: traderFields.totp_code.trim(),
           ...referralFields,
           ...securityFields,
         };
@@ -445,6 +344,15 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       );
     } catch (error: any) {
       const parsed = parseAuthError(error);
+      if (mode === "login" && /authenticator/i.test(parsed.summary)) {
+        setNeedsAuthenticator(true);
+        setFieldErrors({
+          totp_code: "Enter the current 6-digit code from your authenticator app.",
+        });
+        setFormError("This account uses an authenticator. Enter the current 6-digit code.");
+        toast.error("Enter the code from your authenticator app.");
+        return;
+      }
       setFieldErrors(parsed.fieldErrors);
       setFormError(parsed.summary);
       toast.error(parsed.summary);
@@ -482,13 +390,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
       </div>
     );
   }
-
-  const otpUri =
-    "otpauth://totp/GTEX:" +
-    encodeURIComponent(userFields.email || traderFields.trading_alias || "CoinTrader") +
-    "?secret=" +
-    totpSecret +
-    "&issuer=GTEX&algorithm=SHA1&digits=6&period=30";
 
   return (
     <div className="grid min-h-screen bg-[#070B11] lg:grid-cols-2">
@@ -635,7 +536,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                         setAccountType(option.value);
                         setFieldErrors({});
                         setFormError(null);
-                        setTotpVerified(false);
                       }}
                       className={`min-h-24 rounded-lg border p-3 text-left transition ${
                         selected
@@ -666,7 +566,6 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                   setAccountType(event.target.value as AccountType);
                   setFieldErrors({});
                   setFormError(null);
-                  setTotpVerified(false);
                 }}
               >
                 <option value="user">Fan or club owner</option>
@@ -925,120 +824,24 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
                 />
               </Field>
 
-              <div>
-                <span className="gx-label">Desk interests (up to 4)</span>
-                <div className="mt-1.5 flex flex-wrap gap-2">
-                  {TRADER_INTEREST_OPTIONS.map((interest) => {
-                    const selected = traderFields.interests.includes(interest);
-                    return (
-                      <button
-                        key={interest}
-                        type="button"
-                        data-testid={`trader-interest-${interest.toLowerCase().replace(/\s+/g, "-")}`}
-                        onClick={() => toggleTraderInterest(interest)}
-                        className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
-                          selected
-                            ? "border-amber-400/50 bg-amber-400/15 text-amber-100"
-                            : "border-white/10 bg-white/[0.03] text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {interest}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              <div className="rounded-lg border border-cyan-400/20 bg-cyan-500/[0.04] p-3">
-                <div className="flex items-center gap-2 text-sm font-semibold text-cyan-100">
-                  <ShieldCheck size={17} /> Set up your authenticator app
-                </div>
+              <div data-testid="trader-required-desks">
+                <span className="gx-label">Desk coverage (required)</span>
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  Add GTEX to Google Authenticator, Microsoft Authenticator or another TOTP app
-                  using this setup key. Keep it private.
+                  A coin trader desk always includes GTEX Coin, Fan Coin, P2P, and Escrow. You
+                  cannot leave one out.
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <code
-                    data-testid="signup-totp-secret"
-                    className="select-all break-all rounded bg-slate-950 px-2 py-2 text-xs tracking-wider text-cyan-100"
-                  >
-                    {totpSecret}
-                  </code>
-                  <button
-                    type="button"
-                    onClick={copyTotpSecret}
-                    className="inline-flex items-center gap-1 rounded border border-cyan-400/30 px-2 py-2 text-xs text-cyan-100"
-                  >
-                    <Copy size={13} /> Copy key
-                  </button>
+                <div className="mt-1.5 flex flex-wrap gap-2">
+                  {REQUIRED_TRADER_DESKS.map((interest) => (
+                    <span
+                      key={interest}
+                      data-testid={`trader-interest-${interest.toLowerCase().replace(/\s+/g, "-")}`}
+                      className="rounded-lg border border-amber-400/50 bg-amber-400/15 px-2.5 py-1 text-xs font-medium text-amber-100"
+                    >
+                      {interest === "Fan Coins" ? "Fan Coin" : interest}
+                    </span>
+                  ))}
                 </div>
-                <a
-                  href={otpUri}
-                  className="mt-2 inline-block text-xs text-cyan-300 underline"
-                  data-testid="trader-otpauth-link"
-                >
-                  Open authenticator setup link
-                </a>
-                <Field label="Current 6-digit authenticator code" error={fieldErrors.totp_code}>
-                  <input
-                    required
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    maxLength={6}
-                    data-testid="trader-totp-code-input"
-                    className="gx-input mt-1"
-                    value={traderFields.totp_code}
-                    onChange={(event) => {
-                      updateTrader("totp_code")(event);
-                      setTotpVerified(false);
-                    }}
-                    placeholder="000000"
-                  />
-                </Field>
-                <button
-                  type="button"
-                  data-testid="trader-verify-totp-button"
-                  disabled={totpVerifying || !/^\d{6}$/.test(traderFields.totp_code.trim())}
-                  onClick={async () => {
-                    setTotpVerifying(true);
-                    setFormError(null);
-                    clearFieldError("totp_code");
-                    try {
-                      const valid = await verifyTotpCode(totpSecret, traderFields.totp_code);
-                      setTotpVerified(valid);
-                      if (valid) {
-                        toast.success("Authenticator verified.");
-                      } else {
-                        const message =
-                          "That code does not match this setup key. Check your phone time and enter the latest six-digit code.";
-                        setFieldErrors((previous) => ({ ...previous, totp_code: message }));
-                      }
-                    } catch {
-                      setTotpVerified(false);
-                      setFieldErrors((previous) => ({
-                        ...previous,
-                        totp_code:
-                          "Authenticator verification is unavailable in this browser. Open GTEX over a secure HTTPS connection and try again.",
-                      }));
-                    } finally {
-                      setTotpVerifying(false);
-                    }
-                  }}
-                  className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg border border-cyan-400/30 bg-cyan-400/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <ShieldCheck size={14} />
-                  {totpVerifying
-                    ? "Checking code…"
-                    : totpVerified
-                      ? "Authenticator verified"
-                      : "Verify authenticator"}
-                </button>
               </div>
-              <p className="text-xs leading-5 text-slate-400">
-                Your authenticator is checked before submission and independently verified again by
-                GTEX. You do not need to create a separate recovery phrase or security PIN during
-                signup.
-              </p>
             </section>
           )}
 
@@ -1101,7 +904,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
               placeholder="••••••••"
             />
           </Field>
-          {mode === "login" && (
+          {mode === "login" && needsAuthenticator && (
             <Field label="Authenticator code" error={fieldErrors.totp_code}>
               <input
                 inputMode="numeric"
