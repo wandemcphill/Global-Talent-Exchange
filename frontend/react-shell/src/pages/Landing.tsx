@@ -21,6 +21,7 @@ import { PublicTrafficStatsStrip } from "@/components/landing/PublicTrafficStats
 import { useLiveWorldPulse } from "@/components/landing/useLiveWorldPulse";
 import { NigeriaPlaySection } from "@/components/landing/NigeriaPlaySection";
 import { DocumentHead } from "@/components/seo/DocumentHead";
+import { LandingIntroVideos } from "@/components/gtex/ProductIntroVideo";
 
 export default function Landing() {
   const pulse = useLiveWorldPulse();
@@ -126,6 +127,8 @@ export default function Landing() {
       />
       <GtexTopAdvertisingRail />
       <div aria-hidden="true" className="h-[148px] md:h-[158px]" />
+
+      <LandingIntroVideos />
 
       {/* 2. Cinematic Hero & Live Pulse */}
       <HeroSection

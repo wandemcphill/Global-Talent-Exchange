@@ -48,6 +48,8 @@ import { Btn, Chip, Coin, Empty, Loading, Panel, Stat } from "@/components/gtex/
 import { InboxItem } from "@/components/gtex/InboxItem";
 import { WorldClockCard } from "@/components/gtex/WorldClockCard";
 import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
+import { ProductIntroVideo } from "@/components/gtex/ProductIntroVideo";
+import { useAuth } from "@/lib/auth";
 import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D";
 import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
@@ -55,6 +57,13 @@ import {
   TacticalPitch25D,
   TelemetrySparklineCard,
 } from "@/components/gtex/ApexWidgets";
+
+function DashboardIntroVideo() {
+  const auth = useAuth();
+  const user = auth?.user;
+  const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
+  return <ProductIntroVideo audience={accountType === "coin_trader" ? "trader" : "member"} />;
+}
 
 function NoClubDashboard({
   onCreateClub,
@@ -65,6 +74,7 @@ function NoClubDashboard({
 }) {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
+      <DashboardIntroVideo />
       <section className="relative overflow-hidden rounded-3xl border border-gtex-emerald/30 bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <p className="gx-eyebrow mb-3">Start here</p>
         <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
@@ -369,6 +379,7 @@ export function ControlCenter() {
 
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
+      <DashboardIntroVideo />
       {/* 1. EXECUTIVE FIRST VIEWPORT: CLUB COMMAND HERO */}
       <section className="relative overflow-hidden rounded-3xl border border-gtex-graphite bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.18),transparent_70%)]" />

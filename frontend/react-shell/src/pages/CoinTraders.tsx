@@ -2,10 +2,18 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, CandlestickChart } from "lucide-react";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
+import { ProductIntroVideo } from "@/components/gtex/ProductIntroVideo";
+import { useAuth } from "@/lib/auth";
 
 export default function CoinTraders() {
+  const auth = useAuth();
+  const user = auth?.user;
+  const accountType = String(user?.account_type || user?.accountType || "").toLowerCase();
+  const isTrader = accountType === "coin_trader";
+
   return (
     <div className="space-y-6 p-4 sm:p-8" data-testid="coin-traders-screen">
+      {isTrader && <ProductIntroVideo audience="trader" />}
       <Link
         to="/app"
         className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white"
