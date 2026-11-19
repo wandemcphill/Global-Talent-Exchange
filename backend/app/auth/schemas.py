@@ -400,9 +400,7 @@ class TraderSignupRequest(BaseModel):
         # Every coin-trader desk includes the four built markets. Signup cannot drop one.
         self.interests = list(REQUIRED_TRADER_DESK_INTERESTS)
         if bool(self.totp_secret) != bool(self.totp_code):
-            raise ValueError(
-                "Authenticator setup requires both the setup key and the current 6-digit code."
-            )
+            raise ValueError("Authenticator setup requires both the setup key and the current 6-digit code.")
         return self
 
     @field_validator("recovery_phrase_hash")
