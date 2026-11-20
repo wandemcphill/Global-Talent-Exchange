@@ -3075,11 +3075,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     institutional_pulse = living_institution.get_unified_club_pulse(session, state)
     players = [player_dict(p, session) for p in squad(session, club_id)]
     selection = facilities.get("_last_manager_matchday_selection") or {}
-    filed_ids = (
-        [str(pid) for pid in (selection.get("starting_xi_ids") or [])]
-        if isinstance(selection, dict)
-        else []
-    )
+    filed_ids = [str(pid) for pid in (selection.get("starting_xi_ids") or [])] if isinstance(selection, dict) else []
     by_id = {str(player["id"]): player for player in players}
     matchday_xi = [
         {"id": pid, "name": by_id[pid]["name"], "position": by_id[pid].get("position")}

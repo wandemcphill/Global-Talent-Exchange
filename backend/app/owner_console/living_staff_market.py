@@ -391,9 +391,7 @@ def get_club_vacancies(session: Session, user_id: str, club_id: str) -> dict[str
                     "salary_gtex": (
                         _safe_int(staff_data["salary"])
                         if staff_data.get("salary") is not None
-                        else _safe_int(staff_data["salary_gtex"])
-                        if staff_data.get("salary_gtex") is not None
-                        else None
+                        else _safe_int(staff_data["salary_gtex"]) if staff_data.get("salary_gtex") is not None else None
                     ),
                     "mood": staff_data.get("mood") if staff_data.get("mood") is not None else None,
                     "portrait_url": staff_data.get("portrait_url"),
@@ -953,9 +951,9 @@ def hire_staff_from_market(
         if not preferred and meta.get("preferred_formation"):
             preferred = [str(meta["preferred_formation"])]
         pressing_raw = (manager_record.get("personality_profile") or {}).get("pressing_philosophy")
-        mentality = (manager_record.get("personality_profile") or {}).get("preferred_tactical_philosophy") or manager_record.get(
-            "tactical_preference"
-        )
+        mentality = (manager_record.get("personality_profile") or {}).get(
+            "preferred_tactical_philosophy"
+        ) or manager_record.get("tactical_preference")
         tactical_setup = {
             "ratified_by_manager": True,
             "ratified_manager_id": str(manager_record.get("manager_id") or profile.id),
