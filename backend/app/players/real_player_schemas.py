@@ -39,6 +39,7 @@ class RealPlayerUniverseListItemView(BaseModel):
     playstyle: str | None = None
     traits: tuple[str, ...] = ()
     skills: tuple[str, ...] = ()
+    is_regen: bool = False
 
 
 class RealPlayerUniverseListView(BaseModel):

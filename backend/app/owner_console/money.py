@@ -474,13 +474,36 @@ def korapay_webhook(session: Session, raw: bytes, signature: str | None, event: 
 # ---------- capital moves ----------
 
 
-def inject_capital(session: Session, user_id: str, club_id: str, amount) -> LedgerEvent:
+def inject_capital(session: Session, user_id: str, club_id: str, amount, currency: str = "GTEX") -> LedgerEvent:
     require_state(session, club_id, user_id)
     gross_amount = ledger.D(amount)
     if gross_amount <= 0:
         raise OwnerError("amount_must_be_positive", 400)
 
+    unit = ledger.FAN if str(currency or "GTEX").upper() in {"FAN", "FAN_COIN"} else ledger.GTEX
     user_acct = ledger.user_account(user_id)
+    if unit == ledger.FAN:
+        user_fan = ledger.balance(session, user_acct, ledger.FAN)
+        if user_fan < gross_amount:
+            raise OwnerError("insufficient_funds", 402, "Your wallet does not have enough Fan Coin for this transfer.")
+        try:
+            return ledger.record(
+                session,
+                event_type="owner_capital_injection",
+                source=user_acct,
+                destination=ledger.club_account(club_id),
+                currency=ledger.FAN,
+                gross=gross_amount,
+                balance_class="earned",
+                club_id=club_id,
+                user_id=user_id,
+                related_type="club",
+                related_id=club_id,
+                memo="Owner moved Fan Coin from the personal wallet into the club treasury",
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError(str(exc), 402) from exc
+
     user_total = ledger.balance(session, user_acct, ledger.GTEX)
     if user_total < gross_amount:
         raise OwnerError("insufficient_funds", 402)

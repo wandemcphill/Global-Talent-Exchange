@@ -7,6 +7,7 @@ import { api, errMsg } from "@/lib/api";
 import {
   buildLineupPayload,
   LINEUP_FORMATIONS,
+  lineupSheet,
   normalizeLineupPlan,
   normalizeLineupSquad,
   type LineupPlayer,
@@ -162,6 +163,14 @@ function buildTeamSheetFromRoster(opts: {
 
   const byId = new Map<string, LineupPlayer>();
   roster.forEach((p) => byId.set(p.player_id, p));
+  const sheetsKnown = roster.some((player) => Boolean(player.squad_status) || player.is_regen);
+  const starterPool = sheetsKnown ? roster.filter((player) => lineupSheet(player) === "first_team") : roster;
+  const benchPool = sheetsKnown
+    ? [
+        ...roster.filter((player) => lineupSheet(player) === "reserve"),
+        ...roster.filter((player) => lineupSheet(player) === "first_team"),
+      ]
+    : roster;
 
   let chosenSignedStarters: LineupPlayer[] = [];
   const usedIds = new Set<string>();
@@ -170,16 +179,16 @@ function buildTeamSheetFromRoster(opts: {
   if (!useSmartSuggestion && lineupMode !== "rotate" && savedStarterIds.length > 0) {
     savedStarterIds.forEach((id) => {
       const found = byId.get(id);
-      if (found && !usedIds.has(found.player_id) && chosenSignedStarters.length < 11) {
-        chosenSignedStarters.push(found);
-        usedIds.add(found.player_id);
-      }
+      if (!found || usedIds.has(found.player_id) || chosenSignedStarters.length >= 11) return;
+      if (sheetsKnown && lineupSheet(found) !== "first_team") return;
+      chosenSignedStarters.push(found);
+      usedIds.add(found.player_id);
     });
   }
 
   // Smart tactical suggestion fill by role bucket (GK -> DEF -> MID -> FWD)
-  if (chosenSignedStarters.length < 11 && roster.length > 0) {
-    const remaining = roster.filter((p) => !usedIds.has(p.player_id));
+  if (chosenSignedStarters.length < 11 && starterPool.length > 0) {
+    const remaining = starterPool.filter((p) => !usedIds.has(p.player_id));
     const sortFn = (a: LineupPlayer, b: LineupPlayer) => {
       const ra = Number(a.rating ?? 76);
       const rb = Number(b.rating ?? 76);
@@ -347,12 +356,12 @@ function buildTeamSheetFromRoster(opts: {
   const benchCandidates: LineupPlayer[] = [];
   savedBenchIds.forEach((id) => {
     const p = byId.get(id);
-    if (p && !usedIds.has(p.player_id)) {
-      benchCandidates.push(p);
-      usedIds.add(p.player_id);
-    }
+    if (!p || usedIds.has(p.player_id)) return;
+    if (sheetsKnown && lineupSheet(p) === "academy") return;
+    benchCandidates.push(p);
+    usedIds.add(p.player_id);
   });
-  roster.forEach((p) => {
+  benchPool.forEach((p) => {
     if (!usedIds.has(p.player_id)) {
       benchCandidates.push(p);
       usedIds.add(p.player_id);
@@ -441,8 +450,30 @@ export function useClubMatchdaySheet(opts: {
 
   const rosterQuery = useQuery({
     queryKey: ["lineup-squad", clubId],
-    queryFn: async () =>
-      normalizeLineupSquad((await api.get(`/market/clubs/${encodeURIComponent(clubId)}/players`)).data),
+    queryFn: async () => {
+      try {
+        const clubDetail = (await api.get(`/owner/clubs/${encodeURIComponent(clubId)}`)).data;
+        const squad = Array.isArray(clubDetail?.squad) ? clubDetail.squad : [];
+        if (squad.length) {
+          return normalizeLineupSquad({
+            items: squad.map((player: any) => ({
+              player_id: player.id,
+              player_name: player.name,
+              position: player.position,
+              rating: player.rating,
+              portrait_url: player.portrait_url,
+              squad_status: player.squad_status,
+              is_regen: player.is_regen,
+              age: player.age,
+              minutes: player.minutes,
+            })),
+          });
+        }
+      } catch {
+        // A public or opponent club has no owner book.
+      }
+      return normalizeLineupSquad((await api.get(`/market/clubs/${encodeURIComponent(clubId)}/players`)).data);
+    },
     enabled: isRealClub,
     staleTime: 30_000,
   });
@@ -918,7 +949,7 @@ export function MatchdayLineupBroadcast({
         await api.post(`/owner/clubs/${encodeURIComponent(editableClubId)}/lineup-preference`, {
           preferred_formation: myTarget.sheet.formation,
           preferred_player_ids: signedStarterIds,
-          note: "Owner non-binding pre-match preference submitted from Broadcast Team Sheet",
+          note: "Owner lineup request from the first-team sheet",
         });
       } catch {
         // Ignore if offline or mock environment
@@ -929,7 +960,7 @@ export function MatchdayLineupBroadcast({
       queryClient.setQueryData(["lineup-plan", editableClubId], normalizeLineupPlan(saved));
       setUseSmartSuggestion(false);
       toast.success(
-        `Non-binding owner preference (${myTarget.sheet.formation}) forwarded to the First-Team Manager for ${myTarget.sheet.clubName}.`,
+        `${myTarget.sheet.formation} filed with the first-team manager for ${myTarget.sheet.clubName}.`,
       );
     } catch (err) {
       toast.error(errMsg(err));

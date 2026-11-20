@@ -17,7 +17,18 @@ const TIER_FILTERS = [
   { id: "legend", label: "★ Legends" },
   { id: "marquee", label: "World Stars" },
   { id: "wonderkid", label: "Wonderkids" },
+  { id: "regen", label: "Regens" },
 ];
+
+export function marketLane(player: any): "welcome" | "paid" {
+  const quoted = player?.quote?.lane;
+  if (quoted === "welcome" || quoted === "paid") return quoted;
+  const rating = Number(player?.quote?.rating ?? player?.rating ?? player?.overall_rating ?? 60);
+  const tierNorm = String(player?.real_player_tier || "").toLowerCase();
+  const isLegend = tierNorm === "legend" || tierNorm === "icon";
+  const isRegen = Boolean(player?.is_regen) || player?.is_real_player === false || tierNorm === "regen";
+  return isLegend || isRegen || rating >= 75 ? "paid" : "welcome";
+}
 
 const PRICE_PRESETS = [
   { label: "All Prices", value: 0 },
@@ -27,10 +38,11 @@ const PRICE_PRESETS = [
   { label: "≤ 1.5k GTX", value: 1500 },
 ];
 
-async function fetchPage(position: string, tier: string, q: string, cursor?: string) {
+async function fetchPage(position: string, tier: string, q: string, nationality: string, cursor?: string) {
   const params: any = { limit: 48 };
   if (position) params.position = position;
   if (tier) params.tier = tier;
+  if (nationality) params.nationality = nationality;
   if (q) params.search = q;
   if (cursor) params.cursor = cursor;
   const page = (await api.get("/v2/players", { params })).data;
@@ -39,9 +51,11 @@ async function fetchPage(position: string, tier: string, q: string, cursor?: str
   return { ...page, players: (page.players || []).map((p: any) => ({ ...p, quote: quotes[p.player_id] })) };
 }
 
-export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs = [], clubCash }: any) {
+export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs = [], clubCash, queuedIds = [], onQueue }: any) {
   const [position, setPosition] = useState(initialPosition);
   const [tier, setTier] = useState("");
+  const [nation, setNation] = useState("");
+  const [nationQuery, setNationQuery] = useState("");
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
   const [maxPrice, setMaxPrice] = useState<number>(0);
@@ -53,8 +67,8 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
   const marketView = getModuleView("market");
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["market", position, tier, q],
-    queryFn: ({ pageParam }: any) => fetchPage(position, tier, q, pageParam),
+    queryKey: ["market", position, tier, q, nationQuery],
+    queryFn: ({ pageParam }: any) => fetchPage(position, tier, q, nationQuery, pageParam),
     initialPageParam: undefined,
     getNextPageParam: (last: any) => (last.has_more ? last.next_cursor : undefined),
   } as any);
@@ -138,6 +152,22 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             );
           })}
         </div>
+        <form
+          className="flex min-w-[180px] gap-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            setNationQuery(nation.trim());
+          }}
+        >
+          <input
+            data-testid="market-nation-input"
+            className="gx-input py-1 text-xs"
+            placeholder="Nation, e.g. Spain"
+            value={nation}
+            onChange={(event) => setNation(event.target.value)}
+          />
+          <button type="submit" className="gx-btn gx-btn-secondary">Nation</button>
+        </form>
         <div className="flex flex-wrap gap-1">
           {POSITIONS.map((p) => (
             <button
@@ -257,7 +287,9 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           clubId={clubId}
           clubCash={clubCash}
           busyPlayerId={busy}
-          onSign={sign}
+          onSign={queueMode ? (player: any) => onQueue(player, marketLane(player)) : sign}
+          queueMode={queueMode}
+          queuedIds={queuedIds}
           onOpenDossier={(id) => setOpen(id)}
         />
       ) : (
@@ -269,9 +301,12 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
             const tierNorm = String(p.real_player_tier || "").toLowerCase();
             const isLegend = tierNorm === "legend";
-            const isRegen = p.is_regen || p.is_real_player === false;
-            const isRestricted = isLegend || isRegen || rating >= 80;
+            const isRegen = p.is_regen || p.is_real_player === false || tierNorm === "regen";
+            const lane = marketLane(p);
+            const isRestricted = lane === "paid";
             const isWonderkid = tierNorm === "wonderkid";
+            const queued = queuedIds.includes(p.player_id);
+            const queueMode = typeof onQueue === "function";
 
             return (
               <PlayerCard
@@ -287,26 +322,30 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                 tier={isLegend ? "legendary" : undefined}
                 archetype={p.playstyle}
                 traits={p.traits}
-                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? (isRestricted ? "WONDERKID · PAID ONLY" : "WONDERKID") : isRestricted ? "PAID GTEX ONLY" : "PROMO ELIGIBLE"}
+                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? (isRestricted ? "WONDERKID · PAID ONLY" : "WONDERKID") : isRestricted ? "PAID GTX ONLY" : "WELCOME GRANT"}
                 onClick={() => setOpen(p.player_id)}
                 stats={[
                   { k: "Fee", v: price ? `${fmt(price)}` : "-" },
-                  { k: "Funding", v: isRestricted ? "Paid Only" : "Promo OK" },
+                  { k: "Funding", v: isRestricted ? "Top up" : "Grant" },
                   { k: "Value", v: p.current_value_credits != null ? fmt(p.current_value_credits, 1) : (price ? fmt(price, 1) : "-") },
                   { k: "Form", v: p.average_rating ?? "-" },
                 ]}
                 footer={
                   <Btn
                     className="w-full justify-center"
-                    variant={owned ? "ghost" : unaffordable ? "outline" : "secondary"}
-                    disabled={owned || busy === p.player_id || !clubId || unaffordable}
-                    onClick={() => sign(p)}
+                    variant={owned || queued ? "ghost" : !queueMode && unaffordable ? "outline" : "secondary"}
+                    disabled={owned || queued || busy === p.player_id || !clubId || (!queueMode && unaffordable)}
+                    onClick={() => (queueMode ? onQueue(p, lane) : sign(p))}
                     data-testid={`sign-player-${p.player_id}`}
                   >
                     {owned ? (
                       "In squad"
                     ) : busy === p.player_id ? (
                       "Signing…"
+                    ) : queued ? (
+                      "In basket"
+                    ) : queueMode ? (
+                      <>{lane === "welcome" ? "Welcome basket" : "Paid basket"} · <Coin amount={price} /></>
                     ) : unaffordable ? (
                       <span className="text-slate-400">Needs <Coin amount={price} /></span>
                     ) : (

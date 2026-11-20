@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import os
 import secrets
 from decimal import Decimal
 from typing import Any
@@ -69,43 +68,26 @@ def comp_account(competition_id: str) -> str:
     return f"competition:{competition_id}"
 
 
-_EXPLICIT_SEED_ENVS = {"development", "dev", "test", "testing", "local"}
-
-
-def _seeding_disabled_for_environment() -> bool:
-    """Seed sample competitions only when an environment variable explicitly says this is local development."""
-    explicit = (os.getenv("GTE_APP_ENV") or os.getenv("APP_ENV") or os.getenv("ENVIRONMENT") or "").strip().lower()
-    return explicit not in _EXPLICIT_SEED_ENVS
+SEED_NAMES = frozenset(spec["name"] for spec in SEED)
 
 
 def ensure_seed(session: Session) -> None:
-    if _seeding_disabled_for_environment():
-        return
-    for spec in SEED:
-        open_exists = session.scalar(
-            select(OwnerCompetition).where(
-                OwnerCompetition.name == spec["name"], OwnerCompetition.status.in_(("open", "running"))
-            )
+    """Retire the three sample competitions.
+
+    They were platform samples, not competitions created by a club owner.
+    Listing or opening the owner console closes any copy that is still open.
+    """
+    rows = session.scalars(
+        select(OwnerCompetition).where(
+            OwnerCompetition.name.in_(tuple(SEED_NAMES)),
+            OwnerCompetition.host_type == "gtex",
+            OwnerCompetition.status.in_(("open", "running")),
         )
-        if open_exists:
-            continue
-        comp = OwnerCompetition(
-            host_type="gtex", prize_sensitive=spec["entry_fee"] > 0, **{k: v for k, v in spec.items()}
-        )
-        session.add(comp)
+    ).all()
+    for row in rows:
+        row.status = "cancelled"
+    if rows:
         session.flush()
-        ledger.record(
-            session,
-            event_type="competition_pool_funding",
-            source=ledger.PLATFORM_SPONSORS,
-            destination=comp_account(comp.id),
-            currency=ledger.GTEX,
-            gross=spec["sponsored_pool"],
-            related_type="competition",
-            related_id=comp.id,
-            memo=f"Platform-funded pool for {comp.name}",
-        )
-    session.flush()
 
 
 def entries(session: Session, competition_id: str) -> list[OwnerCompetitionEntry]:

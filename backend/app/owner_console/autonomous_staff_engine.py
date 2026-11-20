@@ -2570,7 +2570,7 @@ def execute_authorized_recruitment_signing(
 
     funding = ledger.get_club_funding(db, state.club_id)
     is_restricted_recruitment = (
-        gsi >= 80 or bool(candidate.get("is_regen")) or bool(candidate.get("is_legend") or candidate.get("legend"))
+        gsi >= 75 or bool(candidate.get("is_regen")) or bool(candidate.get("is_legend") or candidate.get("legend"))
     )
     # Autonomous recruitment never draws from the first-club squad grant.
     # Premium/restricted targets require deposited funds; other targets may
@@ -4168,24 +4168,66 @@ def select_manager_matchday_lineup(
             age_adj -= 25.0
         return round(base + fitness_adj + morale_adj + age_adj, 2)
 
-    scored = sorted(eligible, key=_manager_player_score, reverse=True)
-    gks = [p for p in scored if str(p.position or "").upper() in ("GK", "GOALKEEPER")]
-    outfield = [p for p in scored if str(p.position or "").upper() not in ("GK", "GOALKEEPER")]
+    def _sheet_name(p: OwnerSquadPlayer) -> str:
+        pers = dict(p.personality_json or {})
+        raw = str(pers.get("squad_status") or "").lower()
+        if raw == "reserve":
+            return "reserve"
+        if raw in {"academy", "u21"}:
+            return "academy"
+        if raw in {"first_team", "senior"}:
+            return "first_team"
+        if p.is_regen and int(p.age or 24) <= 18 and int(p.minutes or 0) == 0:
+            return "academy"
+        return "first_team"
+
+    def _is_gk(p: OwnerSquadPlayer) -> bool:
+        pos = str(p.position or "")
+        return pos.upper() in {"GK", "GOALKEEPER"} or pos.lower().startswith("goal")
+
+    pref_ids = [
+        str(pid) for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
+    ]
+    by_id = {str(p.id): p for p in eligible}
+    first_team = [p for p in eligible if _sheet_name(p) == "first_team"]
+    committed_xi = [
+        p
+        for p in eligible
+        if (commitments.get(str(p.id)) or {}).get("matchday_role") == "starting_xi" and _sheet_name(p) != "first_team"
+    ]
+    pref_first = [by_id[pid] for pid in pref_ids if pid in by_id and _sheet_name(by_id[pid]) == "first_team"]
 
     starters: list[OwnerSquadPlayer] = []
-    if gks:
-        starters.append(gks[0])
-    for p in outfield:
+    seen: set[str] = set()
+    for player in pref_first + committed_xi:
+        if str(player.id) in seen:
+            continue
+        starters.append(player)
+        seen.add(str(player.id))
+    ranked_first = sorted(first_team, key=_manager_player_score, reverse=True)
+    keepers = [p for p in ranked_first if _is_gk(p)]
+    if keepers and all(not _is_gk(p) for p in starters):
+        starters.insert(0, keepers[0])
+        seen.add(str(keepers[0].id))
+    for player in ranked_first:
         if len(starters) >= 11:
             break
-        starters.append(p)
+        if str(player.id) in seen:
+            continue
+        starters.append(player)
+        seen.add(str(player.id))
     if len(starters) < 11:
-        for p in scored:
-            if p not in starters and len(starters) < 11:
-                starters.append(p)
+        for player in sorted(eligible, key=_manager_player_score, reverse=True):
+            if len(starters) >= 11:
+                break
+            if str(player.id) in seen or _sheet_name(player) == "academy":
+                continue
+            starters.append(player)
+            seen.add(str(player.id))
+    starters = starters[:11]
 
     starter_ids = {p.id for p in starters}
-    remaining = [p for p in scored if p.id not in starter_ids]
+    remaining = [p for p in sorted(eligible, key=_manager_player_score, reverse=True) if p.id not in starter_ids]
 
     bench: list[OwnerSquadPlayer] = []
     for p in remaining:
@@ -4193,12 +4235,12 @@ def select_manager_matchday_lineup(
         if commitment and commitment.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"):
             bench.append(p)
     for p in remaining:
-        if p not in bench and len(bench) < 7:
+        if p not in bench and _sheet_name(p) == "reserve" and len(bench) < 7:
+            bench.append(p)
+    for p in remaining:
+        if p not in bench and _sheet_name(p) != "academy" and len(bench) < 7:
             bench.append(p)
 
-    pref_ids = [
-        str(pid) for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
-    ]
     accepted_pref_ids = [pid for pid in pref_ids if pid in starter_ids]
     declined_pref_ids = [pid for pid in pref_ids if pid not in starter_ids]
     if declined_pref_ids:

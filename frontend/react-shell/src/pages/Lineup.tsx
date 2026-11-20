@@ -13,6 +13,7 @@ import {
   LINEUP_FORMATIONS,
   lineupRoleLabels,
   lineupFormationRows,
+  lineupSheet,
   normalizeLineupPlan,
   normalizeLineupSquad,
   type LineupPlayer,
@@ -32,21 +33,43 @@ export default function Lineup() {
   const initializedClubRef = useRef<string | null>(null);
   const rosterQuery = useQuery({
     queryKey: ["lineup-squad", clubId],
-    queryFn: async () =>
-      normalizeLineupSquad((await api.get("/market/clubs/" + encodeURIComponent(String(clubId)) + "/players")).data),
+    queryFn: async () => {
+      const clubDetail = (await api.get("/owner/clubs/" + encodeURIComponent(String(clubId)))).data;
+      return normalizeLineupSquad({
+        items: (clubDetail.squad || []).map((player: any) => ({
+          player_id: player.id,
+          player_name: player.name,
+          position: player.position,
+          rating: player.rating,
+          portrait_url: player.portrait_url,
+          squad_status: player.squad_status,
+          is_regen: player.is_regen,
+          age: player.age,
+          minutes: player.minutes,
+        })),
+      });
+    },
     enabled: Boolean(clubId),
   });
   const planQuery = useQuery({
     queryKey: ["lineup-plan", clubId],
-    queryFn: async () =>
-      normalizeLineupPlan((await api.get("/clubs/" + encodeURIComponent(String(clubId)) + "/lineup")).data),
+    queryFn: async () => {
+      try {
+        return normalizeLineupPlan((await api.get("/clubs/" + encodeURIComponent(String(clubId)) + "/lineup")).data);
+      } catch {
+        return normalizeLineupPlan({ club_id: clubId, formation: "4-3-3", starter_player_ids: [], bench_player_ids: [] });
+      }
+    },
     enabled: Boolean(clubId),
   });
   const players: LineupPlayer[] = rosterQuery.data || [];
+  const firstTeam = players.filter((player) => lineupSheet(player) === "first_team");
+  const reserve = players.filter((player) => lineupSheet(player) === "reserve");
+  const benchPool = reserve.length ? reserve : players.filter((player) => lineupSheet(player) === "first_team");
   const roles = useMemo(() => lineupRoleLabels(formation), [formation]);
   const selectedStarters = useMemo(() => new Set(starters.filter(Boolean)), [starters]);
   const selectedBench = useMemo(() => new Set(bench), [bench]);
-  const availableForBench = players.filter(
+  const availableForBench = benchPool.filter(
     (player) => !selectedStarters.has(player.player_id) && !selectedBench.has(player.player_id),
   );
 
@@ -66,11 +89,11 @@ export default function Lineup() {
   const autoFillLineup = () => {
     const isKeeper = (player: LineupPlayer) =>
       /(^|[^a-z])(gk|goalkeeper|keeper)([^a-z]|$)/i.test(player.position || "");
-    const keepers = players
+    const keepers = firstTeam
       .filter(isKeeper)
       .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     const goalkeeper = keepers[0];
-    const outfield = players
+    const outfield = firstTeam
       .filter((player) => !isKeeper(player))
       .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
     const next = [
@@ -104,12 +127,13 @@ export default function Lineup() {
     try {
       const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload)).data;
       queryClient.setQueryData(["lineup-plan", clubId], normalizeLineupPlan(saved));
-      await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
+      const filed = (await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
         preferred_formation: formation,
         preferred_player_ids: payload.starter_player_ids,
-        note: "Owner non-binding lineup preference submitted from Squad Lineup Preference page",
-      });
-      toast.success("Non-binding owner lineup preference saved and forwarded to First-Team Manager.");
+        note: "Owner lineup request from the first-team sheet",
+      })).data;
+      const verdict = filed?.manager_selection?.verdict_reason;
+      toast.success(verdict || "The first-team manager filed this eleven.");
     } catch (error) {
       toast.error(errMsg(error));
     } finally {
@@ -133,7 +157,7 @@ export default function Lineup() {
 
   if (rosterQuery.isLoading || planQuery.isLoading) return <Loading label="Loading lineup and squad" />;
 
-  if (rosterQuery.isError || planQuery.isError) {
+  if (rosterQuery.isError && !rosterQuery.data) {
     const message = rosterQuery.error ? errMsg(rosterQuery.error) : errMsg(planQuery.error);
     return (
       <div className="space-y-6">
@@ -152,9 +176,9 @@ export default function Lineup() {
   return (
     <div className="space-y-6" data-testid="lineup-page">
       <PageHeader
-        eyebrow="Owner Pre-Match Preference · First-Team Manager Authoritative"
+        eyebrow="First-team sheet · matchday eleven"
         title="Lineup & Tactics (Owner Preference)"
-        sub={(club?.club_name || "Your club") + " · express a non-binding starting XI & formation preference for your First-Team Manager to evaluate ahead of matchday."}
+        sub={(club?.club_name || "Your club") + " · the match plays the eleven filed from this first-team sheet. The bench comes from the reserve sheet."}
         action={
           <Link to="/app/squad" className="gx-btn gx-btn-ghost inline-flex items-center" data-testid="lineup-back-to-squad">
             <ArrowLeft className="mr-2 h-4 w-4" /> Squad room
@@ -166,14 +190,12 @@ export default function Lineup() {
         className="rounded-xl border border-amber-400/35 bg-amber-500/10 p-4 text-xs text-amber-100"
       >
         <p className="font-black uppercase tracking-wider text-amber-300">
-          Authoritative Matchday Selection Belongs to the First-Team Manager
+          The match plays the eleven on the first-team sheet
         </p>
         <p className="mt-1 leading-relaxed text-slate-200">
-          In GTEX, the Club Owner governs the club and watches the match broadcast. Any formation or starting XI saved
-          on this page is recorded strictly as a <b>non-binding owner preference</b>. Your First-Team Manager evaluates
-          your preference against his own tactical philosophy, youth/veteran commitment, player fitness, and professional
-          independence. To negotiate selection opportunities directly (e.g., requesting minutes for a 16-year-old
-          academy striker), message your First-Team Manager in the <Link to="/app/inbox" className="underline text-emerald-300">Owner Inbox</Link>.
+          Saving files that eleven with the first-team manager. Players on the academy sheet stay out of it.
+          A youth player comes in when you move him onto the first team, or when the manager has already agreed
+          minutes in the <Link to="/app/inbox" className="underline text-emerald-300">Owner Inbox</Link>.
         </p>
       </div>
       <Panel title="Formation & starting XI" eyebrow="Match plan" testid="lineup-editor-panel" className="lg:col-span-12">
@@ -214,7 +236,7 @@ export default function Lineup() {
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                 <span>{starters.filter(Boolean).length} of 11 starting positions filled</span>
-                <span>{players.length} players available</span>
+                <span>{firstTeam.length} on the first-team sheet</span>
               </div>
             </div>
             <div className="flex items-start gap-2 rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-xs leading-5 text-slate-300">
@@ -232,7 +254,7 @@ export default function Lineup() {
               {roles.map((role, index) => {
                 const currentId = starters[index] || "";
                 const usedByOtherSlots = new Set(starters.filter((id, slot) => slot !== index && Boolean(id)));
-                const options = players.filter((player) => !usedByOtherSlots.has(player.player_id));
+                const options = firstTeam.filter((player) => !usedByOtherSlots.has(player.player_id));
                 return (
                   <div key={index} className="min-w-0 rounded-sm border border-white/10 p-3">
                     <label htmlFor={"lineup-slot-" + index} className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
@@ -286,7 +308,7 @@ export default function Lineup() {
           <Empty title="No bench options available" body="Select fewer starters or add eligible players to this club before preparing substitutes." testid="lineup-bench-empty" />
         ) : (
           <>
-            <p className="mb-4 text-sm text-slate-400">Choose reserve players from this club's roster. Players already assigned to the starting XI cannot also occupy the bench.</p>
+            <p className="mb-4 text-sm text-slate-400">The bench is the reserve sheet. Players already in the eleven cannot also sit there.</p>
             <div className="flex flex-col gap-2 sm:flex-row">
               <select aria-label="Choose a substitute" data-testid="lineup-bench-candidate" className="gx-input min-w-0 flex-1" value={benchCandidate} onChange={(event) => setBenchCandidate(event.target.value)}>
                 <option value="">Choose a substitute</option>

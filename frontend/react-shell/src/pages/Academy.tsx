@@ -19,7 +19,7 @@ import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, TraitBar } from "@/
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PackReveal } from "@/components/gtex/PackReveal";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
-import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
+import { AcademyPortraitWall, VogueStaffStill } from "@/components/gtex/StaticPresentation";
 
 const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
 const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
@@ -164,7 +164,11 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
         club_id: club.club_id,
         payment_method: "wallet",
       };
-      if (sonName.trim()) body.requested_name = sonName.trim();
+      const typedName = sonName.trim();
+      if (typedName) {
+        const hasSurname = surname && typedName.toLowerCase().endsWith(surname.toLowerCase());
+        body.requested_name = !surname || typedName.includes(" ") || hasSurname ? typedName : `${typedName} ${surname}`;
+      }
       if (positionOverride) body.requested_position = positionOverride;
       if (countryOverride) body.requested_country_code = countryOverride;
       if (footOverride) body.requested_foot = footOverride;
@@ -263,33 +267,26 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
       testid="build-a-son-panel"
     >
       <div className="mb-6">
-        <GtexSceneViewport
-          sceneId="build_a_son"
-          compact
-          title={`Bloodline induction · ${heirLabel}`}
-          subtitle={
-            band
-              ? `Projected youth band ${band.low}–${band.high}, ceiling ${band.potential}. The minted card is dealt after payment.`
-              : `Son of ${parent?.full_name || "a club player"} at ${club?.club_name || "your club"}. Rating follows academy intake when the parent has no GSI.`
-          }
-          badgeText="DNA WALKOUT"
-          clubName={club?.club_name || "GTEX FC"}
-          subjectName={heirLabel}
-          subjectRole={`${shownPosition} · son of ${parent?.full_name || "the bloodline"}`}
-          jerseyNumber={shownPosition === "ST" ? 9 : shownPosition === "AM" || shownPosition === "RW" ? 10 : 7}
-          overallRating={band ? band.mid : "—"}
-          potentialRating={band ? band.potential : "—"}
-          quote={
-            parent?.full_name
-              ? `I grew up watching ${parent.full_name}. The shirt already knows my name.`
-              : "The bloodline stays at the club."
-          }
+        <VogueStaffStill
+          scene="bloodline"
+          kicker="Build a son"
+          clubName={club?.club_name || "Your club"}
+          person={{
+            name: heirLabel,
+            role: `${shownPosition} · son of ${parent?.full_name || "the bloodline"}`,
+            detail: band
+              ? `Projected youth band ${band.low}–${band.high}. Ceiling ${band.potential}. The portrait is dealt after the induction is paid.`
+              : `He joins ${club?.club_name || "the club"} in the reserve squad.`,
+            portraitUrl: parent?.portrait_url,
+            rating: band ? band.mid : null,
+          }}
+          quote={parent?.full_name ? `Named for the bloodline of ${parent.full_name}.` : "Name him before you induct him."}
         />
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
         <form onSubmit={handleRequestSon} className="space-y-4 lg:col-span-7" data-testid="build-a-son-form">
           <p className="text-xs leading-relaxed text-slate-300">
-            The son keeps <b className="text-white">{parent?.full_name || "the parent's"}</b> surname, position, foot, and DNA unless you pay to change them.
+            Type the son's name. He keeps <b className="text-white">{parent?.full_name || "the parent's"}</b> surname when you enter a given name. Position, foot, and DNA stay with the bloodline unless you change them.
             He joins <b className="text-white">{club?.club_name}</b> in the reserve squad. A lifetime club gets {options.lifetime_cap ?? 3} sons.
           </p>
 
@@ -314,11 +311,11 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Heir name · optional · {fmt(nameUnit)} GTX</label>
+              <label className="gx-label">Son's name · included in the induction</label>
               <input
                 type="text"
                 maxLength={120}
-                placeholder={surname ? `Leave blank to keep ${surname}` : "Leave blank to keep the surname"}
+                placeholder={surname ? `Given name, surname stays ${surname}` : "Type the name you want on the card"}
                 value={sonName}
                 onChange={(e) => setSonName(e.target.value)}
                 className="gx-input mt-1"
@@ -550,7 +547,7 @@ function AcademyProspectCard({
     setBusyAction("contract");
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/contract`);
-      toast.success(`Signed enhanced youth contract for ${p.name} (1,000 GTX). Loyalty & retention secured.`);
+      toast.success(`Signed enhanced youth contract for ${p.name} (1,000 Fan Coin). Loyalty and retention secured.`);
       onRefresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -694,7 +691,7 @@ function AcademyProspectCard({
           data-testid={`youth-contract-${p.id}`}
         >
           <FileText size={13} className="text-amber-300" />
-          <span>{busyAction === "contract" ? "Signing…" : "Offer Youth Contract (1,000 GTX)"}</span>
+          <span>{busyAction === "contract" ? "Signing…" : "Offer Youth Contract (1,000 Fan Coin)"}</span>
         </button>
 
         {!p.promoted && (
@@ -854,39 +851,7 @@ export default function Academy() {
         </div>
       </section>
 
-      {/* 1A. 3D Generational Wonderkid Emergence & Youth Campus Diorama */}
-      <div className="grid gap-6 lg:grid-cols-2">
-        <GtexSceneViewport
-          sceneId="wonderkid_emergence"
-          compact
-          title={`3D Generational Wonderkid Walkout · ${regens[0]?.name || "Crown Jewel #10"}`}
-          subtitle={`HOYD Report: "Cancel all transfer plans — a generational talent has emerged on Pitch 3."`}
-          badgeText="3D GOLDEN FLARE WALKOUT"
-          clubName={club.club_name}
-          subjectName={regens[0]?.name || "Academy Prodigy"}
-          jerseyNumber={10}
-          overallRating={regens[0]?.rating || 76}
-          potentialRating={regens[0]?.potential?.max || 95}
-          stats={[
-            { label: "Ceiling", value: `${regens[0]?.potential?.max || 95} POT`, accent: "#F5B83D" },
-            { label: "HOYD Rating", value: `${hoydRating}/100`, accent: "#00E676" },
-          ]}
-        />
-        <GtexSceneViewport
-          sceneId="academy_upgrade"
-          compact
-          title={`3D Youth Academy Campus · Level ${facilityLevel}/5`}
-          subtitle={`${club.club_name} Biomechanics, 3G Domes & DNA Scouting Complex`}
-          badgeText="3D ACADEMY CAMPUS"
-          clubName={club.club_name}
-          subjectName={`${club.club_name} Youth Complex L${facilityLevel}`}
-          facilityLevel={facilityLevel}
-          stats={[
-            { label: "Growth Speed", value: `+${facilityLevel * 4}%`, accent: "#00E676" },
-            { label: "Prestige Ceiling", value: `Tier ${prestigeTier}`, accent: "#38BDF8" },
-          ]}
-        />
-      </div>
+      <AcademyPortraitWall clubName={club.club_name} players={regens} />
 
       {/* 1B. Canonical Build-A-Son Legacy Program */}
       <BuildASonDesk club={club} onOrderUpdated={refresh} />

@@ -3128,37 +3128,9 @@ export function ClubOperationsCentre3D({
                       ))}
                     </div>
                   )}
-                  {(rpt.sponsor_income?.available_offers || []).filter((o: any) => !o.locked).length === 0 ? (
-                    <p className="text-xs text-slate-400">
-                      No new unlocked sponsorship offers awaiting signature. Grow prestige to unlock higher commercial tiers.
-                    </p>
-                  ) : (
-                    (rpt.sponsor_income?.available_offers || [])
-                      .filter((o: any) => !o.locked)
-                      .slice(0, 2)
-                      .map((offer: any) => (
-                        <div
-                          key={offer.offer_id}
-                          className="rounded-lg border border-white/10 bg-slate-950 p-2.5 flex items-center justify-between gap-2"
-                        >
-                          <div>
-                            <p className="text-xs font-bold text-white">{offer.sponsor_name}</p>
-                            <p className="gx-mono text-[10px] text-emerald-300">
-                              +{fmt(offer.upfront_signing_bonus_gtex)} Upfront · +{fmt(offer.per_match_gross_gtex)}/Match
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            data-testid={`sign-sponsor-${offer.offer_id}`}
-                            disabled={Boolean(busyAction)}
-                            onClick={() => handleSignSponsorOffer(offer.offer_id)}
-                            className="rounded border border-cyan-400/50 bg-cyan-500/20 px-2.5 py-1 text-[10px] font-black uppercase text-cyan-200 hover:bg-cyan-500/30"
-                          >
-                            Sign Deal
-                          </button>
-                        </div>
-                      ))
-                  )}
+                  <p className="text-xs text-slate-400">
+                    Sponsor offers are closed for club owners.
+                  </p>
                 </div>
 
                 {/* Recent Authoritative Ledger Entries */}

@@ -62,7 +62,19 @@ describe("React lineup page", () => {
       defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
     });
     jest.spyOn(api, "get").mockImplementation(((url: string) => {
-      if (url.includes("/market/clubs/")) return Promise.resolve({ data: roster });
+      if (url.includes("/owner/clubs/")) {
+        return Promise.resolve({
+          data: {
+            squad: roster.items.map((player) => ({
+              id: player.player_id,
+              name: player.player_name,
+              position: player.position,
+              rating: player.rating,
+              squad_status: player.player_id === "p-11" ? "reserve" : "first_team",
+            })),
+          },
+        });
+      }
       if (url.includes("/lineup")) {
         return Promise.resolve({
           data: {
@@ -77,6 +89,8 @@ describe("React lineup page", () => {
     }) as any);
     jest.spyOn(api, "put").mockImplementation(((_url: string, payload: any) =>
       Promise.resolve({ data: { club_id: "club-1", ...payload } })) as any);
+    jest.spyOn(api, "post").mockImplementation((() =>
+      Promise.resolve({ data: { manager_selection: { verdict_reason: "The first-team manager filed this eleven." } } })) as any);
   });
 
   afterEach(async () => {

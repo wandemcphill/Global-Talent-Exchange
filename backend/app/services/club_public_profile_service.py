@@ -31,6 +31,7 @@ from app.models.club_infra import ClubFacility, ClubStadium
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile
 from app.models.club_trophy import ClubTrophy
 from app.models.user import User
+from app.owner_console.living_institution import division_name
 from app.owner_console.models import OwnerClubState, OwnerSquadPlayer
 
 
@@ -470,6 +471,8 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             "city_name": club.city_name,
             "founded_year": club.founded_at.year if club.founded_at else None,
             "home_venue_name": club.home_venue_name,
+            "division_level": (state.division_level if state is not None else None) or "foundation",
+            "division_name": division_name(state.division_level if state is not None else "foundation"),
         },
         "owner": owner,
         "stadium": {

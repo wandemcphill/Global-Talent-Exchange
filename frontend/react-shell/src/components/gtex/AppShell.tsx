@@ -49,6 +49,7 @@ const NAV = [
 
   // 2. MY CLUB
   { to: "/app/clubs", label: "My Clubs", icon: Building2, id: "clubs", category: "MY CLUB" },
+  { to: "/app/club/studio", label: "Crest & kit", icon: Palette, id: "crest", category: "MY CLUB" },
   {
     to: "/app/showroom",
     label: "Club Prestige",

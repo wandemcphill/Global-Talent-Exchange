@@ -17,7 +17,20 @@ export type LineupPlayer = {
   position?: string;
   rating?: number | null;
   portrait_url?: string | null;
+  squad_status?: string;
+  is_regen?: boolean;
+  age?: number;
+  minutes?: number;
 };
+
+export function lineupSheet(player: Pick<LineupPlayer, "squad_status" | "is_regen" | "age" | "minutes">): "first_team" | "reserve" | "academy" {
+  const raw = String(player.squad_status || "").toLowerCase();
+  if (raw === "reserve") return "reserve";
+  if (raw === "academy" || raw === "u21") return "academy";
+  if (raw === "first_team" || raw === "senior") return "first_team";
+  if (player.is_regen && Number(player.age) <= 18 && Number(player.minutes || 0) === 0) return "academy";
+  return "first_team";
+}
 
 export type LineupPlan = {
   club_id?: string;
@@ -52,6 +65,10 @@ export function normalizeLineupSquad(payload: unknown): LineupPlayer[] {
         ...(position ? { position: String(position) } : {}),
         ...(rating !== undefined ? { rating } : {}),
         ...(portrait ? { portrait_url: String(portrait) } : {}),
+        ...(raw.squad_status ? { squad_status: String(raw.squad_status) } : {}),
+        ...(raw.is_regen ? { is_regen: true } : {}),
+        ...(optionalNumber(raw.age) !== undefined ? { age: Number(raw.age) } : {}),
+        ...(optionalNumber(raw.minutes) !== undefined ? { minutes: Number(raw.minutes) } : {}),
       } as LineupPlayer;
     })
     .filter((player: LineupPlayer | null): player is LineupPlayer => player !== null);

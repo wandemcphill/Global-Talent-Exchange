@@ -2195,7 +2195,7 @@ class TransferMarketService:
         except club_ledger.LedgerError as exc:
             if "restricted" in str(exc):
                 raise TransferMarketValidationError(
-                    "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. The founding squad grant cannot be used."
+                    "Restricted players (GSI 75+, regens, legends) require deposited GTEX Coin. The founding squad grant cannot be used."
                 ) from exc
             raise TransferMarketValidationError(f"Bidder club treasury cannot cover this {subject}.") from exc
 

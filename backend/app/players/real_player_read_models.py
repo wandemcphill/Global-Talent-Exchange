@@ -35,6 +35,7 @@ class RealPlayerUniverseListItem:
     playstyle: str | None = None
     traits: tuple[str, ...] = ()
     skills: tuple[str, ...] = ()
+    is_regen: bool = False
 
 
 @dataclass(frozen=True, slots=True)

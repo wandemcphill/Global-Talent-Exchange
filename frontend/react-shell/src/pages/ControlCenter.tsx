@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import {
@@ -51,12 +52,99 @@ import { OwnerBriefingPanel } from "@/components/gtex/OwnerBriefingPanel";
 import { ProductIntroVideo } from "@/components/gtex/ProductIntroVideo";
 import { useAuth } from "@/lib/auth";
 import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D";
-import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
+import { VogueStaffStill } from "@/components/gtex/StaticPresentation";
 import {
   HolographicPlayerCard,
   TacticalPitch25D,
   TelemetrySparklineCard,
 } from "@/components/gtex/ApexWidgets";
+
+function ClubTreasuryMove({ clubId, onMoved }: { clubId?: string; onMoved: () => void }) {
+  const queryClient = useQueryClient();
+  const [currency, setCurrency] = useState<"GTEX" | "FAN">("GTEX");
+  const [amount, setAmount] = useState("");
+  const [busy, setBusy] = useState(false);
+  const { data: finance } = useQuery({
+    queryKey: ["owner-finance-move", clubId],
+    queryFn: async () => (await api.get("/owner/finance")).data,
+    enabled: Boolean(clubId),
+  });
+  const { data: club } = useClub(clubId);
+  if (!clubId) return null;
+  const walletGtx = Number(finance?.wallet?.gtex_total || 0);
+  const walletFan = Number(finance?.wallet?.fan_total || 0);
+  const available = currency === "FAN" ? walletFan : walletGtx;
+  const clubBalance = currency === "FAN" ? Number(club?.economy?.gifts_fan_coin || 0) : Number(club?.economy?.cash_gtex || 0);
+  const move = async () => {
+    const value = Number(amount);
+    if (!Number.isFinite(value) || value <= 0) {
+      toast.error("Enter how much to move into the club.");
+      return;
+    }
+    if (value > available) {
+      toast.error("Your personal wallet does not have that much.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.post("/owner/capital/inject", { club_id: clubId, amount: value, currency });
+      toast.success(currency === "FAN" ? "Fan Coin is now in the club treasury." : "GTX is now in the club treasury.");
+      setAmount("");
+      await queryClient.invalidateQueries({ queryKey: ["owner-finance-move", clubId] });
+      onMoved();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section className="rounded-2xl border border-emerald-500/30 bg-slate-950/70 p-5" data-testid="club-treasury-move">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-300">Club treasury</p>
+          <h3 className="mt-1 text-lg font-semibold text-white">Move coins from your wallet into the club</h3>
+          <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
+            Your personal wallet and the club treasury are separate. GTX pays for players, facilities, and founding season salaries. Fan Coin pays later staff contracts and academy youth contracts.
+          </p>
+        </div>
+        <p className="text-right text-xs text-slate-400">
+          In the club now
+          <b className="mt-1 block text-lg text-white">{fmt(clubBalance)} {currency === "FAN" ? "FAN" : "GTX"}</b>
+        </p>
+      </div>
+      <div className="mt-4 flex flex-wrap items-end gap-2">
+        <div className="flex rounded-lg border border-white/10 p-1">
+          {(["GTEX", "FAN"] as const).map((item) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setCurrency(item)}
+              className={`rounded-md px-3 py-1 text-xs font-bold ${currency === item ? "bg-emerald-400 text-black" : "text-slate-300"}`}
+            >
+              {item === "FAN" ? "Fan Coin" : "GTX"}
+            </button>
+          ))}
+        </div>
+        <label className="text-xs text-slate-400">
+          Wallet available {fmt(available)}
+          <input
+            className="gx-input mt-1 w-40"
+            type="number"
+            min={1}
+            step="0.01"
+            value={amount}
+            onChange={(event) => setAmount(event.target.value)}
+            data-testid="club-treasury-amount"
+          />
+        </label>
+        <Btn disabled={busy} onClick={move} data-testid="club-treasury-submit">
+          {busy ? "Moving…" : "Move into club"}
+        </Btn>
+      </div>
+    </section>
+  );
+}
 
 function DashboardIntroVideo() {
   const auth = useAuth();
@@ -231,6 +319,11 @@ export function ControlCenter() {
   const { data, isLoading, isError, refetch } = useControlCenter();
   const { active: activeClub } = useActiveClub();
   const { data: clubDetail } = useClub(activeClub?.club_id);
+  const { data: clubIdentity } = useQuery({
+    queryKey: ["club-identity", activeClub?.club_id],
+    enabled: Boolean(activeClub?.club_id),
+    queryFn: async () => (await api.get(`/clubs/${activeClub?.club_id}/identity`)).data,
+  });
   const { data: institutionalPulse } = useClubInstitutionalPulse(activeClub?.club_id);
   const refresh = useRefreshOwner();
   const navigate = useNavigate();
@@ -311,12 +404,21 @@ export function ControlCenter() {
     data.economy?.broadcast_revenue ??
     null;
 
-  const staffMap = clubDetail?.staff || {};
+  const appointed = clubDetail?.executive_staff || clubDetail?.staff || {};
+  const managerRecord = appointed.first_team_manager || clubDetail?.manager_profile || activeClubProfile.manager || {};
+  const staffMap = {
+    ...appointed,
+    first_team_manager: {
+      ...managerRecord,
+      name: managerRecord.name || managerRecord.display_name || activeClubProfile.manager?.name,
+    },
+  };
+  const homeKit = clubIdentity?.jersey_set?.home;
   const executives = [
     {
       roleKey: "first_team_manager",
       roleLabel: "First-Team Manager",
-      name: staffMap.first_team_manager?.name || activeClubProfile.manager?.name || "Tactical Boss",
+      name: staffMap.first_team_manager?.name || "Not appointed",
       mood: staffMap.first_team_manager?.mood ?? activeClubProfile.manager?.mood ?? 78,
       agenda:
         staffMap.first_team_manager?.personal_agenda ||
@@ -329,7 +431,7 @@ export function ControlCenter() {
     {
       roleKey: "general_manager",
       roleLabel: "General Manager (GM)",
-      name: staffMap.general_manager?.name || "Commercial Director",
+      name: staffMap.general_manager?.name || "Not appointed",
       mood: staffMap.general_manager?.mood ?? 82,
       agenda:
         staffMap.general_manager?.personal_agenda ||
@@ -342,7 +444,7 @@ export function ControlCenter() {
     {
       roleKey: "head_of_youth_development",
       roleLabel: "Head of Youth Dev (HOYD)",
-      name: staffMap.head_of_youth_development?.name || "Youth Director",
+      name: staffMap.head_of_youth_development?.name || "Not appointed",
       mood: staffMap.head_of_youth_development?.mood ?? 85,
       agenda:
         staffMap.head_of_youth_development?.personal_agenda ||
@@ -379,7 +481,6 @@ export function ControlCenter() {
 
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
-      <DashboardIntroVideo />
       {/* 1. EXECUTIVE FIRST VIEWPORT: CLUB COMMAND HERO */}
       <section className="relative overflow-hidden rounded-3xl border border-gtex-graphite bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.18),transparent_70%)]" />
@@ -387,17 +488,40 @@ export function ControlCenter() {
         <div className="relative z-10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6">
           {/* Active Club Identity */}
           <div className="flex items-center gap-5">
-            <div
-              className="gx-display flex size-20 sm:size-24 shrink-0 items-center justify-center rounded-2xl text-2xl sm:text-3xl font-black shadow-2xl border-2 border-white/20"
-              style={{
-                background: activeClubProfile.primary_color || "#10b981",
-                color: activeClubProfile.secondary_color || "#070b11",
-              }}
+            <Link
+              to={activeClubProfile.club_id ? `/app/clubs/${activeClubProfile.club_id}/studio` : "/app/club/studio"}
+              data-testid="club-home-jersey"
+              className="relative flex h-24 w-20 shrink-0 items-end justify-center"
+              title="Crest and kit"
             >
-              {(activeClubProfile.short_name || activeClubProfile.club_name || "GTX")
-                .slice(0, 3)
-                .toUpperCase()}
-            </div>
+              {activeClubProfile.crest_url ? (
+                <img
+                  src={activeClubProfile.crest_url}
+                  alt=""
+                  className="h-20 w-16 object-contain"
+                  data-testid="club-home-crest"
+                />
+              ) : (
+                <>
+                  <span
+                    className="absolute top-1 h-3 w-8 rounded-sm"
+                    style={{ background: homeKit?.secondary_color || activeClubProfile.secondary_color || "#0f172a" }}
+                  />
+                  <span
+                    className="flex h-[4.5rem] w-16 items-start justify-center rounded-b-lg border border-white/20 pt-3 text-[11px] font-black shadow-xl"
+                    style={{
+                      background: homeKit?.primary_color || activeClubProfile.primary_color || "#10b981",
+                      color: homeKit?.accent_color || activeClubProfile.secondary_color || "#070b11",
+                      boxShadow: `inset 0 -16px 0 ${homeKit?.shorts_color || homeKit?.secondary_color || "#0f172a"}`,
+                    }}
+                  >
+                    {(homeKit?.front_text || activeClubProfile.short_name || activeClubProfile.club_name || "GTX")
+                      .slice(0, 3)
+                      .toUpperCase()}
+                  </span>
+                </>
+              )}
+            </Link>
 
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -412,8 +536,8 @@ export function ControlCenter() {
                 {activeClubProfile.club_name || "Football Club HQ"}
               </h1>
               <p className="text-xs sm:text-sm text-slate-300">
-                {activeClubProfile.competition?.name || "Continental Premier Division"} · Managed by{" "}
-                <b className="text-white">{activeClubProfile.manager?.name || "Head Coach"}</b>
+                {activeClubProfile.division_name || "Foundation"} · {activeClubProfile.competition?.name || "Not entered in a competition yet"} · Managed by{" "}
+                <b className="text-white">{staffMap.first_team_manager?.name || "your staff"}</b>
               </p>
             </div>
           </div>
@@ -693,7 +817,9 @@ export function ControlCenter() {
         </Link>
       </section>
 
-      {/* 2a-3D. INTERACTIVE 3D CEREMONIAL & BOARDROOM PRESENTATION SUITE */}
+      <ClubTreasuryMove clubId={activeClubProfile.club_id} onMoved={refresh} />
+
+      {/* 2a. STATIC CLUB DESK */}
       <section
         className="rounded-2xl border border-gtex-gold/30 bg-gtex-slate/90 p-6 shadow-2xl space-y-4"
         data-testid="executive-3d-suite"
@@ -701,10 +827,10 @@ export function ControlCenter() {
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-amber-400">
-              GTEX 3D CEREMONIAL & DIORAMA ENGINE · FIFA MOTION + FM 3D STILLS
+              Official pictures
             </p>
             <h3 className="gx-display text-xl font-black uppercase text-white mt-0.5">
-              3D Club Presentation & Executive Stage
+              Club presentation
             </h3>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -735,47 +861,28 @@ export function ControlCenter() {
           </div>
         </div>
 
-        <GtexSceneViewport
-          sceneId={active3DScene}
-          qualityTier="medium"
-          compact
-          title={
-            active3DScene === "manager_arrival"
-              ? `3D First-Day Training Ground Arrival · ${executives[0].name}`
-              : active3DScene === "signing_walkout"
-                ? `3D Stadium Floodlight Signing Walkout · ${activeClubProfile.club_name}`
-                : active3DScene === "world_gala"
-                  ? `3D GTEX World Player of the Year Gala · ${activeClubProfile.club_name}`
-                  : active3DScene === "luxury_turntable"
-                    ? `3D Owner Luxury Vault & Gifting Unveil · ${activeClubProfile.club_name}`
-                    : `3D Executive Boardroom War Room · ${executives[0].name} vs ${executives[1].name}`
+        <VogueStaffStill
+          scene={active3DScene}
+          clubName={activeClubProfile.club_name || "Your club"}
+          people={executives.map((exec) => {
+            const record = (staffMap as Record<string, { portrait_url?: string; photo_url?: string }>)[exec.roleKey] || {};
+            return {
+              name: exec.name,
+              role: exec.roleLabel,
+              detail: exec.agenda,
+              portraitUrl: record.portrait_url || record.photo_url || (exec.roleKey === "first_team_manager" ? clubDetail?.manager_profile?.portrait_url : null),
+              rating: exec.mood,
+            };
+          })}
+          quote={
+            executives[
+              active3DScene === "luxury_turntable" || active3DScene === "boardroom_clash"
+                ? 1
+                : active3DScene === "facility_upgrade"
+                  ? 2
+                  : 0
+            ]?.secretTrait
           }
-          subtitle={
-            active3DScene === "manager_arrival"
-              ? `Trait: ${executives[0].secretTrait} · Mandate: ${executives[0].agenda}`
-              : active3DScene === "boardroom_clash"
-                ? `Tactical Ambition vs. Commercial Wage Cap Discipline`
-                : `Interactive 360° 3D Stage · Switch between FIFA Motion & FM 3D Diorama Still`
-          }
-          badgeText="LIVE 3D STAGE"
-          clubName={activeClubProfile.club_name || "GTEX FC"}
-          subjectName={
-            active3DScene === "manager_arrival" || active3DScene === "boardroom_clash"
-              ? executives[0].name
-              : active3DScene === "luxury_turntable"
-                ? "Rose-Gold Tourbillon"
-                : "Marquee #9 Superstar"
-          }
-          subjectRole={
-            active3DScene === "manager_arrival"
-              ? `First-Team Manager · Mood ${executives[0].mood}`
-              : active3DScene === "boardroom_clash"
-                ? `Executive Alignment: ${executives[0].secretTrait}`
-                : "Club Icon"
-          }
-          jerseyNumber={9}
-          overallRating={89}
-          quote="Every detail of this club's 3D identity is built for continental supremacy."
         />
       </section>
 
@@ -932,9 +1039,9 @@ export function ControlCenter() {
                 </div>
               ) : (
                 <div className="py-2 text-center">
-                  <p className="text-xs font-bold text-slate-300">No Scheduled Match</p>
+                  <p className="text-xs font-bold text-slate-300">No fixture yet</p>
                   <p className="text-[11px] text-slate-500 mt-0.5">
-                    Fixtures appear once calendar draw occurs.
+                    {activeClubProfile.division_name || "Foundation"} · entry is free
                   </p>
                 </div>
               )}
@@ -945,8 +1052,9 @@ export function ControlCenter() {
                     : "/app/competitions"
                 }
                 className="gx-btn gx-btn-primary w-full text-xs font-bold text-center mt-2"
+                data-testid="console-enter-competition"
               >
-                Match Briefing & Tactics
+                {upcomingFixture ? "Match Briefing & Tactics" : "Enter a competition"}
               </Link>
             </div>
 
@@ -1096,7 +1204,7 @@ export function ControlCenter() {
             {
               to: "/app/finance",
               label: "Club Ledger",
-              sub: "Sponsors & Shares",
+              sub: "Treasury and wages",
               icon: Wallet,
               color: "text-emerald-300",
             },

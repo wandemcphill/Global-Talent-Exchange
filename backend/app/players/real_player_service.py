@@ -76,6 +76,21 @@ REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
 
 
 @dataclass(frozen=True, slots=True)
+def _displayed_position(player: Player, profile: RealPlayerProfile | None) -> str:
+    """Role codes the player actually plays, not the coarse DF/MF/FW bucket."""
+    from app.players.position_roles import display_codes, resolve_positions
+
+    primary, extras, _reason = resolve_positions(
+        name=player.canonical_display_name or player.full_name,
+        position=player.position,
+        normalized_position=player.normalized_position,
+        secondaries=player.secondary_positions_json,
+        profile_primary=profile.primary_position if profile is not None else None,
+        profile_secondaries=profile.secondary_positions_json if profile is not None else None,
+    )
+    return display_codes(primary, extras)
+
+
 class _MatchCandidateSnapshot:
     player_id: str
     player_name: str
@@ -322,15 +337,34 @@ class RealPlayerUniverseQueryService:
         statement = statement.order_by(*self._match_candidate_order_by(payload=payload)).limit(candidate_limit)
         return list(self.session.execute(statement).all())
 
-    def _base_statement(self):
-        bind = self.session.get_bind()
-        dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
-        base_filter = and_(
+    @staticmethod
+    def _tier_is_regen(tier: str | None) -> bool:
+        return (tier or "").strip().lower() in {"regen", "regens"}
+
+    def _audience_filter(self, *, regens_only: bool = False):
+        from app.services.player_aging import REGEN_SOURCES
+
+        if regens_only:
+            tier = func.lower(func.coalesce(Player.real_player_tier, ""))
+            source = func.lower(func.coalesce(Player.source_provider, ""))
+            return and_(
+                Player.is_tradable.is_(True),
+                Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
+                Player.legendary_profile_id.is_(None),
+                tier.notin_(["legend", "icon", "hero", "archived_duplicate", "retired"]),
+                or_(tier == "regen", source.in_(tuple(REGEN_SOURCES)), Player.is_real_player.is_(False)),
+            )
+        return and_(
             Player.is_real_player.is_(True),
             Player.is_tradable.is_(True),
             or_(Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])),
             Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
         )
+
+    def _base_statement(self, *, regens_only: bool = False):
+        bind = self.session.get_bind()
+        dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
+        base_filter = self._audience_filter(regens_only=regens_only)
         if dialect_name == "postgresql":
             return (
                 select(Player, RealPlayerProfile, RealPlayerSourceLink, Country, PlayerSummaryReadModel)
@@ -391,16 +425,10 @@ class RealPlayerUniverseQueryService:
         needs_country = bool(nationality)
         needs_summary = bool(min_value is not None or max_value is not None)
 
+        regens_only = self._tier_is_regen(tier)
         if not (needs_profile or needs_country or needs_summary or availability == "free_agent"):
-            stmt = select(func.count(Player.id)).where(
-                Player.is_real_player.is_(True),
-                Player.is_tradable.is_(True),
-                or_(
-                    Player.real_player_tier.is_(None), Player.real_player_tier.notin_(["archived_duplicate", "retired"])
-                ),
-                Player.id.notin_(ARCHIVED_DUPLICATE_PLAYER_IDS),
-            )
-            if tier:
+            stmt = select(func.count(Player.id)).where(self._audience_filter(regens_only=regens_only))
+            if tier and not regens_only:
                 tier_norm = tier.strip().lower()
                 if tier_norm in {"legend", "legends", "legendary", "icon"}:
                     stmt = stmt.where(
@@ -480,7 +508,8 @@ class RealPlayerUniverseQueryService:
         availability: str | None,
         search: str | None,
     ):
-        statement = self._base_statement().where(Player.is_tradable.is_(True))
+        regens_only = self._tier_is_regen(tier)
+        statement = self._base_statement(regens_only=regens_only).where(Player.is_tradable.is_(True))
         if position:
             pos_raw = position.strip().lower()
             pos_codes = self._position_codes(pos_raw)
@@ -514,7 +543,7 @@ class RealPlayerUniverseQueryService:
             statement = statement.where(self._nationality_expr().ilike(f"%{nationality.strip()}%"))
         if club:
             statement = statement.where(self._club_expr().ilike(f"%{club.strip()}%"))
-        if tier:
+        if tier and not regens_only:
             tier_norm = tier.strip().lower()
             if tier_norm in {"legend", "legends", "legendary", "icon"}:
                 statement = statement.where(
@@ -694,6 +723,15 @@ class RealPlayerUniverseQueryService:
         prof_upd = profile.updated_at if profile is not None else player.updated_at
         is_ver = bool(source_link.is_verified_real_player) if source_link is not None else True
         playstyle, traits, skills = resolve_player_traits_and_playstyle(player, profile, summary)
+        from app.services.player_aging import REGEN_SOURCES
+
+        tier_name = str(player.real_player_tier or "").strip().lower()
+        source_name = str(player.source_provider or "").strip().lower()
+        is_regen = (
+            player.is_real_player is False
+            or tier_name == "regen"
+            or source_name in REGEN_SOURCES
+        )
 
         return RealPlayerUniverseListItem(
             player_id=player.id,
@@ -703,7 +741,7 @@ class RealPlayerUniverseQueryService:
             real_player_tier=player.real_player_tier,
             nationality=country.name if country is not None else prof_nat,
             nationality_code=getattr(country, "alpha2_code", None),
-            position=prof_pos or player.normalized_position or player.position,
+            position=_displayed_position(player, profile) or prof_pos or player.normalized_position or player.position,
             secondary_positions=prof_sec,
             age=self._player_display_age(player, player.date_of_birth or prof_dob),
             current_club_name=prof_club or player.real_world_club_name,
@@ -717,13 +755,14 @@ class RealPlayerUniverseQueryService:
             current_market_reference_value=prof_mkt_val or player.current_market_reference_value,
             market_reference_currency=prof_mkt_cur or player.market_reference_currency,
             image_url=self._profile_image_url(profile, player),
-            source_name=prof_src,
+            source_name=str(prof_src or player.source_provider or "gtex"),
             source_last_refreshed_at=prof_ref or player.source_last_refreshed_at,
-            is_verified_real_player=is_ver,
+            is_verified_real_player=is_ver if not is_regen else False,
             updated_at=prof_upd,
             playstyle=playstyle,
             traits=traits,
             skills=skills,
+            is_regen=is_regen,
         )
 
     def _build_detail(
@@ -792,9 +831,9 @@ class RealPlayerUniverseQueryService:
             short_name=player.short_name,
             nationality=country.name if country is not None else (profile.nationality if profile is not None else None),
             nationality_code=getattr(country, "alpha2_code", None),
-            position=player.position or (profile.primary_position if profile is not None else None),
+            position=_displayed_position(player, profile) or player.position or (profile.primary_position if profile is not None else None),
             normalized_position=player.normalized_position,
-            primary_position=(
+            primary_position=_displayed_position(player, profile) or (
                 (profile.primary_position if profile is not None else None)
                 or player.normalized_position
                 or player.position
@@ -874,7 +913,7 @@ class RealPlayerUniverseQueryService:
     ) -> _MatchCandidateSnapshot:
         club_name = (profile.current_club_name if profile is not None else None) or player.real_world_club_name
         prof_pos = profile.primary_position if profile is not None else None
-        primary_position_label = prof_pos or player.normalized_position or player.position
+        primary_position_label = _displayed_position(player, profile) or prof_pos or player.normalized_position or player.position
         return _MatchCandidateSnapshot(
             player_id=player.id,
             player_name=player.full_name,

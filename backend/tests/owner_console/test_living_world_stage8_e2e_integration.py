@@ -527,7 +527,7 @@ def test_scenario_f_hoyd_and_manager_academy_disagreement_and_promotion():
     promo_res = service.academy_promote(session, u.id, cp.id, wonderkid.id)
     session.commit()
     assert promo_res["status"] == "promoted"
-    assert promo_res["squad_status"] == "senior"
+    assert promo_res["squad_status"] == "first_team"
 
     # Trigger verified 3D academy wonderkid presentation preserving regen identity
     cin_res = living_cinema_showroom.trigger_verified_club_cinematic(

@@ -46,6 +46,8 @@ class SquadTierService:
                 view.first_team.append(member)
             elif membership.tier == "u21":
                 view.u21.append(member)
+            elif membership.tier == "academy":
+                view.academy.append(member)
             else:
                 view.reserve.append(member)
         return view
@@ -79,6 +81,8 @@ class SquadTierService:
         age = _player_age(player.date_of_birth)
         if tier == "u21" and (age is None or age > U21_MAX_AGE):
             raise SquadTierError("Only players aged 21 or under can join the U21 squad.")
+        if tier == "academy" and age is not None and age > U21_MAX_AGE:
+            raise SquadTierError("Only players aged 21 or under can sit in the academy.")
 
         membership = self._active_membership_for(club_id, player_id)
         now = utcnow()
@@ -164,7 +168,7 @@ class SquadTierService:
     ) -> SquadTierMemberView:
         age = _player_age(player.date_of_birth)
         readiness = "settled"
-        if membership.tier in {"u21", "reserve"}:
+        if membership.tier in {"u21", "reserve", "academy"}:
             if age is not None and age > U21_MAX_AGE:
                 readiness = "aged_out"
             else:

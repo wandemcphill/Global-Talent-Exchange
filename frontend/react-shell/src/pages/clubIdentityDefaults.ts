@@ -302,6 +302,31 @@ function renderCrestSvg(
   </svg>`;
 }
 
+export function crestDataUri(input: {
+  shape: string;
+  icon: string;
+  primary: string;
+  secondary: string;
+  accent: string;
+  initials: string;
+}): string {
+  const shapes: CrestShape[] = ["shield", "round", "diamond", "pennant"];
+  const icons: CrestIcon[] = ["star", "lion", "eagle", "crown", "oak", "bolt"];
+  const shape = shapes.includes(input.shape as CrestShape) ? (input.shape as CrestShape) : "shield";
+  const icon = icons.includes(input.icon as CrestIcon) ? (input.icon as CrestIcon) : "star";
+  const svg = renderCrestSvg(
+    shape,
+    icon,
+    "plain",
+    input.primary || "#163A70",
+    input.secondary || "#F4F0E6",
+    input.accent || "#D6A84B",
+    input.initials || "FC",
+    "heritage",
+  );
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 export function buildCrestLibrary(clubName: string): CrestConcept[] {
   const initials = clubShortCode(clubName);
   const options: CrestConcept[] = [];

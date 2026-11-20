@@ -248,7 +248,7 @@ def test_academy_readiness_youth_contract_and_senior_promotion():
     assert ledger.balance(session, ledger.club_account("club-1"), ledger.GTEX) == gtex_before
 
     promo_res = service.academy_promote(session, "user-1", "club-1", prospect.id)
-    assert promo_res["player"]["squad_status"] == "senior"
+    assert promo_res["player"]["squad_status"] == "first_team"
 
 
 def test_daily_briefing_and_boardroom_staff_chat():

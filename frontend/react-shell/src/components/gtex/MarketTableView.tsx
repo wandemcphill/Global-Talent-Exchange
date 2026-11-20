@@ -17,6 +17,8 @@ interface MarketTableViewProps {
   busyPlayerId?: string | null;
   onSign: (player: any) => void;
   onOpenDossier: (playerId: string) => void;
+  queueMode?: boolean;
+  queuedIds?: string[];
 }
 
 export function MarketTableView({
@@ -27,6 +29,8 @@ export function MarketTableView({
   busyPlayerId,
   onSign,
   onOpenDossier,
+  queueMode = false,
+  queuedIds = [],
 }: MarketTableViewProps) {
   const cashNum = Number(clubCash || 0);
 
@@ -56,8 +60,9 @@ export function MarketTableView({
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
             const tierNorm = String(p.real_player_tier || "").toLowerCase();
             const isLegend = tierNorm === "legend";
-            const isRegen = p.is_regen || p.is_real_player === false;
-            const isRestricted = isLegend || isRegen || rating >= 80;
+            const isRegen = p.is_regen || p.is_real_player === false || tierNorm === "regen";
+            const isRestricted = isLegend || isRegen || rating >= 75;
+            const queued = queuedIds.includes(pid);
             const isWonderkid = tierNorm === "wonderkid";
             const isBusy = busyPlayerId === pid;
 
@@ -167,8 +172,8 @@ export function MarketTableView({
                 <td className="py-2.5 px-3 text-center">
                   <Btn
                     className="py-1 px-3 text-[11px]"
-                    variant={owned ? "ghost" : unaffordable ? "outline" : "secondary"}
-                    disabled={owned || isBusy || !clubId || unaffordable}
+                    variant={owned || queued ? "ghost" : !queueMode && unaffordable ? "outline" : "secondary"}
+                    disabled={owned || queued || isBusy || !clubId || (!queueMode && unaffordable)}
                     onClick={() => onSign(p)}
                     data-testid={`sign-player-row-${pid}`}
                   >
@@ -176,8 +181,12 @@ export function MarketTableView({
                       <span className="flex items-center gap-1 text-emerald-400">
                         <UserCheck size={12} /> In Squad
                       </span>
+                    ) : queued ? (
+                      "In basket"
                     ) : isBusy ? (
                       "Signing…"
+                    ) : queueMode ? (
+                      isRestricted ? "Paid basket" : "Welcome basket"
                     ) : unaffordable ? (
                       <span className="text-slate-500">Short Funds</span>
                     ) : (

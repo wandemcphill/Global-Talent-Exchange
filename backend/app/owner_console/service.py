@@ -431,7 +431,9 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     from app.owner_console import storytelling
 
     pers = dict(p.personality_json or {}) if p.is_regen else {}
-    squad_status = pers.get("squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "senior")
+    squad_status = pers.get(
+        "squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team"
+    )
 
     ambition = pers.get("ambition", 10)
     loyalty = pers.get("loyalty", 10)
@@ -649,6 +651,20 @@ def player_quotes(session: Session, players: list) -> dict[str, tuple[int, int]]
     return quotes
 
 
+def _squad_position_label(player, profile=None) -> str:
+    from app.players.position_roles import display_codes, resolve_positions
+
+    primary, extras, _reason = resolve_positions(
+        name=getattr(player, "canonical_display_name", None) or getattr(player, "full_name", None),
+        position=getattr(player, "position", None),
+        normalized_position=getattr(player, "normalized_position", None),
+        secondaries=getattr(player, "secondary_positions_json", None),
+        profile_primary=getattr(profile, "primary_position", None),
+        profile_secondaries=getattr(profile, "secondary_positions_json", None),
+    )
+    return display_codes(primary, extras)
+
+
 def sign_market_player(session: Session, user_id: str, club_id: str, player_id: str) -> OwnerSquadPlayer:
     from app.ingestion.models import Player
 
@@ -688,7 +704,7 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
                 "restricted_player_requires_deposited_funds",
                 402,
                 classification.rejection_reason
-                or "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. The founding squad grant cannot be used.",
+                or "Restricted players (GSI 75+, regens, legends) require deposited GTEX Coin. The founding squad grant cannot be used.",
             )
         try:
             ledger.record(
@@ -750,11 +766,14 @@ def sign_market_player(session: Session, user_id: str, club_id: str, player_id: 
 
         aged = age_years(player.date_of_birth, aging_date_for_player(player, session))
         age = max(16, aged if aged is not None else 16)
+    from app.models.real_player_profile import RealPlayerProfile
+
+    profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
     signed = OwnerSquadPlayer(
         club_id=club_id,
         player_ref=player_id,
         name=player.canonical_display_name or player.full_name,
-        position=engine.normalize_position(player.normalized_position or player.position),
+        position=_squad_position_label(player, profile),
         age=age,
         rating=rating,
         potential=max(rating, int(player.potential or rating + 3)),
@@ -1251,9 +1270,31 @@ def _club_portrait_keys(session: Session, club_id: str) -> set[str]:
     return keys
 
 
+def _table_ready(session: Session, table_name: str) -> bool:
+    """True when the table exists. Uses the open transaction so SQLite does not roll it back."""
+    bind = session.get_bind()
+    if bind is None:
+        return False
+    if bind.dialect.name == "sqlite":
+        from sqlalchemy import text
+
+        return (
+            session.execute(
+                text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = :name"),
+                {"name": table_name},
+            ).first()
+            is not None
+        )
+    from sqlalchemy import inspect
+
+    return inspect(bind).has_table(table_name)
+
+
 def _existing_canonical_player_id(session: Session, club_id: str, regen: dict[str, Any]) -> str | None:
     from app.ingestion.models import Player
 
+    if not _table_ready(session, "ingestion_players"):
+        return None
     requested_ref = str(regen.get("player_ref") or "").strip()
     if requested_ref:
         existing = session.get(Player, requested_ref)
@@ -1305,10 +1346,321 @@ def _add_regen(
     session.add(player)
     session.flush()
     assign_academy_regen_portrait(session, player, used_storage_keys=used_portrait_keys)
+    sheet = str((player.personality_json or {}).get("squad_status") or "")
+    if sheet in {"first_team", "reserve", "academy", "senior"}:
+        _mirror_sheet_membership(session, player, "first_team" if sheet == "senior" else sheet, None)
     return player
 
 
-def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict[str, Any] | None) -> OwnerClubState:
+def onboarding_season_salary_gtx(raw: int | float | str | None) -> int:
+    """Season salary charged in GTX when a new club agrees a named staff contract.
+
+    Catalog wages of 1,000 and above are stored on the Fan Coin scale, so the
+    contract charged here is one tenth of that figure. Smaller catalog wages are
+    already on a club-coin scale and are charged as written. The welcome squad
+    grant never pays this number.
+    """
+    amount = max(0, int(raw or 0))
+    if amount >= 1000:
+        amount = amount // 10
+    season = max(150, amount)
+    # Staff salaries are 65% lower than the old catalog. The cut is applied
+    # after the Fan-scale conversion so a 3,500 wage stays a season fee, not a transfer fee.
+    return max(40, (season * 35) // 100)
+
+
+_ONBOARDING_STAFF_ROLES = ("first_team_manager", "general_manager", "head_of_youth_development")
+_ONBOARDING_DEFAULTS = {
+    "general_manager": {
+        "id": "gtex-default-gm",
+        "staff_id": "gtex-default-gm",
+        "name": "GTEX club secretary",
+        "role_label": "General Manager",
+    },
+    "head_of_youth_development": {
+        "id": "gtex-default-hoyd",
+        "staff_id": "gtex-default-hoyd",
+        "name": "GTEX academy caretaker",
+        "role_label": "Head of Youth Development",
+    },
+}
+
+
+def _charge_onboarding_salary(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    salary: int,
+    *,
+    related_id: str,
+    memo: str,
+) -> None:
+    if salary <= 0:
+        return
+    funding = ledger.get_club_funding(session, club_id)
+    remaining = Decimal(salary)
+    pools = (
+        ("deposited", funding["available_deposited"]),
+        ("earned", funding["available_earned"]),
+    )
+    spendable = sum((ledger.D(amount) for _, amount in pools), Decimal("0"))
+    if spendable < remaining:
+        raise OwnerError(
+            "staff_salary_needs_topup",
+            402,
+            (
+                f"This contract is {salary} GTX. Salaries are paid from topped-up or earned club coins. "
+                "The 2,500 welcome grant cannot pay salaries. Top up with KoraPay, Paystack, or a Coin Trader, "
+                "or use the default staff member."
+            ),
+        )
+    for balance_class, available in pools:
+        if remaining <= 0:
+            break
+        portion = min(ledger.D(available), remaining)
+        if portion <= 0:
+            continue
+        try:
+            ledger.record(
+                session,
+                event_type="staff_hire",
+                source=ledger.club_account(club_id),
+                destination=ledger.WORLD_CLUBS,
+                currency=ledger.GTEX,
+                gross=portion,
+                balance_class=balance_class,
+                club_id=club_id,
+                user_id=user_id,
+                related_type="staff",
+                related_id=related_id,
+                memo=memo,
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError("staff_salary_needs_topup", 402, str(exc)) from exc
+        remaining -= portion
+    if remaining > 0:
+        raise OwnerError(
+            "staff_salary_needs_topup",
+            402,
+            f"The club treasury could not settle the {salary} GTX salary.",
+        )
+
+
+def _note_onboarding_staff(
+    state: OwnerClubState,
+    role: str,
+    payload: dict[str, Any],
+    *,
+    preserved_book: dict[str, Any] | None = None,
+    preserved_exec: dict[str, Any] | None = None,
+    written_exec: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    facs = dict(state.facilities_json or {})
+    book = {**(preserved_book or {}), **dict(facs.get("_onboarding_staff") or {})}
+    book[role] = payload
+    exec_staff = {
+        **(preserved_exec or {}),
+        **dict(facs.get("_executive_staff") or {}),
+        **(written_exec or {}),
+    }
+    facs["_onboarding_staff"] = book
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+    if set(_ONBOARDING_STAFF_ROLES) <= set(book) and state.stage == "manager":
+        state.stage = "competition"
+    return payload
+
+
+def appoint_onboarding_staff(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    role: str,
+    use_default: bool = False,
+    profile_id: str | None = None,
+    manager_id: str | None = None,
+) -> dict[str, Any]:
+    """Agree one founding contract: first-team manager, general manager, or youth head.
+
+    A named contract draws its season salary from topped-up or earned GTX.
+    The default caretaker for each role is free. The squad grant is not touched.
+    The club leaves the staff step only after all three roles have a decision.
+    """
+    from app.models.club_growth import ClubStaffProfile
+    from app.models.manager_market import ManagerCatalogEntry
+
+    role_key = str(role or "").strip()
+    if role_key not in _ONBOARDING_STAFF_ROLES:
+        raise OwnerError("unknown_staff_role", 400, "Choose a first-team manager, general manager, or head of youth development.")
+    state = require_state(session, club_id, user_id)
+    facs = dict(state.facilities_json or {})
+    book = dict(facs.get("_onboarding_staff") or {})
+    preserved_exec = dict(facs.get("_executive_staff") or {})
+    ref = "default" if use_default else str(manager_id or profile_id or "")
+    existing = book.get(role_key) or {}
+    if existing.get("settled") and existing.get("ref") == ref:
+        return existing
+
+    if use_default:
+        written_exec: dict[str, Any] | None = None
+        default_name = "Tunde Bakare"
+        if role_key == "first_team_manager":
+            appoint_manager(session, user_id, club_id, None, advance_stage=False)
+        else:
+            caretaker = dict(_ONBOARDING_DEFAULTS[role_key])
+            caretaker.update(
+                {
+                    "role": role_key,
+                    "is_default": True,
+                    "is_appointed": True,
+                    "salary_gtx": 0,
+                    "salary": 0,
+                }
+            )
+            default_name = str(caretaker["name"])
+            written_exec = {role_key: caretaker}
+        return _note_onboarding_staff(
+            state,
+            role_key,
+            {
+                "settled": True,
+                "ref": "default",
+                "use_default": True,
+                "salary_gtx": 0,
+                "name": default_name,
+            },
+            preserved_book=book,
+            preserved_exec=preserved_exec,
+            written_exec=written_exec,
+        )
+
+    salary = 0
+    display_name = ""
+    written_exec: dict[str, Any] | None = None
+    if role_key == "first_team_manager" and manager_id:
+        row = session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == manager_id))
+        if row is None:
+            raise OwnerError("staff_candidate_not_found", 404, "That manager is not on the staff market.")
+        wage = {"legendary": 50000, "elite_active": 22000, "rare": 9000, "popular": 3500}.get(
+            str(row.rarity or "").strip().lower(), 3500
+        )
+        salary = onboarding_season_salary_gtx(wage)
+        display_name = row.display_name
+        record = {
+            "id": row.manager_id,
+            "staff_id": row.manager_id,
+            "manager_id": row.manager_id,
+            "name": row.display_name,
+            "display_name": row.display_name,
+            "role": role_key,
+            "role_label": "First Team Manager",
+            "rarity": row.rarity,
+            "mentality": row.mentality,
+            "tactics": list(row.tactics or []),
+            "traits": list(row.traits or []),
+            "philosophy_summary": row.philosophy_summary,
+            "salary": salary,
+            "salary_gtx": salary,
+            "is_default": False,
+            "is_appointed": True,
+        }
+        _charge_onboarding_salary(
+            session,
+            user_id,
+            club_id,
+            salary,
+            related_id=row.manager_id,
+            memo=f"Season salary for first-team manager {display_name}",
+        )
+        appoint_manager(session, user_id, club_id, record, advance_stage=False)
+        written_exec = {role_key: record}
+    else:
+        candidate = next(
+            (
+                item
+                for item in engine.EXECUTIVE_STAFF_CATALOG
+                if str(item.get("id") or item.get("staff_id") or "") == str(profile_id or "")
+            ),
+            None,
+        )
+        profile = session.get(ClubStaffProfile, profile_id) if profile_id and candidate is None else None
+        if profile is None and profile_id:
+            profile = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{profile_id}"))
+        if candidate is None and profile is None:
+            raise OwnerError("staff_candidate_not_found", 404, "That staff member is not on the market.")
+        if candidate is not None:
+            raw_wage = candidate.get("salary_gtex") or candidate.get("salary") or candidate.get("salary_fan_coin") or 0
+            display_name = str(candidate.get("name") or "Staff")
+            related = str(candidate.get("id") or profile_id)
+            record = dict(candidate)
+        else:
+            raw_wage = (profile.salary_minor // 100) if profile and profile.salary_minor else 0
+            display_name = profile.display_name
+            related = profile.id
+            meta = dict(profile.metadata_json or {})
+            record = {
+                "id": meta.get("staff_id") or profile.id,
+                "staff_id": meta.get("staff_id") or profile.id,
+                "profile_id": profile.id,
+                "name": profile.display_name,
+                "rating": profile.rating,
+                "style": meta.get("style"),
+                "temperament": meta.get("temperament"),
+                "portrait_url": meta.get("portrait_url"),
+            }
+        salary = onboarding_season_salary_gtx(raw_wage)
+        _charge_onboarding_salary(
+            session,
+            user_id,
+            club_id,
+            salary,
+            related_id=related,
+            memo=f"Season salary for {display_name}",
+        )
+        record.update(
+            {
+                "role": role_key,
+                "role_label": role_key.replace("_", " ").title(),
+                "name": display_name,
+                "salary": salary,
+                "salary_gtx": salary,
+                "is_default": False,
+                "is_appointed": True,
+            }
+        )
+        exec_staff = dict((state.facilities_json or {}).get("_executive_staff") or {})
+        exec_staff[role_key] = record
+        facs = dict(state.facilities_json or {})
+        facs["_executive_staff"] = exec_staff
+        state.facilities_json = facs
+        if role_key == "first_team_manager":
+            appoint_manager(session, user_id, club_id, record, advance_stage=False)
+        written_exec = {role_key: record}
+
+    return _note_onboarding_staff(
+        state,
+        role_key,
+        {
+            "settled": True,
+            "ref": ref,
+            "use_default": False,
+            "salary_gtx": salary,
+            "name": display_name,
+        },
+        preserved_book=book,
+        preserved_exec=preserved_exec,
+        written_exec=written_exec,
+    )
+
+
+def appoint_manager(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    snapshot: dict[str, Any] | None,
+    *,
+    advance_stage: bool = True,
+) -> OwnerClubState:
     from app.owner_console import autonomous_staff_engine, living_club_world
 
     state = require_state(session, club_id, user_id)
@@ -1346,12 +1698,13 @@ def appoint_manager(session: Session, user_id: str, club_id: str, snapshot: dict
         personality_profile=mgr_personality,
     )
     living_club_world.reconcile_staff_relationships(session, state)
-    if state.stage == "manager":
-        state.stage = "competition"
-    elif state.stage == "squad":
-        players = squad(session, club_id)
-        if len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
+    if advance_stage:
+        if state.stage == "manager":
             state.stage = "competition"
+        elif state.stage == "squad":
+            players = squad(session, club_id)
+            if len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
+                state.stage = "competition"
     _morale_shift(session, club_id, 3)
 
     try:
@@ -2664,8 +3017,19 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
     )
     comp = session.get(OwnerCompetition, entry.competition_id) if entry else None
     manager = state.manager_json or {}
+    from app.owner_console.living_institution import division_name
+
+    level = state.division_level or "foundation"
+    crest_url = None
+    if _table_ready(session, "club_profiles"):
+        from app.owner_console.storytelling import resolve_club_crest_url
+
+        crest_url = resolve_club_crest_url(session, state.club_id, state.club_name)
     return {
         "club_id": state.club_id,
+        "division_level": level,
+        "division_name": division_name(level),
+        "crest_url": crest_url,
         "club_name": state.club_name,
         "short_name": profile.short_name if profile else None,
         "primary_color": profile.primary_color if profile else "#10B981",
@@ -3048,9 +3412,10 @@ def hire_executive_staff(
     years = max(1, min(int(contract_years or 3), 5))
     # Every staff contract is priced and settled in Fan Coin. Legacy GTEX
     # signing-fee fields are intentionally ignored for contract pricing.
-    annual_salary_fan_coin = int(
+    raw_annual_salary = int(
         candidate.get("salary_fan_coin") or candidate.get("salary_fancoin") or candidate.get("salary") or 2000
     )
+    annual_salary_fan_coin = max(1, raw_annual_salary * 35 // 100)
     signing_fee_fan_coin = annual_salary_fan_coin * years
     if marquee_wage_premium:
         signing_fee_fan_coin = int(signing_fee_fan_coin * 1.5)
@@ -3425,19 +3790,83 @@ def academy_contract(session: Session, user_id: str, club_id: str, player_id: st
     }
 
 
+_SQUAD_SHEETS = ("first_team", "reserve", "academy")
+
+
+def _mirror_sheet_membership(
+    session: Session,
+    player: OwnerSquadPlayer,
+    sheet: str,
+    actor_user_id: str | None,
+) -> None:
+    """Write the same sheet onto the canonical tier row when this player has one."""
+    ref = str(player.player_ref or "").strip()
+    if not ref or sheet not in _SQUAD_SHEETS:
+        return
+    from app.ingestion.models import Player
+    from app.squad_tiers.service import SquadTierError, SquadTierService
+
+    if not _table_ready(session, "ingestion_players"):
+        return
+    if session.get(Player, ref) is None or session.get(ClubProfile, player.club_id) is None:
+        return
+    try:
+        SquadTierService(session).assign_tier(
+            club_id=player.club_id,
+            player_id=ref,
+            tier=sheet,
+            actor_user_id=actor_user_id,
+        )
+    except SquadTierError as exc:
+        logger.info("squad sheet mirror skipped for %s: %s", player.id, exc)
+
+
+def place_on_squad_sheet(
+    session: Session, user_id: str, club_id: str, player_id: str, sheet: str
+) -> dict[str, Any]:
+    """Move one owner-squad player between first team, reserve, and academy."""
+    require_state(session, club_id, user_id)
+    player = session.get(OwnerSquadPlayer, player_id)
+    if not player or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Player not found in this club squad.")
+    target = str(sheet or "").strip().lower()
+    if target not in _SQUAD_SHEETS:
+        raise OwnerError("unknown_sheet", 400, "Sheet must be first team, reserve, or academy.")
+    if target == "academy" and int(player.age or 99) > 21:
+        raise OwnerError("academy_age", 400, "Only players aged 21 or under can sit in the academy.")
+
+    from sqlalchemy.orm.attributes import flag_modified
+
+    pers = dict(player.personality_json or {})
+    previous = str(pers.get("squad_status") or "")
+    pers["squad_status"] = target
+    if target == "first_team" and previous in {"academy", "u21"}:
+        pers["promoted_to_senior"] = True
+        pers["academy_graduate"] = True
+    player.personality_json = pers
+    flag_modified(player, "personality_json")
+    session.flush()
+    _mirror_sheet_membership(session, player, target, user_id)
+    return {"status": "placed", "sheet": target, "player": player_dict(player, session)}
+
+
 def academy_promote(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
     require_state(session, club_id, user_id)
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
 
+    from sqlalchemy.orm.attributes import flag_modified
+
     player.morale = min(100, player.morale + 10)
     pers = dict(player.personality_json or {})
-    pers["squad_status"] = "senior"
+    pers["squad_status"] = "first_team"
     pers["promoted_to_senior"] = True
     pers["academy_graduate"] = True
     player.personality_json = pers
+    flag_modified(player, "personality_json")
     session.flush()
+    _mirror_sheet_membership(session, player, "first_team", user_id)
 
     state = require_state(session, club_id, user_id)
     try:
@@ -3468,7 +3897,7 @@ def academy_promote(session: Session, user_id: str, club_id: str, player_id: str
     return {
         "status": "promoted",
         "player": player_dict(player, session),
-        "squad_status": "senior",
+        "squad_status": "first_team",
         "morale_boost": 10,
     }
 
@@ -3702,7 +4131,7 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
         "club_prestige": state.prestige,
         "prestige_tier": engine.prestige_tier_label(state.prestige),
         "active_win_bonus_clause_gtex": int(facs.get("_sponsor_win_bonus_clause_gtex", 0)),
-        "offers": offers,
+        "offers": [],
         "active_deals": [
             {
                 "id": d.id,
@@ -3719,6 +4148,12 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
 
 
 def sign_sponsor_offer(session: Session, user_id: str, club_id: str, offer_id: str) -> dict[str, Any]:
+    require_state(session, club_id, user_id)
+    raise OwnerError(
+        "sponsor_offers_closed",
+        403,
+        "Sponsor offers are closed for club owners. The club is not sold a commercial package.",
+    )
     state = require_state(session, club_id, user_id)
     info = get_sponsor_offers(session, user_id, club_id)
     offer = next((o for o in info["offers"] if o["offer_id"] == offer_id), None)

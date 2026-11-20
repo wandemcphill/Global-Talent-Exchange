@@ -8,13 +8,13 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, TimestampMixin, UUIDPrimaryKeyMixin, utcnow
 
-SQUAD_TIERS: tuple[str, ...] = ("first_team", "u21", "reserve")
+SQUAD_TIERS: tuple[str, ...] = ("first_team", "u21", "reserve", "academy")
 SQUAD_TIER_SOURCES: tuple[str, ...] = ("academy", "transfer", "son", "mint", "manual")
 SQUAD_TIER_STATUSES: tuple[str, ...] = ("active", "released", "promoted_out")
 
 
 class ClubSquadTierMembership(UUIDPrimaryKeyMixin, TimestampMixin, Base):
-    """Which tier (first_team / u21 / reserve) an owned player sits in at a club.
+    """Which tier (first_team / reserve / academy / u21) an owned player sits in at a club.
 
     A layer on top of the club<->player relationship; complementary to the
     academy youth feeder (see SQUAD_TIER_PIPELINE_DESIGN.md).

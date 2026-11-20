@@ -237,9 +237,14 @@ class AmountRequest(BaseModel):
     amount: float = Field(gt=0)
 
 
+class SquadSheetRequest(BaseModel):
+    sheet: str = Field(pattern="^(first_team|reserve|academy)$")
+
+
 class ClubAmountRequest(BaseModel):
     club_id: str
     amount: float = Field(gt=0)
+    currency: str = "GTEX"
 
 
 class SisterCapitalRequest(BaseModel):
@@ -406,7 +411,46 @@ def quote(player_ids: str, session: Session = Depends(get_session), user=Depends
     ids = [pid for pid in player_ids.split(",")[:100] if pid]
     players = list(session.scalars(select(Player).where(Player.id.in_(ids))).all()) if ids else []
     quotes = service.player_quotes(session, players)
-    return {"quotes": {pid: {"price": price, "rating": rating} for pid, (price, rating) in quotes.items()}}
+    from app.owner_console.player_classification import classify_player_for_acquisition
+
+    priced: dict[str, Any] = {}
+    for player in players:
+        price, rating = quotes[player.id]
+        classification = classify_player_for_acquisition(session, player)
+        priced[player.id] = {
+            "price": price,
+            "rating": rating,
+            "lane": "paid" if classification.requires_deposited_funds else "welcome",
+            "category": classification.category,
+        }
+    return {"quotes": priced}
+
+
+class OnboardingStaffRequest(BaseModel):
+    role: str
+    use_default: bool = False
+    profile_id: str | None = None
+    manager_id: str | None = None
+
+
+@router.post("/clubs/{club_id}/onboarding/staff")
+def appoint_onboarding_staff(
+    club_id: str,
+    body: OnboardingStaffRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(
+        session,
+        service.appoint_onboarding_staff,
+        session,
+        user.id,
+        club_id,
+        body.role,
+        body.use_default,
+        body.profile_id,
+        body.manager_id,
+    )
 
 
 @router.post("/clubs/{club_id}/manager")
@@ -430,7 +474,7 @@ def finish_onboarding(
 ) -> dict[str, Any]:
     def go():
         state = service.require_state(session, club_id, user.id)
-        if state.stage == "competition":
+        if state.stage in {"manager", "competition"}:
             state.stage = "active"
         return {"stage": state.stage}
 
@@ -745,6 +789,7 @@ def control_center(user=Depends(get_current_user), session: Session = Depends(ge
             for c in session.scalars(
                 select(OwnerCompetition).where(OwnerCompetition.status == "open", OwnerCompetition.host_type == "gtex")
             ).all()
+            if c.name not in comps.SEED_NAMES
         ]
         economy_by_club = {s.club_id: ledger.club_economy(session, s.club_id) for s in states}
         totals: dict[str, float] = {}
@@ -1024,9 +1069,13 @@ def competitions_list(user=Depends(get_current_user), session: Session = Depends
         visible = [
             c
             for c in rows
-            if c.host_type == "gtex"
-            or c.host_user_id == user.id
-            or user.id in {e.owner_user_id for e in comps.entries(session, c.id)}
+            if c.name not in comps.SEED_NAMES
+            and c.status != "cancelled"
+            and (
+                c.host_type == "gtex"
+                or c.host_user_id == user.id
+                or user.id in {e.owner_user_id for e in comps.entries(session, c.id)}
+            )
         ]
         return {"competitions": [comps.comp_dict(session, c, user.id) for c in visible]}
 
@@ -1215,7 +1264,9 @@ async def korapay_deposit_webhook(request: Request, session: Session = Depends(g
 def inject(
     body: ClubAmountRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
-    return ledger.serialize(_run(session, money.inject_capital, session, user.id, body.club_id, body.amount))
+    return ledger.serialize(
+        _run(session, money.inject_capital, session, user.id, body.club_id, body.amount, body.currency)
+    )
 
 
 @router.post("/capital/distribute")
@@ -1970,6 +2021,17 @@ def promote_academy_player(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     return _run(session, service.academy_promote, session, user.id, club_id, player_id)
+
+
+@router.post("/clubs/{club_id}/squad/{player_id}/sheet")
+def place_squad_sheet(
+    club_id: str,
+    player_id: str,
+    payload: SquadSheetRequest,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.place_on_squad_sheet, session, user.id, club_id, player_id, payload.sheet)
 
 
 # ---------- Ecosystem Waterfall, Win Bonus & Press Conference ----------

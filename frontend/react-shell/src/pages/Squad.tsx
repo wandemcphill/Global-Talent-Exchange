@@ -37,6 +37,60 @@ import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
 import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
 
+type SquadSheet = "first_team" | "reserve" | "academy";
+
+const SHEET_LABEL: Record<SquadSheet, string> = {
+  first_team: "First team",
+  reserve: "Reserve",
+  academy: "Academy",
+};
+
+function sheetOf(player: any): SquadSheet {
+  const raw = String(player?.squad_status || "").toLowerCase();
+  if (raw === "reserve") return "reserve";
+  if (raw === "academy" || raw === "u21") return "academy";
+  if (raw === "first_team" || raw === "senior") return "first_team";
+  if (player?.is_regen && Number(player?.age) <= 18 && Number(player?.minutes || 0) === 0) return "academy";
+  return "first_team";
+}
+
+function SheetMove({
+  player,
+  moving,
+  onPlace,
+}: {
+  player: any;
+  moving: boolean;
+  onPlace?: (player: any, sheet: SquadSheet) => void;
+}) {
+  if (!onPlace) return null;
+  const here = sheetOf(player);
+  const moves: SquadSheet[] = (["first_team", "reserve", "academy"] as SquadSheet[]).filter((sheet) => {
+    if (sheet === here) return false;
+    if (sheet === "academy" && Number(player?.age) > 21) return false;
+    return true;
+  });
+  return (
+    <span className="mt-1 flex flex-wrap gap-1" data-testid={`sheet-moves-${player.id}`}>
+      {moves.map((sheet) => (
+        <button
+          key={sheet}
+          type="button"
+          disabled={moving}
+          data-testid={`move-${player.id}-to-${sheet}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPlace(player, sheet);
+          }}
+          className="rounded border border-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-slate-200 hover:border-emerald-400/50 hover:text-white"
+        >
+          {SHEET_LABEL[sheet]}
+        </button>
+      ))}
+    </span>
+  );
+}
+
 function ManagerSheet({ club }: any) {
   const m = club.manager_profile || {};
   const refresh = useRefreshOwner();
@@ -120,7 +174,7 @@ function HireManager({ club }: any) {
   );
 }
 
-function SquadCards({ club, onSelectPlayer }: any) {
+function SquadCards({ club, onSelectPlayer, onPlace, movingId }: any) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
       {club.squad.map((p: any) => (
@@ -139,13 +193,14 @@ function SquadCards({ club, onSelectPlayer }: any) {
             testid={`squad-player-${p.id}`}
             onClick={() => onSelectPlayer && onSelectPlayer(p)}
           />
+          <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
         </div>
       ))}
     </div>
   );
 }
 
-function SquadTable({ club, targetPlayerId, onSelectPlayer }: any) {
+function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }: any) {
   const [view, setView] = useState<"table" | "cards">("table");
   const [mentality, setMentality] = useState(club.mentality || "balanced");
   const save = async (m: string) => {
@@ -175,7 +230,10 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer }: any) {
   return (
     <Panel eyebrow={`${club.squad.length} players`} title="Squad" testid="squad-table-panel" className="lg:col-span-7"
       action={<div className="flex flex-wrap gap-1">{["cards", "table"].map((v) => <button key={v} data-testid={`squad-view-${v}`} onClick={() => setView(v as any)} className={`gx-btn ${view === v ? "gx-btn-primary" : "gx-btn-ghost"}`}>{v}</button>)}<span className="mx-1 w-px bg-white/10" />{["defensive", "balanced", "attacking"].map((m) => <button key={m} data-testid={`default-mentality-${m}`} onClick={() => save(m)} className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}>{m}</button>)}</div>}>
-      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} onSelectPlayer={onSelectPlayer} /></div> : (
+      {club.squad.length === 0 ? (
+        <p className="py-8 text-center text-sm text-slate-400" data-testid="squad-sheet-empty">No players on this sheet.</p>
+      ) : null}
+      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} onSelectPlayer={onSelectPlayer} onPlace={onPlace} movingId={movingId} /></div> : (
       <div className="gx-scroll max-h-[560px] overflow-auto">
         <table className="gx-table w-full min-w-[620px]">
           <thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>Rtg/Pot</th><th>Morale</th><th>Mins</th><th>Value</th></tr></thead>
@@ -192,6 +250,7 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer }: any) {
                   <td className="font-medium text-white">
                     {p.name} {p.is_regen && <Chip tone="emerald">Regen</Chip>} {p.status === "listed" && <Chip tone="gold">Listed</Chip>} {p.injured_days > 0 && <Chip tone="red">Injured</Chip>}
                     {isTarget && <Chip tone="cyan">Target Prospect</Chip>}
+                    <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
                   </td>
                   <td className="capitalize">{p.position}</td>
                   <td className="gx-mono">{p.age}</td>
@@ -672,27 +731,8 @@ function BoardroomSection({ club }: any) {
     enabled: Boolean(club?.club_id),
   });
 
-  const appointed = staffData?.appointed_staff || {
-    first_team_manager: club.manager_profile || {
-      name: club.manager?.name || "Kwame Mensah",
-      tactics_stat: 76,
-      discipline: 74,
-      youth_dev: 78,
-    },
-    general_manager: { name: "Adeola Alabi", attributes: { negotiations: 82, commercial: 80 } },
-    head_of_youth_development: { name: "Ousmane Diallo", attributes: { talent_spotting: 85, youth_conditioning: 81 } },
-    chief_scout: { name: "Lars Lindstrom", attributes: { international_network: 83, precision: 80 } },
-    medical_director: { name: "Dr. Chioma Eze", attributes: { sports_medicine: 86, rehabilitation: 84 } },
-  };
-
-  const effects = staffData?.staff_effects || {
-    transfer_fee_discount_pct: 5,
-    sponsor_revenue_bonus_pct: 8,
-    academy_potential_bonus: 4,
-    tactical_match_bonus: 3,
-    scouting_precision_bonus: 6,
-    injury_recovery_bonus: 10,
-  };
+  const appointed = staffData?.appointed_staff || {};
+  const effects = staffData?.staff_effects || null;
 
   const delegation = staffData?.delegation_policy || {
     mode: "balanced",
@@ -703,12 +743,7 @@ function BoardroomSection({ club }: any) {
 
   const clubPrestige = staffData?.club_prestige ?? club.health?.prestige ?? 55;
   const prestigeTier = staffData?.prestige_tier ?? (clubPrestige >= 85 ? 1 : clubPrestige >= 70 ? 2 : clubPrestige >= 50 ? 3 : clubPrestige >= 35 ? 4 : 5);
-  const candidates: any[] = staffData?.candidates || [
-    { staff_id: "st-cand-1", role: "general_manager", name: "David Sterling", min_prestige: 60, salary_gtex: 12500, specialty: "Continental Broadcast & Kit Sponsor Magnate" },
-    { staff_id: "st-cand-2", role: "head_of_youth_development", name: "Bakary Traore", min_prestige: 50, salary_gtex: 9000, specialty: "Master of African Academy Regens & Pace Archetypes" },
-    { staff_id: "st-cand-3", role: "chief_scout", name: "Matteo Silva", min_prestige: 65, salary_gtex: 11000, specialty: "South American Wonderkid & High-Ceiling Specialist" },
-    { staff_id: "st-cand-4", role: "medical_director", name: "Dr. Elena Rostova", min_prestige: 55, salary_gtex: 9500, specialty: "Advanced Cryotherapy & Hamstring Injury Recovery" },
-  ];
+  const candidates: any[] = staffData?.candidates || [];
 
   const handleHire = async (candidate: any) => {
     setHiringBusy(candidate.staff_id);
@@ -790,32 +825,32 @@ function BoardroomSection({ club }: any) {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Transfer Discount</p>
-            <p className="gx-mono text-lg font-black text-purple-300 mt-0.5">-{effects.transfer_fee_discount_pct ?? 5}%</p>
+            <p className="gx-mono text-lg font-black text-purple-300 mt-0.5">{effects ? `-${effects.transfer_fee_discount_pct ?? 0}%` : "—"}</p>
             <p className="text-[9px] text-slate-500">GM Autonomy</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Sponsor Bonus</p>
-            <p className="gx-mono text-lg font-black text-emerald-300 mt-0.5">+{effects.sponsor_revenue_bonus_pct ?? 8}%</p>
+            <p className="gx-mono text-lg font-black text-emerald-300 mt-0.5">{effects ? `+${effects.sponsor_revenue_bonus_pct ?? 0}%` : "—"}</p>
             <p className="text-[9px] text-slate-500">Commercial</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Academy Potential</p>
-            <p className="gx-mono text-lg font-black text-cyan-300 mt-0.5">+{effects.academy_potential_bonus ?? 4} pts</p>
+            <p className="gx-mono text-lg font-black text-cyan-300 mt-0.5">{effects ? `+${effects.academy_potential_bonus ?? 0} pts` : "—"}</p>
             <p className="text-[9px] text-slate-500">HOYD Intake</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Tactical Match Bonus</p>
-            <p className="gx-mono text-lg font-black text-amber-300 mt-0.5">+{effects.tactical_match_bonus ?? 3} pts</p>
+            <p className="gx-mono text-lg font-black text-amber-300 mt-0.5">{effects ? `+${effects.tactical_match_bonus ?? 0} pts` : "—"}</p>
             <p className="text-[9px] text-slate-500">Manager Tactics</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Scouting Precision</p>
-            <p className="gx-mono text-lg font-black text-blue-300 mt-0.5">+{effects.scouting_precision_bonus ?? 6}%</p>
+            <p className="gx-mono text-lg font-black text-blue-300 mt-0.5">{effects ? `+${effects.scouting_precision_bonus ?? 0}%` : "—"}</p>
             <p className="text-[9px] text-slate-500">Chief Scout</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Injury Recovery</p>
-            <p className="gx-mono text-lg font-black text-rose-300 mt-0.5">+{effects.injury_recovery_bonus ?? 10}%</p>
+            <p className="gx-mono text-lg font-black text-rose-300 mt-0.5">{effects ? `+${effects.injury_recovery_bonus ?? 0}%` : "—"}</p>
             <p className="text-[9px] text-slate-500">Medical Speed</p>
           </div>
         </div>
@@ -855,11 +890,12 @@ function BoardroomSection({ club }: any) {
                 <button
                   type="button"
                   onClick={() => setChatRole(roleDef.key)}
-                  className="w-full rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 py-1.5 text-xs font-bold text-purple-200 flex items-center justify-center gap-1.5 transition"
+                  disabled={!isAppointed}
+                  className="w-full rounded-lg bg-purple-600/30 hover:bg-purple-600/50 border border-purple-500/40 py-1.5 text-xs font-bold text-purple-200 flex items-center justify-center gap-1.5 transition disabled:cursor-not-allowed disabled:opacity-40"
                   data-testid={`chat-staff-${roleDef.key}`}
                 >
                   <MessageSquare size={13} />
-                  <span>Talk to Staff</span>
+                  <span>{isAppointed ? "Talk to Staff" : "Seat empty"}</span>
                 </button>
                 {isAppointed && (
                   <button
@@ -963,6 +999,9 @@ function BoardroomSection({ club }: any) {
           ))}
         </div>
 
+        {filteredCandidates.length === 0 ? (
+          <p className="text-sm text-slate-400" data-testid="staff-candidates-empty">No candidates are on this seat.</p>
+        ) : null}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredCandidates.map((cand) => {
             const meetsPrestige = clubPrestige >= (cand.min_prestige || 50);
@@ -995,7 +1034,7 @@ function BoardroomSection({ club }: any) {
 
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span>Upfront Fan Coin Contract:</span>
-                    <b className="gx-mono text-amber-300">{coinWithNaira((cand.salary_fan_coin || cand.salary || 1600) * (contractYears[cand.staff_id] || 3), "FAN")}</b>
+                    <b className="gx-mono text-amber-300">{coinWithNaira(Math.floor((cand.salary_fan_coin || cand.salary || 1600) * 0.35) * (contractYears[cand.staff_id] || 3), "FAN")}</b>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
                     <span>Contract Length:</span>
@@ -1004,11 +1043,11 @@ function BoardroomSection({ club }: any) {
                       onChange={(e) => setContractYears((prev) => ({ ...prev, [cand.staff_id]: Number(e.target.value) }))}
                       className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 text-xs font-bold text-white"
                     >
-                      <option value={1}>1 Year ({fmt((cand.salary_fan_coin || 1200) * 1)} FAN)</option>
-                      <option value={2}>2 Years ({fmt((cand.salary_fan_coin || 1200) * 2)} FAN)</option>
-                      <option value={3}>3 Years (Recommended · {fmt((cand.salary_fan_coin || 1200) * 3)} FAN)</option>
-                      <option value={4}>4 Years ({fmt((cand.salary_fan_coin || 1200) * 4)} FAN)</option>
-                      <option value={5}>5 Years ({fmt((cand.salary_fan_coin || 1200) * 5)} FAN)</option>
+                      <option value={1}>1 Year ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 1)} FAN)</option>
+                      <option value={2}>2 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 2)} FAN)</option>
+                      <option value={3}>3 Years (Recommended · {fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 3)} FAN)</option>
+                      <option value={4}>4 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 4)} FAN)</option>
+                      <option value={5}>5 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 5)} FAN)</option>
                     </select>
                   </div>
                   <p className="text-[10px] text-emerald-400 mt-1">Paid once upfront · club owes zero recurring debt</p>
@@ -1071,7 +1110,10 @@ export default function Squad() {
   const location = useLocation();
   const navigate = useNavigate();
   const { active } = useActiveClub();
+  const refresh = useRefreshOwner();
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
+  const [sheet, setSheet] = useState<SquadSheet>("first_team");
+  const [movingId, setMovingId] = useState("");
   const { getModuleView, setModuleView } = useSkin();
   const squadView = getModuleView("squad");
 
@@ -1146,6 +1188,31 @@ export default function Squad() {
       </div>
     );
   }
+
+  const players = club.squad || [];
+  const counts: Record<SquadSheet, number> = {
+    first_team: players.filter((player: any) => sheetOf(player) === "first_team").length,
+    reserve: players.filter((player: any) => sheetOf(player) === "reserve").length,
+    academy: players.filter((player: any) => sheetOf(player) === "academy").length,
+  };
+  const sheetClub = { ...club, squad: players.filter((player: any) => sheetOf(player) === sheet) };
+  const firstTeamClub = { ...club, squad: players.filter((player: any) => sheetOf(player) === "first_team") };
+  const placeOnSheet = async (player: any, target: SquadSheet) => {
+    setMovingId(String(player.id));
+    try {
+      if (target === "first_team" && sheetOf(player) === "academy") {
+        await api.post(`/owner/clubs/${club.club_id}/academy/${player.id}/promote`);
+      } else {
+        await api.post(`/owner/clubs/${club.club_id}/squad/${player.id}/sheet`, { sheet: target });
+      }
+      toast.success(`${player.name} is on the ${SHEET_LABEL[target].toLowerCase()} sheet.`);
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setMovingId("");
+    }
+  };
 
   return (
     <div data-testid="squad-page">
@@ -1238,6 +1305,26 @@ export default function Squad() {
         </div>
       )}
 
+      <div className="mb-4 flex flex-wrap gap-2" data-testid="squad-sheets" role="tablist" aria-label="Squad sheets">
+        {(["first_team", "reserve", "academy"] as SquadSheet[]).map((key) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={sheet === key}
+            data-testid={`squad-sheet-${key}`}
+            onClick={() => setSheet(key)}
+            className={`rounded-full border px-3 py-1.5 text-xs font-bold uppercase tracking-wide ${
+              sheet === key
+                ? "border-emerald-400/60 bg-emerald-500/20 text-white"
+                : "border-white/10 text-slate-300 hover:border-white/30 hover:text-white"
+            }`}
+          >
+            {SHEET_LABEL[key]} · {counts[key]}
+          </button>
+        ))}
+      </div>
+
       {/* 1. Competition Roster Registration */}
       <SquadRegistrationPanel club={club} targetPlayerId={targetPlayerId} />
 
@@ -1248,10 +1335,18 @@ export default function Squad() {
       {squadView === "cards" ? (
         <div className="mt-6 space-y-6">
           <SquadCardGridView
-            squad={club.squad || []}
+            squad={sheetClub.squad || []}
             onSelectPlayer={setSelectedPlayer}
             targetPlayerId={targetPlayerId}
           />
+          <div className="grid gap-2 sm:grid-cols-2">
+            {sheetClub.squad.map((player: any) => (
+              <div key={player.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2">
+                <span className="truncate text-sm text-white">{player.name}</span>
+                <SheetMove player={player} moving={movingId === player.id} onPlace={placeOnSheet} />
+              </div>
+            ))}
+          </div>
           <div className="grid gap-6 lg:grid-cols-12">
             <ManagerSheet club={club} />
             <HireManager club={club} />
@@ -1263,22 +1358,22 @@ export default function Squad() {
             <div className="lg:col-span-8">
               <TacticalPitch25D
                 formation={club.formation || "4-3-3"}
-                players={club.squad || []}
+                players={firstTeamClub.squad || []}
                 onSelectPlayer={setSelectedPlayer}
               />
             </div>
             <div className="lg:col-span-4">
               <HolographicPlayerCard
-                name={club.squad?.[0]?.name || "Marquee Talisman"}
-                position={club.squad?.[0]?.position || "ST"}
-                overall={Number(club.squad?.[0]?.rating || 88)}
-                potential={Number(club.squad?.[0]?.potential || 93)}
+                name={firstTeamClub.squad?.[0]?.name || "First-team sheet"}
+                position={firstTeamClub.squad?.[0]?.position || "ST"}
+                overall={Number(firstTeamClub.squad?.[0]?.rating || 0)}
+                potential={Number(firstTeamClub.squad?.[0]?.potential || 0)}
                 clubName={club.club_name}
-                priceGtx={Number(club.squad?.[0]?.value_coin || 14500)}
+                priceGtx={Number(firstTeamClub.squad?.[0]?.value_coin || 0)}
                 jerseyNumber={9}
-                badgeLabel="★ SQUAD CAPTAIN FOIL"
+                badgeLabel="FIRST TEAM"
                 actionLabel="Open Dossier →"
-                onAction={() => club.squad?.[0] && setSelectedPlayer(club.squad[0])}
+                onAction={() => firstTeamClub.squad?.[0] && setSelectedPlayer(firstTeamClub.squad[0])}
               />
             </div>
           </div>
@@ -1291,7 +1386,7 @@ export default function Squad() {
         <div className="mt-6 space-y-6">
           <div className="grid gap-6 lg:grid-cols-12">
             <ManagerSheet club={club} />
-            <SquadTable club={club} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} />
+            <SquadTable club={sheetClub} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} onPlace={placeOnSheet} movingId={movingId} />
             <HireManager club={club} />
           </div>
         </div>

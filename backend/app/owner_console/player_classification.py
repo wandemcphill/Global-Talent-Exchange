@@ -15,7 +15,9 @@ from app.owner_console.models import OwnerSquadPlayer
 logger = logging.getLogger(__name__)
 
 LEGEND_TIERS = {"legend", "icon", "hero", "prime", "legendary"}
-RESTRICTED_GSI_THRESHOLD = 80
+# Welcome-grant signings are active players at GSI 74 and under.
+# 75 and above, regens, and legends need topped-up GTX.
+RESTRICTED_GSI_THRESHOLD = 75
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,8 +42,8 @@ def classify_player_for_acquisition(
     """Authoritatively classify a player for club squad acquisition funding rules.
 
     Rules:
-    - Real players, GSI <= 79: Eligible (Promotional or paid GTEX Coin).
-    - Real players, GSI >= 80: Restricted (Deposited GTEX Coin ONLY).
+    - Real active players, GSI <= 74: Eligible for the welcome squad grant.
+    - Real players, GSI >= 75: Restricted (topped-up GTEX Coin only).
     - Regens (any GSI): Restricted (Deposited GTEX Coin ONLY).
     - Legends (any GSI): Restricted (Deposited GTEX Coin ONLY).
 
@@ -104,7 +106,7 @@ def classify_player_for_acquisition(
                 is_restricted=is_restr,
                 requires_deposited_funds=is_restr,
                 rejection_reason=(
-                    f"Real players with GSI 80+ ({osp.rating}) require deposited GTEX Coin. The founding squad grant cannot be used."
+                    f"Real players with GSI 75+ ({osp.rating}) require deposited GTEX Coin. The founding squad grant cannot be used."
                     if is_restr
                     else None
                 ),
@@ -280,7 +282,7 @@ def classify_player_for_acquisition(
         is_restricted=is_restricted,
         requires_deposited_funds=is_restricted,
         rejection_reason=(
-            f"Real players with GSI 80+ ({cur_gsi}) require deposited GTEX Coin. The founding squad grant cannot be used."
+            f"Real players with GSI 75+ ({cur_gsi}) require deposited GTEX Coin. The founding squad grant cannot be used."
             if is_restricted
             else None
         ),

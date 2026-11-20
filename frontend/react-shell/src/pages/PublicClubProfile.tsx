@@ -479,6 +479,9 @@ export default function PublicClubProfile() {
                     <MapPin size={15} className="text-emerald-400" /> {location}
                   </span>
                 )}
+                <span className="inline-flex items-center gap-1.5" data-testid="public-club-division">
+                  <ShieldCheck size={15} className="text-emerald-400" /> {club.division_name || "Foundation"}
+                </span>
                 {club.founded_year && (
                   <span className="inline-flex items-center gap-1.5">
                     <CalendarDays size={15} className="text-amber-400" /> Founded {club.founded_year}

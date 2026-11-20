@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import * as THREE from "three";
@@ -20,7 +20,8 @@ import {
 import { api, errMsg } from "@/lib/api";
 import { disposeScene } from "@/lib/3d/disposeScene";
 import { useAuth } from "@/lib/auth";
-import { useMyClubs } from "@/lib/owner";
+import { useActiveClub, useMyClubs } from "@/lib/owner";
+import { crestDataUri } from "./clubIdentityDefaults";
 import { Btn, Chip, Loading, Panel } from "@/components/gtex/ui";
 
 const BADGE_SHAPES = ["shield", "round", "diamond", "pennant"] as const;
@@ -35,9 +36,13 @@ export default function ClubIdentityStudio() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [params] = useSearchParams();
+  const { clubId: routeClubId } = useParams<{ clubId?: string }>();
+  const { active } = useActiveClub();
   const { data: myClubs, isLoading: loadingClubs } = useMyClubs();
+  const [savedBadgeUrl, setSavedBadgeUrl] = useState<string | null>(null);
+  const [loadedBadgeKey, setLoadedBadgeKey] = useState("");
 
-  const selectedClubId = params.get("club") || myClubs?.[0]?.id || myClubs?.[0]?.club_id || "";
+  const selectedClubId = routeClubId || params.get("club") || active?.club_id || myClubs?.[0]?.id || myClubs?.[0]?.club_id || "";
 
   // Fetch current club identity
   const { data: identityData, isLoading: loadingIdentity, refetch } = useQuery({
@@ -125,6 +130,17 @@ export default function ClubIdentityStudio() {
         if (b.primary_color) setCrestPrimaryColor(b.primary_color);
         if (b.secondary_color) setCrestSecondaryColor(b.secondary_color);
         if (b.accent_color) setCrestAccentColor(b.accent_color);
+        setSavedBadgeUrl(b.badge_url || null);
+        setLoadedBadgeKey(
+          JSON.stringify({
+            shape: b.shape || "shield",
+            icon: b.icon_family || "lion",
+            initials: String(b.initials || "FC").toUpperCase(),
+            primary: b.primary_color || "#1E3A8A",
+            secondary: b.secondary_color || "#FFFFFF",
+            accent: b.accent_color || "#F59E0B",
+          }),
+        );
       }
       if (identityData.jersey_set) {
         setKits((prev) => ({
@@ -339,6 +355,25 @@ export default function ClubIdentityStudio() {
     setBusySaving(true);
     try {
       // 1. Update Identity & Badge
+      const badgeKey = JSON.stringify({
+        shape: crestShape,
+        icon: crestIcon,
+        initials: crestInitials.toUpperCase(),
+        primary: crestPrimaryColor,
+        secondary: crestSecondaryColor,
+        accent: crestAccentColor,
+      });
+      const badgeUrl =
+        badgeKey === loadedBadgeKey && savedBadgeUrl
+          ? savedBadgeUrl
+          : crestDataUri({
+              shape: crestShape,
+              icon: crestIcon,
+              initials: crestInitials,
+              primary: crestPrimaryColor,
+              secondary: crestSecondaryColor,
+              accent: crestAccentColor,
+            });
       await api.patch(`/clubs/${selectedClubId}/identity`, {
         short_club_code: crestInitials.toUpperCase(),
         badge_profile: {
@@ -349,6 +384,7 @@ export default function ClubIdentityStudio() {
           primary_color: crestPrimaryColor,
           secondary_color: crestSecondaryColor,
           accent_color: crestAccentColor,
+          badge_url: badgeUrl,
         },
         color_palette: {
           palette_name: "custom",
@@ -369,6 +405,7 @@ export default function ClubIdentityStudio() {
       });
 
       await qc.invalidateQueries({ queryKey: ["club-identity", selectedClubId] });
+      await qc.invalidateQueries({ queryKey: ["cc"] });
       refetch();
       toast.success("Official Club Identity & Uniforms successfully saved and published!");
     } catch (e) {
@@ -395,6 +432,24 @@ export default function ClubIdentityStudio() {
             >
               <ArrowLeft size={16} />
             </button>
+            {(savedBadgeUrl || crestInitials) && (
+              <img
+                src={
+                  savedBadgeUrl ||
+                  crestDataUri({
+                    shape: crestShape,
+                    icon: crestIcon,
+                    initials: crestInitials,
+                    primary: crestPrimaryColor,
+                    secondary: crestSecondaryColor,
+                    accent: crestAccentColor,
+                  })
+                }
+                alt=""
+                className="h-14 w-12 object-contain"
+                data-testid="studio-crest"
+              />
+            )}
             <div>
               <p className="gx-eyebrow text-emerald-400">GTEX AI Club Identity Studio</p>
               <h1 className="text-xl font-bold uppercase tracking-wider text-white">

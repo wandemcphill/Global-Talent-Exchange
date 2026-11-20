@@ -205,6 +205,28 @@ def _division_level_str(level_int: int) -> str:
     return "foundation" if lvl >= 4 else f"division_{lvl}"
 
 
+def division_name(raw: Any) -> str:
+    """Owner-facing division. A new club is Foundation. Money does not choose it."""
+    key = str(raw or "foundation").strip().lower()
+    labels = {
+        "foundation": "Foundation",
+        "division_4": "Foundation",
+        "fourth": "Foundation",
+        "4": "Foundation",
+        "division_1": "1st division",
+        "1": "1st division",
+        "first": "1st division",
+        "premier": "1st division",
+        "division_2": "2nd division",
+        "2": "2nd division",
+        "second": "2nd division",
+        "division_3": "3rd division",
+        "3": "3rd division",
+        "third": "3rd division",
+    }
+    return labels.get(key, "Foundation" if _division_level_int(raw) >= 4 else f"Division {_division_level_int(raw)}")
+
+
 def _season_number_for_state(state: OwnerClubState | None) -> int:
     if state is None:
         return 1

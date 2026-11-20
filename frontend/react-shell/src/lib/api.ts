@@ -87,7 +87,7 @@ const READABLE: Record<string, string> = {
   withdrawal_not_eligible: "This withdrawal does not pass the payout eligibility checks.",
   related_party_transfer_blocked: "Related-party transfer blocked by integrity rules.",
   sign_starting_squad_first: "Sign a starting squad (22 players incl. a goalkeeper) first.",
-  restricted_player_requires_deposited_funds: "Restricted players (GSI 80+, Regens, Legends) require deposited GTEX Coin. Promotional launch credit cannot be used.",
+  restricted_player_requires_deposited_funds: "Players at GSI 75 or above, regens, and legends need topped-up GTX. The 2,500 welcome grant only buys active players at GSI 74 and under.",
   minimum_squad_size_not_met: "Club requires at least 22 registered players with goalkeeper coverage.",
 };
 

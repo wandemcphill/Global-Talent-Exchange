@@ -473,7 +473,8 @@ def evaluate_staff_contract_offer(
     """
     meta = dict(candidate_profile.metadata_json or {})
     min_prestige = _safe_int(meta.get("min_prestige"), 15)
-    expected_salary = candidate_profile.salary_minor // 100 if candidate_profile.salary_minor else 600
+    raw_expected = candidate_profile.salary_minor // 100 if candidate_profile.salary_minor else 600
+    expected_salary = max(1, int(raw_expected) * 35 // 100)
     salary_offer_fan_coin = int(
         offered_salary_fan_coin
         if offered_salary_fan_coin is not None
@@ -585,12 +586,15 @@ def hire_staff_from_market(
         raise service.OwnerError("staff_profile_not_found", 404, f"Staff profile {profile_id} not found.")
 
     target_role = normalise_staff_role(role or profile.staff_type)
-    expected_salary_fan_coin = profile.salary_minor // 100 if profile.salary_minor else 600
-    salary_fan_coin = int(
+    raw_expected = profile.salary_minor // 100 if profile.salary_minor else 600
+    expected_salary_fan_coin = max(1, int(raw_expected) * 35 // 100)
+    offered_value = int(
         offered_salary_fan_coin
         if offered_salary_fan_coin is not None
         else (offered_salary_gtex if offered_salary_gtex is not None else expected_salary_fan_coin)
     )
+    # A figure still on the old scale (more than double the new wage) is brought down with the 65% cut.
+    salary_fan_coin = expected_salary_fan_coin if offered_value > expected_salary_fan_coin * 2 else max(1, offered_value)
     years = max(1, min(int(contract_years or 3), 5))
 
     meta = dict(profile.metadata_json or {})

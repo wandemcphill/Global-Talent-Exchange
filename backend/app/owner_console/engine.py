@@ -836,22 +836,9 @@ def market_quote(value_eur: float | None, value_credits: float | None) -> tuple[
 
 
 def normalize_position(raw: str | None) -> str:
+    from app.players.position_roles import position_family
 
-    text = (raw or "").strip().lower()
-
-    if text in {"gk", "goalkeeper", "keeper"} or text.startswith("goal"):
-
-        return "goalkeeper"
-
-    if text in {"df", "def", "cb", "lb", "rb"} or any(k in text for k in ("back", "defend")):
-
-        return "defender"
-
-    if text in {"fw", "st", "cf", "lw", "rw"} or any(k in text for k in ("striker", "forward", "wing", "attack")):
-
-        return "forward"
-
-    return "midfielder"
+    return position_family(raw)
 
 
 def regen_value(rating: int, potential: int, age: int) -> int:
@@ -975,7 +962,69 @@ def club_strength(
     if len(healthy) < 11:
         healthy = [p for p in players if int(p.get("injured_days", 0) or 0) <= 0] or list(players)
 
-    fit = sorted(healthy, key=_manager_selection_score, reverse=True)[:11]
+    def _sheet(p: dict[str, Any]) -> str:
+        raw = str(p.get("squad_status") or "").lower()
+        if raw == "reserve":
+            return "reserve"
+        if raw in {"academy", "u21"}:
+            return "academy"
+        if raw in {"first_team", "senior"}:
+            return "first_team"
+        if p.get("is_regen") and int(p.get("age") or 24) <= 18 and int(p.get("minutes") or 0) == 0:
+            return "academy"
+        return "first_team"
+
+    def _is_gk(p: dict[str, Any]) -> bool:
+        pos = str(p.get("position") or "").lower()
+        return pos in {"gk", "goalkeeper"} or pos.startswith("goal")
+
+    by_id = {str(p.get("id") or ""): p for p in healthy}
+    filed_ids = [
+        str(pid)
+        for pid in (
+            ((facilities or {}).get("_last_manager_matchday_selection") or {}).get("starting_xi_ids") or []
+        )
+    ]
+    committed_starters = {
+        pid
+        for pid, comm in commitments.items()
+        if isinstance(comm, dict) and comm.get("matchday_role") == "starting_xi"
+    }
+    chosen: list[dict[str, Any]] = []
+    seen: set[str] = set()
+
+    def _take(player: dict[str, Any]) -> None:
+        pid = str(player.get("id") or "")
+        if not pid or pid in seen or len(chosen) >= 11:
+            return
+        chosen.append(player)
+        seen.add(pid)
+
+    for pid in filed_ids:
+        player = by_id.get(pid)
+        if player is None:
+            continue
+        if _sheet(player) == "academy" and pid not in committed_starters:
+            continue
+        _take(player)
+    pool = [p for p in healthy if _sheet(p) == "first_team"] or [p for p in healthy if _sheet(p) != "academy"]
+    ranked = sorted(pool, key=_manager_selection_score, reverse=True)
+    if not any(_is_gk(player) for player in chosen):
+        keeper = next((player for player in ranked if _is_gk(player)), None)
+        if keeper is not None:
+            chosen.insert(0, keeper)
+            seen.add(str(keeper.get("id") or ""))
+            if len(chosen) > 11:
+                dropped = chosen.pop()
+                seen.discard(str(dropped.get("id") or ""))
+    for player in ranked:
+        _take(player)
+    if len(chosen) < 11:
+        for player in sorted(healthy, key=_manager_selection_score, reverse=True):
+            if _sheet(player) == "academy":
+                continue
+            _take(player)
+    fit = chosen[:11]
     if not fit:
         return {
             "strength": 40.0,
@@ -987,7 +1036,16 @@ def club_strength(
             "avg_fitness": 75.0,
         }
     starter_ids = {p["id"] for p in fit}
-    remaining = [p for p in sorted(healthy, key=_manager_selection_score, reverse=True) if p["id"] not in starter_ids]
+
+    def _promised_bench(player: dict[str, Any]) -> bool:
+        comm = commitments.get(str(player.get("id") or ""))
+        return bool(comm and comm.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"))
+
+    remaining = [
+        p
+        for p in sorted(healthy, key=_manager_selection_score, reverse=True)
+        if p["id"] not in starter_ids and (_sheet(p) != "academy" or _promised_bench(p))
+    ]
     bench: list[dict[str, Any]] = []
     promised_sub_ids: list[str] = []
     for p in remaining:
@@ -995,6 +1053,9 @@ def club_strength(
         if comm and comm.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"):
             bench.append(p)
             promised_sub_ids.append(p["id"])
+    for p in remaining:
+        if p not in bench and _sheet(p) == "reserve" and len(bench) < 7:
+            bench.append(p)
     for p in remaining:
         if p not in bench and len(bench) < 7:
             bench.append(p)

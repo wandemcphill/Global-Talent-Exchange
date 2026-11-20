@@ -597,7 +597,7 @@ export default function Competitions() {
       <PageHeader
         eyebrow="Competitions"
         title="Where prestige is earned"
-        sub={`Entering as ${active?.club_name || "-"}. Same-owner clubs can't share a prize-sensitive bracket and are routed apart in knockouts.`}
+        sub={`Entering as ${active?.club_name || "-"} in ${active?.division_name || "Foundation"}. Entry is free. Same-owner clubs can't share a prize-sensitive bracket and are routed apart in knockouts.`}
         action={
           <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="competitions-view-toggle">
             <button
@@ -644,7 +644,9 @@ export default function Competitions() {
           )}
           <QuickMatchmakingDesk activeClub={active} />
           <Panel eyebrow="GTEX-hosted" title="Platform competitions" testid="gtex-competitions-panel">
-            {compView === "table" ? (
+            {visibleGtex.length === 0 ? (
+              <Empty title="No platform competitions are open" body="Host a competition for other clubs, or join one with an invite code. Entry is free." />
+            ) : compView === "table" ? (
               <CompetitionsTableView competitions={visibleGtex} clubId={active?.club_id} />
             ) : (
               <div className="grid gap-4 md:grid-cols-3" data-testid="competitions-cards-grid">

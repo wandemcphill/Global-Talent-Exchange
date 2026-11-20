@@ -9,7 +9,6 @@ import { fmt, label, useRefreshOwner } from "@/lib/owner";
 import { nairaText, setMoneyRates, useMoneyRates } from "@/lib/money";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CoinTraderDesk } from "@/components/gtex/CoinTraderDesk";
-import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { TelemetrySparklineCard } from "@/components/gtex/ApexWidgets";
 
 function Balances({ w, rates }: any) {
@@ -461,13 +460,10 @@ function LedgerTable({ rows }: any) {
 function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
   const [selectedClub, setSelectedClub] = useState("");
   const activeClubId = selectedClub || clubs?.[0]?.club_id || "";
-  const refresh = useRefreshOwner();
-  const [signingOfferId, setSigningOfferId] = useState<string | null>(null);
 
   const {
     data: sponsorData,
     isLoading,
-    refetch,
   } = useQuery({
     queryKey: ["sponsor-offers", activeClubId],
     queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/sponsors/offers`)).data,
@@ -503,31 +499,12 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
     enabled: Boolean(activeClubId),
   });
 
-  const handleSign = async (offer: any) => {
-    if (!activeClubId) return;
-    setSigningOfferId(offer.offer_id);
-    try {
-      const { data: r } = await api.post(`/owner/clubs/${activeClubId}/sponsors/sign`, {
-        offer_id: offer.offer_id,
-      });
-      toast.success(
-        `Signed sponsorship with ${offer.sponsor_name}! +${fmt(r.upfront_signing_bonus_gtex || offer.upfront_signing_bonus_gtex)} GTX upfront bonus credited.`,
-      );
-      await refetch();
-      refresh();
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setSigningOfferId(null);
-    }
-  };
-
   if (!activeClubId) return null;
 
   return (
     <Panel
       eyebrow="Commercial Operations · Seasonal Revenue & Stadium Ad Surfaces"
-      title="GM Sponsor Contract Negotiation & Stadium Ad Desk"
+      title="Existing sponsorship contracts"
       testid="sponsor-negotiation-desk"
       className="lg:col-span-12"
     >
@@ -572,158 +549,14 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           )}
         </div>
         <p className="text-xs text-slate-400">
-          Seasonal sponsorship packages negotiated by your General Manager + live stadium surface ad
-          placements.
+          Sponsor offers are closed for club owners. Existing contracts stay on the books. New commercial packages are not sold here.
         </p>
       </div>
 
-      {sponsorData?.offers?.length > 0 && (
-        <div className="my-4 grid gap-4 lg:grid-cols-2">
-          <GtexSceneViewport
-            sceneId="new_ad_deal"
-            compact
-            title={`3D New Sponsor Deal Unveil · ${sponsorData.offers[0]?.sponsor_name || "Global Partner"}`}
-            subtitle={`Executive Handshake & #10 Shirt Launch · Negotiated by ${sponsorData.gm_name || "General Manager"}`}
-            badgeText="3D NEW AD DEAL"
-            clubName={clubs?.find((c: any) => c.club_id === activeClubId)?.club_name || "GTEX FC"}
-            subjectName={sponsorData.offers[0]?.sponsor_name || "FRONT-OF-SHIRT PARTNER"}
-            subjectRole={`Upfront Signing Check: +${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`}
-            sponsorName={sponsorData.offers[0]?.sponsor_name || "GTEX GLOBAL AIRWAYS"}
-            jerseyNumber={10}
-            overallRating={90}
-            stats={[
-              {
-                label: "Upfront Bonus",
-                value: `+${fmt(sponsorData.offers[0]?.upfront_signing_bonus_gtex || 0)} GTX`,
-                accent: "#F5B83D",
-              },
-              {
-                label: "Win Clause",
-                value: `+${fmt(sponsorData.offers[0]?.win_bonus_gtex || 0)} GTX`,
-                accent: "#00E676",
-              },
-            ]}
-          />
-          <GtexSceneViewport
-            sceneId="stadium_ad_display"
-            compact
-            title="3D In-Stadium Ad Surfaces & LED Perimeter Bowl"
-            subtitle="4 Active Zones: Roof Naming Halo · Pitchside 360° LED · Jumbotron · Center-Circle Carpet"
-            badgeText="3D AD DISPLAYS"
-            clubName={clubs?.find((c: any) => c.club_id === activeClubId)?.club_name || "GTEX FC"}
-            subjectName="360° Pitchside LED & Roof Naming Halo"
-            adSurfaceZone="Pitchside LED + Jumbotron + Roof Halo"
-            sponsorName={sponsorData.offers[0]?.sponsor_name || "GTEX GLOBAL AIRWAYS"}
-            facilityLevel={4}
-            stats={[
-              { label: "Ad Surfaces", value: "4 LIVE ZONES", accent: "#38BDF8" },
-              {
-                label: "Per Match Ad",
-                value: `+${fmt(sponsorData.offers[0]?.per_match_gross_gtex || 0)} GTX`,
-                accent: "#00E676",
-              },
-            ]}
-          />
-        </div>
-      )}
       {isLoading || !sponsorData ? (
-        <Loading label="GM negotiating seasonal sponsor contracts" />
+        <Loading label="Loading sponsorship contracts" />
       ) : (
         <div className="mt-4 space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
-            {(sponsorData.offers || []).map((offer: any) => {
-              const isLocked = Boolean(offer.locked);
-              const isSigning = signingOfferId === offer.offer_id;
-              return (
-                <div
-                  key={offer.offer_id}
-                  data-testid={`sponsor-offer-card-${offer.offer_id}`}
-                  className={`flex flex-col justify-between rounded-xl border p-4.5 transition ${
-                    isLocked
-                      ? "border-white/5 bg-slate-950/40 opacity-70"
-                      : "border-sky-500/20 bg-gradient-to-b from-[#0b1a33]/60 via-[#0a1428]/40 to-black/60 hover:border-sky-400/50"
-                  }`}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <h4 className="text-sm font-bold text-white">{offer.sponsor_name}</h4>
-                        <p className="text-xs text-sky-300 font-semibold mt-0.5">{offer.slot}</p>
-                      </div>
-                      <Chip tone={isLocked ? "red" : "gold"}>
-                        {offer.strategy_profile?.replace(/_/g, " ")}
-                      </Chip>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2 rounded-lg border border-white/5 bg-black/40 p-2.5 text-xs">
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Upfront Bonus
-                        </span>
-                        <span className="gx-mono text-xs font-black text-emerald-400">
-                          +{fmt(offer.upfront_signing_bonus_gtex)} GTX
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Per Match Payout
-                        </span>
-                        <span className="gx-mono text-xs font-black text-cyan-300">
-                          {fmt(offer.per_match_gross_gtex)} GTX
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Win-Bonus Clause
-                        </span>
-                        <span className="gx-mono text-xs font-black text-amber-300">
-                          +{fmt(offer.win_bonus_clause_gtex)} GTX
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                          Duration / Gate
-                        </span>
-                        <span className="gx-mono text-xs text-slate-300">
-                          {offer.matches_duration} matches · P{offer.min_prestige_required}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="rounded-md border border-white/5 bg-slate-900/50 p-2.5 text-[11px] text-slate-300 leading-relaxed italic">
-                      <span className="font-semibold not-italic text-amber-300 block mb-0.5">
-                        GM Recommendation:
-                      </span>
-                      "{offer.gm_recommendation}"
-                    </div>
-                  </div>
-
-                  <div className="mt-4 pt-3 border-t border-white/10">
-                    {isLocked ? (
-                      <button
-                        type="button"
-                        disabled
-                        className="gx-btn w-full opacity-60 cursor-not-allowed text-xs text-rose-300 border-rose-500/30"
-                      >
-                        Locked · Requires Prestige {offer.min_prestige_required}
-                      </button>
-                    ) : (
-                      <Btn
-                        variant="primary"
-                        className="w-full text-xs"
-                        disabled={Boolean(signingOfferId)}
-                        onClick={() => handleSign(offer)}
-                        data-testid={`sign-sponsor-${offer.offer_id}`}
-                      >
-                        {isSigning ? "Signing Contract…" : "Sign Sponsor Deal"}
-                      </Btn>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
           {sponsorData.active_deals && sponsorData.active_deals.length > 0 && (
             <div className="rounded-xl border border-white/10 bg-black/30 p-4">
               <h5 className="text-xs font-bold uppercase tracking-wider text-slate-300 mb-2.5">
@@ -763,38 +596,13 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
                 <Megaphone size={14} /> Canonical Stadium Surface Ad Placements
                 (/sponsorship/placements)
               </span>
-              <Chip tone="cyan">{stadiumPlacements?.length || 4} Active Stadium Surfaces</Chip>
+              <Chip tone="cyan">{stadiumPlacements?.length || 0} booked surfaces</Chip>
             </div>
+            {!(stadiumPlacements && stadiumPlacements.length > 0) ? (
+              <p className="text-xs text-slate-400">No stadium surfaces are booked.</p>
+            ) : null}
             <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 text-xs">
-              {(stadiumPlacements && stadiumPlacements.length > 0
-                ? stadiumPlacements
-                : [
-                    {
-                      surface: "perimeter_led",
-                      sponsor_name: sponsorData.active_deals?.[0]?.sponsor_name || "GTEX Exchange",
-                      campaign_code: "LED-MAIN",
-                      source: "club_contract",
-                    },
-                    {
-                      surface: "tunnel_arch",
-                      sponsor_name: "Paystack Pro",
-                      campaign_code: "TUNNEL-VIP",
-                      source: "platform_network",
-                    },
-                    {
-                      surface: "scoreboard_ribbon",
-                      sponsor_name: "Starlight Air",
-                      campaign_code: "RIBBON-HD",
-                      source: "broadcast_pool",
-                    },
-                    {
-                      surface: "press_backdrop",
-                      sponsor_name: "Kora Emerald",
-                      campaign_code: "MEDIA-WALL",
-                      source: "club_contract",
-                    },
-                  ]
-              ).map((pl: any, idx: number) => (
+              {(stadiumPlacements || []).map((pl: any, idx: number) => (
                 <div
                   key={`${pl.surface}-${idx}`}
                   className="rounded-lg border border-white/10 bg-black/40 p-2.5"

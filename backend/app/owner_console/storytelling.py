@@ -406,10 +406,25 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
     # 1. Delegate to RegenPortraitService when a canonical Player / player_ref exists
     if session is not None and seed_key:
         try:
+            from sqlalchemy import text
+
             from app.ingestion.models import Player
             from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
 
-            canonical_player = session.get(Player, seed_key)
+            bind = session.get_bind()
+            players_ready = False
+            if bind is not None and bind.dialect.name == "sqlite":
+                players_ready = (
+                    session.execute(
+                        text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ingestion_players'")
+                    ).first()
+                    is not None
+                )
+            elif bind is not None:
+                from sqlalchemy import inspect
+
+                players_ready = inspect(bind).has_table("ingestion_players")
+            canonical_player = session.get(Player, seed_key) if players_ready else None
             if canonical_player is not None:
                 try:
                     portrait_result = RegenPortraitService(session).ensure_player_portrait(canonical_player)
@@ -1987,8 +2002,8 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                         else "Away Club"
                     ),
                     "status": m.status,
-                    "home_goals": m.home_score,
-                    "away_goals": m.away_score,
+                    "home_goals": m.home_goals,
+                    "away_goals": m.away_goals,
                 }
                 (upcoming if m.status == "scheduled" else recent).append(m_card)
 
@@ -2035,11 +2050,17 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
             }
         )
 
+    def _goals(value: Any) -> int:
+        try:
+            return int(value or 0)
+        except (TypeError, ValueError):
+            return 0
+
     wins = sum(
         1
         for m in recent
-        if (m["home_club_id"] == club_id and m["home_goals"] > m["away_goals"])
-        or (m["away_club_id"] == club_id and m["away_goals"] > m["home_goals"])
+        if (m["home_club_id"] == club_id and _goals(m.get("home_goals")) > _goals(m.get("away_goals")))
+        or (m["away_club_id"] == club_id and _goals(m.get("away_goals")) > _goals(m.get("home_goals")))
     )
     total_played = len(recent)
     win_rate = int((wins / total_played) * 100) if total_played > 0 else 0
@@ -2079,14 +2100,20 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
     from app.owner_console import living_institution
 
-    supporters_data = living_institution.get_supporters_overview(session, state)
-    media_data = living_institution.get_media_ecosystem_overview(session, state, limit=30)
-    archive_data = living_institution.get_institutional_history_archive(
-        session,
-        state,
-        limit=80,
-        include_internal=can_private,
-    )
+    try:
+        supporters_data = living_institution.get_supporters_overview(session, state)
+        media_data = living_institution.get_media_ecosystem_overview(session, state, limit=30)
+        archive_data = living_institution.get_institutional_history_archive(
+            session,
+            state,
+            limit=80,
+            include_internal=can_private,
+        )
+    except Exception:
+        logger.exception("club story institution overlay failed for %s", club_id)
+        supporters_data = {}
+        media_data = {}
+        archive_data = {"timeline": []}
 
     # Merge permanent institutional history entries into timeline
     seen_ids = {t.get("id") for t in timeline}
@@ -2106,11 +2133,15 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
                 }
             )
 
-    unified_pulse = living_institution.get_unified_club_pulse(
-        session,
-        state,
-        include_internal=can_private,
-    )
+    try:
+        unified_pulse = living_institution.get_unified_club_pulse(
+            session,
+            state,
+            include_internal=can_private,
+        )
+    except Exception:
+        logger.exception("club story pulse failed for %s", club_id)
+        unified_pulse = {}
 
     return {
         "club": {

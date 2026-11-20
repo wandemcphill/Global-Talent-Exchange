@@ -19,6 +19,7 @@ class SquadTiersView(BaseModel):
     first_team: list[SquadTierMemberView] = Field(default_factory=list)
     u21: list[SquadTierMemberView] = Field(default_factory=list)
     reserve: list[SquadTierMemberView] = Field(default_factory=list)
+    academy: list[SquadTierMemberView] = Field(default_factory=list)
     total: int = 0
 
 
@@ -29,4 +30,4 @@ class AcademyIntakeView(BaseModel):
 
 
 class AssignTierRequest(BaseModel):
-    tier: str = Field(description="first_team | u21 | reserve")
+    tier: str = Field(description="first_team | u21 | reserve | academy")

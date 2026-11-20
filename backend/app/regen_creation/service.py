@@ -308,7 +308,7 @@ class RegenCreationService:
         assert self.settings is not None
         config = self.settings.regen_generation
         base = self._normalize_amount(config.owner_son_paid_request_base_cost)
-        name_cost = self._normalize_amount(config.owner_son_paid_request_name_cost if payload.requested_name else 0)
+        name_cost = self._normalize_amount(0)
         custom_requested = bool(
             payload.requested_country_code
             or payload.requested_position
@@ -338,7 +338,7 @@ class RegenCreationService:
         config = self.settings.regen_generation
         return RegenCreationPricingView(
             base_cost_coin=self._normalize_amount(config.owner_son_paid_request_base_cost),
-            name_cost_coin=self._normalize_amount(config.owner_son_paid_request_name_cost),
+            name_cost_coin=self._normalize_amount(0),
             customization_cost_coin=self._normalize_amount(config.owner_son_paid_request_customization_cost),
         )
 
@@ -901,7 +901,7 @@ class RegenCreationService:
                 regen_id=regen.id,
                 club_id=club.id,
                 onboarding_type="requested_son",
-                squad_bucket="academy",
+                squad_bucket="reserve",
                 squad_slot=None,
                 is_non_tradable=False,
                 replacement_only=False,
@@ -933,9 +933,56 @@ class RegenCreationService:
             tier="reserve",
             source="son",
         )
+        self._seat_son_on_owner_reserve(club, player, generated_regen)
 
         self.session.flush()
         return player, regen
+
+    def _seat_son_on_owner_reserve(self, club: ClubProfile, player: Player, generated_regen: Any) -> None:
+        """Put a named son on the owner reserve sheet when this club has an owner record."""
+        from app.owner_console.models import OwnerClubState, OwnerSquadPlayer
+
+        state = self.session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club.id))
+        if state is None:
+            return
+        existing = self.session.scalar(
+            select(OwnerSquadPlayer).where(
+                OwnerSquadPlayer.club_id == club.id,
+                OwnerSquadPlayer.player_ref == player.id,
+            )
+        )
+        born = player.date_of_birth
+        age = 17
+        if born is not None:
+            today = date.today()
+            age = today.year - born.year - ((today.month, today.day) < (born.month, born.day))
+            age = max(15, age)
+        rating = int(getattr(generated_regen, "current_gsi", 60) or 60)
+        potential_range = getattr(generated_regen, "potential_range", None)
+        potential = int(getattr(potential_range, "maximum", rating) or rating)
+        position = str(getattr(generated_regen, "primary_position", None) or player.normalized_position or "midfielder")
+        if existing is not None:
+            pers = dict(existing.personality_json or {})
+            pers["squad_status"] = "reserve"
+            existing.personality_json = pers
+            existing.name = player.full_name
+            return
+        self.session.add(
+            OwnerSquadPlayer(
+                club_id=club.id,
+                player_ref=player.id,
+                name=player.full_name,
+                position=position[:32],
+                age=age,
+                rating=rating,
+                potential=potential,
+                value_coin=Decimal("0"),
+                morale=75,
+                is_regen=True,
+                personality_json={"squad_status": "reserve"},
+                acquired_via="son",
+            )
+        )
 
     def _owner_customization(self, order: RegenCreationOrder) -> dict[str, object]:
         customization: dict[str, object] = {}

@@ -8,6 +8,16 @@ import { clubStaffMarketCandidatesEndpoint } from "@/lib/ownerBriefing";
 import { Btn, Empty, Loading, PageHeader } from "@/components/gtex/ui";
 import { coinWithNaira } from "@/lib/money";
 
+function annualFanCoin(candidate: any): number {
+  const listed = Number(candidate?.expected_salary_fan_coin || candidate?.expected_salary_gtex || 0);
+  return Math.max(1, Math.floor(listed * 0.35));
+}
+
+function upfrontFanCoin(annual: number, years: number): number {
+  const span = Math.max(1, Math.min(Number(years) || 3, 5));
+  return span === 3 ? Math.max(annual, Math.floor(annual * 1.5)) : annual * span;
+}
+
 const ROLES = [
   { id: "all", label: "All staff" },
   { id: "first_team_manager", label: "First-team manager" },
@@ -58,7 +68,7 @@ export default function StaffMarket() {
       await api.post(`/owner/clubs/${clubId}/living-world/staff-market/offers`, {
         profile_id: candidate.profile_id,
         role: candidate.role_key,
-        offered_salary_fan_coin: Number(salary || candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 600),
+        offered_salary_fan_coin: Number(salary || annualFanCoin(candidate)),
         contract_years: Number(years || 3),
       });
       toast.success(`Offer sent to ${candidate.name}.`);
@@ -139,10 +149,14 @@ export default function StaffMarket() {
                   {candidate.preferred_formation ? ` · ${candidate.preferred_formation}` : ""}
                   {" · "}rating {candidate.rating} · {candidate.style} · {candidate.temperament}
                 </p>
-                <p className="mt-1 text-sm text-amber-200">Expected wage {coinWithNaira(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 0, "FAN")} / year</p>
+                <p className="mt-1 text-sm text-amber-200">
+                  {coinWithNaira(annualFanCoin(candidate), "FAN")} Fan Coin / year
+                  {" · "}
+                  upfront {coinWithNaira(upfrontFanCoin(annualFanCoin(candidate), Number(years || 3)), "FAN")} Fan Coin
+                </p>
                 </div>
               </div>
-              <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || "")); }}>
+              <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(annualFanCoin(candidate))); }}>
                 Hire
               </Btn>
             </div>

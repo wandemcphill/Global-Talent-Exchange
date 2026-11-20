@@ -3,8 +3,6 @@ import { useNavigate, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
-import { clubCreateErrorMessage } from "./clubLocationCatalog";
-import { ClubLocationFields, clubLocationPayload, useClubLocation } from "@/components/gtex/ClubLocationFields";
 import {
   fmt,
   label,
@@ -1604,66 +1602,17 @@ function Commercial({ club }: any) {
 // ============================================================================
 function NewClub({ count, max }: any) {
   const navigate = useNavigate();
-  const [name, setName] = useState("");
-  const loc = useClubLocation();
-  const [busy, setBusy] = useState(false);
   if (count >= max) return null;
-  const location = loc.validation;
-  const clubName = name.trim();
-
-  const create = async () => {
-    if (clubName.length < 3) {
-      toast.error("Enter a club name with at least 3 characters.");
-      return;
-    }
-    const validatedLocation = loc.validation;
-    if ("error" in validatedLocation) {
-      toast.error(validatedLocation.error);
-      return;
-    }
-    setBusy(true);
-    try {
-      const slug = `${clubName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
-      await api.post("/clubs", {
-        club_name: clubName,
-        slug,
-        short_name: clubName.slice(0, 12),
-        primary_color: "#0F766E",
-        secondary_color: "#F8FAFC",
-        accent_color: "#F59E0B",
-        ...clubLocationPayload(validatedLocation),
-        club_type: "community",
-      });
-      navigate("/onboarding");
-    } catch (e) {
-      toast.error(clubCreateErrorMessage(e, errMsg));
-    } finally {
-      setBusy(false);
-    }
-  };
 
   return (
     <Panel eyebrow={`Expand · ${count}/${max} clubs`} title="Add a Sister Club" testid="new-club-panel">
       <p className="mb-3 text-sm text-slate-400">
-        Owning several clubs establishes a registered multi-club ownership group. Sister clubs cannot share a prize bracket,
-        and transfers between them must sit inside a verified fair-value band.
+        A sister club uses the same crest and kit library as the first club, then the same activation steps.
+        It starts in Foundation. Sister clubs cannot share a prize bracket, and transfers between them must sit inside a verified fair-value band. Entry is free.
       </p>
-      <div className="space-y-2">
-        <input
-          data-testid="new-club-name-input"
-          aria-label="Club name"
-          className="gx-input"
-          placeholder="Club name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-        <div>
-          <ClubLocationFields state={loc} testIdPrefix="new-club" disabled={busy} />
-        </div>
-        <Btn disabled={clubName.length < 3 || !location.valid || busy} onClick={create} data-testid="create-club-button">
-          Create
-        </Btn>
-      </div>
+      <Btn onClick={() => navigate("/onboarding?create=1")} data-testid="create-club-button">
+        Design a sister club
+      </Btn>
     </Panel>
   );
 }

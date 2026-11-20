@@ -380,28 +380,32 @@ def test_trader_and_creator_accounts_denied_first_club_grant(client, auth_user_f
 # =========================================================================
 
 
-def test_real_player_gsi_79_purchasable_with_promotional_credit(client, auth_user_factory, app_session_factory):
-    """Test 12: Ordinary real player with GSI 79 is eligible and purchasable using promotional credit."""
-    user = auth_user_factory(suffix="p-gsi-79")
+def test_real_player_gsi_74_uses_grant_and_75_needs_topup(client, auth_user_factory, app_session_factory):
+    """Welcome grant buys active players at GSI 74. GSI 75 needs topped-up GTX."""
+    user = auth_user_factory(suffix="p-gsi-74")
     claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
     assert claimed.status_code == 200, claimed.text
     club_id = claimed.json()["club_id"]
 
     with app_session_factory() as session:
-        player_79 = _create_player(session, name="Player SeventyNine", overall=79, is_real=True)
-        # Classify authoritative
-        classification = classify_player_for_acquisition(session, player_79)
+        player_74 = _create_player(session, name="Player SeventyFour", overall=74, is_real=True)
+        classification = classify_player_for_acquisition(session, player_74)
         assert classification.is_eligible_for_promotional is True
         assert classification.requires_deposited_funds is False
 
-        # Sign player into squad
-        signed = service.sign_market_player(session, user["user_id"], club_id, player_79.id)
+        signed = service.sign_market_player(session, user["user_id"], club_id, player_74.id)
         assert signed is not None
-        assert signed.player_ref == player_79.id
+        assert signed.player_ref == player_74.id
 
-        # Promotional credit was consumed
         funding = ledger.get_club_funding(session, club_id)
         assert funding["available_squad_grant"] < Decimal("2500")
+
+        player_75 = _create_player(session, name="Player SeventyFive", overall=75, is_real=True)
+        restricted = classify_player_for_acquisition(session, player_75)
+        assert restricted.requires_deposited_funds is True
+        with pytest.raises(OwnerError) as exc_info:
+            service.sign_market_player(session, user["user_id"], club_id, player_75.id)
+        assert exc_info.value.code == "restricted_player_requires_deposited_funds"
 
 
 def test_real_player_gsi_80_rejected_with_promotional_credit(client, auth_user_factory, app_session_factory):

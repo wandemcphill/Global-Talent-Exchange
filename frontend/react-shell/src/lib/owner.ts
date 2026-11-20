@@ -38,13 +38,27 @@ export function useMyClubs() {
   };
 }
 
+function clubIdFromAddress(): string | null {
+  if (typeof window === "undefined") return null;
+  const path = window.location.pathname || "";
+  const fromPath = path.match(/\/app\/clubs\/([^/]+)/);
+  if (fromPath?.[1]) return decodeURIComponent(fromPath[1]);
+  const params = new URLSearchParams(window.location.search || "");
+  return params.get("club_id") || params.get("club");
+}
+
 export function useActiveClub() {
   const { data } = useControlCenter();
   const [stored, setStored] = useState<string | null>(() => localStorage.getItem("gtex_active_club"));
   const clubs: any[] = data?.clubs || [];
-  const active = clubs.find((c) => c.club_id === stored) || clubs[0] || null;
+  const addressed = clubIdFromAddress();
+  const addressedClub = addressed ? clubs.find((club) => club.club_id === addressed) : null;
+  const active = addressedClub || clubs.find((c) => c.club_id === stored) || clubs[0] || null;
   useEffect(() => {
-    if (active && active.club_id !== stored) localStorage.setItem("gtex_active_club", active.club_id);
+    if (active && active.club_id !== stored) {
+      localStorage.setItem("gtex_active_club", active.club_id);
+      setStored(active.club_id);
+    }
   }, [active, stored]);
   const select = (id: string) => {
     localStorage.setItem("gtex_active_club", id);
