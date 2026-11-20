@@ -3073,6 +3073,19 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     supporters_overview = living_institution.get_supporters_overview(session, state)
     media_overview = living_institution.get_media_ecosystem_overview(session, state, limit=12)
     institutional_pulse = living_institution.get_unified_club_pulse(session, state)
+    players = [player_dict(p, session) for p in squad(session, club_id)]
+    selection = facilities.get("_last_manager_matchday_selection") or {}
+    filed_ids = (
+        [str(pid) for pid in (selection.get("starting_xi_ids") or [])]
+        if isinstance(selection, dict)
+        else []
+    )
+    by_id = {str(player["id"]): player for player in players}
+    matchday_xi = [
+        {"id": pid, "name": by_id[pid]["name"], "position": by_id[pid].get("position")}
+        for pid in filed_ids
+        if pid in by_id
+    ]
     return {
         **club_card(session, state),
         "manager_profile": state.manager_json,
@@ -3088,7 +3101,8 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             }
             for k in engine.FACILITY_KINDS
         },
-        "squad": [player_dict(p, session) for p in squad(session, club_id)],
+        "squad": players,
+        "matchday_xi": matchday_xi,
         "formation": get_club_formation_status(session, club_id),
         "health": club_health(session, state),
         "economy": ledger.club_economy(session, club_id),
@@ -3352,10 +3366,7 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
     }
     for r_key, st_val in list(appointed.items()):
         if isinstance(st_val, dict):
-            ag, tr = agenda_by_role.get(r_key, ("Elevate Club Standards", "Boardroom Strategist"))
             st_copy = dict(st_val)
-            st_copy.setdefault("personal_agenda", ag)
-            st_copy.setdefault("secret_trait", tr)
             st_copy.setdefault(
                 "poaching_risk",
                 (

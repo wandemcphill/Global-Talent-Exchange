@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import {
   ArrowRight,
   CheckCircle2,
@@ -38,6 +38,30 @@ import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
 
 type SquadSheet = "first_team" | "reserve" | "academy";
+
+function staffWageLabel(staff: any): string {
+  let fan = 0;
+  let gtx = 0;
+  if (staff && typeof staff === "object") {
+    for (const person of Object.values(staff) as any[]) {
+      if (!person || typeof person !== "object") continue;
+      const hasFanWage = person.salary_fan_coin != null || person.salary_fancoin != null;
+      if (hasFanWage) {
+        const fanWage = Number(person.salary_fan_coin ?? person.salary_fancoin);
+        if (Number.isFinite(fanWage)) fan += fanWage;
+        continue;
+      }
+      const gtxWage = Number(person.salary_gtx ?? person.salary_gtex);
+      if (Number.isFinite(gtxWage) && (person.salary_gtx != null || person.salary_gtex != null)) {
+        gtx += gtxWage;
+      }
+    }
+  }
+  const parts = [];
+  if (gtx) parts.push(`${fmt(gtx)} GTX founding salaries`);
+  if (fan) parts.push(`${fmt(fan)} Fan Coin / year`);
+  return parts.length ? parts.join(" · ") : "No staff wages on the book";
+}
 
 const SHEET_LABEL: Record<SquadSheet, string> = {
   first_team: "First team",
@@ -1344,7 +1368,15 @@ export default function Squad() {
   const { active } = useActiveClub();
   const refresh = useRefreshOwner();
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
-  const [sheet, setSheet] = useState<SquadSheet>("first_team");
+  const requestedSheet = new URLSearchParams(location.search).get("sheet");
+  const [sheet, setSheet] = useState<SquadSheet>(
+    requestedSheet === "reserve" || requestedSheet === "academy" ? requestedSheet : "first_team",
+  );
+  useEffect(() => {
+    if (requestedSheet === "reserve" || requestedSheet === "academy" || requestedSheet === "first_team") {
+      setSheet(requestedSheet);
+    }
+  }, [requestedSheet]);
   const [movingId, setMovingId] = useState("");
   const { getModuleView, setModuleView } = useSkin();
   const squadView = getModuleView("squad");
@@ -1452,9 +1484,8 @@ export default function Squad() {
           club.club_name +
           " · " +
           club.squad.length +
-          " registered players · Wage bill " +
-          fmt(club.wage_bill) +
-          " GTX / match"
+          " registered players · " +
+          staffWageLabel(club.executive_staff)
         }
         action={
           <div className="flex flex-wrap items-center gap-2">

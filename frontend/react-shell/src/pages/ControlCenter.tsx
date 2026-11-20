@@ -431,16 +431,27 @@ export function ControlCenter() {
     },
   };
   const homeKit = clubIdentity?.jersey_set?.home;
+  const filedXi = clubDetail?.matchday_xi || [];
+  const academyReady = (clubDetail?.squad || []).filter((player: any) => {
+    const status = String(player.squad_status || "").toLowerCase();
+    return (status === "academy" || status === "u21") && Number(player.readiness_assessment?.readiness_score || 0) >= 60;
+  }).length;
+  const firstTeamPitch = (clubDetail?.squad || []).filter((player: any) => {
+    const status = String(player.squad_status || "first_team").toLowerCase();
+    return status === "first_team" || status === "senior";
+  });
+  const seat = (person: any) => Boolean(person?.name);
   const executives = [
     {
       roleKey: "first_team_manager",
       roleLabel: "First-Team Manager",
-      name: staffMap.first_team_manager?.name || "Not appointed",
-      mood: staffMap.first_team_manager?.mood ?? activeClubProfile.manager?.mood ?? 78,
-      agenda:
-        staffMap.first_team_manager?.personal_agenda ||
-        "Win silverware & enforce high-press identity",
-      secretTrait: staffMap.first_team_manager?.secret_trait || "Dressing-Room Loyalist",
+      name: staffMap.first_team_manager?.name || "Seat empty",
+      portrait: staffMap.first_team_manager?.portrait_url,
+      mood: seat(staffMap.first_team_manager) ? staffMap.first_team_manager?.mood ?? null : null,
+      agenda: seat(staffMap.first_team_manager)
+        ? staffMap.first_team_manager?.personal_agenda || "No agenda filed."
+        : "This seat is empty.",
+      secretTrait: staffMap.first_team_manager?.secret_trait || "",
       poachingRisk: staffMap.first_team_manager?.poaching_risk || "low",
       to: "/app/squad",
       tone: "emerald",
@@ -448,12 +459,13 @@ export function ControlCenter() {
     {
       roleKey: "general_manager",
       roleLabel: "General Manager (GM)",
-      name: staffMap.general_manager?.name || "Not appointed",
-      mood: staffMap.general_manager?.mood ?? 82,
-      agenda:
-        staffMap.general_manager?.personal_agenda ||
-        "Maximize sponsor yield & wage-to-turnover discipline",
-      secretTrait: staffMap.general_manager?.secret_trait || "Clause Architect",
+      name: staffMap.general_manager?.name || "Seat empty",
+      portrait: staffMap.general_manager?.portrait_url,
+      mood: seat(staffMap.general_manager) ? staffMap.general_manager?.mood ?? null : null,
+      agenda: seat(staffMap.general_manager)
+        ? staffMap.general_manager?.personal_agenda || "No agenda filed."
+        : "This seat is empty.",
+      secretTrait: staffMap.general_manager?.secret_trait || "",
       poachingRisk: staffMap.general_manager?.poaching_risk || "low",
       to: "/app/finance",
       tone: "cyan",
@@ -461,13 +473,14 @@ export function ControlCenter() {
     {
       roleKey: "head_of_youth_development",
       roleLabel: "Head of Youth Dev (HOYD)",
-      name: staffMap.head_of_youth_development?.name || "Not appointed",
-      mood: staffMap.head_of_youth_development?.mood ?? 85,
-      agenda:
-        staffMap.head_of_youth_development?.personal_agenda ||
-        "Fast-track academy wonderkids & Build-A-Son scions",
-      secretTrait: staffMap.head_of_youth_development?.secret_trait || "Bloodline Whisperer",
-      poachingRisk: staffMap.head_of_youth_development?.poaching_risk || "medium",
+      name: staffMap.head_of_youth_development?.name || "Seat empty",
+      portrait: staffMap.head_of_youth_development?.portrait_url,
+      mood: seat(staffMap.head_of_youth_development) ? staffMap.head_of_youth_development?.mood ?? null : null,
+      agenda: seat(staffMap.head_of_youth_development)
+        ? staffMap.head_of_youth_development?.personal_agenda || "No agenda filed."
+        : "This seat is empty.",
+      secretTrait: staffMap.head_of_youth_development?.secret_trait || "",
+      poachingRisk: staffMap.head_of_youth_development?.poaching_risk || "low",
       to: "/app/academy",
       tone: "amber",
     },
@@ -669,12 +682,12 @@ export function ControlCenter() {
       >
         <div className="lg:col-span-4">
           <HolographicPlayerCard
-            name={clubDetail?.squad?.[0]?.name || "Kylian Regent"}
-            position={clubDetail?.squad?.[0]?.position || "ST"}
-            overall={Number(clubDetail?.squad?.[0]?.rating || 91)}
-            potential={Number(clubDetail?.squad?.[0]?.potential || 96)}
+            name={firstTeamPitch[0]?.name || "First-team sheet"}
+            position={firstTeamPitch[0]?.position || "ST"}
+            overall={Number(firstTeamPitch[0]?.rating || 0)}
+            potential={Number(firstTeamPitch[0]?.potential || 0)}
             clubName={activeClubProfile.club_name || "GTEX FC"}
-            priceGtx={Number(clubDetail?.squad?.[0]?.market_value || 18500)}
+            priceGtx={Number(firstTeamPitch[0]?.value_coin || 0)}
             jerseyNumber={9}
             badgeLabel="★ CLUB TALISMAN FOIL"
             actionLabel="Inspect Squad →"
@@ -696,7 +709,7 @@ export function ControlCenter() {
         <div className="lg:col-span-4">
           <TacticalPitch25D
             formation={clubDetail?.formation || "4-3-3"}
-            players={clubDetail?.squad || []}
+            players={firstTeamPitch}
             onSelectPlayer={() => navigate("/app/squad")}
           />
         </div>
@@ -718,19 +731,26 @@ export function ControlCenter() {
                 {exec.roleLabel}
               </span>
               <div className="flex items-center gap-1.5">
-                <Chip tone={exec.mood >= 70 ? "emerald" : exec.mood >= 50 ? "gold" : "red"}>
-                  Mood {exec.mood}
-                </Chip>
-                {exec.poachingRisk === "high" && <Chip tone="red">Poach Risk</Chip>}
+                {exec.mood != null && (
+                  <Chip tone={exec.mood >= 70 ? "emerald" : exec.mood >= 50 ? "gold" : "red"}>
+                    Mood {exec.mood}
+                  </Chip>
+                )}
+                {exec.poachingRisk === "high" && exec.name !== "Seat empty" && <Chip tone="red">Poach Risk</Chip>}
               </div>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
+              {exec.portrait ? (
+                <img src={exec.portrait} alt="" className="h-12 w-12 rounded-full object-cover" />
+              ) : null}
               <h3 className="gx-display text-lg font-bold uppercase text-white group-hover:text-emerald-300">
                 {exec.name}
               </h3>
-              <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
-                {exec.secretTrait}
-              </span>
+              {exec.secretTrait ? (
+                <span className="rounded bg-white/5 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                  {exec.secretTrait}
+                </span>
+              ) : null}
             </div>
             <p className="text-xs text-slate-400 line-clamp-2">
               <b className="text-slate-300">Agenda:</b> {exec.agenda}
@@ -1086,6 +1106,16 @@ export function ControlCenter() {
                   </p>
                 </div>
               )}
+              {filedXi.length > 0 ? (
+                <p className="text-[11px] leading-5 text-slate-300" data-testid="console-filed-xi">
+                  Filed eleven: {filedXi.map((player: any) => player.name).join(", ")}
+                </p>
+              ) : (
+                <p className="text-[11px] text-slate-500">No eleven filed yet.</p>
+              )}
+              <Link to="/app/squad?sheet=academy" className="text-[11px] font-bold text-emerald-300">
+                {academyReady} academy {academyReady === 1 ? "player is" : "players are"} ready to move
+              </Link>
               <Link
                 to={
                   upcomingFixture

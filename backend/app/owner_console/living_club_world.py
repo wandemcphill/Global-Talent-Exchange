@@ -127,7 +127,7 @@ DIRECTIVE_COMPLETION_OBJECTIVES: dict[str, dict[str, dict[str, str]]] = {
     },
     "finance": {
         "sign_commercial_sponsor": {
-            "label": "Sign a commercial sponsor",
+            "label": "Review existing sponsorship contracts",
             "completion_check": "commercial_sponsor_signed",
         },
         "increase_treasury_balance": {

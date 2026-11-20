@@ -642,7 +642,7 @@ function AcademyProspectCard({
     setBusyAction("promote");
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/promote`);
-      toast.success(`Promoted ${p.name} to senior first-team squad with HOYD + Manager sign-off!`);
+      toast.success(`Moved ${p.name} onto the first-team sheet.`);
       onRefresh();
     } catch (e) {
       toast.error(errMsg(e));

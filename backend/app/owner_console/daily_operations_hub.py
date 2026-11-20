@@ -852,14 +852,23 @@ def build_authoritative_daily_briefing(
         p for p in (facs.get("_construction_projects") or []) if p.get("status") not in ("completed", "cancelled")
     ]
 
-    # Daily staff wage upkeep
+    # Daily staff wage upkeep. Same Fan Coin debit as tick_club. Founding salaries
+    # are already paid, so a seat without an explicit unpaid Fan Coin wage adds nothing.
     exec_staff_raw = dict(facs.get("_executive_staff") or {})
     total_staff_salary = sum(
-        _safe_int(s.get("salary_gtex", s.get("salary", 300)), 300)
+        _safe_int(
+            s.get("salary_fan_coin")
+            or s.get("salary_fancoin")
+            or s.get("salary")
+            or s.get("salary_gtx")
+            or s.get("salary_gtex")
+            or 0,
+            0,
+        )
         for s in exec_staff_raw.values()
         if isinstance(s, dict) and not s.get("upfront_paid", True)
     )
-    daily_staff_upkeep_gtex = max(10, total_staff_salary // 30) if exec_staff_raw else 0
+    daily_staff_upkeep_fan_coin = max(10, total_staff_salary // 30) if total_staff_salary else 0
 
     # Urgent Risks Detection (grounded in actual club state)
     urgent_risks: list[dict[str, Any]] = []
@@ -901,7 +910,7 @@ def build_authoritative_daily_briefing(
                 "severity": "high",
                 "department": "finance_commercial_office",
                 "title": f"Low Treasury Liquidity ({cash_bal:,} GTX)",
-                "detail": "Sign a commercial sponsor offer or inject capital before commissioning major upgrades.",
+                "detail": "Move coin into the treasury before commissioning major upgrades.",
             }
         )
     if construction_projects:
@@ -941,9 +950,7 @@ def build_authoritative_daily_briefing(
     per_match_sponsor_income_gtex = sum(
         _safe_int(d.get("per_match_gross"), 0) for d in active_sponsor_deals if d.get("status") == "active"
     )
-    daily_wage_bill_gtex = daily_staff_upkeep_gtex + sum(
-        max(10, _safe_int(p.value_coin, 1000) // 100) for p in squad_players
-    )
+    daily_wage_bill_gtex = daily_staff_upkeep_fan_coin
 
     # --- SECTION A: EXECUTIVE BRIEFING ---
     fin_pos = {
@@ -952,7 +959,8 @@ def build_authoritative_daily_briefing(
         "fan_coin_balance": fan_coin_bal,
         "club_valuation_gtex": club_val,
         "distributable_gtex": distributable_gtex,
-        "daily_staff_upkeep_gtex": daily_staff_upkeep_gtex,
+        "daily_staff_upkeep_gtex": daily_staff_upkeep_fan_coin,
+        "daily_staff_upkeep_fan_coin": daily_staff_upkeep_fan_coin,
         "daily_wage_bill_gtex": daily_wage_bill_gtex,
         "daily_sponsor_income_gtex": per_match_sponsor_income_gtex,
         "pending_payouts_gtex": _safe_int(econ.get("pending_payouts"), 0),
@@ -1181,7 +1189,8 @@ def build_authoritative_daily_briefing(
             "active_construction_projects": construction_projects[:4],
         },
         "contracts_and_obligations": {
-            "daily_staff_upkeep_gtex": daily_staff_upkeep_gtex,
+            "daily_staff_upkeep_gtex": daily_staff_upkeep_fan_coin,
+            "daily_staff_upkeep_fan_coin": daily_staff_upkeep_fan_coin,
             "unsettled_players_count": len(unsettled_players),
             "unsettled_players": unsettled_players[:5],
             "active_sponsor_obligations_count": len(sponsor_info.get("active_deals") or []),
@@ -1445,8 +1454,9 @@ def build_authoritative_daily_briefing(
         },
         "wage_obligations": {
             "total_daily_obligations_gtex": daily_wage_bill_gtex,
-            "daily_staff_wage_upkeep_gtex": daily_staff_upkeep_gtex,
-            "projected_30d_staff_upkeep_gtex": daily_staff_upkeep_gtex * 30,
+            "daily_staff_wage_upkeep_gtex": daily_staff_upkeep_fan_coin,
+            "daily_staff_upkeep_fan_coin": daily_staff_upkeep_fan_coin,
+            "projected_30d_staff_upkeep_gtex": daily_staff_upkeep_fan_coin * 30,
             "appointed_executive_count": len(exec_staff_raw),
         },
         "sponsor_income": {

@@ -1,10 +1,31 @@
 import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Sparkles, Clock, Archive, ArchiveRestore, Check, Mail, MailOpen } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { label, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip } from "@/components/gtex/ui";
+
+function bookLink(item: any): { to: string; label: string } | null {
+  const club = item.club_id ? `club_id=${encodeURIComponent(item.club_id)}` : "";
+  const withClub = (path: string) => (club ? `${path}${path.includes("?") ? "&" : "?"}${club}` : path);
+  if (item.kind === "regen_breakthrough" || item.kind === "regen_endorsement") {
+    return { to: withClub("/app/squad?sheet=academy"), label: "Open the academy sheet" };
+  }
+  if (item.kind === "player_unrest" || item.kind === "transfer_bid") {
+    return { to: withClub("/app/squad"), label: "Open the squad" };
+  }
+  if (item.kind === "competition_invite") {
+    return { to: "/app/competitions", label: "Open competitions" };
+  }
+  if (item.kind === "contract_negotiation") {
+    return { to: withClub("/app/staff-market"), label: "Open the staff market" };
+  }
+  if (item.kind === "manager_request") {
+    return { to: withClub("/app/lineup"), label: "Open the teamsheet" };
+  }
+  return null;
+}
 
 const KIND_TONE: any = {
   transfer_bid: "blue",
@@ -27,6 +48,7 @@ export function InboxItem({ item, compact = false }: any) {
 
   const isArchived = Boolean(item.archived_at);
   const isRead = Boolean(item.is_read);
+  const book = bookLink(item);
 
   const decide = async (key: string) => {
     setBusy(key);
@@ -139,6 +161,12 @@ export function InboxItem({ item, compact = false }: any) {
             </span>
           )}
         </blockquote>
+      )}
+
+      {book && (
+        <Link to={book.to} className="mt-3 inline-flex text-xs font-bold text-emerald-300" data-testid={`inbox-book-link-${item.id}`}>
+          {book.label}
+        </Link>
       )}
 
       {item.status === "open" && item.actions?.length > 0 && (

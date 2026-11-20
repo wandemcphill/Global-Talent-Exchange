@@ -156,9 +156,8 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
     { key: "upgrade_academy_facility", label: "Upgrade the academy facility" },
   ],
   finance: [
-    { key: "sign_commercial_sponsor", label: "Sign a commercial sponsor" },
     { key: "increase_treasury_balance", label: "Increase the club treasury balance" },
-    { key: "complete_sponsor_review", label: "Complete a sponsor review" },
+    { key: "complete_sponsor_review", label: "Review existing sponsorship contracts" },
     {
       key: "upgrade_revenue_infrastructure",
       label: "Upgrade commercial or stadium infrastructure",
@@ -3328,10 +3327,15 @@ export function ClubOperationsCentre3D({
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">
-                      Daily Wage Bill
+                      Staff wage upkeep
                     </p>
                     <p className="gx-mono text-sm font-black text-rose-300 mt-0.5">
-                      {fmt(rpt.wage_obligations?.total_daily_obligations_gtex ?? 0)} GTEX/d
+                      {fmt(
+                        rpt.wage_obligations?.daily_staff_upkeep_fan_coin ??
+                          rpt.wage_obligations?.total_daily_obligations_gtex ??
+                          0,
+                      )}{" "}
+                      Fan Coin/d
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
