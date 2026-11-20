@@ -713,9 +713,7 @@ class TransferMarketService:
 
     def _require_loan_return(self, offer: TransferHubOffer, listing: TransferListing) -> None:
         if self._loan_return_on(self._loan_terms(offer, listing), on_date=utcnow().date()) is None:
-            raise TransferMarketValidationError(
-                "Loan offers need a return date before they can be accepted."
-            )
+            raise TransferMarketValidationError("Loan offers need a return date before they can be accepted.")
 
     def _loan_return_on(self, terms: dict[str, Any], *, on_date: date) -> date | None:
         for key in ("ends_on", "return_on", "loan_end"):
@@ -744,9 +742,7 @@ class TransferMarketService:
         if incoming_club != offer.bidder_club_id:
             raise TransferMarketValidationError("The offered player is not at the bidding club.")
 
-    def _settle_accepted_offer(
-        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
-    ) -> None:
+    def _settle_accepted_offer(self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime) -> None:
         kind = self._hub_deal_kind(offer, listing)
         if kind == "loan":
             self._settle_loan_offer(offer, listing, effective_at)
@@ -764,9 +760,7 @@ class TransferMarketService:
         years = listing.contract_years_remaining
         return listing.salary_amount is not None and years is not None and Decimal(years) > 0
 
-    def _settle_cash_offer(
-        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
-    ) -> None:
+    def _settle_cash_offer(self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime) -> None:
         years = max(1, min(5, int(Decimal(listing.contract_years_remaining or 1))))
         wage = Decimal(listing.salary_amount or 0)
         lifecycle_service = PlayerLifecycleService(self.session)
@@ -801,9 +795,7 @@ class TransferMarketService:
         metadata["settlement"] = "completed"
         offer.metadata_json = metadata
 
-    def _settle_loan_offer(
-        self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime
-    ) -> None:
+    def _settle_loan_offer(self, offer: TransferHubOffer, listing: TransferListing, effective_at: datetime) -> None:
         terms = self._loan_terms(offer, listing)
         return_on = self._loan_return_on(terms, on_date=effective_at.date())
         if return_on is None:

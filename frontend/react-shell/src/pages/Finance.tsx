@@ -461,10 +461,7 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
   const [selectedClub, setSelectedClub] = useState("");
   const activeClubId = selectedClub || clubs?.[0]?.club_id || "";
 
-  const {
-    data: sponsorData,
-    isLoading,
-  } = useQuery({
+  const { data: sponsorData, isLoading } = useQuery({
     queryKey: ["sponsor-offers", activeClubId],
     queryFn: async () => (await api.get(`/owner/clubs/${activeClubId}/sponsors/offers`)).data,
     enabled: Boolean(activeClubId),
@@ -549,7 +546,8 @@ function SponsorNegotiationDesk({ clubs }: { clubs: any[] }) {
           )}
         </div>
         <p className="text-xs text-slate-400">
-          Sponsor offers are closed for club owners. Existing contracts stay on the books. New commercial packages are not sold here.
+          Sponsor offers are closed for club owners. Existing contracts stay on the books. New
+          commercial packages are not sold here.
         </p>
       </div>
 

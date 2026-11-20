@@ -49,7 +49,9 @@ function clubIdFromAddress(): string | null {
 
 export function useActiveClub() {
   const { data } = useControlCenter();
-  const [stored, setStored] = useState<string | null>(() => localStorage.getItem("gtex_active_club"));
+  const [stored, setStored] = useState<string | null>(() =>
+    localStorage.getItem("gtex_active_club"),
+  );
   const clubs: any[] = data?.clubs || [];
   const addressed = clubIdFromAddress();
   const addressedClub = addressed ? clubs.find((club) => club.club_id === addressed) : null;
@@ -128,7 +130,7 @@ export function useClubCampus(clubId?: string) {
 
 export function useClubCommunications(
   clubId?: string,
-  opts?: { search?: string; includeArchived?: boolean }
+  opts?: { search?: string; includeArchived?: boolean },
 ) {
   const search = opts?.search || undefined;
   const includeArchived = opts?.includeArchived || undefined;
@@ -140,7 +142,7 @@ export function useClubCommunications(
           `/owner/clubs/${clubId}/communications`,
           search || includeArchived
             ? { params: { search, include_archived: includeArchived } }
-            : undefined
+            : undefined,
         )
       ).data,
     enabled: !!clubId,
@@ -173,7 +175,7 @@ export function useClubSupporters(clubId?: string) {
 
 export function useClubMedia(
   clubId?: string,
-  opts?: { classification?: string; storyType?: string; outletKey?: string; limit?: number }
+  opts?: { classification?: string; storyType?: string; outletKey?: string; limit?: number },
 ) {
   const classification = opts?.classification || "all";
   const storyType = opts?.storyType || "all";
@@ -217,7 +219,7 @@ export function useClubInstitutionalPulse(clubId?: string) {
 export async function executeRecruitmentSigning(
   clubId: string,
   assignmentId: string,
-  chosenCandidateId?: string
+  chosenCandidateId?: string,
 ) {
   return (
     await api.post(`/owner/clubs/${clubId}/recruitment/${assignmentId}/execute`, {
@@ -251,5 +253,8 @@ export function useRefreshOwner() {
 }
 
 export const fmt = (n: any, digits = 0) =>
-  Number(n || 0).toLocaleString("en-NG", { maximumFractionDigits: digits, minimumFractionDigits: 0 });
+  Number(n || 0).toLocaleString("en-NG", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: 0,
+  });
 export const label = (s: string) => (s || "").replace(/_/g, " ");

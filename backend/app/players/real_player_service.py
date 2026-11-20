@@ -75,7 +75,6 @@ REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
 def _displayed_position(player: Player, profile: RealPlayerProfile | None) -> str:
     """Role codes the player actually plays, not the coarse DF/MF/FW bucket."""
     from app.players.position_roles import display_codes, resolve_positions
@@ -91,6 +90,7 @@ def _displayed_position(player: Player, profile: RealPlayerProfile | None) -> st
     return display_codes(primary, extras)
 
 
+@dataclass(frozen=True, slots=True)
 class _MatchCandidateSnapshot:
     player_id: str
     player_name: str
@@ -727,11 +727,7 @@ class RealPlayerUniverseQueryService:
 
         tier_name = str(player.real_player_tier or "").strip().lower()
         source_name = str(player.source_provider or "").strip().lower()
-        is_regen = (
-            player.is_real_player is False
-            or tier_name == "regen"
-            or source_name in REGEN_SOURCES
-        )
+        is_regen = player.is_real_player is False or tier_name == "regen" or source_name in REGEN_SOURCES
 
         return RealPlayerUniverseListItem(
             player_id=player.id,
@@ -831,9 +827,12 @@ class RealPlayerUniverseQueryService:
             short_name=player.short_name,
             nationality=country.name if country is not None else (profile.nationality if profile is not None else None),
             nationality_code=getattr(country, "alpha2_code", None),
-            position=_displayed_position(player, profile) or player.position or (profile.primary_position if profile is not None else None),
+            position=_displayed_position(player, profile)
+            or player.position
+            or (profile.primary_position if profile is not None else None),
             normalized_position=player.normalized_position,
-            primary_position=_displayed_position(player, profile) or (
+            primary_position=_displayed_position(player, profile)
+            or (
                 (profile.primary_position if profile is not None else None)
                 or player.normalized_position
                 or player.position
@@ -913,7 +912,9 @@ class RealPlayerUniverseQueryService:
     ) -> _MatchCandidateSnapshot:
         club_name = (profile.current_club_name if profile is not None else None) or player.real_world_club_name
         prof_pos = profile.primary_position if profile is not None else None
-        primary_position_label = _displayed_position(player, profile) or prof_pos or player.normalized_position or player.position
+        primary_position_label = (
+            _displayed_position(player, profile) or prof_pos or player.normalized_position or player.position
+        )
         return _MatchCandidateSnapshot(
             player_id=player.id,
             player_name=player.full_name,

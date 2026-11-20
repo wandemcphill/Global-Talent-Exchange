@@ -35,7 +35,10 @@ export function MarketTableView({
   const cashNum = Number(clubCash || 0);
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10 bg-slate-950/60 shadow-xl" data-testid="market-fm-table-view">
+    <div
+      className="overflow-x-auto rounded-xl border border-white/10 bg-slate-950/60 shadow-xl"
+      data-testid="market-fm-table-view"
+    >
       <table className="w-full text-left text-xs gx-table">
         <thead>
           <tr className="border-b border-white/15 bg-white/[0.04] text-[10px] font-black uppercase tracking-wider text-slate-400">
@@ -79,10 +82,10 @@ export function MarketTableView({
                       p.position === "goalkeeper" || p.position === "GK"
                         ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
                         : p.position === "forward" || p.position === "FWD" || p.position === "ST"
-                        ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
-                        : p.position === "midfielder" || p.position === "MID"
-                        ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
-                        : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
+                          ? "bg-rose-500/20 text-rose-300 border border-rose-500/30"
+                          : p.position === "midfielder" || p.position === "MID"
+                            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/30"
+                            : "bg-sky-500/20 text-sky-300 border border-sky-500/30"
                     }`}
                   >
                     {posShort(p.position)}
@@ -96,8 +99,8 @@ export function MarketTableView({
                       rating >= 85
                         ? "text-amber-300"
                         : rating >= 78
-                        ? "text-emerald-300"
-                        : "text-slate-200"
+                          ? "text-emerald-300"
+                          : "text-slate-200"
                     }
                   >
                     {rating}
@@ -160,7 +163,9 @@ export function MarketTableView({
 
                 {/* Value */}
                 <td className="py-2.5 px-3 text-right font-mono text-slate-300">
-                  {p.current_value_credits != null ? fmt(p.current_value_credits, 1) : fmt(price, 1)}
+                  {p.current_value_credits != null
+                    ? fmt(p.current_value_credits, 1)
+                    : fmt(price, 1)}
                 </td>
 
                 {/* Fee */}
@@ -172,7 +177,13 @@ export function MarketTableView({
                 <td className="py-2.5 px-3 text-center">
                   <Btn
                     className="py-1 px-3 text-[11px]"
-                    variant={owned || queued ? "ghost" : !queueMode && unaffordable ? "outline" : "secondary"}
+                    variant={
+                      owned || queued
+                        ? "ghost"
+                        : !queueMode && unaffordable
+                          ? "outline"
+                          : "secondary"
+                    }
                     disabled={owned || queued || isBusy || !clubId || (!queueMode && unaffordable)}
                     onClick={() => onSign(p)}
                     data-testid={`sign-player-row-${pid}`}
@@ -186,7 +197,11 @@ export function MarketTableView({
                     ) : isBusy ? (
                       "Signing…"
                     ) : queueMode ? (
-                      isRestricted ? "Paid basket" : "Welcome basket"
+                      isRestricted ? (
+                        "Paid basket"
+                      ) : (
+                        "Welcome basket"
+                      )
                     ) : unaffordable ? (
                       <span className="text-slate-500">Short Funds</span>
                     ) : (

@@ -181,9 +181,16 @@ function placementBadge(position?: number) {
 function normalizePositionGroup(position?: string | null): "GK" | "DEF" | "MID" | "FWD" | "OTHER" {
   const p = (position || "").toUpperCase().trim();
   if (p === "GK" || p.includes("GOAL")) return "GK";
-  if (["CB", "LB", "RB", "LWB", "RWB", "DEF", "DEFENDER"].some((k) => p.startsWith(k))) return "DEF";
-  if (["CM", "DM", "AM", "LM", "RM", "MID", "MIDFIELDER"].some((k) => p.startsWith(k))) return "MID";
-  if (["ST", "CF", "LW", "RW", "FW", "FWD", "FORWARD", "STRIKER", "WINGER"].some((k) => p.startsWith(k))) return "FWD";
+  if (["CB", "LB", "RB", "LWB", "RWB", "DEF", "DEFENDER"].some((k) => p.startsWith(k)))
+    return "DEF";
+  if (["CM", "DM", "AM", "LM", "RM", "MID", "MIDFIELDER"].some((k) => p.startsWith(k)))
+    return "MID";
+  if (
+    ["ST", "CF", "LW", "RW", "FW", "FWD", "FORWARD", "STRIKER", "WINGER"].some((k) =>
+      p.startsWith(k),
+    )
+  )
+    return "FWD";
   return "OTHER";
 }
 
@@ -198,12 +205,16 @@ export default function PublicClubProfile() {
     queryKey: ["public-club-profile", clubSlug],
     queryFn: async () => {
       try {
-        const res = await api.get(`/api/clubs/${encodeURIComponent(clubSlug || "")}/public-profile`);
+        const res = await api.get(
+          `/api/clubs/${encodeURIComponent(clubSlug || "")}/public-profile`,
+        );
         return res.data;
       } catch (err: any) {
         // Fallback to legacy showroom if the club is indexed by code or older showroom route
         try {
-          const legacyRes = await api.get(`/owner/public/showroom/${encodeURIComponent(clubSlug || "")}`);
+          const legacyRes = await api.get(
+            `/owner/public/showroom/${encodeURIComponent(clubSlug || "")}`,
+          );
           const legacy = legacyRes.data;
           return {
             club: {
@@ -252,9 +263,19 @@ export default function PublicClubProfile() {
               most_promising_player: null,
             },
             staff: [
-              { role: "manager", title: "Manager", name: legacy.manager_name || null, appointed: Boolean(legacy.manager_name) },
+              {
+                role: "manager",
+                title: "Manager",
+                name: legacy.manager_name || null,
+                appointed: Boolean(legacy.manager_name),
+              },
               { role: "general_manager", title: "General Manager", name: null, appointed: false },
-              { role: "head_of_youth_development", title: "Head of Youth Development", name: null, appointed: false },
+              {
+                role: "head_of_youth_development",
+                title: "Head of Youth Development",
+                name: null,
+                appointed: false,
+              },
               { role: "coach", title: "First-Team Coach", name: null, appointed: false },
             ],
             coach_buses: [],
@@ -336,7 +357,10 @@ export default function PublicClubProfile() {
     return (
       <>
         {clubHead}
-        <main className="min-h-screen bg-[#070B11] px-5 py-28 text-center text-slate-400" data-testid="public-club-loading">
+        <main
+          className="min-h-screen bg-[#070B11] px-5 py-28 text-center text-slate-400"
+          data-testid="public-club-loading"
+        >
           <div className="mx-auto mb-4 size-10 animate-spin rounded-full border-2 border-emerald-400 border-t-transparent" />
           <p className="gx-eyebrow text-emerald-400">GTEX Club Profile Archive</p>
           <p className="mt-2 text-sm text-slate-300">Loading verified public club dossier…</p>
@@ -353,7 +377,10 @@ export default function PublicClubProfile() {
       ? "This club may be set to private by its owner, or the URL slug is not registered in the GTEX world."
       : "The public profile service did not return a usable dossier. No simulated data has been substituted.";
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#070B11] px-5 py-16" data-testid="public-club-error">
+      <main
+        className="flex min-h-screen items-center justify-center bg-[#070B11] px-5 py-16"
+        data-testid="public-club-error"
+      >
         {clubHead}
         <section className="w-full max-w-xl rounded-2xl border border-white/10 bg-slate-900/80 p-8 text-center shadow-2xl backdrop-blur-md">
           {isPrivate ? (
@@ -365,7 +392,11 @@ export default function PublicClubProfile() {
           <h1 className="gx-display mt-3 text-3xl font-bold uppercase text-white">{title}</h1>
           <p className="mx-auto mt-3 max-w-md text-sm leading-6 text-slate-400">{description}</p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <button className="gx-btn gx-btn-secondary" onClick={() => refetch()} disabled={isFetching}>
+            <button
+              className="gx-btn gx-btn-secondary"
+              onClick={() => refetch()}
+              disabled={isFetching}
+            >
               {isFetching ? "Retrying…" : "Try again"}
             </button>
             <Link to="/" className="gx-btn gx-btn-primary">
@@ -377,9 +408,23 @@ export default function PublicClubProfile() {
     );
   }
 
-  const { club, owner, stadium, facilities, academy, squad, staff, coach_buses, trophies, dna, jerseys } = data as any;
+  const {
+    club,
+    owner,
+    stadium,
+    facilities,
+    academy,
+    squad,
+    staff,
+    coach_buses,
+    trophies,
+    dna,
+    jerseys,
+  } = data as any;
   const crest = crestSource(club.crest_url);
-  const location = [club.city_name, club.region_name, club.country_code].filter(Boolean).join(" · ");
+  const location = [club.city_name, club.region_name, club.country_code]
+    .filter(Boolean)
+    .join(" · ");
   const primary = club.primary_color || "#0F766E";
   const secondary = club.secondary_color || "#F8FAFC";
   const accent = club.accent_color || "#F59E0B";
@@ -391,7 +436,10 @@ export default function PublicClubProfile() {
       : allPlayers.filter((p) => normalizePositionGroup(p.position) === positionFilter);
 
   return (
-    <main className="min-h-screen bg-[#070B11] text-slate-200" data-testid="public-club-profile-view">
+    <main
+      className="min-h-screen bg-[#070B11] text-slate-200"
+      data-testid="public-club-profile-view"
+    >
       {clubHead}
       {/* 1. HERO & IDENTITY */}
       <header className="relative isolate overflow-hidden border-b border-white/10">
@@ -405,7 +453,11 @@ export default function PublicClubProfile() {
 
         <div className="mx-auto max-w-[1380px] px-5 pb-16 pt-6 sm:px-8 lg:px-12 lg:pb-20">
           <nav className="flex items-center justify-between gap-4">
-            <Link to="/" className="gx-display text-2xl font-black tracking-tight text-white" aria-label="GTEX home">
+            <Link
+              to="/"
+              className="gx-display text-2xl font-black tracking-tight text-white"
+              aria-label="GTEX home"
+            >
               GTEX<span className="text-emerald-400">.</span>
             </Link>
             <div className="flex items-center gap-3">
@@ -479,12 +531,17 @@ export default function PublicClubProfile() {
                     <MapPin size={15} className="text-emerald-400" /> {location}
                   </span>
                 )}
-                <span className="inline-flex items-center gap-1.5" data-testid="public-club-division">
-                  <ShieldCheck size={15} className="text-emerald-400" /> {club.division_name || "Foundation"}
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  data-testid="public-club-division"
+                >
+                  <ShieldCheck size={15} className="text-emerald-400" />{" "}
+                  {club.division_name || "Foundation"}
                 </span>
                 {club.founded_year && (
                   <span className="inline-flex items-center gap-1.5">
-                    <CalendarDays size={15} className="text-amber-400" /> Founded {club.founded_year}
+                    <CalendarDays size={15} className="text-amber-400" /> Founded{" "}
+                    {club.founded_year}
                   </span>
                 )}
                 {stadium?.name && (
@@ -499,26 +556,44 @@ export default function PublicClubProfile() {
           {/* KEY METRICS BAR */}
           <div className="mt-10 grid grid-cols-2 gap-3 sm:grid-cols-4 max-w-4xl">
             <div className="border-l-2 border-emerald-400 bg-black/40 px-4 py-3 backdrop-blur-sm rounded-r-lg">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Senior Squad</p>
-              <p className="gx-display mt-0.5 text-2xl font-bold text-white">{squad?.player_count || 0}</p>
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Senior Squad
+              </p>
+              <p className="gx-display mt-0.5 text-2xl font-bold text-white">
+                {squad?.player_count || 0}
+              </p>
               <p className="text-[11px] text-slate-400">Registered players</p>
             </div>
             <div className="border-l-2 border-cyan-400 bg-black/40 px-4 py-3 backdrop-blur-sm rounded-r-lg">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Academy Talent</p>
-              <p className="gx-display mt-0.5 text-2xl font-bold text-white">{academy?.prospect_count || 0}</p>
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Academy Talent
+              </p>
+              <p className="gx-display mt-0.5 text-2xl font-bold text-white">
+                {academy?.prospect_count || 0}
+              </p>
               <p className="text-[11px] text-slate-400">Active prospects</p>
             </div>
             <div className="border-l-2 border-amber-400 bg-black/40 px-4 py-3 backdrop-blur-sm rounded-r-lg">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Trophies & Honours</p>
-              <p className="gx-display mt-0.5 text-2xl font-bold text-white">{trophies?.length || 0}</p>
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Trophies & Honours
+              </p>
+              <p className="gx-display mt-0.5 text-2xl font-bold text-white">
+                {trophies?.length || 0}
+              </p>
               <p className="text-[11px] text-slate-400">Recorded finishes</p>
             </div>
             <div className="border-l-2 border-purple-400 bg-black/40 px-4 py-3 backdrop-blur-sm rounded-r-lg">
-              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Home Ground</p>
+              <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                Home Ground
+              </p>
               <p className="gx-display mt-0.5 text-2xl font-bold text-white">
                 {stadium?.level ? `Level ${stadium.level}` : "Not rated"}
               </p>
-              <p className="text-[11px] text-slate-400">{stadium?.capacity ? `${stadium.capacity.toLocaleString()} seats` : "Capacity unavailable"}</p>
+              <p className="text-[11px] text-slate-400">
+                {stadium?.capacity
+                  ? `${stadium.capacity.toLocaleString()} seats`
+                  : "Capacity unavailable"}
+              </p>
             </div>
           </div>
         </div>
@@ -530,12 +605,27 @@ export default function PublicClubProfile() {
           <div className="flex items-center gap-2">
             <span className="size-2 rounded-full bg-emerald-400 animate-pulse" />
             <span className="font-semibold text-slate-300">Public Dossier:</span>
-            <span>All records shown are approved for public sporting reference. Internal wages, ledgers and confidential notes remain sealed.</span>
+            <span>
+              All records shown are approved for public sporting reference. Internal wages, ledgers
+              and confidential notes remain sealed.
+            </span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="size-3.5 rounded-full border border-white/20" style={{ backgroundColor: primary }} title="Primary" />
-            <span className="size-3.5 rounded-full border border-white/20" style={{ backgroundColor: secondary }} title="Secondary" />
-            <span className="size-3.5 rounded-full border border-white/20" style={{ backgroundColor: accent }} title="Accent" />
+            <span
+              className="size-3.5 rounded-full border border-white/20"
+              style={{ backgroundColor: primary }}
+              title="Primary"
+            />
+            <span
+              className="size-3.5 rounded-full border border-white/20"
+              style={{ backgroundColor: secondary }}
+              title="Secondary"
+            />
+            <span
+              className="size-3.5 rounded-full border border-white/20"
+              style={{ backgroundColor: accent }}
+              title="Accent"
+            />
             <span className="font-mono text-[10px] text-slate-500 uppercase">Colours</span>
           </div>
         </div>
@@ -543,7 +633,6 @@ export default function PublicClubProfile() {
 
       {/* 3. MAIN CONTENT GRID */}
       <div className="mx-auto max-w-[1380px] px-5 py-12 sm:px-8 lg:px-12 lg:py-16 space-y-16">
-
         {/* SECTION 0: CLUB DNA & CULTURE */}
         <section aria-labelledby="dna-heading" className="space-y-6">
           <div className="flex items-center justify-between">
@@ -561,17 +650,23 @@ export default function PublicClubProfile() {
           <div className="grid gap-6 md:grid-cols-3">
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Primary Philosophy</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Primary Philosophy
+                </span>
                 <h3 className="gx-display text-xl font-black uppercase text-emerald-300 mt-1">
                   {(dna?.primary_philosophy || "youth_development").replace(/_/g, " ")}
                 </h3>
                 <p className="mt-2 text-xs text-slate-300">
-                  {dna?.vision_narrative || "Dedicated to building sporting success and enduring legacy through elite player development."}
+                  {dna?.vision_narrative ||
+                    "Dedicated to building sporting success and enduring legacy through elite player development."}
                 </p>
               </div>
               <div className="mt-4 flex flex-wrap gap-1.5 pt-3 border-t border-white/10">
                 {(dna?.secondary_philosophies || ["financially_sustainable"]).map((p: string) => (
-                  <span key={p} className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-slate-300">
+                  <span
+                    key={p}
+                    className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-slate-300"
+                  >
                     {p.replace(/_/g, " ")}
                   </span>
                 ))}
@@ -580,12 +675,18 @@ export default function PublicClubProfile() {
 
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Recruitment Rules</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Recruitment Rules
+                </span>
                 <div className="mt-3 space-y-2.5 text-xs text-slate-200">
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
                     <span className="text-slate-400">Age Bracket:</span>
                     <span className="font-semibold text-white">
-                      {dna?.age_mode === "preferred" && dna?.preferred_max_age ? `Under ${dna.preferred_max_age} (Exceptions Allowed)` : dna?.age_mode === "strict" ? `Strict U${dna.preferred_max_age}` : "All Ages Eligible"}
+                      {dna?.age_mode === "preferred" && dna?.preferred_max_age
+                        ? `Under ${dna.preferred_max_age} (Exceptions Allowed)`
+                        : dna?.age_mode === "strict"
+                          ? `Strict U${dna.preferred_max_age}`
+                          : "All Ages Eligible"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
@@ -604,12 +705,17 @@ export default function PublicClubProfile() {
 
             <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-6 flex flex-col justify-between">
               <div>
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Economic Strategy</span>
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Economic Strategy
+                </span>
                 <h3 className="gx-display text-xl font-black uppercase text-cyan-300 mt-1">
                   {(dna?.transfer_strategy || "buy_young_develop_sell").replace(/_/g, " ")}
                 </h3>
                 <p className="mt-2 text-xs text-slate-300">
-                  Financial Model: <b className="text-white capitalize">{(dna?.financial_philosophy || "sustainable").replace(/_/g, " ")}</b>
+                  Financial Model:{" "}
+                  <b className="text-white capitalize">
+                    {(dna?.financial_philosophy || "sustainable").replace(/_/g, " ")}
+                  </b>
                 </p>
               </div>
               <div className="mt-4 pt-3 border-t border-white/10 text-[11px] text-slate-400">
@@ -630,7 +736,10 @@ export default function PublicClubProfile() {
                   { key: "away", label: "Away Kit", kit: jerseys.away },
                   { key: "third", label: "Third Kit", kit: jerseys.third },
                 ].map(({ key, label, kit }) => (
-                  <div key={key} className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-3">
+                  <div
+                    key={key}
+                    className="flex items-center gap-3 rounded-xl border border-white/10 bg-black/40 p-3"
+                  >
                     <div
                       className="size-12 rounded-lg border border-white/20 shadow-inner flex items-center justify-center font-bold text-xs"
                       style={{
@@ -644,7 +753,8 @@ export default function PublicClubProfile() {
                     <div className="min-w-0 flex-1 text-xs">
                       <p className="font-bold uppercase text-white">{label}</p>
                       <p className="text-[11px] text-slate-400 capitalize">
-                        {kit?.pattern_type || "solid"} pattern · {kit?.collar_style || "crew"} collar
+                        {kit?.pattern_type || "solid"} pattern · {kit?.collar_style || "crew"}{" "}
+                        collar
                       </p>
                     </div>
                   </div>
@@ -691,7 +801,8 @@ export default function PublicClubProfile() {
                   )}
                 </div>
                 <p className="mt-3 text-sm text-slate-300 leading-relaxed">
-                  The home base for all domestic and continental fixtures. Matchday revenue and ticket demand scale directly with stadium infrastructure and fan engagement.
+                  The home base for all domestic and continental fixtures. Matchday revenue and
+                  ticket demand scale directly with stadium infrastructure and fan engagement.
                 </p>
               </div>
 
@@ -703,11 +814,15 @@ export default function PublicClubProfile() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Match Pitch</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    Match Pitch
+                  </span>
                   <p className="gx-mono text-lg font-bold text-emerald-400 mt-0.5">Not available</p>
                 </div>
                 <div>
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Campus Link</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    Campus Link
+                  </span>
                   <p className="text-sm font-bold text-cyan-300 mt-0.5">Verified Asset</p>
                 </div>
               </div>
@@ -716,7 +831,9 @@ export default function PublicClubProfile() {
 
           {/* Pitchside LED Perimeter & Matchday Soundscape Showcases */}
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            <StadiumPerimeterLEDShowcase stadiumName={stadium?.name || club.home_venue_name || `${club.name} Stadium`} />
+            <StadiumPerimeterLEDShowcase
+              stadiumName={stadium?.name || club.home_venue_name || `${club.name} Stadium`}
+            />
             <StadiumMatchdaySoundscape clubName={club.name} />
           </div>
         </section>
@@ -725,7 +842,10 @@ export default function PublicClubProfile() {
         <section aria-labelledby="department-heading" className="space-y-6">
           <div>
             <p className="gx-eyebrow text-emerald-400">Football Operations</p>
-            <h2 id="department-heading" className="gx-display text-3xl font-bold uppercase text-white">
+            <h2
+              id="department-heading"
+              className="gx-display text-3xl font-bold uppercase text-white"
+            >
               Standout Talent & Leadership
             </h2>
           </div>
@@ -767,21 +887,31 @@ export default function PublicClubProfile() {
                     <div className="mt-3 flex items-center gap-4">
                       {squad.best_player.rating && (
                         <div>
-                          <span className="text-[9px] uppercase font-mono text-slate-400">Rating</span>
-                          <p className="gx-mono text-xl font-black text-amber-300">{squad.best_player.rating}</p>
+                          <span className="text-[9px] uppercase font-mono text-slate-400">
+                            Rating
+                          </span>
+                          <p className="gx-mono text-xl font-black text-amber-300">
+                            {squad.best_player.rating}
+                          </p>
                         </div>
                       )}
                       {squad.best_player.potential && (
                         <div>
-                          <span className="text-[9px] uppercase font-mono text-slate-400">Potential</span>
-                          <p className="gx-mono text-xl font-black text-emerald-400">{squad.best_player.potential}</p>
+                          <span className="text-[9px] uppercase font-mono text-slate-400">
+                            Potential
+                          </span>
+                          <p className="gx-mono text-xl font-black text-emerald-400">
+                            {squad.best_player.potential}
+                          </p>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <p className="mt-6 text-sm text-slate-400">No standout senior player designated in public roster.</p>
+                <p className="mt-6 text-sm text-slate-400">
+                  No standout senior player designated in public roster.
+                </p>
               )}
             </div>
 
@@ -814,27 +944,38 @@ export default function PublicClubProfile() {
                       {squad.most_promising_player.name}
                     </h3>
                     <p className="text-xs text-slate-400 mt-1">
-                      {squad.most_promising_player.position} · Age {squad.most_promising_player.age || "—"}
+                      {squad.most_promising_player.position} · Age{" "}
+                      {squad.most_promising_player.age || "—"}
                       {squad.most_promising_player.is_regen && " · Regen Pipeline"}
                     </p>
                     <div className="mt-3 flex items-center gap-4">
                       {squad.most_promising_player.rating && (
                         <div>
-                          <span className="text-[9px] uppercase font-mono text-slate-400">Current</span>
-                          <p className="gx-mono text-xl font-black text-slate-200">{squad.most_promising_player.rating}</p>
+                          <span className="text-[9px] uppercase font-mono text-slate-400">
+                            Current
+                          </span>
+                          <p className="gx-mono text-xl font-black text-slate-200">
+                            {squad.most_promising_player.rating}
+                          </p>
                         </div>
                       )}
                       {squad.most_promising_player.potential && (
                         <div>
-                          <span className="text-[9px] uppercase font-mono text-slate-400">Ceiling</span>
-                          <p className="gx-mono text-xl font-black text-emerald-300">{squad.most_promising_player.potential}</p>
+                          <span className="text-[9px] uppercase font-mono text-slate-400">
+                            Ceiling
+                          </span>
+                          <p className="gx-mono text-xl font-black text-emerald-300">
+                            {squad.most_promising_player.potential}
+                          </p>
                         </div>
                       )}
                     </div>
                   </div>
                 </div>
               ) : (
-                <p className="mt-6 text-sm text-slate-400">No young breakthrough prospect designated in public roster.</p>
+                <p className="mt-6 text-sm text-slate-400">
+                  No young breakthrough prospect designated in public roster.
+                </p>
               )}
             </div>
           </div>
@@ -851,12 +992,16 @@ export default function PublicClubProfile() {
                     key={person.role}
                     className="rounded-xl border border-white/5 bg-black/40 p-4 transition-all hover:border-white/15"
                   >
-                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">{person.title}</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                      {person.title}
+                    </p>
                     <p className="gx-display text-lg font-bold text-white mt-1 truncate">
                       {person.name || "Vacant"}
                     </p>
                     <div className="mt-2 flex items-center justify-between text-xs">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${person.appointed ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}>
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold ${person.appointed ? "bg-emerald-500/20 text-emerald-300" : "bg-slate-800 text-slate-400"}`}
+                      >
                         {person.appointed ? "Appointed" : "Unassigned"}
                       </span>
                       {person.rating && (
@@ -890,7 +1035,9 @@ export default function PublicClubProfile() {
                   key={pos}
                   onClick={() => setPositionFilter(pos)}
                   className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                    positionFilter === pos ? "bg-emerald-500 text-slate-950 shadow" : "text-slate-400 hover:text-white"
+                    positionFilter === pos
+                      ? "bg-emerald-500 text-slate-950 shadow"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   {pos}
@@ -931,7 +1078,9 @@ export default function PublicClubProfile() {
                         {p.potential ?? "—"}
                       </td>
                       <td className="py-3 px-4 text-center">
-                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.is_regen ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/20 text-blue-300"}`}>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${p.is_regen ? "bg-purple-500/20 text-purple-300" : "bg-blue-500/20 text-blue-300"}`}
+                        >
                           {p.is_regen ? "Regen" : "Senior"}
                         </span>
                       </td>
@@ -947,7 +1096,10 @@ export default function PublicClubProfile() {
         <section aria-labelledby="facilities-heading" className="space-y-6">
           <div>
             <p className="gx-eyebrow text-amber-400">Youth Infrastructure</p>
-            <h2 id="facilities-heading" className="gx-display text-3xl font-bold uppercase text-white">
+            <h2
+              id="facilities-heading"
+              className="gx-display text-3xl font-bold uppercase text-white"
+            >
               Academy & Performance Facilities
             </h2>
           </div>
@@ -959,15 +1111,32 @@ export default function PublicClubProfile() {
                   <School size={16} /> Youth Development Complex
                 </span>
                 <h3 className="gx-display text-2xl font-black uppercase text-white mt-2">
-                  {(academy?.level ?? facilities?.academy_level) != null ? `Level ${academy?.level ?? facilities?.academy_level} Academy` : "Academy details unavailable"}
+                  {(academy?.level ?? facilities?.academy_level) != null
+                    ? `Level ${academy?.level ?? facilities?.academy_level} Academy`
+                    : "Academy details unavailable"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-2 leading-relaxed">
-                  The proving ground for generational regens and academy intakes. High academy tier accelerates tactical IQ and potential fulfillment.
+                  The proving ground for generational regens and academy intakes. High academy tier
+                  accelerates tactical IQ and potential fulfillment.
                 </p>
 
                 <div className="mt-4 space-y-1.5 text-xs text-slate-400">
-                  <p>Capacity Limit: <b className="text-white">{academy?.capacity != null ? `${academy.capacity.toLocaleString()} prospects` : "Not available"}</b></p>
-                  <p>Active In Pipeline: <b className="text-emerald-400">{academy?.prospect_count != null ? `${academy.prospect_count} prospects` : "Not available"}</b></p>
+                  <p>
+                    Capacity Limit:{" "}
+                    <b className="text-white">
+                      {academy?.capacity != null
+                        ? `${academy.capacity.toLocaleString()} prospects`
+                        : "Not available"}
+                    </b>
+                  </p>
+                  <p>
+                    Active In Pipeline:{" "}
+                    <b className="text-emerald-400">
+                      {academy?.prospect_count != null
+                        ? `${academy.prospect_count} prospects`
+                        : "Not available"}
+                    </b>
+                  </p>
                 </div>
               </div>
 
@@ -1000,17 +1169,52 @@ export default function PublicClubProfile() {
             {/* Facilities Level Matrix */}
             <div className="lg:col-span-8 grid grid-cols-2 sm:grid-cols-3 gap-3">
               {[
-                { label: "Training Facility", level: facilities?.training_level ?? null, icon: Building, color: "text-emerald-400" },
-                { label: "Academy Complex", level: facilities?.academy_level ?? academy?.level ?? null, icon: School, color: "text-amber-400" },
-                { label: "Medical Centre", level: facilities?.medical_level ?? null, icon: Stethoscope, color: "text-rose-400" },
-                { label: "Youth Recruitment", level: facilities?.youth_recruitment_level ?? null, icon: Globe, color: "text-cyan-400" },
-                { label: "Commercial & Branding", level: facilities?.branding_level ?? null, icon: Palette, color: "text-purple-400" },
-                { label: "Stadium Quality", level: stadium?.level ?? null, icon: Building, color: "text-blue-400" },
+                {
+                  label: "Training Facility",
+                  level: facilities?.training_level ?? null,
+                  icon: Building,
+                  color: "text-emerald-400",
+                },
+                {
+                  label: "Academy Complex",
+                  level: facilities?.academy_level ?? academy?.level ?? null,
+                  icon: School,
+                  color: "text-amber-400",
+                },
+                {
+                  label: "Medical Centre",
+                  level: facilities?.medical_level ?? null,
+                  icon: Stethoscope,
+                  color: "text-rose-400",
+                },
+                {
+                  label: "Youth Recruitment",
+                  level: facilities?.youth_recruitment_level ?? null,
+                  icon: Globe,
+                  color: "text-cyan-400",
+                },
+                {
+                  label: "Commercial & Branding",
+                  level: facilities?.branding_level ?? null,
+                  icon: Palette,
+                  color: "text-purple-400",
+                },
+                {
+                  label: "Stadium Quality",
+                  level: stadium?.level ?? null,
+                  icon: Building,
+                  color: "text-blue-400",
+                },
               ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-white/5 bg-black/40 p-4 flex flex-col justify-between">
+                <div
+                  key={item.label}
+                  className="rounded-xl border border-white/5 bg-black/40 p-4 flex flex-col justify-between"
+                >
                   <div className="flex items-center justify-between">
                     <item.icon className={item.color} size={18} />
-                    <span className="gx-mono text-xs font-bold text-slate-400">{item.level != null ? `L${item.level}/5` : "Unrated"}</span>
+                    <span className="gx-mono text-xs font-bold text-slate-400">
+                      {item.level != null ? `L${item.level}/5` : "Unrated"}
+                    </span>
                   </div>
                   <div className="mt-4">
                     <p className="text-[11px] font-bold text-white">{item.label}</p>
@@ -1038,10 +1242,16 @@ export default function PublicClubProfile() {
                 {academy.prospects.map((p) => (
                   <div key={p.id} className="rounded-xl border border-white/5 bg-black/40 p-4">
                     <p className="font-bold text-white">{p.name}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">{p.position} · Age {p.age}</p>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {p.position} · Age {p.age}
+                    </p>
                     <div className="mt-3 flex items-center justify-between text-xs">
-                      <span className="text-[10px] text-slate-400 uppercase font-mono">Potential</span>
-                      <span className="font-mono font-bold text-emerald-400">{p.potential} POT</span>
+                      <span className="text-[10px] text-slate-400 uppercase font-mono">
+                        Potential
+                      </span>
+                      <span className="font-mono font-bold text-emerald-400">
+                        {p.potential} POT
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -1062,7 +1272,10 @@ export default function PublicClubProfile() {
           {coach_buses && coach_buses.length > 0 ? (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {coach_buses.map((bus, idx) => (
-                <div key={idx} className="rounded-2xl border border-purple-500/20 bg-slate-900/60 p-5 flex flex-col justify-between">
+                <div
+                  key={idx}
+                  className="rounded-2xl border border-purple-500/20 bg-slate-900/60 p-5 flex flex-col justify-between"
+                >
                   <div>
                     <div className="flex items-center justify-between">
                       <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-300">
@@ -1087,7 +1300,9 @@ export default function PublicClubProfile() {
           ) : (
             <div className="rounded-2xl border border-dashed border-white/10 bg-slate-900/30 p-8 text-center text-slate-400 flex items-center justify-center gap-3">
               <Bus size={22} className="text-slate-500" />
-              <span>No custom coach buses registered in this club's public transport fleet yet.</span>
+              <span>
+                No custom coach buses registered in this club's public transport fleet yet.
+              </span>
             </div>
           )}
         </section>
@@ -1100,12 +1315,16 @@ export default function PublicClubProfile() {
                 <Users size={32} />
               </div>
               <div>
-                <p className="text-[10px] uppercase font-bold tracking-wider text-amber-300">Club Ownership</p>
+                <p className="text-[10px] uppercase font-bold tracking-wider text-amber-300">
+                  Club Ownership
+                </p>
                 <h3 className="gx-display text-2xl sm:text-3xl font-black uppercase text-white mt-0.5">
                   {owner?.display_name || "GTEX Club Owner"}
                 </h3>
                 <p className="text-xs text-slate-300 mt-1">
-                  Controls {owner?.club_count || 1} verified GTEX club{owner?.club_count === 1 ? "" : "s"} · {owner?.luxury_asset_count || 0} registered personal luxury assets
+                  Controls {owner?.club_count || 1} verified GTEX club
+                  {owner?.club_count === 1 ? "" : "s"} · {owner?.luxury_asset_count || 0} registered
+                  personal luxury assets
                 </p>
               </div>
             </div>
@@ -1113,7 +1332,9 @@ export default function PublicClubProfile() {
             <div className="flex items-center gap-4">
               {owner?.net_worth && (
                 <div className="text-right">
-                  <span className="text-[10px] uppercase font-bold text-slate-400">Owner Net Worth</span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">
+                    Owner Net Worth
+                  </span>
                   <p className="gx-mono text-xl font-black text-amber-300">
                     {formatGtx(owner.net_worth, owner.net_worth_currency || "GTX")}
                   </p>
@@ -1135,7 +1356,10 @@ export default function PublicClubProfile() {
           <div className="flex items-center justify-between">
             <div>
               <p className="gx-eyebrow text-amber-400">Silverware Cabinet</p>
-              <h2 id="honours-heading" className="gx-display text-3xl font-bold uppercase text-white">
+              <h2
+                id="honours-heading"
+                className="gx-display text-3xl font-bold uppercase text-white"
+              >
                 Honours & Achievements
               </h2>
             </div>
@@ -1175,7 +1399,9 @@ export default function PublicClubProfile() {
             <div className="rounded-xl border border-dashed border-white/10 bg-slate-900/30 p-10 text-center text-slate-400">
               <Trophy className="mx-auto mb-3 text-slate-600" size={32} />
               <p className="font-bold text-white">A record still being written</p>
-              <p className="text-xs text-slate-400 mt-1">Honours and podium finishes will update as competitions conclude.</p>
+              <p className="text-xs text-slate-400 mt-1">
+                Honours and podium finishes will update as competitions conclude.
+              </p>
             </div>
           )}
         </section>
@@ -1196,7 +1422,11 @@ export default function PublicClubProfile() {
             quote="Inspect this club's 3D facilities, pitch arena, and matchday presentation."
             stats={[
               { label: "Recorded Honours", value: `${trophies?.length || 0}`, accent: "#F5B83D" },
-              { label: "Stadium Status", value: stadium?.level ? `Tier ${stadium.level}` : "Not rated", accent: "#00E676" },
+              {
+                label: "Stadium Status",
+                value: stadium?.level ? `Tier ${stadium.level}` : "Not rated",
+                accent: "#00E676",
+              },
             ]}
           />
         </section>
@@ -1214,7 +1444,9 @@ export default function PublicClubProfile() {
               <X size={20} />
             </button>
 
-            <p className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">Owner Persona</p>
+            <p className="text-[10px] uppercase font-bold text-amber-400 tracking-wider">
+              Owner Persona
+            </p>
             <h2 className="gx-display text-2xl font-black uppercase text-white mt-1">
               {owner?.display_name || "Club Owner"}
             </h2>
@@ -1226,7 +1458,9 @@ export default function PublicClubProfile() {
               </div>
               <div className="rounded-lg bg-slate-900/80 p-3 border border-white/5">
                 <span className="text-slate-400">Luxury Assets</span>
-                <p className="text-base font-bold text-white mt-0.5">{owner?.luxury_asset_count || 0}</p>
+                <p className="text-base font-bold text-white mt-0.5">
+                  {owner?.luxury_asset_count || 0}
+                </p>
               </div>
             </div>
 

@@ -625,20 +625,20 @@ def host_competition(session: Session, user_id: str, payload: dict[str, Any]) ->
 
             try:
                 ClubSocialService(session).create_challenge(
-                actor=actor,
-                club_id=host_club_id,
-                title=f"Join {comp.name}"[:160],
-                message=f"You are invited to {comp.name}. Use pin {comp.invite_code} to enter with your club.",
-                stakes_text="Friend competition",
-                target_club_id=opponent_club_id,
-                visibility="private",
-                country_code=None,
-                region_name=None,
-                city_name=None,
-                competition_id=comp.id,
-                accept_by=None,
-                scheduled_for=None,
-                metadata_json={"invite_code": comp.invite_code, "source": "friend_competition"},
+                    actor=actor,
+                    club_id=host_club_id,
+                    title=f"Join {comp.name}"[:160],
+                    message=f"You are invited to {comp.name}. Use pin {comp.invite_code} to enter with your club.",
+                    stakes_text="Friend competition",
+                    target_club_id=opponent_club_id,
+                    visibility="private",
+                    country_code=None,
+                    region_name=None,
+                    city_name=None,
+                    competition_id=comp.id,
+                    accept_by=None,
+                    scheduled_for=None,
+                    metadata_json={"invite_code": comp.invite_code, "source": "friend_competition"},
                 )
             except ClubSocialError:
                 pass
@@ -661,9 +661,11 @@ def search_fixtures(
     names: dict[str, str] = {}
     for comp in comps:
         rows = entries(session, comp.id)
-        involved = comp.host_type == "gtex" or comp.host_user_id == user_id or user_id in {
-            entry.owner_user_id for entry in rows
-        }
+        involved = (
+            comp.host_type == "gtex"
+            or comp.host_user_id == user_id
+            or user_id in {entry.owner_user_id for entry in rows}
+        )
         if not involved:
             continue
         visible_ids.add(comp.id)
@@ -686,9 +688,7 @@ def search_fixtures(
         if status_query and match.status != status_query:
             continue
         competition_name = names.get(match.competition_id, "")
-        if name_query and name_query not in " ".join(
-            (competition_name, match.home_name, match.away_name)
-        ).lower():
+        if name_query and name_query not in " ".join((competition_name, match.home_name, match.away_name)).lower():
             continue
         home_hit = _side_matches(club_query, match.home_club_id, match.home_name)
         away_hit = _side_matches(club_query, match.away_club_id, match.away_name)

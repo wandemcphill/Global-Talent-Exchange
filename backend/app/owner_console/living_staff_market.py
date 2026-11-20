@@ -594,7 +594,9 @@ def hire_staff_from_market(
         else (offered_salary_gtex if offered_salary_gtex is not None else expected_salary_fan_coin)
     )
     # A figure still on the old scale (more than double the new wage) is brought down with the 65% cut.
-    salary_fan_coin = expected_salary_fan_coin if offered_value > expected_salary_fan_coin * 2 else max(1, offered_value)
+    salary_fan_coin = (
+        expected_salary_fan_coin if offered_value > expected_salary_fan_coin * 2 else max(1, offered_value)
+    )
     years = max(1, min(int(contract_years or 3), 5))
 
     meta = dict(profile.metadata_json or {})

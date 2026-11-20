@@ -133,35 +133,215 @@ type KitStory = {
 };
 
 const KIT_STORIES: KitStory[] = [
-  { id: "royal-heritage", name: "Royal Heritage", description: "Royal blue, white and championship gold", home: ["#123B8A", "#FFFFFF", "#D9A441"], third: ["#101827", "#D9A441", "#FFFFFF"], goalkeeper: ["#E9B949", "#152238", "#FFFFFF"] },
-  { id: "emerald-dynasty", name: "Emerald Dynasty", description: "Deep emerald with warm gold detailing", home: ["#075B45", "#F4F1E8", "#D6A84B"], third: ["#102B26", "#56C7A3", "#F4F1E8"], goalkeeper: ["#E4A62C", "#102B26", "#FFFFFF"] },
-  { id: "scarlet-regalia", name: "Scarlet Regalia", description: "Classic scarlet, cream and dark navy", home: ["#A5122A", "#FFF4E6", "#152238"], third: ["#152238", "#A5122A", "#FFF4E6"], goalkeeper: ["#C7E7F5", "#152238", "#A5122A"] },
-  { id: "midnight-gold", name: "Midnight Gold", description: "Midnight navy with metallic gold", home: ["#081B35", "#D7B65D", "#FFFFFF"], third: ["#202938", "#D7B65D", "#F4F5F7"], goalkeeper: ["#6E43A6", "#F4F5F7", "#D7B65D"] },
-  { id: "coastal-teal", name: "Coastal Teal", description: "Ocean teal, ice white and coral", home: ["#087F8C", "#E9F6F6", "#F27B62"], third: ["#123B50", "#5BC0BE", "#FFFFFF"], goalkeeper: ["#F1B84B", "#123B50", "#FFFFFF"] },
-  { id: "purple-sovereign", name: "Purple Sovereign", description: "Regal purple with gold and ivory", home: ["#542583", "#F7F0DF", "#D8AD55"], third: ["#1D1832", "#A67BD5", "#F7F0DF"], goalkeeper: ["#5DB7A4", "#1D1832", "#FFFFFF"] },
-  { id: "black-panther", name: "Black Panther", description: "Black, graphite and electric lime", home: ["#101418", "#D8F35A", "#FFFFFF"], third: ["#26313A", "#7FA4B8", "#FFFFFF"], goalkeeper: ["#D84D43", "#101418", "#FFFFFF"] },
-  { id: "northern-sky", name: "Northern Sky", description: "Sky blue, navy and silver", home: ["#4DA6D8", "#102D4A", "#E9F1F7"], third: ["#102D4A", "#B9D5E8", "#FFFFFF"], goalkeeper: ["#E7B44B", "#102D4A", "#FFFFFF"] },
-  { id: "burgundy-classic", name: "Burgundy Classic", description: "Burgundy, sand and cream", home: ["#641C32", "#E5D3B3", "#F8F2E8"], third: ["#242B36", "#C9A86A", "#F8F2E8"], goalkeeper: ["#3C9B76", "#242B36", "#FFFFFF"] },
-  { id: "copper-forge", name: "Copper Forge", description: "Burnt orange, charcoal and pale gold", home: ["#B74B2A", "#17212B", "#F2C078"], third: ["#17212B", "#E47C42", "#F5E8D6"], goalkeeper: ["#3C77A8", "#17212B", "#FFFFFF"] },
-  { id: "forest-tradition", name: "Forest Tradition", description: "Forest green with old-gold trim", home: ["#174B35", "#F4F0E4", "#B69A55"], third: ["#243B34", "#8CC7A5", "#F4F0E4"], goalkeeper: ["#D94B43", "#243B34", "#FFFFFF"] },
-  { id: "ice-cobalt", name: "Ice Cobalt", description: "Cobalt, ice blue and white", home: ["#1745A5", "#D8F0FA", "#FFFFFF"], third: ["#0D1B36", "#5BA9E6", "#FFFFFF"], goalkeeper: ["#E8A23A", "#0D1B36", "#FFFFFF"] },
-  { id: "desert-rose", name: "Desert Rose", description: "Sandstone, rose and dark plum", home: ["#B96E68", "#F6E9D8", "#44273F"], third: ["#44273F", "#DDA7A0", "#F6E9D8"], goalkeeper: ["#477D72", "#44273F", "#FFFFFF"] },
-  { id: "monochrome-elite", name: "Monochrome Elite", description: "Black, white and silver", home: ["#111820", "#FFFFFF", "#A9B4BF"], third: ["#46515C", "#F0F2F4", "#111820"], goalkeeper: ["#D4AF37", "#111820", "#FFFFFF"] },
-  { id: "citrus-electric", name: "Citrus Electric", description: "Electric yellow, deep blue and black", home: ["#D5E82D", "#102A43", "#FFFFFF"], third: ["#102A43", "#F36B3F", "#FFFFFF"], goalkeeper: ["#7D5CC6", "#102A43", "#FFFFFF"] },
-  { id: "ocean-maroon", name: "Ocean Maroon", description: "Deep maroon, aqua and cream", home: ["#6D1D3B", "#B8E4E3", "#F5ECDD"], third: ["#0D3D4A", "#E0A65D", "#FFFFFF"], goalkeeper: ["#D95F4D", "#0D3D4A", "#FFFFFF"] },
-  { id: "ivory-navy", name: "Ivory Navy", description: "Ivory body with navy and copper", home: ["#F4EFE4", "#14233B", "#C47B4A"], third: ["#14233B", "#F4EFE4", "#C47B4A"], goalkeeper: ["#2F9E8F", "#14233B", "#F4EFE4"] },
-  { id: "crimson-ink", name: "Crimson Ink", description: "Ink black with crimson flashes", home: ["#1A1014", "#E11D48", "#F8E7EA"], third: ["#3F0D1A", "#F8E7EA", "#E11D48"], goalkeeper: ["#F59E0B", "#1A1014", "#F8E7EA"] },
-  { id: "arctic-white", name: "Arctic White", description: "White, ice blue and deep navy", home: ["#F8FBFF", "#0F3A68", "#7DD3FC"], third: ["#0F3A68", "#F8FBFF", "#7DD3FC"], goalkeeper: ["#F97316", "#0F3A68", "#F8FBFF"] },
-  { id: "amber-pitch", name: "Amber Pitch", description: "Amber, pitch green and cream", home: ["#C47B16", "#16382B", "#F6E7C1"], third: ["#16382B", "#E7B008", "#F6E7C1"], goalkeeper: ["#2563EB", "#16382B", "#F6E7C1"] },
-  { id: "violet-night", name: "Violet Night", description: "Night violet with silver and lilac", home: ["#2E1065", "#E9D5FF", "#C4B5FD"], third: ["#111827", "#A78BFA", "#F5F3FF"], goalkeeper: ["#FACC15", "#2E1065", "#F5F3FF"] },
-  { id: "lime-harbor", name: "Lime Harbor", description: "Harbor navy with lime and white", home: ["#0F2C3C", "#D9F99D", "#FFFFFF"], third: ["#14532D", "#D9F99D", "#ECFCCB"], goalkeeper: ["#FB7185", "#0F2C3C", "#FFFFFF"] },
-  { id: "bronze-city", name: "Bronze City", description: "Bronze, charcoal and warm sand", home: ["#8A5A2B", "#1F2933", "#F3E6D0"], third: ["#1F2933", "#D6A15A", "#F3E6D0"], goalkeeper: ["#0EA5E9", "#1F2933", "#F3E6D0"] },
-  { id: "rose-navy", name: "Rose Navy", description: "Rose red, navy and pale gold", home: ["#9F1239", "#172554", "#FDE68A"], third: ["#172554", "#FB7185", "#FDE68A"], goalkeeper: ["#34D399", "#172554", "#FDE68A"] },
-  { id: "glacier-red", name: "Glacier Red", description: "Glacier blue with signal red", home: ["#0369A1", "#E0F2FE", "#DC2626"], third: ["#082F49", "#FCA5A5", "#E0F2FE"], goalkeeper: ["#FDE047", "#082F49", "#E0F2FE"] },
+  {
+    id: "royal-heritage",
+    name: "Royal Heritage",
+    description: "Royal blue, white and championship gold",
+    home: ["#123B8A", "#FFFFFF", "#D9A441"],
+    third: ["#101827", "#D9A441", "#FFFFFF"],
+    goalkeeper: ["#E9B949", "#152238", "#FFFFFF"],
+  },
+  {
+    id: "emerald-dynasty",
+    name: "Emerald Dynasty",
+    description: "Deep emerald with warm gold detailing",
+    home: ["#075B45", "#F4F1E8", "#D6A84B"],
+    third: ["#102B26", "#56C7A3", "#F4F1E8"],
+    goalkeeper: ["#E4A62C", "#102B26", "#FFFFFF"],
+  },
+  {
+    id: "scarlet-regalia",
+    name: "Scarlet Regalia",
+    description: "Classic scarlet, cream and dark navy",
+    home: ["#A5122A", "#FFF4E6", "#152238"],
+    third: ["#152238", "#A5122A", "#FFF4E6"],
+    goalkeeper: ["#C7E7F5", "#152238", "#A5122A"],
+  },
+  {
+    id: "midnight-gold",
+    name: "Midnight Gold",
+    description: "Midnight navy with metallic gold",
+    home: ["#081B35", "#D7B65D", "#FFFFFF"],
+    third: ["#202938", "#D7B65D", "#F4F5F7"],
+    goalkeeper: ["#6E43A6", "#F4F5F7", "#D7B65D"],
+  },
+  {
+    id: "coastal-teal",
+    name: "Coastal Teal",
+    description: "Ocean teal, ice white and coral",
+    home: ["#087F8C", "#E9F6F6", "#F27B62"],
+    third: ["#123B50", "#5BC0BE", "#FFFFFF"],
+    goalkeeper: ["#F1B84B", "#123B50", "#FFFFFF"],
+  },
+  {
+    id: "purple-sovereign",
+    name: "Purple Sovereign",
+    description: "Regal purple with gold and ivory",
+    home: ["#542583", "#F7F0DF", "#D8AD55"],
+    third: ["#1D1832", "#A67BD5", "#F7F0DF"],
+    goalkeeper: ["#5DB7A4", "#1D1832", "#FFFFFF"],
+  },
+  {
+    id: "black-panther",
+    name: "Black Panther",
+    description: "Black, graphite and electric lime",
+    home: ["#101418", "#D8F35A", "#FFFFFF"],
+    third: ["#26313A", "#7FA4B8", "#FFFFFF"],
+    goalkeeper: ["#D84D43", "#101418", "#FFFFFF"],
+  },
+  {
+    id: "northern-sky",
+    name: "Northern Sky",
+    description: "Sky blue, navy and silver",
+    home: ["#4DA6D8", "#102D4A", "#E9F1F7"],
+    third: ["#102D4A", "#B9D5E8", "#FFFFFF"],
+    goalkeeper: ["#E7B44B", "#102D4A", "#FFFFFF"],
+  },
+  {
+    id: "burgundy-classic",
+    name: "Burgundy Classic",
+    description: "Burgundy, sand and cream",
+    home: ["#641C32", "#E5D3B3", "#F8F2E8"],
+    third: ["#242B36", "#C9A86A", "#F8F2E8"],
+    goalkeeper: ["#3C9B76", "#242B36", "#FFFFFF"],
+  },
+  {
+    id: "copper-forge",
+    name: "Copper Forge",
+    description: "Burnt orange, charcoal and pale gold",
+    home: ["#B74B2A", "#17212B", "#F2C078"],
+    third: ["#17212B", "#E47C42", "#F5E8D6"],
+    goalkeeper: ["#3C77A8", "#17212B", "#FFFFFF"],
+  },
+  {
+    id: "forest-tradition",
+    name: "Forest Tradition",
+    description: "Forest green with old-gold trim",
+    home: ["#174B35", "#F4F0E4", "#B69A55"],
+    third: ["#243B34", "#8CC7A5", "#F4F0E4"],
+    goalkeeper: ["#D94B43", "#243B34", "#FFFFFF"],
+  },
+  {
+    id: "ice-cobalt",
+    name: "Ice Cobalt",
+    description: "Cobalt, ice blue and white",
+    home: ["#1745A5", "#D8F0FA", "#FFFFFF"],
+    third: ["#0D1B36", "#5BA9E6", "#FFFFFF"],
+    goalkeeper: ["#E8A23A", "#0D1B36", "#FFFFFF"],
+  },
+  {
+    id: "desert-rose",
+    name: "Desert Rose",
+    description: "Sandstone, rose and dark plum",
+    home: ["#B96E68", "#F6E9D8", "#44273F"],
+    third: ["#44273F", "#DDA7A0", "#F6E9D8"],
+    goalkeeper: ["#477D72", "#44273F", "#FFFFFF"],
+  },
+  {
+    id: "monochrome-elite",
+    name: "Monochrome Elite",
+    description: "Black, white and silver",
+    home: ["#111820", "#FFFFFF", "#A9B4BF"],
+    third: ["#46515C", "#F0F2F4", "#111820"],
+    goalkeeper: ["#D4AF37", "#111820", "#FFFFFF"],
+  },
+  {
+    id: "citrus-electric",
+    name: "Citrus Electric",
+    description: "Electric yellow, deep blue and black",
+    home: ["#D5E82D", "#102A43", "#FFFFFF"],
+    third: ["#102A43", "#F36B3F", "#FFFFFF"],
+    goalkeeper: ["#7D5CC6", "#102A43", "#FFFFFF"],
+  },
+  {
+    id: "ocean-maroon",
+    name: "Ocean Maroon",
+    description: "Deep maroon, aqua and cream",
+    home: ["#6D1D3B", "#B8E4E3", "#F5ECDD"],
+    third: ["#0D3D4A", "#E0A65D", "#FFFFFF"],
+    goalkeeper: ["#D95F4D", "#0D3D4A", "#FFFFFF"],
+  },
+  {
+    id: "ivory-navy",
+    name: "Ivory Navy",
+    description: "Ivory body with navy and copper",
+    home: ["#F4EFE4", "#14233B", "#C47B4A"],
+    third: ["#14233B", "#F4EFE4", "#C47B4A"],
+    goalkeeper: ["#2F9E8F", "#14233B", "#F4EFE4"],
+  },
+  {
+    id: "crimson-ink",
+    name: "Crimson Ink",
+    description: "Ink black with crimson flashes",
+    home: ["#1A1014", "#E11D48", "#F8E7EA"],
+    third: ["#3F0D1A", "#F8E7EA", "#E11D48"],
+    goalkeeper: ["#F59E0B", "#1A1014", "#F8E7EA"],
+  },
+  {
+    id: "arctic-white",
+    name: "Arctic White",
+    description: "White, ice blue and deep navy",
+    home: ["#F8FBFF", "#0F3A68", "#7DD3FC"],
+    third: ["#0F3A68", "#F8FBFF", "#7DD3FC"],
+    goalkeeper: ["#F97316", "#0F3A68", "#F8FBFF"],
+  },
+  {
+    id: "amber-pitch",
+    name: "Amber Pitch",
+    description: "Amber, pitch green and cream",
+    home: ["#C47B16", "#16382B", "#F6E7C1"],
+    third: ["#16382B", "#E7B008", "#F6E7C1"],
+    goalkeeper: ["#2563EB", "#16382B", "#F6E7C1"],
+  },
+  {
+    id: "violet-night",
+    name: "Violet Night",
+    description: "Night violet with silver and lilac",
+    home: ["#2E1065", "#E9D5FF", "#C4B5FD"],
+    third: ["#111827", "#A78BFA", "#F5F3FF"],
+    goalkeeper: ["#FACC15", "#2E1065", "#F5F3FF"],
+  },
+  {
+    id: "lime-harbor",
+    name: "Lime Harbor",
+    description: "Harbor navy with lime and white",
+    home: ["#0F2C3C", "#D9F99D", "#FFFFFF"],
+    third: ["#14532D", "#D9F99D", "#ECFCCB"],
+    goalkeeper: ["#FB7185", "#0F2C3C", "#FFFFFF"],
+  },
+  {
+    id: "bronze-city",
+    name: "Bronze City",
+    description: "Bronze, charcoal and warm sand",
+    home: ["#8A5A2B", "#1F2933", "#F3E6D0"],
+    third: ["#1F2933", "#D6A15A", "#F3E6D0"],
+    goalkeeper: ["#0EA5E9", "#1F2933", "#F3E6D0"],
+  },
+  {
+    id: "rose-navy",
+    name: "Rose Navy",
+    description: "Rose red, navy and pale gold",
+    home: ["#9F1239", "#172554", "#FDE68A"],
+    third: ["#172554", "#FB7185", "#FDE68A"],
+    goalkeeper: ["#34D399", "#172554", "#FDE68A"],
+  },
+  {
+    id: "glacier-red",
+    name: "Glacier Red",
+    description: "Glacier blue with signal red",
+    home: ["#0369A1", "#E0F2FE", "#DC2626"],
+    third: ["#082F49", "#FCA5A5", "#E0F2FE"],
+    goalkeeper: ["#FDE047", "#082F49", "#E0F2FE"],
+  },
 ];
 
 function xmlSafe(value: string): string {
-  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;");
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
 }
 
 const GENERIC_CLUB_WORDS = new Set(["FC", "CF", "SC", "AC", "AFC"]);
@@ -175,12 +355,16 @@ export function clubShortCode(clubName: string): string {
 
   let code = "";
   if (words.length >= 3) {
-    code = words.slice(0, 3).map((word) => word[0]).join("");
+    code = words
+      .slice(0, 3)
+      .map((word) => word[0])
+      .join("");
   } else if (words.length === 2) {
     const [first, second] = words;
-    code = GENERIC_CLUB_WORDS.has(first) || GENERIC_CLUB_WORDS.has(second)
-      ? (first + second).slice(0, 3)
-      : (first[0] + second).slice(0, 3);
+    code =
+      GENERIC_CLUB_WORDS.has(first) || GENERIC_CLUB_WORDS.has(second)
+        ? (first + second).slice(0, 3)
+        : (first[0] + second).slice(0, 3);
   } else {
     code = words[0].slice(0, 3);
   }
@@ -336,7 +520,16 @@ export function buildCrestLibrary(clubName: string): CrestConcept[] {
       for (const finish of FINISHES) {
         for (const layout of LAYOUTS) {
           const palette = CREST_PALETTES[optionIndex % CREST_PALETTES.length];
-          const svg = renderCrestSvg(shape.id, icon.id, layout.id, palette[0], palette[1], palette[2], initials, finish.id);
+          const svg = renderCrestSvg(
+            shape.id,
+            icon.id,
+            layout.id,
+            palette[0],
+            palette[1],
+            palette[2],
+            initials,
+            finish.id,
+          );
           const style = `${finish.label} ${shape.label}`;
           options.push({
             concept_id: `${shape.id}-${icon.id}-${finish.id}-${layout.id}`,
@@ -364,7 +557,8 @@ export function buildCrestLibrary(clubName: string): CrestConcept[] {
 }
 
 export function preferredCrestIndex(crests: CrestConcept[], style: string): number {
-  const shape: CrestShape = style === "modern" ? "round" : style === "metallic" ? "diamond" : "shield";
+  const shape: CrestShape =
+    style === "modern" ? "round" : style === "metallic" ? "diamond" : "shield";
   const index = crests.findIndex((crest) => crest.shape === shape && crest.layout === "plain");
   return index < 0 ? 0 : index;
 }
@@ -378,7 +572,8 @@ export function filterCrestLibrary(
     if (filter.finish && filter.finish !== "all" && crest.finish !== filter.finish) return false;
     if (filter.shape && filter.shape !== "all" && crest.shape !== filter.shape) return false;
     if (!query) return true;
-    const haystack = `${crest.style} ${crest.icon_family} ${crest.layout} ${crest.initials} ${crest.visual_meaning}`.toLowerCase();
+    const haystack =
+      `${crest.style} ${crest.icon_family} ${crest.layout} ${crest.initials} ${crest.visual_meaning}`.toLowerCase();
     return haystack.includes(query);
   });
 }
@@ -405,7 +600,12 @@ function buildKitCatalog(): KitPreset[] {
         pattern: cut.pattern,
         collar: cut.collar,
         sleeve: cut.sleeve,
-        patterns: [cut.pattern, shiftPattern(cut.pattern, 1), shiftPattern(cut.pattern, 2), shiftPattern(cut.pattern, 3)],
+        patterns: [
+          cut.pattern,
+          shiftPattern(cut.pattern, 1),
+          shiftPattern(cut.pattern, 2),
+          shiftPattern(cut.pattern, 3),
+        ],
       });
     });
   }
@@ -445,10 +645,46 @@ export function buildKitSet(presetId: string, clubName: string): KitSet {
   const [awayPrimary] = preset.away;
   const [thirdPrimary] = preset.third;
   return {
-    home: variant("home", preset.home, preset.patterns[0], preset.collar, preset.sleeve, homePrimary, homeSecondary, chestText),
-    away: variant("away", preset.away, preset.patterns[1], preset.collar, preset.sleeve, awayPrimary, preset.away[1], chestText),
-    third: variant("third", preset.third, preset.patterns[2], preset.collar, preset.sleeve, thirdPrimary, preset.third[1], chestText),
-    goalkeeper: variant("goalkeeper", preset.goalkeeper, preset.patterns[3], preset.collar, "long", preset.goalkeeper[0], preset.goalkeeper[1], chestText),
+    home: variant(
+      "home",
+      preset.home,
+      preset.patterns[0],
+      preset.collar,
+      preset.sleeve,
+      homePrimary,
+      homeSecondary,
+      chestText,
+    ),
+    away: variant(
+      "away",
+      preset.away,
+      preset.patterns[1],
+      preset.collar,
+      preset.sleeve,
+      awayPrimary,
+      preset.away[1],
+      chestText,
+    ),
+    third: variant(
+      "third",
+      preset.third,
+      preset.patterns[2],
+      preset.collar,
+      preset.sleeve,
+      thirdPrimary,
+      preset.third[1],
+      chestText,
+    ),
+    goalkeeper: variant(
+      "goalkeeper",
+      preset.goalkeeper,
+      preset.patterns[3],
+      preset.collar,
+      "long",
+      preset.goalkeeper[0],
+      preset.goalkeeper[1],
+      chestText,
+    ),
   };
 }
 
@@ -458,9 +694,12 @@ export function filterKitPresets(
 ): KitPreset[] {
   const query = (filter.query || "").trim().toLowerCase();
   return presets.filter((preset) => {
-    if (filter.pattern && filter.pattern !== "all" && preset.pattern !== filter.pattern) return false;
+    if (filter.pattern && filter.pattern !== "all" && preset.pattern !== filter.pattern)
+      return false;
     if (!query) return true;
-    return `${preset.name} ${preset.description} ${preset.collar} ${preset.sleeve}`.toLowerCase().includes(query);
+    return `${preset.name} ${preset.description} ${preset.collar} ${preset.sleeve}`
+      .toLowerCase()
+      .includes(query);
   });
 }
 
@@ -472,16 +711,50 @@ export function buildClubDNA(
   preferredAgeBracket: string,
   nationalityFocus: string,
 ) {
-  const policy: Record<string, { philosophy: string; transfer: string; finance: string; narrative: string }> = {
-    youth: { philosophy: "youth_development", transfer: "buy_young_develop_sell", finance: "balanced", narrative: "developing young talent and building a lasting football legacy" },
-    academy: { philosophy: "academy_first", transfer: "academy_production", finance: "academy_focused", narrative: "bringing home-grown academy graduates into the first team" },
-    selling: { philosophy: "selling_club", transfer: "buy_young_develop_sell", finance: "sustainable", narrative: "finding undervalued players, developing them and selling at the right moment" },
-    superstars: { philosophy: "superstar", transfer: "superstars", finance: "big_spending", narrative: "competing for the biggest names and the highest honours" },
-    sustainable: { philosophy: "financially_sustainable", transfer: "buy_undervalued", finance: "sustainable", narrative: "building a competitive club through careful scouting and disciplined spending" },
-    balanced: { philosophy: "balanced", transfer: "buy_undervalued", finance: "balanced", narrative: "balancing promising young players with experienced professionals" },
+  const policy: Record<
+    string,
+    { philosophy: string; transfer: string; finance: string; narrative: string }
+  > = {
+    youth: {
+      philosophy: "youth_development",
+      transfer: "buy_young_develop_sell",
+      finance: "balanced",
+      narrative: "developing young talent and building a lasting football legacy",
+    },
+    academy: {
+      philosophy: "academy_first",
+      transfer: "academy_production",
+      finance: "academy_focused",
+      narrative: "bringing home-grown academy graduates into the first team",
+    },
+    selling: {
+      philosophy: "selling_club",
+      transfer: "buy_young_develop_sell",
+      finance: "sustainable",
+      narrative: "finding undervalued players, developing them and selling at the right moment",
+    },
+    superstars: {
+      philosophy: "superstar",
+      transfer: "superstars",
+      finance: "big_spending",
+      narrative: "competing for the biggest names and the highest honours",
+    },
+    sustainable: {
+      philosophy: "financially_sustainable",
+      transfer: "buy_undervalued",
+      finance: "sustainable",
+      narrative: "building a competitive club through careful scouting and disciplined spending",
+    },
+    balanced: {
+      philosophy: "balanced",
+      transfer: "buy_undervalued",
+      finance: "balanced",
+      narrative: "balancing promising young players with experienced professionals",
+    },
   };
   const selected = policy[recruitmentFocus] || policy.youth;
-  const preferredMaxAge = preferredAgeBracket === "none" ? null : Number(preferredAgeBracket.replace("U", "")) || 23;
+  const preferredMaxAge =
+    preferredAgeBracket === "none" ? null : Number(preferredAgeBracket.replace("U", "")) || 23;
   return {
     primary_philosophy: selected.philosophy,
     secondary_philosophies: ["financially_sustainable"],
@@ -543,7 +816,8 @@ function sleeveMarkup(kit: KitVariant): string {
 }
 
 export function kitSwatchDataUri(kit: KitVariant): string {
-  const shirtPath = "M36 24 L48 12 L62 20 L76 12 L88 24 L108 39 L97 59 L85 50 L85 116 L39 116 L39 50 L27 59 L16 39 Z";
+  const shirtPath =
+    "M36 24 L48 12 L62 20 L76 12 L88 24 L108 39 L97 59 L85 50 L85 116 L39 116 L39 50 L27 59 L16 39 Z";
   const pattern = patternMarkup(kit, shirtPath);
   const chest = xmlSafe(kit.front_text.slice(0, 20));
   const fontSize = chest.length > 12 ? 6.5 : chest.length > 8 ? 8 : 10;

@@ -42,10 +42,20 @@ export default function ClubIdentityStudio() {
   const [savedBadgeUrl, setSavedBadgeUrl] = useState<string | null>(null);
   const [loadedBadgeKey, setLoadedBadgeKey] = useState("");
 
-  const selectedClubId = routeClubId || params.get("club") || active?.club_id || myClubs?.[0]?.id || myClubs?.[0]?.club_id || "";
+  const selectedClubId =
+    routeClubId ||
+    params.get("club") ||
+    active?.club_id ||
+    myClubs?.[0]?.id ||
+    myClubs?.[0]?.club_id ||
+    "";
 
   // Fetch current club identity
-  const { data: identityData, isLoading: loadingIdentity, refetch } = useQuery({
+  const {
+    data: identityData,
+    isLoading: loadingIdentity,
+    refetch,
+  } = useQuery({
     queryKey: ["club-identity", selectedClubId],
     queryFn: async () => {
       if (!selectedClubId) return null;
@@ -54,7 +64,9 @@ export default function ClubIdentityStudio() {
     enabled: !!selectedClubId,
   });
 
-  const [activeTab, setActiveTab] = useState<"crest" | "home" | "away" | "third" | "goalkeeper">("crest");
+  const [activeTab, setActiveTab] = useState<"crest" | "home" | "away" | "third" | "goalkeeper">(
+    "crest",
+  );
   const [busySaving, setBusySaving] = useState(false);
   const [aiPrompt, setAiPrompt] = useState("");
   const [aiBusy, setAiBusy] = useState(false);
@@ -214,7 +226,9 @@ export default function ClubIdentityStudio() {
 
     // Shoulders & Sleeves
     const leftArmGeo = new THREE.CylinderGeometry(0.2, 0.18, 0.8, 16);
-    const armMat = new THREE.MeshStandardMaterial({ color: new THREE.Color(activeKit.primary_color) });
+    const armMat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(activeKit.primary_color),
+    });
     const leftArm = new THREE.Mesh(leftArmGeo, armMat);
     leftArm.position.set(-0.95, 1.6, 0);
     leftArm.rotation.z = 0.3;
@@ -288,9 +302,13 @@ export default function ClubIdentityStudio() {
         if (child.name === "shirt" || child.name === "leftArm" || child.name === "rightArm") {
           (child.material as THREE.MeshStandardMaterial).color.set(activeKit.primary_color);
         } else if (child.name === "shorts") {
-          (child.material as THREE.MeshStandardMaterial).color.set(activeKit.shorts_color || activeKit.primary_color);
+          (child.material as THREE.MeshStandardMaterial).color.set(
+            activeKit.shorts_color || activeKit.primary_color,
+          );
         } else if (child.name === "leftSock" || child.name === "rightSock") {
-          (child.material as THREE.MeshStandardMaterial).color.set(activeKit.socks_color || activeKit.secondary_color);
+          (child.material as THREE.MeshStandardMaterial).color.set(
+            activeKit.socks_color || activeKit.secondary_color,
+          );
         }
       }
     });
@@ -420,7 +438,10 @@ export default function ClubIdentityStudio() {
   }
 
   return (
-    <div className="gx-pitch-grid min-h-screen bg-[#070B11] px-4 py-8 sm:px-8" data-testid="club-identity-studio">
+    <div
+      className="gx-pitch-grid min-h-screen bg-[#070B11] px-4 py-8 sm:px-8"
+      data-testid="club-identity-studio"
+    >
       <div className="mx-auto max-w-[1400px]">
         {/* Header toolbar */}
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-white/10 pb-4">
@@ -527,7 +548,9 @@ export default function ClubIdentityStudio() {
                 type="button"
                 onClick={() => setActiveTab("crest")}
                 className={`flex items-center gap-2 rounded px-3 py-1.5 text-xs font-bold uppercase transition-colors ${
-                  activeTab === "crest" ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"
+                  activeTab === "crest"
+                    ? "bg-emerald-500 text-white"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
                 <Shield size={14} /> Crest & Badge
@@ -538,7 +561,9 @@ export default function ClubIdentityStudio() {
                   key={slot}
                   onClick={() => setActiveTab(slot)}
                   className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-bold uppercase transition-colors ${
-                    activeTab === slot ? "bg-emerald-500 text-white" : "text-slate-400 hover:text-white"
+                    activeTab === slot
+                      ? "bg-emerald-500 text-white"
+                      : "text-slate-400 hover:text-white"
                   }`}
                 >
                   <Shirt size={14} /> {slot} Kit
@@ -548,10 +573,16 @@ export default function ClubIdentityStudio() {
 
             {/* Crest Designer Controls */}
             {activeTab === "crest" && (
-              <Panel eyebrow="Vector Heraldry" title="Club Crest & Badge Architecture" className="w-full">
+              <Panel
+                eyebrow="Vector Heraldry"
+                title="Club Crest & Badge Architecture"
+                className="w-full"
+              >
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Shield Shape</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Shield Shape
+                    </label>
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                       {BADGE_SHAPES.map((sh) => (
                         <button
@@ -571,7 +602,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Emblem Symbol</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Emblem Symbol
+                    </label>
                     <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                       {ICON_FAMILIES.map((ic) => (
                         <button
@@ -591,7 +624,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Initials Wordmark</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Initials Wordmark
+                    </label>
                     <input
                       className="gx-input mt-1.5 uppercase"
                       maxLength={4}
@@ -601,19 +636,25 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Trophy Stars Count</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Trophy Stars Count
+                    </label>
                     <input
                       type="number"
                       min={0}
                       max={5}
                       className="gx-input mt-1.5"
                       value={trophyStars}
-                      onChange={(e) => setTrophyStars(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                      onChange={(e) =>
+                        setTrophyStars(Math.max(0, parseInt(e.target.value, 10) || 0))
+                      }
                     />
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Color Palette</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Color Palette
+                    </label>
                     <div className="mt-1.5 flex gap-4">
                       <label className="flex items-center gap-2 text-xs text-slate-400">
                         Primary:
@@ -650,10 +691,16 @@ export default function ClubIdentityStudio() {
 
             {/* Uniform Kit Controls */}
             {activeTab !== "crest" && (
-              <Panel eyebrow={`${activeTab.toUpperCase()} Uniform`} title="Jersey & Kit Tailoring" className="w-full">
+              <Panel
+                eyebrow={`${activeTab.toUpperCase()} Uniform`}
+                title="Jersey & Kit Tailoring"
+                className="w-full"
+              >
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Fabric Pattern</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Fabric Pattern
+                    </label>
                     <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                       {PATTERNS.map((p) => (
                         <button
@@ -678,7 +725,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Collar Cut</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Collar Cut
+                    </label>
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                       {COLLAR_STYLES.map((c) => (
                         <button
@@ -703,7 +752,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Sleeves Style</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Sleeves Style
+                    </label>
                     <div className="mt-1.5 grid grid-cols-2 gap-1.5">
                       {SLEEVE_STYLES.map((s) => (
                         <button
@@ -728,7 +779,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Chest Text / Motto</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Chest Text / Motto
+                    </label>
                     <input
                       className="gx-input mt-1.5 uppercase"
                       value={kits[activeTab].front_text || ""}
@@ -742,7 +795,9 @@ export default function ClubIdentityStudio() {
                   </div>
 
                   <div className="sm:col-span-2">
-                    <label className="text-[11px] font-semibold uppercase text-slate-300">Uniform Tones</label>
+                    <label className="text-[11px] font-semibold uppercase text-slate-300">
+                      Uniform Tones
+                    </label>
                     <div className="mt-1.5 flex flex-wrap gap-4">
                       <label className="flex items-center gap-2 text-xs text-slate-400">
                         Jersey Base:

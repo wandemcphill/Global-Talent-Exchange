@@ -9,7 +9,9 @@ function backendOrigin(): string {
     );
   }
   if (configured.endsWith("/api")) {
-    throw new Error("REACT_APP_BACKEND_URL must be the API origin without a /api suffix. The shell appends /api itself.");
+    throw new Error(
+      "REACT_APP_BACKEND_URL must be the API origin without a /api suffix. The shell appends /api itself.",
+    );
   }
   return configured;
 }
@@ -81,14 +83,18 @@ api.interceptors.response.use(
 
 const READABLE: Record<string, string> = {
   insufficient_funds: "Not enough funds in this account.",
-  same_owner_bracket_blocked: "Clubs under common ownership can't enter the same prize-sensitive bracket.",
+  same_owner_bracket_blocked:
+    "Clubs under common ownership can't enter the same prize-sensitive bracket.",
   club_ownership_cap_reached: "You already own the maximum of 3 clubs.",
-  paystack_secret_key_not_configured: "Paystack isn't connected yet. Add the Paystack secret key to enable Naira deposits.",
+  paystack_secret_key_not_configured:
+    "Paystack isn't connected yet. Add the Paystack secret key to enable Naira deposits.",
   withdrawal_not_eligible: "This withdrawal does not pass the payout eligibility checks.",
   related_party_transfer_blocked: "Related-party transfer blocked by integrity rules.",
   sign_starting_squad_first: "Sign a starting squad (22 players incl. a goalkeeper) first.",
-  restricted_player_requires_deposited_funds: "Players at GSI 75 or above, regens, and legends need topped-up GTX. The 2,500 welcome grant only buys active players at GSI 74 and under.",
-  minimum_squad_size_not_met: "Club requires at least 22 registered players with goalkeeper coverage.",
+  restricted_player_requires_deposited_funds:
+    "Players at GSI 75 or above, regens, and legends need topped-up GTX. The 2,500 welcome grant only buys active players at GSI 74 and under.",
+  minimum_squad_size_not_met:
+    "Club requires at least 22 registered players with goalkeeper coverage.",
 };
 
 export function errMsg(e: any): string {

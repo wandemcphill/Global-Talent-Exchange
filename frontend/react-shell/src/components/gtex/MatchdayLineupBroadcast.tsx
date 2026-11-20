@@ -45,41 +45,6 @@ export interface MatchdayTeamSheet {
 const DEFAULT_NUMBERS = [1, 2, 4, 5, 3, 6, 8, 10, 7, 11, 9];
 const SUB_NUMBERS = [13, 14, 15, 16, 17, 18, 20, 21, 23];
 
-const ACADEMY_SURNAMES_POOL = [
-  { name: "D. Rushworth", pos: "GK", rating: 78 },
-  { name: "M. van Ewijk", pos: "RB", rating: 79 },
-  { name: "B. Thomas", pos: "CB", rating: 78 },
-  { name: "L. Kitching", pos: "CB", rating: 77 },
-  { name: "J. Dasilva", pos: "LB", rating: 78 },
-  { name: "M. Grimes", pos: "DM", rating: 81 },
-  { name: "J. Rudoni", pos: "CM", rating: 80 },
-  { name: "V. Torp", pos: "CM", rating: 79 },
-  { name: "E. Mason-Clark", pos: "LW", rating: 80 },
-  { name: "B. Thomas-Asante", pos: "RW", rating: 79 },
-  { name: "H. Wright", pos: "ST", rating: 82 },
-  { name: "R. Roefs", pos: "GK", rating: 77 },
-  { name: "T. Hume", pos: "RB", rating: 79 },
-  { name: "L. O'Nien", pos: "CB", rating: 78 },
-  { name: "O. Alderete", pos: "CB", rating: 80 },
-  { name: "R. Mandava", pos: "LB", rating: 80 },
-  { name: "G. Xhaka", pos: "DM", rating: 84 },
-  { name: "N. Sadiki", pos: "CM", rating: 78 },
-  { name: "C. Rigg", pos: "CM", rating: 79 },
-  { name: "E. Le Fée", pos: "AM", rating: 81 },
-  { name: "I. Angulo", pos: "LW", rating: 78 },
-  { name: "B. Brobbey", pos: "ST", rating: 82 },
-  { name: "B. Wilson", pos: "GK", rating: 75 },
-  { name: "L. Woolfenden", pos: "CB", rating: 76 },
-  { name: "J. Latibeaudiere", pos: "CB", rating: 76 },
-  { name: "J. Bidwell", pos: "LB", rating: 75 },
-  { name: "F. Onyeka", pos: "DM", rating: 78 },
-  { name: "J. Eccles", pos: "CM", rating: 76 },
-  { name: "T. Sakamoto", pos: "RW", rating: 78 },
-  { name: "M. Talbi", pos: "CB", rating: 77 },
-  { name: "W. Isidor", pos: "ST", rating: 78 },
-  { name: "E. Simms", pos: "ST", rating: 78 },
-];
-
 function hashSeed(input: string): number {
   let h = 2166136261;
   for (let i = 0; i < input.length; i += 1) {
@@ -93,7 +58,21 @@ function extractBroadcastSurname(fullName: string): string {
   const clean = (fullName || "Player").trim();
   const parts = clean.split(/\s+/).filter(Boolean);
   if (parts.length <= 1) return clean;
-  const particles = new Set(["van", "von", "de", "del", "della", "da", "di", "le", "la", "el", "al", "st.", "st"]);
+  const particles = new Set([
+    "van",
+    "von",
+    "de",
+    "del",
+    "della",
+    "da",
+    "di",
+    "le",
+    "la",
+    "el",
+    "al",
+    "st.",
+    "st",
+  ]);
   if (parts.length >= 2 && particles.has(parts[parts.length - 2].toLowerCase())) {
     return `${parts[parts.length - 2]} ${parts[parts.length - 1]}`;
   }
@@ -156,7 +135,9 @@ function buildTeamSheetFromRoster(opts: {
   } = opts;
 
   const seed = hashSeed(`${clubId}:${clubName}`);
-  const validFormation = (LINEUP_FORMATIONS as readonly string[]).includes(formation) ? formation : "4-3-3";
+  const validFormation = (LINEUP_FORMATIONS as readonly string[]).includes(formation)
+    ? formation
+    : "4-3-3";
   const [defCount, ...restLines] = validFormation.split("-").map((n) => Number(n) || 3);
   const fwdCount = restLines[restLines.length - 1] || 3;
   const midCount = Math.max(1, 10 - defCount - fwdCount);
@@ -164,7 +145,9 @@ function buildTeamSheetFromRoster(opts: {
   const byId = new Map<string, LineupPlayer>();
   roster.forEach((p) => byId.set(p.player_id, p));
   const sheetsKnown = roster.some((player) => Boolean(player.squad_status) || player.is_regen);
-  const starterPool = sheetsKnown ? roster.filter((player) => lineupSheet(player) === "first_team") : roster;
+  const starterPool = sheetsKnown
+    ? roster.filter((player) => lineupSheet(player) === "first_team")
+    : roster;
   const benchPool = sheetsKnown
     ? [
         ...roster.filter((player) => lineupSheet(player) === "reserve"),
@@ -199,7 +182,9 @@ function buildTeamSheetFromRoster(opts: {
     const mids = remaining.filter((p) => classifyRoleBucket(p.position) === "MID").sort(sortFn);
     const fwds = remaining.filter((p) => classifyRoleBucket(p.position) === "FWD").sort(sortFn);
 
-    const hasKeeperAlready = chosenSignedStarters.some((p) => classifyRoleBucket(p.position) === "GK");
+    const hasKeeperAlready = chosenSignedStarters.some(
+      (p) => classifyRoleBucket(p.position) === "GK",
+    );
     const pick = (pool: LineupPlayer[], count: number) => {
       for (const candidate of pool) {
         if (count <= 0 || chosenSignedStarters.length >= 11) break;
@@ -241,10 +226,10 @@ function buildTeamSheetFromRoster(opts: {
 
   const signedStarterCount = starters.length;
 
-  // If live pitchPlayers were supplied for an AI/opponent club with 0 signed roster rows, use them
+  // A live opponent with no owner book uses the names already on the pitch.
   if (starters.length === 0 && pitchPlayers && pitchPlayers.length > 0) {
     pitchPlayers.slice(0, 11).forEach((pp, idx) => {
-      const fullName = pp.name || ACADEMY_SURNAMES_POOL[(seed + idx) % ACADEMY_SURNAMES_POOL.length].name;
+      const fullName = pp.name || "Unnamed";
       starters.push({
         player_id: pp.player_id || `live-${clubId}-${idx}`,
         full_name: fullName,
@@ -258,13 +243,12 @@ function buildTeamSheetFromRoster(opts: {
     });
   }
 
-  // Fill any remaining slots up to 11 starters with deterministic matchday squad call-ups
   const liveXiOnPitch = Array.isArray(pitchPlayers) && pitchPlayers.length >= 11;
   if (liveXiOnPitch) {
     for (const pp of pitchPlayers) {
       if (starters.length >= 11) break;
       if (pp.player_id && starters.some((starter) => starter.player_id === pp.player_id)) continue;
-      const fullName = pp.name || `Player ${starters.length + 1}`;
+      const fullName = pp.name || "Unnamed";
       starters.push({
         player_id: pp.player_id || `live-${clubId}-${starters.length}`,
         full_name: fullName,
@@ -277,62 +261,20 @@ function buildTeamSheetFromRoster(opts: {
       });
     }
   }
-  const usedNames = new Set(starters.map((s) => s.short_name.toLowerCase()));
   const usedNumbers = new Set(starters.map((s) => s.shirt_number));
-  let poolCursor = seed % ACADEMY_SURNAMES_POOL.length;
 
-  if (!liveXiOnPitch && starters.length > 0 && !starters.some((s) => s.position === "GK")) {
-    // Ensure slot 0 has a goalkeeper if club roster lacked one
-    if (starters.length < 11) {
-      const gkEntry = ACADEMY_SURNAMES_POOL.find((e) => e.pos === "GK") || ACADEMY_SURNAMES_POOL[0];
-      starters.unshift({
-        player_id: `acad-gk-${clubId}`,
-        full_name: gkEntry.name,
-        short_name: extractBroadcastSurname(gkEntry.name),
-        shirt_number: usedNumbers.has(1) ? 19 : 1,
-        position: "GK",
-        rating: gkEntry.rating,
-        portrait_url: null,
-        is_signed: false,
-      });
-      usedNames.add(extractBroadcastSurname(gkEntry.name).toLowerCase());
-      usedNumbers.add(starters[0].shirt_number);
-    }
-  }
-
-  while (!liveXiOnPitch && starters.length < 11) {
-    const idx = starters.length;
-    const candidate = ACADEMY_SURNAMES_POOL[poolCursor % ACADEMY_SURNAMES_POOL.length];
-    poolCursor += 1;
-    const surname = extractBroadcastSurname(candidate.name);
-    if (usedNames.has(surname.toLowerCase())) continue;
-    usedNames.add(surname.toLowerCase());
-    let shirt = DEFAULT_NUMBERS[idx] || idx + 12;
-    while (usedNumbers.has(shirt)) shirt += 11;
-    usedNumbers.add(shirt);
-    starters.push({
-      player_id: `acad-${clubId}-${idx}`,
-      full_name: candidate.name,
-      short_name: surname,
-      shirt_number: shirt,
-      position: idx === 0 ? "GK" : candidate.pos,
-      rating: lineupMode === "rotate" ? candidate.rating - 2 : candidate.rating,
-      portrait_url: null,
-      is_signed: false,
-    });
-  }
-
-  // Appoint Captain: highest-rated signed starter (or highest-rated starter overall)
   let captainIdx = 0;
-  let bestScore = -1;
-  starters.forEach((s, idx) => {
-    const score = s.rating + (s.is_signed ? 15 : 0) + (idx > 0 ? 2 : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      captainIdx = idx;
-    }
-  });
-  starters[captainIdx] = { ...starters[captainIdx], is_captain: true };
+  if (starters.length > 0) {
+    let bestScore = -1;
+    starters.forEach((s, idx) => {
+      const score = s.rating + (s.is_signed ? 15 : 0) + (idx > 0 ? 2 : 0);
+      if (score > bestScore) {
+        bestScore = score;
+        captainIdx = idx;
+      }
+    });
+    starters[captainIdx] = { ...starters[captainIdx], is_captain: true };
+  }
 
   // Propagate live pitch stamina onto starters when available
   if (pitchPlayers && pitchPlayers.length > 0) {
@@ -341,7 +283,9 @@ function buildTeamSheetFromRoster(opts: {
         pitchPlayers.find((pp) => pp.player_id && pp.player_id === s.player_id) ||
         pitchPlayers.find((pp) => pp.shirt_number && Number(pp.shirt_number) === s.shirt_number) ||
         pitchPlayers.find(
-          (pp) => pp.name && extractBroadcastSurname(pp.name).toLowerCase() === s.short_name.toLowerCase(),
+          (pp) =>
+            pp.name &&
+            extractBroadcastSurname(pp.name).toLowerCase() === s.short_name.toLowerCase(),
         ) ||
         pitchPlayers[idx];
       const rawStam = match?.stamina_pct ?? match?.staminaPct ?? null;
@@ -373,7 +317,6 @@ function buildTeamSheetFromRoster(opts: {
     while (usedNumbers.has(shirt)) shirt += 1;
     usedNumbers.add(shirt);
     const surname = extractBroadcastSurname(p.player_name);
-    usedNames.add(surname.toLowerCase());
     substitutes.push({
       player_id: p.player_id,
       full_name: p.player_name,
@@ -386,37 +329,24 @@ function buildTeamSheetFromRoster(opts: {
     });
   });
 
-  while (substitutes.length < 8) {
-    const idx = substitutes.length;
-    const candidate = ACADEMY_SURNAMES_POOL[poolCursor % ACADEMY_SURNAMES_POOL.length];
-    poolCursor += 1;
-    const surname = extractBroadcastSurname(candidate.name);
-    if (usedNames.has(surname.toLowerCase())) continue;
-    usedNames.add(surname.toLowerCase());
-    let shirt = SUB_NUMBERS[idx] || 24 + idx;
-    while (usedNumbers.has(shirt)) shirt += 1;
-    usedNumbers.add(shirt);
-    substitutes.push({
-      player_id: `bench-${clubId}-${idx}`,
-      full_name: candidate.name,
-      short_name: surname,
-      shirt_number: shirt,
-      position: candidate.pos,
-      rating: candidate.rating - 2,
-      portrait_url: null,
-      is_signed: false,
-    });
-  }
-
-  // Hero spotlight player: prefer a starter WITH a verified real photo (captain first, then highest GSI), else captain
   const picturedStarters = starters.filter((s) => Boolean(s.portrait_url));
-  const hero =
-    picturedStarters.find((s) => s.is_captain) ||
+  const hero = picturedStarters.find((s) => s.is_captain) ||
     [...picturedStarters].sort((a, b) => b.rating - a.rating)[0] ||
     starters[captainIdx] ||
-    starters[0];
+    starters[0] || {
+      player_id: `none-${clubId}`,
+      full_name: "No eleven filed",
+      short_name: "No XI",
+      shirt_number: 0,
+      position: "—",
+      rating: 0,
+      portrait_url: null,
+      is_signed: false,
+    };
 
-  const avgRating = Math.round(starters.reduce((sum, s) => sum + s.rating, 0) / starters.length);
+  const avgRating = starters.length
+    ? Math.round(starters.reduce((sum, s) => sum + s.rating, 0) / starters.length)
+    : 0;
 
   return {
     clubId,
@@ -472,7 +402,9 @@ export function useClubMatchdaySheet(opts: {
       } catch {
         // A public or opponent club has no owner book.
       }
-      return normalizeLineupSquad((await api.get(`/market/clubs/${encodeURIComponent(clubId)}/players`)).data);
+      return normalizeLineupSquad(
+        (await api.get(`/market/clubs/${encodeURIComponent(clubId)}/players`)).data,
+      );
     },
     enabled: isRealClub,
     staleTime: 30_000,
@@ -482,7 +414,9 @@ export function useClubMatchdaySheet(opts: {
     queryKey: ["lineup-plan", clubId],
     queryFn: async () => {
       try {
-        return normalizeLineupPlan((await api.get(`/clubs/${encodeURIComponent(clubId)}/lineup`)).data);
+        return normalizeLineupPlan(
+          (await api.get(`/clubs/${encodeURIComponent(clubId)}/lineup`)).data,
+        );
       } catch {
         return normalizeLineupPlan({});
       }
@@ -543,7 +477,10 @@ export function TunnelStartingXICard({
   const [heroSrc, setHeroSrc] = useState<string>(sheet.hero.portrait_url || heroFallback);
 
   React.useEffect(() => {
-    setHeroSrc(sheet.hero.portrait_url || buildSilhouetteDataUri(sheet.hero.position, sheet.hero.rating >= 85));
+    setHeroSrc(
+      sheet.hero.portrait_url ||
+        buildSilhouetteDataUri(sheet.hero.position, sheet.hero.rating >= 85),
+    );
   }, [sheet.hero.portrait_url, sheet.hero.position, sheet.hero.rating]);
 
   return (
@@ -559,7 +496,8 @@ export function TunnelStartingXICard({
       <div
         className="pointer-events-none absolute inset-y-0 right-[24%] w-24 opacity-25 blur-2xl"
         style={{
-          background: "linear-gradient(180deg, rgba(125,211,252,0.55) 0%, rgba(56,189,248,0.12) 60%, transparent 100%)",
+          background:
+            "linear-gradient(180deg, rgba(125,211,252,0.55) 0%, rgba(56,189,248,0.12) 60%, transparent 100%)",
         }}
       />
 
@@ -589,7 +527,10 @@ export function TunnelStartingXICard({
             </div>
 
             {/* 11 Starters Vertical List */}
-            <ol className="space-y-1 text-[13px] sm:text-[14px] leading-snug" data-testid="tunnel-starters-list">
+            <ol
+              className="space-y-1 text-[13px] sm:text-[14px] leading-snug"
+              data-testid="tunnel-starters-list"
+            >
               {sheet.starters.map((player) => {
                 const warn = staminaWarning(player.stamina_pct);
                 return (
@@ -628,6 +569,13 @@ export function TunnelStartingXICard({
                 );
               })}
             </ol>
+            {sheet.starters.length !== 11 && (
+              <p className="mt-2 text-[10px] text-slate-400" data-testid="filed-sheet-count">
+                {sheet.starters.length === 0
+                  ? "No eleven filed."
+                  : `${sheet.starters.length} names on the filed sheet.`}
+              </p>
+            )}
 
             {/* Compact Substitutes Block */}
             <div className="mt-4 border-t border-white/10 pt-2.5">
@@ -635,7 +583,9 @@ export function TunnelStartingXICard({
                 Substitutes
               </p>
               <p className="mt-0.5 text-[10.5px] leading-relaxed text-slate-300/80">
-                {sheet.substitutes.map((s) => s.short_name).join(", ")}.
+                {sheet.substitutes.length
+                  ? `${sheet.substitutes.map((s) => s.short_name).join(", ")}.`
+                  : "None named."}
               </p>
             </div>
           </div>
@@ -657,9 +607,7 @@ export function TunnelStartingXICard({
               <p className="text-[9px] font-black uppercase tracking-[0.18em] text-sky-300">
                 {competitionName || "GTEX MATCHDAY LIVE"}
               </p>
-              <p className="text-[9px] text-slate-400">
-                Avg XI GSI {sheet.avgRating}
-              </p>
+              <p className="text-[9px] text-slate-400">Avg XI GSI {sheet.avgRating}</p>
             </div>
           </div>
         </div>
@@ -676,7 +624,8 @@ export function TunnelStartingXICard({
             <div
               className="pointer-events-none absolute inset-x-0 bottom-0 h-28"
               style={{
-                background: "linear-gradient(180deg, transparent 0%, rgba(5,8,17,0.86) 68%, #050811 100%)",
+                background:
+                  "linear-gradient(180deg, transparent 0%, rgba(5,8,17,0.86) 68%, #050811 100%)",
               }}
             />
           </div>
@@ -723,7 +672,10 @@ export function EditorialLineupPosterCard({
   const [heroSrc, setHeroSrc] = useState<string>(sheet.hero.portrait_url || heroFallback);
 
   React.useEffect(() => {
-    setHeroSrc(sheet.hero.portrait_url || buildSilhouetteDataUri(sheet.hero.position, sheet.hero.rating >= 85));
+    setHeroSrc(
+      sheet.hero.portrait_url ||
+        buildSilhouetteDataUri(sheet.hero.position, sheet.hero.rating >= 85),
+    );
   }, [sheet.hero.portrait_url, sheet.hero.position, sheet.hero.rating]);
 
   const formattedDate =
@@ -825,6 +777,13 @@ export function EditorialLineupPosterCard({
                 );
               })}
             </ol>
+            {sheet.starters.length !== 11 && (
+              <p className="mt-2 text-center text-[10px] text-slate-400">
+                {sheet.starters.length === 0
+                  ? "No eleven filed."
+                  : `${sheet.starters.length} names on the filed sheet.`}
+              </p>
+            )}
 
             {/* Centered Club-Accent Uppercase Substitutes Block */}
             <div className="mt-4 max-w-[260px] border-t border-[#25354B] pt-2.5 text-center">
@@ -832,7 +791,9 @@ export function EditorialLineupPosterCard({
                 className="text-[9.5px] sm:text-[10px] font-black uppercase leading-snug tracking-[0.06em]"
                 style={{ color: accent.subText }}
               >
-                {sheet.substitutes.map((s) => s.short_name.toUpperCase()).join(", ")}
+                {sheet.substitutes.length
+                  ? sheet.substitutes.map((s) => s.short_name.toUpperCase()).join(", ")
+                  : "NONE NAMED"}
               </p>
             </div>
           </div>
@@ -923,8 +884,7 @@ export function MatchdayLineupBroadcast({
     pitchPlayers: awayPitchPlayers,
   });
 
-  const myTarget =
-    editableClubId && editableClubId === awayClubId && hasAway ? away : home;
+  const myTarget = editableClubId && editableClubId === awayClubId && hasAway ? away : home;
   const canPersistToClub = Boolean(
     editableClubId && !editableClubId.startsWith("ai:") && myTarget.roster.length > 0,
   );
@@ -954,9 +914,8 @@ export function MatchdayLineupBroadcast({
       } catch {
         // Ignore if offline or mock environment
       }
-      const saved = (
-        await api.put(`/clubs/${encodeURIComponent(editableClubId)}/lineup`, payload)
-      ).data;
+      const saved = (await api.put(`/clubs/${encodeURIComponent(editableClubId)}/lineup`, payload))
+        .data;
       queryClient.setQueryData(["lineup-plan", editableClubId], normalizeLineupPlan(saved));
       setUseSmartSuggestion(false);
       toast.success(
@@ -983,8 +942,8 @@ export function MatchdayLineupBroadcast({
           </span>
           <span className="text-xs text-slate-300">
             <b className="text-white">{myTarget.sheet.clubName}</b> ·{" "}
-            <span className="gx-mono text-emerald-300">{myTarget.sheet.formation}</span> · Avg XI GSI{" "}
-            <b className="gx-mono text-amber-300">{myTarget.sheet.avgRating}</b> · Captain{" "}
+            <span className="gx-mono text-emerald-300">{myTarget.sheet.formation}</span> · Avg XI
+            GSI <b className="gx-mono text-amber-300">{myTarget.sheet.avgRating}</b> · Captain{" "}
             <b className="text-sky-300">{myTarget.sheet.hero.short_name}</b>
           </span>
         </div>
@@ -1050,7 +1009,9 @@ export function MatchdayLineupBroadcast({
                 type="button"
                 onClick={() => setViewStyle("dual")}
                 className={`rounded-xs px-2 py-0.5 text-[10px] font-black uppercase transition-colors ${
-                  viewStyle === "dual" ? "bg-emerald-500/25 text-emerald-300" : "text-slate-400 hover:text-white"
+                  viewStyle === "dual"
+                    ? "bg-emerald-500/25 text-emerald-300"
+                    : "text-slate-400 hover:text-white"
                 }`}
               >
                 Dual Sheet
@@ -1060,7 +1021,9 @@ export function MatchdayLineupBroadcast({
               type="button"
               onClick={() => setViewStyle("tunnel")}
               className={`inline-flex items-center gap-1 rounded-xs px-2 py-0.5 text-[10px] font-black uppercase transition-colors ${
-                viewStyle === "tunnel" ? "bg-sky-500/25 text-sky-300" : "text-slate-400 hover:text-white"
+                viewStyle === "tunnel"
+                  ? "bg-sky-500/25 text-sky-300"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               <Tv size={10} /> Tunnel XI
@@ -1069,7 +1032,9 @@ export function MatchdayLineupBroadcast({
               type="button"
               onClick={() => setViewStyle("editorial")}
               className={`rounded-xs px-2 py-0.5 text-[10px] font-black uppercase transition-colors ${
-                viewStyle === "editorial" ? "bg-rose-400/25 text-rose-200" : "text-slate-400 hover:text-white"
+                viewStyle === "editorial"
+                  ? "bg-rose-400/25 text-rose-200"
+                  : "text-slate-400 hover:text-white"
               }`}
             >
               Editorial Poster
@@ -1099,9 +1064,7 @@ export function MatchdayLineupBroadcast({
         <div className={hasAway ? "grid gap-5 xl:grid-cols-2" : "max-w-2xl"}>
           <TunnelStartingXICard
             sheet={myTarget.sheet}
-            opponentName={
-              myTarget.sheet.clubName === homeClubName ? awayClubName : homeClubName
-            }
+            opponentName={myTarget.sheet.clubName === homeClubName ? awayClubName : homeClubName}
             competitionName={competitionName}
             roundLabel={roundLabel || `MATCHDAY ${matchdayNumber}`}
           />

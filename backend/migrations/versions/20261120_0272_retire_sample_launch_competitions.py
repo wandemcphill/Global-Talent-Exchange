@@ -19,9 +19,7 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE owner_competitions
             SET status = 'cancelled'
             WHERE host_type = 'gtex'
@@ -31,15 +29,11 @@ def upgrade() -> None:
                 'Naija Rising Stars League',
                 'Weekend Knockout Shield'
               )
-            """
-        )
-    )
+            """))
 
 
 def downgrade() -> None:
-    op.execute(
-        sa.text(
-            """
+    op.execute(sa.text("""
             UPDATE owner_competitions
             SET status = 'open'
             WHERE host_type = 'gtex'
@@ -49,6 +43,4 @@ def downgrade() -> None:
                 'Naija Rising Stars League',
                 'Weekend Knockout Shield'
               )
-            """
-        )
-    )
+            """))

@@ -74,7 +74,10 @@ function ClubTreasuryMove({ clubId, onMoved }: { clubId?: string; onMoved: () =>
   const walletGtx = Number(finance?.wallet?.gtex_total || 0);
   const walletFan = Number(finance?.wallet?.fan_total || 0);
   const available = currency === "FAN" ? walletFan : walletGtx;
-  const clubBalance = currency === "FAN" ? Number(club?.economy?.gifts_fan_coin || 0) : Number(club?.economy?.cash_gtex || 0);
+  const clubBalance =
+    currency === "FAN"
+      ? Number(club?.economy?.gifts_fan_coin || 0)
+      : Number(club?.economy?.cash_gtex || 0);
   const move = async () => {
     const value = Number(amount);
     if (!Number.isFinite(value) || value <= 0) {
@@ -88,7 +91,11 @@ function ClubTreasuryMove({ clubId, onMoved }: { clubId?: string; onMoved: () =>
     setBusy(true);
     try {
       await api.post("/owner/capital/inject", { club_id: clubId, amount: value, currency });
-      toast.success(currency === "FAN" ? "Fan Coin is now in the club treasury." : "GTX is now in the club treasury.");
+      toast.success(
+        currency === "FAN"
+          ? "Fan Coin is now in the club treasury."
+          : "GTX is now in the club treasury.",
+      );
       setAmount("");
       await queryClient.invalidateQueries({ queryKey: ["owner-finance-move", clubId] });
       onMoved();
@@ -99,18 +106,27 @@ function ClubTreasuryMove({ clubId, onMoved }: { clubId?: string; onMoved: () =>
     }
   };
   return (
-    <section className="rounded-2xl border border-emerald-500/30 bg-slate-950/70 p-5" data-testid="club-treasury-move">
+    <section
+      className="rounded-2xl border border-emerald-500/30 bg-slate-950/70 p-5"
+      data-testid="club-treasury-move"
+    >
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-emerald-300">Club treasury</p>
-          <h3 className="mt-1 text-lg font-semibold text-white">Move coins from your wallet into the club</h3>
+          <h3 className="mt-1 text-lg font-semibold text-white">
+            Move coins from your wallet into the club
+          </h3>
           <p className="mt-1 max-w-2xl text-xs leading-5 text-slate-400">
-            Your personal wallet and the club treasury are separate. GTX pays for players, facilities, and founding season salaries. Fan Coin pays later staff contracts and academy youth contracts.
+            Your personal wallet and the club treasury are separate. GTX pays for players,
+            facilities, and founding season salaries. Fan Coin pays later staff contracts and
+            academy youth contracts.
           </p>
         </div>
         <p className="text-right text-xs text-slate-400">
           In the club now
-          <b className="mt-1 block text-lg text-white">{fmt(clubBalance)} {currency === "FAN" ? "FAN" : "GTX"}</b>
+          <b className="mt-1 block text-lg text-white">
+            {fmt(clubBalance)} {currency === "FAN" ? "FAN" : "GTX"}
+          </b>
         </p>
       </div>
       <div className="mt-4 flex flex-wrap items-end gap-2">
@@ -405,7 +421,8 @@ export function ControlCenter() {
     null;
 
   const appointed = clubDetail?.executive_staff || clubDetail?.staff || {};
-  const managerRecord = appointed.first_team_manager || clubDetail?.manager_profile || activeClubProfile.manager || {};
+  const managerRecord =
+    appointed.first_team_manager || clubDetail?.manager_profile || activeClubProfile.manager || {};
   const staffMap = {
     ...appointed,
     first_team_manager: {
@@ -489,7 +506,11 @@ export function ControlCenter() {
           {/* Active Club Identity */}
           <div className="flex items-center gap-5">
             <Link
-              to={activeClubProfile.club_id ? `/app/clubs/${activeClubProfile.club_id}/studio` : "/app/club/studio"}
+              to={
+                activeClubProfile.club_id
+                  ? `/app/clubs/${activeClubProfile.club_id}/studio`
+                  : "/app/club/studio"
+              }
               data-testid="club-home-jersey"
               className="relative flex h-24 w-20 shrink-0 items-end justify-center"
               title="Crest and kit"
@@ -505,17 +526,27 @@ export function ControlCenter() {
                 <>
                   <span
                     className="absolute top-1 h-3 w-8 rounded-sm"
-                    style={{ background: homeKit?.secondary_color || activeClubProfile.secondary_color || "#0f172a" }}
+                    style={{
+                      background:
+                        homeKit?.secondary_color || activeClubProfile.secondary_color || "#0f172a",
+                    }}
                   />
                   <span
                     className="flex h-[4.5rem] w-16 items-start justify-center rounded-b-lg border border-white/20 pt-3 text-[11px] font-black shadow-xl"
                     style={{
-                      background: homeKit?.primary_color || activeClubProfile.primary_color || "#10b981",
-                      color: homeKit?.accent_color || activeClubProfile.secondary_color || "#070b11",
+                      background:
+                        homeKit?.primary_color || activeClubProfile.primary_color || "#10b981",
+                      color:
+                        homeKit?.accent_color || activeClubProfile.secondary_color || "#070b11",
                       boxShadow: `inset 0 -16px 0 ${homeKit?.shorts_color || homeKit?.secondary_color || "#0f172a"}`,
                     }}
                   >
-                    {(homeKit?.front_text || activeClubProfile.short_name || activeClubProfile.club_name || "GTX")
+                    {(
+                      homeKit?.front_text ||
+                      activeClubProfile.short_name ||
+                      activeClubProfile.club_name ||
+                      "GTX"
+                    )
                       .slice(0, 3)
                       .toUpperCase()}
                   </span>
@@ -536,7 +567,9 @@ export function ControlCenter() {
                 {activeClubProfile.club_name || "Football Club HQ"}
               </h1>
               <p className="text-xs sm:text-sm text-slate-300">
-                {activeClubProfile.division_name || "Foundation"} · {activeClubProfile.competition?.name || "Not entered in a competition yet"} · Managed by{" "}
+                {activeClubProfile.division_name || "Foundation"} ·{" "}
+                {activeClubProfile.competition?.name || "Not entered in a competition yet"} ·
+                Managed by{" "}
                 <b className="text-white">{staffMap.first_team_manager?.name || "your staff"}</b>
               </p>
             </div>
@@ -865,12 +898,20 @@ export function ControlCenter() {
           scene={active3DScene}
           clubName={activeClubProfile.club_name || "Your club"}
           people={executives.map((exec) => {
-            const record = (staffMap as Record<string, { portrait_url?: string; photo_url?: string }>)[exec.roleKey] || {};
+            const record =
+              (staffMap as Record<string, { portrait_url?: string; photo_url?: string }>)[
+                exec.roleKey
+              ] || {};
             return {
               name: exec.name,
               role: exec.roleLabel,
               detail: exec.agenda,
-              portraitUrl: record.portrait_url || record.photo_url || (exec.roleKey === "first_team_manager" ? clubDetail?.manager_profile?.portrait_url : null),
+              portraitUrl:
+                record.portrait_url ||
+                record.photo_url ||
+                (exec.roleKey === "first_team_manager"
+                  ? clubDetail?.manager_profile?.portrait_url
+                  : null),
               rating: exec.mood,
             };
           })}

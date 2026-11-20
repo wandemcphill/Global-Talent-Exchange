@@ -50,7 +50,8 @@ function sheetOf(player: any): SquadSheet {
   if (raw === "reserve") return "reserve";
   if (raw === "academy" || raw === "u21") return "academy";
   if (raw === "first_team" || raw === "senior") return "first_team";
-  if (player?.is_regen && Number(player?.age) <= 18 && Number(player?.minutes || 0) === 0) return "academy";
+  if (player?.is_regen && Number(player?.age) <= 18 && Number(player?.minutes || 0) === 0)
+    return "academy";
   return "first_team";
 }
 
@@ -65,11 +66,13 @@ function SheetMove({
 }) {
   if (!onPlace) return null;
   const here = sheetOf(player);
-  const moves: SquadSheet[] = (["first_team", "reserve", "academy"] as SquadSheet[]).filter((sheet) => {
-    if (sheet === here) return false;
-    if (sheet === "academy" && Number(player?.age) > 21) return false;
-    return true;
-  });
+  const moves: SquadSheet[] = (["first_team", "reserve", "academy"] as SquadSheet[]).filter(
+    (sheet) => {
+      if (sheet === here) return false;
+      if (sheet === "academy" && Number(player?.age) > 21) return false;
+      return true;
+    },
+  );
   return (
     <span className="mt-1 flex flex-wrap gap-1" data-testid={`sheet-moves-${player.id}`}>
       {moves.map((sheet) => (
@@ -95,7 +98,12 @@ function ManagerSheet({ club }: any) {
   const m = club.manager_profile || {};
   const refresh = useRefreshOwner();
   const fire = async () => {
-    if (!window.confirm("Dismissing the manager triggers compensation and unsettles the squad. Continue?")) return;
+    if (
+      !window.confirm(
+        "Dismissing the manager triggers compensation and unsettles the squad. Continue?",
+      )
+    )
+      return;
     try {
       const { data } = await api.post(`/owner/clubs/${club.club_id}/manager/fire`);
       toast.warning(`Paid ${fmt(data.compensation)} GTX compensation. ${data.why}`);
@@ -105,8 +113,17 @@ function ManagerSheet({ club }: any) {
     }
   };
   return (
-    <Panel eyebrow="Manager realism engine" title={m.name} testid="manager-sheet" className="lg:col-span-5"
-      action={<Btn variant="danger" onClick={fire} data-testid="fire-manager-button">Dismiss</Btn>}>
+    <Panel
+      eyebrow="Manager realism engine"
+      title={m.name}
+      testid="manager-sheet"
+      className="lg:col-span-5"
+      action={
+        <Btn variant="danger" onClick={fire} data-testid="fire-manager-button">
+          Dismiss
+        </Btn>
+      }
+    >
       <div className="mb-4">
         <GtexSceneViewport
           sceneId="manager_arrival"
@@ -139,11 +156,24 @@ function ManagerSheet({ club }: any) {
 function HireManager({ club }: any) {
   const refresh = useRefreshOwner();
   const [busy, setBusy] = useState<string | null>(null);
-  const { data: catalog = [] } = useQuery({ queryKey: ["mgr-catalog-6"], queryFn: async () => (await api.get("/managers/catalog", { params: { limit: 6 } })).data.items });
+  const { data: catalog = [] } = useQuery({
+    queryKey: ["mgr-catalog-6"],
+    queryFn: async () => (await api.get("/managers/catalog", { params: { limit: 6 } })).data.items,
+  });
   const hire = async (m: any) => {
     setBusy(m.manager_id);
     try {
-      await api.post(`/owner/clubs/${club.club_id}/manager`, { manager: { manager_id: m.manager_id, display_name: m.display_name, rarity: m.rarity, mentality: m.mentality, tactics: m.tactics, traits: m.traits, philosophy_summary: m.philosophy_summary } });
+      await api.post(`/owner/clubs/${club.club_id}/manager`, {
+        manager: {
+          manager_id: m.manager_id,
+          display_name: m.display_name,
+          rarity: m.rarity,
+          mentality: m.mentality,
+          tactics: m.tactics,
+          traits: m.traits,
+          philosophy_summary: m.philosophy_summary,
+        },
+      });
       toast.success(`Hired ${m.display_name} as manager.`);
       refresh();
     } catch (e) {
@@ -153,14 +183,24 @@ function HireManager({ club }: any) {
     }
   };
   return (
-    <Panel eyebrow="Candidate market" title="Available managers" testid="hire-manager-panel" className="lg:col-span-12">
+    <Panel
+      eyebrow="Candidate market"
+      title="Available managers"
+      testid="hire-manager-panel"
+      className="lg:col-span-12"
+    >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {catalog.map((m: any) => (
-          <div key={m.manager_id} className="rounded border border-gtex-graphite bg-gtex-slate/80 p-4">
+          <div
+            key={m.manager_id}
+            className="rounded border border-gtex-graphite bg-gtex-slate/80 p-4"
+          >
             <div className="flex items-start justify-between">
               <div>
                 <p className="font-semibold text-white">{m.display_name}</p>
-                <p className="text-xs text-slate-400">{m.mentality} · {m.rarity}</p>
+                <p className="text-xs text-slate-400">
+                  {m.mentality} · {m.rarity}
+                </p>
               </div>
               <Btn variant="secondary" onClick={() => hire(m)} disabled={busy === m.manager_id}>
                 {busy === m.manager_id ? "Hiring…" : "Hire"}
@@ -178,7 +218,11 @@ function SquadCards({ club, onSelectPlayer, onPlace, movingId }: any) {
   return (
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-testid="squad-cards-grid">
       {club.squad.map((p: any) => (
-        <div key={p.id} className="cursor-pointer" onClick={() => onSelectPlayer && onSelectPlayer(p)}>
+        <div
+          key={p.id}
+          className="cursor-pointer"
+          onClick={() => onSelectPlayer && onSelectPlayer(p)}
+        >
           <PlayerCard
             name={p.name}
             rating={p.rating}
@@ -207,7 +251,9 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }:
     try {
       const res = await api.put(`/owner/clubs/${club.club_id}/mentality`, { mentality: m });
       const decision = res?.data || {};
-      const decisionStatus = String(decision.manager_decision_status || decision.decision_status || "");
+      const decisionStatus = String(
+        decision.manager_decision_status || decision.decision_status || "",
+      );
       const effective = String(decision.effective_matchday_mentality || decision.mentality || m);
       setMentality(decision.owner_requested_mentality || m);
       if (decisionStatus === "rejected") {
@@ -221,49 +267,107 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }:
             `Preference '${m}' adjusted to '${effective}' by First-Team Manager.`,
         );
       } else {
-        toast.success(decision.manager_decision_reasoning || `Matchday mentality synced to ${effective}.`);
+        toast.success(
+          decision.manager_decision_reasoning || `Matchday mentality synced to ${effective}.`,
+        );
       }
     } catch (e) {
       toast.error(errMsg(e));
     }
   };
   return (
-    <Panel eyebrow={`${club.squad.length} players`} title="Squad" testid="squad-table-panel" className="lg:col-span-7"
-      action={<div className="flex flex-wrap gap-1">{["cards", "table"].map((v) => <button key={v} data-testid={`squad-view-${v}`} onClick={() => setView(v as any)} className={`gx-btn ${view === v ? "gx-btn-primary" : "gx-btn-ghost"}`}>{v}</button>)}<span className="mx-1 w-px bg-white/10" />{["defensive", "balanced", "attacking"].map((m) => <button key={m} data-testid={`default-mentality-${m}`} onClick={() => save(m)} className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}>{m}</button>)}</div>}>
+    <Panel
+      eyebrow={`${club.squad.length} players`}
+      title="Squad"
+      testid="squad-table-panel"
+      className="lg:col-span-7"
+      action={
+        <div className="flex flex-wrap gap-1">
+          {["cards", "table"].map((v) => (
+            <button
+              key={v}
+              data-testid={`squad-view-${v}`}
+              onClick={() => setView(v as any)}
+              className={`gx-btn ${view === v ? "gx-btn-primary" : "gx-btn-ghost"}`}
+            >
+              {v}
+            </button>
+          ))}
+          <span className="mx-1 w-px bg-white/10" />
+          {["defensive", "balanced", "attacking"].map((m) => (
+            <button
+              key={m}
+              data-testid={`default-mentality-${m}`}
+              onClick={() => save(m)}
+              className={`gx-btn ${mentality === m ? "gx-btn-primary" : "gx-btn-secondary"}`}
+            >
+              {m}
+            </button>
+          ))}
+        </div>
+      }
+    >
       {club.squad.length === 0 ? (
-        <p className="py-8 text-center text-sm text-slate-400" data-testid="squad-sheet-empty">No players on this sheet.</p>
+        <p className="py-8 text-center text-sm text-slate-400" data-testid="squad-sheet-empty">
+          No players on this sheet.
+        </p>
       ) : null}
-      {view === "cards" ? <div className="gx-scroll max-h-[640px] overflow-auto pr-1"><SquadCards club={club} onSelectPlayer={onSelectPlayer} onPlace={onPlace} movingId={movingId} /></div> : (
-      <div className="gx-scroll max-h-[560px] overflow-auto">
-        <table className="gx-table w-full min-w-[620px]">
-          <thead><tr><th>Player</th><th>Pos</th><th>Age</th><th>Rtg/Pot</th><th>Morale</th><th>Mins</th><th>Value</th></tr></thead>
-          <tbody>
-            {club.squad.map((p: any) => {
-              const isTarget = targetPlayerId && (p.id === targetPlayerId || p.player_id === targetPlayerId);
-              return (
-                <tr
-                  key={p.id}
-                  data-testid={`squad-row-${p.id}`}
-                  onClick={() => onSelectPlayer && onSelectPlayer(p)}
-                  className={`cursor-pointer transition-colors hover:bg-emerald-500/10 ${isTarget ? "bg-emerald-500/10 border-l-4 border-emerald-400" : ""}`}
-                >
-                  <td className="font-medium text-white">
-                    {p.name} {p.is_regen && <Chip tone="emerald">Regen</Chip>} {p.status === "listed" && <Chip tone="gold">Listed</Chip>} {p.injured_days > 0 && <Chip tone="red">Injured</Chip>}
-                    {isTarget && <Chip tone="cyan">Target Prospect</Chip>}
-                    <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
-                  </td>
-                  <td className="capitalize">{p.position}</td>
-                  <td className="gx-mono">{p.age}</td>
-                  <td className="gx-mono">{p.rating}<span className="text-slate-500">/{p.potential}</span></td>
-                  <td className="gx-mono">{p.morale}</td>
-                  <td className="gx-mono">{p.minutes}</td>
-                  <td className="gx-mono font-medium text-emerald-300">{fmt(p.value_coin)}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {view === "cards" ? (
+        <div className="gx-scroll max-h-[640px] overflow-auto pr-1">
+          <SquadCards
+            club={club}
+            onSelectPlayer={onSelectPlayer}
+            onPlace={onPlace}
+            movingId={movingId}
+          />
+        </div>
+      ) : (
+        <div className="gx-scroll max-h-[560px] overflow-auto">
+          <table className="gx-table w-full min-w-[620px]">
+            <thead>
+              <tr>
+                <th>Player</th>
+                <th>Pos</th>
+                <th>Age</th>
+                <th>Rtg/Pot</th>
+                <th>Morale</th>
+                <th>Mins</th>
+                <th>Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {club.squad.map((p: any) => {
+                const isTarget =
+                  targetPlayerId && (p.id === targetPlayerId || p.player_id === targetPlayerId);
+                return (
+                  <tr
+                    key={p.id}
+                    data-testid={`squad-row-${p.id}`}
+                    onClick={() => onSelectPlayer && onSelectPlayer(p)}
+                    className={`cursor-pointer transition-colors hover:bg-emerald-500/10 ${isTarget ? "bg-emerald-500/10 border-l-4 border-emerald-400" : ""}`}
+                  >
+                    <td className="font-medium text-white">
+                      {p.name} {p.is_regen && <Chip tone="emerald">Regen</Chip>}{" "}
+                      {p.status === "listed" && <Chip tone="gold">Listed</Chip>}{" "}
+                      {p.injured_days > 0 && <Chip tone="red">Injured</Chip>}
+                      {isTarget && <Chip tone="cyan">Target Prospect</Chip>}
+                      <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
+                    </td>
+                    <td className="capitalize">{p.position}</td>
+                    <td className="gx-mono">{p.age}</td>
+                    <td className="gx-mono">
+                      {p.rating}
+                      <span className="text-slate-500">/{p.potential}</span>
+                    </td>
+                    <td className="gx-mono">{p.morale}</td>
+                    <td className="gx-mono">{p.minutes}</td>
+                    <td className="gx-mono font-medium text-emerald-300">{fmt(p.value_coin)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       )}
     </Panel>
   );
@@ -274,9 +378,11 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
   const registrationQuery = useQuery({
     queryKey: ["squad-registration", club.club_id],
     queryFn: async () =>
-      (await api.get("/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration", {
-        params: { season_label: SQUAD_SEASON_LABEL },
-      })).data,
+      (
+        await api.get("/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration", {
+          params: { season_label: SQUAD_SEASON_LABEL },
+        })
+      ).data,
     enabled: Boolean(club?.club_id),
   });
   const registration = registrationQuery.data || null;
@@ -284,10 +390,16 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
   const endpoint = "/clubs/" + encodeURIComponent(club.club_id) + "/squad-registration";
 
   const targetInRegistration = Boolean(
-    targetPlayerId && (registration?.players || []).some((rp: any) => rp.player_id === targetPlayerId || rp.id === targetPlayerId),
+    targetPlayerId &&
+    (registration?.players || []).some(
+      (rp: any) => rp.player_id === targetPlayerId || rp.id === targetPlayerId,
+    ),
   );
   const targetInClubSquad = Boolean(
-    targetPlayerId && (club.squad || []).some((sp: any) => sp.id === targetPlayerId || sp.player_id === targetPlayerId),
+    targetPlayerId &&
+    (club.squad || []).some(
+      (sp: any) => sp.id === targetPlayerId || sp.player_id === targetPlayerId,
+    ),
   );
 
   const sync = async () => {
@@ -310,7 +422,9 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
     }
     setBusy("submit");
     try {
-      await api.post(endpoint + "/submit", undefined, { params: { season_label: SQUAD_SEASON_LABEL } });
+      await api.post(endpoint + "/submit", undefined, {
+        params: { season_label: SQUAD_SEASON_LABEL },
+      });
       await registrationQuery.refetch();
       toast.success("Squad registration submitted.");
     } catch (error) {
@@ -320,10 +434,17 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
     }
   };
   const lock = async () => {
-    if (!window.confirm("Locking the squad finalizes this competition roster for the current registration window. Continue?")) return;
+    if (
+      !window.confirm(
+        "Locking the squad finalizes this competition roster for the current registration window. Continue?",
+      )
+    )
+      return;
     setBusy("lock");
     try {
-      await api.post(endpoint + "/lock", undefined, { params: { season_label: SQUAD_SEASON_LABEL } });
+      await api.post(endpoint + "/lock", undefined, {
+        params: { season_label: SQUAD_SEASON_LABEL },
+      });
       await registrationQuery.refetch();
       toast.success("Squad registration locked.");
     } catch (error) {
@@ -332,7 +453,14 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
       setBusy("");
     }
   };
-  const tone = status === "locked" ? "emerald" : status === "submitted" ? "cyan" : status === "draft" ? "gold" : "slate";
+  const tone =
+    status === "locked"
+      ? "emerald"
+      : status === "submitted"
+        ? "cyan"
+        : status === "draft"
+          ? "gold"
+          : "slate";
   const canSync = status !== "locked";
   const canSubmit = Boolean(registration) && status !== "locked";
   const canLock = Boolean(registration) && status !== "locked";
@@ -348,9 +476,13 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
         <div className="flex flex-wrap items-center gap-3">
           <Chip tone={tone}>{status === "not synced" ? "Not synced" : status}</Chip>
           <span className="text-xs text-slate-400">
-            {registration ? String((registration.players || []).length) + " registered players" : "No roster registered yet"}
+            {registration
+              ? String((registration.players || []).length) + " registered players"
+              : "No roster registered yet"}
           </span>
-          <span className="text-xs text-slate-500">Season: {registration?.season_label || SQUAD_SEASON_LABEL}</span>
+          <span className="text-xs text-slate-500">
+            Season: {registration?.season_label || SQUAD_SEASON_LABEL}
+          </span>
         </div>
 
         {/* Targeted prospect journey status */}
@@ -360,8 +492,8 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
               targetInRegistration
                 ? "bg-emerald-950/40 border-emerald-500/40 text-emerald-200"
                 : targetInClubSquad
-                ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
-                : "bg-slate-900/60 border-white/10 text-slate-300"
+                  ? "bg-amber-950/40 border-amber-500/40 text-amber-200"
+                  : "bg-slate-900/60 border-white/10 text-slate-300"
             }`}
             data-testid="target-prospect-registration-status"
           >
@@ -375,8 +507,8 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
                 {targetInRegistration
                   ? `Target prospect ${targetPlayerId} is confirmed in this competition registration (${status}).`
                   : targetInClubSquad
-                  ? `Target prospect ${targetPlayerId} is in your club squad roster, but not yet included in the competition registration. Click "Sync squad" below to update the roster.`
-                  : `Target prospect ${targetPlayerId} is not in this club's squad yet. Verify transfer settlement in the Transfer Hub before registering.`}
+                    ? `Target prospect ${targetPlayerId} is in your club squad roster, but not yet included in the competition registration. Click "Sync squad" below to update the roster.`
+                    : `Target prospect ${targetPlayerId} is not in this club's squad yet. Verify transfer settlement in the Transfer Hub before registering.`}
               </span>
             </div>
           </div>
@@ -384,13 +516,18 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
 
         {registration && Object.keys(registration.position_summary || {}).length > 0 && (
           <div className="flex flex-wrap gap-2" data-testid="squad-registration-position-summary">
-            {Object.entries(registration.position_summary || {}).map(([position, count]: [string, any]) => (
-              <Chip key={position}>{position}: {count}</Chip>
-            ))}
+            {Object.entries(registration.position_summary || {}).map(
+              ([position, count]: [string, any]) => (
+                <Chip key={position}>
+                  {position}: {count}
+                </Chip>
+              ),
+            )}
           </div>
         )}
         <p className="max-w-3xl text-sm leading-6 text-slate-400">
-          Sync the current club roster, submit it for eligibility checks, then lock it when ready. Registration is persisted separately from the tactical starting XI.
+          Sync the current club roster, submit it for eligibility checks, then lock it when ready.
+          Registration is persisted separately from the tactical starting XI.
         </p>
         {registrationQuery.isError && (
           <p role="alert" className="text-sm text-amber-300">
@@ -423,7 +560,10 @@ function SquadRegistrationPanel({ club, targetPlayerId }: any) {
           </Btn>
         </div>
         {status === "locked" && (
-          <p className="text-xs text-emerald-300">This registration is locked. The squad must be reopened through an authorized lifecycle flow before it can be changed.</p>
+          <p className="text-xs text-emerald-300">
+            This registration is locked. The squad must be reopened through an authorized lifecycle
+            flow before it can be changed.
+          </p>
         )}
       </div>
     </Panel>
@@ -588,7 +728,12 @@ function StaffChatModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="staff-chat-modal">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+      role="dialog"
+      aria-modal="true"
+      data-testid="staff-chat-modal"
+    >
       <div className="flex h-[600px] w-full max-w-2xl flex-col rounded-2xl border border-white/10 bg-[#070B11] shadow-2xl overflow-hidden">
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-white/10 bg-slate-950/80 px-6 py-4">
@@ -598,17 +743,25 @@ function StaffChatModal({
             </span>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="gx-display text-lg font-black uppercase text-white">Boardroom AI Staff Chat</h3>
+                <h3 className="gx-display text-lg font-black uppercase text-white">
+                  Boardroom AI Staff Chat
+                </h3>
                 <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 text-[9px] font-black uppercase">
                   Persona Grounded
                 </span>
               </div>
               <p className="text-xs text-slate-400">
-                Direct council with <b className="text-white">{staffMember.name}</b> · {currentRoleConfig.label}
+                Direct council with <b className="text-white">{staffMember.name}</b> ·{" "}
+                {currentRoleConfig.label}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="rounded p-1 text-slate-400 hover:text-white hover:bg-white/10"><X size={18} /></button>
+          <button
+            onClick={onClose}
+            className="rounded p-1 text-slate-400 hover:text-white hover:bg-white/10"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         {/* Role Selector Tabs */}
@@ -637,9 +790,12 @@ function StaffChatModal({
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {history.length === 0 ? (
             <div className="py-12 text-center space-y-2">
-              <p className="text-sm font-bold text-slate-300">Start the council with your {currentRoleConfig.label}</p>
+              <p className="text-sm font-bold text-slate-300">
+                Start the council with your {currentRoleConfig.label}
+              </p>
               <p className="text-xs text-slate-500 max-w-sm mx-auto">
-                Ask questions regarding transfers, tactical adjustments, youth contracts, or training regimens.
+                Ask questions regarding transfers, tactical adjustments, youth contracts, or
+                training regimens.
               </p>
             </div>
           ) : (
@@ -742,7 +898,17 @@ function BoardroomSection({ club }: any) {
   };
 
   const clubPrestige = staffData?.club_prestige ?? club.health?.prestige ?? 55;
-  const prestigeTier = staffData?.prestige_tier ?? (clubPrestige >= 85 ? 1 : clubPrestige >= 70 ? 2 : clubPrestige >= 50 ? 3 : clubPrestige >= 35 ? 4 : 5);
+  const prestigeTier =
+    staffData?.prestige_tier ??
+    (clubPrestige >= 85
+      ? 1
+      : clubPrestige >= 70
+        ? 2
+        : clubPrestige >= 50
+          ? 3
+          : clubPrestige >= 35
+            ? 4
+            : 5);
   const candidates: any[] = staffData?.candidates || [];
 
   const handleHire = async (candidate: any) => {
@@ -793,7 +959,8 @@ function BoardroomSection({ club }: any) {
     }
   };
 
-  const filteredCandidates = roleFilter === "all" ? candidates : candidates.filter((c) => c.role === roleFilter);
+  const filteredCandidates =
+    roleFilter === "all" ? candidates : candidates.filter((c) => c.role === roleFilter);
 
   return (
     <section className="space-y-6 mb-8" data-testid="executive-boardroom-section">
@@ -808,7 +975,8 @@ function BoardroomSection({ club }: any) {
               Club Executive Leadership
             </h2>
             <p className="text-xs sm:text-sm text-slate-300 mt-1 max-w-2xl">
-              Appoint elite executives to amplify transfer fee discounts, academy regens, tactical acumen, and medical recovery.
+              Appoint elite executives to amplify transfer fee discounts, academy regens, tactical
+              acumen, and medical recovery.
             </p>
           </div>
 
@@ -816,7 +984,9 @@ function BoardroomSection({ club }: any) {
             <div className="rounded-xl border border-white/10 bg-black/50 p-3 text-right">
               <p className="text-[10px] uppercase font-bold text-slate-400">Club Prestige</p>
               <p className="gx-mono text-2xl font-black text-amber-300">{clubPrestige}/100</p>
-              <span className="text-[10px] font-bold uppercase text-emerald-400">Tier {prestigeTier} Standing</span>
+              <span className="text-[10px] font-bold uppercase text-emerald-400">
+                Tier {prestigeTier} Standing
+              </span>
             </div>
           </div>
         </div>
@@ -825,32 +995,44 @@ function BoardroomSection({ club }: any) {
         <div className="mt-6 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Transfer Discount</p>
-            <p className="gx-mono text-lg font-black text-purple-300 mt-0.5">{effects ? `-${effects.transfer_fee_discount_pct ?? 0}%` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-purple-300 mt-0.5">
+              {effects ? `-${effects.transfer_fee_discount_pct ?? 0}%` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">GM Autonomy</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Sponsor Bonus</p>
-            <p className="gx-mono text-lg font-black text-emerald-300 mt-0.5">{effects ? `+${effects.sponsor_revenue_bonus_pct ?? 0}%` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-emerald-300 mt-0.5">
+              {effects ? `+${effects.sponsor_revenue_bonus_pct ?? 0}%` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">Commercial</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Academy Potential</p>
-            <p className="gx-mono text-lg font-black text-cyan-300 mt-0.5">{effects ? `+${effects.academy_potential_bonus ?? 0} pts` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-cyan-300 mt-0.5">
+              {effects ? `+${effects.academy_potential_bonus ?? 0} pts` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">HOYD Intake</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Tactical Match Bonus</p>
-            <p className="gx-mono text-lg font-black text-amber-300 mt-0.5">{effects ? `+${effects.tactical_match_bonus ?? 0} pts` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-amber-300 mt-0.5">
+              {effects ? `+${effects.tactical_match_bonus ?? 0} pts` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">Manager Tactics</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Scouting Precision</p>
-            <p className="gx-mono text-lg font-black text-blue-300 mt-0.5">{effects ? `+${effects.scouting_precision_bonus ?? 0}%` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-blue-300 mt-0.5">
+              {effects ? `+${effects.scouting_precision_bonus ?? 0}%` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">Chief Scout</p>
           </div>
           <div className="rounded-xl border border-white/10 bg-black/40 p-3 text-center">
             <p className="text-[9px] uppercase font-bold text-slate-400">Injury Recovery</p>
-            <p className="gx-mono text-lg font-black text-rose-300 mt-0.5">{effects ? `+${effects.injury_recovery_bonus ?? 0}%` : "—"}</p>
+            <p className="gx-mono text-lg font-black text-rose-300 mt-0.5">
+              {effects ? `+${effects.injury_recovery_bonus ?? 0}%` : "—"}
+            </p>
             <p className="text-[9px] text-slate-500">Medical Speed</p>
           </div>
         </div>
@@ -870,7 +1052,9 @@ function BoardroomSection({ club }: any) {
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span className={`flex size-8 items-center justify-center rounded-lg bg-white/5 ${roleDef.color}`}>
+                  <span
+                    className={`flex size-8 items-center justify-center rounded-lg bg-white/5 ${roleDef.color}`}
+                  >
                     <Icon size={16} />
                   </span>
                   <Chip tone={roleDef.badgeTone}>{isAppointed ? "Appointed" : "Vacant"}</Chip>
@@ -913,9 +1097,14 @@ function BoardroomSection({ club }: any) {
       </div>
 
       {/* 3. Boardroom Delegation Policy Controls */}
-      <Panel eyebrow="Strategic Governance" title="Boardroom Delegation Policy" testid="delegation-policy-panel">
+      <Panel
+        eyebrow="Strategic Governance"
+        title="Boardroom Delegation Policy"
+        testid="delegation-policy-panel"
+      >
         <p className="text-xs text-slate-400 mb-4 max-w-2xl leading-relaxed">
-          Decide how much authority to delegate to your General Manager, Head of Youth Development, and First-Team Manager.
+          Decide how much authority to delegate to your General Manager, Head of Youth Development,
+          and First-Team Manager.
         </p>
 
         <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -947,7 +1136,9 @@ function BoardroomSection({ club }: any) {
             />
             <div>
               <p className="text-xs font-bold text-white">GM Transfer Autonomy</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Allows GM to negotiate fees and submit shortlist targets.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Allows GM to negotiate fees and submit shortlist targets.
+              </p>
             </div>
           </label>
 
@@ -960,7 +1151,9 @@ function BoardroomSection({ club }: any) {
             />
             <div>
               <p className="text-xs font-bold text-white">HOYD Youth Autonomy</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">HOYD automatically signs contracts for top academy gems.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                HOYD automatically signs contracts for top academy gems.
+              </p>
             </div>
           </label>
 
@@ -968,19 +1161,27 @@ function BoardroomSection({ club }: any) {
             <input
               type="checkbox"
               checked={Boolean(delegation.manager_tactics_autonomy)}
-              onChange={(e) => handleUpdateDelegation({ manager_tactics_autonomy: e.target.checked })}
+              onChange={(e) =>
+                handleUpdateDelegation({ manager_tactics_autonomy: e.target.checked })
+              }
               className="mt-0.5 rounded border-white/20 bg-slate-900 text-sky-600"
             />
             <div>
               <p className="text-xs font-bold text-white">Manager Tactical Autonomy</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">Manager commands in-match tactical changes and subs.</p>
+              <p className="text-[11px] text-slate-400 mt-0.5">
+                Manager commands in-match tactical changes and subs.
+              </p>
             </div>
           </label>
         </div>
       </Panel>
 
       {/* 4. Candidate Market per Role */}
-      <Panel eyebrow="Talent Acquisition" title="Executive & Coaching Candidate Market" testid="staff-candidates-panel">
+      <Panel
+        eyebrow="Talent Acquisition"
+        title="Executive & Coaching Candidate Market"
+        testid="staff-candidates-panel"
+      >
         <div className="flex flex-wrap gap-2 mb-5">
           <button
             onClick={() => setRoleFilter("all")}
@@ -1000,7 +1201,9 @@ function BoardroomSection({ club }: any) {
         </div>
 
         {filteredCandidates.length === 0 ? (
-          <p className="text-sm text-slate-400" data-testid="staff-candidates-empty">No candidates are on this seat.</p>
+          <p className="text-sm text-slate-400" data-testid="staff-candidates-empty">
+            No candidates are on this seat.
+          </p>
         ) : null}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filteredCandidates.map((cand) => {
@@ -1017,7 +1220,9 @@ function BoardroomSection({ club }: any) {
                   <div className="flex items-start justify-between">
                     <div>
                       <p className="font-bold text-white text-sm">{cand.name}</p>
-                      <p className="text-xs text-purple-300 font-semibold uppercase">{cand.role.replace(/_/g, " ")}</p>
+                      <p className="text-xs text-purple-300 font-semibold uppercase">
+                        {cand.role.replace(/_/g, " ")}
+                      </p>
                     </div>
                     <span
                       className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase border ${
@@ -1034,23 +1239,47 @@ function BoardroomSection({ club }: any) {
 
                   <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
                     <span>Upfront Fan Coin Contract:</span>
-                    <b className="gx-mono text-amber-300">{coinWithNaira(Math.floor((cand.salary_fan_coin || cand.salary || 1600) * 0.35) * (contractYears[cand.staff_id] || 3), "FAN")}</b>
+                    <b className="gx-mono text-amber-300">
+                      {coinWithNaira(
+                        Math.floor((cand.salary_fan_coin || cand.salary || 1600) * 0.35) *
+                          (contractYears[cand.staff_id] || 3),
+                        "FAN",
+                      )}
+                    </b>
                   </div>
                   <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
                     <span>Contract Length:</span>
                     <select
                       value={contractYears[cand.staff_id] || 3}
-                      onChange={(e) => setContractYears((prev) => ({ ...prev, [cand.staff_id]: Number(e.target.value) }))}
+                      onChange={(e) =>
+                        setContractYears((prev) => ({
+                          ...prev,
+                          [cand.staff_id]: Number(e.target.value),
+                        }))
+                      }
                       className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 text-xs font-bold text-white"
                     >
-                      <option value={1}>1 Year ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 1)} FAN)</option>
-                      <option value={2}>2 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 2)} FAN)</option>
-                      <option value={3}>3 Years (Recommended · {fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 3)} FAN)</option>
-                      <option value={4}>4 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 4)} FAN)</option>
-                      <option value={5}>5 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 5)} FAN)</option>
+                      <option value={1}>
+                        1 Year ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 1)} FAN)
+                      </option>
+                      <option value={2}>
+                        2 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 2)} FAN)
+                      </option>
+                      <option value={3}>
+                        3 Years (Recommended ·{" "}
+                        {fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 3)} FAN)
+                      </option>
+                      <option value={4}>
+                        4 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 4)} FAN)
+                      </option>
+                      <option value={5}>
+                        5 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 5)} FAN)
+                      </option>
                     </select>
                   </div>
-                  <p className="text-[10px] text-emerald-400 mt-1">Paid once upfront · club owes zero recurring debt</p>
+                  <p className="text-[10px] text-emerald-400 mt-1">
+                    Paid once upfront · club owes zero recurring debt
+                  </p>
 
                   {!meetsPrestige && (
                     <label className="mt-3 flex items-center gap-2 rounded bg-amber-950/40 border border-amber-500/30 p-2 text-[10px] text-amber-200 cursor-pointer">
@@ -1058,7 +1287,10 @@ function BoardroomSection({ club }: any) {
                         type="checkbox"
                         checked={usePremium}
                         onChange={(e) =>
-                          setMarqueePremiums((prev) => ({ ...prev, [cand.staff_id]: e.target.checked }))
+                          setMarqueePremiums((prev) => ({
+                            ...prev,
+                            [cand.staff_id]: e.target.checked,
+                          }))
                         }
                         className="rounded border-amber-500/40 bg-slate-900 text-amber-500"
                       />
@@ -1083,8 +1315,8 @@ function BoardroomSection({ club }: any) {
                     {isHiring
                       ? "Appointing…"
                       : !meetsPrestige && !usePremium
-                      ? "Prestige Too Low"
-                      : "Appoint to Role"}
+                        ? "Prestige Too Low"
+                        : "Appoint to Role"}
                   </span>
                 </button>
               </div>
@@ -1120,12 +1352,7 @@ export default function Squad() {
   const journeyParams = useMemo(() => readJourneyParams(location.search), [location.search]);
   const targetPlayerId = journeyParams.player;
 
-  const {
-    data: club,
-    isLoading,
-    isError,
-    refetch,
-  } = useClub(active?.club_id);
+  const { data: club, isLoading, isError, refetch } = useClub(active?.club_id);
 
   const clearTarget = () => {
     const searchParams = new URLSearchParams(location.search);
@@ -1142,11 +1369,13 @@ export default function Squad() {
           title="Choose a club to manage a squad"
           sub="Your GTEX member account is ready. Squad and manager tools become available when you create, join, or take over a club."
         />
-        <Panel eyebrow="Club ownership is optional" title="Start with the club that is right for you">
+        <Panel
+          eyebrow="Club ownership is optional"
+          title="Start with the club that is right for you"
+        >
           <p className="text-sm leading-6 text-slate-300">
-            You can explore GTEX and manage eligible national-team activities without
-            owning a club. To open the squad roster, first choose a club for your
-            owner workspace.
+            You can explore GTEX and manage eligible national-team activities without owning a club.
+            To open the squad roster, first choose a club for your owner workspace.
           </p>
           <Link
             to="/app/clubs"
@@ -1172,16 +1401,13 @@ export default function Squad() {
         />
         <Panel eyebrow="Connection status" title="Unable to load squad details">
           <p className="text-sm leading-6 text-slate-300">
-            Retry the request. If the problem continues, return to My Clubs and
-            select the club again.
+            Retry the request. If the problem continues, return to My Clubs and select the club
+            again.
           </p>
           <Btn variant="secondary" className="mt-4" onClick={() => void refetch()}>
             Retry squad
           </Btn>
-          <Link
-            to="/app/clubs"
-            className="gx-btn gx-btn-ghost ml-2 mt-4 inline-flex"
-          >
+          <Link to="/app/clubs" className="gx-btn gx-btn-ghost ml-2 mt-4 inline-flex">
             Open My Clubs
           </Link>
         </Panel>
@@ -1196,7 +1422,10 @@ export default function Squad() {
     academy: players.filter((player: any) => sheetOf(player) === "academy").length,
   };
   const sheetClub = { ...club, squad: players.filter((player: any) => sheetOf(player) === sheet) };
-  const firstTeamClub = { ...club, squad: players.filter((player: any) => sheetOf(player) === "first_team") };
+  const firstTeamClub = {
+    ...club,
+    squad: players.filter((player: any) => sheetOf(player) === "first_team"),
+  };
   const placeOnSheet = async (player: any, target: SquadSheet) => {
     setMovingId(String(player.id));
     try {
@@ -1219,11 +1448,21 @@ export default function Squad() {
       <PageHeader
         eyebrow="Manager & squad"
         title="Squad room"
-        sub={club.club_name + " · " + club.squad.length + " registered players · Wage bill " + fmt(club.wage_bill) + " GTX / match"}
+        sub={
+          club.club_name +
+          " · " +
+          club.squad.length +
+          " registered players · Wage bill " +
+          fmt(club.wage_bill) +
+          " GTX / match"
+        }
         action={
           <div className="flex flex-wrap items-center gap-2">
             {/* Layer 3: Football Display Mode Switcher */}
-            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="squad-view-toggle">
+            <div
+              className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1"
+              data-testid="squad-view-toggle"
+            >
               <button
                 type="button"
                 onClick={() => setModuleView("squad", "table")}
@@ -1292,7 +1531,8 @@ export default function Squad() {
       {targetPlayerId && (
         <div className="mb-4 flex items-center justify-between rounded-lg border border-cyan-500/40 bg-cyan-950/60 p-3 text-xs text-cyan-200">
           <span>
-            Tracking journey target prospect: <b className="font-mono text-white">{targetPlayerId}</b>
+            Tracking journey target prospect:{" "}
+            <b className="font-mono text-white">{targetPlayerId}</b>
           </span>
           <button
             type="button"
@@ -1305,7 +1545,12 @@ export default function Squad() {
         </div>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-2" data-testid="squad-sheets" role="tablist" aria-label="Squad sheets">
+      <div
+        className="mb-4 flex flex-wrap gap-2"
+        data-testid="squad-sheets"
+        role="tablist"
+        aria-label="Squad sheets"
+      >
         {(["first_team", "reserve", "academy"] as SquadSheet[]).map((key) => (
           <button
             key={key}
@@ -1341,7 +1586,10 @@ export default function Squad() {
           />
           <div className="grid gap-2 sm:grid-cols-2">
             {sheetClub.squad.map((player: any) => (
-              <div key={player.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2">
+              <div
+                key={player.id}
+                className="flex items-center justify-between gap-3 rounded-lg border border-white/10 px-3 py-2"
+              >
                 <span className="truncate text-sm text-white">{player.name}</span>
                 <SheetMove player={player} moving={movingId === player.id} onPlace={placeOnSheet} />
               </div>
@@ -1373,7 +1621,9 @@ export default function Squad() {
                 jerseyNumber={9}
                 badgeLabel="FIRST TEAM"
                 actionLabel="Open Dossier →"
-                onAction={() => firstTeamClub.squad?.[0] && setSelectedPlayer(firstTeamClub.squad[0])}
+                onAction={() =>
+                  firstTeamClub.squad?.[0] && setSelectedPlayer(firstTeamClub.squad[0])
+                }
               />
             </div>
           </div>
@@ -1386,7 +1636,13 @@ export default function Squad() {
         <div className="mt-6 space-y-6">
           <div className="grid gap-6 lg:grid-cols-12">
             <ManagerSheet club={club} />
-            <SquadTable club={sheetClub} targetPlayerId={targetPlayerId} onSelectPlayer={setSelectedPlayer} onPlace={placeOnSheet} movingId={movingId} />
+            <SquadTable
+              club={sheetClub}
+              targetPlayerId={targetPlayerId}
+              onSelectPlayer={setSelectedPlayer}
+              onPlace={placeOnSheet}
+              movingId={movingId}
+            />
             <HireManager club={club} />
           </div>
         </div>
@@ -1394,7 +1650,11 @@ export default function Squad() {
 
       {/* 4. Universal Player Dossier Drawer */}
       <PlayerDrawer
-        playerId={selectedPlayer ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id) : null}
+        playerId={
+          selectedPlayer
+            ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id)
+            : null
+        }
         onClose={() => setSelectedPlayer(null)}
       />
     </div>

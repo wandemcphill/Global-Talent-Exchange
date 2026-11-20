@@ -981,9 +981,7 @@ def club_strength(
     by_id = {str(p.get("id") or ""): p for p in healthy}
     filed_ids = [
         str(pid)
-        for pid in (
-            ((facilities or {}).get("_last_manager_matchday_selection") or {}).get("starting_xi_ids") or []
-        )
+        for pid in (((facilities or {}).get("_last_manager_matchday_selection") or {}).get("starting_xi_ids") or [])
     ]
     committed_starters = {
         pid

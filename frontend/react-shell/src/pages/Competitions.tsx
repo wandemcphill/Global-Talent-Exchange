@@ -48,8 +48,8 @@ function CompCard({ c, clubId }: any) {
               c.status === "open"
                 ? "border border-amber-400/40 bg-amber-400/10 text-amber-300"
                 : c.status === "running"
-                ? "border border-emerald-400/40 bg-emerald-400/10 text-emerald-300 animate-pulse"
-                : "border border-slate-700 bg-slate-800 text-slate-400"
+                  ? "border border-emerald-400/40 bg-emerald-400/10 text-emerald-300 animate-pulse"
+                  : "border border-slate-700 bg-slate-800 text-slate-400"
             }`}
           >
             {c.status}
@@ -64,7 +64,9 @@ function CompCard({ c, clubId }: any) {
             <h3 className="gx-display text-lg font-bold uppercase tracking-tight text-white group-hover:text-emerald-300 transition-colors truncate">
               {c.name}
             </h3>
-            <p className="text-xs text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">{c.description}</p>
+            <p className="text-xs text-slate-400 line-clamp-2 mt-0.5 leading-relaxed">
+              {c.description}
+            </p>
           </div>
         </div>
 
@@ -75,7 +77,9 @@ function CompCard({ c, clubId }: any) {
             <p className="gx-mono text-xs font-bold text-white mt-0.5">FREE</p>
           </div>
           <div>
-            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">Prize Pool</p>
+            <p className="text-[10px] uppercase font-bold tracking-wider text-slate-500">
+              Prize Pool
+            </p>
             <p className="gx-mono text-xs font-black text-amber-300 mt-0.5">
               <Coin amount={c.prize_pool} />
             </p>
@@ -99,7 +103,10 @@ function CompCard({ c, clubId }: any) {
         </div>
 
         {c.invite_code && (
-          <p className="gx-mono mt-3 rounded bg-white/5 px-2 py-1 text-center text-xs text-cyan-300" data-testid={`invite-code-${c.id}`}>
+          <p
+            className="gx-mono mt-3 rounded bg-white/5 px-2 py-1 text-center text-xs text-cyan-300"
+            data-testid={`invite-code-${c.id}`}
+          >
             Invite Code: <b className="text-white tracking-widest">{c.invite_code}</b>
           </p>
         )}
@@ -156,7 +163,12 @@ function HostForm() {
   });
   const applyTemplate = (key: string) => {
     const presets: Record<string, any> = {
-      weekend_league: { name: "Weekend League", format: "league", max_clubs: 10, template_key: "weekend_league" },
+      weekend_league: {
+        name: "Weekend League",
+        format: "league",
+        max_clubs: 10,
+        template_key: "weekend_league",
+      },
       cup_8: { name: "Friends Cup", format: "knockout", max_clubs: 8, template_key: "cup_8" },
     };
     const mine = saved.find((item) => item.id === key);
@@ -168,7 +180,18 @@ function HostForm() {
       toast.error("Name the template before saving it.");
       return;
     }
-    const next = [{ id: `mine-${Date.now()}`, name, format: f.format, max_clubs: Number(f.max_clubs), pin: f.pin, winner_prize: f.winner_prize, contribution: f.contribution }, ...saved].slice(0, 12);
+    const next = [
+      {
+        id: `mine-${Date.now()}`,
+        name,
+        format: f.format,
+        max_clubs: Number(f.max_clubs),
+        pin: f.pin,
+        winner_prize: f.winner_prize,
+        contribution: f.contribution,
+      },
+      ...saved,
+    ].slice(0, 12);
     localStorage.setItem(HOST_TEMPLATES_KEY, JSON.stringify(next));
     setSaved(next);
     setSavedName("");
@@ -181,7 +204,9 @@ function HostForm() {
       return;
     }
     try {
-      const { data } = await api.get("/community/discovery/clubs", { params: { q: value.trim(), limit: 8 } });
+      const { data } = await api.get("/community/discovery/clubs", {
+        params: { q: value.trim(), limit: 8 },
+      });
       setOpponents(data.clubs || []);
     } catch {
       setOpponents([]);
@@ -208,35 +233,124 @@ function HostForm() {
     }
   };
   return (
-    <form onSubmit={submit} className="grid gap-3 md:grid-cols-4" data-testid="host-competition-form">
-      <select className="gx-input md:col-span-2" value="" onChange={(e) => applyTemplate(e.target.value)} data-testid="host-template-select">
+    <form
+      onSubmit={submit}
+      className="grid gap-3 md:grid-cols-4"
+      data-testid="host-competition-form"
+    >
+      <select
+        className="gx-input md:col-span-2"
+        value=""
+        onChange={(e) => applyTemplate(e.target.value)}
+        data-testid="host-template-select"
+      >
         <option value="">Start from a template</option>
         <option value="weekend_league">Weekend league</option>
         <option value="cup_8">8-club cup</option>
-        {saved.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+        {saved.map((item) => (
+          <option key={item.id} value={item.id}>
+            {item.name}
+          </option>
+        ))}
       </select>
-      <input required minLength={3} data-testid="host-name-input" className="gx-input md:col-span-2" placeholder="Adekunle and Friends Cup" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value, template_key: "" })} />
-      <select data-testid="host-format-select" className="gx-input" value={f.format} onChange={(e) => setF({ ...f, format: e.target.value })}><option value="league">League</option><option value="knockout">Cup</option></select>
-      <select data-testid="host-size-select" className="gx-input" value={f.max_clubs} onChange={(e) => setF({ ...f, max_clubs: e.target.value })}>{[2, 4, 6, 8, 10, 12, 16].map((n) => <option key={n} value={n}>{n} clubs</option>)}</select>
-      <input data-testid="host-opponent-input" className="gx-input md:col-span-2" placeholder="Opponent club" value={opponentQuery} onChange={(e) => searchOpponents(e.target.value)} />
+      <input
+        required
+        minLength={3}
+        data-testid="host-name-input"
+        className="gx-input md:col-span-2"
+        placeholder="Adekunle and Friends Cup"
+        value={f.name}
+        onChange={(e) => setF({ ...f, name: e.target.value, template_key: "" })}
+      />
+      <select
+        data-testid="host-format-select"
+        className="gx-input"
+        value={f.format}
+        onChange={(e) => setF({ ...f, format: e.target.value })}
+      >
+        <option value="league">League</option>
+        <option value="knockout">Cup</option>
+      </select>
+      <select
+        data-testid="host-size-select"
+        className="gx-input"
+        value={f.max_clubs}
+        onChange={(e) => setF({ ...f, max_clubs: e.target.value })}
+      >
+        {[2, 4, 6, 8, 10, 12, 16].map((n) => (
+          <option key={n} value={n}>
+            {n} clubs
+          </option>
+        ))}
+      </select>
+      <input
+        data-testid="host-opponent-input"
+        className="gx-input md:col-span-2"
+        placeholder="Opponent club"
+        value={opponentQuery}
+        onChange={(e) => searchOpponents(e.target.value)}
+      />
       {opponents.length > 0 && (
-        <div className="md:col-span-4 rounded border border-white/10 bg-black/40" data-testid="host-opponent-results">
+        <div
+          className="md:col-span-4 rounded border border-white/10 bg-black/40"
+          data-testid="host-opponent-results"
+        >
           {opponents.map((club) => (
-            <button type="button" key={club.id} className="block w-full px-3 py-2 text-left text-sm text-white hover:bg-white/5" onClick={() => { setOpponent(club); setOpponentQuery(club.club_name); setOpponents([]); }}>
-              {club.club_name}{club.city_name ? ` · ${club.city_name}` : ""}
+            <button
+              type="button"
+              key={club.id}
+              className="block w-full px-3 py-2 text-left text-sm text-white hover:bg-white/5"
+              onClick={() => {
+                setOpponent(club);
+                setOpponentQuery(club.club_name);
+                setOpponents([]);
+              }}
+            >
+              {club.club_name}
+              {club.city_name ? ` · ${club.city_name}` : ""}
             </button>
           ))}
         </div>
       )}
-      {opponent && <p className="text-xs text-emerald-300 md:col-span-4">Opponent: {opponent.club_name}. They receive the pin with the challenge.</p>}
-      <input data-testid="host-pin-input" className="gx-input uppercase" placeholder="Pin (optional)" maxLength={12} value={f.pin} onChange={(e) => setF({ ...f, pin: e.target.value.toUpperCase() })} />
-      <input data-testid="host-prize-input" className="gx-input" type="number" min="0" placeholder="Winner purse" value={f.winner_prize} onChange={(e) => setF({ ...f, winner_prize: e.target.value })} />
-      <Btn type="submit" data-testid="host-submit-button">Host</Btn>
+      {opponent && (
+        <p className="text-xs text-emerald-300 md:col-span-4">
+          Opponent: {opponent.club_name}. They receive the pin with the challenge.
+        </p>
+      )}
+      <input
+        data-testid="host-pin-input"
+        className="gx-input uppercase"
+        placeholder="Pin (optional)"
+        maxLength={12}
+        value={f.pin}
+        onChange={(e) => setF({ ...f, pin: e.target.value.toUpperCase() })}
+      />
+      <input
+        data-testid="host-prize-input"
+        className="gx-input"
+        type="number"
+        min="0"
+        placeholder="Winner purse"
+        value={f.winner_prize}
+        onChange={(e) => setF({ ...f, winner_prize: e.target.value })}
+      />
+      <Btn type="submit" data-testid="host-submit-button">
+        Host
+      </Btn>
       <div className="flex gap-2 md:col-span-3">
-        <input className="gx-input" placeholder="Save these settings as my template" value={savedName} onChange={(e) => setSavedName(e.target.value)} />
-        <Btn type="button" variant="secondary" onClick={saveTemplate}>Save template</Btn>
+        <input
+          className="gx-input"
+          placeholder="Save these settings as my template"
+          value={savedName}
+          onChange={(e) => setSavedName(e.target.value)}
+        />
+        <Btn type="button" variant="secondary" onClick={saveTemplate}>
+          Save template
+        </Btn>
       </div>
-      <p className="text-xs text-slate-400 md:col-span-4">Entering is free. Set a pin so a friend can join, and GTEX funds the winner purse.</p>
+      <p className="text-xs text-slate-400 md:col-span-4">
+        Entering is free. Set a pin so a friend can join, and GTEX funds the winner purse.
+      </p>
     </form>
   );
 }
@@ -255,8 +369,21 @@ function JoinCode({ clubId }: any) {
   };
   return (
     <div className="flex gap-2">
-      <input data-testid="join-code-input" className="gx-input uppercase" placeholder="Invite code" value={code} onChange={(e) => setCode(e.target.value)} />
-      <Btn variant="secondary" disabled={code.length < 4} onClick={join} data-testid="join-code-button">Join</Btn>
+      <input
+        data-testid="join-code-input"
+        className="gx-input uppercase"
+        placeholder="Invite code"
+        value={code}
+        onChange={(e) => setCode(e.target.value)}
+      />
+      <Btn
+        variant="secondary"
+        disabled={code.length < 4}
+        onClick={join}
+        data-testid="join-code-button"
+      >
+        Join
+      </Btn>
     </div>
   );
 }
@@ -319,7 +446,9 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
         },
       });
       setLastMatch(data);
-      toast.success(`Matched vs ${data.opponent?.club_name || "Rival Club"} (${data.match_context?.tactical_story || "Tactical Clash"})!`);
+      toast.success(
+        `Matched vs ${data.opponent?.club_name || "Rival Club"} (${data.match_context?.tactical_story || "Tactical Clash"})!`,
+      );
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
     } catch (e) {
       toast.error(errMsg(e));
@@ -332,7 +461,9 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
     setBusy(true);
     try {
       const { data } = await api.post(`/simulation-matchmaking/quick-game/${matchId}/settle`);
-      toast.success(`Quick match settled: ${data.home_score}–${data.away_score} (${label(data.result)})`);
+      toast.success(
+        `Quick match settled: ${data.home_score}–${data.away_score} (${label(data.result)})`,
+      );
       setLastMatch((prev: any) => (prev ? { ...prev, settlement: data } : prev));
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
     } catch (e) {
@@ -351,12 +482,15 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       <div className="grid gap-4 lg:grid-cols-12 items-center">
         <div className="space-y-2 lg:col-span-5">
           <p className="text-xs text-slate-300 leading-relaxed">
-            Pair <b className="text-white">{activeClub?.club_name || "your club"}</b> against live owners or elite tactical bots via{" "}
-            <span className="gx-mono text-emerald-300">/api/simulation-matchmaking/quick-game</span>.
+            Pair <b className="text-white">{activeClub?.club_name || "your club"}</b> against live
+            owners or elite tactical bots via{" "}
+            <span className="gx-mono text-emerald-300">/api/simulation-matchmaking/quick-game</span>
+            .
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
             <Chip tone="emerald">
-              Free Run: {entitlement?.free_matches_remaining ?? 10}/{entitlement?.free_match_limit ?? 10} Remaining
+              Free Run: {entitlement?.free_matches_remaining ?? 10}/
+              {entitlement?.free_match_limit ?? 10} Remaining
             </Chip>
             <Chip tone="gold">Wins: {entitlement?.wins_count ?? 0}</Chip>
           </div>
@@ -385,7 +519,11 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
             <option value="tactical_clash">Tactical Clash Priority</option>
           </select>
 
-          <Btn onClick={launchQuickGame} disabled={busy || !activeClub?.club_id} data-testid="launch-quick-game-btn">
+          <Btn
+            onClick={launchQuickGame}
+            disabled={busy || !activeClub?.club_id}
+            data-testid="launch-quick-game-btn"
+          >
             <Swords size={14} />
             {busy ? "Matching…" : "Find Instant Match"}
           </Btn>
@@ -399,26 +537,38 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
         >
           <div>
             <p className="font-bold text-white text-sm">
-              {activeClub?.club_name} vs. {lastMatch.opponent?.club_name} ({lastMatch.opponent?.region})
+              {activeClub?.club_name} vs. {lastMatch.opponent?.club_name} (
+              {lastMatch.opponent?.region})
             </p>
             <p className="text-slate-300 mt-0.5">
-              {lastMatch.match_context?.tactical_story} · Compatibility {lastMatch.match_context?.tactical_compatibility_score}% · Difficulty:{" "}
-              <b className="uppercase text-amber-300">{lastMatch.match_context?.expected_difficulty}</b>
+              {lastMatch.match_context?.tactical_story} · Compatibility{" "}
+              {lastMatch.match_context?.tactical_compatibility_score}% · Difficulty:{" "}
+              <b className="uppercase text-amber-300">
+                {lastMatch.match_context?.expected_difficulty}
+              </b>
             </p>
             {lastMatch.settlement && (
               <p className="text-emerald-300 font-bold mt-1">
-                Final Score: {lastMatch.settlement.home_score} – {lastMatch.settlement.away_score} ({label(lastMatch.settlement.result)})
+                Final Score: {lastMatch.settlement.home_score} – {lastMatch.settlement.away_score} (
+                {label(lastMatch.settlement.result)})
               </p>
             )}
           </div>
           <div className="flex gap-2">
             {lastMatch.live_session?.session_route && (
-              <Btn variant="secondary" onClick={() => navigate(`/app/matches/${lastMatch.match_id}`)}>
+              <Btn
+                variant="secondary"
+                onClick={() => navigate(`/app/matches/${lastMatch.match_id}`)}
+              >
                 Open 2D Pitch
               </Btn>
             )}
             {!lastMatch.settlement && (
-              <Btn variant="gold" onClick={() => settleQuickGame(lastMatch.match_id)} disabled={busy}>
+              <Btn
+                variant="gold"
+                onClick={() => settleQuickGame(lastMatch.match_id)}
+                disabled={busy}
+              >
                 <Zap size={13} /> Settle Match Result
               </Btn>
             )}
@@ -456,7 +606,11 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
 
   const entries: any[] = globalBoard?.entries || [];
   const sortedClubs = [...(worldClubs || [])]
-    .sort((a, b) => Number(b.prestige || 0) - Number(a.prestige || 0) || Number(b.trophies || 0) - Number(a.trophies || 0))
+    .sort(
+      (a, b) =>
+        Number(b.prestige || 0) - Number(a.prestige || 0) ||
+        Number(b.trophies || 0) - Number(a.trophies || 0),
+    )
     .slice(0, 10);
 
   return (
@@ -470,8 +624,12 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
           {season && (
             <>
               <Chip tone="emerald">{label(season.status)}</Chip>
-              <span>Days Remaining: <b className="text-white">{season.days_remaining}d</b></span>
-              <span>Default ELO: <b className="text-white">{season.default_rating}</b></span>
+              <span>
+                Days Remaining: <b className="text-white">{season.days_remaining}d</b>
+              </span>
+              <span>
+                Default ELO: <b className="text-white">{season.default_rating}</b>
+              </span>
             </>
           )}
         </div>
@@ -513,9 +671,13 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
                 <tr key={row.player_id} data-testid={`leaderboard-row-${row.player_id}`}>
                   <td className="gx-mono font-bold text-amber-300">#{row.rank}</td>
                   <td className="font-semibold text-white">{row.display_name}</td>
-                  <td><Chip tone="gold">{label(row.tier)}</Chip></td>
+                  <td>
+                    <Chip tone="gold">{label(row.tier)}</Chip>
+                  </td>
                   <td className="gx-mono text-emerald-300">{row.rating}</td>
-                  <td className="gx-mono text-xs">{row.wins}-{row.draws}-{row.losses}</td>
+                  <td className="gx-mono text-xs">
+                    {row.wins}-{row.draws}-{row.losses}
+                  </td>
                   <td className="gx-mono">{Math.round(Number(row.win_rate || 0) * 100)}%</td>
                   <td className="gx-mono">{row.tournament_titles}</td>
                   <td className="gx-mono text-amber-300">{fmt(Number(row.earnings || 0))} GTX</td>
@@ -545,7 +707,13 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
                   <td className="text-slate-300">{c.country || "Global"}</td>
                   <td className="gx-mono text-emerald-300">{c.prestige ?? 60}</td>
                   <td className="gx-mono text-amber-300">{c.trophies ?? 0}</td>
-                  <td>{c.multi_club_group ? <Chip tone="cyan">Multi-Club Group</Chip> : <span className="text-xs text-slate-500">Independent</span>}</td>
+                  <td>
+                    {c.multi_club_group ? (
+                      <Chip tone="cyan">Multi-Club Group</Chip>
+                    ) : (
+                      <span className="text-xs text-slate-500">Independent</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -560,7 +728,10 @@ export default function Competitions() {
   const { active } = useActiveClub();
   const { getModuleView, setModuleView } = useSkin();
   const compView = getModuleView("competitions");
-  const { data, isLoading } = useQuery({ queryKey: ["competitions"], queryFn: async () => (await api.get("/owner/competitions")).data.competitions });
+  const { data, isLoading } = useQuery({
+    queryKey: ["competitions"],
+    queryFn: async () => (await api.get("/owner/competitions")).data.competitions,
+  });
   const { data: worldClubs = [] } = useQuery({
     queryKey: ["world-clubs"],
     queryFn: async () => {
@@ -590,8 +761,12 @@ export default function Competitions() {
   const gtex = (data || []).filter((c: any) => c.host_type === "gtex");
   const user = (data || []).filter((c: any) => c.host_type === "user");
   const needle = fixtureQuery.trim().toLowerCase();
-  const visibleGtex = needle ? gtex.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle)) : gtex;
-  const visibleUser = needle ? user.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle)) : user;
+  const visibleGtex = needle
+    ? gtex.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle))
+    : gtex;
+  const visibleUser = needle
+    ? user.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle))
+    : user;
   return (
     <div data-testid="competitions-page" className="space-y-6">
       <PageHeader
@@ -599,7 +774,10 @@ export default function Competitions() {
         title="Where prestige is earned"
         sub={`Entering as ${active?.club_name || "-"} in ${active?.division_name || "Foundation"}. Entry is free. Same-owner clubs can't share a prize-sensitive bracket and are routed apart in knockouts.`}
         action={
-          <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="competitions-view-toggle">
+          <div
+            className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1"
+            data-testid="competitions-view-toggle"
+          >
             <button
               type="button"
               onClick={() => setModuleView("competitions", "discovery")}
@@ -627,40 +805,88 @@ export default function Competitions() {
           </div>
         }
       />
-      {isLoading ? <Loading /> : (
+      {isLoading ? (
+        <Loading />
+      ) : (
         <>
           <div className="flex flex-wrap gap-2" data-testid="competition-search">
-            <input className="gx-input min-w-64 flex-1" placeholder="Find a match by competition, club, or opponent" value={fixtureQuery} onChange={(e) => setFixtureQuery(e.target.value)} />
-            <Btn variant="secondary" onClick={searchFixtures}>Search matches</Btn>
+            <input
+              className="gx-input min-w-64 flex-1"
+              placeholder="Find a match by competition, club, or opponent"
+              value={fixtureQuery}
+              onChange={(e) => setFixtureQuery(e.target.value)}
+            />
+            <Btn variant="secondary" onClick={searchFixtures}>
+              Search matches
+            </Btn>
           </div>
           {fixtures.length > 0 && (
             <Panel eyebrow="Fixtures" title="Matching matches">
               {fixtures.map((fixture) => (
-                <Link key={fixture.id} to={fixture.route || `/app/match/${fixture.id}`} className="block rounded border border-white/5 px-3 py-2 text-sm text-white hover:border-emerald-500/40">
-                  {fixture.home_name} vs {fixture.away_name} · {fixture.competition_name} · {fixture.status}
+                <Link
+                  key={fixture.id}
+                  to={fixture.route || `/app/match/${fixture.id}`}
+                  className="block rounded border border-white/5 px-3 py-2 text-sm text-white hover:border-emerald-500/40"
+                >
+                  {fixture.home_name} vs {fixture.away_name} · {fixture.competition_name} ·{" "}
+                  {fixture.status}
                 </Link>
               ))}
             </Panel>
           )}
           <QuickMatchmakingDesk activeClub={active} />
-          <Panel eyebrow="GTEX-hosted" title="Platform competitions" testid="gtex-competitions-panel">
+          <Panel
+            eyebrow="GTEX-hosted"
+            title="Platform competitions"
+            testid="gtex-competitions-panel"
+          >
             {visibleGtex.length === 0 ? (
-              <Empty title="No platform competitions are open" body="Host a competition for other clubs, or join one with an invite code. Entry is free." />
+              <Empty
+                title="No platform competitions are open"
+                body="Host a competition for other clubs, or join one with an invite code. Entry is free."
+              />
             ) : compView === "table" ? (
               <CompetitionsTableView competitions={visibleGtex} clubId={active?.club_id} />
             ) : (
               <div className="grid gap-4 md:grid-cols-3" data-testid="competitions-cards-grid">
-                {visibleGtex.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}
+                {visibleGtex.map((c: any) => (
+                  <CompCard key={c.id} c={c} clubId={active?.club_id} />
+                ))}
               </div>
             )}
           </Panel>
           <div className="grid gap-6 lg:grid-cols-12">
-            <Panel eyebrow="User-hosted" title="Host a friend competition" className="lg:col-span-8" testid="host-panel"><HostForm /></Panel>
-            <Panel eyebrow="Invite" title="Join with a code" className="lg:col-span-4" testid="join-panel"><JoinCode clubId={active?.club_id} /></Panel>
+            <Panel
+              eyebrow="User-hosted"
+              title="Host a friend competition"
+              className="lg:col-span-8"
+              testid="host-panel"
+            >
+              <HostForm />
+            </Panel>
+            <Panel
+              eyebrow="Invite"
+              title="Join with a code"
+              className="lg:col-span-4"
+              testid="join-panel"
+            >
+              <JoinCode clubId={active?.club_id} />
+            </Panel>
           </div>
-          <Panel eyebrow="Friends & hosted" title="Your user-hosted competitions" testid="user-competitions-panel">
-            {visibleUser.length === 0 ? <Empty title="None yet" body="Host one above or join with an invite code." /> : <div className="grid gap-4 md:grid-cols-3">{visibleUser.map((c: any) => <CompCard key={c.id} c={c} clubId={active?.club_id} />)}</div>}
-
+          <Panel
+            eyebrow="Friends & hosted"
+            title="Your user-hosted competitions"
+            testid="user-competitions-panel"
+          >
+            {visibleUser.length === 0 ? (
+              <Empty title="None yet" body="Host one above or join with an invite code." />
+            ) : (
+              <div className="grid gap-4 md:grid-cols-3">
+                {visibleUser.map((c: any) => (
+                  <CompCard key={c.id} c={c} clubId={active?.club_id} />
+                ))}
+              </div>
+            )}
           </Panel>
           <GlobalLeaderboardPanel worldClubs={worldClubs} />
         </>

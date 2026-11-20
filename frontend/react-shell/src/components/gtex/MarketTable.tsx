@@ -26,7 +26,8 @@ export function marketLane(player: any): "welcome" | "paid" {
   const rating = Number(player?.quote?.rating ?? player?.rating ?? player?.overall_rating ?? 60);
   const tierNorm = String(player?.real_player_tier || "").toLowerCase();
   const isLegend = tierNorm === "legend" || tierNorm === "icon";
-  const isRegen = Boolean(player?.is_regen) || player?.is_real_player === false || tierNorm === "regen";
+  const isRegen =
+    Boolean(player?.is_regen) || player?.is_real_player === false || tierNorm === "regen";
   return isLegend || isRegen || rating >= 75 ? "paid" : "welcome";
 }
 
@@ -38,7 +39,13 @@ const PRICE_PRESETS = [
   { label: "≤ 1.5k GTX", value: 1500 },
 ];
 
-async function fetchPage(position: string, tier: string, q: string, nationality: string, cursor?: string) {
+async function fetchPage(
+  position: string,
+  tier: string,
+  q: string,
+  nationality: string,
+  cursor?: string,
+) {
   const params: any = { limit: 48 };
   if (position) params.position = position;
   if (tier) params.tier = tier;
@@ -47,11 +54,24 @@ async function fetchPage(position: string, tier: string, q: string, nationality:
   if (cursor) params.cursor = cursor;
   const page = (await api.get("/v2/players", { params })).data;
   const ids = (page.players || []).map((p: any) => p.player_id).join(",");
-  const quotes = ids ? (await api.get("/owner/market/quote", { params: { player_ids: ids } })).data.quotes : {};
-  return { ...page, players: (page.players || []).map((p: any) => ({ ...p, quote: quotes[p.player_id] })) };
+  const quotes = ids
+    ? (await api.get("/owner/market/quote", { params: { player_ids: ids } })).data.quotes
+    : {};
+  return {
+    ...page,
+    players: (page.players || []).map((p: any) => ({ ...p, quote: quotes[p.player_id] })),
+  };
 }
 
-export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs = [], clubCash, queuedIds = [], onQueue }: any) {
+export function MarketTable({
+  clubId,
+  initialPosition = "",
+  onSigned,
+  signedRefs = [],
+  clubCash,
+  queuedIds = [],
+  onQueue,
+}: any) {
   const [position, setPosition] = useState(initialPosition);
   const [tier, setTier] = useState("");
   const [nation, setNation] = useState("");
@@ -65,6 +85,7 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
   const refresh = useRefreshOwner();
   const { getModuleView, setModuleView } = useSkin();
   const marketView = getModuleView("market");
+  const queueMode = typeof onQueue === "function";
 
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["market", position, tier, q, nationQuery],
@@ -100,7 +121,9 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
   const sign = async (p: any) => {
     setBusy(p.player_id);
     try {
-      const { data: res } = await api.post(`/owner/clubs/${clubId}/sign`, { player_id: p.player_id });
+      const { data: res } = await api.post(`/owner/clubs/${clubId}/sign`, {
+        player_id: p.player_id,
+      });
       toast.success(`${res.player.name} signed. Club cash: ${fmt(res.cash)} GTX`);
       refresh();
       onSigned?.(res);
@@ -117,7 +140,13 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
     <div data-testid="market-table" className="space-y-4">
       {/* Search and Main Filters */}
       <div className="flex flex-wrap items-center gap-2">
-        <form onSubmit={(e) => { e.preventDefault(); setQ(search); }} className="relative min-w-[220px] flex-1">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            setQ(search);
+          }}
+          className="relative min-w-[220px] flex-1"
+        >
           <Search size={14} className="absolute left-3 top-3 text-slate-500" />
           <input
             data-testid="market-search-input"
@@ -143,8 +172,8 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                       ? "border-amber-400 bg-amber-500 text-black font-bold"
                       : "gx-btn-primary"
                     : isLegendBtn
-                    ? "border-amber-400/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
-                    : "gx-btn-secondary"
+                      ? "border-amber-400/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20"
+                      : "gx-btn-secondary"
                 }`}
               >
                 {t.label}
@@ -166,7 +195,9 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             value={nation}
             onChange={(event) => setNation(event.target.value)}
           />
-          <button type="submit" className="gx-btn gx-btn-secondary">Nation</button>
+          <button type="submit" className="gx-btn gx-btn-secondary">
+            Nation
+          </button>
         </form>
         <div className="flex flex-wrap gap-1">
           {POSITIONS.map((p) => (
@@ -223,7 +254,10 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
 
         <div className="flex items-center gap-2">
           {/* Layer 3: Football Display Mode Switcher */}
-          <div className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/40 p-0.5" data-testid="market-view-toggle">
+          <div
+            className="flex items-center gap-1 rounded-lg border border-white/10 bg-black/40 p-0.5"
+            data-testid="market-view-toggle"
+          >
             <button
               type="button"
               onClick={() => setModuleView("market", "cards")}
@@ -268,8 +302,15 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
 
       {/* Player Count Indicator */}
       <div className="flex items-center justify-between text-xs text-slate-500">
-        <span>Showing {filteredPlayers.length} players {maxPrice > 0 ? `(filtered by price ≤ ${fmt(maxPrice)})` : ""}</span>
-        {pages[0] && <span className="gx-mono" data-testid="market-total">{fmt(pages[0].total)} total in universe</span>}
+        <span>
+          Showing {filteredPlayers.length} players{" "}
+          {maxPrice > 0 ? `(filtered by price ≤ ${fmt(maxPrice)})` : ""}
+        </span>
+        {pages[0] && (
+          <span className="gx-mono" data-testid="market-total">
+            {fmt(pages[0].total)} total in universe
+          </span>
+        )}
       </div>
 
       {/* Grid or Empty State */}
@@ -278,7 +319,11 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
       ) : filteredPlayers.length === 0 ? (
         <Empty
           title="No players match the current filters"
-          body={maxPrice > 0 ? "Try selecting 'All Prices' or increasing your price filter." : "Try another name, tier, or position."}
+          body={
+            maxPrice > 0
+              ? "Try selecting 'All Prices' or increasing your price filter."
+              : "Try another name, tier, or position."
+          }
         />
       ) : marketView === "table" ? (
         <MarketTableView
@@ -293,7 +338,10 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
           onOpenDossier={(id) => setOpen(id)}
         />
       ) : (
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6" data-testid="market-cards-grid">
+        <div
+          className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-6"
+          data-testid="market-cards-grid"
+        >
           {filteredPlayers.map((p: any) => {
             const owned = signedRefs.includes(p.player_id);
             const price = p.quote?.price ?? 0;
@@ -306,7 +354,6 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
             const isRestricted = lane === "paid";
             const isWonderkid = tierNorm === "wonderkid";
             const queued = queuedIds.includes(p.player_id);
-            const queueMode = typeof onQueue === "function";
 
             return (
               <PlayerCard
@@ -322,19 +369,49 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                 tier={isLegend ? "legendary" : undefined}
                 archetype={p.playstyle}
                 traits={p.traits}
-                badge={isLegend ? "ICON · 1 OF 1" : isWonderkid ? (isRestricted ? "WONDERKID · PAID ONLY" : "WONDERKID") : isRestricted ? "PAID GTX ONLY" : "WELCOME GRANT"}
+                badge={
+                  isLegend
+                    ? "ICON · 1 OF 1"
+                    : isWonderkid
+                      ? isRestricted
+                        ? "WONDERKID · PAID ONLY"
+                        : "WONDERKID"
+                      : isRestricted
+                        ? "PAID GTX ONLY"
+                        : "WELCOME GRANT"
+                }
                 onClick={() => setOpen(p.player_id)}
                 stats={[
                   { k: "Fee", v: price ? `${fmt(price)}` : "-" },
                   { k: "Funding", v: isRestricted ? "Top up" : "Grant" },
-                  { k: "Value", v: p.current_value_credits != null ? fmt(p.current_value_credits, 1) : (price ? fmt(price, 1) : "-") },
+                  {
+                    k: "Value",
+                    v:
+                      p.current_value_credits != null
+                        ? fmt(p.current_value_credits, 1)
+                        : price
+                          ? fmt(price, 1)
+                          : "-",
+                  },
                   { k: "Form", v: p.average_rating ?? "-" },
                 ]}
                 footer={
                   <Btn
                     className="w-full justify-center"
-                    variant={owned || queued ? "ghost" : !queueMode && unaffordable ? "outline" : "secondary"}
-                    disabled={owned || queued || busy === p.player_id || !clubId || (!queueMode && unaffordable)}
+                    variant={
+                      owned || queued
+                        ? "ghost"
+                        : !queueMode && unaffordable
+                          ? "outline"
+                          : "secondary"
+                    }
+                    disabled={
+                      owned ||
+                      queued ||
+                      busy === p.player_id ||
+                      !clubId ||
+                      (!queueMode && unaffordable)
+                    }
                     onClick={() => (queueMode ? onQueue(p, lane) : sign(p))}
                     data-testid={`sign-player-${p.player_id}`}
                   >
@@ -345,11 +422,18 @@ export function MarketTable({ clubId, initialPosition = "", onSigned, signedRefs
                     ) : queued ? (
                       "In basket"
                     ) : queueMode ? (
-                      <>{lane === "welcome" ? "Welcome basket" : "Paid basket"} · <Coin amount={price} /></>
+                      <>
+                        {lane === "welcome" ? "Welcome basket" : "Paid basket"} ·{" "}
+                        <Coin amount={price} />
+                      </>
                     ) : unaffordable ? (
-                      <span className="text-slate-400">Needs <Coin amount={price} /></span>
+                      <span className="text-slate-400">
+                        Needs <Coin amount={price} />
+                      </span>
                     ) : (
-                      <>Sign · <Coin amount={price} /></>
+                      <>
+                        Sign · <Coin amount={price} />
+                      </>
                     )}
                   </Btn>
                 }

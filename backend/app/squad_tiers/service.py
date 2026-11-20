@@ -139,9 +139,7 @@ class SquadTierService:
 
     # ---- helpers -----------------------------------------------------------
 
-    def _active_membership_for(
-        self, club_id: str, player_id: str
-    ) -> ClubSquadTierMembership | None:
+    def _active_membership_for(self, club_id: str, player_id: str) -> ClubSquadTierMembership | None:
         return self.session.scalar(
             select(ClubSquadTierMembership).where(
                 ClubSquadTierMembership.club_id == club_id,
@@ -150,9 +148,7 @@ class SquadTierService:
             )
         )
 
-    def _active_memberships(
-        self, club_id: str
-    ) -> list[tuple[ClubSquadTierMembership, Player]]:
+    def _active_memberships(self, club_id: str) -> list[tuple[ClubSquadTierMembership, Player]]:
         stmt = (
             select(ClubSquadTierMembership, Player)
             .join(Player, Player.id == ClubSquadTierMembership.player_id)
@@ -163,9 +159,7 @@ class SquadTierService:
         )
         return list(self.session.execute(stmt).all())
 
-    def _member_view(
-        self, membership: ClubSquadTierMembership, player: Player
-    ) -> SquadTierMemberView:
+    def _member_view(self, membership: ClubSquadTierMembership, player: Player) -> SquadTierMemberView:
         age = _player_age(player.date_of_birth)
         readiness = "settled"
         if membership.tier in {"u21", "reserve", "academy"}:

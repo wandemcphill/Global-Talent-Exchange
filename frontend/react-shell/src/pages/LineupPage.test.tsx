@@ -15,10 +15,14 @@ jest.mock("react-router-dom", () => {
   const ReactModule = require("react");
   return {
     Link: ({ to, children, ...props }: any) =>
-      ReactModule.createElement("a", {
-        href: typeof to === "string" ? to : "#",
-        ...props,
-      }, children),
+      ReactModule.createElement(
+        "a",
+        {
+          href: typeof to === "string" ? to : "#",
+          ...props,
+        },
+        children,
+      ),
     useSearchParams: () => [new URLSearchParams("club_id=club-1")],
   };
 });
@@ -87,10 +91,18 @@ describe("React lineup page", () => {
       }
       return Promise.reject(new Error("Unexpected GET " + url));
     }) as any);
-    jest.spyOn(api, "put").mockImplementation(((_url: string, payload: any) =>
-      Promise.resolve({ data: { club_id: "club-1", ...payload } })) as any);
-    jest.spyOn(api, "post").mockImplementation((() =>
-      Promise.resolve({ data: { manager_selection: { verdict_reason: "The first-team manager filed this eleven." } } })) as any);
+    jest
+      .spyOn(api, "put")
+      .mockImplementation(((_url: string, payload: any) =>
+        Promise.resolve({ data: { club_id: "club-1", ...payload } })) as any);
+    jest
+      .spyOn(api, "post")
+      .mockImplementation((() =>
+        Promise.resolve({
+          data: {
+            manager_selection: { verdict_reason: "The first-team manager filed this eleven." },
+          },
+        })) as any);
   });
 
   afterEach(async () => {
@@ -128,7 +140,9 @@ describe("React lineup page", () => {
   test("auto-fills a goalkeeper and ten outfield players and saves through the lineup API", async () => {
     await renderPage();
 
-    const autoFill = container.querySelector('[data-testid="auto-fill-lineup-button"]') as HTMLButtonElement;
+    const autoFill = container.querySelector(
+      '[data-testid="auto-fill-lineup-button"]',
+    ) as HTMLButtonElement;
     await act(async () => autoFill.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
     const save = container.querySelector('[data-testid="save-lineup-button"]') as HTMLButtonElement;

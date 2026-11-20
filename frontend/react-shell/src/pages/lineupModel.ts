@@ -23,12 +23,15 @@ export type LineupPlayer = {
   minutes?: number;
 };
 
-export function lineupSheet(player: Pick<LineupPlayer, "squad_status" | "is_regen" | "age" | "minutes">): "first_team" | "reserve" | "academy" {
+export function lineupSheet(
+  player: Pick<LineupPlayer, "squad_status" | "is_regen" | "age" | "minutes">,
+): "first_team" | "reserve" | "academy" {
   const raw = String(player.squad_status || "").toLowerCase();
   if (raw === "reserve") return "reserve";
   if (raw === "academy" || raw === "u21") return "academy";
   if (raw === "first_team" || raw === "senior") return "first_team";
-  if (player.is_regen && Number(player.age) <= 18 && Number(player.minutes || 0) === 0) return "academy";
+  if (player.is_regen && Number(player.age) <= 18 && Number(player.minutes || 0) === 0)
+    return "academy";
   return "first_team";
 }
 
@@ -55,8 +58,11 @@ export function normalizeLineupSquad(payload: unknown): LineupPlayer[] {
   return items
     .map((raw: any) => {
       const playerId = raw?.player_id ?? raw?.playerId ?? raw?.id;
-      if (playerId === undefined || playerId === null || String(playerId).trim() === "") return null;
-      const rating = optionalNumber(raw.rating ?? raw.overall ?? raw.overall_rating ?? raw.current_rating);
+      if (playerId === undefined || playerId === null || String(playerId).trim() === "")
+        return null;
+      const rating = optionalNumber(
+        raw.rating ?? raw.overall ?? raw.overall_rating ?? raw.current_rating,
+      );
       const position = raw.position ?? raw.normalized_position;
       const portrait = raw.portrait_url ?? raw.portraitUrl ?? raw.image_url ?? raw.avatar_url;
       return {
@@ -81,9 +87,7 @@ export function normalizeLineupPlan(payload: unknown): LineupPlan {
     ? (candidate as LineupFormation)
     : "4-3-3";
   const normalizeIds = (value: unknown) =>
-    Array.isArray(value)
-      ? value.map((id) => String(id ?? "").trim()).filter(Boolean)
-      : [];
+    Array.isArray(value) ? value.map((id) => String(id ?? "").trim()).filter(Boolean) : [];
   return {
     ...(root.club_id ? { club_id: String(root.club_id) } : {}),
     formation,
@@ -93,22 +97,19 @@ export function normalizeLineupPlan(payload: unknown): LineupPlan {
 }
 
 export function lineupRoleLabels(formation: string): string[] {
-  const valid = (LINEUP_FORMATIONS as readonly string[]).includes(formation)
-    ? formation
-    : "4-3-3";
+  const valid = (LINEUP_FORMATIONS as readonly string[]).includes(formation) ? formation : "4-3-3";
   const lines = valid.split("-").map((part) => Number(part));
   const labels = ["Goalkeeper"];
   lines.forEach((count, lineIndex) => {
-    const role = lineIndex === 0 ? "Defender" : lineIndex === lines.length - 1 ? "Forward" : "Midfielder";
+    const role =
+      lineIndex === 0 ? "Defender" : lineIndex === lines.length - 1 ? "Forward" : "Midfielder";
     for (let i = 1; i <= count; i += 1) labels.push(role + " " + i);
   });
   return labels.slice(0, 11);
 }
 
 export function lineupFormationRows(formation: string): number[][] {
-  const valid = (LINEUP_FORMATIONS as readonly string[]).includes(formation)
-    ? formation
-    : "4-3-3";
+  const valid = (LINEUP_FORMATIONS as readonly string[]).includes(formation) ? formation : "4-3-3";
   const rows = [[0]];
   let nextIndex = 1;
   valid.split("-").forEach((part) => {
@@ -135,7 +136,8 @@ export function buildLineupPayload(
   const validIds = knownPlayerIds ? new Set(knownPlayerIds) : null;
   const seenBench = new Set<string>();
   const benchPlayerIds = bench.filter((id) => {
-    if (!id || seenStarters.has(id) || seenBench.has(id) || (validIds && !validIds.has(id))) return false;
+    if (!id || seenStarters.has(id) || seenBench.has(id) || (validIds && !validIds.has(id)))
+      return false;
     seenBench.add(id);
     return true;
   });

@@ -55,9 +55,16 @@ export default function Lineup() {
     queryKey: ["lineup-plan", clubId],
     queryFn: async () => {
       try {
-        return normalizeLineupPlan((await api.get("/clubs/" + encodeURIComponent(String(clubId)) + "/lineup")).data);
+        return normalizeLineupPlan(
+          (await api.get("/clubs/" + encodeURIComponent(String(clubId)) + "/lineup")).data,
+        );
       } catch {
-        return normalizeLineupPlan({ club_id: clubId, formation: "4-3-3", starter_player_ids: [], bench_player_ids: [] });
+        return normalizeLineupPlan({
+          club_id: clubId,
+          formation: "4-3-3",
+          starter_player_ids: [],
+          bench_player_ids: [],
+        });
       }
     },
     enabled: Boolean(clubId),
@@ -65,7 +72,9 @@ export default function Lineup() {
   const players: LineupPlayer[] = rosterQuery.data || [];
   const firstTeam = players.filter((player) => lineupSheet(player) === "first_team");
   const reserve = players.filter((player) => lineupSheet(player) === "reserve");
-  const benchPool = reserve.length ? reserve : players.filter((player) => lineupSheet(player) === "first_team");
+  const benchPool = reserve.length
+    ? reserve
+    : players.filter((player) => lineupSheet(player) === "first_team");
   const roles = useMemo(() => lineupRoleLabels(formation), [formation]);
   const selectedStarters = useMemo(() => new Set(starters.filter(Boolean)), [starters]);
   const selectedBench = useMemo(() => new Set(bench), [bench]);
@@ -77,12 +86,16 @@ export default function Lineup() {
     if (!planQuery.data || initializedClubRef.current === clubId) return;
     initializedClubRef.current = clubId || null;
     setFormation(planQuery.data.formation);
-    setStarters([...planQuery.data.starter_player_ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
+    setStarters(
+      [...planQuery.data.starter_player_ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11),
+    );
     setBench(planQuery.data.bench_player_ids);
   }, [clubId, planQuery.data]);
 
   const setStarter = (index: number, playerId: string) => {
-    setStarters((current) => current.map((currentId, slot) => slot === index ? playerId : currentId));
+    setStarters((current) =>
+      current.map((currentId, slot) => (slot === index ? playerId : currentId)),
+    );
     if (playerId) setBench((current) => current.filter((id) => id !== playerId));
   };
 
@@ -104,12 +117,13 @@ export default function Lineup() {
     const selected = new Set(next.filter(Boolean));
     setBench((current) => current.filter((id) => !selected.has(id)));
     if (!goalkeeper) {
-      toast.warning("No goalkeeper was identified in this roster. Select the goalkeeper position manually.");
+      toast.warning(
+        "No goalkeeper was identified in this roster. Select the goalkeeper position manually.",
+      );
     } else {
       toast.success("Best available XI selected by rating, with a goalkeeper in goal.");
     }
   };
-
 
   const saveLineup = async () => {
     if (!clubId) return;
@@ -125,13 +139,16 @@ export default function Lineup() {
     }
     setSaving(true);
     try {
-      const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload)).data;
+      const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload))
+        .data;
       queryClient.setQueryData(["lineup-plan", clubId], normalizeLineupPlan(saved));
-      const filed = (await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
-        preferred_formation: formation,
-        preferred_player_ids: payload.starter_player_ids,
-        note: "Owner lineup request from the first-team sheet",
-      })).data;
+      const filed = (
+        await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
+          preferred_formation: formation,
+          preferred_player_ids: payload.starter_player_ids,
+          note: "Owner lineup request from the first-team sheet",
+        })
+      ).data;
       const verdict = filed?.manager_selection?.verdict_reason;
       toast.success(verdict || "The first-team manager filed this eleven.");
     } catch (error) {
@@ -144,10 +161,20 @@ export default function Lineup() {
   if (!clubId) {
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Squad room" title="Lineup & Tactics" sub="Choose a club before building your starting XI." />
+        <PageHeader
+          eyebrow="Squad room"
+          title="Lineup & Tactics"
+          sub="Choose a club before building your starting XI."
+        />
         <Panel title="No active club">
-          <p className="text-sm text-slate-400">The lineup editor needs an owned club and its authoritative player roster.</p>
-          <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex" data-testid="lineup-choose-club">
+          <p className="text-sm text-slate-400">
+            The lineup editor needs an owned club and its authoritative player roster.
+          </p>
+          <Link
+            to="/app/clubs"
+            className="gx-btn gx-btn-primary mt-4 inline-flex"
+            data-testid="lineup-choose-club"
+          >
             Choose a club <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         </Panel>
@@ -155,18 +182,33 @@ export default function Lineup() {
     );
   }
 
-  if (rosterQuery.isLoading || planQuery.isLoading) return <Loading label="Loading lineup and squad" />;
+  if (rosterQuery.isLoading || planQuery.isLoading)
+    return <Loading label="Loading lineup and squad" />;
 
   if (rosterQuery.isError && !rosterQuery.data) {
     const message = rosterQuery.error ? errMsg(rosterQuery.error) : errMsg(planQuery.error);
     return (
       <div className="space-y-6">
-        <PageHeader eyebrow="Squad room" title="Lineup & Tactics" sub="The editor reads and saves the club's real lineup." />
+        <PageHeader
+          eyebrow="Squad room"
+          title="Lineup & Tactics"
+          sub="The editor reads and saves the club's real lineup."
+        />
         <Panel title="Lineup temporarily unavailable">
           <p className="text-sm text-slate-400">{message}</p>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Btn variant="secondary" onClick={() => { void rosterQuery.refetch(); void planQuery.refetch(); }}>Retry</Btn>
-            <Link to="/app/squad" className="gx-btn gx-btn-ghost inline-flex items-center"><ArrowLeft className="mr-2 h-4 w-4" /> Back to Squad room</Link>
+            <Btn
+              variant="secondary"
+              onClick={() => {
+                void rosterQuery.refetch();
+                void planQuery.refetch();
+              }}
+            >
+              Retry
+            </Btn>
+            <Link to="/app/squad" className="gx-btn gx-btn-ghost inline-flex items-center">
+              <ArrowLeft className="mr-2 h-4 w-4" /> Back to Squad room
+            </Link>
           </div>
         </Panel>
       </div>
@@ -178,9 +220,16 @@ export default function Lineup() {
       <PageHeader
         eyebrow="First-team sheet · matchday eleven"
         title="Lineup & Tactics (Owner Preference)"
-        sub={(club?.club_name || "Your club") + " · the match plays the eleven filed from this first-team sheet. The bench comes from the reserve sheet."}
+        sub={
+          (club?.club_name || "Your club") +
+          " · the match plays the eleven filed from this first-team sheet. The bench comes from the reserve sheet."
+        }
         action={
-          <Link to="/app/squad" className="gx-btn gx-btn-ghost inline-flex items-center" data-testid="lineup-back-to-squad">
+          <Link
+            to="/app/squad"
+            className="gx-btn gx-btn-ghost inline-flex items-center"
+            data-testid="lineup-back-to-squad"
+          >
             <ArrowLeft className="mr-2 h-4 w-4" /> Squad room
           </Link>
         }
@@ -193,21 +242,44 @@ export default function Lineup() {
           The match plays the eleven on the first-team sheet
         </p>
         <p className="mt-1 leading-relaxed text-slate-200">
-          Saving files that eleven with the first-team manager. Players on the academy sheet stay out of it.
-          A youth player comes in when you move him onto the first team, or when the manager has already agreed
-          minutes in the <Link to="/app/inbox" className="underline text-emerald-300">Owner Inbox</Link>.
+          Saving files that eleven with the first-team manager. Players on the academy sheet stay
+          out of it. A youth player comes in when you move him onto the first team, or when the
+          manager has already agreed minutes in the{" "}
+          <Link to="/app/inbox" className="underline text-emerald-300">
+            Owner Inbox
+          </Link>
+          .
         </p>
       </div>
-      <Panel title="Formation & starting XI" eyebrow="Match plan" testid="lineup-editor-panel" className="lg:col-span-12">
+      <Panel
+        title="Formation & starting XI"
+        eyebrow="Match plan"
+        testid="lineup-editor-panel"
+        className="lg:col-span-12"
+      >
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
           <div className="space-y-4">
-            <label className="block text-sm font-medium text-slate-300" htmlFor="lineup-formation">Formation</label>
-            <select id="lineup-formation" data-testid="lineup-formation-select" className="gx-input w-full" value={formation} onChange={(event) => setFormation(event.target.value)}>
-              {LINEUP_FORMATIONS.map((option) => <option key={option} value={option}>{option}</option>)}
+            <label className="block text-sm font-medium text-slate-300" htmlFor="lineup-formation">
+              Formation
+            </label>
+            <select
+              id="lineup-formation"
+              data-testid="lineup-formation-select"
+              className="gx-input w-full"
+              value={formation}
+              onChange={(event) => setFormation(event.target.value)}
+            >
+              {LINEUP_FORMATIONS.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
             </select>
             <div className="rounded-xl border border-gtex-emerald/30 bg-gradient-to-b from-gtex-slate to-gtex-midnight p-5 shadow-xl">
               <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">Tactical pitch</span>
+                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">
+                  Tactical pitch
+                </span>
                 <Chip tone="emerald">{formation}</Chip>
               </div>
               <div className="relative overflow-hidden rounded-xl border border-gtex-emerald/40 bg-emerald-950/60 px-4 py-5 shadow-inner">
@@ -219,19 +291,33 @@ export default function Lineup() {
                     <div key={lineIndex} className="flex w-full flex-wrap justify-center gap-2">
                       {row.map((slotIndex) => {
                         const role = roles[slotIndex] || "Player";
-                        const player = players.find((item) => item.player_id === starters[slotIndex]);
+                        const player = players.find(
+                          (item) => item.player_id === starters[slotIndex],
+                        );
                         return (
-                          <div key={slotIndex} className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md">
+                          <div
+                            key={slotIndex}
+                            className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md"
+                          >
                             <KitBakedMark size={28} />
-                            <span className="mb-1 text-[10px] font-bold text-emerald-100">{player ? (player.rating ? Math.round(player.rating) : "XI") : slotIndex + 1}</span>
-                            <span className="w-full truncate text-[10px] font-semibold text-white">{player?.player_name || role}</span>
-                            <span className="w-full truncate text-[9px] text-slate-400">{role}</span>
+                            <span className="mb-1 text-[10px] font-bold text-emerald-100">
+                              {player
+                                ? player.rating
+                                  ? Math.round(player.rating)
+                                  : "XI"
+                                : slotIndex + 1}
+                            </span>
+                            <span className="w-full truncate text-[10px] font-semibold text-white">
+                              {player?.player_name || role}
+                            </span>
+                            <span className="w-full truncate text-[9px] text-slate-400">
+                              {role}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
                   ))}
-
                 </div>
               </div>
               <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
@@ -241,23 +327,34 @@ export default function Lineup() {
             </div>
             <div className="flex items-start gap-2 rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-xs leading-5 text-slate-300">
               <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" />
-              Formation sets the shape. Choose a player for each position; the same player cannot be used twice. At least eleven eligible players, including a goalkeeper, are needed for competition registration.
+              Formation sets the shape. Choose a player for each position; the same player cannot be
+              used twice. At least eleven eligible players, including a goalkeeper, are needed for
+              competition registration.
             </div>
           </div>
 
           <div className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <h3 className="gx-h3">Starting XI</h3>
-              <Chip tone={starters.filter(Boolean).length === 11 ? "emerald" : "gold"}>{starters.filter(Boolean).length}/11 selected</Chip>
+              <Chip tone={starters.filter(Boolean).length === 11 ? "emerald" : "gold"}>
+                {starters.filter(Boolean).length}/11 selected
+              </Chip>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               {roles.map((role, index) => {
                 const currentId = starters[index] || "";
-                const usedByOtherSlots = new Set(starters.filter((id, slot) => slot !== index && Boolean(id)));
-                const options = firstTeam.filter((player) => !usedByOtherSlots.has(player.player_id));
+                const usedByOtherSlots = new Set(
+                  starters.filter((id, slot) => slot !== index && Boolean(id)),
+                );
+                const options = firstTeam.filter(
+                  (player) => !usedByOtherSlots.has(player.player_id),
+                );
                 return (
                   <div key={index} className="min-w-0 rounded-sm border border-white/10 p-3">
-                    <label htmlFor={"lineup-slot-" + index} className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500">
+                    <label
+                      htmlFor={"lineup-slot-" + index}
+                      className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                    >
                       {String(index + 1).padStart(2, "0")} · {role}
                     </label>
                     <select
@@ -271,7 +368,8 @@ export default function Lineup() {
                       <option value="">Select player</option>
                       {options.map((player) => (
                         <option key={player.player_id} value={player.player_id}>
-                          {player.player_name}{player.position ? " · " + player.position : ""}
+                          {player.player_name}
+                          {player.position ? " · " + player.position : ""}
                         </option>
                       ))}
                     </select>
@@ -280,24 +378,44 @@ export default function Lineup() {
               })}
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2">
-              <Btn variant="secondary" onClick={autoFillLineup} disabled={players.length === 0} data-testid="auto-fill-lineup-button">
+              <Btn
+                variant="secondary"
+                onClick={autoFillLineup}
+                disabled={players.length === 0}
+                data-testid="auto-fill-lineup-button"
+              >
                 <Users className="mr-2 h-4 w-4" /> Auto-fill XI
               </Btn>
-              <Btn onClick={saveLineup} disabled={saving || players.length === 0} data-testid="save-lineup-button">
+              <Btn
+                onClick={saveLineup}
+                disabled={saving || players.length === 0}
+                data-testid="save-lineup-button"
+              >
                 <Save className="mr-2 h-4 w-4" /> {saving ? "Saving lineup…" : "Save lineup"}
               </Btn>
-              <span className="text-xs text-slate-500">Saved lineups are persisted through GTEX's club-lineup API.</span>
+              <span className="text-xs text-slate-500">
+                Saved lineups are persisted through GTEX's club-lineup API.
+              </span>
             </div>
           </div>
         </div>
       </Panel>
 
-      <Panel title="Manager & coaching staff" eyebrow="Tactical support" testid="lineup-manager-panel">
+      <Panel
+        title="Manager & coaching staff"
+        eyebrow="Tactical support"
+        testid="lineup-manager-panel"
+      >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <p className="max-w-2xl text-sm leading-6 text-slate-400">
-            Choose a manager whose tactical style fits the selected formation. React's manager hiring and management actions are available from the Squad room.
+            Choose a manager whose tactical style fits the selected formation. React's manager
+            hiring and management actions are available from the Squad room.
           </p>
-          <Link to="/app/squad" className="gx-btn gx-btn-secondary inline-flex shrink-0 items-center" data-testid="lineup-manage-manager-link">
+          <Link
+            to="/app/squad"
+            className="gx-btn gx-btn-secondary inline-flex shrink-0 items-center"
+            data-testid="lineup-manage-manager-link"
+          >
             Manage manager <ArrowRight className="ml-2 h-4 w-4" />
           </Link>
         </div>
@@ -305,30 +423,78 @@ export default function Lineup() {
 
       <Panel title="Substitutes & bench" eyebrow="Matchday options" testid="lineup-bench-panel">
         {availableForBench.length === 0 && bench.length === 0 ? (
-          <Empty title="No bench options available" body="Select fewer starters or add eligible players to this club before preparing substitutes." testid="lineup-bench-empty" />
+          <Empty
+            title="No bench options available"
+            body="Select fewer starters or add eligible players to this club before preparing substitutes."
+            testid="lineup-bench-empty"
+          />
         ) : (
           <>
-            <p className="mb-4 text-sm text-slate-400">The bench is the reserve sheet. Players already in the eleven cannot also sit there.</p>
+            <p className="mb-4 text-sm text-slate-400">
+              The bench is the reserve sheet. Players already in the eleven cannot also sit there.
+            </p>
             <div className="flex flex-col gap-2 sm:flex-row">
-              <select aria-label="Choose a substitute" data-testid="lineup-bench-candidate" className="gx-input min-w-0 flex-1" value={benchCandidate} onChange={(event) => setBenchCandidate(event.target.value)}>
+              <select
+                aria-label="Choose a substitute"
+                data-testid="lineup-bench-candidate"
+                className="gx-input min-w-0 flex-1"
+                value={benchCandidate}
+                onChange={(event) => setBenchCandidate(event.target.value)}
+              >
                 <option value="">Choose a substitute</option>
-                {availableForBench.map((player) => <option key={player.player_id} value={player.player_id}>{player.player_name}{player.position ? " · " + player.position : ""}</option>)}
+                {availableForBench.map((player) => (
+                  <option key={player.player_id} value={player.player_id}>
+                    {player.player_name}
+                    {player.position ? " · " + player.position : ""}
+                  </option>
+                ))}
               </select>
-              <Btn variant="secondary" disabled={!benchCandidate} onClick={() => { if (benchCandidate && !selectedStarters.has(benchCandidate) && !selectedBench.has(benchCandidate)) setBench((current) => [...current, benchCandidate]); setBenchCandidate(""); }} data-testid="add-bench-player">
+              <Btn
+                variant="secondary"
+                disabled={!benchCandidate}
+                onClick={() => {
+                  if (
+                    benchCandidate &&
+                    !selectedStarters.has(benchCandidate) &&
+                    !selectedBench.has(benchCandidate)
+                  )
+                    setBench((current) => [...current, benchCandidate]);
+                  setBenchCandidate("");
+                }}
+                data-testid="add-bench-player"
+              >
                 <Users className="mr-2 h-4 w-4" /> Add to bench
               </Btn>
             </div>
             {bench.length > 0 && (
-              <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3" data-testid="lineup-bench-list">
+              <div
+                className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3"
+                data-testid="lineup-bench-list"
+              >
                 {bench.map((id) => {
                   const player = players.find((item) => item.player_id === id);
                   return (
-                    <div key={id} className="flex min-w-0 items-center justify-between gap-3 rounded-sm border border-white/10 p-3">
+                    <div
+                      key={id}
+                      className="flex min-w-0 items-center justify-between gap-3 rounded-sm border border-white/10 p-3"
+                    >
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-semibold text-white">{player?.player_name || "Unknown player"}</p>
-                        <p className="text-xs text-slate-500">{player?.position || "Squad player"}{player?.rating ? " · OVR " + Math.round(player.rating) : ""}</p>
+                        <p className="truncate text-sm font-semibold text-white">
+                          {player?.player_name || "Unknown player"}
+                        </p>
+                        <p className="text-xs text-slate-500">
+                          {player?.position || "Squad player"}
+                          {player?.rating ? " · OVR " + Math.round(player.rating) : ""}
+                        </p>
                       </div>
-                      <Btn variant="ghost" className="shrink-0" onClick={() => setBench((current) => current.filter((item) => item !== id))} aria-label={"Remove " + (player?.player_name || "player") + " from bench"}>Remove</Btn>
+                      <Btn
+                        variant="ghost"
+                        className="shrink-0"
+                        onClick={() => setBench((current) => current.filter((item) => item !== id))}
+                        aria-label={"Remove " + (player?.player_name || "player") + " from bench"}
+                      >
+                        Remove
+                      </Btn>
                     </div>
                   );
                 })}
@@ -356,9 +522,16 @@ export default function Lineup() {
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 p-4">
         <div className="flex items-start gap-2 text-sm text-slate-400">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-300" />
-          <span>The saved tactical lineup is separate from competition registration. Sync, submit, and lock the registered squad on the Squad room page.</span>
+          <span>
+            The saved tactical lineup is separate from competition registration. Sync, submit, and
+            lock the registered squad on the Squad room page.
+          </span>
         </div>
-        <Link to="/app/squad" className="gx-btn gx-btn-secondary inline-flex items-center" data-testid="lineup-registration-link">
+        <Link
+          to="/app/squad"
+          className="gx-btn gx-btn-secondary inline-flex items-center"
+          data-testid="lineup-registration-link"
+        >
           Squad registration <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
       </div>

@@ -66,7 +66,10 @@ function detectWebGLAvailable(): boolean {
   if (typeof window === "undefined" || typeof document === "undefined") return false;
   try {
     const canvas = document.createElement("canvas");
-    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+    const gl =
+      canvas.getContext("webgl2") ||
+      canvas.getContext("webgl") ||
+      canvas.getContext("experimental-webgl");
     return Boolean(gl);
   } catch {
     return false;
@@ -156,7 +159,10 @@ const DIRECTIVE_OBJECTIVES_BY_DEPARTMENT: Record<string, Array<{ key: string; la
     { key: "sign_commercial_sponsor", label: "Sign a commercial sponsor" },
     { key: "increase_treasury_balance", label: "Increase the club treasury balance" },
     { key: "complete_sponsor_review", label: "Complete a sponsor review" },
-    { key: "upgrade_revenue_infrastructure", label: "Upgrade commercial or stadium infrastructure" },
+    {
+      key: "upgrade_revenue_infrastructure",
+      label: "Upgrade commercial or stadium infrastructure",
+    },
   ],
   scouting: [
     { key: "expand_scouting_watchlist", label: "Expand the scouting watchlist" },
@@ -183,8 +189,13 @@ function MatchdayDecisionCard({
     : decision?.declined_player_ids || [];
   const line = (value?: string | null) => (value && value.trim() ? value : "DATA UNAVAILABLE");
   return (
-    <div data-testid="matchday-decision-panel" className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-1">
-      <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">Matchday decision</p>
+    <div
+      data-testid="matchday-decision-panel"
+      className="rounded-xl border border-white/10 bg-black/40 p-3 space-y-1"
+    >
+      <p className="text-[10px] font-black uppercase tracking-wider text-sky-300">
+        Matchday decision
+      </p>
       <p className="text-xs text-slate-200" data-testid="matchday-declined-players">
         Declined: {declined.length ? declined.join(", ") : "DATA UNAVAILABLE"}
       </p>
@@ -234,8 +245,12 @@ export function ClubOperationsCentre3D({
   const [cameraMode, setCameraMode] = useState<"room" | "overview">("room");
   const [activeHotspotId, setActiveHotspotId] = useState<string | null>(null);
   const [lightingMode, setLightingMode] = useState<"day" | "night">("day");
-  const [renderMode, setRenderMode] = useState<"3d" | "2d">(() => (detectWebGLAvailable() ? "3d" : "2d"));
-  const [webglStatus, setWebglStatus] = useState<"initializing" | "ready" | "context_lost" | "fallback">("initializing");
+  const [renderMode, setRenderMode] = useState<"3d" | "2d">(() =>
+    detectWebGLAvailable() ? "3d" : "2d",
+  );
+  const [webglStatus, setWebglStatus] = useState<
+    "initializing" | "ready" | "context_lost" | "fallback"
+  >("initializing");
   const [loadedGlbCount, setLoadedGlbCount] = useState<number>(0);
   const [proceduralRoomCount, setProceduralRoomCount] = useState<number>(0);
   const [departmentRoomsReady, setDepartmentRoomsReady] = useState<number>(0);
@@ -329,7 +344,9 @@ export function ClubOperationsCentre3D({
             destination.label,
             destination.subtitle,
             (destination.hotspots || [])
-              .map((hotspot) => [hotspot.id, hotspot.action, hotspot.label, hotspot.offset.join(",")].join("~"))
+              .map((hotspot) =>
+                [hotspot.id, hotspot.action, hotspot.label, hotspot.offset.join(",")].join("~"),
+              )
               .join(";"),
           ].join("|"),
         )
@@ -340,7 +357,7 @@ export function ClubOperationsCentre3D({
   destinationsRef.current = destinations;
   const activeDestination: OperationsHubDestination | undefined = useMemo(
     () => destinations.find((d) => d.destination_key === activeDestKey) || destinations[0],
-    [destinations, activeDestKey]
+    [destinations, activeDestKey],
   );
   const requestedHotspotRef = useRef<{ destKey: string; hotspotId: string } | null>(null);
   const [focusedStationAction, setFocusedStationAction] = useState<string | null>(null);
@@ -358,29 +375,67 @@ export function ClubOperationsCentre3D({
     if (action === "inspect_timeline") {
       setShowTimelineDrawer(true);
       window.requestAnimationFrame(() => {
-        const drawer = document.querySelector<HTMLElement>('[data-testid="living-world-timeline-drawer"]');
+        const drawer = document.querySelector<HTMLElement>(
+          '[data-testid="living-world-timeline-drawer"]',
+        );
         drawer?.focus?.({ preventScroll: true });
       });
       return;
     }
 
     const selectors: Record<string, string[]> = {
-      inspect_briefing: ['[data-testid="executive-briefing-summary"]', '[data-testid="room-panel-executive-office"]'],
-      inspect_decisions: ['[data-testid="executive-pending-decisions"]', '[data-testid="room-panel-executive-office"]'],
-      set_mentality: ['[data-testid="set-mentality-balanced"]', '[data-testid="manager-tactical-panel"]'],
-      pledge_win_bonus: ['[data-testid="room-pledge-win-bonus-btn"]', '[data-testid="manager-matchday-prep"]'],
-      configure_delegation: ['[data-testid="set-delegation-balanced"]', '[data-testid="gm-delegation-panel"]'],
-      inspect_campus: ['[data-testid="campus-construction-projects"]', '[data-testid="room-panel-general-managers-office"]'],
+      inspect_briefing: [
+        '[data-testid="executive-briefing-summary"]',
+        '[data-testid="room-panel-executive-office"]',
+      ],
+      inspect_decisions: [
+        '[data-testid="executive-pending-decisions"]',
+        '[data-testid="room-panel-executive-office"]',
+      ],
+      set_mentality: [
+        '[data-testid="set-mentality-balanced"]',
+        '[data-testid="manager-tactical-panel"]',
+      ],
+      pledge_win_bonus: [
+        '[data-testid="room-pledge-win-bonus-btn"]',
+        '[data-testid="manager-matchday-prep"]',
+      ],
+      configure_delegation: [
+        '[data-testid="set-delegation-balanced"]',
+        '[data-testid="gm-delegation-panel"]',
+      ],
+      inspect_campus: [
+        '[data-testid="campus-construction-projects"]',
+        '[data-testid="room-panel-general-managers-office"]',
+      ],
       commission_intake: ['[data-testid="commission-academy-intake-btn"]'],
-      manage_regens: ['[data-testid="academy-regen-pipeline"]', '[data-testid="room-panel-academy-department"]'],
-      run_conditioning: ['[data-testid="run-medical-recovery-protocol-btn"]', '[data-testid="medical-rehabilitation-ward"]'],
-      inspect_workloads: ['[data-testid="medical-workload-watchlist"]', '[data-testid="room-panel-medical-department"]'],
-      inspect_ledger: ['[data-testid="finance-ledger-stream"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      manage_regens: [
+        '[data-testid="academy-regen-pipeline"]',
+        '[data-testid="room-panel-academy-department"]',
+      ],
+      run_conditioning: [
+        '[data-testid="run-medical-recovery-protocol-btn"]',
+        '[data-testid="medical-rehabilitation-ward"]',
+      ],
+      inspect_workloads: [
+        '[data-testid="medical-workload-watchlist"]',
+        '[data-testid="room-panel-medical-department"]',
+      ],
+      inspect_ledger: [
+        '[data-testid="finance-ledger-stream"]',
+        '[data-testid="room-panel-finance-commercial-office"]',
+      ],
       sign_sponsor: ['[data-testid^="sign-sponsor-"]', '[data-testid="finance-sponsor-offers"]'],
-      inspect_matchday_econ: ['[data-testid="finance-matchday-economics"]', '[data-testid="room-panel-finance-commercial-office"]'],
+      inspect_matchday_econ: [
+        '[data-testid="finance-matchday-economics"]',
+        '[data-testid="room-panel-finance-commercial-office"]',
+      ],
     };
     const targets = action.startsWith("chat_")
-      ? ['[data-testid="department-staff-chat-input"]', '[data-testid="vacant-staff-channel-notice"]']
+      ? [
+          '[data-testid="department-staff-chat-input"]',
+          '[data-testid="vacant-staff-channel-notice"]',
+        ]
       : selectors[action] || [];
     const panelSelector = `[data-testid="department-inspector-${destinationKey}"]`;
 
@@ -396,7 +451,8 @@ export function ClubOperationsCentre3D({
           break;
         }
       }
-      const focusNode = enabledTarget || firstMatch || document.querySelector<HTMLElement>(panelSelector);
+      const focusNode =
+        enabledTarget || firstMatch || document.querySelector<HTMLElement>(panelSelector);
       focusNode?.scrollIntoView?.({ behavior: "smooth", block: "center" });
       focusNode?.focus?.({ preventScroll: true });
     });
@@ -407,7 +463,8 @@ export function ClubOperationsCentre3D({
 
   const activeDirectiveDepartment =
     DIRECTIVE_DEPARTMENT_BY_DESTINATION[activeDestination?.destination_key || ""] || "executive";
-  const directiveObjectiveOptions = DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
+  const directiveObjectiveOptions =
+    DIRECTIVE_OBJECTIVES_BY_DEPARTMENT[activeDirectiveDepartment] || [];
 
   // Sync hotspot when switching destination without clobbering explicit station selection
   useEffect(() => {
@@ -487,7 +544,10 @@ export function ClubOperationsCentre3D({
       typeof window.matchMedia === "function"
         ? window.matchMedia("(max-width: 768px)").matches
         : window.innerWidth <= 768;
-    const qualityTier = isCompactViewport && activeQualityProfile.tier === "ultra" ? "high" : activeQualityProfile.tier;
+    const qualityTier =
+      isCompactViewport && activeQualityProfile.tier === "ultra"
+        ? "high"
+        : activeQualityProfile.tier;
     const qualityProfile = QUALITY_PROFILES[qualityTier];
     const lowPowerDevice = qualityTier === "low" || qualityTier === "medium";
 
@@ -544,12 +604,16 @@ export function ClubOperationsCentre3D({
     controls.addEventListener("start", stopAutoTransition);
 
     // Lighting rig
-    const hemiLight = new THREE.HemisphereLight(0xdbeafe, 0x0f172a, lightingRef.current === "day" ? 1.1 : 0.45);
+    const hemiLight = new THREE.HemisphereLight(
+      0xdbeafe,
+      0x0f172a,
+      lightingRef.current === "day" ? 1.1 : 0.45,
+    );
     scene.add(hemiLight);
 
     const sunLight = new THREE.DirectionalLight(
       lightingRef.current === "day" ? 0xfffbeb : 0x60a5fa,
-      lightingRef.current === "day" ? 2.1 : 0.9
+      lightingRef.current === "day" ? 2.1 : 0.9,
     );
     sunLight.position.set(28, 42, 24);
     sunLight.castShadow = qualityProfile.shadowsEnabled;
@@ -584,7 +648,12 @@ export function ClubOperationsCentre3D({
     // Central Club Crest Atrium Ring
     const rotundaRing = new THREE.Mesh(
       new THREE.RingGeometry(4.2, 5.1, 48),
-      new THREE.MeshBasicMaterial({ color: 0x38bdf8, side: THREE.DoubleSide, transparent: true, opacity: 0.45 })
+      new THREE.MeshBasicMaterial({
+        color: 0x38bdf8,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.45,
+      }),
     );
     rotundaRing.rotation.x = -Math.PI / 2;
     rotundaRing.position.y = 0.05;
@@ -614,7 +683,11 @@ export function ClubOperationsCentre3D({
     roomScreensRef.current = [];
     roomActorsRef.current = [];
 
-    const mountDestinationGlb = (dest: OperationsHubDestination, group: THREE.Group, accent: THREE.Color) => {
+    const mountDestinationGlb = (
+      dest: OperationsHubDestination,
+      group: THREE.Group,
+      accent: THREE.Color,
+    ) => {
       const rawGlbUrl = dest.glb_model || "";
       if (!rawGlbUrl || PROCEDURAL_ROOM_ONLY.test(rawGlbUrl)) {
         failedDestKeys.delete(dest.destination_key);
@@ -682,7 +755,10 @@ export function ClubOperationsCentre3D({
         undefined,
         (err) => {
           if (!mounted) return;
-          console.warn(`[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`, err);
+          console.warn(
+            `[ClubOperationsCentre3D] Failed to load GLB for ${dest.destination_key}: ${glbUrl}`,
+            err,
+          );
           loadedDestKeys.delete(dest.destination_key);
           failedDestKeys.add(dest.destination_key);
           publishAssetCounts();
@@ -700,7 +776,10 @@ export function ClubOperationsCentre3D({
             const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
             fallbackMesh.name = fallbackName;
             fallbackMesh.position.set(7.0, 1.2, -0.8);
-            fallbackMesh.userData = { destinationKey: dest.destination_key, isFallbackWireframe: true };
+            fallbackMesh.userData = {
+              destinationKey: dest.destination_key,
+              isFallbackWireframe: true,
+            };
             fallbackMesh.castShadow = true;
             fallbackMesh.receiveShadow = true;
             pickables.push(fallbackMesh);
@@ -746,7 +825,11 @@ export function ClubOperationsCentre3D({
       const distToCenter = Math.hypot(rx, rz);
       if (distToCenter > 1) {
         const pathGeo = new THREE.BoxGeometry(0.45, 0.04, distToCenter * 0.65);
-        const pathMat = new THREE.MeshBasicMaterial({ color: accent, transparent: true, opacity: 0.35 });
+        const pathMat = new THREE.MeshBasicMaterial({
+          color: accent,
+          transparent: true,
+          opacity: 0.35,
+        });
         const pathMesh = new THREE.Mesh(pathGeo, pathMat);
         pathMesh.position.set(-rx * 0.35, 0.05, -rz * 0.35);
         pathMesh.lookAt(new THREE.Vector3(0, 0.05, 0));
@@ -833,7 +916,9 @@ export function ClubOperationsCentre3D({
     const onWebglContextRestored = () => {
       if (!mounted) return;
       isContextLost = false;
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio, 1.25));
+      renderer.setPixelRatio(
+        Math.min(window.devicePixelRatio || 1, qualityProfile.pixelRatio, 1.25),
+      );
       onResize();
       setWebglStatus("ready");
       scheduleFrame();
@@ -1077,13 +1162,19 @@ export function ClubOperationsCentre3D({
   };
 
   // --- Authoritative Owner Actions ---
-  const handleExecuteDecision = async (decision: OperationalRecommendation, action: "approve" | "reject") => {
+  const handleExecuteDecision = async (
+    decision: OperationalRecommendation,
+    action: "approve" | "reject",
+  ) => {
     setBusyDecisionId(`${decision.decision_id}:${action}`);
     try {
-      const { data } = await api.post(clubExecuteOperationalDecisionEndpoint(clubId, decision.decision_id), {
-        action,
-        note: `Executed from ${activeDestination?.label || "Club Operations Centre"}`,
-      });
+      const { data } = await api.post(
+        clubExecuteOperationalDecisionEndpoint(clubId, decision.decision_id),
+        {
+          action,
+          note: `Executed from ${activeDestination?.label || "Club Operations Centre"}`,
+        },
+      );
       await invalidateAll();
       toast.success(data?.outcome || `Decision ${action}d.`);
     } catch (e) {
@@ -1096,7 +1187,9 @@ export function ClubOperationsCentre3D({
   const handleResolveDilemma = async (choiceId: string) => {
     setBusyAction(`dilemma:${choiceId}`);
     try {
-      const { data } = await api.post(clubBriefingResolveDilemmaEndpoint(clubId), { choice_id: choiceId });
+      const { data } = await api.post(clubBriefingResolveDilemmaEndpoint(clubId), {
+        choice_id: choiceId,
+      });
       await invalidateAll();
       toast.success(data?.outcome || "Boardroom dilemma resolved.");
     } catch (e) {
@@ -1109,10 +1202,14 @@ export function ClubOperationsCentre3D({
   const handleSetMentality = async (mentality: "defensive" | "balanced" | "attacking") => {
     setBusyAction(`mentality:${mentality}`);
     try {
-      const res = await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, { mentality });
+      const res = await api.put(`/owner/clubs/${encodeURIComponent(clubId)}/mentality`, {
+        mentality,
+      });
       const decision = res?.data || {};
       await invalidateAll();
-      const decisionStatus = String(decision.manager_decision_status || decision.decision_status || "");
+      const decisionStatus = String(
+        decision.manager_decision_status || decision.decision_status || "",
+      );
       const reasoning = String(decision.manager_decision_reasoning || "").trim();
       if (decisionStatus === "rejected") {
         toast.warning(
@@ -1180,7 +1277,9 @@ export function ClubOperationsCentre3D({
   const handleUpgradeFacility = async (kind: string) => {
     setBusyAction(`facility:${kind}`);
     try {
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/facilities/${encodeURIComponent(kind)}/upgrade`);
+      await api.post(
+        `/owner/clubs/${encodeURIComponent(clubId)}/facilities/${encodeURIComponent(kind)}/upgrade`,
+      );
       await invalidateAll();
       toast.success(`Upgraded ${kind} facility level.`);
     } catch (e) {
@@ -1223,7 +1322,7 @@ export function ClubOperationsCentre3D({
     setBusyAction(`promote:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/promote`
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/promote`,
       );
       await invalidateAll();
       toast.success(`Promoted ${playerName} into the senior squad.`);
@@ -1238,7 +1337,7 @@ export function ClubOperationsCentre3D({
     setBusyAction(`contract:${playerId}`);
     try {
       await api.post(
-        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/contract`
+        `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/contract`,
       );
       await invalidateAll();
       toast.success(`Improved ${playerName}'s academy contract for 1,000 Fan Coin.`);
@@ -1252,7 +1351,9 @@ export function ClubOperationsCentre3D({
   const handleSignSponsorOffer = async (offerId: string) => {
     setBusyAction(`sponsor:${offerId}`);
     try {
-      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/sponsors/sign`, { offer_id: offerId });
+      await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/sponsors/sign`, {
+        offer_id: offerId,
+      });
       await invalidateAll();
       toast.success("Signed commercial sponsorship contract.");
     } catch (e) {
@@ -1265,7 +1366,9 @@ export function ClubOperationsCentre3D({
   const handleRunMedicalRecoveryProtocol = async (costGtex = 800) => {
     setBusyAction("medical-recovery-protocol");
     try {
-      const res = await api.post(clubMedicalRecoveryProtocolEndpoint(clubId), { cost_gtex: costGtex });
+      const res = await api.post(clubMedicalRecoveryProtocolEndpoint(clubId), {
+        cost_gtex: costGtex,
+      });
       await invalidateAll();
       toast.success(
         String(res?.data?.outcome || "Executed Hydro & Cryo conditioning protocol for the squad."),
@@ -1298,9 +1401,12 @@ export function ClubOperationsCentre3D({
     if (!message || sendingChat) return;
     if (
       activeDestination &&
-      (activeDestination.communication_channel_mode === "vacant" || activeDestination.staff_lead?.is_vacant)
+      (activeDestination.communication_channel_mode === "vacant" ||
+        activeDestination.staff_lead?.is_vacant)
     ) {
-      toast.info("This department position is currently vacant. Appoint staff before opening direct dialogue.");
+      toast.info(
+        "This department position is currently vacant. Appoint staff before opening direct dialogue.",
+      );
       return;
     }
     setSendingChat(true);
@@ -1318,20 +1424,25 @@ export function ClubOperationsCentre3D({
           : roleKey.startsWith("staff:") || roleKey.startsWith("room:")
             ? roleKey
             : `staff:${roleKey}`);
-      const res = await api.post(`/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`, {
-        thread_id: threadId,
-        message,
-        sender_role: "owner",
-        topic: activeHotspotId || "operations",
-        priority: "normal",
-        request_reply: true,
-      });
+      const res = await api.post(
+        `/owner/clubs/${encodeURIComponent(clubId)}/communications/messages`,
+        {
+          thread_id: threadId,
+          message,
+          sender_role: "owner",
+          topic: activeHotspotId || "operations",
+          priority: "normal",
+          request_reply: true,
+        },
+      );
       setStaffMessageText("");
       await invalidateAll();
       queryClient.invalidateQueries({ queryKey: ["communications", clubId] });
       queryClient.invalidateQueries({ queryKey: ["owner-comms-summary"] });
       if (res?.data?.role_vacant) {
-        toast.info("Executive broadcast recorded in Staff Room (awaiting appointed staff replies).");
+        toast.info(
+          "Executive broadcast recorded in Staff Room (awaiting appointed staff replies).",
+        );
       } else {
         toast.success(
           isExecutiveRoom
@@ -1416,7 +1527,8 @@ export function ClubOperationsCentre3D({
           <div className="min-w-0 flex-1">
             <h3 className="text-sm font-black text-white">Club Operations Centre could not load</h3>
             <p className="mt-1 text-xs text-slate-400">
-              The department scene and operational controls are unavailable until the club data request succeeds.
+              The department scene and operational controls are unavailable until the club data
+              request succeeds.
             </p>
             <p className="mt-2 break-words text-xs text-rose-200">{errMsg(hubError)}</p>
             <button
@@ -1436,7 +1548,9 @@ export function ClubOperationsCentre3D({
   if (!hub || !activeDestination) return null;
 
   const rpt = activeDestination.report || {};
-  const activeHotspot = activeDestination.hotspots.find((hotspot) => hotspot.id === activeHotspotId);
+  const activeHotspot = activeDestination.hotspots.find(
+    (hotspot) => hotspot.id === activeHotspotId,
+  );
   const openDeptDecisions = activeDestination.open_decisions || [];
   const allOpenDeptDecisions = hub.actionable_decisions?.department_decisions || [];
   const dilemma = hub.daily_briefing?.boardroom_dilemma;
@@ -1462,7 +1576,8 @@ export function ClubOperationsCentre3D({
             {hub.club.club_name} · Executive Headquarters
           </h2>
           <p className="text-xs text-slate-400">
-            Navigate 6 operational departments in 3D, inspect staff reports, and execute authoritative club decisions.
+            Navigate 6 operational departments in 3D, inspect staff reports, and execute
+            authoritative club decisions.
           </p>
         </div>
 
@@ -1553,7 +1668,8 @@ export function ClubOperationsCentre3D({
                   <span className="truncate">{dest.short_label}</span>
                 </span>
                 <div className="flex items-center gap-1">
-                  {((dest.active_events_count || 0) > 0 || (dest.active_directives_count || 0) > 0) && (
+                  {((dest.active_events_count || 0) > 0 ||
+                    (dest.active_directives_count || 0) > 0) && (
                     <span
                       data-testid={`dest-activity-badge-${dest.destination_key}`}
                       className="flex items-center gap-1 rounded-full bg-cyan-500/20 border border-cyan-400/50 px-1.5 py-0.2 text-[9px] font-bold text-cyan-300"
@@ -1597,7 +1713,8 @@ export function ClubOperationsCentre3D({
                       Architectural Blueprint · 2D Interactive HQ Floorplan
                     </p>
                     <p className="text-[11px] text-slate-400">
-                      Click any department wing or operational station to inspect live reports and execute decisions.
+                      Click any department wing or operational station to inspect live reports and
+                      execute decisions.
                     </p>
                   </div>
                   <span className="gx-mono rounded bg-sky-950/80 border border-sky-500/30 px-2 py-0.5 text-[10px] text-sky-300">
@@ -1647,7 +1764,9 @@ export function ClubOperationsCentre3D({
                               </span>
                             )}
                           </div>
-                          <p className="mt-1 text-xs font-bold text-white">{dest.staff_lead.name}</p>
+                          <p className="mt-1 text-xs font-bold text-white">
+                            {dest.staff_lead.name}
+                          </p>
                           <p className="text-[10px] text-slate-400">
                             {dest.staff_lead.is_owner_workspace
                               ? `Executive Command · ${dest.staff_lead.role_label}`
@@ -1706,7 +1825,9 @@ export function ClubOperationsCentre3D({
                 <span className="text-xs font-black uppercase tracking-wider text-white">
                   {activeDestination.label}
                 </span>
-                <span className="text-[11px] text-slate-400">· {activeDestination.staff_lead.name}</span>
+                <span className="text-[11px] text-slate-400">
+                  · {activeDestination.staff_lead.name}
+                </span>
               </div>
 
               <div
@@ -1731,7 +1852,8 @@ export function ClubOperationsCentre3D({
                     data-testid="webgl-perf-telemetry"
                     className="gx-mono border-l border-white/15 pl-2 text-[9px] text-sky-300"
                   >
-                    {perfTelemetry.fps} FPS · {perfTelemetry.frameMs.toFixed(1)}ms · {perfTelemetry.tier}
+                    {perfTelemetry.fps} FPS · {perfTelemetry.frameMs.toFixed(1)}ms ·{" "}
+                    {perfTelemetry.tier}
                   </span>
                 )}
               </div>
@@ -1746,7 +1868,8 @@ export function ClubOperationsCentre3D({
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={14} className="text-rose-400 shrink-0" />
                   <span>
-                    3D WebGL GPU context was interrupted. Waiting for automatic browser recovery, or switch to the 2D Blueprint view.
+                    3D WebGL GPU context was interrupted. Waiting for automatic browser recovery, or
+                    switch to the 2D Blueprint view.
                   </span>
                 </div>
                 <button
@@ -1774,8 +1897,8 @@ export function ClubOperationsCentre3D({
                 <div className="flex items-center gap-2">
                   <AlertTriangle size={14} className="text-amber-400 shrink-0" />
                   <span>
-                    {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe fallback active for{" "}
-                    {failedGlbModels.join(", ")}.
+                    {failedGlbModels.length} 3D model asset(s) unavailable; procedural wireframe
+                    fallback active for {failedGlbModels.join(", ")}.
                   </span>
                 </div>
                 <button
@@ -1807,7 +1930,9 @@ export function ClubOperationsCentre3D({
                         type="button"
                         data-testid={`room-hotspot-${hs.id}`}
                         aria-pressed={isHsActive}
-                        onClick={() => focusHotspotAction(hs.action, activeDestination.destination_key, hs.id)}
+                        onClick={() =>
+                          focusHotspotAction(hs.action, activeDestination.destination_key, hs.id)
+                        }
                         className={`rounded-lg px-2.5 py-1 text-[11px] font-bold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
                           isHsActive
                             ? "bg-sky-500 text-slate-950 font-black"
@@ -1867,7 +1992,9 @@ export function ClubOperationsCentre3D({
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] text-slate-400">{activeDestination.staff_lead.specialty}</span>
+                  <span className="text-[10px] text-slate-400">
+                    {activeDestination.staff_lead.specialty}
+                  </span>
                 </div>
 
                 {activeDestination.recent_messages.length > 0 && (
@@ -1903,7 +2030,8 @@ export function ClubOperationsCentre3D({
                     value={staffMessageText}
                     onChange={(e) => setStaffMessageText(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && !isVacantChannel) handleSendStaffChat(activeDestination.lead_role_key);
+                      if (e.key === "Enter" && !isVacantChannel)
+                        handleSendStaffChat(activeDestination.lead_role_key);
                     }}
                     placeholder={
                       isExecutiveChannel
@@ -1950,7 +2078,9 @@ export function ClubOperationsCentre3D({
                   {activeHotspot ? ` · ${activeHotspot.action.replace(/_/g, " ")}` : ""}
                 </span>
               </div>
-              <h3 className="mt-1 text-lg font-black text-white">{rpt.title || activeDestination.subtitle}</h3>
+              <h3 className="mt-1 text-lg font-black text-white">
+                {rpt.title || activeDestination.subtitle}
+              </h3>
               <p className="mt-1 text-xs leading-relaxed text-slate-300">{rpt.summary}</p>
             </div>
 
@@ -1978,34 +2108,51 @@ export function ClubOperationsCentre3D({
                   <div>
                     <div className="flex justify-between text-slate-400 mb-0.5">
                       <span>Trust</span>
-                      <span className="text-emerald-300 font-bold">{activeDestination.relationship.trust}%</span>
+                      <span className="text-emerald-300 font-bold">
+                        {activeDestination.relationship.trust}%
+                      </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${activeDestination.relationship.trust}%` }} />
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${activeDestination.relationship.trust}%` }}
+                      />
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-slate-400 mb-0.5">
                       <span>Respect</span>
-                      <span className="text-sky-300 font-bold">{activeDestination.relationship.respect}%</span>
+                      <span className="text-sky-300 font-bold">
+                        {activeDestination.relationship.respect}%
+                      </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-sky-500 rounded-full" style={{ width: `${activeDestination.relationship.respect}%` }} />
+                      <div
+                        className="h-full bg-sky-500 rounded-full"
+                        style={{ width: `${activeDestination.relationship.respect}%` }}
+                      />
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-slate-400 mb-0.5">
                       <span>Affinity</span>
-                      <span className="text-purple-300 font-bold">{activeDestination.relationship.affinity}%</span>
+                      <span className="text-purple-300 font-bold">
+                        {activeDestination.relationship.affinity}%
+                      </span>
                     </div>
                     <div className="h-1.5 w-full rounded-full bg-slate-800 overflow-hidden">
-                      <div className="h-full bg-purple-500 rounded-full" style={{ width: `${activeDestination.relationship.affinity}%` }} />
+                      <div
+                        className="h-full bg-purple-500 rounded-full"
+                        style={{ width: `${activeDestination.relationship.affinity}%` }}
+                      />
                     </div>
                   </div>
                   <div>
                     <div className="flex justify-between text-slate-400 mb-0.5">
                       <span>Tension</span>
-                      <span className={`font-bold ${activeDestination.relationship.tension >= 50 ? "text-rose-400" : "text-amber-300"}`}>
+                      <span
+                        className={`font-bold ${activeDestination.relationship.tension >= 50 ? "text-rose-400" : "text-amber-300"}`}
+                      >
                         {activeDestination.relationship.tension}%
                       </span>
                     </div>
@@ -2021,19 +2168,28 @@ export function ClubOperationsCentre3D({
                   <div className="rounded bg-white/5 px-1.5 py-1">
                     <span className="block text-slate-500">Alignment</span>
                     <b className="gx-mono text-emerald-300">
-                      {activeDestination.relationship.alignment ?? activeDestination.relationship.metadata?.alignment ?? 70}%
+                      {activeDestination.relationship.alignment ??
+                        activeDestination.relationship.metadata?.alignment ??
+                        70}
+                      %
                     </b>
                   </div>
                   <div className="rounded bg-white/5 px-1.5 py-1">
                     <span className="block text-slate-500">Autonomy</span>
                     <b className="gx-mono text-sky-300">
-                      {activeDestination.relationship.autonomy ?? activeDestination.relationship.metadata?.autonomy ?? 78}%
+                      {activeDestination.relationship.autonomy ??
+                        activeDestination.relationship.metadata?.autonomy ??
+                        78}
+                      %
                     </b>
                   </div>
                   <div className="rounded bg-white/5 px-1.5 py-1">
                     <span className="block text-slate-500">Loyalty</span>
                     <b className="gx-mono text-purple-300">
-                      {activeDestination.relationship.loyalty ?? activeDestination.relationship.metadata?.loyalty ?? 72}%
+                      {activeDestination.relationship.loyalty ??
+                        activeDestination.relationship.metadata?.loyalty ??
+                        72}
+                      %
                     </b>
                   </div>
                   <div className="rounded bg-white/5 px-1.5 py-1">
@@ -2071,11 +2227,16 @@ export function ClubOperationsCentre3D({
                 </button>
               </div>
               {(activeDestination.active_directives?.length || 0) === 0 ? (
-                <p className="text-[10px] text-slate-400 italic">No active directives for this department.</p>
+                <p className="text-[10px] text-slate-400 italic">
+                  No active directives for this department.
+                </p>
               ) : (
                 <div className="space-y-1.5">
                   {activeDestination.active_directives?.map((dir) => (
-                    <div key={dir.id} className="rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] space-y-1">
+                    <div
+                      key={dir.id}
+                      className="rounded-lg border border-white/10 bg-black/40 p-2 text-[11px] space-y-1"
+                    >
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-white">{dir.title}</span>
                         <span className="rounded bg-sky-900/60 px-1.5 py-0.2 text-[9px] font-bold text-sky-300 uppercase">
@@ -2123,8 +2284,8 @@ export function ClubOperationsCentre3D({
                             ev.severity === "critical"
                               ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
                               : ev.severity === "important"
-                              ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                              : "bg-slate-700/40 text-slate-300"
+                                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                : "bg-slate-700/40 text-slate-300"
                           }`}
                         >
                           {ev.severity}
@@ -2182,7 +2343,9 @@ export function ClubOperationsCentre3D({
                         </span>
                       </div>
                       <p className="text-[11px] text-slate-300 leading-relaxed">{dec.summary}</p>
-                      <p className="text-[10px] font-semibold text-emerald-300">{dec.effects_preview}</p>
+                      <p className="text-[10px] font-semibold text-emerald-300">
+                        {dec.effects_preview}
+                      </p>
                       <div className="flex items-center justify-end gap-2 pt-1">
                         <button
                           type="button"
@@ -2218,7 +2381,9 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="executive-briefing-summary"
                   className={`grid grid-cols-2 gap-2.5 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-emerald-400/70 ${
-                    focusedStationAction === "inspect_briefing" ? "ring-2 ring-emerald-400/60 p-1" : ""
+                    focusedStationAction === "inspect_briefing"
+                      ? "ring-2 ring-emerald-400/60 p-1"
+                      : ""
                   }`}
                 >
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
@@ -2228,22 +2393,30 @@ export function ClubOperationsCentre3D({
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Squad Availability</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Squad Availability
+                    </p>
                     <p className="gx-mono text-sm font-black text-emerald-300 mt-0.5">
                       {rpt.squad_condition_and_availability?.available_players ?? 0}/
                       {rpt.squad_condition_and_availability?.squad_size ?? 0} Fit
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Stadium Capacity</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Stadium Capacity
+                    </p>
                     <p className="gx-mono text-sm font-black text-sky-300 mt-0.5">
-                      {fmt(rpt.stadium_and_campus_operations?.operational_stadium_capacity ?? 15000)} Seats
+                      {fmt(
+                        rpt.stadium_and_campus_operations?.operational_stadium_capacity ?? 15000,
+                      )}{" "}
+                      Seats
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
                     <p className="text-[10px] uppercase font-bold text-slate-400">Recent Record</p>
                     <p className="gx-mono text-sm font-black text-amber-300 mt-0.5">
-                      {rpt.recent_match_performance?.wins ?? 0}W-{rpt.recent_match_performance?.draws ?? 0}D-
+                      {rpt.recent_match_performance?.wins ?? 0}W-
+                      {rpt.recent_match_performance?.draws ?? 0}D-
                       {rpt.recent_match_performance?.losses ?? 0}L
                     </p>
                   </div>
@@ -2260,10 +2433,15 @@ export function ClubOperationsCentre3D({
                     <span>Executive Risk Watchlist ({(rpt.urgent_risks || []).length})</span>
                   </p>
                   {(rpt.urgent_risks || []).length === 0 ? (
-                    <p className="text-[11px] text-emerald-300">No acute strategic or financial risks flagged today.</p>
+                    <p className="text-[11px] text-emerald-300">
+                      No acute strategic or financial risks flagged today.
+                    </p>
                   ) : (
                     (rpt.urgent_risks || []).map((r: any) => (
-                      <div key={r.risk_id} className="rounded border border-white/10 bg-black/40 p-2 text-xs">
+                      <div
+                        key={r.risk_id}
+                        className="rounded border border-white/10 bg-black/40 p-2 text-xs"
+                      >
                         <div className="flex items-center justify-between">
                           <span className="font-bold text-white">{r.title}</span>
                           <button
@@ -2288,7 +2466,9 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="executive-pending-decisions"
                   className={`space-y-3 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
-                    focusedStationAction === "inspect_decisions" ? "ring-2 ring-amber-400/60 p-1.5" : ""
+                    focusedStationAction === "inspect_decisions"
+                      ? "ring-2 ring-amber-400/60 p-1.5"
+                      : ""
                   }`}
                 >
                   {dilemma && dilemma.status === "open" && (
@@ -2308,7 +2488,9 @@ export function ClubOperationsCentre3D({
                           >
                             <div className="flex items-center justify-between text-xs font-bold text-white">
                               <span>{ch.label}</span>
-                              <span className="text-[10px] text-emerald-300">{ch.effects_preview}</span>
+                              <span className="text-[10px] text-emerald-300">
+                                {ch.effects_preview}
+                              </span>
                             </div>
                           </button>
                         ))}
@@ -2329,7 +2511,8 @@ export function ClubOperationsCentre3D({
                           <div>
                             <p className="text-xs font-bold text-white">{dec.title}</p>
                             <p className="text-[10px] text-slate-400">
-                              {dec.staff_name} · {dec.cost_gtex > 0 ? `${fmt(dec.cost_gtex)} GTEX` : "No Fee"}
+                              {dec.staff_name} ·{" "}
+                              {dec.cost_gtex > 0 ? `${fmt(dec.cost_gtex)} GTEX` : "No Fee"}
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -2361,7 +2544,8 @@ export function ClubOperationsCentre3D({
                         Boardroom &amp; Executive Decisions
                       </p>
                       <p className="mt-1 text-xs text-emerald-300">
-                        All open boardroom dilemmas and cross-departmental decisions are resolved for today.
+                        All open boardroom dilemmas and cross-departmental decisions are resolved
+                        for today.
                       </p>
                     </div>
                   ) : null}
@@ -2377,22 +2561,33 @@ export function ClubOperationsCentre3D({
                     <button
                       type="button"
                       data-testid="executive-open-timeline-btn"
-                      onClick={() => focusHotspotAction("inspect_timeline", "executive_office", "world_chronometer")}
+                      onClick={() =>
+                        focusHotspotAction(
+                          "inspect_timeline",
+                          "executive_office",
+                          "world_chronometer",
+                        )
+                      }
                       className="rounded border border-purple-400/40 bg-purple-500/15 px-2 py-0.5 text-[10px] font-bold uppercase text-purple-200 hover:bg-purple-500/30"
                     >
                       Open Timeline Drawer
                     </button>
                   </div>
                   <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                    {(Array.isArray(hub.operational_timeline) ? hub.operational_timeline : []).slice(0, 8).map((ev) => (
-                      <div key={ev.id} className="rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]">
-                        <div className="flex items-center justify-between text-[10px] text-slate-400">
-                          <span className="font-bold text-sky-300 uppercase">{ev.title}</span>
-                          <span>Day {ev.world_day}</span>
+                    {(Array.isArray(hub.operational_timeline) ? hub.operational_timeline : [])
+                      .slice(0, 8)
+                      .map((ev) => (
+                        <div
+                          key={ev.id}
+                          className="rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]"
+                        >
+                          <div className="flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="font-bold text-sky-300 uppercase">{ev.title}</span>
+                            <span>Day {ev.world_day}</span>
+                          </div>
+                          <p className="text-slate-300 mt-0.5">{ev.detail}</p>
                         </div>
-                        <p className="text-slate-300 mt-0.5">{ev.detail}</p>
-                      </div>
-                    ))}
+                      ))}
                   </div>
                 </div>
               </div>
@@ -2411,7 +2606,9 @@ export function ClubOperationsCentre3D({
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Dressing Room Morale</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Dressing Room Morale
+                    </p>
                     <p className="gx-mono text-sm font-black text-emerald-300 mt-0.5">
                       {rpt.player_morale?.avg_morale != null
                         ? `${rpt.player_morale.avg_morale}%`
@@ -2438,7 +2635,9 @@ export function ClubOperationsCentre3D({
                       "balanced",
                   );
                   const decisionStatus = String(
-                    tacticalAuthority?.decision_status || hub.club.manager_decision_status || "aligned",
+                    tacticalAuthority?.decision_status ||
+                      hub.club.manager_decision_status ||
+                      "aligned",
                   );
                   const decisionReasoning = String(
                     tacticalAuthority?.reasoning || hub.club.manager_decision_reasoning || "",
@@ -2454,7 +2653,9 @@ export function ClubOperationsCentre3D({
                       tabIndex={-1}
                       data-testid="manager-tactical-panel"
                       className={`rounded-xl border bg-black/40 p-3 space-y-2.5 transition focus:outline-none focus:ring-2 focus:ring-sky-400/70 ${
-                        focusedStationAction === "set_mentality" ? "border-sky-400/70 ring-2 ring-sky-400/50" : "border-white/10"
+                        focusedStationAction === "set_mentality"
+                          ? "border-sky-400/70 ring-2 ring-sky-400/50"
+                          : "border-white/10"
                       }`}
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2519,7 +2720,8 @@ export function ClubOperationsCentre3D({
                         ))}
                       </div>
                       <p className="text-[10px] text-slate-400">
-                        Non-binding Owner preference — live match coaching &amp; substitutions remain strictly under First-Team Manager authority.
+                        Non-binding Owner preference — live match coaching &amp; substitutions
+                        remain strictly under First-Team Manager authority.
                       </p>
                     </div>
                   );
@@ -2585,7 +2787,9 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="manager-matchday-prep"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
-                    focusedStationAction === "pledge_win_bonus" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                    focusedStationAction === "pledge_win_bonus"
+                      ? "border-amber-400/70 ring-2 ring-amber-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex items-center justify-between">
@@ -2593,7 +2797,8 @@ export function ClubOperationsCentre3D({
                       Pledge Matchday Win Bonus
                     </p>
                     <span className="gx-mono text-[10px] text-emerald-300">
-                      Active Pledge: {fmt(rpt.upcoming_match_preparation?.pledged_win_bonus_gtex ?? 0)} GTEX
+                      Active Pledge:{" "}
+                      {fmt(rpt.upcoming_match_preparation?.pledged_win_bonus_gtex ?? 0)} GTEX
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -2603,7 +2808,9 @@ export function ClubOperationsCentre3D({
                       max={10000}
                       step={50}
                       value={winBonusAmount}
-                      onChange={(e) => setWinBonusAmount(Math.max(100, Number(e.target.value) || 100))}
+                      onChange={(e) =>
+                        setWinBonusAmount(Math.max(100, Number(e.target.value) || 100))
+                      }
                       className="w-28 rounded-lg border border-white/15 bg-slate-950 px-2.5 py-1 text-xs text-white"
                     />
                     <button
@@ -2613,7 +2820,9 @@ export function ClubOperationsCentre3D({
                       onClick={handlePledgeWinBonus}
                       className="flex-1 rounded-lg border border-amber-400/50 bg-amber-500/20 py-1.5 text-[11px] font-black uppercase text-amber-200 hover:bg-amber-500/30"
                     >
-                      {busyAction === "win-bonus" ? "Pledging…" : `Pledge ${fmt(winBonusAmount)} GTEX Bonus`}
+                      {busyAction === "win-bonus"
+                        ? "Pledging…"
+                        : `Pledge ${fmt(winBonusAmount)} GTEX Bonus`}
                     </button>
                   </div>
                 </div>
@@ -2646,7 +2855,9 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="gm-delegation-panel"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-purple-400/70 ${
-                    focusedStationAction === "configure_delegation" ? "border-purple-400/70 ring-2 ring-purple-400/50" : "border-white/10"
+                    focusedStationAction === "configure_delegation"
+                      ? "border-purple-400/70 ring-2 ring-purple-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -2757,26 +2968,30 @@ export function ClubOperationsCentre3D({
                     <span>Core Club Infrastructure Levels</span>
                   </p>
                   <div className="grid grid-cols-2 gap-2">
-                    {Object.entries(rpt.club_operations?.facility_levels || {}).map(([kind, lvl]) => (
-                      <div
-                        key={kind}
-                        className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-2"
-                      >
-                        <div>
-                          <p className="text-[11px] font-bold uppercase text-white">{kind}</p>
-                          <p className="gx-mono text-[10px] text-purple-300">Level {String(lvl)}/5</p>
-                        </div>
-                        <button
-                          type="button"
-                          data-testid={`upgrade-facility-${kind}`}
-                          disabled={Number(lvl) >= 5 || Boolean(busyAction)}
-                          onClick={() => handleUpgradeFacility(kind)}
-                          className="rounded border border-purple-400/40 bg-purple-500/20 px-2 py-1 text-[10px] font-black uppercase text-purple-200 hover:bg-purple-500/30 disabled:opacity-40"
+                    {Object.entries(rpt.club_operations?.facility_levels || {}).map(
+                      ([kind, lvl]) => (
+                        <div
+                          key={kind}
+                          className="flex items-center justify-between rounded-lg border border-white/10 bg-slate-950 p-2"
                         >
-                          {Number(lvl) >= 5 ? "Max" : "Upgrade"}
-                        </button>
-                      </div>
-                    ))}
+                          <div>
+                            <p className="text-[11px] font-bold uppercase text-white">{kind}</p>
+                            <p className="gx-mono text-[10px] text-purple-300">
+                              Level {String(lvl)}/5
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            data-testid={`upgrade-facility-${kind}`}
+                            disabled={Number(lvl) >= 5 || Boolean(busyAction)}
+                            onClick={() => handleUpgradeFacility(kind)}
+                            className="rounded border border-purple-400/40 bg-purple-500/20 px-2 py-1 text-[10px] font-black uppercase text-purple-200 hover:bg-purple-500/30 disabled:opacity-40"
+                          >
+                            {Number(lvl) >= 5 ? "Max" : "Upgrade"}
+                          </button>
+                        </div>
+                      ),
+                    )}
                   </div>
                 </div>
 
@@ -2785,12 +3000,15 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="campus-construction-projects"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
-                    focusedStationAction === "inspect_campus" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                    focusedStationAction === "inspect_campus"
+                      ? "border-amber-400/70 ring-2 ring-amber-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Campus Projects &amp; Construction ({rpt.club_operations?.operational_modules_count ?? 0} Built)
+                      Campus Projects &amp; Construction (
+                      {rpt.club_operations?.operational_modules_count ?? 0} Built)
                     </p>
                     <a
                       href="/app/campus"
@@ -2802,7 +3020,8 @@ export function ClubOperationsCentre3D({
                   </div>
                   {(rpt.club_operations?.active_construction_projects || []).length === 0 ? (
                     <p className="text-[11px] text-slate-400">
-                      No active campus builds underway. Commission new campus modules from the Campus Masterplan or upgrade core facilities above.
+                      No active campus builds underway. Commission new campus modules from the
+                      Campus Masterplan or upgrade core facilities above.
                     </p>
                   ) : (
                     (rpt.club_operations?.active_construction_projects || []).map((proj: any) => (
@@ -2813,7 +3032,8 @@ export function ClubOperationsCentre3D({
                         <div>
                           <p className="font-bold text-white">{proj.name || proj.module_name}</p>
                           <p className="text-[10px] text-slate-400">
-                            Stage {proj.stage_index}/{proj.total_stages}: {proj.construction_stage_label || proj.stage}
+                            Stage {proj.stage_index}/{proj.total_stages}:{" "}
+                            {proj.construction_stage_label || proj.stage}
                           </p>
                         </div>
                         <button
@@ -2844,13 +3064,22 @@ export function ClubOperationsCentre3D({
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Ceiling Bonus</p>
                     <p className="gx-mono text-sm font-black text-amber-300">
-                      +{rpt.academy_development?.campus_academy_ceiling_bonus ?? rpt.academy_development?.campus_ceiling_bonus ?? rpt.academy_development?.campus_regen_potential_bonus ?? 0} POT
+                      +
+                      {rpt.academy_development?.campus_academy_ceiling_bonus ??
+                        rpt.academy_development?.campus_ceiling_bonus ??
+                        rpt.academy_development?.campus_regen_potential_bonus ??
+                        0}{" "}
+                      POT
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Intake Quality</p>
                     <p className="gx-mono text-sm font-black text-sky-300">
-                      +{rpt.academy_development?.campus_intake_quality_pct ?? rpt.academy_development?.campus_youth_intake_quality_bonus ?? 0}%
+                      +
+                      {rpt.academy_development?.campus_intake_quality_pct ??
+                        rpt.academy_development?.campus_youth_intake_quality_bonus ??
+                        0}
+                      %
                     </p>
                   </div>
                 </div>
@@ -2878,7 +3107,8 @@ export function ClubOperationsCentre3D({
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
-                      Prospective Academy &amp; Regen Pipeline ({(rpt.prospective_youth_players || []).length})
+                      Prospective Academy &amp; Regen Pipeline (
+                      {(rpt.prospective_youth_players || []).length})
                     </p>
                     <span className="text-[10px] text-emerald-300">
                       Ready: {rpt.academy_development?.ready_for_senior_count ?? 0}
@@ -2886,7 +3116,8 @@ export function ClubOperationsCentre3D({
                   </div>
                   {(rpt.prospective_youth_players || []).length === 0 ? (
                     <p className="rounded-lg border border-white/10 bg-black/40 p-3 text-xs text-slate-400">
-                      No youth intake regens currently enrolled. Commission a youth intake cohort above to scout prospects.
+                      No youth intake regens currently enrolled. Commission a youth intake cohort
+                      above to scout prospects.
                     </p>
                   ) : (
                     <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
@@ -2903,7 +3134,9 @@ export function ClubOperationsCentre3D({
                               </span>
                             </p>
                             <p className="gx-mono text-[10px] text-emerald-300 mt-0.5">
-                              OVR {p.rating} → POT {p.potential} (+{p.headroom ?? Math.max(0, (p.potential || 0) - (p.rating || 0))} Headroom) · Morale {p.morale}%
+                              OVR {p.rating} → POT {p.potential} (+
+                              {p.headroom ?? Math.max(0, (p.potential || 0) - (p.rating || 0))}{" "}
+                              Headroom) · Morale {p.morale}%
                             </p>
                           </div>
                           <div className="flex items-center gap-1.5">
@@ -2965,13 +3198,18 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="medical-rehabilitation-ward"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2.5 transition focus:outline-none focus:ring-2 focus:ring-pink-400/70 ${
-                    focusedStationAction === "run_conditioning" ? "border-pink-400/70 ring-2 ring-pink-400/50" : "border-white/10"
+                    focusedStationAction === "run_conditioning"
+                      ? "border-pink-400/70 ring-2 ring-pink-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-[10px] font-black uppercase tracking-wider text-rose-300 flex items-center gap-1.5">
                       <Activity size={12} />
-                      <span>Rehabilitation &amp; Recovery Protocols ({(rpt.injured_players || []).length} Injured)</span>
+                      <span>
+                        Rehabilitation &amp; Recovery Protocols (
+                        {(rpt.injured_players || []).length} Injured)
+                      </span>
                     </p>
                     <button
                       type="button"
@@ -2996,17 +3234,23 @@ export function ClubOperationsCentre3D({
                   </div>
                   {(rpt.injured_players || []).length === 0 ? (
                     <p className="text-xs text-emerald-300">
-                      Zero players in the treatment room. Preventive recovery protocol restores +6% squad conditioning.
+                      Zero players in the treatment room. Preventive recovery protocol restores +6%
+                      squad conditioning.
                     </p>
                   ) : (
                     <div className="space-y-2">
                       {(rpt.injured_players || []).map((inj: any) => (
-                        <div key={inj.id} className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-2.5 text-xs">
+                        <div
+                          key={inj.id}
+                          className="rounded-lg border border-rose-500/30 bg-rose-950/20 p-2.5 text-xs"
+                        >
                           <div className="flex items-center justify-between font-bold text-white">
                             <span>
                               {inj.name} ({inj.position})
                             </span>
-                            <span className="gx-mono text-rose-300">{inj.injured_days}d Injury</span>
+                            <span className="gx-mono text-rose-300">
+                              {inj.injured_days}d Injury
+                            </span>
                           </div>
                           <p className="text-[11px] text-slate-300 mt-0.5">
                             {inj.injury_type} · Est. Recovery:{" "}
@@ -3025,12 +3269,15 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="medical-workload-watchlist"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-amber-400/70 ${
-                    focusedStationAction === "inspect_workloads" ? "border-amber-400/70 ring-2 ring-amber-400/50" : "border-white/10"
+                    focusedStationAction === "inspect_workloads"
+                      ? "border-amber-400/70 ring-2 ring-amber-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-black uppercase tracking-wider text-amber-300">
-                      Workload &amp; Conditioning Watchlist ({(rpt.players_requiring_special_attention || []).length})
+                      Workload &amp; Conditioning Watchlist (
+                      {(rpt.players_requiring_special_attention || []).length})
                     </p>
                     <span className="gx-mono text-[10px] text-slate-400">
                       Recovery +{rpt.medical_facility_performance?.fatigue_recovery_pct ?? 0}%
@@ -3038,7 +3285,8 @@ export function ClubOperationsCentre3D({
                   </div>
                   {(rpt.players_requiring_special_attention || []).length === 0 ? (
                     <p className="text-xs text-emerald-300">
-                      All monitored squad members are within safe conditioning and training load thresholds.
+                      All monitored squad members are within safe conditioning and training load
+                      thresholds.
                     </p>
                   ) : (
                     <div className="space-y-1.5 max-h-40 overflow-y-auto">
@@ -3065,17 +3313,23 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="finance-matchday-economics"
                   className={`grid grid-cols-2 gap-2.5 rounded-xl transition focus:outline-none focus:ring-2 focus:ring-cyan-400/70 ${
-                    focusedStationAction === "inspect_matchday_econ" ? "ring-2 ring-cyan-400/60 p-1" : ""
+                    focusedStationAction === "inspect_matchday_econ"
+                      ? "ring-2 ring-cyan-400/60 p-1"
+                      : ""
                   }`}
                 >
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Treasury Balance</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Treasury Balance
+                    </p>
                     <p className="gx-mono text-sm font-black text-cyan-300 mt-0.5">
                       {fmt(rpt.current_club_balance?.cash_gtex ?? hub.club.cash_gtex)} GTEX
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Daily Wage Bill</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Daily Wage Bill
+                    </p>
                     <p className="gx-mono text-sm font-black text-rose-300 mt-0.5">
                       {fmt(rpt.wage_obligations?.total_daily_obligations_gtex ?? 0)} GTEX/d
                     </p>
@@ -3087,7 +3341,9 @@ export function ClubOperationsCentre3D({
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
-                    <p className="text-[10px] uppercase font-bold text-slate-400">Projected Attendance</p>
+                    <p className="text-[10px] uppercase font-bold text-slate-400">
+                      Projected Attendance
+                    </p>
                     <p className="gx-mono text-sm font-black text-amber-300 mt-0.5">
                       {fmt(rpt.matchday_revenue?.projected_next_home_attendance ?? 0)} /{" "}
                       {fmt(rpt.matchday_revenue?.operational_stadium_capacity ?? 15000)}
@@ -3100,7 +3356,9 @@ export function ClubOperationsCentre3D({
                   tabIndex={-1}
                   data-testid="finance-sponsor-offers"
                   className={`rounded-xl border bg-black/40 p-3 space-y-2 transition focus:outline-none focus:ring-2 focus:ring-cyan-400/70 ${
-                    focusedStationAction === "sign_sponsor" ? "border-cyan-400/70 ring-2 ring-cyan-400/50" : "border-white/10"
+                    focusedStationAction === "sign_sponsor"
+                      ? "border-cyan-400/70 ring-2 ring-cyan-400/50"
+                      : "border-white/10"
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
@@ -3122,7 +3380,8 @@ export function ClubOperationsCentre3D({
                         >
                           <span className="font-semibold text-white">{deal.sponsor_name}</span>
                           <span className="gx-mono text-emerald-300">
-                            {fmt(deal.per_match_gross)} GTX/m · {deal.matches_remaining ?? deal.matches_duration}m left
+                            {fmt(deal.per_match_gross)} GTX/m ·{" "}
+                            {deal.matches_remaining ?? deal.matches_duration}m left
                           </span>
                         </div>
                       ))}
@@ -3150,15 +3409,21 @@ export function ClubOperationsCentre3D({
                     </p>
                   ) : (
                     <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                      {(rpt.recent_income_and_expenditure?.recent_ledger_entries || []).slice(0, 6).map((le: any) => (
-                        <div
-                          key={le.id}
-                          className="flex items-center justify-between rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]"
-                        >
-                          <span className="truncate text-slate-300">{le.memo || le.event_type}</span>
-                          <span className="gx-mono font-bold text-white">{fmt(le.net_amount)} GTX</span>
-                        </div>
-                      ))}
+                      {(rpt.recent_income_and_expenditure?.recent_ledger_entries || [])
+                        .slice(0, 6)
+                        .map((le: any) => (
+                          <div
+                            key={le.id}
+                            className="flex items-center justify-between rounded border border-white/5 bg-black/30 px-2.5 py-1.5 text-[11px]"
+                          >
+                            <span className="truncate text-slate-300">
+                              {le.memo || le.event_type}
+                            </span>
+                            <span className="gx-mono font-bold text-white">
+                              {fmt(le.net_amount)} GTX
+                            </span>
+                          </div>
+                        ))}
                     </div>
                   )}
                 </div>
@@ -3236,8 +3501,8 @@ export function ClubOperationsCentre3D({
                   ))}
                 </select>
                 <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
-                  The selected objective is the enforceable completion condition. The instruction adds context;
-                  other improvements in the department do not count.
+                  The selected objective is the enforceable completion condition. The instruction
+                  adds context; other improvements in the department do not count.
                 </p>
               </div>
               <div>
@@ -3313,26 +3578,33 @@ export function ClubOperationsCentre3D({
               {/* Category Filter Pills (including culture) */}
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-1.5" data-testid="timeline-category-filters">
-                  {["all", "executive", "tactical", "squad", "academy", "medical", "financial", "culture"].map(
-                    (cat) => (
-                      <button
-                        key={cat}
-                        type="button"
-                        data-testid={`timeline-filter-category-${cat}`}
-                        onClick={() => {
-                          setTimelineCategoryFilter(cat);
-                          setTimelineOffset(0);
-                        }}
-                        className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase transition ${
-                          timelineCategoryFilter === cat
-                            ? "bg-purple-600/30 border border-purple-400/50 text-purple-200"
-                            : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    )
-                  )}
+                  {[
+                    "all",
+                    "executive",
+                    "tactical",
+                    "squad",
+                    "academy",
+                    "medical",
+                    "financial",
+                    "culture",
+                  ].map((cat) => (
+                    <button
+                      key={cat}
+                      type="button"
+                      data-testid={`timeline-filter-category-${cat}`}
+                      onClick={() => {
+                        setTimelineCategoryFilter(cat);
+                        setTimelineOffset(0);
+                      }}
+                      className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase transition ${
+                        timelineCategoryFilter === cat
+                          ? "bg-purple-600/30 border border-purple-400/50 text-purple-200"
+                          : "bg-white/5 border border-white/10 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      {cat}
+                    </button>
+                  ))}
                 </div>
 
                 {/* Severity & Status Filters */}
@@ -3422,13 +3694,19 @@ export function ClubOperationsCentre3D({
                   data-testid="living-timeline-empty"
                   className="rounded-xl border border-white/10 bg-black/40 p-6 text-center space-y-1.5"
                 >
-                  <p className="text-xs font-bold text-slate-300">No timeline entries match the active filters.</p>
+                  <p className="text-xs font-bold text-slate-300">
+                    No timeline entries match the active filters.
+                  </p>
                   <p className="text-[11px] text-slate-400">
-                    Adjust category, severity, or status filters to inspect historical events, directives, and relationship milestones.
+                    Adjust category, severity, or status filters to inspect historical events,
+                    directives, and relationship milestones.
                   </p>
                 </div>
               ) : (
-                <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1" data-testid="living-timeline-list">
+                <div
+                  className="space-y-3 max-h-[60vh] overflow-y-auto pr-1"
+                  data-testid="living-timeline-list"
+                >
                   {(timelineResponse?.items || []).map((item: LivingWorldTimelineItem) => {
                     const isActionableEvent =
                       item.kind === "event" &&
@@ -3439,8 +3717,8 @@ export function ClubOperationsCentre3D({
                       item.kind === "directive"
                         ? "Directive"
                         : item.kind === "relationship_shift"
-                        ? "Relationship Milestone"
-                        : "Club Event";
+                          ? "Relationship Milestone"
+                          : "Club Event";
                     return (
                       <div
                         key={`${item.kind}-${item.id}`}
@@ -3456,8 +3734,8 @@ export function ClubOperationsCentre3D({
                                 item.kind === "directive"
                                   ? "bg-sky-500/20 text-sky-300 border border-sky-500/40"
                                   : item.kind === "relationship_shift"
-                                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                                  : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+                                    ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                                    : "bg-purple-500/20 text-purple-300 border border-purple-500/40"
                               }`}
                             >
                               {kindLabel}
@@ -3473,8 +3751,8 @@ export function ClubOperationsCentre3D({
                                 item.status === "active" || item.status === "awaiting_decision"
                                   ? "bg-cyan-500/20 text-cyan-300"
                                   : item.status === "expired"
-                                  ? "bg-rose-500/20 text-rose-300"
-                                  : "bg-slate-800 text-slate-300"
+                                    ? "bg-rose-500/20 text-rose-300"
+                                    : "bg-slate-800 text-slate-300"
                               }`}
                             >
                               {item.status}
@@ -3484,8 +3762,8 @@ export function ClubOperationsCentre3D({
                                 item.severity === "critical"
                                   ? "bg-rose-500/20 text-rose-300"
                                   : item.severity === "important"
-                                  ? "bg-amber-500/20 text-amber-300"
-                                  : "bg-slate-700/40 text-slate-300"
+                                    ? "bg-amber-500/20 text-amber-300"
+                                    : "bg-slate-700/40 text-slate-300"
                               }`}
                             >
                               {item.severity}
@@ -3493,9 +3771,14 @@ export function ClubOperationsCentre3D({
                           </div>
                         </div>
                         <h4 className="text-xs font-bold text-white">{item.title}</h4>
-                        <p className="text-[11px] text-slate-300 leading-relaxed">{item.description}</p>
+                        <p className="text-[11px] text-slate-300 leading-relaxed">
+                          {item.description}
+                        </p>
                         {item.acknowledged_by && (
-                          <p data-testid={`timeline-lead-${item.id}`} className="text-[10px] text-slate-400">
+                          <p
+                            data-testid={`timeline-lead-${item.id}`}
+                            className="text-[10px] text-slate-400"
+                          >
                             Lead: {item.acknowledged_by}
                           </p>
                         )}
@@ -3531,18 +3814,17 @@ export function ClubOperationsCentre3D({
             </div>
 
             {/* Pagination Footer */}
-            <div className="pt-4 border-t border-white/10 space-y-2" data-testid="living-timeline-pagination">
+            <div
+              className="pt-4 border-t border-white/10 space-y-2"
+              data-testid="living-timeline-pagination"
+            >
               {timelineResponse && (
                 <div className="flex items-center justify-between text-[10px] text-slate-400">
                   <span data-testid="living-timeline-range">
-                    Showing{" "}
-                    {timelineResponse.total_count === 0
-                      ? 0
-                      : timelineOffset + 1}
-                    –
+                    Showing {timelineResponse.total_count === 0 ? 0 : timelineOffset + 1}–
                     {Math.min(
                       timelineOffset + (timelineResponse.items?.length || 0),
-                      timelineResponse.total_count
+                      timelineResponse.total_count,
                     )}{" "}
                     of {timelineResponse.total_count}
                   </span>

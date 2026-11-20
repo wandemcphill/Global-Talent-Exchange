@@ -76,9 +76,12 @@ function Facilities({ club }: any) {
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-sky-500/20 bg-sky-950/20 p-4">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-sky-400">Interactive Infrastructure</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-sky-400">
+            Interactive Infrastructure
+          </span>
           <p className="mt-1 text-xs text-slate-300">
-            Expand training pitches, cathedral stadiums, medical labs, and the youth complex to drive performance multipliers.
+            Expand training pitches, cathedral stadiums, medical labs, and the youth complex to
+            drive performance multipliers.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -122,8 +125,16 @@ function Facilities({ club }: any) {
           subjectName={`${club.club_name} Arena & Youth Campus`}
           facilityLevel={Number(facilities?.stadium?.level ?? facilities?.academy?.level ?? 3)}
           stats={[
-            { label: "Stadium Tier", value: `L${facilities?.stadium?.level ?? 2}/5`, accent: "#38BDF8" },
-            { label: "Academy Campus", value: `L${facilities?.academy?.level ?? 2}/5`, accent: "#00E676" },
+            {
+              label: "Stadium Tier",
+              value: `L${facilities?.stadium?.level ?? 2}/5`,
+              accent: "#38BDF8",
+            },
+            {
+              label: "Academy Campus",
+              value: `L${facilities?.academy?.level ?? 2}/5`,
+              accent: "#00E676",
+            },
           ]}
         />
       </div>
@@ -151,12 +162,18 @@ function Facilities({ club }: any) {
             </div>
 
             <p className="text-[11px] text-slate-400 min-h-[32px]">
-              {k === "stadium" && "Expands matchday gate receipts, hospitality suites, and tier capacity."}
-              {k === "academy" && "Increases regen intake potential, wonderkid discovery rates, and youth coaching."}
-              {k === "training" && "Accelerates squad tactical familiarity, conditioning, and training progress."}
-              {k === "medical" && "Reduces match injury downtime and increases player physical recovery speed."}
-              {k === "commercial" && "Boosts sponsorship contract values, merchandise royalties, and fan reach."}
-              {!["stadium", "academy", "training", "medical", "commercial"].includes(k) && "Campus operational upgrade asset."}
+              {k === "stadium" &&
+                "Expands matchday gate receipts, hospitality suites, and tier capacity."}
+              {k === "academy" &&
+                "Increases regen intake potential, wonderkid discovery rates, and youth coaching."}
+              {k === "training" &&
+                "Accelerates squad tactical familiarity, conditioning, and training progress."}
+              {k === "medical" &&
+                "Reduces match injury downtime and increases player physical recovery speed."}
+              {k === "commercial" &&
+                "Boosts sponsorship contract values, merchandise royalties, and fan reach."}
+              {!["stadium", "academy", "training", "medical", "commercial"].includes(k) &&
+                "Campus operational upgrade asset."}
             </p>
 
             <Btn
@@ -206,11 +223,32 @@ function OrganisationalStructurePanel({ club }: any) {
   };
 
   const ROLES = [
-    { key: "first_team_manager", title: "First-Team Manager / Head Coach", fallbackDesc: "Tactical direction, starting lineup selection, and matchday leadership." },
-    { key: "general_manager", title: "General Manager (GM)", fallbackDesc: "Commercial contracts, transfer budget execution, and executive operations." },
-    { key: "head_of_youth_development", title: "Head of Youth Development (HOYD)", fallbackDesc: "Youth academy curriculum, wonderkid intake, and regen development." },
-    { key: "chief_scout", title: "Chief Scout", fallbackDesc: "Global market intelligence, opponent scouting reports, and hidden talent identification." },
-    { key: "medical_director", title: "Head of Sports Science & Medical", fallbackDesc: "Physical conditioning, recovery acceleration, and injury risk prevention." },
+    {
+      key: "first_team_manager",
+      title: "First-Team Manager / Head Coach",
+      fallbackDesc: "Tactical direction, starting lineup selection, and matchday leadership.",
+    },
+    {
+      key: "general_manager",
+      title: "General Manager (GM)",
+      fallbackDesc: "Commercial contracts, transfer budget execution, and executive operations.",
+    },
+    {
+      key: "head_of_youth_development",
+      title: "Head of Youth Development (HOYD)",
+      fallbackDesc: "Youth academy curriculum, wonderkid intake, and regen development.",
+    },
+    {
+      key: "chief_scout",
+      title: "Chief Scout",
+      fallbackDesc:
+        "Global market intelligence, opponent scouting reports, and hidden talent identification.",
+    },
+    {
+      key: "medical_director",
+      title: "Head of Sports Science & Medical",
+      fallbackDesc: "Physical conditioning, recovery acceleration, and injury risk prevention.",
+    },
   ];
 
   return (
@@ -222,9 +260,12 @@ function OrganisationalStructurePanel({ club }: any) {
     >
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-4">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">Boardroom Hierarchy</span>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-indigo-400">
+            Boardroom Hierarchy
+          </span>
           <p className="mt-1 text-xs text-slate-300">
-            A world-class executive staff drives performance, youth development, and commercial power.
+            A world-class executive staff drives performance, youth development, and commercial
+            power.
           </p>
         </div>
         <div className="flex gap-2">
@@ -264,9 +305,15 @@ function OrganisationalStructurePanel({ club }: any) {
                   <Shield className="h-6 w-6" />
                 </div>
                 <div>
-                  <span className="text-[9px] font-black uppercase tracking-wider text-amber-400">CONTROLLING SHAREHOLDER & OWNER</span>
-                  <h4 className="text-base font-black text-white">{club.ownership_group?.label || "Club Owner"}</h4>
-                  <p className="text-xs text-slate-400">Ultimate governance, treasury authority, and strategic mandate.</p>
+                  <span className="text-[9px] font-black uppercase tracking-wider text-amber-400">
+                    CONTROLLING SHAREHOLDER & OWNER
+                  </span>
+                  <h4 className="text-base font-black text-white">
+                    {club.ownership_group?.label || "Club Owner"}
+                  </h4>
+                  <p className="text-xs text-slate-400">
+                    Ultimate governance, treasury authority, and strategic mandate.
+                  </p>
                 </div>
               </div>
               <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-3 py-1 text-xs font-bold text-amber-300">
@@ -280,9 +327,13 @@ function OrganisationalStructurePanel({ club }: any) {
             {ROLES.map(({ key, title, fallbackDesc }) => {
               const staff = appointed[key];
               const isAppointed = !!staff && typeof staff === "object";
-              const name = isAppointed ? staff.name || staff.display_name || "Appointed Executive" : "Vacant Position";
-              const rating = isAppointed ? (staff.tactical_flexibility || staff.rating || staff.overall || 75) : null;
-              const agenda = isAppointed ? (staff.personal_agenda || "Elevate club standard") : null;
+              const name = isAppointed
+                ? staff.name || staff.display_name || "Appointed Executive"
+                : "Vacant Position";
+              const rating = isAppointed
+                ? staff.tactical_flexibility || staff.rating || staff.overall || 75
+                : null;
+              const agenda = isAppointed ? staff.personal_agenda || "Elevate club standard" : null;
               const secretTrait = isAppointed ? staff.secret_trait : null;
               const poachingRisk = isAppointed ? staff.poaching_risk : null;
 
@@ -294,7 +345,9 @@ function OrganisationalStructurePanel({ club }: any) {
                 >
                   <div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{title}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                        {title}
+                      </span>
                       {isAppointed ? (
                         <span className="rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
                           Appointed
@@ -321,7 +374,7 @@ function OrganisationalStructurePanel({ club }: any) {
                     </div>
 
                     <p className="mt-3 text-xs text-slate-400 line-clamp-2">
-                      {isAppointed ? (staff.bio || fallbackDesc) : fallbackDesc}
+                      {isAppointed ? staff.bio || fallbackDesc : fallbackDesc}
                     </p>
 
                     {agenda && (
@@ -341,7 +394,9 @@ function OrganisationalStructurePanel({ club }: any) {
 
                   <div className="pt-2 border-t border-white/5 flex items-center justify-between text-[10px]">
                     <span className="text-slate-500">
-                      {poachingRisk ? `Poaching Risk: ${poachingRisk.toUpperCase()}` : "Operational Ready"}
+                      {poachingRisk
+                        ? `Poaching Risk: ${poachingRisk.toUpperCase()}`
+                        : "Operational Ready"}
                     </span>
                     <button
                       type="button"
@@ -359,7 +414,8 @@ function OrganisationalStructurePanel({ club }: any) {
           <div className="rounded-xl border border-white/5 bg-slate-900/40 p-3 text-[11px] text-slate-400 flex items-center gap-2">
             <LockKeyhole className="h-4 w-4 shrink-0 text-slate-500" />
             <span>
-              Executive salaries and contract agreements are confidential boardroom records and are excluded from the public club profile.
+              Executive salaries and contract agreements are confidential boardroom records and are
+              excluded from the public club profile.
             </span>
           </div>
         </div>
@@ -367,24 +423,48 @@ function OrganisationalStructurePanel({ club }: any) {
         <div className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-xl border border-emerald-500/20 bg-slate-950/60 p-4">
-              <span className="text-[10px] uppercase font-bold text-emerald-400">Tactical Synergy</span>
-              <div className="mt-1 text-2xl font-black text-white">+{staffEffects.tactical_synergy ?? 12}%</div>
-              <p className="mt-1 text-xs text-slate-400">Matchday formation discipline and in-game tactical adjustments.</p>
+              <span className="text-[10px] uppercase font-bold text-emerald-400">
+                Tactical Synergy
+              </span>
+              <div className="mt-1 text-2xl font-black text-white">
+                +{staffEffects.tactical_synergy ?? 12}%
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Matchday formation discipline and in-game tactical adjustments.
+              </p>
             </div>
             <div className="rounded-xl border border-sky-500/20 bg-slate-950/60 p-4">
-              <span className="text-[10px] uppercase font-bold text-sky-400">Youth Intake Multiplier</span>
-              <div className="mt-1 text-2xl font-black text-white">+{staffEffects.youth_multiplier ?? 15}%</div>
-              <p className="mt-1 text-xs text-slate-400">Probability of discovering generational wonderkids in the annual intake.</p>
+              <span className="text-[10px] uppercase font-bold text-sky-400">
+                Youth Intake Multiplier
+              </span>
+              <div className="mt-1 text-2xl font-black text-white">
+                +{staffEffects.youth_multiplier ?? 15}%
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Probability of discovering generational wonderkids in the annual intake.
+              </p>
             </div>
             <div className="rounded-xl border border-purple-500/20 bg-slate-950/60 p-4">
-              <span className="text-[10px] uppercase font-bold text-purple-400">Physical Recovery Speed</span>
-              <div className="mt-1 text-2xl font-black text-white">+{staffEffects.recovery_bonus ?? 10}%</div>
-              <p className="mt-1 text-xs text-slate-400">Accelerated player fitness recharge between congested fixtures.</p>
+              <span className="text-[10px] uppercase font-bold text-purple-400">
+                Physical Recovery Speed
+              </span>
+              <div className="mt-1 text-2xl font-black text-white">
+                +{staffEffects.recovery_bonus ?? 10}%
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Accelerated player fitness recharge between congested fixtures.
+              </p>
             </div>
             <div className="rounded-xl border border-amber-500/20 bg-slate-950/60 p-4">
-              <span className="text-[10px] uppercase font-bold text-amber-400">Commercial Pull</span>
-              <div className="mt-1 text-2xl font-black text-white">+{staffEffects.commercial_pull ?? 8}%</div>
-              <p className="mt-1 text-xs text-slate-400">Reputation premium applied to incoming sponsorship contracts.</p>
+              <span className="text-[10px] uppercase font-bold text-amber-400">
+                Commercial Pull
+              </span>
+              <div className="mt-1 text-2xl font-black text-white">
+                +{staffEffects.commercial_pull ?? 8}%
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Reputation premium applied to incoming sponsorship contracts.
+              </p>
             </div>
           </div>
         </div>
@@ -411,7 +491,9 @@ function OrganisationalStructurePanel({ club }: any) {
                   </p>
                   <div className="mt-2 text-[11px] text-slate-300">
                     <span className="text-slate-500">Signing Fee:</span>{" "}
-                    <span className="font-mono font-bold text-amber-300">{fmt(cand.signing_fee_gtex || cand.salary || 2000)} GTX</span>
+                    <span className="font-mono font-bold text-amber-300">
+                      {fmt(cand.signing_fee_gtex || cand.salary || 2000)} GTX
+                    </span>
                   </div>
                 </div>
                 <Btn
@@ -450,7 +532,12 @@ function DelegationAuthorityPanel({ club }: any) {
   const [hoydYouth, setHoydYouth] = useState<boolean>(policy.hoyd_youth_contracts ?? true);
   const [mgrTactics, setMgrTactics] = useState<boolean>(policy.manager_tactics_autonomy ?? true);
 
-  const save = async (nextMode = mode, nextGm = gmTransfer, nextHoyd = hoydYouth, nextMgr = mgrTactics) => {
+  const save = async (
+    nextMode = mode,
+    nextGm = gmTransfer,
+    nextHoyd = hoydYouth,
+    nextMgr = mgrTactics,
+  ) => {
     setBusy(true);
     try {
       await api.put(`/owner/clubs/${club.club_id}/delegation`, {
@@ -496,9 +583,12 @@ function DelegationAuthorityPanel({ club }: any) {
       className="lg:col-span-12"
     >
       <div className="mb-6 rounded-xl border border-purple-500/20 bg-purple-950/20 p-4">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">Delegation Framework</span>
+        <span className="text-[10px] font-bold uppercase tracking-widest text-purple-400">
+          Delegation Framework
+        </span>
         <p className="mt-1 text-xs text-slate-300">
-          Determine how much operational autonomy is delegated to your executive team versus requiring direct owner sign-off.
+          Determine how much operational autonomy is delegated to your executive team versus
+          requiring direct owner sign-off.
         </p>
       </div>
 
@@ -518,7 +608,8 @@ function DelegationAuthorityPanel({ club }: any) {
             {mode === "hands_on" && <CheckCircle className="h-4 w-4 text-amber-300" />}
           </div>
           <p className="mt-2 text-xs text-slate-300">
-            You personally approve every transfer negotiation, youth contract, and tactical formation change.
+            You personally approve every transfer negotiation, youth contract, and tactical
+            formation change.
           </p>
         </button>
 
@@ -537,7 +628,8 @@ function DelegationAuthorityPanel({ club }: any) {
             {mode === "balanced" && <CheckCircle className="h-4 w-4 text-sky-300" />}
           </div>
           <p className="mt-2 text-xs text-slate-300">
-            Recommended. Executive staff operate autonomously within approved budgets; owner retains veto on major actions.
+            Recommended. Executive staff operate autonomously within approved budgets; owner retains
+            veto on major actions.
           </p>
         </button>
 
@@ -552,22 +644,31 @@ function DelegationAuthorityPanel({ club }: any) {
           data-testid="preset-executive-led"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs font-black uppercase text-emerald-300">Executive-Led Group</span>
+            <span className="text-xs font-black uppercase text-emerald-300">
+              Executive-Led Group
+            </span>
             {mode === "executive_led" && <CheckCircle className="h-4 w-4 text-emerald-300" />}
           </div>
           <p className="mt-2 text-xs text-slate-300">
-            Complete executive delegation. The General Manager, HOYD, and Head Coach run full day-to-day operations.
+            Complete executive delegation. The General Manager, HOYD, and Head Coach run full
+            day-to-day operations.
           </p>
         </button>
       </div>
 
       <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/70 p-5">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Granular Autonomy Policies</h4>
+        <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">
+          Granular Autonomy Policies
+        </h4>
 
         <div className="flex items-center justify-between py-2 border-b border-white/5">
           <div>
-            <div className="text-xs font-bold text-white">GM Transfer & Release-Clause Autonomy</div>
-            <p className="text-[11px] text-slate-400">General Manager may negotiate player signings and fee clauses within treasury cap.</p>
+            <div className="text-xs font-bold text-white">
+              GM Transfer & Release-Clause Autonomy
+            </div>
+            <p className="text-[11px] text-slate-400">
+              General Manager may negotiate player signings and fee clauses within treasury cap.
+            </p>
           </div>
           <button
             type="button"
@@ -579,14 +680,21 @@ function DelegationAuthorityPanel({ club }: any) {
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${gmTransfer ? "bg-emerald-500" : "bg-slate-700"}`}
             data-testid="toggle-gm-autonomy"
           >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${gmTransfer ? "translate-x-6" : "translate-x-1"}`} />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${gmTransfer ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
 
         <div className="flex items-center justify-between py-2 border-b border-white/5">
           <div>
-            <div className="text-xs font-bold text-white">HOYD Youth Contracts & Intake Autonomy</div>
-            <p className="text-[11px] text-slate-400">Head of Youth Development may offer professional terms directly to top academy prospects.</p>
+            <div className="text-xs font-bold text-white">
+              HOYD Youth Contracts & Intake Autonomy
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Head of Youth Development may offer professional terms directly to top academy
+              prospects.
+            </p>
           </div>
           <button
             type="button"
@@ -598,14 +706,21 @@ function DelegationAuthorityPanel({ club }: any) {
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${hoydYouth ? "bg-emerald-500" : "bg-slate-700"}`}
             data-testid="toggle-hoyd-autonomy"
           >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${hoydYouth ? "translate-x-6" : "translate-x-1"}`} />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${hoydYouth ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
 
         <div className="flex items-center justify-between py-2">
           <div>
-            <div className="text-xs font-bold text-white">First-Team Manager Tactics & Lineup Autonomy</div>
-            <p className="text-[11px] text-slate-400">Manager has unilateral discretion over matchday starting XI, formations, and tactical subs.</p>
+            <div className="text-xs font-bold text-white">
+              First-Team Manager Tactics & Lineup Autonomy
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Manager has unilateral discretion over matchday starting XI, formations, and tactical
+              subs.
+            </p>
           </div>
           <button
             type="button"
@@ -617,7 +732,9 @@ function DelegationAuthorityPanel({ club }: any) {
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${mgrTactics ? "bg-emerald-500" : "bg-slate-700"}`}
             data-testid="toggle-manager-autonomy"
           >
-            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${mgrTactics ? "translate-x-6" : "translate-x-1"}`} />
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${mgrTactics ? "translate-x-6" : "translate-x-1"}`}
+            />
           </button>
         </div>
       </div>
@@ -640,10 +757,15 @@ function AcademyDevelopmentPanel({ club }: any) {
     >
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-5">
         <div>
-          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">Homegrown Legacy</span>
-          <h4 className="mt-1 text-base font-black text-white">Academy Tier Level {academyLevel} / 5</h4>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-400">
+            Homegrown Legacy
+          </span>
+          <h4 className="mt-1 text-base font-black text-white">
+            Academy Tier Level {academyLevel} / 5
+          </h4>
           <p className="mt-1 text-xs text-slate-300">
-            Develop future superstars through the GTEX Regen Generation Engine. Homegrown players yield 100% equity retention.
+            Develop future superstars through the GTEX Regen Generation Engine. Homegrown players
+            yield 100% equity retention.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -668,19 +790,33 @@ function AcademyDevelopmentPanel({ club }: any) {
 
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <span className="text-[10px] uppercase font-bold text-slate-400">Intake Quality Rating</span>
-          <div className="mt-1 text-2xl font-black text-emerald-400">{academyLevel * 18 + 10} / 100</div>
-          <p className="mt-1 text-[11px] text-slate-400">Determines the ceiling potential of new prospects enrolled each season.</p>
+          <span className="text-[10px] uppercase font-bold text-slate-400">
+            Intake Quality Rating
+          </span>
+          <div className="mt-1 text-2xl font-black text-emerald-400">
+            {academyLevel * 18 + 10} / 100
+          </div>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Determines the ceiling potential of new prospects enrolled each season.
+          </p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <span className="text-[10px] uppercase font-bold text-slate-400">Active Academy Squad</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400">
+            Active Academy Squad
+          </span>
           <div className="mt-1 text-2xl font-black text-white">8 Registered Prospects</div>
-          <p className="mt-1 text-[11px] text-slate-400">Under-18 talent receiving daily coaching and physical development.</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            Under-18 talent receiving daily coaching and physical development.
+          </p>
         </div>
         <div className="rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-          <span className="text-[10px] uppercase font-bold text-slate-400">Next Scheduled Intake</span>
+          <span className="text-[10px] uppercase font-bold text-slate-400">
+            Next Scheduled Intake
+          </span>
           <div className="mt-1 text-2xl font-black text-amber-300">Spring Cycle</div>
-          <p className="mt-1 text-[11px] text-slate-400">The GTEX youth generation worker evaluates academy facility tier upon arrival.</p>
+          <p className="mt-1 text-[11px] text-slate-400">
+            The GTEX youth generation worker evaluates academy facility tier upon arrival.
+          </p>
         </div>
       </div>
     </Panel>
@@ -756,12 +892,16 @@ function ClubIdentityPublishingPanel({ club }: any) {
       {/* Visibility Status Banner */}
       <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-800 bg-slate-950/80 p-5">
         <div className="flex items-center gap-3">
-          <div className={`flex h-12 w-12 items-center justify-center rounded-xl border ${visibility === "public" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-300"}`}>
+          <div
+            className={`flex h-12 w-12 items-center justify-center rounded-xl border ${visibility === "public" ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300" : "border-amber-500/40 bg-amber-500/10 text-amber-300"}`}
+          >
             {visibility === "public" ? <Eye className="h-6 w-6" /> : <EyeOff className="h-6 w-6" />}
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${visibility === "public" ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30" : "bg-amber-500/10 text-amber-300 border border-amber-500/30"}`}>
+              <span
+                className={`rounded-full px-2.5 py-0.5 text-[10px] font-black uppercase tracking-wider ${visibility === "public" ? "bg-emerald-500/10 text-emerald-300 border border-emerald-500/30" : "bg-amber-500/10 text-amber-300 border border-amber-500/30"}`}
+              >
                 {visibility === "public" ? "PUBLIC PROFILE ACTIVE" : "PRIVATE PROFILE (UNLISTED)"}
               </span>
             </div>
@@ -800,7 +940,11 @@ function ClubIdentityPublishingPanel({ club }: any) {
             className="text-xs"
             data-testid="toggle-visibility-button"
           >
-            {busy ? "Updating..." : visibility === "public" ? "Unpublish (Set Private)" : "Publish to Web"}
+            {busy
+              ? "Updating..."
+              : visibility === "public"
+                ? "Unpublish (Set Private)"
+                : "Publish to Web"}
           </Btn>
         </div>
       </div>
@@ -834,8 +978,13 @@ function ClubIdentityPublishingPanel({ club }: any) {
       </div>
 
       {/* Identity Form */}
-      <form onSubmit={handleSaveIdentity} className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/60 p-5">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">Edit Club Identity & Branding</h4>
+      <form
+        onSubmit={handleSaveIdentity}
+        className="space-y-4 rounded-xl border border-slate-800 bg-slate-950/60 p-5"
+      >
+        <h4 className="text-xs font-black uppercase tracking-wider text-slate-300">
+          Edit Club Identity & Branding
+        </h4>
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
@@ -851,7 +1000,9 @@ function ClubIdentityPublishingPanel({ club }: any) {
             />
           </div>
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400">Home Venue / Stadium Name</label>
+            <label className="text-[10px] font-bold uppercase text-slate-400">
+              Home Venue / Stadium Name
+            </label>
             <input
               type="text"
               maxLength={120}
@@ -865,7 +1016,9 @@ function ClubIdentityPublishingPanel({ club }: any) {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400">Club History & Ethos Description</label>
+          <label className="text-[10px] font-bold uppercase text-slate-400">
+            Club History & Ethos Description
+          </label>
           <textarea
             rows={3}
             maxLength={1000}
@@ -878,7 +1031,9 @@ function ClubIdentityPublishingPanel({ club }: any) {
         </div>
 
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400">Official Club Colors</label>
+          <label className="text-[10px] font-bold uppercase text-slate-400">
+            Official Club Colors
+          </label>
           <div className="mt-2 flex flex-wrap gap-4">
             <div className="flex items-center gap-2">
               <input
@@ -943,7 +1098,9 @@ function ClubNewsNotificationsPanel({ club }: any) {
               type="button"
               onClick={() => setCategory(cat)}
               className={`rounded-lg px-3 py-1 text-xs font-bold uppercase transition ${
-                category === cat ? "bg-amber-400 text-slate-950" : "bg-slate-900 text-slate-400 hover:text-white"
+                category === cat
+                  ? "bg-amber-400 text-slate-950"
+                  : "bg-slate-900 text-slate-400 hover:text-white"
               }`}
             >
               {cat}
@@ -988,12 +1145,16 @@ function ClubNewsNotificationsPanel({ club }: any) {
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <h5 className="truncate text-xs font-bold text-white">{item.headline || item.title || "Dispatch"}</h5>
+                  <h5 className="truncate text-xs font-bold text-white">
+                    {item.headline || item.title || "Dispatch"}
+                  </h5>
                   <span className="text-[10px] text-slate-500 shrink-0">
                     {item.created_at ? new Date(item.created_at).toLocaleDateString() : "Just now"}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-slate-400 line-clamp-2">{item.summary || item.body || item.content}</p>
+                <p className="mt-1 text-xs text-slate-400 line-clamp-2">
+                  {item.summary || item.body || item.content}
+                </p>
               </div>
             </div>
           ))}
@@ -1022,12 +1183,17 @@ function ShowroomPanel({ club }: any) {
 
   const purchaseIntentKeys = useRef(new Map<string, string>());
   const giftIntentKeys = useRef(new Map<string, string>());
-  const stableIntentKey = (store: React.MutableRefObject<Map<string, string>>, identity: string, prefix: string) => {
+  const stableIntentKey = (
+    store: React.MutableRefObject<Map<string, string>>,
+    identity: string,
+    prefix: string,
+  ) => {
     const existing = store.current.get(identity);
     if (existing) return existing;
-    const nonce = typeof crypto !== "undefined" && "randomUUID" in crypto
-      ? crypto.randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const nonce =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const created = `${prefix}:${club.club_id}:${identity}:${nonce}`;
     store.current.set(identity, created);
     return created;
@@ -1060,7 +1226,9 @@ function ShowroomPanel({ club }: any) {
       setPurchaseReceipt({ item, result });
       const acquiredName = result?.asset?.custom_name || item?.name || "prestige asset";
       if (result?.broadcast_globally === true) {
-        toast.success(`Acquired ${acquiredName}. Verified notice published to the GTEX global wire.`);
+        toast.success(
+          `Acquired ${acquiredName}. Verified notice published to the GTEX global wire.`,
+        );
       } else {
         toast.success(`Acquired ${acquiredName} for club operations.`);
       }
@@ -1072,12 +1240,36 @@ function ShowroomPanel({ club }: any) {
     }
   };
 
-  const clubPrestige = data?.club_prestige ?? clubDetail?.health?.prestige ?? club?.health?.prestige ?? 60;
-  const prestigeTierNum = data?.prestige_tier ?? (clubPrestige >= 90 ? 1 : clubPrestige >= 75 ? 2 : clubPrestige >= 55 ? 3 : clubPrestige >= 35 ? 4 : 5);
-  const prestigeTierLabel = prestigeTierNum === 1 ? "Tier 1: Global Superclub" : prestigeTierNum === 2 ? "Tier 2: Continental Challenger" : prestigeTierNum === 3 ? "Tier 3: National Contender" : prestigeTierNum === 4 ? "Tier 4: Regional Pioneer" : "Tier 5: Grassroots Foundation";
+  const clubPrestige =
+    data?.club_prestige ?? clubDetail?.health?.prestige ?? club?.health?.prestige ?? 60;
+  const prestigeTierNum =
+    data?.prestige_tier ??
+    (clubPrestige >= 90
+      ? 1
+      : clubPrestige >= 75
+        ? 2
+        : clubPrestige >= 55
+          ? 3
+          : clubPrestige >= 35
+            ? 4
+            : 5);
+  const prestigeTierLabel =
+    prestigeTierNum === 1
+      ? "Tier 1: Global Superclub"
+      : prestigeTierNum === 2
+        ? "Tier 2: Continental Challenger"
+        : prestigeTierNum === 3
+          ? "Tier 3: National Contender"
+          : prestigeTierNum === 4
+            ? "Tier 4: Regional Pioneer"
+            : "Tier 5: Grassroots Foundation";
 
   const staffRoles = [
-    { role: "first_team_manager", name: "First-Team Manager", effect: "+15 Morale & Tactical Alignment" },
+    {
+      role: "first_team_manager",
+      name: "First-Team Manager",
+      effect: "+15 Morale & Tactical Alignment",
+    },
     { role: "general_manager", name: "General Manager", effect: "+20 Loyalty & Sponsor Relations" },
     { role: "head_of_youth", name: "Head of Youth Dev", effect: "+15 Academy Pipeline Loyalty" },
     { role: "chief_scout", name: "Chief Scout", effect: "+15 Scouting Motivation" },
@@ -1107,10 +1299,22 @@ function ShowroomPanel({ club }: any) {
       });
       const result = responseData ?? {};
       giftIntentKeys.current.delete(giftIntent);
-      const recipient = recipientType === "player"
-        ? (result?.player || selectedPlayer)
-        : { name: staffRoles.find(r => r.role === selectedStaffRole)?.name || selectedStaffRole.replace(/_/g, " ").toUpperCase(), role: selectedStaffRole };
-      setGiftReceipt({ item: giftingItem, player: recipient, note: giftNote.trim(), result, recipientType });
+      const recipient =
+        recipientType === "player"
+          ? result?.player || selectedPlayer
+          : {
+              name:
+                staffRoles.find((r) => r.role === selectedStaffRole)?.name ||
+                selectedStaffRole.replace(/_/g, " ").toUpperCase(),
+              role: selectedStaffRole,
+            };
+      setGiftReceipt({
+        item: giftingItem,
+        player: recipient,
+        note: giftNote.trim(),
+        result,
+        recipientType,
+      });
       setGiftingItem(null);
       setSelectedPlayerId("");
       setGiftNote("");
@@ -1144,16 +1348,22 @@ function ShowroomPanel({ club }: any) {
           <Sparkles className="h-6 w-6" />
         </div>
         <div className="min-w-0">
-          <div className="text-[10px] font-black uppercase tracking-[0.23em] text-amber-200">The owner's private collection</div>
+          <div className="text-[10px] font-black uppercase tracking-[0.23em] text-amber-200">
+            The owner's private collection
+          </div>
           <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-300">
-            Acquire prestige assets through the club treasury, or purchase a player-eligible gift and deliver it directly to a registered squad member.
+            Acquire prestige assets through the club treasury, or purchase a player-eligible gift
+            and deliver it directly to a registered squad member.
           </p>
         </div>
         <div className="sm:ml-auto flex items-center gap-3 shrink-0">
           <div className="shrink-0 rounded-lg border border-amber-500/30 bg-amber-950/40 px-3 py-2">
-            <div className="text-[9px] uppercase tracking-wider text-amber-300 font-bold">Prestige Rating</div>
+            <div className="text-[9px] uppercase tracking-wider text-amber-300 font-bold">
+              Prestige Rating
+            </div>
             <div className="font-mono text-sm font-black text-amber-200">
-              {clubPrestige}/100 <span className="text-[10px] text-slate-400">· Tier {prestigeTierNum}</span>
+              {clubPrestige}/100{" "}
+              <span className="text-[10px] text-slate-400">· Tier {prestigeTierNum}</span>
             </div>
             <div className="text-[9px] text-amber-300/80 font-medium">{prestigeTierLabel}</div>
           </div>
@@ -1167,7 +1377,9 @@ function ShowroomPanel({ club }: any) {
           </Link>
           <div className="shrink-0 rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2">
             <div className="text-[9px] uppercase tracking-wider text-slate-500">Treasury</div>
-            <div className="font-mono text-sm font-bold text-amber-200">{fmt(club.cash || club.economy?.cash_gtex)} GTX</div>
+            <div className="font-mono text-sm font-bold text-amber-200">
+              {fmt(club.cash || club.economy?.cash_gtex)} GTX
+            </div>
           </div>
         </div>
       </div>
@@ -1179,7 +1391,8 @@ function ShowroomPanel({ club }: any) {
           <Gift className="mx-auto mb-3 h-8 w-8 text-amber-300" />
           <div className="text-sm font-bold text-white">Showroom catalogue unavailable</div>
           <p className="mx-auto mt-2 max-w-md text-xs text-slate-400">
-            GTEX did not return the luxury catalogue. Refresh the club data before trying to purchase or gift any item.
+            GTEX did not return the luxury catalogue. Refresh the club data before trying to
+            purchase or gift any item.
           </p>
         </div>
       ) : (
@@ -1211,13 +1424,21 @@ function ShowroomPanel({ club }: any) {
                   )}
                   <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
                   <div className="absolute left-3 top-3">
-                    <span className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${isJet ? "border-amber-300/40 bg-amber-400/15 text-amber-200" : "border-slate-600 bg-slate-950/80 text-slate-300"}`}>
-                      {isJet ? <ExternalLink className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
+                    <span
+                      className={`inline-flex items-center gap-1 rounded-md border px-2 py-1 text-[9px] font-black uppercase tracking-wider ${isJet ? "border-amber-300/40 bg-amber-400/15 text-amber-200" : "border-slate-600 bg-slate-950/80 text-slate-300"}`}
+                    >
+                      {isJet ? (
+                        <ExternalLink className="h-3 w-3" />
+                      ) : (
+                        <LockKeyhole className="h-3 w-3" />
+                      )}
                       {isJet ? "Eligible global wire" : "Private"}
                     </span>
                   </div>
                   <div className="absolute bottom-3 left-3 right-3 flex items-end justify-between gap-2">
-                    <span className="rounded-md border border-white/10 bg-slate-950/75 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-200">{rarityFor(it)}</span>
+                    <span className="rounded-md border border-white/10 bg-slate-950/75 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-200">
+                      {rarityFor(it)}
+                    </span>
                     <span className="flex items-center gap-1 rounded-md bg-slate-950/80 px-2 py-1 font-mono text-[11px] font-black text-amber-200">
                       <Coins className="h-3 w-3" /> {formatPrice(it)} GTX
                     </span>
@@ -1227,12 +1448,18 @@ function ShowroomPanel({ club }: any) {
                 <div className="flex flex-1 flex-col p-4">
                   <div className="min-h-[92px]">
                     <h4 className="text-sm font-extrabold leading-snug text-white">{it.name}</h4>
-                    <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-slate-400">{it.model || it.description || "A limited prestige asset for your club collection."}</p>
+                    <p className="mt-1 line-clamp-3 text-[11px] leading-5 text-slate-400">
+                      {it.model ||
+                        it.description ||
+                        "A limited prestige asset for your club collection."}
+                    </p>
                   </div>
                   <div className="mt-auto space-y-2 border-t border-slate-800 pt-3">
                     <div className="flex items-center justify-between gap-2 text-[10px] text-slate-500">
                       <span>Club treasury debit</span>
-                      <span className="font-mono font-bold text-slate-300">{formatPrice(it)} GTX</span>
+                      <span className="font-mono font-bold text-slate-300">
+                        {formatPrice(it)} GTX
+                      </span>
                     </div>
                     <div className="flex gap-2">
                       <Btn
@@ -1271,26 +1498,62 @@ function ShowroomPanel({ club }: any) {
 
       {/* Purchase Modal */}
       {acquiringItem && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-purchase-confirm">
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          data-testid="showroom-purchase-confirm"
+        >
           <div className="w-full max-w-md overflow-hidden rounded-2xl border border-amber-300/35 bg-gradient-to-br from-slate-900 via-slate-950 to-amber-950/20 shadow-2xl">
             <div className="relative h-40 bg-slate-950">
-              {assetImage(acquiringItem) && <img src={assetImage(acquiringItem)} alt={acquiringItem.name} className="h-full w-full object-cover" />}
+              {assetImage(acquiringItem) && (
+                <img
+                  src={assetImage(acquiringItem)}
+                  alt={acquiringItem.name}
+                  className="h-full w-full object-cover"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 to-transparent" />
-              <button type="button" onClick={() => setAcquiringItem(null)} className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white"><X className="h-4 w-4" /></button>
+              <button
+                type="button"
+                onClick={() => setAcquiringItem(null)}
+                className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <div className="absolute bottom-3 left-4 right-4">
-                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200">Treasury authorisation</div>
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-amber-200">
+                  Treasury authorisation
+                </div>
                 <h3 className="mt-1 text-lg font-black text-white">{acquiringItem.name}</h3>
               </div>
             </div>
             <div className="space-y-4 p-5">
-              <p className="text-xs leading-5 text-slate-300">Confirm this acquisition. GTEX will validate the catalogue item and debit the verified price from your club treasury.</p>
+              <p className="text-xs leading-5 text-slate-300">
+                Confirm this acquisition. GTEX will validate the catalogue item and debit the
+                verified price from your club treasury.
+              </p>
               <div className="flex items-center justify-between rounded-lg border border-slate-800 bg-black/25 px-3 py-3">
                 <span className="text-xs text-slate-400">Total price</span>
-                <span className="font-mono text-base font-black text-amber-200">{formatPrice(acquiringItem)} GTX</span>
+                <span className="font-mono text-base font-black text-amber-200">
+                  {formatPrice(acquiringItem)} GTX
+                </span>
               </div>
               <div className="flex gap-2">
-                <button type="button" onClick={() => setAcquiringItem(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5" disabled={!!busyItem}>Cancel</button>
-                <button type="button" onClick={() => handlePurchase(acquiringItem)} className="flex-1 rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 transition hover:bg-amber-200 disabled:opacity-50" disabled={!!busyItem}>
+                <button
+                  type="button"
+                  onClick={() => setAcquiringItem(null)}
+                  className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5"
+                  disabled={!!busyItem}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePurchase(acquiringItem)}
+                  className="flex-1 rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 transition hover:bg-amber-200 disabled:opacity-50"
+                  disabled={!!busyItem}
+                >
                   {busyItem ? "Processing..." : `Confirm · ${formatPrice(acquiringItem)} GTX`}
                 </button>
               </div>
@@ -1301,16 +1564,37 @@ function ShowroomPanel({ club }: any) {
 
       {/* Gift Modal */}
       {giftingItem && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-gift-confirm">
+        <div
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          data-testid="showroom-gift-confirm"
+        >
           <div className="w-full max-w-lg overflow-hidden rounded-2xl border border-purple-400/30 bg-gradient-to-br from-slate-900 via-slate-950 to-purple-950/25 shadow-2xl">
             <div className="relative h-44 bg-slate-950">
-              {assetImage(giftingItem) && <img src={assetImage(giftingItem)} alt={giftingItem.name} className="h-full w-full object-cover opacity-90" />}
+              {assetImage(giftingItem) && (
+                <img
+                  src={assetImage(giftingItem)}
+                  alt={giftingItem.name}
+                  className="h-full w-full object-cover opacity-90"
+                />
+              )}
               <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/10 to-transparent" />
-              <button type="button" onClick={() => setGiftingItem(null)} className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white"><X className="h-4 w-4" /></button>
+              <button
+                type="button"
+                onClick={() => setGiftingItem(null)}
+                className="absolute right-3 top-3 rounded-full border border-white/15 bg-black/60 p-2 text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
               <div className="absolute bottom-3 left-4 right-4">
-                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.2em] text-purple-200"><Gift className="h-3 w-3" /> A personal club reward</div>
+                <div className="flex items-center gap-1 text-[9px] font-black uppercase tracking-[0.2em] text-purple-200">
+                  <Gift className="h-3 w-3" /> A personal club reward
+                </div>
                 <h3 className="mt-1 text-lg font-black text-white">{giftingItem.name}</h3>
-                <div className="mt-1 font-mono text-xs font-bold text-amber-200">{formatPrice(giftingItem)} GTX · charged to club treasury</div>
+                <div className="mt-1 font-mono text-xs font-bold text-amber-200">
+                  {formatPrice(giftingItem)} GTX · charged to club treasury
+                </div>
               </div>
             </div>
             <form onSubmit={handleGift} className="space-y-4 p-5">
@@ -1333,7 +1617,9 @@ function ShowroomPanel({ club }: any) {
 
               {recipientType === "player" ? (
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Choose player or regen</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Choose player or regen
+                  </label>
                   <div className="mt-2 grid max-h-52 gap-2 overflow-y-auto sm:grid-cols-2">
                     {(eligibleRegens.length > 0 ? eligibleRegens : squad).map((p: any) => (
                       <button
@@ -1344,16 +1630,22 @@ function ShowroomPanel({ club }: any) {
                       >
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-xs font-extrabold text-white">{p.name}</div>
-                          <div className="mt-0.5 text-[10px] text-slate-500">{p.position || "Squad player"} · OVR {p.rating ?? "—"}</div>
+                          <div className="mt-0.5 text-[10px] text-slate-500">
+                            {p.position || "Squad player"} · OVR {p.rating ?? "—"}
+                          </div>
                         </div>
-                        {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />}
+                        {selectedPlayerId === p.id && (
+                          <CheckCircle className="h-4 w-4 shrink-0 text-purple-200" />
+                        )}
                       </button>
                     ))}
                   </div>
                 </div>
               ) : (
                 <div>
-                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Select Coach or Executive Staff</label>
+                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                    Select Coach or Executive Staff
+                  </label>
                   <div className="mt-2 space-y-2">
                     {staffRoles.map((s) => (
                       <button
@@ -1366,7 +1658,9 @@ function ShowroomPanel({ club }: any) {
                           <div className="text-xs font-bold text-white">{s.name}</div>
                           <div className="text-[10px] text-purple-300">{s.effect}</div>
                         </div>
-                        {selectedStaffRole === s.role && <CheckCircle className="h-4 w-4 text-purple-200" />}
+                        {selectedStaffRole === s.role && (
+                          <CheckCircle className="h-4 w-4 text-purple-200" />
+                        )}
                       </button>
                     ))}
                   </div>
@@ -1374,7 +1668,9 @@ function ShowroomPanel({ club }: any) {
               )}
 
               <div>
-                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Personal note</label>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Personal note
+                </label>
                 <input
                   type="text"
                   maxLength={180}
@@ -1386,13 +1682,26 @@ function ShowroomPanel({ club }: any) {
               </div>
 
               <div className="flex gap-2 pt-1">
-                <button type="button" onClick={() => setGiftingItem(null)} className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5" disabled={!!busyItem}>Cancel</button>
+                <button
+                  type="button"
+                  onClick={() => setGiftingItem(null)}
+                  className="flex-1 rounded-lg border border-slate-700 px-4 py-3 text-xs font-bold text-slate-300 hover:bg-white/5"
+                  disabled={!!busyItem}
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  disabled={(recipientType === "player" && !selectedPlayerId) || (recipientType === "staff" && !selectedStaffRole) || !!busyItem}
+                  disabled={
+                    (recipientType === "player" && !selectedPlayerId) ||
+                    (recipientType === "staff" && !selectedStaffRole) ||
+                    !!busyItem
+                  }
                   className="flex-1 rounded-lg bg-purple-500 px-4 py-3 text-xs font-black text-white transition hover:bg-purple-400 disabled:opacity-50"
                 >
-                  {busyItem === `gift:${keyOf(giftingItem)}` ? "Delivering..." : `Confirm gift · ${formatPrice(giftingItem)} GTX`}
+                  {busyItem === `gift:${keyOf(giftingItem)}`
+                    ? "Delivering..."
+                    : `Confirm gift · ${formatPrice(giftingItem)} GTX`}
                 </button>
               </div>
             </form>
@@ -1402,24 +1711,53 @@ function ShowroomPanel({ club }: any) {
 
       {/* Purchase Receipt */}
       {purchaseReceipt && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-purchase-receipt">
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/80 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          data-testid="showroom-purchase-receipt"
+        >
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-amber-300/50 bg-slate-950 p-6 text-center shadow-2xl">
             <CheckCircle className="mx-auto h-12 w-12 text-emerald-400" />
-            <h3 className="mt-3 text-xl font-black text-white">{purchaseReceipt.result?.asset?.custom_name || purchaseReceipt.item.name}</h3>
-            <p className="mt-2 text-xs text-slate-300">The GTEX showroom has confirmed the purchase and recorded the charge against your club treasury.</p>
-            <button type="button" onClick={() => setPurchaseReceipt(null)} className="mt-5 w-full rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 hover:bg-amber-200">Return to showroom</button>
+            <h3 className="mt-3 text-xl font-black text-white">
+              {purchaseReceipt.result?.asset?.custom_name || purchaseReceipt.item.name}
+            </h3>
+            <p className="mt-2 text-xs text-slate-300">
+              The GTEX showroom has confirmed the purchase and recorded the charge against your club
+              treasury.
+            </p>
+            <button
+              type="button"
+              onClick={() => setPurchaseReceipt(null)}
+              className="mt-5 w-full rounded-lg bg-amber-300 px-4 py-3 text-xs font-black text-slate-950 hover:bg-amber-200"
+            >
+              Return to showroom
+            </button>
           </div>
         </div>
       )}
 
       {/* Gift Receipt */}
       {giftReceipt && (
-        <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md" role="dialog" aria-modal="true" data-testid="showroom-gift-receipt">
+        <div
+          className="fixed inset-0 z-[90] flex items-center justify-center bg-black/85 p-4 backdrop-blur-md"
+          role="dialog"
+          aria-modal="true"
+          data-testid="showroom-gift-receipt"
+        >
           <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-purple-300/50 bg-slate-950 p-6 text-center shadow-2xl">
             <Gift className="mx-auto h-12 w-12 text-purple-300" />
             <h3 className="mt-3 text-xl font-black text-white">{giftReceipt.item.name}</h3>
-            <p className="mt-2 text-xs text-slate-300">A personal gift from the club owner to {giftReceipt.player?.name || "Recipient"}.</p>
-            <button type="button" onClick={() => setGiftReceipt(null)} className="mt-5 w-full rounded-lg bg-purple-400 px-4 py-3 text-xs font-black text-slate-950 hover:bg-purple-300">Return to the club</button>
+            <p className="mt-2 text-xs text-slate-300">
+              A personal gift from the club owner to {giftReceipt.player?.name || "Recipient"}.
+            </p>
+            <button
+              type="button"
+              onClick={() => setGiftReceipt(null)}
+              className="mt-5 w-full rounded-lg bg-purple-400 px-4 py-3 text-xs font-black text-slate-950 hover:bg-purple-300"
+            >
+              Return to the club
+            </button>
           </div>
         </div>
       )}
@@ -1446,10 +1784,18 @@ function Capital({ club, clubs }: any) {
   const sisters = clubs.filter((c: any) => c.club_id !== club.club_id);
 
   return (
-    <Panel eyebrow="Approved capital actions" title="Treasury & Liquidity" testid="capital-panel" className="lg:col-span-6">
+    <Panel
+      eyebrow="Approved capital actions"
+      title="Treasury & Liquidity"
+      testid="capital-panel"
+      className="lg:col-span-6"
+    >
       <div className="grid grid-cols-2 gap-4">
         <Stat label="Club cash" value={<Coin amount={club.economy?.cash_gtex ?? club.cash} />} />
-        <Stat label="Pending payouts" value={<Coin amount={club.economy?.pending_payouts ?? 0} />} />
+        <Stat
+          label="Pending payouts"
+          value={<Coin amount={club.economy?.pending_payouts ?? 0} />}
+        />
       </div>
       <label className="gx-label mt-5">Amount (GTX)</label>
       <input
@@ -1466,7 +1812,7 @@ function Capital({ club, clubs }: any) {
             run(
               "/owner/capital/inject",
               { club_id: club.club_id, amount: Number(amount) },
-              "Capital injected from your wallet."
+              "Capital injected from your wallet.",
             )
           }
         >
@@ -1479,7 +1825,7 @@ function Capital({ club, clubs }: any) {
             run(
               "/owner/capital/distribute",
               { club_id: club.club_id, amount: Number(amount) },
-              "Distributed earned revenue to your wallet."
+              "Distributed earned revenue to your wallet.",
             )
           }
         >
@@ -1487,7 +1833,8 @@ function Capital({ club, clubs }: any) {
         </Btn>
       </div>
       <p className="mt-2 text-xs text-slate-500">
-        Only earned club revenue (gate, prizes, sponsors, sales) can be distributed. Launch grants stay in the club.
+        Only earned club revenue (gate, prizes, sponsors, sales) can be distributed. Launch grants
+        stay in the club.
       </p>
       {sisters.length > 0 && (
         <div className="mt-5 border-t border-white/5 pt-4">
@@ -1514,7 +1861,7 @@ function Capital({ club, clubs }: any) {
                 run(
                   "/owner/capital/sister-transfer",
                   { from_club_id: club.club_id, to_club_id: target, amount: Number(amount) },
-                  "Related-party capital move ledgered."
+                  "Related-party capital move ledgered.",
                 )
               }
             >
@@ -1533,16 +1880,25 @@ function Capital({ club, clubs }: any) {
 function Commercial({ club }: any) {
   const { data } = useQuery({
     queryKey: ["supporters", club.club_id],
-    queryFn: async () => (await api.get(`/owner/clubs/${club.club_id}/supporters`)).data.leaderboard,
+    queryFn: async () =>
+      (await api.get(`/owner/clubs/${club.club_id}/supporters`)).data.leaderboard,
   });
   const sponsors = club.sponsors || [];
   const disclosures = club.disclosures || [];
 
   return (
     <>
-      <Panel eyebrow="Commercial · 70/30 split" title="Sponsors" testid="sponsors-panel" className="lg:col-span-6">
+      <Panel
+        eyebrow="Commercial · 70/30 split"
+        title="Sponsors"
+        testid="sponsors-panel"
+        className="lg:col-span-6"
+      >
         {sponsors.length === 0 ? (
-          <Empty title="No sponsors" body="Sponsor offers arrive in your inbox as fans and commercial level grow." />
+          <Empty
+            title="No sponsors"
+            body="Sponsor offers arrive in your inbox as fans and commercial level grow."
+          />
         ) : (
           <div className="space-y-2">
             {sponsors.map((s: any) => (
@@ -1565,7 +1921,12 @@ function Commercial({ club }: any) {
           </div>
         )}
       </Panel>
-      <Panel eyebrow="Supporters" title="Gift leaderboard" testid="supporters-panel" className="lg:col-span-6">
+      <Panel
+        eyebrow="Supporters"
+        title="Gift leaderboard"
+        testid="supporters-panel"
+        className="lg:col-span-6"
+      >
         {(data || []).length === 0 ? (
           <Empty title="No gifts yet" body="Fans gift during and after matches." />
         ) : (
@@ -1582,12 +1943,20 @@ function Commercial({ club }: any) {
           </ol>
         )}
       </Panel>
-      <Panel eyebrow="Transparency" title="Related-party history" testid="disclosures-panel" className="lg:col-span-6">
+      <Panel
+        eyebrow="Transparency"
+        title="Related-party history"
+        testid="disclosures-panel"
+        className="lg:col-span-6"
+      >
         {disclosures.length === 0 ? (
           <p className="text-sm text-slate-500">No related-party transfers disclosed.</p>
         ) : (
           disclosures.map((d: any) => (
-            <div key={d.id} className="mb-2 rounded-sm border border-amber-500/20 p-3 text-xs text-slate-300">
+            <div
+              key={d.id}
+              className="mb-2 rounded-sm border border-amber-500/20 p-3 text-xs text-slate-300"
+            >
               {d.player_name}: fee {fmt(d.fee)} (fair value {fmt(d.fair_value)})
             </div>
           ))
@@ -1605,10 +1974,15 @@ function NewClub({ count, max }: any) {
   if (count >= max) return null;
 
   return (
-    <Panel eyebrow={`Expand · ${count}/${max} clubs`} title="Add a Sister Club" testid="new-club-panel">
+    <Panel
+      eyebrow={`Expand · ${count}/${max} clubs`}
+      title="Add a Sister Club"
+      testid="new-club-panel"
+    >
       <p className="mb-3 text-sm text-slate-400">
-        A sister club uses the same crest and kit library as the first club, then the same activation steps.
-        It starts in Foundation. Sister clubs cannot share a prize bracket, and transfers between them must sit inside a verified fair-value band. Entry is free.
+        A sister club uses the same crest and kit library as the first club, then the same
+        activation steps. It starts in Foundation. Sister clubs cannot share a prize bracket, and
+        transfers between them must sit inside a verified fair-value band. Entry is free.
       </p>
       <Btn onClick={() => navigate("/onboarding?create=1")} data-testid="create-club-button">
         Design a sister club
@@ -1633,10 +2007,16 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
         <div className="rounded-xl border border-sky-500/20 bg-slate-950/70 p-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase font-bold text-sky-400">Stadium Arena</span>
-            <span className="rounded bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold text-sky-300">L{stadiumLevel}/5</span>
+            <span className="rounded bg-sky-500/10 px-2 py-0.5 text-[10px] font-bold text-sky-300">
+              L{stadiumLevel}/5
+            </span>
           </div>
-          <div className="mt-2 text-base font-black text-white">{club.home_venue_name || "Cathedral Stadium"}</div>
-          <p className="mt-1 text-xs text-slate-400">Capacity ~{stadiumLevel * 15000 + 10000} · Hybrid Pitch Ready</p>
+          <div className="mt-2 text-base font-black text-white">
+            {club.home_venue_name || "Cathedral Stadium"}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Capacity ~{stadiumLevel * 15000 + 10000} · Hybrid Pitch Ready
+          </p>
           <button
             type="button"
             onClick={() => onSelectTab("facilities")}
@@ -1648,11 +2028,17 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
 
         <div className="rounded-xl border border-emerald-500/20 bg-slate-950/70 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-emerald-400">Academy Pipeline</span>
-            <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">L{academyLevel}/5</span>
+            <span className="text-[10px] uppercase font-bold text-emerald-400">
+              Academy Pipeline
+            </span>
+            <span className="rounded bg-emerald-500/10 px-2 py-0.5 text-[10px] font-bold text-emerald-300">
+              L{academyLevel}/5
+            </span>
           </div>
           <div className="mt-2 text-base font-black text-white">Active Regen Pipeline</div>
-          <p className="mt-1 text-xs text-slate-400">Youth recruitment ceiling active · Next intake prepared</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Youth recruitment ceiling active · Next intake prepared
+          </p>
           <button
             type="button"
             onClick={() => onSelectTab("academy")}
@@ -1664,11 +2050,19 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
 
         <div className="rounded-xl border border-indigo-500/20 bg-slate-950/70 p-4">
           <div className="flex items-center justify-between">
-            <span className="text-[10px] uppercase font-bold text-indigo-400">Boardroom Hierarchy</span>
-            <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-300">Staff Active</span>
+            <span className="text-[10px] uppercase font-bold text-indigo-400">
+              Boardroom Hierarchy
+            </span>
+            <span className="rounded bg-indigo-500/10 px-2 py-0.5 text-[10px] font-bold text-indigo-300">
+              Staff Active
+            </span>
           </div>
-          <div className="mt-2 text-base font-black text-white">{club.manager?.name || "Manager Appointed"}</div>
-          <p className="mt-1 text-xs text-slate-400">Tactical alignment high · Executive team intact</p>
+          <div className="mt-2 text-base font-black text-white">
+            {club.manager?.name || "Manager Appointed"}
+          </div>
+          <p className="mt-1 text-xs text-slate-400">
+            Tactical alignment high · Executive team intact
+          </p>
           <button
             type="button"
             onClick={() => onSelectTab("organisation")}
@@ -1681,13 +2075,17 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
         <div className="rounded-xl border border-amber-500/20 bg-slate-950/70 p-4">
           <div className="flex items-center justify-between">
             <span className="text-[10px] uppercase font-bold text-amber-400">Public Profile</span>
-            <span className={`rounded px-2 py-0.5 text-[10px] font-bold ${visibility === "public" ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}>
+            <span
+              className={`rounded px-2 py-0.5 text-[10px] font-bold ${visibility === "public" ? "bg-emerald-500/10 text-emerald-300" : "bg-amber-500/10 text-amber-300"}`}
+            >
               {visibility.toUpperCase()}
             </span>
           </div>
           <div className="mt-2 text-base font-black text-white">Global Sporting Identity</div>
           <p className="mt-1 text-xs text-slate-400">
-            {visibility === "public" ? "Web profile published & verified" : "Profile currently unlisted"}
+            {visibility === "public"
+              ? "Web profile published & verified"
+              : "Profile currently unlisted"}
           </p>
           <button
             type="button"
@@ -1701,7 +2099,9 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
 
       {/* Quick Launchpad */}
       <div className="rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900 via-slate-950 to-slate-900 p-6">
-        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4">Command Action Launcher</h4>
+        <h4 className="text-xs font-black uppercase tracking-wider text-slate-400 mb-4">
+          Command Action Launcher
+        </h4>
         <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
           <Link
             to="/app/campus"
@@ -1844,13 +2244,20 @@ export default function MyClubs() {
               <Stat label="Manager" value={club.manager?.name || "-"} />
               <Stat
                 label="Status"
-                value={<Chip tone={club.stage === "active" ? "emerald" : "gold"}>{club.stage || "Active"}</Chip>}
+                value={
+                  <Chip tone={club.stage === "active" ? "emerald" : "gold"}>
+                    {club.stage || "Active"}
+                  </Chip>
+                }
               />
             </div>
           </Panel>
 
           {/* Tabbed Navigation Bar */}
-          <div className="flex overflow-x-auto gap-1 border-b border-white/10 pb-2 scrollbar-none" data-testid="club-hq-tabs">
+          <div
+            className="flex overflow-x-auto gap-1 border-b border-white/10 pb-2 scrollbar-none"
+            data-testid="club-hq-tabs"
+          >
             {TABS.map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;

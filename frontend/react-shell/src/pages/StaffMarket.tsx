@@ -9,7 +9,9 @@ import { Btn, Empty, Loading, PageHeader } from "@/components/gtex/ui";
 import { coinWithNaira } from "@/lib/money";
 
 function annualFanCoin(candidate: any): number {
-  const listed = Number(candidate?.expected_salary_fan_coin || candidate?.expected_salary_gtex || 0);
+  const listed = Number(
+    candidate?.expected_salary_fan_coin || candidate?.expected_salary_gtex || 0,
+  );
   return Math.max(1, Math.floor(listed * 0.35));
 }
 
@@ -83,8 +85,12 @@ export default function StaffMarket() {
     return (
       <div className="mx-auto max-w-lg p-8 text-center">
         <h1 className="text-2xl font-black text-white">Staff market</h1>
-        <p className="mt-2 text-sm text-slate-400">Open a club before you hire a manager, general manager, or physio.</p>
-        <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex">My clubs</Link>
+        <p className="mt-2 text-sm text-slate-400">
+          Open a club before you hire a manager, general manager, or physio.
+        </p>
+        <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex">
+          My clubs
+        </Link>
       </div>
     );
   }
@@ -100,7 +106,9 @@ export default function StaffMarket() {
         sub="Search the whole market by name or country. A surname is enough, and accents are optional."
       />
       <label className="block">
-        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">Search staff</span>
+        <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
+          Search staff
+        </span>
         <input
           className="gx-input w-full"
           placeholder="Ferguson, Arteta, Chelle, Nigeria"
@@ -111,12 +119,38 @@ export default function StaffMarket() {
         />
       </label>
       <div className="grid gap-3 md:grid-cols-4">
-        <select className="gx-input" value={role} onChange={(event) => setRole(event.target.value)} data-testid="staff-role-filter">
-          {ROLES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}
+        <select
+          className="gx-input"
+          value={role}
+          onChange={(event) => setRole(event.target.value)}
+          data-testid="staff-role-filter"
+        >
+          {ROLES.map((item) => (
+            <option key={item.id} value={item.id}>
+              {item.label}
+            </option>
+          ))}
         </select>
-        <input className="gx-input" placeholder="Max wage" type="number" min="0" value={wageMax} onChange={(event) => setWageMax(event.target.value)} />
-        <input className="gx-input" placeholder="Tactical style" value={style} onChange={(event) => setStyle(event.target.value)} />
-        <input className="gx-input" placeholder="Temperament" value={temperament} onChange={(event) => setTemperament(event.target.value)} />
+        <input
+          className="gx-input"
+          placeholder="Max wage"
+          type="number"
+          min="0"
+          value={wageMax}
+          onChange={(event) => setWageMax(event.target.value)}
+        />
+        <input
+          className="gx-input"
+          placeholder="Tactical style"
+          value={style}
+          onChange={(event) => setStyle(event.target.value)}
+        />
+        <input
+          className="gx-input"
+          placeholder="Temperament"
+          value={temperament}
+          onChange={(event) => setTemperament(event.target.value)}
+        />
       </div>
       <p className="text-xs text-slate-400" data-testid="staff-supply-note">
         {search.trim().length === 1 ? "Type one more letter to search the whole market. " : ""}
@@ -130,43 +164,82 @@ export default function StaffMarket() {
       {!query.isLoading && candidates.length === 0 ? (
         <Empty
           title="No staff match"
-          body={appliedSearch.length >= 2 ? `Nobody matches “${appliedSearch}”. Try a surname, or set the role to All staff.` : "Widen the wage, style, or temperament filter."}
+          body={
+            appliedSearch.length >= 2
+              ? `Nobody matches “${appliedSearch}”. Try a surname, or set the role to All staff.`
+              : "Widen the wage, style, or temperament filter."
+          }
         />
       ) : null}
       <div className="grid gap-3">
         {candidates.map((candidate: any) => (
-          <article key={candidate.profile_id} className="rounded-xl border border-white/10 bg-slate-950/70 p-4" data-testid={`staff-candidate-${candidate.profile_id}`}>
+          <article
+            key={candidate.profile_id}
+            className="rounded-xl border border-white/10 bg-slate-950/70 p-4"
+            data-testid={`staff-candidate-${candidate.profile_id}`}
+          >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="flex items-start gap-3">
                 {candidate.portrait_url ? (
-                  <img src={candidate.portrait_url} alt="" className="h-14 w-14 rounded-full object-cover bg-slate-800" />
+                  <img
+                    src={candidate.portrait_url}
+                    alt=""
+                    className="h-14 w-14 rounded-full object-cover bg-slate-800"
+                  />
                 ) : null}
                 <div>
-                <h2 className="text-lg font-black text-white">{candidate.name}</h2>
-                <p className="text-xs text-slate-400">
-                  {candidate.role_label}
-                  {candidate.nation ? ` · ${candidate.nation}` : ""}
-                  {candidate.preferred_formation ? ` · ${candidate.preferred_formation}` : ""}
-                  {" · "}rating {candidate.rating} · {candidate.style} · {candidate.temperament}
-                </p>
-                <p className="mt-1 text-sm text-amber-200">
-                  {coinWithNaira(annualFanCoin(candidate), "FAN")} Fan Coin / year
-                  {" · "}
-                  upfront {coinWithNaira(upfrontFanCoin(annualFanCoin(candidate), Number(years || 3)), "FAN")} Fan Coin
-                </p>
+                  <h2 className="text-lg font-black text-white">{candidate.name}</h2>
+                  <p className="text-xs text-slate-400">
+                    {candidate.role_label}
+                    {candidate.nation ? ` · ${candidate.nation}` : ""}
+                    {candidate.preferred_formation ? ` · ${candidate.preferred_formation}` : ""}
+                    {" · "}rating {candidate.rating} · {candidate.style} · {candidate.temperament}
+                  </p>
+                  <p className="mt-1 text-sm text-amber-200">
+                    {coinWithNaira(annualFanCoin(candidate), "FAN")} Fan Coin / year
+                    {" · "}
+                    upfront{" "}
+                    {coinWithNaira(
+                      upfrontFanCoin(annualFanCoin(candidate), Number(years || 3)),
+                      "FAN",
+                    )}{" "}
+                    Fan Coin
+                  </p>
                 </div>
               </div>
-              <Btn type="button" onClick={() => { setOfferFor(candidate.profile_id); setSalary(String(annualFanCoin(candidate))); }}>
+              <Btn
+                type="button"
+                onClick={() => {
+                  setOfferFor(candidate.profile_id);
+                  setSalary(String(annualFanCoin(candidate)));
+                }}
+              >
                 Hire
               </Btn>
             </div>
             {offerFor === candidate.profile_id && (
               <div className="mt-3 flex flex-wrap items-end gap-2">
-                <input className="gx-input w-36" type="number" min="100" value={salary} onChange={(event) => setSalary(event.target.value)} />
-                <select className="gx-input w-28" value={years} onChange={(event) => setYears(event.target.value)}>
-                  {[1, 2, 3, 4, 5].map((year) => <option key={year} value={year}>{year} years</option>)}
+                <input
+                  className="gx-input w-36"
+                  type="number"
+                  min="100"
+                  value={salary}
+                  onChange={(event) => setSalary(event.target.value)}
+                />
+                <select
+                  className="gx-input w-28"
+                  value={years}
+                  onChange={(event) => setYears(event.target.value)}
+                >
+                  {[1, 2, 3, 4, 5].map((year) => (
+                    <option key={year} value={year}>
+                      {year} years
+                    </option>
+                  ))}
                 </select>
-                <Btn type="button" onClick={() => hire(candidate)}>Send offer</Btn>
+                <Btn type="button" onClick={() => hire(candidate)}>
+                  Send offer
+                </Btn>
               </div>
             )}
           </article>

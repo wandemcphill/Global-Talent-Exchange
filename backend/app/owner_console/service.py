@@ -1491,7 +1491,9 @@ def appoint_onboarding_staff(
 
     role_key = str(role or "").strip()
     if role_key not in _ONBOARDING_STAFF_ROLES:
-        raise OwnerError("unknown_staff_role", 400, "Choose a first-team manager, general manager, or head of youth development.")
+        raise OwnerError(
+            "unknown_staff_role", 400, "Choose a first-team manager, general manager, or head of youth development."
+        )
     state = require_state(session, club_id, user_id)
     facs = dict(state.facilities_json or {})
     book = dict(facs.get("_onboarding_staff") or {})
@@ -1585,7 +1587,9 @@ def appoint_onboarding_staff(
         )
         profile = session.get(ClubStaffProfile, profile_id) if profile_id and candidate is None else None
         if profile is None and profile_id:
-            profile = session.scalar(select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{profile_id}"))
+            profile = session.scalar(
+                select(ClubStaffProfile).where(ClubStaffProfile.market_key == f"staff:{profile_id}")
+            )
         if candidate is None and profile is None:
             raise OwnerError("staff_candidate_not_found", 404, "That staff member is not on the market.")
         if candidate is not None:
@@ -3821,9 +3825,7 @@ def _mirror_sheet_membership(
         logger.info("squad sheet mirror skipped for %s: %s", player.id, exc)
 
 
-def place_on_squad_sheet(
-    session: Session, user_id: str, club_id: str, player_id: str, sheet: str
-) -> dict[str, Any]:
+def place_on_squad_sheet(session: Session, user_id: str, club_id: str, player_id: str, sheet: str) -> dict[str, Any]:
     """Move one owner-squad player between first team, reserve, and academy."""
     require_state(session, club_id, user_id)
     player = session.get(OwnerSquadPlayer, player_id)
@@ -4110,15 +4112,7 @@ def get_sponsor_offers(session: Session, user_id: str, club_id: str) -> dict[str
     else:
         gm_name = "Commercial Operations Desk (GM Vacant)"
         gm_nego = 10
-    comm_level = int(facs.get("commercial", 1))
 
-    offers = engine.generate_sponsor_offers(
-        club_id=club_id,
-        prestige=state.prestige,
-        gm_negotiation=gm_nego,
-        commercial_level=comm_level,
-        campus_sponsor_bonus_pct=int(campus_effects.get("sponsor_revenue_bonus_pct", 0)),
-    )
     deals = session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == club_id).order_by(OwnerSponsorDeal.created_at.desc())
     ).all()

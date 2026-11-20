@@ -22,9 +22,18 @@ import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 import { AcademyPortraitWall, VogueStaffStill } from "@/components/gtex/StaticPresentation";
 
 const seenKey = (clubId: string) => `gtex.regens.seen.${clubId}`;
-const readSeen = (clubId: string): string[] => JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
+const readSeen = (clubId: string): string[] =>
+  JSON.parse(localStorage.getItem(seenKey(clubId)) || "[]");
 
-const TRAITS = ["ambition", "loyalty", "marketability", "professionalism", "adaptability", "growth_responsiveness", "environment_sensitivity"];
+const TRAITS = [
+  "ambition",
+  "loyalty",
+  "marketability",
+  "professionalism",
+  "adaptability",
+  "growth_responsiveness",
+  "environment_sensitivity",
+];
 const SON_POSITIONS = ["ST", "RW", "LW", "AM", "CM", "DM", "RB", "LB", "CB", "GK"];
 
 const POS_CANON: Record<string, string> = {
@@ -52,7 +61,10 @@ const POS_CANON: Record<string, string> = {
 
 function canonPos(value?: string | null): string {
   if (!value) return "";
-  const key = value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const key = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, "");
   return POS_CANON[key] || (SON_POSITIONS.includes(key) ? key : "");
 }
 
@@ -133,7 +145,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
   const customized = Boolean(positionOverride || countryOverride || footOverride || heightOverride);
   const customCost = customized ? customUnit : 0;
   const totalEstimated = baseCost + nameCost + customCost;
-  const slots = Number.isFinite(Number(options?.slots_remaining)) ? Number(options.slots_remaining) : null;
+  const slots = Number.isFinite(Number(options?.slots_remaining))
+    ? Number(options.slots_remaining)
+    : null;
   const band = projectYouthBand(parent?.current_rating, parent?.potential_rating);
   const surname = String(parent?.full_name || "")
     .trim()
@@ -167,7 +181,8 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
       const typedName = sonName.trim();
       if (typedName) {
         const hasSurname = surname && typedName.toLowerCase().endsWith(surname.toLowerCase());
-        body.requested_name = !surname || typedName.includes(" ") || hasSurname ? typedName : `${typedName} ${surname}`;
+        body.requested_name =
+          !surname || typedName.includes(" ") || hasSurname ? typedName : `${typedName} ${surname}`;
       }
       if (positionOverride) body.requested_position = positionOverride;
       if (countryOverride) body.requested_country_code = countryOverride;
@@ -261,11 +276,7 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
   }
 
   return (
-    <Panel
-      eyebrow="Dynasty bloodline"
-      title="Build a Son"
-      testid="build-a-son-panel"
-    >
+    <Panel eyebrow="Dynasty bloodline" title="Build a Son" testid="build-a-son-panel">
       <div className="mb-6">
         <VogueStaffStill
           scene="bloodline"
@@ -280,14 +291,25 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             portraitUrl: parent?.portrait_url,
             rating: band ? band.mid : null,
           }}
-          quote={parent?.full_name ? `Named for the bloodline of ${parent.full_name}.` : "Name him before you induct him."}
+          quote={
+            parent?.full_name
+              ? `Named for the bloodline of ${parent.full_name}.`
+              : "Name him before you induct him."
+          }
         />
       </div>
       <div className="grid gap-6 lg:grid-cols-12">
-        <form onSubmit={handleRequestSon} className="space-y-4 lg:col-span-7" data-testid="build-a-son-form">
+        <form
+          onSubmit={handleRequestSon}
+          className="space-y-4 lg:col-span-7"
+          data-testid="build-a-son-form"
+        >
           <p className="text-xs leading-relaxed text-slate-300">
-            Type the son's name. He keeps <b className="text-white">{parent?.full_name || "the parent's"}</b> surname when you enter a given name. Position, foot, and DNA stay with the bloodline unless you change them.
-            He joins <b className="text-white">{club?.club_name}</b> in the reserve squad. A lifetime club gets {options.lifetime_cap ?? 3} sons.
+            Type the son's name. He keeps{" "}
+            <b className="text-white">{parent?.full_name || "the parent's"}</b> surname when you
+            enter a given name. Position, foot, and DNA stay with the bloodline unless you change
+            them. He joins <b className="text-white">{club?.club_name}</b> in the reserve squad. A
+            lifetime club gets {options.lifetime_cap ?? 3} sons.
           </p>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -299,7 +321,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
                 onChange={(e) => setParentId(e.target.value)}
                 data-testid="build-a-son-parent-select"
               >
-                {eligibleParents.length === 0 && <option value="">No eligible parents at this club</option>}
+                {eligibleParents.length === 0 && (
+                  <option value="">No eligible parents at this club</option>
+                )}
                 {eligibleParents.map((p: any) => (
                   <option key={p.player_id} value={p.player_id}>
                     {p.full_name} · {p.position || "POS"}
@@ -315,7 +339,11 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
               <input
                 type="text"
                 maxLength={120}
-                placeholder={surname ? `Given name, surname stays ${surname}` : "Type the name you want on the card"}
+                placeholder={
+                  surname
+                    ? `Given name, surname stays ${surname}`
+                    : "Type the name you want on the card"
+                }
                 value={sonName}
                 onChange={(e) => setSonName(e.target.value)}
                 className="gx-input mt-1"
@@ -324,7 +352,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Position · blank inherits {inheritedPosition || "the bloodline"}</label>
+              <label className="gx-label">
+                Position · blank inherits {inheritedPosition || "the bloodline"}
+              </label>
               <select
                 className="gx-input mt-1"
                 value={sonPosition}
@@ -341,7 +371,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Country · blank inherits {inheritedCountry || "the parent"}</label>
+              <label className="gx-label">
+                Country · blank inherits {inheritedCountry || "the parent"}
+              </label>
               <input
                 type="text"
                 maxLength={8}
@@ -354,7 +386,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Foot · blank inherits {inheritedFoot || "the parent"}</label>
+              <label className="gx-label">
+                Foot · blank inherits {inheritedFoot || "the parent"}
+              </label>
               <select
                 className="gx-input mt-1"
                 value={sonFoot}
@@ -369,7 +403,9 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
 
             <div>
-              <label className="gx-label">Height cm · blank inherits{parent?.height_cm ? ` ~${parent.height_cm}` : ""}</label>
+              <label className="gx-label">
+                Height cm · blank inherits{parent?.height_cm ? ` ~${parent.height_cm}` : ""}
+              </label>
               <input
                 type="number"
                 min={145}
@@ -383,11 +419,15 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs" data-testid="build-a-son-price">
+          <div
+            className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-amber-500/5 p-3 text-xs"
+            data-testid="build-a-son-price"
+          >
             <div className="flex items-center gap-2 text-amber-200">
               <Crown size={15} className="text-amber-400" />
               <span>
-                Base <b>{fmt(baseCost)}</b> · Name <b>{fmt(nameCost)}</b> · Change <b>{fmt(customCost)}</b>
+                Base <b>{fmt(baseCost)}</b> · Name <b>{fmt(nameCost)}</b> · Change{" "}
+                <b>{fmt(customCost)}</b>
                 {slots != null && (
                   <b className="ml-2 text-white" data-testid="build-a-son-slots">
                     {slots} slot{slots === 1 ? "" : "s"} left
@@ -402,15 +442,22 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
               data-testid="build-a-son-submit"
             >
               <Dna size={14} />
-              {busyOrder === "create" ? "Inducting heir…" : `Induct son · ${fmt(totalEstimated)} GTX`}
+              {busyOrder === "create"
+                ? "Inducting heir…"
+                : `Induct son · ${fmt(totalEstimated)} GTX`}
             </Btn>
           </div>
         </form>
 
         <div className="space-y-3 lg:col-span-5">
-          <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4" data-testid="build-a-son-preview">
+          <div
+            className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4"
+            data-testid="build-a-son-preview"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-200">What the son inherits</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-amber-200">
+                What the son inherits
+              </span>
               <Chip tone="gold">{customized ? "Custom change" : "Pure bloodline"}</Chip>
             </div>
             <p className="text-xs leading-relaxed text-slate-300">
@@ -418,22 +465,32 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
               Position {positionOverride || inheritedPosition || "from the academy roll"}.
               {parent?.current_rating
                 ? ` Youth band about ${band?.low}–${band?.high}, ceiling ${band?.potential}.`
-                : " No parent GSI yet, so ability follows a normal academy intake."}
-              {" "}The minted card appears after the wallet payment.
+                : " No parent GSI yet, so ability follows a normal academy intake."}{" "}
+              The minted card appears after the wallet payment.
             </p>
             {dna && (
               <div className="space-y-2">
-                <p className="text-[11px] uppercase tracking-wider text-slate-400">{dna.archetype || "DNA"} from the parent</p>
+                <p className="text-[11px] uppercase tracking-wider text-slate-400">
+                  {dna.archetype || "DNA"} from the parent
+                </p>
                 {(["tempo", "creativity", "discipline", "risk_taking"] as const).map((key) =>
                   dna[key] == null ? null : (
-                    <TraitBar key={key} label={label(key)} value={Math.round(Number(dna[key]) * 100)} max={100} />
+                    <TraitBar
+                      key={key}
+                      label={label(key)}
+                      value={Math.round(Number(dna[key]) * 100)}
+                      max={100}
+                    />
                   ),
                 )}
               </div>
             )}
           </div>
 
-          <div className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4" data-testid="build-a-son-orders">
+          <div
+            className="space-y-3 rounded-xl border border-white/10 bg-slate-950/60 p-4"
+            data-testid="build-a-son-orders"
+          >
             <div className="flex items-center justify-between">
               <span className="text-xs font-bold uppercase tracking-wider text-emerald-300">
                 Dynasty orders ({orders.length})
@@ -455,11 +512,18 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
                   >
                     <div>
                       <p className="font-bold text-white">
-                        {ord.generated_player?.full_name || ord.requested_name || "Bloodline heir"} ·{" "}
-                        <span className="text-emerald-300">{ord.generated_player?.position || ord.requested_position || inheritedPosition || "POS"}</span>
+                        {ord.generated_player?.full_name || ord.requested_name || "Bloodline heir"}{" "}
+                        ·{" "}
+                        <span className="text-emerald-300">
+                          {ord.generated_player?.position ||
+                            ord.requested_position ||
+                            inheritedPosition ||
+                            "POS"}
+                        </span>
                       </p>
                       <p className="text-[11px] text-slate-400">
-                        Status: <b className="uppercase text-amber-300">{label(ord.status)}</b> · <Coin amount={Number(ord.amount_coin || 0)} />
+                        Status: <b className="uppercase text-amber-300">{label(ord.status)}</b> ·{" "}
+                        <Coin amount={Number(ord.amount_coin || 0)} />
                       </p>
                     </div>
                     <div className="flex gap-1.5">
@@ -483,7 +547,8 @@ function BuildASonDesk({ club, onOrderUpdated }: { club: any; onOrderUpdated: ()
                       )}
                       {ord.generated_player && (
                         <Chip tone="emerald">
-                          OVR {ord.generated_player.current_rating} / POT {ord.generated_player.potential_rating}
+                          OVR {ord.generated_player.current_rating} / POT{" "}
+                          {ord.generated_player.potential_rating}
                         </Chip>
                       )}
                     </div>
@@ -533,12 +598,27 @@ function AcademyProspectCard({
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const archetype = p.archetype || t.archetype || (ceiling >= 15 ? "Generational Prodigy" : "Technical Playmaker");
-  const moodState = p.mood_state || t.mood || (p.morale >= 75 ? "Hungry & Motivated" : p.morale >= 50 ? "Focused on Training" : "Needs Minutes & Assurance");
-  const monologue = p.inner_monologue || t.inner_monologue || "I am working on my first touch every single session so the first-team coach notices.";
+  const archetype =
+    p.archetype || t.archetype || (ceiling >= 15 ? "Generational Prodigy" : "Technical Playmaker");
+  const moodState =
+    p.mood_state ||
+    t.mood ||
+    (p.morale >= 75
+      ? "Hungry & Motivated"
+      : p.morale >= 50
+        ? "Focused on Training"
+        : "Needs Minutes & Assurance");
+  const monologue =
+    p.inner_monologue ||
+    t.inner_monologue ||
+    "I am working on my first touch every single session so the first-team coach notices.";
   const readiness = p.readiness_score ?? (p.rating >= 68 ? 92 : p.rating >= 62 ? 76 : 54);
-  const hoydVerdict = p.hoyd_verdict || (p.potential >= 82 ? "Prime candidate for senior promotion" : "Conditioning recommended before top-flight minutes");
-  const managerApproved = p.manager_approved ?? (p.rating >= 60);
+  const hoydVerdict =
+    p.hoyd_verdict ||
+    (p.potential >= 82
+      ? "Prime candidate for senior promotion"
+      : "Conditioning recommended before top-flight minutes");
+  const managerApproved = p.manager_approved ?? p.rating >= 60;
   const originBackstory = p.origin_backstory || t.origin_backstory;
   const superAgent = p.super_agent || t.super_agent;
   const dramaArc = p.drama_arc || t.drama_arc;
@@ -547,7 +627,9 @@ function AcademyProspectCard({
     setBusyAction("contract");
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/contract`);
-      toast.success(`Signed enhanced youth contract for ${p.name} (1,000 Fan Coin). Loyalty and retention secured.`);
+      toast.success(
+        `Signed enhanced youth contract for ${p.name} (1,000 Fan Coin). Loyalty and retention secured.`,
+      );
       onRefresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -608,7 +690,9 @@ function AcademyProspectCard({
               age={p.age}
               regen
               image={p.portrait_url}
-              badge={pressure >= 60 ? "Unsettled" : ceiling >= 15 ? "Wonderkid" : "Academy Prospect"}
+              badge={
+                pressure >= 60 ? "Unsettled" : ceiling >= 15 ? "Wonderkid" : "Academy Prospect"
+              }
               stats={[
                 { k: "Ceiling", v: `+${ceiling}` },
                 { k: "Morale", v: p.morale },
@@ -636,7 +720,9 @@ function AcademyProspectCard({
 
             {/* Inner Monologue */}
             <div className="rounded-lg border border-white/5 bg-black/40 p-2.5">
-              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-400">Inner Monologue</p>
+              <p className="text-[9px] font-black uppercase tracking-wider text-emerald-400">
+                Inner Monologue
+              </p>
               <p className="text-xs italic text-slate-300 mt-0.5">"{monologue}"</p>
             </div>
 
@@ -665,7 +751,9 @@ function AcademyProspectCard({
             <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-2.5 text-xs">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-purple-300">HOYD Verdict:</span>
-                <span className={`text-[10px] font-bold uppercase ${managerApproved ? "text-emerald-400" : "text-amber-400"}`}>
+                <span
+                  className={`text-[10px] font-bold uppercase ${managerApproved ? "text-emerald-400" : "text-amber-400"}`}
+                >
                   {managerApproved ? "Manager Approved" : "Development Track"}
                 </span>
               </div>
@@ -675,8 +763,14 @@ function AcademyProspectCard({
         </div>
 
         {last && (
-          <p className="border-t border-white/5 pt-2 text-xs text-slate-400" data-testid="regen-growth-explanation">
-            <span className="gx-mono mr-1 text-[10px] uppercase text-slate-500">Day {last.day}</span>+{last.gain} · {last.explanation}
+          <p
+            className="border-t border-white/5 pt-2 text-xs text-slate-400"
+            data-testid="regen-growth-explanation"
+          >
+            <span className="gx-mono mr-1 text-[10px] uppercase text-slate-500">
+              Day {last.day}
+            </span>
+            +{last.gain} · {last.explanation}
           </p>
         )}
       </div>
@@ -691,7 +785,9 @@ function AcademyProspectCard({
           data-testid={`youth-contract-${p.id}`}
         >
           <FileText size={13} className="text-amber-300" />
-          <span>{busyAction === "contract" ? "Signing…" : "Offer Youth Contract (1,000 Fan Coin)"}</span>
+          <span>
+            {busyAction === "contract" ? "Signing…" : "Offer Youth Contract (1,000 Fan Coin)"}
+          </span>
         </button>
 
         {!p.promoted && (
@@ -756,8 +852,12 @@ export default function Academy() {
     return (
       <div className="mx-auto max-w-lg p-8 text-center">
         <h1 className="text-2xl font-black text-white">Youth academy</h1>
-        <p className="mt-2 text-sm text-slate-400">Create a club to run an academy. You can keep browsing the rest of GTEX until then.</p>
-        <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex">My clubs</Link>
+        <p className="mt-2 text-sm text-slate-400">
+          Create a club to run an academy. You can keep browsing the rest of GTEX until then.
+        </p>
+        <Link to="/app/clubs" className="gx-btn gx-btn-primary mt-4 inline-flex">
+          My clubs
+        </Link>
       </div>
     );
   }
@@ -765,24 +865,30 @@ export default function Academy() {
   if (!club) return <Loading label="Opening your academy..." />;
 
   const regens: any[] = club.squad.filter((p: any) => Boolean(p.is_regen));
-  const facilityLevel = Number(
-    typeof club.facilities?.academy === 'object' && club.facilities?.academy !== null
-      ? club.facilities?.academy?.level
-      : club.facilities?.academy ?? club.academy_level ?? 2
-  ) || 2;
+  const facilityLevel =
+    Number(
+      typeof club.facilities?.academy === "object" && club.facilities?.academy !== null
+        ? club.facilities?.academy?.level
+        : (club.facilities?.academy ?? club.academy_level ?? 2),
+    ) || 2;
   const clubPrestige = club.health?.prestige ?? 55;
-  const prestigeTier = clubPrestige >= 85 ? 1 : clubPrestige >= 70 ? 2 : clubPrestige >= 50 ? 3 : clubPrestige >= 35 ? 4 : 5;
+  const prestigeTier =
+    clubPrestige >= 85
+      ? 1
+      : clubPrestige >= 70
+        ? 2
+        : clubPrestige >= 50
+          ? 3
+          : clubPrestige >= 35
+            ? 4
+            : 5;
   const hoydRating = club.staff?.head_of_youth_development?.rating ?? club.hoyd?.rating ?? 78;
 
   const prospects = regens.filter((p) => !p.promoted);
   const promotedRegens = regens.filter((p) => Boolean(p.promoted));
 
   const displayedRegens =
-    categoryTab === "prospects"
-      ? prospects
-      : categoryTab === "promoted"
-      ? promotedRegens
-      : regens;
+    categoryTab === "prospects" ? prospects : categoryTab === "promoted" ? promotedRegens : regens;
 
   const dismissPack = () => {
     const next = Array.from(new Set([...readSeen(club.club_id), ...pack.map((p) => p.id)]));
@@ -811,7 +917,12 @@ export default function Academy() {
         title="Youth Academy Command"
         sub="AI-generated regen players enter your academy. Facility levels and Club Prestige decide intake class size, potential ceilings, and senior readiness."
         action={
-          <Btn variant="primary" disabled={!!busy} onClick={scoutIntake} data-testid="scout-intake-button">
+          <Btn
+            variant="primary"
+            disabled={!!busy}
+            onClick={scoutIntake}
+            data-testid="scout-intake-button"
+          >
             <Sprout size={14} />
             {busy === "intake" ? "Signing…" : "Scout New Intake"}
           </Btn>
@@ -819,15 +930,23 @@ export default function Academy() {
       />
 
       {/* 1. Facility Level & Prestige Tier Impact Banner */}
-      <section className="grid grid-cols-1 sm:grid-cols-3 gap-4" data-testid="academy-facility-stats">
+      <section
+        className="grid grid-cols-1 sm:grid-cols-3 gap-4"
+        data-testid="academy-facility-stats"
+      >
         <div className="rounded-2xl border border-emerald-500/30 bg-gradient-to-br from-[#061e16] to-[#040f0b] p-5 shadow-lg">
           <div className="flex items-center justify-between text-emerald-400 mb-2">
             <Building size={18} />
             <span className="text-[10px] font-black uppercase tracking-wider">Infrastructure</span>
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">Academy Facility Level</p>
-          <p className="gx-mono text-3xl font-black text-white mt-1">Level {facilityLevel}<span className="text-sm text-slate-500">/5</span></p>
-          <p className="text-[11px] text-emerald-300 mt-1">+{facilityLevel * 4}% Regen Growth Speed</p>
+          <p className="gx-mono text-3xl font-black text-white mt-1">
+            Level {facilityLevel}
+            <span className="text-sm text-slate-500">/5</span>
+          </p>
+          <p className="text-[11px] text-emerald-300 mt-1">
+            +{facilityLevel * 4}% Regen Growth Speed
+          </p>
         </div>
 
         <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-[#1e1506] to-[#0f0c05] p-5 shadow-lg">
@@ -837,16 +956,23 @@ export default function Academy() {
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">Prestige Tier Impact</p>
           <p className="gx-mono text-3xl font-black text-amber-300 mt-1">Tier {prestigeTier}</p>
-          <p className="text-[11px] text-amber-200 mt-1">+{Math.max(0, 6 - prestigeTier) * 3} Max Potential Ceiling</p>
+          <p className="text-[11px] text-amber-200 mt-1">
+            +{Math.max(0, 6 - prestigeTier) * 3} Max Potential Ceiling
+          </p>
         </div>
 
         <div className="rounded-2xl border border-purple-500/30 bg-gradient-to-br from-[#180a29] to-[#0a0512] p-5 shadow-lg">
           <div className="flex items-center justify-between text-purple-400 mb-2">
             <Sparkles size={18} />
-            <span className="text-[10px] font-black uppercase tracking-wider">Staff Leadership</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">
+              Staff Leadership
+            </span>
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">HOYD Youth Rating</p>
-          <p className="gx-mono text-3xl font-black text-purple-300 mt-1">{hoydRating}<span className="text-sm text-slate-500">/100</span></p>
+          <p className="gx-mono text-3xl font-black text-purple-300 mt-1">
+            {hoydRating}
+            <span className="text-sm text-slate-500">/100</span>
+          </p>
           <p className="text-[11px] text-purple-200 mt-1">Senior Transition Autonomy Active</p>
         </div>
       </section>
@@ -880,7 +1006,9 @@ export default function Academy() {
         </div>
       </div>
 
-      {pack.length > 0 && <PackReveal regens={pack} players={pack} onClose={dismissPack} onDismiss={dismissPack} />}
+      {pack.length > 0 && (
+        <PackReveal regens={pack} players={pack} onClose={dismissPack} onDismiss={dismissPack} />
+      )}
 
       {/* 3. Prospects & Promoted Regens Grid */}
       <div className="space-y-4">
@@ -906,7 +1034,11 @@ export default function Academy() {
 
       {/* Universal Player Drawer */}
       <PlayerDrawer
-        playerId={selectedPlayer ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id) : null}
+        playerId={
+          selectedPlayer
+            ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id)
+            : null
+        }
         onClose={() => setSelectedPlayer(null)}
       />
     </div>

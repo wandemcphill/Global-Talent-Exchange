@@ -192,7 +192,9 @@ def position_family(raw: str | None) -> str:
         return "midfielder"
     if "keep" in text or text.startswith("goal"):
         return "goalkeeper"
-    if any(token in text for token in ("wing-back", "wing back", "full-back", "full back", "centre-back", "center-back")):
+    if any(
+        token in text for token in ("wing-back", "wing back", "full-back", "full back", "centre-back", "center-back")
+    ):
         return "defender"
     if "winger" in text or "striker" in text:
         return "forward"

@@ -22,7 +22,9 @@ def test_sample_launch_competitions_are_retired_in_every_environment(
     for env_name in ("production", "development"):
         monkeypatch.setenv("GTE_APP_ENV", env_name)
         with app_session_factory() as session:
-            for comp_id in session.scalars(select(OwnerCompetition.id).where(OwnerCompetition.name.in_(seed_names))).all():
+            for comp_id in session.scalars(
+                select(OwnerCompetition.id).where(OwnerCompetition.name.in_(seed_names))
+            ).all():
                 session.delete(session.get(OwnerCompetition, comp_id))
             session.flush()
             session.add(
