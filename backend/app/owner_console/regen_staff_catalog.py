@@ -191,14 +191,45 @@ def _rating(index: int) -> int:
     return _mix(index, 85, 91)
 
 
+def regen_contract_demand(rating: int) -> int:
+    """Fan Coin a generated staff member asks for. A 91 stays under Arteta."""
+    clamped = max(60, min(91, int(rating)))
+    return 80 + (clamped - 60) * 11
+
+
 def _wage(rating: int) -> int:
-    if rating <= 70:
-        return 180 + (rating - 58) * 40
-    if rating <= 78:
-        return 760 + (rating - 71) * 160
-    if rating <= 84:
-        return 2100 + (rating - 79) * 380
-    return 4800 + (rating - 85) * 650
+    """Catalog wage before the 35 percent market cut. The cut returns regen_contract_demand."""
+    demand = regen_contract_demand(rating)
+    return (demand * 100 + 34) // 35
+
+
+def _name_pools(gender: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    if gender == "female":
+        given = tuple(name for group in FACE_GROUPS for name in _FEMALE[group])
+    else:
+        given = tuple(name for group in FACE_GROUPS for name in _MALE[group][0])
+    surnames = tuple(name for group in FACE_GROUPS for name in _MALE[group][1])
+    return given, surnames
+
+
+def _unique_name(index: int, gender: str, used: set[str]) -> str:
+    """Give every regen a distinct name. The small regional pools otherwise repeat."""
+    given_pool, surnames = _name_pools(gender)
+    given = given_pool[index % len(given_pool)]
+    surname = surnames[(index // len(given_pool)) % len(surnames)]
+    name = f"{given} {surname}"
+    bump = 0
+    while name in used:
+        bump += 1
+        middle = given_pool[(index + bump) % len(given_pool)]
+        if middle == given:
+            continue
+        name = f"{given} {middle} {surname}"
+        if bump > len(given_pool) + 2:
+            name = f"{given} {middle} {surname} {index}"
+            break
+    used.add(name)
+    return name
 
 
 def _roles() -> list[str]:
@@ -214,19 +245,13 @@ def build_regen_staff_catalog() -> tuple[dict, ...]:
     if len(roles) != REGEN_STAFF_COUNT:
         raise RuntimeError(f"regen staff role plan must total {REGEN_STAFF_COUNT}")
     people: list[dict] = []
+    used_names: set[str] = set()
     for index, role in enumerate(roles):
         group = FACE_GROUPS[index % len(FACE_GROUPS)]
         gender = "female" if role in FEMALE_ROLES and index % 13 == 0 else "male"
         age = 34 + ((index * 3) % 23)
         rating = _rating(index)
         wage = _wage(rating)
-        male_given, family = _MALE[group]
-        if gender == "female":
-            given_pool = _FEMALE[group]
-            given = given_pool[(index // len(FACE_GROUPS)) % len(given_pool)]
-        else:
-            given = male_given[(index // len(FACE_GROUPS)) % len(male_given)]
-        surname = family[(index // (len(FACE_GROUPS) * 4)) % len(family)]
         nation = _NATIONS[group][index % len(_NATIONS[group])]
         style = _STYLES[role][index % len(_STYLES[role])]
         temperament = _TEMPERAMENTS[index % len(_TEMPERAMENTS)]
@@ -238,7 +263,7 @@ def build_regen_staff_catalog() -> tuple[dict, ...]:
                 "staff_id": staff_id,
                 "role": role,
                 "role_label": role.replace("_", " ").title(),
-                "name": f"{given} {surname}",
+                "name": _unique_name(index, gender, used_names),
                 "nation": nation,
                 "gender": gender,
                 "age": age,

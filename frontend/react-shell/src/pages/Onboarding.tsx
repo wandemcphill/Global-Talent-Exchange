@@ -824,6 +824,12 @@ function SquadStep({ clubId, onDone }: any) {
   );
 }
 
+function seasonSalaryFromDemand(raw: number) {
+  const amount = Math.max(0, Math.round(Number(raw) || 0));
+  const scaled = amount >= 1000 ? Math.floor(amount / 10) : amount;
+  return Math.max(40, scaled);
+}
+
 function seasonSalaryGtx(raw: number) {
   const amount = Math.max(0, Math.round(Number(raw) || 0));
   const scaled = amount >= 1000 ? Math.floor(amount / 10) : amount;
@@ -899,9 +905,12 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
             blurb: candidate.nation
               ? `${candidate.nation} · rating ${candidate.rating}`
               : `Rating ${candidate.rating}`,
-            salary: seasonSalaryGtx(
-              candidate.expected_salary_fan_coin || candidate.expected_salary_gtex || 600,
-            ),
+            salary:
+              candidate.expected_salary_fan_coin || candidate.expected_salary_gtex
+                ? seasonSalaryFromDemand(
+                    candidate.expected_salary_fan_coin || candidate.expected_salary_gtex,
+                  )
+                : null,
             profile_id: candidate.profile_id,
           });
         }
@@ -921,7 +930,10 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               name,
               detail: candidate.specialty || candidate.style || role.label,
               blurb: candidate.bio,
-              salary: seasonSalaryGtx(candidate.salary_gtx || candidate.salary || 600),
+              salary:
+                candidate.salary_gtx || candidate.salary
+                  ? seasonSalaryGtx(candidate.salary_gtx || candidate.salary)
+                  : null,
               profile_id: candidate.id || candidate.staff_id,
             });
           }
@@ -976,7 +988,9 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
             <div>
               <p className="text-sm font-semibold text-white">{person.name}</p>
               <p className="text-[11px] text-slate-400">{person.detail}</p>
-              <p className="text-[11px] text-emerald-300">Season salary {fmt(person.salary)} GTX</p>
+              <p className="text-[11px] text-emerald-300">
+                {person.salary == null ? "Wage not filed" : `Season salary ${fmt(person.salary)} GTX`}
+              </p>
             </div>
             <Btn
               variant="secondary"

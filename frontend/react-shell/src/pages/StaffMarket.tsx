@@ -12,7 +12,7 @@ function annualFanCoin(candidate: any): number {
   const listed = Number(
     candidate?.expected_salary_fan_coin || candidate?.expected_salary_gtex || 0,
   );
-  return Math.max(1, Math.floor(listed * 0.35));
+  return Math.max(1, Math.floor(listed));
 }
 
 function upfrontFanCoin(annual: number, years: number): number {

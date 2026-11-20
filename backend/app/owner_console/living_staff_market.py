@@ -42,6 +42,78 @@ from app.owner_console import engine, ledger
 
 logger = logging.getLogger(__name__)
 
+ADVERTISED_STAFF_FIELDS = (
+    "preferred_formation",
+    "preferred_formations",
+    "philosophy_summary",
+    "mentality",
+    "tactics",
+    "traits",
+    "youth_development",
+    "tactical_flexibility",
+    "gsi",
+    "nation",
+    "age",
+    "uses_academy_players",
+)
+
+
+def _sync_staff_line(session: Session, state: Any, role: str, previous_name: str | None, new_name: str | None) -> None:
+    try:
+        from app.owner_console import comms_persistence
+
+        comms_persistence.rotate_staff_conversation_on_change(
+            session,
+            state,
+            role_key=role,
+            previous_staff_name=previous_name,
+            new_staff_name=new_name,
+        )
+        comms_persistence.ensure_club_conversations_seeded(session, state)
+    except Exception:
+        logger.debug("staff conversation sync skipped", exc_info=True)
+
+
+def _vacate_staff_seat(session: Session, state: Any, role: str, *, reason: str) -> str | None:
+    from sqlalchemy.orm.attributes import flag_modified
+
+    facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    current = exec_staff.get(role)
+    if not isinstance(current, dict) and role == ROLE_FIRST_TEAM_MANAGER:
+        current = state.manager_json if isinstance(state.manager_json, dict) else {}
+    previous_name = str((current or {}).get("name") or "") or None
+    now = datetime.now(timezone.utc)
+    contract_id = (current or {}).get("contract_id") if isinstance(current, dict) else None
+    if contract_id:
+        contract = session.get(ClubStaffContract, contract_id)
+        if contract and contract.status == "active":
+            contract.status = "terminated"
+            contract.terminated_at = now
+    for assignment in session.scalars(
+        select(ClubStaffAssignment).where(
+            ClubStaffAssignment.club_id == state.club_id,
+            ClubStaffAssignment.role_key == role,
+            ClubStaffAssignment.active.is_(True),
+        )
+    ):
+        assignment.active = False
+    exec_staff.pop(role, None)
+    facs["_executive_staff"] = exec_staff
+    state.facilities_json = facs
+    flag_modified(state, "facilities_json")
+    if role == ROLE_FIRST_TEAM_MANAGER:
+        state.manager_json = {"name": "", "is_vacant": True, "status": "vacant", "is_appointed": False}
+        flag_modified(state, "manager_json")
+        setup = dict(facs.get("_tactical_setup") or {})
+        setup.pop("ratified_manager_id", None)
+        facs["_tactical_setup"] = setup
+        state.facilities_json = facs
+        flag_modified(state, "facilities_json")
+    _sync_staff_line(session, state, role, previous_name, None)
+    return previous_name
+
+
 SUPPORTED_MARKET_ROLES = [
     ROLE_FIRST_TEAM_MANAGER,
     ROLE_GENERAL_MANAGER,
@@ -94,6 +166,14 @@ ROLE_DISPLAY_LABELS: dict[str, str] = {
 }
 
 
+def demanded_salary_fan_coin(raw_annual: int | None) -> int:
+    """What the staff member asks for. Catalog wages are the old scale; keep 35 percent."""
+    amount = max(0, int(raw_annual or 0))
+    if amount <= 0:
+        return 0
+    return max(1, (amount * 35) // 100)
+
+
 def _safe_int(val: Any, default: int = 0) -> int:
     try:
         if val is None:
@@ -122,17 +202,28 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
 
         raw_role = str(item.get("role") or "first_team_manager")
         canon_role = normalise_staff_role(raw_role)
-        salary_fan_coin = _safe_int(
-            item.get("salary_fan_coin")
-            or item.get("salary_fancoin")
-            or item.get("salary")
-            or item.get("salary_gtex")
-            or 600
+        raw_salary = next(
+            (
+                item.get(key)
+                for key in ("salary_fan_coin", "salary_fancoin", "salary", "salary_gtex")
+                if item.get(key) is not None
+            ),
+            None,
         )
+        raw_rating = next(
+            (
+                item.get(key)
+                for key in ("rating", "tactical_flexibility", "youth_development")
+                if item.get(key) is not None
+            ),
+            None,
+        )
+        if raw_salary is None or raw_rating is None:
+            continue
+        catalog_salary = _safe_int(raw_salary)
+        salary_fan_coin = demanded_salary_fan_coin(catalog_salary)
         salary_minor = salary_fan_coin * 100
-        rating = _safe_int(item.get("rating"), 0) or _safe_int(
-            item.get("tactical_flexibility") or item.get("youth_development") or 72
-        )
+        rating = _safe_int(raw_rating)
 
         if key in by_key:
             profile = by_key[key]
@@ -145,12 +236,15 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
             if incoming_portrait and (not stored_portrait or replace_bank_face):
                 meta["portrait_url"] = incoming_portrait
                 profile.metadata_json = meta
+            catalog_name = str(item.get("name") or "").strip()
+            if catalog_name and key.startswith("staff:regen-staff-") and profile.display_name != catalog_name:
+                profile.display_name = catalog_name
             if str(meta.get("employment_status") or "unemployed") == "unemployed" and profile.staff_type != canon_role:
                 profile.staff_type = canon_role
                 profile.rating = rating
                 profile.salary_minor = salary_minor
-                style = str(meta.get("style") or item.get("style") or "Balanced")
-                profile.skills_json = [canon_role, style]
+                style = str(item.get("style") or meta.get("style") or "")
+                profile.skills_json = [canon_role, style] if style else [canon_role]
                 meta["preferred_roles"] = [canon_role, raw_role]
                 if item.get("source_job"):
                     meta["source_job"] = item.get("source_job")
@@ -160,10 +254,12 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
                 profile.rating = rating
                 profile.salary_minor = salary_minor
                 profile.rarity = str(item.get("rarity") or profile.rarity)
-                style = str(item.get("style") or meta.get("style") or "Balanced")
-                profile.skills_json = [canon_role, style]
-                meta["style"] = style
-                meta["temperament"] = str(item.get("temperament") or meta.get("temperament") or "pragmatic")
+                style = str(item.get("style") or meta.get("style") or "")
+                profile.skills_json = [canon_role, style] if style else [canon_role]
+                if style:
+                    meta["style"] = style
+                if item.get("temperament") or meta.get("temperament"):
+                    meta["temperament"] = str(item.get("temperament") or meta.get("temperament"))
                 meta["preferred_roles"] = [canon_role, raw_role]
                 for field in (
                     "preferred_formation",
@@ -179,7 +275,7 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
                 ):
                     if item.get(field) is not None:
                         meta[field] = item[field]
-                meta["reputation"] = min(95, max(30, rating))
+                meta["reputation"] = rating
                 profile.metadata_json = meta
             continue
 
@@ -187,12 +283,14 @@ def ensure_staff_market_profiles(session: Session) -> list[ClubStaffProfile]:
             "staff_id": staff_id,
             "employment_status": "unemployed",
             "current_club_id": None,
-            "min_prestige": _safe_int(item.get("min_prestige"), 15),
-            "temperament": str(item.get("temperament") or "pragmatic"),
-            "style": str(item.get("style") or "Balanced"),
-            "ambition": _safe_int(item.get("ambition"), 10),
-            "loyalty": _safe_int(item.get("loyalty"), 12),
-            "experience_years": max(3, _safe_int(item.get("min_prestige"), 15) // 5),
+            "min_prestige": _safe_int(item["min_prestige"]) if item.get("min_prestige") is not None else None,
+            "temperament": str(item["temperament"]) if item.get("temperament") else None,
+            "style": str(item["style"]) if item.get("style") else None,
+            "ambition": _safe_int(item["ambition"]) if item.get("ambition") is not None else None,
+            "loyalty": _safe_int(item["loyalty"]) if item.get("loyalty") is not None else None,
+            "experience_years": (
+                _safe_int(item["min_prestige"]) // 5 if item.get("min_prestige") is not None else None
+            ),
             "career_history": [],
             "previous_relationships": {},
             "preferred_roles": [canon_role, raw_role],
@@ -290,8 +388,14 @@ def get_club_vacancies(session: Session, user_id: str, club_id: str) -> dict[str
                     "incumbent_name": staff_data.get("name"),
                     "staff_id": staff_data.get("id") or staff_data.get("staff_id"),
                     "appointed_at": staff_data.get("appointed_at"),
-                    "salary_gtex": _safe_int(staff_data.get("salary") or staff_data.get("salary_gtex") or 600),
-                    "mood": _safe_int(staff_data.get("mood"), 75),
+                    "salary_gtex": (
+                        _safe_int(staff_data["salary"])
+                        if staff_data.get("salary") is not None
+                        else _safe_int(staff_data["salary_gtex"])
+                        if staff_data.get("salary_gtex") is not None
+                        else None
+                    ),
+                    "mood": staff_data.get("mood") if staff_data.get("mood") is not None else None,
                     "portrait_url": staff_data.get("portrait_url"),
                 }
             )
@@ -302,7 +406,9 @@ def get_club_vacancies(session: Session, user_id: str, club_id: str) -> dict[str
                     "role_label": display_label,
                     "is_urgent": r == ROLE_FIRST_TEAM_MANAGER,
                     "provisional_name": (
-                        staff_data.get("name") if isinstance(staff_data, dict) else "Provisional Caretaker"
+                        staff_data.get("name")
+                        if isinstance(staff_data, dict) and staff_data.get("name")
+                        else "Seat empty"
                     ),
                     "recommended_min_rating": max(50, state.prestige),
                 }
@@ -474,7 +580,7 @@ def evaluate_staff_contract_offer(
     meta = dict(candidate_profile.metadata_json or {})
     min_prestige = _safe_int(meta.get("min_prestige"), 15)
     raw_expected = candidate_profile.salary_minor // 100 if candidate_profile.salary_minor else 600
-    expected_salary = max(1, int(raw_expected) * 35 // 100)
+    expected_salary = max(1, int(raw_expected))
     salary_offer_fan_coin = int(
         offered_salary_fan_coin
         if offered_salary_fan_coin is not None
@@ -587,16 +693,18 @@ def hire_staff_from_market(
 
     target_role = normalise_staff_role(role or profile.staff_type)
     raw_expected = profile.salary_minor // 100 if profile.salary_minor else 600
-    expected_salary_fan_coin = max(1, int(raw_expected) * 35 // 100)
+    expected_salary_fan_coin = max(1, int(raw_expected))
     offered_value = int(
         offered_salary_fan_coin
         if offered_salary_fan_coin is not None
         else (offered_salary_gtex if offered_salary_gtex is not None else expected_salary_fan_coin)
     )
-    # A figure still on the old scale (more than double the new wage) is brought down with the 65% cut.
+    # An offer still written on the old full catalog wage is brought down to the reduced demand.
     salary_fan_coin = (
         expected_salary_fan_coin if offered_value > expected_salary_fan_coin * 2 else max(1, offered_value)
     )
+    if dict(state.facilities_json or {}).get("_contract_wage_ceiling") == "catalog":
+        salary_fan_coin = min(salary_fan_coin, expected_salary_fan_coin)
     years = max(1, min(int(contract_years or 3), 5))
 
     meta = dict(profile.metadata_json or {})
@@ -636,40 +744,71 @@ def hire_staff_from_market(
     if marquee_wage_premium:
         total_contract_fee_fan_coin = int(total_contract_fee_fan_coin * 1.4)
 
+    from app.owner_console.models import OwnerClubState
+
+    seller_club_id = str(meta.get("current_club_id") or "")
+    employed_elsewhere = (
+        str(meta.get("employment_status") or "") == "employed" and bool(seller_club_id) and seller_club_id != club_id
+    )
+    if str(meta.get("employment_status") or "") == "employed" and seller_club_id == club_id:
+        return {
+            "status": "rejected",
+            "success": False,
+            "reason": "already_at_club",
+            "message": f"{profile.display_name} is already appointed at this club.",
+        }
+    seller_state = None
+    if employed_elsewhere and not seller_club_id.startswith("rival:"):
+        seller_state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == seller_club_id))
+    current_salary = max(1, int(raw_expected))
+    if seller_state is not None:
+        seller_facs = dict(seller_state.facilities_json or {})
+        seller_seat = dict((seller_facs.get("_executive_staff") or {}).get(target_role) or {})
+        if target_role == ROLE_FIRST_TEAM_MANAGER and not seller_seat:
+            seller_seat = dict(seller_state.manager_json or {})
+        current_salary = max(
+            current_salary,
+            int(seller_seat.get("salary_fan_coin") or seller_seat.get("salary") or current_salary),
+        )
+    buyout_fan_coin = max(1800, int(round(current_salary * 2.5))) if employed_elsewhere else 0
+    amount_due = total_contract_fee_fan_coin + buyout_fan_coin
+
     # Financial settlement is a hard precondition for an appointment. Never create
     # a contract or change employment state when the club cannot fund the upfront fee.
     club_acct = ledger.club_account(club_id)
     user_acct = ledger.user_account(user_id)
     club_fan = ledger.balance(session, club_acct, ledger.FAN)
     user_fan = ledger.balance(session, user_acct, ledger.FAN)
-    if user_fan >= total_contract_fee_fan_coin:
+    if user_fan >= amount_due:
         pay_source = user_acct
         pay_balance = user_fan
     else:
         pay_source = club_acct
         pay_balance = club_fan
     logger.info("Executing staff appointment for club %s; Fan Coin available: %s", club_id, pay_balance)
-    if pay_balance < total_contract_fee_fan_coin:
+    if pay_balance < amount_due:
         return {
             "status": "rejected",
             "success": False,
             "reason": "insufficient_funds",
             "message": (
                 f"Appointment not completed: staff salaries are paid in Fan Coin. "
-                f"Available Fan Coin is {max(user_fan, club_fan)}, and the upfront contract is {total_contract_fee_fan_coin} Fan Coin."
+                f"Available Fan Coin is {max(user_fan, club_fan)}, and the agreed move is {amount_due} Fan Coin."
             ),
             "required_salary_fan_coin": salary_fan_coin,
             "required_salary_gtex": salary_fan_coin,
+            "buyout_fan_coin": buyout_fan_coin,
         }
 
     # The ledger must successfully settle before any contract or assignment is written.
-    ledger.record(
+    contract_event = ledger.record(
         session,
         event_type="staff_hire",
         source=pay_source,
         destination=ledger.WORLD_CLUBS,
         currency=ledger.FAN,
         gross=total_contract_fee_fan_coin,
+        fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
         club_id=club_id,
         user_id=user_id,
         related_type="staff",
@@ -677,23 +816,56 @@ def hire_staff_from_market(
         memo=f"Upfront contract salary for {profile.display_name} ({ROLE_DISPLAY_LABELS.get(target_role, target_role)})",
         check_funds=True,
     )
+    buyout_event = None
+    if buyout_fan_coin:
+        seller_account = ledger.club_account(seller_state.club_id) if seller_state is not None else ledger.WORLD_CLUBS
+        buyout_event = ledger.record(
+            session,
+            event_type="staff_transfer",
+            source=pay_source,
+            destination=seller_account,
+            currency=ledger.FAN,
+            gross=buyout_fan_coin,
+            fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=profile.id,
+            memo=f"Staff compensation for {profile.display_name} from {seller_club_id}",
+            check_funds=True,
+        )
+        if seller_state is not None:
+            _vacate_staff_seat(session, seller_state, target_role, reason="sold_to_another_club")
 
     now = datetime.now(timezone.utc)
 
-    # 1. Terminate any existing active contract/assignment for this role at this club
+    # 1. One seat per role. The assignment row is unique on club and role,
+    # so a replacement reuses that row instead of inserting a second occupant.
     existing_assignment = session.scalar(
         select(ClubStaffAssignment).where(
             ClubStaffAssignment.club_id == club_id,
             ClubStaffAssignment.role_key == target_role,
-            ClubStaffAssignment.active.is_(True),
         )
     )
     if existing_assignment:
-        existing_assignment.active = False
         old_contract = session.get(ClubStaffContract, existing_assignment.staff_contract_id)
         if old_contract and old_contract.status == "active":
             old_contract.status = "terminated"
             old_contract.terminated_at = now
+            previous = session.get(ClubStaffProfile, old_contract.staff_profile_id)
+            if previous is not None and previous.id != profile.id:
+                previous_meta = dict(previous.metadata_json or {})
+                previous_meta["employment_status"] = "unemployed"
+                previous_meta["current_club_id"] = None
+                previous_history = list(previous_meta.get("career_history") or [])
+                if previous_history and previous_history[-1].get("status") == "ongoing":
+                    previous_history[-1] = {
+                        **previous_history[-1],
+                        "status": "replaced",
+                        "reason_for_leaving": "replaced",
+                    }
+                previous_meta["career_history"] = previous_history
+                previous.metadata_json = previous_meta
 
     # 2. Create authoritative ClubStaffContract
     new_contract = ClubStaffContract(
@@ -718,15 +890,21 @@ def hire_staff_from_market(
     session.add(new_contract)
     session.flush()
 
-    # 3. Create authoritative ClubStaffAssignment
-    new_assignment = ClubStaffAssignment(
-        club_id=club_id,
-        staff_contract_id=new_contract.id,
-        role_key=target_role,
-        active=True,
-        metadata_json={"appointed_by": user_id, "world_day": state.world_day},
-    )
-    session.add(new_assignment)
+    # 3. One assignment row holds the seat.
+    if existing_assignment is None:
+        new_assignment = ClubStaffAssignment(
+            club_id=club_id,
+            staff_contract_id=new_contract.id,
+            role_key=target_role,
+            active=True,
+            metadata_json={"appointed_by": user_id, "world_day": state.world_day},
+        )
+        session.add(new_assignment)
+    else:
+        existing_assignment.staff_contract_id = new_contract.id
+        existing_assignment.active = True
+        existing_assignment.metadata_json = {"appointed_by": user_id, "world_day": state.world_day}
+        new_assignment = existing_assignment
 
     # 4. Synchronize facilities_json and manager_json
     facs = dict(state.facilities_json or {})
@@ -750,21 +928,58 @@ def hire_staff_from_market(
         "salary_fancoin": salary_fan_coin,
         "salary_gtex": salary_fan_coin,  # Legacy alias; value is Fan Coin.
         "appointed_at": now.isoformat(),
-        "mood": 85,
         "contract_years": years,
         "is_appointed": True,
         "portrait_url": meta.get("portrait_url"),
+        "profile_locked": True,
     }
+    for field in ADVERTISED_STAFF_FIELDS:
+        if meta.get(field) is not None:
+            appointed_dict[field] = meta[field]
     exec_staff[target_role] = appointed_dict
     facs["_executive_staff"] = exec_staff
     state.facilities_json = facs
 
     if target_role == ROLE_FIRST_TEAM_MANAGER:
-        state.manager_json = engine.manager_profile(appointed_dict)
+        manager_record = engine.manager_profile(appointed_dict)
+        from app.owner_console import autonomous_staff_engine
+
+        manager_record["personality_profile"] = autonomous_staff_engine.derive_manager_personality(
+            {**appointed_dict, **manager_record}
+        )
+        manager_record["philosophy"] = meta.get("philosophy_summary") or manager_record.get("philosophy")
+        state.manager_json = manager_record
+        preferred = list(manager_record.get("preferred_formations") or [])
+        if not preferred and meta.get("preferred_formation"):
+            preferred = [str(meta["preferred_formation"])]
+        pressing_raw = (manager_record.get("personality_profile") or {}).get("pressing_philosophy")
+        mentality = (manager_record.get("personality_profile") or {}).get("preferred_tactical_philosophy") or manager_record.get(
+            "tactical_preference"
+        )
+        tactical_setup = {
+            "ratified_by_manager": True,
+            "ratified_manager_id": str(manager_record.get("manager_id") or profile.id),
+        }
+        if preferred:
+            tactical_setup["formation"] = preferred[0]
+        if pressing_raw is not None:
+            pressing = int(pressing_raw)
+            tactical_setup["pressing"] = "high" if pressing >= 75 else "low" if pressing <= 40 else "medium"
+        if mentality:
+            tactical_setup["mentality"] = str(mentality)
+        facs["_tactical_setup"] = tactical_setup
+        state.facilities_json = facs
         service._morale_shift(session, club_id, 4)
 
     # 5. Update Profile Career History and Employment Status
     career_history = list(meta.get("career_history") or [])
+    if career_history and career_history[-1].get("status") == "ongoing":
+        career_history[-1] = {
+            **career_history[-1],
+            "status": "transferred" if employed_elsewhere else "replaced",
+            "reason_for_leaving": "sold_to_another_club" if employed_elsewhere else "replaced",
+            "ended_at": now.strftime("%Y-%m-%d"),
+        }
     career_entry = {
         "club_id": club_id,
         "club_name": state.club_name or "Club",
@@ -782,6 +997,10 @@ def hire_staff_from_market(
     meta["career_history"] = career_history
     profile.metadata_json = meta
     session.flush()
+    previous_name = None
+    if existing_assignment is not None:
+        previous_name = None
+    _sync_staff_line(session, state, target_role, previous_name, profile.display_name)
 
     from app.owner_console import living_cinema_showroom
 
@@ -802,6 +1021,10 @@ def hire_staff_from_market(
         "assignment_id": new_assignment.id,
         "appointed_staff": appointed_dict,
         "total_contract_fee_fan_coin": total_contract_fee_fan_coin,
+        "buyout_fan_coin": buyout_fan_coin,
+        "platform_fee_fan_coin": int(contract_event.platform_fee)
+        + int(buyout_event.platform_fee if buyout_event is not None else 0),
+        "seller_club_id": seller_state.club_id if seller_state is not None else None,
         "currency": ledger.FAN,
         "cinematic_event": cinematic_event,
     }
@@ -887,7 +1110,7 @@ def dismiss_staff_with_free_agency(
     state.facilities_json = facs
 
     if role == ROLE_FIRST_TEAM_MANAGER:
-        state.manager_json = engine.manager_profile(engine.DEFAULT_MANAGER)
+        state.manager_json = {"name": "", "is_vacant": True, "status": "vacant", "is_appointed": False}
         service._morale_shift(session, club_id, -5)
 
     # 3. Locate ClubStaffProfile and update career history & free-agency status
@@ -937,6 +1160,8 @@ def dismiss_staff_with_free_agency(
         meta["previous_relationships"] = prev_rels
         profile.metadata_json = meta
         session.flush()
+
+    _sync_staff_line(session, state, role, staff_name, None)
 
     return {
         "status": "dismissed",
@@ -1266,6 +1491,7 @@ def resolve_external_poaching_approach(
             destination=ledger.club_account(club_id),
             currency=ledger.FAN,
             gross=Decimal(str(buyout_fan_coin)),
+            fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
             club_id=club_id,
             user_id=user_id,
             related_type="staff_poaching",
@@ -1322,8 +1548,12 @@ def resolve_external_poaching_approach(
             "retained": False,
             "released_to": rival_club,
             "role_vacated": target_role,
-            "buyout_credited_fan_coin": buyout_fan_coin,
-            "buyout_credited_gtex": buyout_fan_coin,
+            "buyout_credited_fan_coin": int(
+                Decimal(str(buyout_fan_coin)) * Decimal(10000 - ledger.TRANSFER_PLATFORM_FEE_BPS) / Decimal(10000)
+            ),
+            "buyout_credited_gtex": int(
+                Decimal(str(buyout_fan_coin)) * Decimal(10000 - ledger.TRANSFER_PLATFORM_FEE_BPS) / Decimal(10000)
+            ),
             "treasury_balance_gtex": float(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
         }
 
