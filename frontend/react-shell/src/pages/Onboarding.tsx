@@ -232,7 +232,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="gx-eyebrow text-emerald-300">
-            {wageMode ? "Staff contracts" : "Complete your 22-player squad"}
+            {wageMode ? "Staff contracts" : "Fund the squad, then keep signing"}
           </p>
           <h3 className="gx-display mt-1 text-xl font-bold uppercase text-white">
             {wageMode ? "Top up to pay salaries" : "Squad funding and top-up"}
@@ -240,7 +240,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
             {wageMode
               ? `Named staff draw a salary the moment you agree the contract. That salary comes from topped-up or earned club coins, never from the 2,500 GTX welcome grant. The gap for the contracts you have selected is ${fmt(estimatedCoinsNeeded)} GTX. Pay with KoraPay, Paystack, or a Coin Trader, then move the coins into the club. If you would rather not pay, use the default staff member for that role.`
-              : `Your club needs 22 registered players across the First Team, Reserves and Academy, including at least one goalkeeper. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: ${fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for active players at GSI 74 and under. Legends, regens, and anyone at GSI 75 or above need topped-up GTX.`}
+              : `22 registered players, including a goalkeeper, makes the club match-eligible. You can sign more than 22. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: ${fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for active players at GSI 74 and under. Legends, regens, and anyone at GSI 75 or above need topped-up GTX.`}
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend
@@ -358,8 +358,15 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
 
 function SquadStep({ clubId, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
+  const rosterQuery = useQuery({
+    queryKey: ["club-roster", clubId],
+    queryFn: async () => (await api.get(`/owner/clubs/${clubId}/roster`)).data,
+    enabled: !!clubId,
+  });
+  const roster = rosterQuery.data;
   const [unsigningId, setUnsigningId] = useState<string | null>(null);
   const [autopicking, setAutopicking] = useState(false);
+  const [continuing, setContinuing] = useState(false);
   const [tactic, setTactic] = useState("tiki_taka");
   const [formation, setFormation] = useState("4-3-3");
   const [budgetCap, setBudgetCap] = useState("0");
@@ -367,23 +374,28 @@ function SquadStep({ clubId, onDone }: any) {
   const [queue, setQueue] = useState<any[]>([]);
   const [checkingOut, setCheckingOut] = useState(false);
 
-  const allRegisteredSquad = club?.squad || [];
+  const refreshSquad = () => {
+    refetch();
+    rosterQuery.refetch();
+  };
+  const allRegisteredSquad = roster?.squad ?? club?.squad ?? [];
+  const formationStatus = roster?.formation ?? club?.formation;
   const registeredCount = Number(
-    club?.formation?.total_registered_players ?? allRegisteredSquad.length,
+    formationStatus?.total_registered_players ?? allRegisteredSquad.length,
   );
   const remainingToForm = Number(
-    club?.formation?.remaining_to_form ?? Math.max(0, 22 - registeredCount),
+    formationStatus?.remaining_to_form ?? Math.max(0, 22 - registeredCount),
   );
   const hasGk = Boolean(
-    club?.formation?.has_goalkeeper ??
-    allRegisteredSquad.some(
-      (p: any) =>
-        (p.position || "").toLowerCase().includes("goal") ||
-        (p.position || "").toLowerCase() === "gk",
-    ),
+    formationStatus?.has_goalkeeper ??
+    allRegisteredSquad.some((p: any) => {
+      const position = String(p.position || "").toLowerCase();
+      return position.includes("goal") || position === "gk" || position.startsWith("gk/") || position.startsWith("gk ");
+    }),
   );
-  const isMatchEligible = Boolean(club?.formation?.is_formed ?? (registeredCount >= 22 && hasGk));
-  const clubCash = Number(club?.economy?.cash_gtex || 0);
+  const isMatchEligible = Boolean(formationStatus?.is_formed ?? (registeredCount >= 22 && hasGk));
+  const clubCash = Number(roster?.economy?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
+  const squadCeiling = Number(roster?.maximum_squad ?? 80);
 
   const handleTacticChange = (nextTactic: string) => {
     setTactic(nextTactic);
@@ -405,8 +417,9 @@ function SquadStep({ clubId, onDone }: any) {
         player_id: p.id || p.player_ref,
       });
       const refund = data?.refunded ?? data?.refund_amount ?? p.value_coin ?? 0;
-      toast.success(`Removed ${p.name}. Refunded ${fmt(refund)} GTX to club treasury.`);
-      refetch();
+      const destination = data?.refund_destination === "wallet" ? "your wallet" : "club treasury";
+      toast.success(`Removed ${p.name}. Refunded ${fmt(refund)} GTX to ${destination}.`);
+      refreshSquad();
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -430,7 +443,7 @@ function SquadStep({ clubId, onDone }: any) {
             ? `Staff auto-picked ${count} player(s) for ${data.formation || formation} (${(data.tactic || tactic).replace(/_/g, " ")})! Remaining cash: ${fmt(data.cash)} GTX`
             : "No affordable players found within current budget."),
       );
-      refetch();
+      refreshSquad();
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -438,8 +451,20 @@ function SquadStep({ clubId, onDone }: any) {
     }
   };
 
-  const grantRemaining = Number(club?.economy?.squad_grant || 0);
-  const clubCoinsNow = Number(club?.economy?.cash_gtex || 0);
+  const handleContinue = async () => {
+    setContinuing(true);
+    try {
+      await api.post(`/owner/clubs/${clubId}/confirm-squad`);
+      onDone();
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setContinuing(false);
+    }
+  };
+
+  const grantRemaining = Number(roster?.economy?.squad_grant ?? club?.economy?.squad_grant ?? 0);
+  const clubCoinsNow = Number(roster?.economy?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
   const outsideGrant = Math.max(0, clubCoinsNow - grantRemaining);
   const queueValue = (lane: "welcome" | "paid") =>
     queue
@@ -476,10 +501,10 @@ function SquadStep({ clubId, onDone }: any) {
       }
       toast.success(`Signed ${queue.length} player(s) from your baskets.`);
       setQueue([]);
-      refetch();
+      refreshSquad();
     } catch (e) {
       toast.error(errMsg(e));
-      refetch();
+      refreshSquad();
     } finally {
       setCheckingOut(false);
     }
@@ -493,7 +518,7 @@ function SquadStep({ clubId, onDone }: any) {
       action={
         <div className="flex flex-col items-end gap-1">
           <p className="text-[10px] uppercase tracking-widest text-slate-500">Club cash</p>
-          <Coin amount={club?.economy?.cash_gtex} testid="onboarding-cash" />
+          <Coin amount={clubCash} testid="onboarding-cash" />
         </div>
       }
     >
@@ -562,7 +587,7 @@ function SquadStep({ clubId, onDone }: any) {
             <input
               type="number"
               min={22}
-              max={25}
+              max={squadCeiling}
               value={targetSquadSize}
               onChange={(e) => setTargetSquadSize(e.target.value)}
               data-testid="onboarding-autopick-size"
@@ -576,32 +601,29 @@ function SquadStep({ clubId, onDone }: any) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Chip tone={isMatchEligible ? "emerald" : "gold"} testid="onboarding-squad-count">
-            {club?.formation?.progress_label || `${registeredCount}/22 players registered`}
+            {formationStatus?.progress_label ||
+              `${registeredCount} registered · 22 to play`}
           </Chip>
           <Chip tone={hasGk ? "emerald" : "red"}>
             {hasGk ? "✓ Goalkeeper registered" : "⚠ Needs a goalkeeper"}
           </Chip>
           <span className="text-xs text-slate-400">
-            A club becomes match-eligible with 22 players (First Team, Reserves, Academy) including
-            a goalkeeper.
+            22 players, including a goalkeeper, makes the club match-eligible. Signing more than 22
+            is allowed.
           </span>
         </div>
 
         <div className="flex items-center gap-2">
           <Btn
             variant={isMatchEligible ? "ghost" : "primary"}
-            disabled={autopicking || isMatchEligible}
+            disabled={autopicking}
             onClick={handleAutopick}
             className="flex items-center gap-1.5"
             data-testid="onboarding-autopick-button"
             title="Automatically sign affordable players to complete your squad within available funds"
           >
             <Sparkles size={14} className={autopicking ? "animate-spin" : "text-amber-300"} />
-            {autopicking
-              ? "Auto-picking…"
-              : isMatchEligible
-                ? "Squad Complete ✓"
-                : "⚡ Auto-Pick within Budget"}
+            {autopicking ? "Auto-picking…" : "⚡ Auto-Pick within Budget"}
           </Btn>
         </div>
       </div>
@@ -729,16 +751,17 @@ function SquadStep({ clubId, onDone }: any) {
 
         {allRegisteredSquad.length === 0 ? (
           <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-500">
-            {isMatchEligible
-              ? "Your 22-player starter squad is already registered. Browse the transfer market below to sign additional players and strengthen your club."
-              : `No additional market signings yet (${registeredCount} of 22 players registered${hasGk ? "" : ", goalkeeper still needed"}). Use Auto-Pick or browse the transfer market below to complete your squad.`}
+            {`No players on the list yet (${registeredCount} registered, 22 needed to play${hasGk ? "" : ", goalkeeper still needed"}). Players you acquire show up here, and you can remove any of them. You can sign more than 22.`}
           </div>
         ) : (
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {allRegisteredSquad.map((p: any) => {
+              const position = String(p.position || "").toLowerCase();
               const isGk =
-                (p.position || "").toLowerCase().includes("goal") ||
-                (p.position || "").toLowerCase() === "gk";
+                position.includes("goal") ||
+                position === "gk" ||
+                position.startsWith("gk/") ||
+                position.startsWith("gk ");
               const posBadge = isGk
                 ? "bg-amber-500/20 text-amber-300 border-amber-500/40"
                 : (p.position || "").toLowerCase().includes("def")
@@ -812,7 +835,7 @@ function SquadStep({ clubId, onDone }: any) {
         <MarketTable
           clubId={clubId}
           signedRefs={allRegisteredSquad.map((p: any) => p.player_ref)}
-          onSigned={() => refetch()}
+          onSigned={() => refreshSquad()}
           clubCash={clubCash}
           queuedIds={queue.map((p) => p.player_id)}
           onQueue={toggleQueue}
@@ -824,8 +847,12 @@ function SquadStep({ clubId, onDone }: any) {
             ? "The squad stays here until you continue. Remove anyone you do not want, then hire your staff."
             : `Register ${remainingToForm} more player${remainingToForm === 1 ? "" : "s"}${hasGk ? "" : " including a goalkeeper"} before you continue.`}
         </p>
-        <Btn disabled={!isMatchEligible} onClick={onDone} data-testid="onboarding-squad-continue">
-          Squad looks right — hire staff
+        <Btn
+          disabled={!isMatchEligible || continuing}
+          onClick={handleContinue}
+          data-testid="onboarding-squad-continue"
+        >
+          {continuing ? "Saving the squad…" : "Squad looks right — hire staff"}
         </Btn>
       </div>
     </Panel>

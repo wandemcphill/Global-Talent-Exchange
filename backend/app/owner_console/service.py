@@ -34,7 +34,7 @@ LAUNCH_GRANT_GTEX = 2_500
 LAUNCH_GRANT_OWNER_LIMIT = 500
 LAUNCH_GRANT_FAN = 1_000
 MIN_SQUAD = 22
-MAX_SQUAD = 30
+MAX_SQUAD = 80
 PLATFORM_SALE_FEE_BPS = ledger.TRANSFER_PLATFORM_FEE_BPS
 SPONSOR_PLATFORM_BPS = 3000
 
@@ -331,7 +331,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
         pid = p.player_ref or p.id
         if pid not in distinct_ids:
             distinct_ids.add(pid)
-            if (p.position or "").lower().startswith("goal"):
+            if _is_goalkeeper(p.position):
                 keepers += 1
             pers = dict(p.personality_json or {}) if p.is_regen else {}
             status_val = pers.get(
@@ -356,7 +356,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
         if c.player_id not in distinct_ids:
             distinct_ids.add(c.player_id)
             p_obj = session.get(Player, c.player_id)
-            if p_obj and (p_obj.normalized_position or p_obj.position or "").lower().startswith("goal"):
+            if p_obj and _is_goalkeeper(p_obj.normalized_position or p_obj.position):
                 keepers += 1
             first_team_count += 1
 
@@ -369,7 +369,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
     for ap in academy_players:
         if ap.player_id and ap.player_id not in distinct_ids:
             distinct_ids.add(ap.player_id)
-            if (ap.position or "").lower().startswith("goal"):
+            if _is_goalkeeper(ap.position):
                 keepers += 1
             academy_count += 1
 
@@ -393,7 +393,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
         "first_team_count": first_team_count,
         "reserve_count": reserve_count,
         "academy_count": academy_count,
-        "progress_label": f"{total_registered} / {MIN_SQUAD} players",
+        "progress_label": f"{total_registered} registered · {MIN_SQUAD} to play",
     }
 
 
@@ -659,7 +659,141 @@ def _squad_position_label(player, profile=None) -> str:
         profile_primary=getattr(profile, "primary_position", None),
         profile_secondaries=getattr(profile, "secondary_positions_json", None),
     )
-    return display_codes(primary, extras)
+    label = display_codes(primary, extras)
+    return label[:32]
+
+
+def _is_goalkeeper(position: str | None) -> bool:
+    text = (position or "").strip().lower()
+    if not text:
+        return False
+    if text.startswith("goal") or text == "gk" or text.startswith("gk ") or text.startswith("gk/"):
+        return True
+    return text.split("/")[0].strip() == "gk"
+
+
+def _release_share_signing(session: Session, user_id: str, player_ref: str | None) -> str:
+    """Return one acquired unit to the market and refund the wallet that paid for it."""
+    if not player_ref:
+        return "0"
+    from app.players.token_service import PlayerTokenMarketService
+
+    result = PlayerTokenMarketService(session).release_player_acquisition(user_id=user_id, player_id=player_ref)
+    return str(result.get("refund_coin") or "0")
+
+
+def register_acquired_shares(session: Session, user_id: str, club_id: str | None = None) -> int:
+    """Put this account's acquired player units on the club squad without charging twice.
+
+    The share purchase already took the coin from the wallet. The squad row is the
+    list the owner can see and remove. Twenty-two is the match-eligibility minimum,
+    not a cap, so a longer signing list is kept up to MAX_SQUAD.
+    """
+    from app.ingestion.models import Player
+    from app.models.player_token_market import PlayerShareHolding
+    from app.models.real_player_profile import RealPlayerProfile
+
+    if club_id is None:
+        state = session.scalar(
+            select(OwnerClubState)
+            .where(OwnerClubState.owner_user_id == user_id)
+            .order_by(OwnerClubState.created_at.desc())
+        )
+        if state is None:
+            return 0
+        club_id = state.club_id
+    else:
+        require_state(session, club_id, user_id)
+
+    current = squad(session, club_id)
+    owned_refs = {p.player_ref for p in current if p.player_ref}
+    holdings = list(
+        session.scalars(
+            select(PlayerShareHolding).where(
+                PlayerShareHolding.user_id == user_id,
+                PlayerShareHolding.share_count > 0,
+            )
+        ).all()
+    )
+    added = 0
+    for holding in holdings:
+        if len(current) + added >= MAX_SQUAD:
+            break
+        player_id = holding.player_id
+        if player_id in owned_refs:
+            continue
+        rival = session.scalar(
+            select(OwnerSquadPlayer).where(
+                OwnerSquadPlayer.player_ref == player_id,
+                OwnerSquadPlayer.status.in_(("active", "listed")),
+                OwnerSquadPlayer.club_id != club_id,
+            )
+        )
+        if rival is not None:
+            continue
+        player = session.get(Player, player_id)
+        if player is None or not bool(getattr(player, "is_tradable", True)):
+            continue
+        profile = session.scalar(select(RealPlayerProfile).where(RealPlayerProfile.gtex_player_id == player.id))
+        age = 24
+        if player.date_of_birth:
+            from app.services.player_aging import age_years, aging_date_for_player
+
+            aged = age_years(player.date_of_birth, aging_date_for_player(player, session))
+            age = max(16, aged if aged is not None else 16)
+        rating = int(player.governed_gsi or player.potential or 60)
+        potential = int(player.governed_potential_gsi or player.potential or max(rating, rating + 3))
+        tier = str(player.real_player_tier or "").strip().lower()
+        is_regen = tier == "regen" or not bool(player.is_real_player)
+        paid = Decimal(str(holding.average_cost_coin or "0"))
+        signed = OwnerSquadPlayer(
+            club_id=club_id,
+            player_ref=player_id,
+            name=(player.canonical_display_name or player.full_name)[:160],
+            position=_squad_position_label(player, profile) or (player.position or "CM"),
+            age=age,
+            rating=rating,
+            potential=max(rating, potential),
+            value_coin=paid,
+            morale=72,
+            is_regen=is_regen,
+            acquired_via="share",
+        )
+        session.add(signed)
+        owned_refs.add(player_id)
+        added += 1
+    if added:
+        session.flush()
+    return added
+
+
+def squad_roster(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    """Squad list, eligibility, and treasury without the heavy club dossier."""
+    require_state(session, club_id, user_id)
+    register_acquired_shares(session, user_id, club_id)
+    return {
+        "squad": [player_dict(p, session) for p in squad(session, club_id)],
+        "formation": get_club_formation_status(session, club_id),
+        "economy": ledger.club_economy(session, club_id),
+        "minimum_squad": MIN_SQUAD,
+        "maximum_squad": MAX_SQUAD,
+    }
+
+
+def confirm_squad(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
+    """Move on from signing once 22 players, including a goalkeeper, are registered."""
+    state = require_state(session, club_id, user_id)
+    register_acquired_shares(session, user_id, club_id)
+    _advance_stage_after_squad(session, state)
+    status = get_club_formation_status(session, club_id)
+    if state.stage == "squad":
+        missing = "a goalkeeper" if not status["has_goalkeeper"] else f"{status['remaining_to_form']} more player(s)"
+        raise OwnerError(
+            "minimum_squad_size_not_met",
+            400,
+            f"Register {missing} before hiring staff. You can keep more than {MIN_SQUAD} players.",
+        )
+    return {"stage": state.stage, "squad_size": status["total_registered"], "formation": status}
 
 
 def buy_squad_player_from_club(
@@ -946,15 +1080,20 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
     )
     if target is None:
         raise OwnerError("player_not_in_squad", 404)
-    if target.acquired_via != "market":
+    if target.acquired_via not in ("market", "share"):
         raise OwnerError(
             "player_not_market_signing",
             400,
             "Starter and academy players cannot be unsigned for a refund.",
         )
 
-    refund_amount = int(target.value_coin or 0)
-    if refund_amount > 0:
+    refund_destination = "treasury"
+    if target.acquired_via == "share":
+        refund_amount = _release_share_signing(session, user_id, target.player_ref)
+        refund_destination = "wallet"
+    else:
+        refund_amount = int(target.value_coin or 0)
+    if target.acquired_via != "share" and refund_amount > 0:
         club_acct = ledger.club_account(club_id)
         related_id = target.player_ref or target.id
         # Restore exact balance classes spent on signing so squad_grant returns to
@@ -1082,7 +1221,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
     session.flush()
 
     remaining = squad(session, club_id)
-    has_keeper = any(p.position.startswith("goal") for p in remaining)
+    has_keeper = any(_is_goalkeeper(p.position) for p in remaining)
     if len(remaining) < MIN_SQUAD or not has_keeper:
         if state.stage == "manager":
             state.stage = "squad"
@@ -1091,6 +1230,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
         "released_player_id": player_id,
         "refunded": refund_amount,
         "refund_amount": refund_amount,
+        "refund_destination": refund_destination,
         "squad_size": len(remaining),
         "stage": state.stage,
         "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
@@ -1158,7 +1298,9 @@ def autopick_squad(
 
     current = squad(session, club_id)
     non_regens = [p for p in current if not p.is_regen]
-    desired_total = max(MIN_SQUAD, min(int(target_squad_size), 25)) if target_squad_size is not None else MIN_SQUAD
+    desired_total = (
+        max(MIN_SQUAD, min(int(target_squad_size), MAX_SQUAD)) if target_squad_size is not None else MIN_SQUAD
+    )
     slots_needed = min(desired_total - len(non_regens), max(0, MAX_SQUAD - len(current)))
     if slots_needed <= 0:
         return {
@@ -1312,7 +1454,7 @@ def autopick_squad(
     if (
         target_squad_size
         and len(final_squad) >= int(target_squad_size)
-        and any(p.position.startswith("goal") for p in final_squad)
+        and any(_is_goalkeeper(p.position) for p in final_squad)
     ):
         has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
         state.stage = "competition" if has_custom_manager else "manager"
@@ -1332,7 +1474,7 @@ def autopick_squad(
 
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
     players = squad(session, state.club_id)
-    if state.stage == "squad" and len(players) >= MIN_SQUAD and any(p.position.startswith("goal") for p in players):
+    if state.stage == "squad" and len(players) >= MIN_SQUAD and any(_is_goalkeeper(p.position) for p in players):
         has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
         state.stage = "competition" if has_custom_manager else "manager"
 

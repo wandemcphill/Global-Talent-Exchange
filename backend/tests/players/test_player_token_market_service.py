@@ -370,3 +370,31 @@ def test_release_account_acquisitions_returns_the_unit_and_refunds_the_coin(sess
     second = service.buy_shares(actor=fan, player_id=player.id, share_count=1)
     assert second["holding"].share_count == 1
     assert service._primary_available_shares(market) == available_before - 1
+
+
+def test_release_player_acquisition_returns_one_unit(session) -> None:
+    wallet = WalletService()
+    admin = _create_user(session, user_id="release-one-admin", role=UserRole.ADMIN)
+    fan = _create_user(session, user_id="release-one-fan")
+    player = _create_player(session, player_id="release-one-player")
+    _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
+    service = PlayerTokenMarketService(session=session, wallet_service=wallet)
+    market = service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=200,
+        share_price_coin=Decimal("0.5000"),
+        liquidity_coin=Decimal("20.0000"),
+    )
+    available_before = service._primary_available_shares(market)
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+
+    released = service.release_player_acquisition(user_id=fan.id, player_id=player.id)
+    session.refresh(market)
+
+    assert released["released"] is True
+    assert released["shares"] == 1
+    assert service._primary_available_shares(market) == available_before
+    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 0
+    balance = wallet.get_balance(session, wallet.get_user_account(session, fan, LedgerUnit.COIN))
+    assert balance == Decimal("50.0000")

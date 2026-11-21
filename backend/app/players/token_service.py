@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from contextvars import ContextVar
 from decimal import Decimal
 from hashlib import sha256
@@ -23,6 +24,7 @@ from app.players import legacy_token_service as _legacy
 from app.players.trade_context import consume_player_share_idempotency_key
 
 PlayerTokenMarketError = _legacy.PlayerTokenMarketError
+logger = logging.getLogger(__name__)
 
 _trade_reference: ContextVar[str | None] = ContextVar("player_share_trade_reference", default=None)
 _trade_market_override: ContextVar[PlayerShareMarket | None] = ContextVar(
@@ -311,7 +313,17 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
                 raise PlayerTokenMarketError(
                     "This player has no unallocated units remaining.", reason="player_supply_exhausted"
                 )
-            return super(PlayerTokenMarketService, self).buy_shares(actor=actor, player_id=player_id, share_count=1)
+            purchased = super(PlayerTokenMarketService, self).buy_shares(
+                actor=actor, player_id=player_id, share_count=1
+            )
+            try:
+                from app.owner_console.service import register_acquired_shares
+
+                with self.session.begin_nested():
+                    register_acquired_shares(self.session, actor.id)
+            except Exception:
+                logger.exception("squad registration after acquisition failed")
+            return purchased
 
         return self._run_trade_with_boundary(
             actor=actor,
@@ -447,6 +459,26 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
             "refund_total": str(refund_total),
             "releases": releases,
         }
+
+    def release_player_acquisition(self, *, user_id: str, player_id: str) -> dict[str, Any]:
+        """Return one acquired unit to the market and refund what this account paid."""
+        user = self.session.get(User, user_id)
+        if user is None:
+            raise PlayerTokenMarketError("User was not found.", reason="user_not_found")
+        holding = self.session.scalar(
+            select(PlayerShareHolding)
+            .where(
+                PlayerShareHolding.user_id == user_id,
+                PlayerShareHolding.player_id == player_id,
+                PlayerShareHolding.share_count > 0,
+            )
+            .with_for_update()
+        )
+        if holding is None:
+            return {"player_id": player_id, "shares": 0, "refund_coin": "0.0000", "released": False}
+        release = self._release_holding(user=user, holding=holding)
+        self.session.flush()
+        return {**release, "released": True}
 
     def _release_holding(self, *, user: User, holding: PlayerShareHolding) -> dict[str, Any]:
         share_count = int(holding.share_count or 0)

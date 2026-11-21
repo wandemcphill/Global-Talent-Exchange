@@ -285,6 +285,15 @@ export function PlayerDrawer({
               {p.real_player_tier && <Chip tone="gold">{label(p.real_player_tier)}</Chip>}
               {p.lifecycle_status_label && <Chip tone="emerald">{p.lifecycle_status_label}</Chip>}
               {p.height_cm && <Chip>{p.height_cm} cm</Chip>}
+              {(p.dominant_foot || p.preferred_foot) && (
+                <Chip>
+                  {String(p.dominant_foot || p.preferred_foot)
+                    .replace(/foot/i, "")
+                    .trim()
+                    .replace(/^\w/, (letter) => letter.toUpperCase())}{" "}
+                  foot
+                </Chip>
+              )}
             </div>
             {(playstyle || playerTraits.length > 0) && (
               <div

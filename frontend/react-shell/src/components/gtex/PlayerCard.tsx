@@ -23,8 +23,11 @@ export const POS: Record<string, string> = {
   "centre-forward": "CF",
 };
 
-export const posShort = (p?: string): string =>
-  p ? POS[p.toLowerCase()] || p.slice(0, 3).toUpperCase() : "-";
+export const posShort = (p?: string): string => {
+  if (!p) return "-";
+  if (p.includes("/")) return p.toUpperCase();
+  return POS[p.toLowerCase()] || (p.length <= 4 ? p.toUpperCase() : p.slice(0, 3).toUpperCase());
+};
 
 export type TierType = "standard" | "elite" | "legendary" | "regen";
 

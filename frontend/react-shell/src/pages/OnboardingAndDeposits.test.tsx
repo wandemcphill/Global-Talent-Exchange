@@ -215,7 +215,7 @@ describe("PaymentCallback and Onboarding grant/funding flows", () => {
 
     // Incomplete squad copy shows registered progress rather than claiming 22 starter players are registered.
     const basket = container.querySelector('[data-testid="squad-basket"]');
-    expect(basket?.textContent).toContain("No additional market signings yet (12 of 22 players registered, goalkeeper still needed)");
+    expect(basket?.textContent).toContain("No players on the list yet (12 registered, 22 needed to play, goalkeeper still needed)");
 
     // SquadFundingPanel falls back to Paystack when KoraPay is disabled and Paystack is enabled.
     const buyBtn = container.querySelector('[data-testid="squad-platform-buy"]') as HTMLButtonElement;

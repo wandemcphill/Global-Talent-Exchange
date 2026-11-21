@@ -350,6 +350,20 @@ def activate(club_id: str, user=Depends(get_current_user), session: Session = De
     return {"club_id": state.club_id, "stage": state.stage}
 
 
+@router.get("/clubs/{club_id}/roster")
+def club_roster(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.squad_roster, session, user.id, club_id)
+
+
+@router.post("/clubs/{club_id}/confirm-squad")
+def confirm_squad(
+    club_id: str, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    return _run(session, service.confirm_squad, session, user.id, club_id)
+
+
 @router.post("/clubs/{club_id}/sign")
 def sign(
     club_id: str, body: SignRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
