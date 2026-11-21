@@ -34,14 +34,13 @@ export function PlayerStatisticalProfileView({
   scoutReport,
 }: PlayerStatisticalProfileViewProps) {
   // Extract or synthesize attributes anchored Authoritatively to rating
-  const baseAttr = Math.max(45, Math.min(99, rating));
   const rawAttrs = player.attributes || player.stats || {};
 
   // Attribute resolver helper
-  const getAttr = (key: string, offset = 0) => {
-    if (rawAttrs[key] != null) return Number(rawAttrs[key]);
-    // Deterministic procedural attribute based on rating & position
-    return Math.max(30, Math.min(99, baseAttr + offset));
+  const getAttr = (key: string, _offset = 0): number | null => {
+    if (rawAttrs[key] == null || rawAttrs[key] === "") return null;
+    const numeric = Number(rawAttrs[key]);
+    return Number.isFinite(numeric) ? numeric : null;
   };
 
   const technical = [
@@ -71,28 +70,18 @@ export function PlayerStatisticalProfileView({
     { label: "Balance", value: getAttr("balance", 1) },
   ];
 
-  const renderAttributeBar = (label: string, val: number) => {
-    let colorClass = "text-slate-400";
-    let bgClass = "bg-slate-600";
-    if (val >= 85) {
-      colorClass = "text-emerald-400 font-black";
-      bgClass = "bg-emerald-400";
-    } else if (val >= 75) {
-      colorClass = "text-emerald-300 font-bold";
-      bgClass = "bg-emerald-500/80";
-    } else if (val >= 65) {
-      colorClass = "text-amber-300 font-medium";
-      bgClass = "bg-amber-400/80";
-    }
+  const renderAttributeBar = (label: string, val: number | null) => {
+    const color = val == null ? "#64748b" : val >= 85 ? "#34d399" : val >= 75 ? "#6ee7b7" : val >= 65 ? "#fcd34d" : "#94a3b8";
+    const width = val == null ? 0 : Math.max(0, Math.min(100, (val / 99) * 100));
 
     return (
       <div key={label} className="flex items-center justify-between text-xs py-1">
         <span className="text-slate-400 text-[11px]">{label}</span>
         <div className="flex items-center gap-2">
-          <div className="h-1.5 w-12 rounded-full bg-slate-800 overflow-hidden">
-            <div className={`h-full ${bgClass}`} style={{ width: `${Math.min(100, (val / 99) * 100)}%` }} />
+          <div className="relative h-1.5 w-12 overflow-hidden rounded-full bg-slate-800">
+            <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${width}%`, backgroundColor: color }} />
           </div>
-          <span className={`gx-mono text-xs w-6 text-right ${colorClass}`}>{val}</span>
+          <span className="gx-mono w-6 text-right text-xs" style={{ color }}>{val ?? "—"}</span>
         </div>
       </div>
     );

@@ -80,6 +80,7 @@ function Deposit({ configured, rates, mode }: any) {
   const [amount, setAmount] = useState("5000");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const [providerTouched, setProviderTouched] = useState(false);
+  const [currency, setCurrency] = useState<"gtex" | "fan">("gtex");
 
   useEffect(() => {
     if (providerTouched || !configured || configured === true) return;
@@ -91,16 +92,23 @@ function Deposit({ configured, rates, mode }: any) {
   }, [configured, providerTouched]);
 
   const rate = Number(rates?.deposit_rate || 0);
-  const coins =
-    rates?.deposit_direction === "coin_per_fiat"
-      ? Number(amount || 0) * rate
-      : Number(amount || 0) / (rate || 1);
+  const fanRate = Number(rates?.fan_coin_deposit_rate || rates?.naira_per_fan || 0);
+  const naira = Number(amount || 0);
+  const gtxCoins =
+    rates?.deposit_direction === "coin_per_fiat" ? naira * rate : naira / (rate || 1);
+  const fanCoins = fanRate > 0 ? naira / fanRate : 0;
+  const buyingFan = currency === "fan";
   const providerLabel = provider === "korapay" ? "KoraPay" : "Paystack";
   const go = async () => {
+    if (buyingFan && fanRate <= 0) {
+      toast.error("Fan Coin does not have a naira rate yet.");
+      return;
+    }
     try {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: Number(amount),
         provider,
+        currency,
         callback_url: `${window.location.origin}${publicUrl(`/payment/callback?provider=${provider}`)}`,
       });
       window.location.href = data.authorization_url;
@@ -131,6 +139,24 @@ function Deposit({ configured, rates, mode }: any) {
           </button>
         ))}
       </div>
+      <div className="mb-3 flex gap-2">
+        {(
+          [
+            ["gtex", "GTEX Coin"],
+            ["fan", "Fan Coin"],
+          ] as const
+        ).map(([item, label]) => (
+          <button
+            key={item}
+            type="button"
+            data-testid={`deposit-currency-${item}`}
+            onClick={() => setCurrency(item)}
+            className={`gx-btn flex-1 py-1 text-xs ${currency === item ? "gx-btn-primary" : "gx-btn-secondary"}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <label className="gx-label">Amount (₦)</label>
       <input
         data-testid="deposit-amount-input"
@@ -141,8 +167,11 @@ function Deposit({ configured, rates, mode }: any) {
         onChange={(e) => setAmount(e.target.value)}
       />
       <p className="mt-2 text-xs text-slate-400" data-testid="deposit-preview">
-        You receive <b className="text-white">{fmt(coins, 2)} GTX</b> at the treasury rate of ₦
-        {fmt(rate)} per GTEX Coin {mode === "live" && <Chip tone="red">Live payments</Chip>}
+        This payment buys <b className="text-white">{fmt(gtxCoins, 2)} GTX</b> at ₦{fmt(rate)} per
+        GTEX Coin, or{" "}
+        <b className="text-white">{fanRate > 0 ? `${fmt(fanCoins, 2)} FAN` : "Fan Coin once a rate is set"}</b>
+        {fanRate > 0 ? ` at ₦${fmt(fanRate, 2)} per Fan Coin` : ""}. You selected{" "}
+        {buyingFan ? "Fan Coin" : "GTEX Coin"}. {mode === "live" && <Chip tone="red">Live payments</Chip>}
       </p>
       <p className="mt-2 text-xs leading-5 text-amber-200" data-testid="deposit-trader-value">
         Buying and selling through verified coin traders guarantees more value for money. Coin
@@ -155,7 +184,7 @@ function Deposit({ configured, rates, mode }: any) {
         onClick={go}
         data-testid="deposit-button"
       >
-        Pay with {providerLabel}
+        Pay with {providerLabel} for {buyingFan ? "Fan Coin" : "GTEX Coin"}
       </Btn>
       {!configured?.[provider] && configured !== true && (
         <p className="mt-2 text-xs text-amber-300" data-testid="payment-provider-not-configured">
@@ -164,7 +193,9 @@ function Deposit({ configured, rates, mode }: any) {
         </p>
       )}
       <p className="mt-2 text-xs text-slate-500">
-        Deposits credit your wallet as "deposited" GTEX Coin after {providerLabel} verification.
+        GTEX Coin lands in your wallet as deposited coin. Fan Coin lands in your wallet and cannot be
+        withdrawn. Staff contracts are paid in Fan Coin. After {providerLabel} verifies the payment,
+        the coin you selected is credited.
       </p>
     </Panel>
   );

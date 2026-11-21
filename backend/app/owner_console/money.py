@@ -241,8 +241,17 @@ def release_payout(session: Session, ledger_event_id: str) -> LedgerEvent:
 SUPPORTED_DEPOSIT_PROVIDERS = {"paystack", "korapay"}
 
 
+def _deposit_product(reference: str | None) -> str:
+    return "fan" if str(reference or "").startswith("fan_") else "gtex"
+
+
 def paystack_init(
-    session: Session, user, amount_ngn: int, callback_url: str, provider: str = "paystack"
+    session: Session,
+    user,
+    amount_ngn: int,
+    callback_url: str,
+    provider: str = "paystack",
+    currency: str = "gtex",
 ) -> dict[str, Any]:
     from app.wallets.providers.registry import get_live_provider_adapter
 
@@ -251,7 +260,9 @@ def paystack_init(
         raise OwnerError("unsupported_deposit_provider", 400)
     if amount_ngn < 100:
         raise OwnerError("minimum_deposit_100_ngn")
-    reference = f"gtex_{uuid.uuid4().hex[:18]}"
+    product = "fan" if str(currency or "gtex").strip().lower() in {"fan", "fan_coin"} else "gtex"
+    reference = f"{product}_{uuid.uuid4().hex[:18]}"
+    product_name = "Fan Coin" if product == "fan" else "GTEX"
     try:
         adapter = get_live_provider_adapter(provider)
         checkout_session = adapter.initialize_checkout(
@@ -261,8 +272,8 @@ def paystack_init(
             customer_email=user.email,
             customer_name=user.full_name or user.username or user.email,
             callback_url=callback_url,
-            metadata={"user_id": user.id, "product": "gtex_coin", "provider": provider},
-            narration=f"GTEX {reference}",
+            metadata={"user_id": user.id, "product": f"{product}_coin", "provider": provider},
+            narration=f"{product_name} {reference}",
         )
         session.add(
             OwnerDepositIntent(
@@ -331,34 +342,50 @@ def _credit_deposit(session: Session, intent: OwnerDepositIntent, amount_kobo: i
         raise OwnerError("deposit_already_processing", 409)
     ngn = Decimal(amount_kobo) / Decimal(100)
     rates = treasury_rates(session)
-    coins = fiat_to_coin(ngn, rates["deposit_rate"], rates["deposit_direction"])
+    product = _deposit_product(intent.reference)
+    if product == "fan":
+        fan_rate = ledger.D(rates["fan_coin_deposit_rate"])
+        if fan_rate <= 0:
+            raise OwnerError("fan_deposit_rate_missing", 500, "Fan Coin does not have a naira rate yet.")
+        coins = fiat_to_coin(ngn, fan_rate, "fiat_per_coin")
+        currency = ledger.FAN
+        balance_class = "non_withdrawable"
+        memo = f"Fan Coin {provider.title()} deposit NGN {ngn:,.2f}"
+    else:
+        coins = fiat_to_coin(ngn, rates["deposit_rate"], rates["deposit_direction"])
+        currency = ledger.GTEX
+        balance_class = "deposited"
+        memo = f"GTEX {provider.title()} deposit NGN {ngn:,.2f}"
+        rate_value = Decimal(str(rates["deposit_rate"]))
+        rate_direction = rates["deposit_direction"]
     event = ledger.record(
         session,
         event_type="deposit",
         source=f"platform:{provider}",
         destination=ledger.user_account(intent.user_id),
-        currency=ledger.GTEX,
+        currency=currency,
         gross=coins,
-        balance_class="deposited",
+        balance_class=balance_class,
         user_id=intent.user_id,
         related_type=provider,
         related_id=intent.reference,
-        memo=f"GTEX {provider.title()} deposit NGN {ngn:,.2f}",
+        memo=memo,
         wallet_idempotency_key=_deposit_wallet_key(provider, intent.reference),
     )
     intent.status = "credited"
     intent.ledger_event_id = event.id
     intent.credited_amount_kobo = amount_kobo
     session.flush()
-    from app.services.first_deposit_referral_service import FirstDepositReferralService
+    if product == "gtex":
+        from app.services.first_deposit_referral_service import FirstDepositReferralService
 
-    FirstDepositReferralService(session).on_owner_deposit_credited(
-        intent,
-        fiat_amount=ngn,
-        rate_value=Decimal(str(rates["deposit_rate"])),
-        rate_direction=rates["deposit_direction"],
-        wallet_credit=coins,
-    )
+        FirstDepositReferralService(session).on_owner_deposit_credited(
+            intent,
+            fiat_amount=ngn,
+            rate_value=rate_value,
+            rate_direction=rate_direction,
+            wallet_credit=coins,
+        )
     return event
 
 
@@ -747,7 +774,85 @@ def buy_fan_coin(session: Session, user_id: str, gtex_amount) -> dict[str, Any]:
         user_id=user_id,
         memo="Fan Coin (non-withdrawable)",
     )
-    return {"fan_coin": str(gtex_amount * FAN_COIN_PER_GTEX)}
+    fan_out = ledger.D(gtex_amount * FAN_COIN_PER_GTEX)
+    return {
+        "fan_coin": str(fan_out),
+        "gtex_spent": str(gtex_amount),
+        "fan_coin_per_gtex": str(FAN_COIN_PER_GTEX),
+        "destination": "wallet",
+    }
+
+
+def convert_club_gtex_to_fan(session: Session, user_id: str, club_id: str, gtex_amount) -> dict[str, Any]:
+    """Turn deposited or earned club GTEX into club Fan Coin.
+
+    The welcome squad grant stays reserved for player signings. Fan Coin lands
+    on the club and can pay a staff contract. It is not withdrawable.
+    """
+    require_state(session, club_id, user_id)
+    gtex_amount = ledger.D(gtex_amount)
+    if gtex_amount <= 0:
+        raise OwnerError("invalid_amount", 400)
+    funding = ledger.get_club_funding(session, club_id)
+    pools = (
+        ("deposited", ledger.D(funding["available_deposited"])),
+        ("earned", ledger.D(funding["available_earned"])),
+    )
+    spendable = pools[0][1] + pools[1][1]
+    if spendable < gtex_amount:
+        raise OwnerError(
+            "fan_conversion_needs_spendable_coin",
+            402,
+            "Only deposited and earned club coins convert to Fan Coin. The welcome squad grant stays for player signings.",
+        )
+    remaining = gtex_amount
+    for balance_class, available in pools:
+        if remaining <= 0:
+            break
+        portion = min(available, remaining)
+        if portion <= 0:
+            continue
+        try:
+            ledger.record(
+                session,
+                event_type="fan_coin_purchase",
+                source=ledger.club_account(club_id),
+                destination=ledger.GIFT_CONVERSION_BRIDGE,
+                currency=ledger.GTEX,
+                gross=portion,
+                balance_class=balance_class,
+                club_id=club_id,
+                user_id=user_id,
+                memo="Club GTEX Coin converted to Fan Coin",
+            )
+        except ledger.LedgerError as exc:
+            raise OwnerError(str(exc), 402) from exc
+        remaining -= portion
+    if remaining > 0:
+        raise OwnerError(
+            "fan_conversion_needs_spendable_coin",
+            402,
+            "The club treasury could not convert that much GTEX Coin.",
+        )
+    fan_out = ledger.D(gtex_amount * FAN_COIN_PER_GTEX)
+    ledger.record(
+        session,
+        event_type="fan_coin_purchase",
+        source=ledger.PLATFORM_GRANTS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.FAN,
+        gross=fan_out,
+        balance_class="non_withdrawable",
+        club_id=club_id,
+        user_id=user_id,
+        memo="Fan Coin from club GTEX conversion (non-withdrawable)",
+    )
+    return {
+        "fan_coin": str(fan_out),
+        "gtex_spent": str(gtex_amount),
+        "fan_coin_per_gtex": str(FAN_COIN_PER_GTEX),
+        "destination": "club",
+    }
 
 
 def send_gift(

@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from typing import Any
 
-from sqlalchemy import Integer, String, and_, case, cast, distinct, func, literal, or_, select
+from sqlalchemy import Integer, String, and_, case, cast, distinct, exists, func, literal, or_, select
 from sqlalchemy.orm import Session
 
 from app.ingestion.models import Country, Player
@@ -73,6 +73,34 @@ REAL_PLAYER_POSITION_SEARCH_TERMS: dict[str, frozenset[str]] = {
         {"st", "striker", "centre-forward", "center-forward", "centre forward", "center forward", "cf", "forward"}
     ),
 }
+
+# Words a scout types that are not already stored on the player row.
+_POSITION_SEARCH_WORDS: dict[str, tuple[str, ...]] = {
+    "winger": ("rw", "lw", "rm", "lm"),
+    "striker": ("st",),
+    "forward": ("st", "rw", "lw"),
+    "attacker": ("st", "rw", "lw"),
+    "midfielder": ("cm", "dm", "am", "rm", "lm"),
+    "midfield": ("cm", "dm", "am", "rm", "lm"),
+    "defender": ("cb", "lb", "rb", "lwb", "rwb"),
+    "goalkeeper": ("gk",),
+    "keeper": ("gk",),
+}
+
+
+def _scale_attribute(value: float, *, fm_scale: bool) -> int:
+    """Turn a stored attribute into the 1-99 scale the card bar expects.
+
+    A 0-1 ratio means a percentage. A whole set at or below 20 is the Football
+    Manager scale. A lone number already on the 1-99 scale stays there, so a
+    pace of 15 is not turned into 75.
+    """
+    scaled = float(value)
+    if 0 < scaled <= 1:
+        scaled *= 100
+    elif fm_scale and scaled <= 20:
+        scaled *= 5
+    return max(1, min(99, int(round(scaled))))
 
 
 def _displayed_position(player: Player, profile: RealPlayerProfile | None) -> str:
@@ -165,6 +193,9 @@ class RealPlayerUniverseQueryService:
         max_age: int | None = None,
         min_value: float | None = None,
         max_value: float | None = None,
+        min_height: int | None = None,
+        max_height: int | None = None,
+        foot: str | None = None,
         availability: str | None = None,
         search: str | None = None,
         sort: str = "current_value",
@@ -181,6 +212,9 @@ class RealPlayerUniverseQueryService:
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            min_height=min_height,
+            max_height=max_height,
+            foot=foot,
             availability=normalized_availability,
             search=search,
             sort=sort,
@@ -197,6 +231,9 @@ class RealPlayerUniverseQueryService:
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            min_height=min_height,
+            max_height=max_height,
+            foot=foot,
             availability=normalized_availability,
             sort=sort,
         )
@@ -209,6 +246,9 @@ class RealPlayerUniverseQueryService:
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            min_height=min_height,
+            max_height=max_height,
+            foot=foot,
             availability=normalized_availability,
             search=search,
         )
@@ -221,6 +261,9 @@ class RealPlayerUniverseQueryService:
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            min_height=min_height,
+            max_height=max_height,
+            foot=foot,
             availability=normalized_availability,
             search=search,
         )
@@ -418,10 +461,21 @@ class RealPlayerUniverseQueryService:
         max_age: int | None,
         min_value: float | None,
         max_value: float | None,
+        min_height: int | None = None,
+        max_height: int | None = None,
+        foot: str | None = None,
         availability: str | None,
         search: str | None,
     ) -> int:
-        needs_profile = bool(position or club)
+        needs_profile = bool(
+            position
+            or club
+            or min_height is not None
+            or max_height is not None
+            or foot
+            or min_age is not None
+            or max_age is not None
+        )
         needs_country = bool(nationality)
         needs_summary = bool(min_value is not None or max_value is not None)
 
@@ -449,33 +503,9 @@ class RealPlayerUniverseQueryService:
                 stmt = stmt.where(self._age_expr() >= min_age)
             if max_age is not None:
                 stmt = stmt.where(self._age_expr() <= max_age)
-            if search:
-                cleaned = search.strip()
-                tokens = [t.lower() for t in cleaned.split() if t]
-                bind = self.session.get_bind()
-                dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
-                if dialect_name == "postgresql":
-                    token_conditions = []
-                    for t in tokens:
-                        term = f"%{t}%"
-                        token_conditions.append(
-                            or_(
-                                func.f_unaccent(Player.full_name).ilike(term),
-                                func.f_unaccent(Player.canonical_display_name).ilike(term),
-                            )
-                        )
-                    stmt = stmt.where(and_(*token_conditions))
-                else:
-                    token_conditions = []
-                    for t in tokens:
-                        term = f"%{t}%"
-                        token_conditions.append(
-                            or_(
-                                Player.full_name.ilike(term),
-                                Player.canonical_display_name.ilike(term),
-                            )
-                        )
-                    stmt = stmt.where(and_(*token_conditions))
+            search_clause = self._search_clause(search)
+            if search_clause is not None:
+                stmt = stmt.where(search_clause)
             return int(self.session.scalar(stmt) or 0)
 
         # Fallback for queries with profile/country/summary join requirements
@@ -488,6 +518,9 @@ class RealPlayerUniverseQueryService:
             max_age=max_age,
             min_value=min_value,
             max_value=max_value,
+            min_height=min_height,
+            max_height=max_height,
+            foot=foot,
             availability=availability,
             search=search,
         )
@@ -505,6 +538,9 @@ class RealPlayerUniverseQueryService:
         max_age: int | None,
         min_value: float | None,
         max_value: float | None,
+        min_height: int | None = None,
+        max_height: int | None = None,
+        foot: str | None = None,
         availability: str | None,
         search: str | None,
     ):
@@ -518,13 +554,21 @@ class RealPlayerUniverseQueryService:
             elif pos_raw in {"defender", "def", "df"}:
                 pos_codes = {"CB", "LB", "RB", "LWB", "RWB"}
             elif pos_raw in {"midfielder", "mid", "mf"}:
-                pos_codes = {"DM", "CM", "AM"}
+                pos_codes = {"DM", "CM", "AM", "LM", "RM"}
             elif pos_raw in {"forward", "fwd", "fw", "attacker"}:
                 pos_codes = {"ST", "LW", "RW"}
             if pos_codes:
                 pos_clauses = [self._lower_trimmed_expr(self._position_expr()) == pos_raw]
                 for code in pos_codes:
-                    pos_clauses.append(self._lower_trimmed_expr(self._position_expr()) == code.lower())
+                    lowered = code.lower()
+                    pos_clauses.append(self._lower_trimmed_expr(self._position_expr()) == lowered)
+                    for column in (
+                        self._position_expr(),
+                        Player.position,
+                        cast(Player.secondary_positions_json, String),
+                        cast(RealPlayerProfile.secondary_positions_json, String),
+                    ):
+                        pos_clauses.append(self._position_code_match(column, lowered))
                     for st in REAL_PLAYER_POSITION_SEARCH_TERMS.get(code, frozenset()):
                         pos_clauses.append(self._lower_trimmed_expr(self._position_expr()) == st)
                 pos_clauses.append(
@@ -564,42 +608,100 @@ class RealPlayerUniverseQueryService:
             statement = statement.where(self._age_expr() >= min_age)
         if max_age is not None:
             statement = statement.where(self._age_expr() <= max_age)
+        if min_height is not None:
+            statement = statement.where(self._height_expr() >= min_height)
+        if max_height is not None:
+            statement = statement.where(self._height_expr() <= max_height)
+        foot_clause = self._foot_clause(foot)
+        if foot_clause is not None:
+            statement = statement.where(foot_clause)
         if min_value is not None:
             statement = statement.where(self._current_value_expr() >= min_value)
         if max_value is not None:
             statement = statement.where(self._current_value_expr() <= max_value)
         if availability == "free_agent":
             statement = statement.where(self._free_agent_clause())
-        if search:
-            cleaned = search.strip()
-            tokens = [t.lower() for t in cleaned.split() if t]
-            bind = self.session.get_bind()
-            dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
-            if dialect_name == "postgresql":
-                token_conditions = []
-                for t in tokens:
-                    term = f"%{t}%"
-                    token_conditions.append(
-                        or_(
-                            func.f_unaccent(Player.full_name).ilike(term),
-                            func.f_unaccent(Player.canonical_display_name).ilike(term),
-                        )
-                    )
-                statement = statement.where(and_(*token_conditions))
-            else:
-                token_conditions = []
-                for t in tokens:
-                    term = f"%{t}%"
-                    token_conditions.append(
-                        or_(
-                            Player.full_name.ilike(term),
-                            Player.canonical_display_name.ilike(term),
-                            RealPlayerProfile.canonical_name.ilike(term),
-                            cast(RealPlayerProfile.known_aliases_json, String).ilike(term),
-                        )
-                    )
-                statement = statement.where(and_(*token_conditions))
+        search_clause = self._search_clause(search)
+        if search_clause is not None:
+            statement = statement.where(search_clause)
         return statement
+
+    def _search_clause(self, search: str | None):
+        tokens = [token.lower() for token in (search or "").split() if len(token.strip()) >= 2]
+        if not tokens:
+            return None
+        return and_(*(self._search_token_clause(token) for token in tokens))
+
+    def _search_token_clause(self, token: str):
+        term = f"%{token}%"
+        postgres = self._is_postgresql()
+        codes = _POSITION_SEARCH_WORDS.get(token, ())
+
+        def matches(column):
+            folded = func.coalesce(column, "")
+            if postgres:
+                folded = func.f_unaccent(folded)
+            return folded.ilike(term)
+
+        def matches_codes(column):
+            return or_(*(self._position_code_match(column, code) for code in codes)) if codes else literal(False)
+
+        profile_match = exists(
+            select(RealPlayerProfile.id)
+            .where(
+                RealPlayerProfile.gtex_player_id == Player.id,
+                or_(
+                    matches(RealPlayerProfile.canonical_name),
+                    matches(cast(RealPlayerProfile.known_aliases_json, String)),
+                    matches(RealPlayerProfile.nationality),
+                    matches(RealPlayerProfile.current_club_name),
+                    matches(RealPlayerProfile.primary_position),
+                    matches_codes(RealPlayerProfile.primary_position),
+                    matches(cast(RealPlayerProfile.secondary_positions_json, String)),
+                    matches_codes(cast(RealPlayerProfile.secondary_positions_json, String)),
+                ),
+            )
+            .correlate(Player)
+        )
+        country_match = exists(
+            select(Country.id)
+            .where(
+                Country.id == Player.country_id,
+                matches(Country.name),
+            )
+            .correlate(Player)
+        )
+        return or_(
+            matches(Player.full_name),
+            matches(Player.canonical_display_name),
+            matches(Player.real_world_club_name),
+            matches(Player.position),
+            matches_codes(Player.position),
+            matches(Player.normalized_position),
+            matches_codes(Player.normalized_position),
+            profile_match,
+            country_match,
+        )
+
+    def _position_code_match(self, column, code: str):
+        """Match a role code as its own token, not as letters inside another word."""
+        folded = func.lower(func.coalesce(column, ""))
+        return or_(
+            folded == code,
+            folded.like(f"{code} %"),
+            folded.like(f"{code}/%"),
+            folded.like(f"% {code}"),
+            folded.like(f"%/{code}"),
+            folded.like(f"% {code} %"),
+            folded.like(f"%/{code}/%"),
+            folded.like(f"% {code}/%"),
+            folded.like(f"%/{code} %"),
+            folded.like(f'%"{code}"%'),
+        )
+
+    def _is_postgresql(self) -> bool:
+        bind = self.session.get_bind()
+        return getattr(getattr(bind, "dialect", None), "name", "") == "postgresql"
 
     def _apply_match_prefilters(
         self,
@@ -751,6 +853,8 @@ class RealPlayerUniverseQueryService:
             current_market_reference_value=prof_mkt_val or player.current_market_reference_value,
             market_reference_currency=prof_mkt_cur or player.market_reference_currency,
             image_url=self._profile_image_url(profile, player),
+            height_cm=(profile.height_cm if profile is not None else None) or player.height_cm,
+            dominant_foot=(profile.dominant_foot if profile is not None else None) or player.preferred_foot,
             source_name=str(prof_src or player.source_provider or "gtex"),
             source_last_refreshed_at=prof_ref or player.source_last_refreshed_at,
             is_verified_real_player=is_ver if not is_regen else False,
@@ -785,10 +889,14 @@ class RealPlayerUniverseQueryService:
                 raw_attrs = profile.normalized_signals_json
 
         if isinstance(raw_attrs, dict):
-            for k, v in raw_attrs.items():
-                if isinstance(v, (int, float)):
-                    val = min(99, max(1, int(float(v) * 5))) if float(v) <= 20 else min(99, max(1, int(float(v))))
-                    football_attributes[str(k).lower()] = val
+            numeric = {
+                str(k).lower(): float(v)
+                for k, v in raw_attrs.items()
+                if isinstance(v, (int, float)) and float(v) > 0
+            }
+            fm_scale = bool(numeric) and max(numeric.values()) <= 20 and max(numeric.values()) > 1
+            for key, raw in numeric.items():
+                football_attributes[key] = _scale_attribute(raw, fm_scale=fm_scale)
 
         profile_signals = dict(profile.normalized_signals_json or {}) if profile is not None else {}
         raw_signals = football_attributes if football_attributes else profile_signals
@@ -974,6 +1082,9 @@ class RealPlayerUniverseQueryService:
         max_age: int | None,
         min_value: float | None,
         max_value: float | None,
+        min_height: int | None = None,
+        max_height: int | None = None,
+        foot: str | None = None,
         availability: str | None,
         sort: str,
     ) -> None:
@@ -993,6 +1104,14 @@ class RealPlayerUniverseQueryService:
             raise RealPlayerUniverseValidationError("max_value cannot be negative")
         if min_value is not None and max_value is not None and min_value > max_value:
             raise RealPlayerUniverseValidationError("min_value cannot exceed max_value")
+        if min_height is not None and min_height < 0:
+            raise RealPlayerUniverseValidationError("min_height cannot be negative")
+        if max_height is not None and max_height < 0:
+            raise RealPlayerUniverseValidationError("max_height cannot be negative")
+        if min_height is not None and max_height is not None and min_height > max_height:
+            raise RealPlayerUniverseValidationError("min_height cannot exceed max_height")
+        if foot is not None and self._foot_clause(foot) is None:
+            raise RealPlayerUniverseValidationError("foot must be one of: left, right, both")
         if availability is not None and availability not in REAL_PLAYER_DISCOVERY_AVAILABILITY:
             raise RealPlayerUniverseValidationError("availability must be one of: free_agent")
         if sort not in REAL_PLAYER_DISCOVERY_SORTS:
@@ -1020,6 +1139,9 @@ class RealPlayerUniverseQueryService:
         max_age: int | None,
         min_value: float | None,
         max_value: float | None,
+        min_height: int | None = None,
+        max_height: int | None = None,
+        foot: str | None = None,
         availability: str | None,
         search: str | None,
         sort: str,
@@ -1032,6 +1154,9 @@ class RealPlayerUniverseQueryService:
             "max_age": max_age,
             "min_value": min_value,
             "max_value": max_value,
+            "min_height": min_height,
+            "max_height": max_height,
+            "foot": self._clean_filter_value(foot),
             "availability": availability,
             "search": self._clean_filter_value(search),
             "sort": sort,
@@ -1734,6 +1859,21 @@ class RealPlayerUniverseQueryService:
 
     def _height_expr(self):
         return func.coalesce(RealPlayerProfile.height_cm, Player.height_cm)
+
+    def _foot_clause(self, foot: str | None):
+        cleaned = (foot or "").strip().lower()
+        if not cleaned:
+            return None
+        recorded = func.lower(
+            func.trim(func.coalesce(RealPlayerProfile.dominant_foot, Player.preferred_foot, ""))
+        )
+        if cleaned in {"left", "l"}:
+            return recorded.in_(("left", "l", "both", "either"))
+        if cleaned in {"right", "r"}:
+            return recorded.in_(("right", "r", "both", "either"))
+        if cleaned in {"both", "either"}:
+            return recorded.in_(("both", "either"))
+        return None
 
     def _age_expr(self):
         from app.services.player_aging import HUMAN_TIERS, LEGEND_SOURCES, LEGEND_TIERS, REGEN_SOURCES, world_date

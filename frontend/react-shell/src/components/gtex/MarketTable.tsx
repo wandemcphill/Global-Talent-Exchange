@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ArrowUpDown, Crown, DollarSign, Search, Sparkles } from "lucide-react";
@@ -45,6 +45,11 @@ async function fetchPage(
   tier: string,
   q: string,
   nationality: string,
+  minAge: string,
+  maxAge: string,
+  foot: string,
+  minHeight: string,
+  maxHeight: string,
   cursor?: string,
 ) {
   const params: any = { limit: 48 };
@@ -52,6 +57,11 @@ async function fetchPage(
   if (tier) params.tier = tier;
   if (nationality) params.nationality = nationality;
   if (q) params.search = q;
+  if (minAge) params.min_age = Number(minAge);
+  if (maxAge) params.max_age = Number(maxAge);
+  if (foot) params.foot = foot;
+  if (minHeight) params.min_height = Number(minHeight);
+  if (maxHeight) params.max_height = Number(maxHeight);
   if (cursor) params.cursor = cursor;
   const page = (await api.get("/v2/players", { params })).data;
   const ids = (page.players || []).map((p: any) => p.player_id).join(",");
@@ -79,6 +89,11 @@ export function MarketTable({
   const [nationQuery, setNationQuery] = useState("");
   const [search, setSearch] = useState("");
   const [q, setQ] = useState("");
+  const [minAge, setMinAge] = useState("");
+  const [maxAge, setMaxAge] = useState("");
+  const [foot, setFoot] = useState("");
+  const [minHeight, setMinHeight] = useState("");
+  const [maxHeight, setMaxHeight] = useState("");
   const [maxPrice, setMaxPrice] = useState<number>(0);
   const [sortBy, setSortBy] = useState<string>("default");
   const [busy, setBusy] = useState<string | null>(null);
@@ -88,11 +103,24 @@ export function MarketTable({
   const marketView = getModuleView("market");
   const queueMode = typeof onQueue === "function";
 
+  useEffect(() => {
+    const handle = window.setTimeout(() => setQ(search.trim()), 280);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+
+  useEffect(() => {
+    const handle = window.setTimeout(() => setNationQuery(nation.trim()), 280);
+    return () => window.clearTimeout(handle);
+  }, [nation]);
+
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["market", position, tier, q, nationQuery],
-    queryFn: ({ pageParam }: any) => fetchPage(position, tier, q, nationQuery, pageParam),
+    queryKey: ["market", position, tier, q, nationQuery, minAge, maxAge, foot, minHeight, maxHeight],
+    queryFn: ({ pageParam }: any) =>
+      fetchPage(position, tier, q, nationQuery, minAge, maxAge, foot, minHeight, maxHeight, pageParam),
     initialPageParam: undefined,
     getNextPageParam: (last: any) => (last.has_more ? last.next_cursor : undefined),
+    refetchOnMount: "always",
+    refetchOnWindowFocus: true,
   } as any);
 
   const pages: any[] = (data as any)?.pages || [];
@@ -152,7 +180,7 @@ export function MarketTable({
           <input
             data-testid="market-search-input"
             className="gx-input pl-9"
-            placeholder="Search players or icons, e.g. Osimhen, Maradona, Messi"
+            placeholder="Name, club, nation, or position"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -216,6 +244,65 @@ export function MarketTable({
       </div>
 
       {/* Secondary Bar: Price Filter & Sort Controls */}
+      <div className="flex flex-wrap items-end gap-3 rounded-sm border border-white/10 bg-slate-950/40 p-3">
+        <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Age
+          <span className="flex items-center gap-1">
+            <input
+              data-testid="market-min-age"
+              className="gx-input w-16 py-1 text-xs"
+              inputMode="numeric"
+              placeholder="Min"
+              value={minAge}
+              onChange={(event) => setMinAge(event.target.value.replace(/\D/g, "").slice(0, 2))}
+            />
+            <input
+              data-testid="market-max-age"
+              className="gx-input w-16 py-1 text-xs"
+              inputMode="numeric"
+              placeholder="Max"
+              value={maxAge}
+              onChange={(event) => setMaxAge(event.target.value.replace(/\D/g, "").slice(0, 2))}
+            />
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Foot
+          <select
+            data-testid="market-foot"
+            className="gx-input py-1 text-xs"
+            value={foot}
+            onChange={(event) => setFoot(event.target.value)}
+          >
+            <option value="">Any</option>
+            <option value="left">Left</option>
+            <option value="right">Right</option>
+            <option value="both">Both</option>
+          </select>
+        </label>
+        <label className="flex flex-col gap-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          Height cm
+          <span className="flex items-center gap-1">
+            <input
+              data-testid="market-min-height"
+              className="gx-input w-16 py-1 text-xs"
+              inputMode="numeric"
+              placeholder="Min"
+              value={minHeight}
+              onChange={(event) => setMinHeight(event.target.value.replace(/\D/g, "").slice(0, 3))}
+            />
+            <input
+              data-testid="market-max-height"
+              className="gx-input w-16 py-1 text-xs"
+              inputMode="numeric"
+              placeholder="Max"
+              value={maxHeight}
+              onChange={(event) => setMaxHeight(event.target.value.replace(/\D/g, "").slice(0, 3))}
+            />
+          </span>
+        </label>
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/40 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <span className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wider text-slate-400">
@@ -323,7 +410,7 @@ export function MarketTable({
           body={
             maxPrice > 0
               ? "Try selecting 'All Prices' or increasing your price filter."
-              : "Try another name, tier, or position."
+              : "Search a surname, a club, a nation, or a position such as winger."
           }
         />
       ) : marketView === "table" ? (
@@ -364,6 +451,8 @@ export function MarketTable({
                 rating={rating ?? undefined}
                 position={p.position}
                 age={p.age}
+                heightCm={p.height_cm}
+                foot={p.dominant_foot || p.preferred_foot}
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}

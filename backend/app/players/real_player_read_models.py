@@ -32,6 +32,8 @@ class RealPlayerUniverseListItem:
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool
     updated_at: datetime
+    height_cm: int | None = None
+    dominant_foot: str | None = None
     playstyle: str | None = None
     traits: tuple[str, ...] = ()
     skills: tuple[str, ...] = ()

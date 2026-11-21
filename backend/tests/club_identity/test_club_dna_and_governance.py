@@ -298,3 +298,19 @@ def test_squad_dna_recommendations(session: Session, test_club: ClubProfile) -> 
     assert recs["academy_promotion_quota"] == 4
     assert any("FRA" in d for d in recs["scouting_directives"])
     assert any("showcase" in d.lower() for d in recs["tactical_directives"])
+
+
+def test_balanced_charter_is_not_overridden_by_a_sustainable_secondary(
+    session: Session, test_club: ClubProfile
+) -> None:
+    service = ClubGovernancePolicyService(session)
+    service.update_policy(
+        test_club.id,
+        {
+            "primary_philosophy": "balanced",
+            "secondary_philosophies": ["financially_sustainable"],
+        },
+    )
+    recs = service.generate_squad_dna_recommendations(test_club.id)
+    assert recs["recommended_mentality"] == "Balanced Tactical Control"
+    assert recs["target_u21_minutes_share_pct"] == 25

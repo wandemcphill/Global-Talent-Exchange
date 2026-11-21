@@ -223,7 +223,12 @@ describe("PaymentCallback and Onboarding grant/funding flows", () => {
 
     mockApiPost.mockResolvedValueOnce({ data: { authorization_url: "" } });
     const amountInput = container.querySelector('[data-testid="squad-platform-amount"]') as HTMLInputElement;
-    expect(Number(amountInput.value)).toBeGreaterThanOrEqual(100);
+    expect(amountInput.value).toBe("");
+    const valueSetter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    await act(async () => {
+      valueSetter?.call(amountInput, "5000");
+      amountInput.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await act(async () => {
       buyBtn.click();
     });

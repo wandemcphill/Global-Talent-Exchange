@@ -32,6 +32,8 @@ class RealPlayerUniverseListItemView(BaseModel):
     current_market_reference_value: float | None
     market_reference_currency: str | None
     image_url: str | None
+    height_cm: int | None = None
+    dominant_foot: str | None = None
     source_name: str
     source_last_refreshed_at: datetime | None
     is_verified_real_player: bool

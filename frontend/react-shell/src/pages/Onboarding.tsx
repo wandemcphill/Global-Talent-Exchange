@@ -74,6 +74,38 @@ function Stepper({ index }: any) {
   );
 }
 
+function useOnboardingMoney(clubId?: string) {
+  const query = useQuery({
+    queryKey: ["club-squad-funding-finance"],
+    queryFn: async () => (await api.get("/owner/finance")).data,
+    enabled: !!clubId,
+  });
+  const row = (query.data?.clubs || []).find((item: any) => item.club_id === clubId);
+  const numberOrNull = (value: unknown) => (value == null || value === "" ? null : Number(value));
+  return {
+    ready: Boolean(row),
+    loading: query.isLoading,
+    wallet: numberOrNull(query.data?.wallet?.gtex_total),
+    fan: numberOrNull(query.data?.wallet?.fan_total),
+    cash: numberOrNull(row?.cash_gtex),
+    deposited: numberOrNull(row?.deposited),
+    grant: numberOrNull(row?.squad_grant),
+    earned: numberOrNull(row?.earned),
+    clubFan: numberOrNull(row?.gifts_fan_coin),
+    nairaPerFan: Number(query.data?.naira_per_fan || query.data?.treasury_rates?.fan_coin_deposit_rate || 0),
+    fanPerGtex: Number(query.data?.fan_coin_per_gtex || 0),
+    refetch: query.refetch,
+  };
+}
+
+function moneyText(value: number | null) {
+  return value == null ? "…" : `${fmt(value)} GTX`;
+}
+
+function fanText(value: number | null) {
+  return value == null ? "…" : `${fmt(value)} FAN`;
+}
+
 function IdentityStep({ club, onboarding, onDone }: any) {
   const [busy, setBusy] = useState(false);
   const launchGrant = Number(onboarding?.launch_grant ?? 2500);
@@ -113,8 +145,10 @@ function IdentityStep({ club, onboarding, onDone }: any) {
       <p className="max-w-xl text-sm text-slate-300">
         Your club identity is registered. Activating it unlocks a{" "}
         <b className="text-white">{fmt(launchGrant)} GTX squad-signing grant</b> if you are among
-        the first {fmt(launchGrantLimit)} eligible club owners, plus 1,000 FAN for gifting. The GTX
-        grant is ring-fenced for eligible player signings.
+        the first {fmt(launchGrantLimit)} eligible club owners, plus 1,000 FAN toward staff
+        contracts and gifting. Named staff are paid in Fan Coin, and that grant may not cover
+        every role. You can convert deposited or earned GTEX, or buy more Fan Coin. The GTX grant
+        stays ring-fenced for eligible player signings.
       </p>
       <Btn
         className="mt-6"
@@ -128,15 +162,27 @@ function IdentityStep({ club, onboarding, onDone }: any) {
   );
 }
 
-function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shortfall }: any) {
+function SquadFundingPanel({
+  clubId,
+  club,
+  onClubFunded,
+  purpose = "squad",
+  shortfall,
+  registeredCount,
+}: any) {
   const queryClient = useQueryClient();
   const [coinsToMove, setCoinsToMove] = useState("");
   const [nairaAmount, setNairaAmount] = useState("");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const [providerTouched, setProviderTouched] = useState(false);
+  const [buyCurrency, setBuyCurrency] = useState<"gtex" | "fan">(purpose === "wages" ? "fan" : "gtex");
+  const [convertAmount, setConvertAmount] = useState("");
+  const [convertFrom, setConvertFrom] = useState<"club" | "wallet">("club");
+  const money = useOnboardingMoney(clubId);
   const financeQuery = useQuery({
     queryKey: ["club-squad-funding-finance"],
     queryFn: async () => (await api.get("/owner/finance")).data,
+    enabled: !!clubId,
   });
   const finance = financeQuery.data;
   useEffect(() => {
@@ -149,20 +195,35 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
   }, [finance?.payment_providers, providerTouched]);
   const rates = finance?.treasury_rates || {};
   const rate = Number(rates.deposit_rate || 0);
-  const walletCoins = Number(finance?.wallet?.gtex_total || 0);
-  const financeClub = (finance?.clubs || []).find((item: any) => item.club_id === clubId);
-  const clubCoins = Number(financeClub?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
-  const depositedCoins = Number(financeClub?.deposited ?? club?.economy?.deposited ?? 0);
-  const squadGrant = Number(financeClub?.squad_grant ?? club?.economy?.squad_grant ?? 0);
+  const filled = (primary: number | null, fallback: unknown) =>
+    primary ?? (fallback == null || fallback === "" ? null : Number(fallback));
+  const walletCoins = money.wallet ?? 0;
+  const clubCoins = filled(money.cash, club?.economy?.cash_gtex);
+  const depositedCoins = filled(money.deposited, club?.economy?.deposited);
+  const squadGrant = filled(money.grant, club?.economy?.squad_grant);
+  const earnedCoins = filled(money.earned, club?.economy?.earned);
   const registeredPlayers = Number(
-    club?.formation?.total_registered_players ?? club?.squad?.length ?? 0,
+    registeredCount ?? club?.formation?.total_registered_players ?? club?.squad?.length ?? 0,
   );
   const playersRemaining = Math.max(0, 22 - registeredPlayers);
-  const squadGap = Math.max(0, playersRemaining * 200 - clubCoins - walletCoins);
-  const estimatedCoinsNeeded = shortfall != null ? Math.max(0, Number(shortfall) || 0) : squadGap;
+  const knownTreasury = clubCoins == null ? null : clubCoins + (money.wallet ?? 0);
+  const squadGap =
+    knownTreasury == null ? null : Math.max(0, playersRemaining * 200 - knownTreasury);
+  const estimatedCoinsNeeded =
+    purpose === "wages"
+      ? shortfall == null
+        ? null
+        : Math.max(0, Number(shortfall) || 0)
+      : squadGap;
   const wageMode = purpose === "wages";
-  const suggestedNaira =
-    rate > 0
+  const fanRateForSuggestion = Number(
+    money.nairaPerFan || rates.fan_coin_deposit_rate || 0,
+  );
+  const suggestedNaira = wageMode
+    ? fanRateForSuggestion > 0 && estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0
+      ? Math.max(100, Math.ceil(estimatedCoinsNeeded * fanRateForSuggestion))
+      : ""
+    : rate > 0 && estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0
       ? Math.max(
           100,
           Math.ceil(
@@ -180,23 +241,55 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
         ? amountToPay * rate
         : amountToPay / rate
       : 0;
+  const fanRate = Number(money.nairaPerFan || rates.fan_coin_deposit_rate || 0);
+  const fanQuote = fanRate > 0 ? amountToPay / fanRate : 0;
+  const fanPerGtex = Number(money.fanPerGtex || finance?.fan_coin_per_gtex || 15);
+  const spendableClubGtx =
+    depositedCoins == null || earnedCoins == null ? null : Math.max(0, depositedCoins + earnedCoins);
   const platformReady = Boolean(finance?.payment_providers?.[provider]);
+  const buyingFan = buyCurrency === "fan";
 
   const buyFromPlatform = async () => {
     const amount = Math.trunc(amountToPay);
     if (!Number.isFinite(amount) || amount < 100) {
-      toast.error("Enter at least ₦100 to buy GTEX Coin.");
+      toast.error(buyingFan ? "Enter at least ₦100 to buy Fan Coin." : "Enter at least ₦100 to buy GTEX Coin.");
+      return;
+    }
+    if (buyingFan && fanRate <= 0) {
+      toast.error("Fan Coin does not have a naira rate yet.");
       return;
     }
     try {
       const { data } = await api.post("/owner/deposits/init", {
         amount_ngn: amount,
         provider,
+        currency: buyCurrency,
         callback_url:
           window.location.origin +
           publicUrl(`/payment/callback?return_to=%2Fonboarding&provider=${provider}`),
       });
       window.location.href = data.authorization_url;
+    } catch (error) {
+      toast.error(errMsg(error));
+    }
+  };
+
+  const convertToFan = async () => {
+    const amount = Number(convertAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Enter how much GTEX Coin to convert.");
+      return;
+    }
+    try {
+      const { data } = await api.post("/owner/fan-coin/convert", {
+        amount,
+        club_id: convertFrom === "club" ? clubId : undefined,
+      });
+      toast.success(`Converted ${fmt(amount)} GTX into ${fmt(data?.fan_coin)} FAN.`);
+      setConvertAmount("");
+      await queryClient.invalidateQueries({ queryKey: ["club-squad-funding-finance"] });
+      await queryClient.invalidateQueries({ queryKey: ["finance"] });
+      await onClubFunded?.();
     } catch (error) {
       toast.error(errMsg(error));
     }
@@ -239,8 +332,10 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           </h3>
           <p className="mt-2 max-w-3xl text-xs leading-relaxed text-slate-300">
             {wageMode
-              ? `Named staff draw a salary the moment you agree the contract. That salary comes from topped-up or earned club coins, never from the 2,500 GTX welcome grant. The gap for the contracts you have selected is ${fmt(estimatedCoinsNeeded)} GTX. Pay with KoraPay, Paystack, or a Coin Trader, then move the coins into the club. If you would rather not pay, use the default staff member for that role.`
-              : `22 registered players, including a goalkeeper, makes the club match-eligible. You can sign more than 22. At a planning average of 200 GTX per player, use the current registered squad, club treasury and wallet balances to estimate any funding gap: ${fmt(estimatedCoinsNeeded)} GTX. The first-500 campaign grant is up to 2,500 GTX and is reserved for active players at GSI 74 and under. Legends, regens, and anyone at GSI 75 or above need topped-up GTX.`}
+              ? `Named staff are paid in Fan Coin. The 1,000 FAN launch grant is a start and may not cover every role. The contracts you have selected still need ${fanText(estimatedCoinsNeeded)}. Convert deposited or earned GTEX, or buy Fan Coin. Default staff stay free, and the squad grant is not spent on salaries.`
+              : estimatedCoinsNeeded === 0
+                ? `The treasury already covers a 22-player squad at the planning rate of 200 GTX each. You do not need to buy more coins to reach that minimum. The welcome grant, ${moneyText(squadGrant)}, stays reserved for active players at GSI 74 and under. Legends, regens, and GSI 75+ spend deposited coins, currently ${moneyText(depositedCoins)}.`
+                : `22 registered players, including a goalkeeper, makes the club match-eligible. You can sign more than 22. At 200 GTX per player still needed, the treasury and wallet leave a gap of ${moneyText(estimatedCoinsNeeded)}. The welcome grant buys active players at GSI 74 and under. Legends, regens, and GSI 75+ need deposited coins.`}
           </p>
           <p className="mt-1 max-w-3xl text-[11px] text-slate-400">
             The grant is for the first 500 eligible club owners. Some premium, regen, and legend
@@ -249,13 +344,13 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
         </div>
         <div className="rounded-lg border border-emerald-500/25 bg-black/25 px-4 py-3 text-right">
           <p className="text-[10px] uppercase tracking-widest text-slate-400">Club treasury</p>
-          <p className="gx-mono text-xl font-bold text-emerald-300">{fmt(clubCoins)} GTX</p>
-          <p className="mt-1 text-[10px] text-slate-400">
-            Deposited: {fmt(depositedCoins)} GTX
-          </p>
-          <p className="text-[10px] text-slate-400">
-            Squad grant remaining: {fmt(squadGrant)} GTX
-          </p>
+          <p className="gx-mono text-xl font-bold text-emerald-300">{moneyText(clubCoins)}</p>
+          <p className="mt-1 text-[10px] text-slate-400">Deposited: {moneyText(depositedCoins)}</p>
+          <p className="text-[10px] text-slate-400">Squad grant remaining: {moneyText(squadGrant)}</p>
+          <p className="text-[10px] text-slate-400">Earned: {moneyText(earnedCoins)}</p>
+          <p className="mt-2 text-[10px] uppercase tracking-widest text-slate-400">Fan Coin</p>
+          <p className="text-[10px] text-slate-400">Wallet: {fanText(money.fan)}</p>
+          <p className="text-[10px] text-slate-400">Club: {fanText(money.clubFan)}</p>
         </div>
       </div>
 
@@ -263,8 +358,30 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
         <div className="rounded-lg border border-white/10 bg-black/20 p-4">
           <p className="gx-label text-slate-300">Option 1 · Buy from GTEX</p>
           <p className="mt-1 text-xs text-slate-400">
-            Pay through the platform. Verified payment credits your personal GTEX wallet first.
+            Pay through the platform. Choose GTEX Coin for the squad treasury, or Fan Coin for staff.
+            A verified payment credits your personal wallet.
           </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(
+              [
+                ["gtex", "GTEX Coin"],
+                ["fan", "Fan Coin"],
+              ] as const
+            ).map(([item, label]) => (
+              <button
+                key={item}
+                type="button"
+                onClick={() => setBuyCurrency(item)}
+                className={
+                  "gx-btn flex-1 py-1.5 text-xs " +
+                  (buyCurrency === item ? "gx-btn-primary" : "gx-btn-secondary")
+                }
+                data-testid={`squad-buy-currency-${item}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           <div className="mt-3 flex flex-wrap gap-2">
             {(["korapay", "paystack"] as const).map((item) => (
               <button
@@ -293,16 +410,18 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
             onChange={(event) => setNairaAmount(event.target.value)}
             data-testid="squad-platform-amount"
           />
-          <p className="mt-2 text-xs text-slate-400">
-            Estimated wallet credit: <b className="text-white">{fmt(previewCoins, 2)} GTX</b>
+          <p className="mt-2 text-xs text-slate-400" data-testid="squad-platform-quote">
+            This payment buys <b className="text-white">{fmt(previewCoins, 2)} GTX</b> or{" "}
+            <b className="text-white">{fanRate > 0 ? `${fmt(fanQuote, 2)} FAN` : "Fan Coin once a naira rate is set"}</b>.
+            You selected {buyingFan ? "Fan Coin" : "GTEX Coin"}.
           </p>
           <Btn
             className="mt-3 w-full"
-            disabled={!rate || !platformReady || financeQuery.isLoading}
+            disabled={(buyingFan ? fanRate <= 0 : !rate) || !platformReady || financeQuery.isLoading}
             onClick={buyFromPlatform}
             data-testid="squad-platform-buy"
           >
-            Buy GTX from platform
+            {buyingFan ? "Buy Fan Coin" : "Buy GTX from platform"}
           </Btn>
           {!platformReady && (
             <p className="mt-2 text-[11px] text-amber-300">
@@ -319,7 +438,7 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           </p>
           <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
             <span>Available in your wallet</span>
-            <b className="gx-mono text-white">{fmt(walletCoins)} GTX</b>
+            <b className="gx-mono text-white">{moneyText(money.wallet)}</b>
           </div>
           <label className="gx-label mt-3 block">GTX to add to club treasury</label>
           <input
@@ -341,23 +460,78 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           >
             Add coins to club treasury
           </Btn>
-          {squadGrant > 0 && (
+          {squadGrant != null && squadGrant > 0 && (
             <p className="mt-2 text-[11px] text-slate-500">
-              The grant is already in your club treasury; it cannot be withdrawn or used for
-              facilities.
+              The grant is already in your club treasury; it cannot be withdrawn, converted, or used
+              for facilities or staff.
             </p>
           )}
         </div>
       </div>
+      <div className="mt-3 rounded-lg border border-amber-500/25 bg-black/20 p-4" data-testid="fan-coin-convert">
+        <p className="gx-label text-amber-200">Convert GTEX Coin to Fan Coin</p>
+        <p className="mt-1 text-xs text-slate-400">
+          1 GTX becomes {fmt(fanPerGtex)} FAN. Club conversion spends deposited and earned coins
+          only, currently {moneyText(spendableClubGtx)}. The squad grant stays for player signings.
+          Wallet conversion spends personal GTEX. Fan Coin pays staff and is not withdrawable.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {(
+            [
+              ["club", "Club treasury"],
+              ["wallet", "Personal wallet"],
+            ] as const
+          ).map(([item, label]) => (
+            <button
+              key={item}
+              type="button"
+              onClick={() => setConvertFrom(item)}
+              className={
+                "gx-btn flex-1 py-1.5 text-xs " +
+                (convertFrom === item ? "gx-btn-primary" : "gx-btn-secondary")
+              }
+              data-testid={`fan-convert-source-${item}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <label className="gx-label mt-3 block">GTX to convert</label>
+        <input
+          className="gx-input mt-1"
+          type="number"
+          min={1}
+          step="0.01"
+          value={convertAmount}
+          onChange={(event) => setConvertAmount(event.target.value)}
+          placeholder="Enter GTX"
+          data-testid="fan-convert-amount"
+        />
+        <p className="mt-2 text-xs text-slate-400">
+          You receive <b className="text-white">{fmt((Number(convertAmount) || 0) * fanPerGtex)} FAN</b>
+          {convertFrom === "club" ? " in the club" : " in your wallet"}.
+        </p>
+        <Btn
+          className="mt-3 w-full"
+          disabled={!convertAmount || Number(convertAmount) <= 0}
+          onClick={convertToFan}
+          data-testid="fan-convert-button"
+        >
+          Convert to Fan Coin
+        </Btn>
+      </div>
       <div className="mt-4">
-        <ClubCoinTraderFundingPanel initialAmount={String(estimatedCoinsNeeded)} />
+        <ClubCoinTraderFundingPanel
+          initialAmount={estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0 ? String(estimatedCoinsNeeded) : ""}
+        />
       </div>
     </div>
   );
 }
 
-function SquadStep({ clubId, onDone }: any) {
+function SquadStep({ clubId, knownCash, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
+  const money = useOnboardingMoney(clubId);
   const rosterQuery = useQuery({
     queryKey: ["club-roster", clubId],
     queryFn: async () => (await api.get(`/owner/clubs/${clubId}/roster`)).data,
@@ -369,7 +543,7 @@ function SquadStep({ clubId, onDone }: any) {
   const [continuing, setContinuing] = useState(false);
   const [tactic, setTactic] = useState("tiki_taka");
   const [formation, setFormation] = useState("4-3-3");
-  const [budgetCap, setBudgetCap] = useState("0");
+  const [budgetCap, setBudgetCap] = useState("");
   const [targetSquadSize, setTargetSquadSize] = useState("22");
   const [queue, setQueue] = useState<any[]>([]);
   const [checkingOut, setCheckingOut] = useState(false);
@@ -377,6 +551,7 @@ function SquadStep({ clubId, onDone }: any) {
   const refreshSquad = () => {
     refetch();
     rosterQuery.refetch();
+    money.refetch();
   };
   const allRegisteredSquad = roster?.squad ?? club?.squad ?? [];
   const formationStatus = roster?.formation ?? club?.formation;
@@ -394,7 +569,9 @@ function SquadStep({ clubId, onDone }: any) {
     }),
   );
   const isMatchEligible = Boolean(formationStatus?.is_formed ?? (registeredCount >= 22 && hasGk));
-  const clubCash = Number(roster?.economy?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
+  const clubCash =
+    money.cash ??
+    (knownCash == null || knownCash === "" ? null : Number(knownCash));
   const squadCeiling = Number(roster?.maximum_squad ?? 80);
 
   const handleTacticChange = (nextTactic: string) => {
@@ -463,17 +640,16 @@ function SquadStep({ clubId, onDone }: any) {
     }
   };
 
-  const grantRemaining = Number(roster?.economy?.squad_grant ?? club?.economy?.squad_grant ?? 0);
-  const clubCoinsNow = Number(roster?.economy?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
-  const outsideGrant = Math.max(0, clubCoinsNow - grantRemaining);
+  const grantRemaining = money.grant;
+  const depositedAvailable = money.deposited;
   const queueValue = (lane: "welcome" | "paid") =>
     queue
       .filter((p) => marketLane(p) === lane)
       .reduce((sum, p) => sum + Number(p.quote?.price || 0), 0);
   const welcomeQueued = queueValue("welcome");
   const paidQueued = queueValue("paid");
-  const welcomeOver = welcomeQueued > grantRemaining + 0.001;
-  const paidOver = paidQueued > outsideGrant + 0.001;
+  const welcomeOver = grantRemaining != null && welcomeQueued > grantRemaining + 0.001;
+  const paidOver = depositedAvailable != null && paidQueued > depositedAvailable + 0.001;
   const signedWelcome = allRegisteredSquad.filter((p: any) => marketLane(p) === "welcome");
   const signedPaid = allRegisteredSquad.filter((p: any) => marketLane(p) === "paid");
   const signedValue = (rows: any[]) => rows.reduce((sum, p) => sum + Number(p.value_coin || 0), 0);
@@ -517,8 +693,18 @@ function SquadStep({ clubId, onDone }: any) {
       testid="onboarding-squad-step"
       action={
         <div className="flex flex-col items-end gap-1">
-          <p className="text-[10px] uppercase tracking-widest text-slate-500">Club cash</p>
-          <Coin amount={clubCash} testid="onboarding-cash" />
+          <p className="text-[10px] uppercase tracking-widest text-slate-500">Club treasury</p>
+          {clubCash == null ? (
+            <span className="gx-mono text-sm text-slate-400" data-testid="onboarding-cash">
+              …
+            </span>
+          ) : (
+            <Coin amount={clubCash} testid="onboarding-cash" />
+          )}
+          <p className="text-[10px] text-slate-500">
+            Deposited {moneyText(money.deposited)} · Grant {moneyText(money.grant)} · Earned{" "}
+            {moneyText(money.earned)}
+          </p>
         </div>
       }
     >
@@ -529,11 +715,12 @@ function SquadStep({ clubId, onDone }: any) {
       >
         <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
           <div>
-            <p className="gx-eyebrow text-emerald-400">Club Legacy & Recruitment Committee</p>
+            <p className="gx-eyebrow text-emerald-400">Recruitment settings</p>
             <p className="text-xs text-slate-300">
-              Set the style and budget, then auto-pick or build a basket yourself. Auto-pick stays
-              on this page so you can see every player, remove anyone, and top up before you
-              continue. Staff are hired on the next page.
+              These four controls are sent with Auto-Pick. Style sets the formation it prefers.
+              A blank budget spends the club treasury. The target is how many players Auto-Pick
+              tries to reach, and 22 is the match-eligibility minimum, not a cap. Staff are hired
+              on the next page.
             </p>
           </div>
           <Chip tone="cyan">Welcome grant buys active players at GSI 74 and under</Chip>
@@ -573,10 +760,12 @@ function SquadStep({ clubId, onDone }: any) {
             </select>
           </label>
           <label className="text-xs text-slate-400">
-            Recruitment Budget Cap (GTX)
+            Recruitment budget cap (GTX)
             <input
               type="number"
+              min={0}
               value={budgetCap}
+              placeholder="Whole treasury"
               onChange={(e) => setBudgetCap(e.target.value)}
               data-testid="onboarding-autopick-budget"
               className="mt-1 w-full rounded border border-white/15 bg-slate-900 px-2.5 py-1.5 text-xs text-white"
@@ -629,7 +818,7 @@ function SquadStep({ clubId, onDone }: any) {
       </div>
 
       {/* Low cash warning if stuck */}
-      {!isMatchEligible && clubCash < 800 && registeredCount > 0 && (
+      {!isMatchEligible && clubCash != null && clubCash < 800 && registeredCount > 0 && (
         <div className="mb-6 flex items-start gap-3 rounded border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
           <AlertTriangle size={16} className="mt-0.5 shrink-0 text-amber-400" />
           <div>
@@ -654,10 +843,13 @@ function SquadStep({ clubId, onDone }: any) {
             Welcome grant basket
           </p>
           <p className="mt-1 text-sm text-white">
-            Signed {fmt(signedValue(signedWelcome))} GTX · In basket {fmt(welcomeQueued)} GTX
+            {signedWelcome.length === 0 && welcomeQueued === 0
+              ? "No grant signings yet"
+              : `Signed ${fmt(signedValue(signedWelcome))} GTX · In basket ${fmt(welcomeQueued)} GTX`}
           </p>
           <p className="text-xs text-slate-400">
-            Grant remaining {fmt(grantRemaining)} GTX. Active players at GSI 74 and under only.
+            Grant remaining {moneyText(grantRemaining)}. This pays for active players at GSI 74 and
+            under only.
           </p>
           {welcomeOver && (
             <p className="mt-1 text-xs text-rose-300">
@@ -671,11 +863,13 @@ function SquadStep({ clubId, onDone }: any) {
         >
           <p className="text-[10px] uppercase tracking-widest text-amber-300">Paid basket</p>
           <p className="mt-1 text-sm text-white">
-            Signed {fmt(signedValue(signedPaid))} GTX · In basket {fmt(paidQueued)} GTX
+            {signedPaid.length === 0 && paidQueued === 0
+              ? "No deposited signings yet"
+              : `Signed ${fmt(signedValue(signedPaid))} GTX · In basket ${fmt(paidQueued)} GTX`}
           </p>
           <p className="text-xs text-slate-400">
-            Topped-up coins available {fmt(outsideGrant)} GTX. Legends, regens, and GSI 75+ live
-            here.
+            Deposited coins available {moneyText(depositedAvailable)}. Legends, regens, and GSI 75+
+            are paid from this, not from the grant.
           </p>
           {paidOver && (
             <p className="mt-1 text-xs text-rose-300">
@@ -822,7 +1016,12 @@ function SquadStep({ clubId, onDone }: any) {
         )}
       </div>
 
-      <SquadFundingPanel clubId={clubId} club={club} onClubFunded={refetch} />
+      <SquadFundingPanel
+        clubId={clubId}
+        club={club}
+        registeredCount={registeredCount}
+        onClubFunded={refreshSquad}
+      />
 
       {/* Transfer Market Explorer */}
       <div className="space-y-3">
@@ -859,17 +1058,10 @@ function SquadStep({ clubId, onDone }: any) {
   );
 }
 
-function seasonSalaryFromDemand(raw: number) {
+function seasonSalaryFan(raw: number) {
   const amount = Math.max(0, Math.round(Number(raw) || 0));
-  const scaled = amount >= 1000 ? Math.floor(amount / 10) : amount;
-  return Math.max(40, scaled);
-}
-
-function seasonSalaryGtx(raw: number) {
-  const amount = Math.max(0, Math.round(Number(raw) || 0));
-  const scaled = amount >= 1000 ? Math.floor(amount / 10) : amount;
-  const season = Math.max(150, scaled);
-  return Math.max(40, Math.floor((season * 35) / 100));
+  if (amount <= 0) return 0;
+  return Math.max(1, Math.floor((amount * 35) / 100));
 }
 
 const STAFF_ROLES = [
@@ -908,7 +1100,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               name: manager.display_name,
               detail: `${manager.rarity || "coach"} · ${(manager.mentality || "").replace(/_/g, " ")}`,
               blurb: manager.philosophy_summary,
-              salary: seasonSalaryGtx(
+              salary: seasonSalaryFan(
                 manager.annual_wage_fancoin || manager.recruit_price_fancoin || 3500,
               ),
               manager_id: manager.manager_id,
@@ -942,7 +1134,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               : `Rating ${candidate.rating}`,
             salary:
               candidate.expected_salary_fan_coin || candidate.expected_salary_gtex
-                ? seasonSalaryFromDemand(
+                ? seasonSalaryFan(
                     candidate.expected_salary_fan_coin || candidate.expected_salary_gtex,
                   )
                 : null,
@@ -967,7 +1159,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               blurb: candidate.bio,
               salary:
                 candidate.salary_gtx || candidate.salary
-                  ? seasonSalaryGtx(candidate.salary_gtx || candidate.salary)
+                  ? seasonSalaryFan(candidate.salary_fan_coin || candidate.salary_gtx || candidate.salary)
                   : null,
               profile_id: candidate.id || candidate.staff_id,
             });
@@ -1024,7 +1216,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               <p className="text-sm font-semibold text-white">{person.name}</p>
               <p className="text-[11px] text-slate-400">{person.detail}</p>
               <p className="text-[11px] text-emerald-300">
-                {person.salary == null ? "Wage not filed" : `Season salary ${fmt(person.salary)} GTX`}
+                {person.salary == null ? "Wage not filed" : `Season salary ${fmt(person.salary)} FAN`}
               </p>
             </div>
             <Btn
@@ -1032,7 +1224,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               onClick={() => onChoose({ ...person, use_default: false, role: role.key })}
               data-testid={`choose-staff-${person.manager_id || person.profile_id}`}
             >
-              Agree contract
+              Select
             </Btn>
           </div>
         ))}
@@ -1056,17 +1248,18 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
 
 function ManagerStep({ clubId, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
+  const money = useOnboardingMoney(clubId);
   const [choices, setChoices] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
   const salaryDue = STAFF_ROLES.reduce(
     (sum, role) => sum + Number(choices[role.key]?.salary || 0),
     0,
   );
-  const outsideGrant = Math.max(
-    0,
-    Number(club?.economy?.cash_gtex || 0) - Number(club?.economy?.squad_grant || 0),
-  );
-  const shortfall = Math.max(0, salaryDue - outsideGrant);
+  const fanAvailable =
+    money.fan == null && money.clubFan == null
+      ? null
+      : (money.fan ?? 0) + (money.clubFan ?? 0);
+  const shortfall = fanAvailable == null ? null : Math.max(0, salaryDue - fanAvailable);
   const ready = STAFF_ROLES.every((role) => choices[role.key]);
   const confirm = async () => {
     setBusy(true);
@@ -1098,9 +1291,10 @@ function ManagerStep({ clubId, onDone }: any) {
     >
       <p className="mb-4 text-sm text-slate-300">
         A club needs a first-team manager, a general manager, and a head of youth development. They
-        are not bought. They draw a salary when you agree the contract. Search the full market. If
-        the salary is more than you want to pay right now, use the default for that role and hire a
-        named person later.
+        are not bought. A named contract is paid in Fan Coin for the season. The 1,000 FAN launch
+        grant is a start and may not cover every role. Convert deposited or earned GTEX, or buy Fan
+        Coin, below. If the salary is more than you want to pay right now, use the default for that
+        role and hire a named person later.
       </p>
       <div className="mb-4 grid gap-4">
         {STAFF_ROLES.map((role) => (
@@ -1116,8 +1310,9 @@ function ManagerStep({ clubId, onDone }: any) {
         ))}
       </div>
       <p className="mb-3 text-xs text-slate-400" data-testid="staff-salary-total">
-        Season salaries selected: <b className="text-white">{fmt(salaryDue)} GTX</b>. Coins outside
-        the welcome grant: <b className="text-white">{fmt(outsideGrant)} GTX</b>.
+        Season salaries selected: <b className="text-white">{fmt(salaryDue)} FAN</b>. Fan Coin on
+        hand, wallet plus club: <b className="text-white">{fanText(fanAvailable)}</b>. Each contract
+        is paid from whichever of those balances can cover it.
       </p>
       <SquadFundingPanel
         clubId={clubId}
@@ -1145,7 +1340,7 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
     setBusyIntake(true);
     try {
       await api.post(`/owner/clubs/${clubId}/academy/intake`);
-      toast.success("Genesis academy intake scouted! New wonderkids signed.");
+      toast.success("Academy intake filed. The youth players are on the list below.");
       refetch();
     } catch (e) {
       toast.error(errMsg(e));
@@ -1154,8 +1349,15 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
     }
   };
 
-  const hoydName = club?.staff?.head_of_youth_development?.name || "";
-  const hoydRating = club?.staff?.head_of_youth_development?.rating;
+  const hoyd = club?.staff?.head_of_youth_development;
+  const hoydName = hoyd?.use_default || hoyd?.is_vacant ? "" : hoyd?.name || "";
+  const hoydRating = hoydName ? hoyd?.rating : null;
+  const potentials = regens
+    .map((player: any) => Number(player.potential))
+    .filter((value: number) => Number.isFinite(value) && value > 0);
+  const ceilingLabel = potentials.length
+    ? `${Math.min(...potentials)}–${Math.max(...potentials)} POT`
+    : "Not filed yet";
 
   return (
     <Panel
@@ -1183,9 +1385,9 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
           clubName={club?.club_name}
           facilityLevel={1}
           stats={[
-            { label: "Genesis Regens", value: `${regens.length} Prospects`, accent: "#00E676" },
-            { label: "Campus Tier", value: "Level 1 Academy", accent: "#38BDF8" },
-            { label: "Ceilings", value: "85–95 POT", accent: "#F5B83D" },
+            { label: "Youth on the list", value: `${regens.length}`, accent: "#00E676" },
+            { label: "Campus", value: "Level 1 Academy", accent: "#38BDF8" },
+            { label: "Potentials filed", value: ceilingLabel, accent: "#F5B83D" },
           ]}
         />
       </div>
@@ -1207,14 +1409,12 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
               <p className="text-[11px] text-slate-400">Youth Scouting & Development Briefing</p>
             </div>
           </div>
-          <Chip tone="cyan">HOYD Autonomy Active</Chip>
+          <Chip tone="cyan">{hoydName ? `Head of youth · ${hoydName}` : "Default youth lead"}</Chip>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-slate-300">
-          "Welcome to the training grounds, Boss. While the first-team squad was being finalized,
-          our academy scouts canvassed local regional trials and secured our inaugural class of
-          youth wonderkids. These regens are training on Pitch 3 and possess elite development
-          ceilings. With proper match exposure, coaching, and facility upgrades, they will form the
-          backbone of your dynasty."
+          {regens.length
+            ? `${regens.length} youth player${regens.length === 1 ? " is" : "s are"} on this club's academy list. Ratings, potentials and positions below are the ones filed for them. ${hoydName ? `${hoydName} is the head of youth.` : "No named head of youth is appointed, so the default lead is in the role."}`
+            : "No academy intake is filed yet. Scout the inaugural class to add youth players to this club. Their ages, positions, ratings and potentials appear on the cards after that. You can also open the club and scout later."}
         </p>
       </div>
 
@@ -1227,25 +1427,21 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
               High-potential homegrown talents signed directly to your youth roster
             </p>
           </div>
-          {regens.length === 0 && (
-            <Btn
-              variant="secondary"
-              disabled={busyIntake}
-              onClick={handleManualIntake}
-              className="flex items-center gap-1.5 text-xs"
-              data-testid="onboarding-scout-genesis-intake"
-            >
-              <Sparkles size={13} className="text-amber-300" />
-              <span>{busyIntake ? "Scouting Intake…" : "Scout Genesis Intake"}</span>
-            </Btn>
+          {regens.length > 0 && (
+            <span className="text-xs text-slate-400">{regens.length} on the youth list</span>
           )}
         </div>
 
         {regens.length === 0 ? (
           <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
-            <p>Your genesis academy class is preparing for their medicals.</p>
-            <Btn className="mt-3" disabled={busyIntake} onClick={handleManualIntake}>
-              {busyIntake ? "Generating Wonderkids…" : "Trigger Inaugural Intake"}
+            <p>No youth players are on the academy list.</p>
+            <Btn
+              className="mt-3"
+              disabled={busyIntake}
+              onClick={handleManualIntake}
+              data-testid="onboarding-scout-genesis-intake"
+            >
+              {busyIntake ? "Scouting intake…" : "Scout inaugural intake"}
             </Btn>
           </div>
         ) : (
@@ -1313,7 +1509,9 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="text-purple-300">HOYD Monitored</span>
+                    <span className="text-purple-300">
+                      {hoydName ? `Filed under ${hoydName}` : "Youth roster"}
+                    </span>
                     <span className="gx-mono text-emerald-300">
                       {p.value_coin == null ? "—" : `${fmt(p.value_coin)} GTX`}
                     </span>
@@ -1343,16 +1541,16 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                 <Chip tone="gold">Dynasty Feature</Chip>
               </div>
               <p className="mt-1 text-xs text-slate-300 leading-relaxed max-w-2xl">
-                As your senior players establish legendary status, you can pass on their genetic DNA
-                bloodlines, mental composure, and fan devotion to custom dynasty scions right here
-                in your Academy Command (<b>/app/academy</b>).
+                After you open the club, Academy has Build a Son. You name an heir from a senior
+                player's bloodline and pay the induction in GTX. A lifetime club has a fixed number
+                of sons. This page does not induct one.
               </p>
             </div>
           </div>
           <div className="shrink-0">
             <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase">Bloodlines Engine</p>
-              <p className="text-xs font-bold text-amber-300">20/20 Loyalty Guarantee</p>
+              <p className="text-[10px] text-slate-500 uppercase">Where it lives</p>
+              <p className="text-xs font-bold text-amber-300">Academy, after the club opens</p>
             </div>
           </div>
         </div>
@@ -1377,7 +1575,34 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
   );
 }
 
-function CreateFirstClub({ onDone, onCancel, another }: any) {
+const PHILOSOPHY_LABEL: Record<string, string> = {
+  youth: "Youth development",
+  academy: "Academy-first",
+  selling: "Selling club",
+  superstars: "Superstar club",
+  sustainable: "Financially sustainable",
+  balanced: "Balanced",
+};
+
+const NATIONALITY_LABEL: Record<string, string> = {
+  preferred: "Preferred domestic",
+  exclusive: "Exclusive domestic",
+  none: "Global scouting",
+};
+
+const CREST_STYLE_LABEL: Record<string, string> = {
+  traditional: "Traditional shield",
+  modern: "Modern roundel",
+  metallic: "Metallic diamond",
+};
+
+function CreateFirstClub({
+  onDone,
+  onCancel,
+  another,
+  launchGrant = 2500,
+  launchGrantLimit = 500,
+}: any) {
   const [wizardStep, setWizardStep] = useState<
     "name" | "philosophy" | "roster" | "studio" | "review"
   >("name");
@@ -1468,48 +1693,49 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
     setBusy(true);
     try {
       const slug = `${clubName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${Date.now().toString(36).slice(-4)}`;
-      const activeCrest = recommendation?.crest_concepts?.[selectedCrestIdx];
-      const homeKit = kitSet?.home;
+      const crestLibrary = buildCrestLibrary(clubName);
+      const activeCrest =
+        recommendation?.crest_concepts?.[selectedCrestIdx] ||
+        crestLibrary[preferredCrestIndex(crestLibrary, preferredStyle)];
+      const activeKit = kitSet || buildKitSet(selectedKitPresetId || KIT_PRESETS[0].id, clubName);
+      const homeKit = activeKit?.home;
 
       const primaryColor = activeCrest?.primary_color || homeKit?.primary_color || "#0F766E";
       const secondaryColor = activeCrest?.secondary_color || homeKit?.secondary_color || "#F8FAFC";
       const accentColor = activeCrest?.accent_color || homeKit?.accent_color || "#F59E0B";
 
-      const dnaPayload = recommendation
-        ? {
-            primary_philosophy: recommendation.primary_philosophy,
-            secondary_philosophies: recommendation.secondary_philosophies,
-            nationality_mode: recommendation.nationality_mode,
-            target_nationalities: recommendation.target_nationalities,
-            allow_dual_nationality: true,
-            age_mode: recommendation.age_mode,
-            preferred_max_age: recommendation.preferred_max_age,
-            allow_age_exceptions: true,
-            transfer_strategy: recommendation.transfer_strategy,
-            financial_philosophy: recommendation.financial_philosophy,
-            club_vision_narrative: recommendation.vision_narrative,
-          }
-        : {
-            primary_philosophy:
-              recruitmentFocus === "academy"
-                ? "academy_first"
-                : recruitmentFocus === "selling"
-                  ? "selling_club"
-                  : "youth_development",
-            secondary_philosophies: ["financially_sustainable"],
-            nationality_mode: nationalityFocus,
-            target_nationalities:
-              nationalityFocus === "none" ? [] : [validatedLocation.countryCode],
-            allow_dual_nationality: true,
-            age_mode: preferredAgeBracket === "none" ? "none" : "preferred",
-            preferred_max_age:
-              preferredAgeBracket === "none"
-                ? null
-                : parseInt(preferredAgeBracket.replace("U", ""), 10),
-            allow_age_exceptions: true,
-            transfer_strategy: "buy_young_develop_sell",
-            financial_philosophy: "sustainable",
-          };
+      const filedDna = buildClubDNA(
+        clubName,
+        validatedLocation.cityName,
+        validatedLocation.countryCode,
+        recruitmentFocus,
+        preferredAgeBracket,
+        nationalityFocus,
+      );
+      const dnaPayload = {
+        primary_philosophy: filedDna.primary_philosophy,
+        secondary_philosophies: filedDna.secondary_philosophies,
+        nationality_mode: filedDna.nationality_mode,
+        target_nationalities: filedDna.target_nationalities,
+        allow_dual_nationality: true,
+        age_mode: filedDna.age_mode,
+        preferred_max_age: filedDna.preferred_max_age,
+        allow_age_exceptions: true,
+        transfer_strategy: filedDna.transfer_strategy,
+        financial_philosophy: filedDna.financial_philosophy,
+        club_vision_narrative: filedDna.vision_narrative,
+      };
+      const kitPiece = (piece: any) => ({
+        primary_color: piece.primary_color,
+        secondary_color: piece.secondary_color,
+        accent_color: piece.accent_color,
+        pattern_type: piece.pattern_type,
+        collar_style: piece.collar_style,
+        sleeve_style: piece.sleeve_style,
+        shorts_color: piece.shorts_color,
+        socks_color: piece.socks_color,
+        front_text: piece.front_text,
+      });
 
       const badgePayload = activeCrest
         ? {
@@ -1524,52 +1750,12 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
           }
         : null;
 
-      const jerseyPayload = kitSet
+      const jerseyPayload = activeKit
         ? {
-            home: {
-              primary_color: kitSet.home.primary_color,
-              secondary_color: kitSet.home.secondary_color,
-              accent_color: kitSet.home.accent_color,
-              pattern_type: kitSet.home.pattern_type,
-              collar_style: kitSet.home.collar_style,
-              sleeve_style: kitSet.home.sleeve_style,
-              shorts_color: kitSet.home.shorts_color,
-              socks_color: kitSet.home.socks_color,
-              front_text: kitSet.home.front_text,
-            },
-            away: {
-              primary_color: kitSet.away.primary_color,
-              secondary_color: kitSet.away.secondary_color,
-              accent_color: kitSet.away.accent_color,
-              pattern_type: kitSet.away.pattern_type,
-              collar_style: kitSet.away.collar_style,
-              sleeve_style: kitSet.away.sleeve_style,
-              shorts_color: kitSet.away.shorts_color,
-              socks_color: kitSet.away.socks_color,
-              front_text: kitSet.away.front_text,
-            },
-            third: {
-              primary_color: kitSet.third.primary_color,
-              secondary_color: kitSet.third.secondary_color,
-              accent_color: kitSet.third.accent_color,
-              pattern_type: kitSet.third.pattern_type,
-              collar_style: kitSet.third.collar_style,
-              sleeve_style: kitSet.third.sleeve_style,
-              shorts_color: kitSet.third.shorts_color,
-              socks_color: kitSet.third.socks_color,
-              front_text: kitSet.third.front_text,
-            },
-            goalkeeper: {
-              primary_color: kitSet.goalkeeper.primary_color,
-              secondary_color: kitSet.goalkeeper.secondary_color,
-              accent_color: kitSet.goalkeeper.accent_color,
-              pattern_type: kitSet.goalkeeper.pattern_type,
-              collar_style: kitSet.goalkeeper.collar_style,
-              sleeve_style: kitSet.goalkeeper.sleeve_style,
-              shorts_color: kitSet.goalkeeper.shorts_color,
-              socks_color: kitSet.goalkeeper.socks_color,
-              front_text: kitSet.goalkeeper.front_text,
-            },
+            home: kitPiece(activeKit.home),
+            away: kitPiece(activeKit.away),
+            third: kitPiece(activeKit.third),
+            goalkeeper: kitPiece(activeKit.goalkeeper),
           }
         : null;
 
@@ -1619,6 +1805,17 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
     crestFilter === "all" &&
     crestShape === "all" &&
     crestQuery.trim() === "";
+  const dnaPreview =
+    clubName.length < 3 || "error" in location
+      ? null
+      : buildClubDNA(
+          clubName,
+          location.cityName,
+          location.countryCode,
+          recruitmentFocus,
+          preferredAgeBracket,
+          nationalityFocus,
+        );
 
   return (
     <div
@@ -1632,14 +1829,24 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
             GTEX Club Identity & DNA Studio
           </span>
           <div className="flex items-center gap-1.5">
-            {["name", "philosophy", "roster", "studio", "review"].map((step, idx) => (
-              <span
-                key={step}
-                className={`h-1.5 w-6 rounded-full transition-colors ${
-                  wizardStep === step ? "bg-emerald-400" : "bg-white/10"
-                }`}
-              />
-            ))}
+            {(["name", "philosophy", "roster", "studio", "review"] as const).map((step, idx) => {
+              const current = ["name", "philosophy", "roster", "studio", "review"].indexOf(
+                wizardStep,
+              );
+              const reached = idx <= current;
+              return (
+                <button
+                  key={step}
+                  type="button"
+                  disabled={!reached || step === wizardStep}
+                  aria-label={`Founding step ${idx + 1} of 5`}
+                  onClick={() => setWizardStep(step)}
+                  className={`h-1.5 w-6 rounded-full transition-colors ${
+                    reached ? "bg-emerald-400" : "bg-white/10"
+                  } disabled:cursor-default`}
+                />
+              );
+            })}
           </div>
         </div>
 
@@ -1680,9 +1887,16 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
                 onClick={create}
                 data-testid="first-club-create-button"
               >
-                Quick Create (Default Kit)
+                Create now · default kit
               </Btn>
             </div>
+            <p className="mt-2 text-[11px] text-slate-500">
+              Create now files {PHILOSOPHY_LABEL[recruitmentFocus] || "Youth development"},{" "}
+              {preferredAgeBracket === "none" ? "all ages" : preferredAgeBracket},{" "}
+              {NATIONALITY_LABEL[nationalityFocus] || "Preferred domestic"}, a{" "}
+              {CREST_STYLE_LABEL[preferredStyle] || "traditional"} crest, and the first uniform set.
+              The next pages change those choices before you seal the charter.
+            </p>
             <Btn
               className="mt-2 w-full"
               variant="ghost"
@@ -1703,8 +1917,9 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
             className="w-full"
           >
             <p className="mb-4 text-xs text-slate-300">
-              Your recruitment culture shapes squad building, scouting algorithms, and transfer
-              market policies.
+              This choice is saved on the club. It sets the recruitment recommendation: formation,
+              youth minutes, and whether the club buys to develop and sell, spends on established
+              names, or keeps contracts disciplined.
             </p>
             <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
               {[
@@ -2279,17 +2494,26 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="rounded border border-white/10 bg-slate-950/50 p-3">
                   <span className="text-[10px] uppercase text-slate-400">Philosophy</span>
-                  <p className="mt-0.5 font-semibold text-emerald-300 capitalize">
-                    {(recommendation?.primary_philosophy || recruitmentFocus).replace(/_/g, " ")}
+                  <p className="mt-0.5 font-semibold text-emerald-300">
+                    {PHILOSOPHY_LABEL[recruitmentFocus] || recruitmentFocus}
                   </p>
                 </div>
                 <div className="rounded border border-white/10 bg-slate-950/50 p-3">
-                  <span className="text-[10px] uppercase text-slate-400">Transfer Strategy</span>
+                  <span className="text-[10px] uppercase text-slate-400">Transfer strategy</span>
                   <p className="mt-0.5 font-semibold text-cyan-300 capitalize">
-                    {(recommendation?.transfer_strategy || "buy_young_develop_sell").replace(
-                      /_/g,
-                      " ",
-                    )}
+                    {(dnaPreview?.transfer_strategy || "buy_young_develop_sell").replace(/_/g, " ")}
+                  </p>
+                </div>
+                <div className="rounded border border-white/10 bg-slate-950/50 p-3">
+                  <span className="text-[10px] uppercase text-slate-400">Age profile</span>
+                  <p className="mt-0.5 font-semibold text-white">
+                    {preferredAgeBracket === "none" ? "All ages" : preferredAgeBracket}
+                  </p>
+                </div>
+                <div className="rounded border border-white/10 bg-slate-950/50 p-3">
+                  <span className="text-[10px] uppercase text-slate-400">Nationality</span>
+                  <p className="mt-0.5 font-semibold text-white">
+                    {NATIONALITY_LABEL[nationalityFocus] || nationalityFocus}
                   </p>
                 </div>
               </div>
@@ -2306,8 +2530,10 @@ function CreateFirstClub({ onDone, onCancel, another }: any) {
                 <div className="rounded border border-emerald-500/20 bg-emerald-500/5 p-3 text-xs text-slate-300">
                   <span className="font-semibold text-emerald-400">Owner Activation Package:</span>
                   <p className="mt-0.5 text-slate-400">
-                    The first 500 eligible club owners receive <b>2,500 GTX</b> ring-fenced for
-                    player signings, plus <b>1,000 FAN</b> for gifting.
+                    The first {fmt(launchGrantLimit)} eligible club owners receive{" "}
+                    <b>{fmt(launchGrant)} GTX</b> ring-fenced for player signings, plus{" "}
+                    <b>1,000 FAN</b> toward staff contracts and gifting. Named staff may need more
+                    Fan Coin. You can convert deposited GTEX or buy Fan Coin after the club exists.
                   </p>
                 </div>
               )}
@@ -2345,6 +2571,9 @@ export default function Onboarding() {
     enabled: !!user,
   });
   const club = (data?.clubs || []).find((c: any) => !["active"].includes(c.stage)) || null;
+  const money = useOnboardingMoney(club?.club_id);
+  const footerTreasury =
+    money.cash ?? (club?.cash == null || club?.cash === "" ? null : Number(club.cash));
 
   if (loading || (user && isLoading)) return <Loading label="Preparing your club" />;
   if (!user) return <Navigate to="/login" replace />;
@@ -2352,6 +2581,8 @@ export default function Onboarding() {
     return (
       <CreateFirstClub
         another={Boolean((data?.clubs || []).length)}
+        launchGrant={Number(data?.launch_grant ?? 2500)}
+        launchGrantLimit={Number(data?.launch_grant_owner_limit ?? 500)}
         onDone={() => {
           refetch();
           navigate("/onboarding", { replace: true });
@@ -2391,11 +2622,13 @@ export default function Onboarding() {
         <h1 className="gx-h2 mb-8">{club.club_name}: from paperwork to matchday</h1>
         <Stepper index={index} />
         {index === 0 && <IdentityStep club={club} onboarding={data} onDone={next} />}
-        {index === 1 && <SquadStep clubId={club.club_id} onDone={next} />}
+        {index === 1 && (
+          <SquadStep clubId={club.club_id} knownCash={club.cash} onDone={next} />
+        )}
         {index === 2 && <ManagerStep clubId={club.club_id} onDone={next} />}
         {index === 3 && <AcademyStep clubId={club.club_id} onDone={openClub} />}
         <p className="mt-6 text-xs text-slate-600">
-          Club treasury: {fmt(club.cash)} GTX · Squad {club.squad_size}
+          Club treasury: {moneyText(footerTreasury)} · Squad {club.squad_size ?? 0}
         </p>
       </div>
     </div>

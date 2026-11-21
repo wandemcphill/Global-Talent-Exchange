@@ -227,3 +227,79 @@ def test_korapay_webhook_and_providerless_verify(monkeypatch) -> None:
         assert ledger.balance(session, ledger.user_account(owner.id), ledger.GTEX) == Decimal("100.00")
     finally:
         session.close()
+
+
+def test_fan_naira_deposit_credits_fan_coin_not_gtex(monkeypatch) -> None:
+    adapter = _Paystack()
+    monkeypatch.setattr("app.wallets.providers.registry.get_live_provider_adapter", lambda _provider: adapter)
+    monkeypatch.setattr("app.wallets.providers.registry.get_provider_adapter", lambda _provider: adapter)
+    session = _session()
+    try:
+        owner = _user(session, email="fan-deposit@example.com", username="fan-deposit")
+        settings = TreasuryService().ensure_settings(session)
+        settings.fan_coin_deposit_rate_value = Decimal("4")
+        session.commit()
+
+        started = money.paystack_init(session, owner, 1000, "https://app.test/callback", currency="fan")
+        session.commit()
+        assert started["reference"].startswith("fan_")
+
+        verified = money.paystack_verify(session, owner, started["reference"])
+        session.commit()
+
+        assert verified["status"] == "success"
+        assert verified["ledger_event"]["currency"] == ledger.FAN
+        assert verified["ledger_event"]["balance_class"] == "non_withdrawable"
+        assert ledger.balance(session, ledger.user_account(owner.id), ledger.FAN) == Decimal("62.50")
+        assert ledger.balance(session, ledger.user_account(owner.id), ledger.GTEX) == Decimal("0.00")
+    finally:
+        session.close()
+
+
+def test_club_gtex_converts_to_fan_coin_and_leaves_the_squad_grant(monkeypatch) -> None:
+    session = _session()
+    try:
+        owner = _user(session, email="fan-convert@example.com", username="fan-convert")
+        monkeypatch.setattr(money, "require_state", lambda *_args, **_kwargs: None)
+        club_id = "club-fan"
+        ledger.record(
+            session,
+            event_type="launch_grant",
+            source=ledger.PLATFORM_GRANTS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=Decimal("2500"),
+            balance_class="squad_grant",
+            club_id=club_id,
+            user_id=owner.id,
+        )
+        ledger.record(
+            session,
+            event_type="owner_capital_injection",
+            source=ledger.PLATFORM_GRANTS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=Decimal("100"),
+            balance_class="deposited",
+            club_id=club_id,
+            user_id=owner.id,
+        )
+        session.commit()
+
+        converted = money.convert_club_gtex_to_fan(session, owner.id, club_id, Decimal("10"))
+        session.commit()
+
+        expected_fan = ledger.D(Decimal("10") * money.FAN_COIN_PER_GTEX)
+        assert Decimal(converted["fan_coin"]) == Decimal("10") * money.FAN_COIN_PER_GTEX
+        assert converted["destination"] == "club"
+        funding = ledger.get_club_funding(session, club_id)
+        assert funding["available_squad_grant"] == Decimal("2500.00")
+        assert funding["available_deposited"] == Decimal("90.00")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.FAN) == expected_fan
+
+        with pytest.raises(OwnerError) as blocked:
+            money.convert_club_gtex_to_fan(session, owner.id, club_id, Decimal("91"))
+        assert blocked.value.code == "fan_conversion_needs_spendable_coin"
+        assert ledger.get_club_funding(session, club_id)["available_squad_grant"] == Decimal("2500.00")
+    finally:
+        session.close()

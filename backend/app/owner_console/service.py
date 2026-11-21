@@ -620,24 +620,34 @@ def player_quotes(session: Session, players: list) -> dict[str, tuple[int, int]]
         cur_gsi, pot_gsi = resolve_player_gsi(p, market)
         rating = cur_gsi
 
-        if (
-            market is not None
-            and getattr(market, "status", "active") == "active"
-            and float(market.share_price_coin or 0) > 0
-        ):
+        traded = market is not None and int(getattr(market, "circulating_shares", 0) or 0) > 0
+        if traded and getattr(market, "status", "active") == "active" and float(market.share_price_coin or 0) > 0:
+            # A holding means the listed price has been bought. Leave that
+            # number alone. An unsold card is repriced from the career curve.
             price = max(15, int(round(float(market.share_price_coin))))
         else:
+            from datetime import date as _date
+
+            from app.players.acquisition_pricing import acquisition_price
+
             is_legend = (
-                str(getattr(p, "real_player_tier", "") or "").strip().lower() == "legend"
-                or str(getattr(p, "source_provider", "") or "").strip().lower() == "gtex_legend_prime"
+                str(getattr(p, "real_player_tier", "") or "").strip().lower()
+                in {"legend", "legendary", "icon", "immortal"}
+                or str(getattr(p, "source_provider", "") or "").strip().lower() in {"gtex_legend", "gtex_legend_prime"}
+                or bool(getattr(p, "legendary_profile_id", None))
             )
+            dob = getattr(p, "date_of_birth", None)
+            age = None if dob is None else (_date.today() - dob).days / 365.25
             price = max(
                 15,
                 int(
                     round(
-                        engine.calculate_gsi_price(
+                        acquisition_price(
                             cur_gsi,
                             pot_gsi,
+                            age=age,
+                            position=getattr(p, "position", None),
+                            tier=getattr(p, "real_player_tier", None),
                             is_real=bool(getattr(p, "is_real_player", True)),
                             is_legend=is_legend,
                         )
@@ -1646,21 +1656,18 @@ def _add_regen(
     return player
 
 
-def onboarding_season_salary_gtx(raw: int | float | str | None) -> int:
-    """Season salary charged in GTX when a new club agrees a named staff contract.
+def onboarding_season_salary_fan(raw: int | float | str | None) -> int:
+    """One season of a named staff contract, in Fan Coin.
 
-    Catalog wages of 1,000 and above are stored on the Fan Coin scale, so the
-    contract charged here is one tenth of that figure. Smaller catalog wages are
-    already on a club-coin scale and are charged as written. The welcome squad
-    grant never pays this number.
+    Catalog wages are annual Fan Coin figures. The season charge is 35 percent
+    of that wage, the same rate the staff market uses. The 1,000 Fan Coin
+    launch grant is a start and does not cover every named role. Default staff
+    stay free, and the GTX squad grant is never spent here.
     """
     amount = max(0, int(raw or 0))
-    if amount >= 1000:
-        amount = amount // 10
-    season = max(150, amount)
-    # Staff salaries are 65% lower than the old catalog. The cut is applied
-    # after the Fan-scale conversion so a 3,500 wage stays a season fee, not a transfer fee.
-    return max(40, (season * 35) // 100)
+    if amount <= 0:
+        return 0
+    return max(1, (amount * 35) // 100)
 
 
 _ONBOARDING_STAFF_ROLES = ("first_team_manager", "general_manager", "head_of_youth_development")
@@ -1677,54 +1684,41 @@ def _charge_onboarding_salary(
 ) -> None:
     if salary <= 0:
         return
-    funding = ledger.get_club_funding(session, club_id)
-    remaining = Decimal(salary)
-    pools = (
-        ("deposited", funding["available_deposited"]),
-        ("earned", funding["available_earned"]),
-    )
-    spendable = sum((ledger.D(amount) for _, amount in pools), Decimal("0"))
-    if spendable < remaining:
+    fee = Decimal(salary)
+    user_fan = ledger.balance(session, ledger.user_account(user_id), ledger.FAN)
+    club_fan = ledger.balance(session, ledger.club_account(club_id), ledger.FAN)
+    if user_fan >= fee:
+        source = ledger.user_account(user_id)
+    elif club_fan >= fee:
+        source = ledger.club_account(club_id)
+    else:
+        available = max(user_fan, club_fan)
         raise OwnerError(
-            "staff_salary_needs_topup",
+            "insufficient_fan_coin",
             402,
             (
-                f"This contract is {salary} GTX. Salaries are paid from topped-up or earned club coins. "
-                "The 2,500 welcome grant cannot pay salaries. Top up with KoraPay, Paystack, or a Coin Trader, "
-                "or use the default staff member."
+                f"This season contract is {salary} Fan Coin. Available Fan Coin is {available}. "
+                "The 1,000 Fan Coin grant is a start and may not cover every named role. "
+                "Convert deposited or earned GTEX Coin, or buy Fan Coin. Default staff stay free."
             ),
         )
-    for balance_class, available in pools:
-        if remaining <= 0:
-            break
-        portion = min(ledger.D(available), remaining)
-        if portion <= 0:
-            continue
-        try:
-            ledger.record(
-                session,
-                event_type="staff_hire",
-                source=ledger.club_account(club_id),
-                destination=ledger.WORLD_CLUBS,
-                currency=ledger.GTEX,
-                gross=portion,
-                balance_class=balance_class,
-                club_id=club_id,
-                user_id=user_id,
-                related_type="staff",
-                related_id=related_id,
-                fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
-                memo=memo,
-            )
-        except ledger.LedgerError as exc:
-            raise OwnerError("staff_salary_needs_topup", 402, str(exc)) from exc
-        remaining -= portion
-    if remaining > 0:
-        raise OwnerError(
-            "staff_salary_needs_topup",
-            402,
-            f"The club treasury could not settle the {salary} GTX salary.",
+    try:
+        ledger.record(
+            session,
+            event_type="staff_hire",
+            source=source,
+            destination=ledger.WORLD_CLUBS,
+            currency=ledger.FAN,
+            gross=fee,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="staff",
+            related_id=related_id,
+            fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
+            memo=memo,
         )
+    except ledger.LedgerError as exc:
+        raise OwnerError("insufficient_fan_coin", 402, str(exc)) from exc
 
 
 def _note_onboarding_staff(
@@ -1763,8 +1757,8 @@ def appoint_onboarding_staff(
 ) -> dict[str, Any]:
     """Agree one founding contract: first-team manager, general manager, or youth head.
 
-    A named contract draws its season salary from topped-up or earned GTX.
-    The default caretaker for each role is free. The squad grant is not touched.
+    A named contract is paid in Fan Coin for one season. The default caretaker
+    for each role is free. The squad grant is not touched.
     The club leaves the staff step only after all three roles have a decision.
     """
     from app.models.club_growth import ClubStaffProfile
@@ -1811,7 +1805,7 @@ def appoint_onboarding_staff(
         wage = {"legendary": 50000, "elite_active": 22000, "rare": 9000, "popular": 3500}.get(
             str(row.rarity or "").strip().lower(), 3500
         )
-        salary = onboarding_season_salary_gtx(wage)
+        salary = onboarding_season_salary_fan(wage)
         display_name = row.display_name
         record = {
             "id": row.manager_id,
@@ -1827,7 +1821,8 @@ def appoint_onboarding_staff(
             "traits": list(row.traits or []),
             "philosophy_summary": row.philosophy_summary,
             "salary": salary,
-            "salary_gtx": salary,
+            "salary_fan_coin": salary,
+            "salary_gtx": 0,
             "is_default": False,
             "is_appointed": True,
         }
@@ -1837,7 +1832,7 @@ def appoint_onboarding_staff(
             club_id,
             salary,
             related_id=row.manager_id,
-            memo=f"Season salary for first-team manager {display_name}",
+            memo=f"Season Fan Coin salary for first-team manager {display_name}",
         )
         appoint_manager(session, user_id, club_id, record, advance_stage=False)
         written_exec = {role_key: record}
@@ -1858,7 +1853,13 @@ def appoint_onboarding_staff(
         if candidate is None and profile is None:
             raise OwnerError("staff_candidate_not_found", 404, "That staff member is not on the market.")
         if candidate is not None:
-            raw_wage = candidate.get("salary_gtex") or candidate.get("salary") or candidate.get("salary_fan_coin") or 0
+            raw_wage = (
+                candidate.get("salary_fan_coin")
+                or candidate.get("salary_fancoin")
+                or candidate.get("salary")
+                or candidate.get("salary_gtex")
+                or 0
+            )
             display_name = str(candidate.get("name") or "Staff")
             related = str(candidate.get("id") or profile_id)
             record = dict(candidate)
@@ -1877,14 +1878,14 @@ def appoint_onboarding_staff(
                 "temperament": meta.get("temperament"),
                 "portrait_url": meta.get("portrait_url"),
             }
-        salary = onboarding_season_salary_gtx(raw_wage)
+        salary = onboarding_season_salary_fan(raw_wage)
         _charge_onboarding_salary(
             session,
             user_id,
             club_id,
             salary,
             related_id=related,
-            memo=f"Season salary for {display_name}",
+            memo=f"Season Fan Coin salary for {display_name}",
         )
         record.update(
             {
@@ -1892,7 +1893,8 @@ def appoint_onboarding_staff(
                 "role_label": role_key.replace("_", " ").title(),
                 "name": display_name,
                 "salary": salary,
-                "salary_gtx": salary,
+                "salary_fan_coin": salary,
+                "salary_gtx": 0,
                 "is_default": False,
                 "is_appointed": True,
             }
@@ -1913,7 +1915,8 @@ def appoint_onboarding_staff(
             "settled": True,
             "ref": ref,
             "use_default": False,
-            "salary_gtx": salary,
+            "salary_fan_coin": salary,
+            "salary_gtx": 0,
             "name": display_name,
         },
         preserved_book=book,
@@ -3775,7 +3778,8 @@ def hire_executive_staff(
             "insufficient_fan_coin",
             400,
             f"Staff contracts are settled in Fan Coin. This {years}-year contract needs {signing_fee_fan_coin} Fan Coin. "
-            f"Available Fan Coin is {max(user_fan_bal, club_fan_bal)}.",
+            f"Available Fan Coin is {max(user_fan_bal, club_fan_bal)}. "
+            "Convert deposited or earned GTEX Coin, or buy Fan Coin. The 1,000 Fan Coin grant may not cover every named role.",
         )
 
     try:

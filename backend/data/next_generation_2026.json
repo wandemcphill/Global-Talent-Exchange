@@ -654,18 +654,22 @@
     "dob": "2009-11-08",
     "height": 180,
     "foot": "Left",
-    "position": "AM",
+    "position": "LW",
     "secondary": [
-      "ST"
+      "LM",
+      "AM",
+      "CM"
     ],
     "gsi": 74,
     "potential": 88,
-    "playstyle": "Left-footed attacking midfielder who strikes immediately when he arrives",
+    "playstyle": "Skilful Left-Sided Attacker",
     "traits": [
-      "Impact Substitute",
-      "Clinical Finisher",
-      "Composure",
-      "First Touch"
+      "Skillful",
+      "Flair",
+      "Left Foot",
+      "One-on-One Dribbler",
+      "First Touch",
+      "Arrives Late"
     ],
     "skill_moves": 3,
     "weak_foot": 3,
@@ -674,10 +678,12 @@
     "short": "M. Mesloub Soares",
     "age": 17,
     "positions": [
+      "LW",
+      "LM",
       "AM",
-      "ST"
+      "CM"
     ],
-    "position_display": "AM/ST",
+    "position_display": "LW/LM/AM/CM",
     "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959220/players/portraits/p_72b67aaa_mezian_mesloub_soares.jpg",
     "attributes": {
       "pace": 76,

@@ -2,6 +2,35 @@ from app.owner_console.engine import normalize_position
 from app.players.position_roles import display_codes, resolve_positions
 
 
+def test_estevao_willian_plays_on_the_right_and_through_the_middle():
+    primary, extras, reason = resolve_positions(
+        name="Estêvão Willian",
+        position="Winger",
+        normalized_position="LW",
+        profile_primary="Winger",
+    )
+    assert reason == "named"
+    assert primary == "RW"
+    assert extras == ["AM", "ST", "RM"]
+    assert display_codes(primary, extras) == "RW / AM / ST / RM"
+
+    filed, filed_extras, filed_reason = resolve_positions(
+        name="Estêvão",
+        position="RW / AM / ST / RM",
+        normalized_position="rw",
+    )
+    assert filed_reason == "unchanged"
+    assert display_codes(filed, filed_extras) == "RW / AM / ST / RM"
+
+    other, other_extras, other_reason = resolve_positions(
+        name="Estevão Barreto",
+        position="AM / LW / RW / ST",
+    )
+    assert other_reason == "unchanged"
+    assert other == "AM"
+    assert other_extras == ["LW", "RW", "ST"]
+
+
 def test_musiala_and_monga_are_not_defenders():
     musiala = resolve_positions(
         name="Jamal Musiala",

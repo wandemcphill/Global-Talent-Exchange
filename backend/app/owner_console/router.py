@@ -237,6 +237,11 @@ class AmountRequest(BaseModel):
     amount: float = Field(gt=0)
 
 
+class FanConvertRequest(BaseModel):
+    amount: float = Field(gt=0)
+    club_id: str | None = None
+
+
 class SquadSheetRequest(BaseModel):
     sheet: str = Field(pattern="^(first_team|reserve|academy)$")
 
@@ -270,6 +275,7 @@ class DepositInitRequest(BaseModel):
     amount_ngn: int = Field(ge=100)
     callback_url: str
     provider: str = "paystack"
+    currency: Literal["gtex", "fan"] = "gtex"
 
 
 class GiftRequest(BaseModel):
@@ -1238,7 +1244,16 @@ def deposit_init(
     provider = (body.provider or "paystack").strip().lower()
     if provider not in {"paystack", "korapay"}:
         raise HTTPException(status_code=400, detail={"code": "unsupported_deposit_provider"})
-    return _run(session, money.paystack_init, session, user, body.amount_ngn, body.callback_url, provider)
+    return _run(
+        session,
+        money.paystack_init,
+        session,
+        user,
+        body.amount_ngn,
+        body.callback_url,
+        provider,
+        body.currency,
+    )
 
 
 @router.get("/deposits/verify/{reference}")
@@ -1322,6 +1337,15 @@ def internal(
 def fan_coin(
     body: AmountRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
 ) -> dict[str, Any]:
+    return _run(session, money.buy_fan_coin, session, user.id, body.amount)
+
+
+@router.post("/fan-coin/convert")
+def convert_fan_coin(
+    body: FanConvertRequest, user=Depends(get_current_user), session: Session = Depends(get_session)
+) -> dict[str, Any]:
+    if body.club_id:
+        return _run(session, money.convert_club_gtex_to_fan, session, user.id, body.club_id, body.amount)
     return _run(session, money.buy_fan_coin, session, user.id, body.amount)
 
 

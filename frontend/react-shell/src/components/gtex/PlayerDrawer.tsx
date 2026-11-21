@@ -257,6 +257,8 @@ export function PlayerDrawer({
                 }
                 position={p.position}
                 age={p.age}
+                heightCm={p.height_cm}
+                foot={p.dominant_foot || p.preferred_foot}
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}

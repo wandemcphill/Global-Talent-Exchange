@@ -146,6 +146,8 @@ export interface PlayerCardProps {
   potential?: number | string;
   position?: string;
   age?: number | string;
+  heightCm?: number | string | null;
+  foot?: string | null;
   nationality?: string;
   club?: string;
   image?: string | null;
@@ -180,6 +182,8 @@ export function PlayerCard(props: PlayerCardProps) {
     potential,
     position = "MID",
     age,
+    heightCm,
+    foot,
     nationality,
     club,
     image,
@@ -196,6 +200,10 @@ export function PlayerCard(props: PlayerCardProps) {
   } = props;
 
   const numRating = Number(rating || 0);
+  const footLabel = foot
+    ? `${String(foot).replace(/foot/i, "").trim().replace(/^\w/, (letter) => letter.toUpperCase())} foot`
+    : null;
+  const bodyLine = [heightCm ? `${heightCm} cm` : null, footLabel].filter(Boolean).join(" · ");
   const tier = props.tier ? TIERS[props.tier] || tierOf(numRating) : tierOf(numRating);
   const [imgError, setImgError] = useState(false);
   const cardRef = useRef<HTMLElement | null>(null);
@@ -360,7 +368,7 @@ export function PlayerCard(props: PlayerCardProps) {
             {name}
           </p>
           <p className="truncate text-[10px] font-medium text-slate-300">
-            {[nationality, club, age ? `${age}y` : null].filter(Boolean).join(" · ")}
+            {[nationality, club, age ? `${age}y` : null, bodyLine || null].filter(Boolean).join(" · ")}
           </p>
         </div>
 
@@ -503,7 +511,7 @@ export function PlayerCard(props: PlayerCardProps) {
           {name}
         </h3>
         <p className="mt-1 truncate text-xs text-slate-300 font-medium">
-          {[club, age ? `${age} yrs` : null].filter(Boolean).join(" · ")}
+          {[club, age ? `${age} yrs` : null, bodyLine || null].filter(Boolean).join(" · ")}
         </p>
         {props.archetype && (
           <p className="mt-0.5 truncate text-[10px] font-bold uppercase tracking-wider text-[#42B9EC]">

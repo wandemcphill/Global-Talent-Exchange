@@ -555,22 +555,26 @@ class ClubGovernancePolicyService:
         policy = self.get_or_create_policy(club_id)
         primary = (policy.primary_philosophy or "balanced").lower()
         secondaries = [s.lower() for s in (policy.secondary_philosophies or [])]
-        all_phil = {primary, *secondaries}
 
-        if "youth_development" in all_phil or "academy_first" in all_phil:
+        if primary in {"youth_development", "academy_first"}:
             formation = "4-3-3"
             mentality = "High-Energy Positional Development"
-            u21_share = 45 if "academy_first" in all_phil else 38
-            academy_quota = 4 if "academy_first" in all_phil else 3
-        elif "superstar" in all_phil or "big_spending" in all_phil:
+            u21_share = 45 if primary == "academy_first" else 38
+            academy_quota = 4 if primary == "academy_first" else 3
+        elif primary in {"superstar", "big_spending"}:
             formation = "4-2-4"
             mentality = "Galactico Attacking Dominance"
             u21_share = 15
             academy_quota = 1
-        elif "selling_club" in all_phil or "financially_sustainable" in all_phil:
+        elif primary == "selling_club":
             formation = "3-4-3"
             mentality = "High-Value Showcase Transition"
             u21_share = 32
+            academy_quota = 2
+        elif primary in {"sustainable", "financially_sustainable"}:
+            formation = "4-2-3-1"
+            mentality = "Disciplined recruitment and careful contracts"
+            u21_share = 28
             academy_quota = 2
         else:
             formation = "4-3-3"
@@ -602,7 +606,7 @@ class ClubGovernancePolicyService:
             f"Target {u21_share}% matchday minutes allocation for U21 and academy-developed players.",
             f"Promote at least {academy_quota} academy graduates into the first-team matchday rotation this season.",
         ]
-        if "selling_club" in all_phil:
+        if primary == "selling_club" or "selling_club" in secondaries:
             tactical_directives.append(
                 "Feature high-potential transfer-listed talents in continental showcase fixtures to maximize market valuation."
             )

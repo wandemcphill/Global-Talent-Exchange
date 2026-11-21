@@ -740,7 +740,7 @@ export function buildClubDNA(
       narrative: "competing for the biggest names and the highest honours",
     },
     sustainable: {
-      philosophy: "financially_sustainable",
+      philosophy: "sustainable",
       transfer: "buy_undervalued",
       finance: "sustainable",
       narrative: "building a competitive club through careful scouting and disciplined spending",
@@ -757,7 +757,7 @@ export function buildClubDNA(
     preferredAgeBracket === "none" ? null : Number(preferredAgeBracket.replace("U", "")) || 23;
   return {
     primary_philosophy: selected.philosophy,
-    secondary_philosophies: ["financially_sustainable"],
+    secondary_philosophies: [],
     nationality_mode: nationalityFocus,
     target_nationalities: nationalityFocus === "none" ? [] : [countryCode],
     allow_dual_nationality: true,

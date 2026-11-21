@@ -657,19 +657,22 @@ export default function PublicClubProfile() {
                   {(dna?.primary_philosophy || "youth_development").replace(/_/g, " ")}
                 </h3>
                 <p className="mt-2 text-xs text-slate-300">
-                  {dna?.vision_narrative ||
-                    "Dedicated to building sporting success and enduring legacy through elite player development."}
+                  {dna?.club_vision_narrative || dna?.vision_narrative || "No club narrative is filed."}
                 </p>
               </div>
               <div className="mt-4 flex flex-wrap gap-1.5 pt-3 border-t border-white/10">
-                {(dna?.secondary_philosophies || ["financially_sustainable"]).map((p: string) => (
-                  <span
-                    key={p}
-                    className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-slate-300"
-                  >
-                    {p.replace(/_/g, " ")}
-                  </span>
-                ))}
+                {(dna?.secondary_philosophies || []).length === 0 ? (
+                  <span className="text-[10px] uppercase text-slate-500">No secondary philosophy</span>
+                ) : (
+                  dna.secondary_philosophies.map((p: string) => (
+                    <span
+                      key={p}
+                      className="rounded bg-white/5 px-2 py-0.5 text-[10px] uppercase text-slate-300"
+                    >
+                      {p.replace(/_/g, " ")}
+                    </span>
+                  ))
+                )}
               </div>
             </div>
 
@@ -683,21 +686,27 @@ export default function PublicClubProfile() {
                     <span className="text-slate-400">Age Bracket:</span>
                     <span className="font-semibold text-white">
                       {dna?.age_mode === "preferred" && dna?.preferred_max_age
-                        ? `Under ${dna.preferred_max_age} (Exceptions Allowed)`
+                        ? `Under ${dna.preferred_max_age}${dna.allow_age_exceptions === false ? "" : " · exceptions allowed"}`
                         : dna?.age_mode === "strict"
-                          ? `Strict U${dna.preferred_max_age}`
-                          : "All Ages Eligible"}
+                          ? `Strict under ${dna.preferred_max_age ?? "—"}`
+                          : "All ages"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between border-b border-white/5 pb-1.5">
                     <span className="text-slate-400">Nationality Policy:</span>
                     <span className="font-semibold text-white capitalize">
-                      {dna?.nationality_mode || "Global Scouting"}
+                      {dna?.nationality_mode === "exclusive"
+                        ? "Exclusive domestic"
+                        : dna?.nationality_mode === "preferred"
+                          ? "Preferred domestic"
+                          : "Global scouting"}
                     </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400">Dual-Nationalities:</span>
-                    <span className="font-semibold text-emerald-400">Eligible</span>
+                    <span className="font-semibold text-emerald-400">
+                      {dna?.allow_dual_nationality === false ? "Not eligible" : "Eligible"}
+                    </span>
                   </div>
                 </div>
               </div>

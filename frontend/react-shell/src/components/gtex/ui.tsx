@@ -168,7 +168,9 @@ export function TraitBar({ label, value, max = 20, testid }: any) {
       </div>
     );
   }
-  const pct = Math.max(0, Math.min(100, (Number(value) / max) * 100));
+  const numeric = Number(value);
+  const scale = Number(max) > 0 ? Number(max) : 99;
+  const pct = Math.max(0, Math.min(100, (numeric / scale) * 100));
   const gradient =
     pct >= 75
       ? "from-[#00C991] via-teal-300 to-[#E5B63F]"
@@ -184,9 +186,9 @@ export function TraitBar({ label, value, max = 20, testid }: any) {
           {value}/{max}
         </span>
       </div>
-      <div className="h-2 rounded-full bg-[#080F1C] p-0.5 border border-[#25354B]">
+      <div className="relative h-2 overflow-hidden rounded-full border border-[#25354B] bg-[#080F1C]">
         <div
-          className={`h-full rounded-full bg-gradient-to-r ${gradient} transition-[width] duration-500`}
+          className={`absolute inset-y-0 left-0 rounded-full bg-gradient-to-r ${gradient} transition-[width] duration-500`}
           style={{ width: `${pct}%` }}
         />
       </div>

@@ -337,6 +337,150 @@ CURATED_PLAYER_PROFILES: dict[str, tuple[str, list[str]]] = {
             "Playmaker",
         ],
     ),
+    "adriano leite ribeiro": (
+        "Power Striker",
+        ["Power Left Foot", "Shoots With Power", "Shoots From Outside the Box", "Powerful", "Left Foot"],
+    ),
+    "shabani nonda": (
+        "Penalty-Box Striker",
+        ["Right Foot", "Poacher", "Movement in the Box", "Finisher"],
+    ),
+    "shabani christophe nonda": (
+        "Penalty-Box Striker",
+        ["Right Foot", "Poacher", "Movement in the Box", "Finisher"],
+    ),
+    "rio ngumoha": (
+        "Direct Winger",
+        ["Strong Shooting", "Agile", "Quick", "Takes On Players", "Right Foot"],
+    ),
+    "rio chima ngumoha": (
+        "Direct Winger",
+        ["Strong Shooting", "Agile", "Quick", "Takes On Players", "Right Foot"],
+    ),
+    "trey nyoni": (
+        "Simple Midfielder",
+        ["Simple Passes", "Right Foot", "Keeps Possession"],
+    ),
+    "treymaurice nyoni": (
+        "Simple Midfielder",
+        ["Simple Passes", "Right Foot", "Keeps Possession"],
+    ),
+    "joshua abe": (
+        "Left-Footed Right Winger",
+        ["Left Foot", "Takes On Players"],
+    ),
+    "joshua oluwatobi abe": (
+        "Left-Footed Right Winger",
+        ["Left Foot", "Takes On Players"],
+    ),
+    "marc bernal": (
+        "La Masia Midfielder",
+        [
+            "Tactical Awareness",
+            "Composure",
+            "Progressive Passing",
+            "Intelligent",
+            "Left Foot",
+        ],
+    ),
+    "marc bernal casas": (
+        "La Masia Midfielder",
+        [
+            "Tactical Awareness",
+            "Composure",
+            "Progressive Passing",
+            "Intelligent",
+            "Left Foot",
+        ],
+    ),
+    "mezian mesloub soares": (
+        "Skilful Left-Sided Attacker",
+        [
+            "Skillful",
+            "Flair",
+            "Left Foot",
+            "One-on-One Dribbler",
+            "First Touch",
+            "Arrives Late",
+        ],
+    ),
+    "mezian soares mesloub": (
+        "Skilful Left-Sided Attacker",
+        [
+            "Skillful",
+            "Flair",
+            "Left Foot",
+            "One-on-One Dribbler",
+            "First Touch",
+            "Arrives Late",
+        ],
+    ),
+    "tunde akinsola": (
+        "Right-Sided Winger",
+        [
+            "Crosses From Deep",
+            "Curls The Ball",
+            "Strong Runner",
+            "Left Foot",
+            "Uses Right Foot",
+            "One-on-One Dribbler",
+        ],
+    ),
+    "babatunde jimoh akinsola": (
+        "Right-Sided Winger",
+        [
+            "Crosses From Deep",
+            "Curls The Ball",
+            "Strong Runner",
+            "Left Foot",
+            "Uses Right Foot",
+            "One-on-One Dribbler",
+        ],
+    ),
+    "djibril cisse": (
+        "Pacey Striker",
+        [
+            "Explosive Pace",
+            "Powerful Shot",
+            "Right Foot",
+            "Flair",
+            "Direct Runner",
+            "Finisher",
+        ],
+    ),
+    "djibril arrun cisse": (
+        "Pacey Striker",
+        [
+            "Explosive Pace",
+            "Powerful Shot",
+            "Right Foot",
+            "Flair",
+            "Direct Runner",
+            "Finisher",
+        ],
+    ),
+    "jose maria gutierrez": (
+        "Elegant Midfielder",
+        [
+            "Intelligent",
+            "Elegant",
+            "Dictates Tempo",
+            "Vision",
+            "First Touch",
+            "Incisive Pass",
+        ],
+    ),
+    "jose maria gutierrez hernandez": (
+        "Elegant Midfielder",
+        [
+            "Intelligent",
+            "Elegant",
+            "Dictates Tempo",
+            "Vision",
+            "First Touch",
+            "Incisive Pass",
+        ],
+    ),
     "cole palmer": (
         "Advanced Playmaker / Inverted Winger",
         [
@@ -1469,10 +1613,10 @@ def _extract_stat(dna: dict[str, Any], attrs: dict[str, Any], key: str, default:
         val = src.get(key)
         if isinstance(val, (int, float)) and val > 0:
             v = float(val)
-            if v <= 20:
-                v *= 5.0
-            elif v <= 1.0:
+            if 0 < v <= 1:
                 v *= 100.0
+            elif v <= 20:
+                v *= 5.0
             return int(max(1, min(99, round(v))))
     return default
 
@@ -1495,7 +1639,9 @@ def derive_playstyle_and_traits(
 
     attrs = dna.get("attributes") if isinstance(dna.get("attributes"), dict) else {}
     base = int(gsi or dna.get("overall") or dna.get("current_rating") or 70)
-    pace = _extract_stat(dna, attrs, "pace", base)
+    cat = _position_category(position, normalized_position)
+    pace_default = {"GK": 48, "CB": 62, "DM": 66, "FB": 72, "WINGER": 76, "ST": 74}.get(cat, 68)
+    pace = _extract_stat(dna, attrs, "pace", pace_default)
     shooting = _extract_stat(dna, attrs, "shooting", base - 4)
     passing = _extract_stat(dna, attrs, "passing", base - 2)
     dribbling = _extract_stat(dna, attrs, "dribbling", base - 1)
@@ -1503,7 +1649,6 @@ def derive_playstyle_and_traits(
     physical = _extract_stat(dna, attrs, "physical", base)
     height = int(height_cm or dna.get("height_cm") or 180)
     foot = str(preferred_foot or dna.get("preferred_foot") or "Right").strip().lower()
-    cat = _position_category(position, normalized_position)
 
     seed = int(hashlib.md5(f"{player_id}:{full_name}".encode("utf-8")).hexdigest()[:8], 16)
     traits: list[str] = []

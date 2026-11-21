@@ -665,6 +665,142 @@ def test_real_player_universe_routes_support_list_search_filters_and_exclude_non
         engine.dispose()
 
 
+def test_market_search_finds_a_club_a_nation_and_a_secondary_position() -> None:
+    engine, session = _build_session()
+    try:
+        _seed_real_player(
+            session=session,
+            player_id="player-versatile",
+            provider_external_id="versatile-001",
+            full_name="Versatile Scout",
+            nationality="Nigeria",
+            nationality_code="NG",
+            date_of_birth=date(2003, 3, 10),
+            primary_position="LM",
+            club_name="Cercle Brugge",
+            league_name="Belgian Pro League",
+            competition_level="established",
+            current_value_credits=120.0,
+            market_reference_value=1_500_000,
+            source_last_refreshed_at=datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc),
+            secondary_positions=["LW", "RM", "CM", "AM", "ST"],
+        )
+        _seed_real_player(
+            session=session,
+            player_id="player-saliba",
+            provider_external_id="saliba-001",
+            full_name="William Saliba",
+            nationality="France",
+            nationality_code="FR",
+            date_of_birth=date(2001, 3, 24),
+            primary_position="Centre-Back",
+            club_name="North London Reds",
+            league_name="Launch League Premier",
+            competition_level="featured",
+            current_value_credits=390.0,
+            market_reference_value=55_000_000,
+            source_last_refreshed_at=datetime(2026, 3, 22, 10, 0, tzinfo=timezone.utc),
+            secondary_positions=["CB"],
+        )
+        session.commit()
+
+        app = FastAPI()
+        app.include_router(players_router)
+
+        def _session_override():
+            yield session
+
+        app.dependency_overrides[get_session] = _session_override
+
+        with TestClient(app) as client:
+            club = client.get("/players", params={"search": "Brugge"})
+            nation = client.get("/players", params={"search": "France"})
+            combined = client.get("/players", params={"search": "Scout Nigeria"})
+            winger = client.get("/players", params={"search": "winger"})
+            midfield = client.get("/players", params={"position": "midfielder"})
+            forward = client.get("/players", params={"position": "forward"})
+
+        assert club.status_code == 200
+        assert {item["player_id"] for item in club.json()["players"]} == {"player-versatile"}
+        assert {item["player_id"] for item in nation.json()["players"]} == {"player-saliba"}
+        assert {item["player_id"] for item in combined.json()["players"]} == {"player-versatile"}
+        assert {item["player_id"] for item in winger.json()["players"]} == {"player-versatile"}
+        assert "player-versatile" in {item["player_id"] for item in midfield.json()["players"]}
+        assert "player-saliba" not in {item["player_id"] for item in midfield.json()["players"]}
+        assert "player-versatile" in {item["player_id"] for item in forward.json()["players"]}
+        assert "player-saliba" not in {item["player_id"] for item in forward.json()["players"]}
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_market_filters_age_foot_and_height() -> None:
+    engine, session = _build_session()
+    try:
+        _seed_real_player(
+            session=session,
+            player_id="player-tall-right",
+            provider_external_id="tall-right",
+            full_name="Tall Right Back",
+            nationality="Spain",
+            nationality_code="ES",
+            date_of_birth=date(1990, 1, 1),
+            primary_position="RB",
+            club_name="Madrid Example",
+            league_name="Example League",
+            competition_level="established",
+            current_value_credits=80.0,
+            market_reference_value=2_000_000,
+            source_last_refreshed_at=datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc),
+            dominant_foot="right",
+            height_cm=191,
+        )
+        _seed_real_player(
+            session=session,
+            player_id="player-short-left",
+            provider_external_id="short-left",
+            full_name="Short Left Winger",
+            nationality="France",
+            nationality_code="FR",
+            date_of_birth=date(2008, 6, 1),
+            primary_position="LW",
+            club_name="Lyon Example",
+            league_name="Example League",
+            competition_level="established",
+            current_value_credits=40.0,
+            market_reference_value=500_000,
+            source_last_refreshed_at=datetime(2026, 11, 21, 12, 0, tzinfo=timezone.utc),
+            dominant_foot="left",
+            height_cm=168,
+        )
+        session.commit()
+
+        app = FastAPI()
+        app.include_router(players_router)
+
+        def _session_override():
+            yield session
+
+        app.dependency_overrides[get_session] = _session_override
+
+        with TestClient(app) as client:
+            older = client.get("/players", params={"min_age": 30})
+            younger = client.get("/players", params={"max_age": 20})
+            left = client.get("/players", params={"foot": "left"})
+            tall = client.get("/players", params={"min_height": 185})
+
+        assert {item["player_id"] for item in older.json()["players"]} == {"player-tall-right"}
+        assert {item["player_id"] for item in younger.json()["players"]} == {"player-short-left"}
+        assert {item["player_id"] for item in left.json()["players"]} == {"player-short-left"}
+        assert left.json()["players"][0]["dominant_foot"] == "left"
+        assert left.json()["players"][0]["height_cm"] == 168
+        assert {item["player_id"] for item in tall.json()["players"]} == {"player-tall-right"}
+        assert tall.json()["players"][0]["height_cm"] == 191
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_real_player_universe_detail_exposes_serialized_profile_and_rejects_non_real_players() -> None:
     engine, session = _build_session()
     try:

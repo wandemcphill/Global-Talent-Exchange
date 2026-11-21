@@ -47,6 +47,8 @@ export function MarketTableView({
             <th className="py-2.5 px-3">Player Name</th>
             <th className="py-2.5 px-3 hidden sm:table-cell">Nat</th>
             <th className="py-2.5 px-3 hidden md:table-cell">Age</th>
+            <th className="py-2.5 px-3 hidden lg:table-cell">Foot</th>
+            <th className="py-2.5 px-3 hidden lg:table-cell">cm</th>
             <th className="py-2.5 px-3 hidden lg:table-cell">Current Club</th>
             <th className="py-2.5 px-3 hidden xl:table-cell">Tier & Rules</th>
             <th className="py-2.5 px-3 text-right">Fair Value</th>
@@ -133,6 +135,12 @@ export function MarketTableView({
                 {/* Age */}
                 <td className="py-2.5 px-3 text-slate-300 hidden md:table-cell font-mono">
                   {p.age || "—"}
+                </td>
+                <td className="py-2.5 px-3 text-slate-300 hidden lg:table-cell capitalize">
+                  {p.dominant_foot || p.preferred_foot || "—"}
+                </td>
+                <td className="py-2.5 px-3 text-slate-300 hidden lg:table-cell font-mono">
+                  {p.height_cm || "—"}
                 </td>
 
                 {/* Current Club */}

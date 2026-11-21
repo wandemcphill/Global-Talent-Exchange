@@ -614,6 +614,8 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             "target_nationalities": getattr(dna_policy, "target_nationalities", []) if dna_policy else [],
             "age_mode": getattr(dna_policy, "age_mode", "none") if dna_policy else "none",
             "preferred_max_age": getattr(dna_policy, "preferred_max_age", None) if dna_policy else None,
+            "allow_age_exceptions": bool(getattr(dna_policy, "allow_age_exceptions", True)) if dna_policy else True,
+            "allow_dual_nationality": bool(getattr(dna_policy, "allow_dual_nationality", True)) if dna_policy else True,
             "transfer_strategy": (
                 getattr(dna_policy, "transfer_strategy", "buy_young_develop_sell")
                 if dna_policy
