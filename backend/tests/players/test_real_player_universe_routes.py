@@ -1410,3 +1410,111 @@ def test_real_player_universe_supports_profileless_fm23_legends_excludes_retired
     finally:
         session.close()
         engine.dispose()
+
+
+def test_regen_list_keeps_facebank_portrait_and_real_players_still_drop_it() -> None:
+    engine, session = _build_session()
+    facebank = (
+        "https://res.cloudinary.com/dvxiniqew/image/upload/v1/"
+        "generated-media/regen_newgen_faces/script_skin_hair/African/Black/africa-black-1.png"
+    )
+    try:
+        session.add(
+            Player(
+                id="player-regen-face",
+                source_provider="fm23_genie_scout",
+                provider_external_id="regen-face-1",
+                full_name="Aaron Kalu",
+                canonical_display_name="Aaron Kalu",
+                position="RB",
+                normalized_position="defender",
+                date_of_birth=date(2004, 4, 2),
+                is_real_player=True,
+                is_tradable=True,
+                real_player_tier="regen",
+                dna_profile={"portraitUrl": facebank, "portraitStatus": "ready_newgen_face_bank"},
+            )
+        )
+        session.add(
+            RealPlayerSourceLink(
+                id="source-link-regen-face",
+                gtex_player_id="player-regen-face",
+                source_name="fm23_genie_scout",
+                source_player_key="regen-face-1",
+                canonical_name="Aaron Kalu",
+                nationality="Nigeria",
+                date_of_birth=date(2004, 4, 2),
+                birth_year=2004,
+                primary_position="RB",
+                is_verified_real_player=False,
+                verification_state="unverified",
+            )
+        )
+        session.add(
+            RealPlayerProfile(
+                id="profile-regen-face",
+                gtex_player_id="player-regen-face",
+                source_link_id="source-link-regen-face",
+                source_name="fm23_genie_scout",
+                source_player_key="regen-face-1",
+                canonical_name="Aaron Kalu",
+                nationality="Nigeria",
+                date_of_birth=date(2004, 4, 2),
+                birth_year=2004,
+                primary_position="RB",
+                current_club_name="Regen Pool",
+                metadata_json={
+                    "photo_url": "https://cdn.sportmonks.com/images/soccer/placeholder.png",
+                },
+            )
+        )
+        _seed_real_player(
+            session=session,
+            player_id="player-real-facebank",
+            provider_external_id="real-facebank",
+            full_name="Real Facebank",
+            nationality="Nigeria",
+            nationality_code="NG",
+            date_of_birth=date(1999, 1, 1),
+            primary_position="Striker",
+            club_name="Istanbul Lions",
+            league_name="Launch League Elite",
+            competition_level="elite",
+            current_value_credits=100.0,
+            market_reference_value=1_000_000,
+            source_last_refreshed_at=datetime(2026, 3, 22, 12, 0, tzinfo=timezone.utc),
+            photo_url=facebank,
+        )
+        session.commit()
+
+        app = FastAPI()
+        app.include_router(players_router)
+
+        def _session_override():
+            yield session
+
+        app.dependency_overrides[get_session] = _session_override
+        with TestClient(app) as client:
+            regen_resp = client.get("/players", params={"tier": "regen", "search": "Aaron"})
+            real_resp = client.get("/players", params={"search": "Real Facebank"})
+            detail_resp = client.get("/players/real-universe/player-regen-face")
+
+        assert regen_resp.status_code == 200
+        regen_items = regen_resp.json()["players"]
+        assert [item["player_id"] for item in regen_items] == ["player-regen-face"]
+        assert regen_items[0]["image_url"] == facebank
+        assert regen_items[0]["is_regen"] is True
+
+        assert real_resp.status_code == 200
+        real_items = real_resp.json()["players"]
+        assert [item["player_id"] for item in real_items] == ["player-real-facebank"]
+        assert real_items[0]["image_url"] is None
+        assert real_items[0]["is_regen"] is False
+
+        assert detail_resp.status_code == 200
+        detail = detail_resp.json()
+        assert detail["image_url"] == facebank
+        assert detail["is_regen"] is True
+    finally:
+        session.close()
+        engine.dispose()

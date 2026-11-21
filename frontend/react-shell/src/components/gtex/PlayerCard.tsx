@@ -147,6 +147,7 @@ export interface PlayerCardProps {
   club?: string;
   image?: string | null;
   regen?: boolean;
+  facebank?: boolean;
   tier?: TierType;
   stats?: Array<{ k: string; v: string | number }>;
   footer?: React.ReactNode;
@@ -208,7 +209,11 @@ export function PlayerCard(props: PlayerCardProps) {
     () => resolvePlayerFallback(position, isLegendaryTier),
     [position, isLegendaryTier],
   );
-  const cleanImage = useMemo(() => sanitizeRealPlayerImage(image, props.regen), [image, props.regen]);
+  const allowFacebank = Boolean(props.regen || props.facebank);
+  const cleanImage = useMemo(
+    () => sanitizeRealPlayerImage(image, allowFacebank),
+    [image, allowFacebank],
+  );
   const imageSrc = !imgError && cleanImage ? cleanImage : fallbackSrc;
   const radarPts = useMemo(() => buildRadarPolygon(numRating, position), [numRating, position]);
 

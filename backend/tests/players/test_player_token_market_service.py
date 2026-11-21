@@ -326,3 +326,47 @@ def test_creator_account_can_hold_only_one_share_per_player_before_any_debit(ses
     )
     assert balance_after_rejection == balance_after_first
     assert service.get_holding(user_id=creator.id, player_id=player.id).share_count == 1
+
+
+def test_release_account_acquisitions_returns_the_unit_and_refunds_the_coin(session) -> None:
+    wallet = WalletService()
+    admin = _create_user(session, user_id="release-admin", role=UserRole.ADMIN)
+    fan = _create_user(session, user_id="release-fan")
+    player = _create_player(session, player_id="release-player")
+    _seed_coin_balance(session, wallet, user=fan, amount=Decimal("50.0000"))
+
+    service = PlayerTokenMarketService(session=session, wallet_service=wallet)
+    market = service.issue_market(
+        actor=admin,
+        player_id=player.id,
+        total_shares=200,
+        share_price_coin=Decimal("0.5000"),
+        liquidity_coin=Decimal("20.0000"),
+    )
+    released_before = market.released_shares
+    total_before = market.total_shares
+    available_before = service._primary_available_shares(market)
+
+    service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+    available_after_buy = service._primary_available_shares(market)
+    assert available_after_buy == available_before - 1
+    with pytest.raises(PlayerTokenMarketError) as owned:
+        service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+    assert owned.value.reason == "player_already_owned"
+
+    result = service.release_account_acquisitions(user_id=fan.id)
+    session.refresh(market)
+
+    assert result["holdings_released"] == 1
+    assert result["shares_released"] == 1
+    assert service._primary_available_shares(market) == available_before
+    assert service._primary_available_shares(market) - available_after_buy == 1
+    assert market.released_shares == released_before
+    assert market.total_shares == total_before
+    assert service.get_holding(user_id=fan.id, player_id=player.id).share_count == 0
+    balance = wallet.get_balance(session, wallet.get_user_account(session, fan, LedgerUnit.COIN))
+    assert balance == Decimal("50.0000")
+
+    second = service.buy_shares(actor=fan, player_id=player.id, share_count=1)
+    assert second["holding"].share_count == 1
+    assert service._primary_available_shares(market) == available_before - 1

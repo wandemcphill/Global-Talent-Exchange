@@ -900,6 +900,7 @@ class RealPlayerUniverseQueryService:
             playstyle=playstyle,
             traits=traits,
             skills=skills,
+            is_regen=self._player_is_regen(player),
         )
 
     def _build_match_candidate_snapshot(
@@ -1615,42 +1616,64 @@ class RealPlayerUniverseQueryService:
         values.discard(None)
         return values
 
+    _FACEBANK_IMAGE_TOKENS = (
+        "regen_newgen_faces",
+        "generated-media",
+        "regen_portraits",
+        "national_regen_portraits",
+    )
+    _PLACEHOLDER_IMAGE_TOKEN = "sportmonks.com/images/soccer/placeholder"
+
     @staticmethod
     def _clean_real_image_url(url: str | None) -> str | None:
+        return RealPlayerUniverseQueryService._clean_image_url(url, allow_facebank=False)
+
+    @staticmethod
+    def _clean_image_url(url: str | None, *, allow_facebank: bool) -> str | None:
         if not isinstance(url, str):
             return None
         cleaned = url.strip()
         if not cleaned:
             return None
         lowered = cleaned.lower()
-        if any(
-            tok in lowered
-            for tok in (
-                "regen_newgen_faces",
-                "generated-media",
-                "regen_portraits",
-                "national_regen_portraits",
-                "sportmonks.com/images/soccer/placeholder",
-            )
+        if RealPlayerUniverseQueryService._PLACEHOLDER_IMAGE_TOKEN in lowered:
+            return None
+        if not allow_facebank and any(
+            tok in lowered for tok in RealPlayerUniverseQueryService._FACEBANK_IMAGE_TOKENS
         ):
             return None
         return cleaned
 
+    @staticmethod
+    def _player_is_regen(player: Player | None) -> bool:
+        if player is None:
+            return False
+        from app.services.player_aging import REGEN_SOURCES
+
+        tier_name = str(player.real_player_tier or "").strip().lower()
+        source_name = str(player.source_provider or "").strip().lower()
+        return player.is_real_player is False or tier_name == "regen" or source_name in REGEN_SOURCES
+
     @classmethod
     def _profile_image_url(cls, profile: RealPlayerProfile | None, player: Player | None = None) -> str | None:
+        allow_facebank = cls._player_is_regen(player)
+
+        def clean(url: str | None) -> str | None:
+            return cls._clean_image_url(url, allow_facebank=allow_facebank)
+
         if profile is not None:
             metadata = dict(profile.metadata_json or {})
-            photo_url = cls._clean_real_image_url(metadata.get("photo_url"))
+            photo_url = clean(metadata.get("photo_url"))
             if photo_url:
                 return photo_url
             image_payload = metadata.get("image")
             if isinstance(image_payload, dict):
-                source_url = cls._clean_real_image_url(image_payload.get("source_url"))
+                source_url = clean(image_payload.get("source_url"))
                 if source_url:
                     return source_url
         if player is not None and isinstance(player.dna_profile, dict):
             for key in ("portraitUrl", "photo_url", "image_url"):
-                val = cls._clean_real_image_url(player.dna_profile.get(key))
+                val = clean(player.dna_profile.get(key))
                 if val:
                     return val
         return None

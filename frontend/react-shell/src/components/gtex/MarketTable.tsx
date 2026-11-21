@@ -367,6 +367,7 @@ export function MarketTable({
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}
+                facebank={isRegen}
                 tier={isLegend ? "legendary" : undefined}
                 archetype={p.playstyle}
                 traits={p.traits}

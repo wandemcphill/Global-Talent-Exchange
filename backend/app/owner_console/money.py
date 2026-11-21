@@ -508,87 +508,23 @@ def inject_capital(session: Session, user_id: str, club_id: str, amount, currenc
     if user_total < gross_amount:
         raise OwnerError("insufficient_funds", 402)
 
-    # Calculate user's available deposited funds to preserve provenance
-    dep_credits = ledger._sum(
-        session,
-        LedgerEvent.destination_account == user_acct,
-        LedgerEvent.currency == ledger.GTEX,
-        LedgerEvent.status == "completed",
-        LedgerEvent.balance_class == "deposited",
-    )
-    dep_debits = ledger._sum(
-        session,
-        LedgerEvent.source_account == user_acct,
-        LedgerEvent.currency == ledger.GTEX,
-        LedgerEvent.status.in_(ledger.LIVE_STATUSES),
-        LedgerEvent.balance_class == "deposited",
-        column=LedgerEvent.gross_amount,
-    )
-    available_user_deposited = min(max(Decimal("0"), dep_credits - dep_debits), user_total)
-
+    # An explicit wallet top-up is purchase capital. Regens, legends, and
+    # players at GSI 75 or above can only be signed with deposited coin.
     try:
-        if available_user_deposited >= gross_amount:
-            return ledger.record(
-                session,
-                event_type="owner_capital_injection",
-                source=user_acct,
-                destination=ledger.club_account(club_id),
-                currency=ledger.GTEX,
-                gross=gross_amount,
-                balance_class="deposited",
-                club_id=club_id,
-                user_id=user_id,
-                related_type="club",
-                related_id=club_id,
-                memo="Approved owner capital action (deposited funds)",
-            )
-        elif available_user_deposited > 0:
-            # Atomic split: deposited portion + earned portion
-            dep_event = ledger.record(
-                session,
-                event_type="owner_capital_injection",
-                source=user_acct,
-                destination=ledger.club_account(club_id),
-                currency=ledger.GTEX,
-                gross=available_user_deposited,
-                balance_class="deposited",
-                club_id=club_id,
-                user_id=user_id,
-                related_type="club",
-                related_id=club_id,
-                memo="Approved owner capital action (deposited portion)",
-            )
-            earned_amount = gross_amount - available_user_deposited
-            ledger.record(
-                session,
-                event_type="owner_capital_injection",
-                source=user_acct,
-                destination=ledger.club_account(club_id),
-                currency=ledger.GTEX,
-                gross=earned_amount,
-                balance_class="earned",
-                club_id=club_id,
-                user_id=user_id,
-                related_type="club",
-                related_id=club_id,
-                memo="Approved owner capital action (earned portion)",
-            )
-            return dep_event
-        else:
-            return ledger.record(
-                session,
-                event_type="owner_capital_injection",
-                source=user_acct,
-                destination=ledger.club_account(club_id),
-                currency=ledger.GTEX,
-                gross=gross_amount,
-                balance_class="earned",
-                club_id=club_id,
-                user_id=user_id,
-                related_type="club",
-                related_id=club_id,
-                memo="Approved owner capital action",
-            )
+        return ledger.record(
+            session,
+            event_type="owner_capital_injection",
+            source=user_acct,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=gross_amount,
+            balance_class="deposited",
+            club_id=club_id,
+            user_id=user_id,
+            related_type="club",
+            related_id=club_id,
+            memo="Owner moved GTEX Coin from the personal wallet into the club treasury",
+        )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
 

@@ -1,15 +1,24 @@
 from __future__ import annotations
 
 from contextvars import ContextVar
+from decimal import Decimal
 from hashlib import sha256
 from typing import Callable, Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.models.player_token_market import PlayerShareMarket
+from app.models.player_token_market import PlayerShareEvent, PlayerShareHolding, PlayerShareMarket
 from app.models.user import User
-from app.models.wallet import LedgerEntry, LedgerTransaction
+from app.models.wallet import (
+    LedgerEntry,
+    LedgerEntryReason,
+    LedgerSourceTag,
+    LedgerTransaction,
+    LedgerTransactionType,
+    LedgerUnit,
+)
+from app.wallets.service import LedgerPosting
 from app.players import legacy_token_service as _legacy
 from app.players.trade_context import consume_player_share_idempotency_key
 
@@ -401,6 +410,215 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
         )
         self.session.flush()
         return market
+
+    def release_account_acquisitions(self, *, user_id: str) -> dict[str, Any]:
+        """Return one account's acquired units to the market and refund what it paid.
+
+        Circulating supply falls by the released count. Released supply and
+        lifetime total supply stay where they are, so a 1-of-1 legend is not minted again.
+        """
+        user = self.session.get(User, user_id)
+        if user is None:
+            raise PlayerTokenMarketError("User was not found.", reason="user_not_found")
+
+        holdings = list(
+            self.session.scalars(
+                select(PlayerShareHolding)
+                .where(
+                    PlayerShareHolding.user_id == user_id,
+                    PlayerShareHolding.share_count > 0,
+                )
+                .with_for_update()
+            ).all()
+        )
+        releases: list[dict[str, Any]] = []
+        refund_total = Decimal("0.0000")
+        shares_released = 0
+        for holding in holdings:
+            release = self._release_holding(user=user, holding=holding)
+            releases.append(release)
+            refund_total = self._amount(refund_total + Decimal(release["refund_coin"]))
+            shares_released += int(release["shares"])
+        self.session.flush()
+        return {
+            "user_id": user_id,
+            "holdings_released": len(releases),
+            "shares_released": shares_released,
+            "refund_total": str(refund_total),
+            "releases": releases,
+        }
+
+    def _release_holding(self, *, user: User, holding: PlayerShareHolding) -> dict[str, Any]:
+        share_count = int(holding.share_count or 0)
+        market = self.session.scalar(
+            select(PlayerShareMarket)
+            .where(PlayerShareMarket.player_id == holding.player_id)
+            .with_for_update()
+        )
+        if market is None:
+            raise PlayerTokenMarketError(
+                "Player share market was not found.",
+                reason="market_not_found",
+            )
+        circulating_before = int(market.circulating_shares or 0)
+        if circulating_before < share_count:
+            raise PlayerTokenMarketError(
+                "Circulating supply is lower than this holding.",
+                reason="holding_circulation_mismatch",
+            )
+        released_before = market.released_shares
+        total_before = market.total_shares
+        available_before = self._primary_available_shares(market)
+        gross, fee = self._acquisition_settlement(holding)
+        refund = self._amount(gross + fee)
+        transaction_id = self._refund_acquisition(
+            user=user,
+            player_id=holding.player_id,
+            gross=gross,
+            fee=fee,
+        )
+        holding.share_count = 0
+        holding.average_cost_coin = Decimal("0.0000")
+        holding.metadata_json = {
+            **(holding.metadata_json or {}),
+            "last_transaction_id": transaction_id,
+            "last_trade_side": "reset_release",
+        }
+        market.circulating_shares = circulating_before - share_count
+        if market.released_shares != released_before or market.total_shares != total_before:
+            raise PlayerTokenMarketError(
+                "Releasing an acquisition must not mint supply.",
+                reason="release_minted_supply",
+            )
+        available_after = self._primary_available_shares(market)
+        if available_after != available_before + share_count:
+            raise PlayerTokenMarketError(
+                "Released units did not return to the market.",
+                reason="release_availability_mismatch",
+            )
+        self._record_event(
+            player_id=holding.player_id,
+            user_id=user.id,
+            actor_user_id=user.id,
+            event_type="reset_release",
+            share_delta=-share_count,
+            price_per_share_coin=self._amount(market.share_price_coin),
+            gross_amount_coin=gross,
+            metadata_json={
+                "market_id": market.id,
+                "transaction_id": transaction_id,
+                "fee_amount_coin": str(fee),
+                "refund_coin": str(refund),
+                "circulating_before": circulating_before,
+                "circulating_shares": int(market.circulating_shares or 0),
+                "released_shares": released_before,
+                "total_shares": int(total_before or 0),
+            },
+        )
+        return {
+            "player_id": holding.player_id,
+            "shares": share_count,
+            "circulating_before": circulating_before,
+            "circulating_after": int(market.circulating_shares or 0),
+            "available_before": available_before,
+            "available_after": available_after,
+            "refund_coin": str(refund),
+            "released_shares": released_before,
+            "total_shares": total_before,
+        }
+
+    def _acquisition_settlement(self, holding: PlayerShareHolding) -> tuple[Decimal, Decimal]:
+        share_count = int(holding.share_count or 0)
+        events = list(
+            self.session.scalars(
+                select(PlayerShareEvent).where(
+                    PlayerShareEvent.user_id == holding.user_id,
+                    PlayerShareEvent.player_id == holding.player_id,
+                    PlayerShareEvent.event_type == "buy",
+                    PlayerShareEvent.share_delta > 0,
+                )
+            ).all()
+        )
+        gross = Decimal("0.0000")
+        fee = Decimal("0.0000")
+        shares_seen = 0
+        for event in events:
+            gross = self._amount(gross + self._amount(event.gross_amount_coin))
+            fee = self._amount(fee + self._amount((event.metadata_json or {}).get("fee_amount_coin")))
+            shares_seen += int(event.share_delta or 0)
+        if shares_seen == share_count and gross > 0:
+            return gross, fee
+        paid = self._amount(self._amount(holding.average_cost_coin) * Decimal(share_count))
+        return paid, Decimal("0.0000")
+
+    def _refund_acquisition(
+        self,
+        *,
+        user: User,
+        player_id: str,
+        gross: Decimal,
+        fee: Decimal,
+    ) -> str | None:
+        refund = self._amount(gross + fee)
+        if refund <= 0:
+            return None
+        user_account = self.wallet_service.get_user_account(self.session, user, LedgerUnit.COIN)
+        liquidity = self._ensure_player_share_liquidity_account(player_id)
+        liquidity_balance = self.wallet_service.get_balance(self.session, liquidity)
+        liquidity_debit = self._amount(min(liquidity_balance, gross))
+        fee_debit = Decimal("0.0000")
+        fee_account = None
+        if fee > 0:
+            fee_account = self.wallet_service.ensure_trade_fee_account(self.session, LedgerUnit.COIN)
+            fee_balance = self.wallet_service.get_balance(self.session, fee_account)
+            fee_debit = self._amount(min(fee_balance, fee))
+        shortfall = self._amount(refund - liquidity_debit - fee_debit)
+        postings = [
+            LedgerPosting(
+                account=user_account,
+                amount=refund,
+                source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                transaction_type=LedgerTransactionType.ADJUSTMENT,
+            )
+        ]
+        if liquidity_debit > 0:
+            postings.append(
+                LedgerPosting(
+                    account=liquidity,
+                    amount=-liquidity_debit,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                )
+            )
+        if fee_account is not None and fee_debit > 0:
+            postings.append(
+                LedgerPosting(
+                    account=fee_account,
+                    amount=-fee_debit,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                )
+            )
+        if shortfall > 0:
+            platform = self.wallet_service.ensure_platform_account(self.session, LedgerUnit.COIN)
+            postings.append(
+                LedgerPosting(
+                    account=platform,
+                    amount=-shortfall,
+                    source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+                    transaction_type=LedgerTransactionType.ADJUSTMENT,
+                )
+            )
+        entries = self.wallet_service.append_transaction(
+            self.session,
+            postings=postings,
+            reason=LedgerEntryReason.ADJUSTMENT,
+            source_tag=LedgerSourceTag.ADMIN_ADJUSTMENT,
+            reference=f"player-share-reset-release:{player_id}:{user.id}",
+            description=f"Released acquired player {player_id} back to the market",
+            actor=user,
+        )
+        return entries[0].transaction_id
 
     def _serialize_market_view(self, market: PlayerShareMarket) -> dict[str, Any]:
         payload = super()._serialize_market_view(market)

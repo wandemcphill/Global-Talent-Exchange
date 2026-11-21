@@ -201,7 +201,9 @@ export function PlayerDrawer({
     p?.attributes && Object.keys(p.attributes).length > 0
       ? p.attributes
       : p?.normalized_signals || {};
-  const isLegend = String(p?.real_player_tier || "").toLowerCase() === "legend";
+  const tierNorm = String(p?.real_player_tier || "").toLowerCase();
+  const isLegend = tierNorm === "legend";
+  const isRegen = Boolean(p?.is_regen) || p?.is_real_player === false || tierNorm === "regen";
   const honors: string[] = Array.isArray(p?.metadata_json?.honors) ? p.metadata_json.honors : [];
   const playstyle: string | undefined =
     p?.playstyle ||
@@ -258,6 +260,7 @@ export function PlayerDrawer({
                 nationality={p.nationality}
                 club={p.current_club_name}
                 image={p.image_url}
+                facebank={isRegen}
                 tier={isLegend ? "legendary" : undefined}
                 badge={isLegend ? "ICON · 1 OF 1" : undefined}
                 archetype={playstyle}

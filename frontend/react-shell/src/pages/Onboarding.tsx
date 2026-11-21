@@ -150,7 +150,10 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
   const rates = finance?.treasury_rates || {};
   const rate = Number(rates.deposit_rate || 0);
   const walletCoins = Number(finance?.wallet?.gtex_total || 0);
-  const clubCoins = Number(club?.economy?.cash_gtex || 0);
+  const financeClub = (finance?.clubs || []).find((item: any) => item.club_id === clubId);
+  const clubCoins = Number(financeClub?.cash_gtex ?? club?.economy?.cash_gtex ?? 0);
+  const depositedCoins = Number(financeClub?.deposited ?? club?.economy?.deposited ?? 0);
+  const squadGrant = Number(financeClub?.squad_grant ?? club?.economy?.squad_grant ?? 0);
   const registeredPlayers = Number(
     club?.formation?.total_registered_players ?? club?.squad?.length ?? 0,
   );
@@ -248,7 +251,10 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           <p className="text-[10px] uppercase tracking-widest text-slate-400">Club treasury</p>
           <p className="gx-mono text-xl font-bold text-emerald-300">{fmt(clubCoins)} GTX</p>
           <p className="mt-1 text-[10px] text-slate-400">
-            Squad grant remaining: {fmt(club?.economy?.squad_grant || 0)} GTX
+            Deposited: {fmt(depositedCoins)} GTX
+          </p>
+          <p className="text-[10px] text-slate-400">
+            Squad grant remaining: {fmt(squadGrant)} GTX
           </p>
         </div>
       </div>
@@ -329,16 +335,18 @@ function SquadFundingPanel({ clubId, club, onClubFunded, purpose = "squad", shor
           />
           <Btn
             className="mt-3 w-full"
-            disabled={!coinsToMove || Number(coinsToMove) <= 0 || Number(coinsToMove) > walletCoins}
+            disabled={!coinsToMove || Number(coinsToMove) <= 0}
             onClick={moveToClub}
             data-testid="squad-wallet-inject"
           >
             Add coins to club treasury
           </Btn>
-          <p className="mt-2 text-[11px] text-slate-500">
-            The grant is already in your club treasury; it cannot be withdrawn or used for
-            facilities.
-          </p>
+          {squadGrant > 0 && (
+            <p className="mt-2 text-[11px] text-slate-500">
+              The grant is already in your club treasury; it cannot be withdrawn or used for
+              facilities.
+            </p>
+          )}
         </div>
       </div>
       <div className="mt-4">

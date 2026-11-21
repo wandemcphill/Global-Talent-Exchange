@@ -675,6 +675,22 @@ def test_user_wallet_deposit_transfers_provenance_to_club_treasury(client, auth_
         assert funding["available_deposited"] == Decimal("10000")
 
 
+def test_wallet_topup_without_deposited_provenance_lands_as_deposited(
+    client, auth_user_factory, app_session_factory
+):
+    """Moving personal GTEX into the club is purchase capital, even if the wallet was not tagged deposited."""
+    user = auth_user_factory(suffix="topup-deposited", funded_coin=Decimal("8000"))
+    claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])
+    assert claimed.status_code == 200, claimed.text
+    club_id = claimed.json()["club_id"]
+
+    with app_session_factory() as session:
+        event = money.inject_capital(session, user["user_id"], club_id, Decimal("5000"))
+        assert event.balance_class == "deposited"
+        funding = ledger.get_club_funding(session, club_id)
+        assert funding["available_deposited"] == Decimal("5000")
+
+
 def test_formal_transfer_bid_enforces_funding_provenance_at_bid_and_settlement(
     client, auth_user_factory, app_session_factory
 ):

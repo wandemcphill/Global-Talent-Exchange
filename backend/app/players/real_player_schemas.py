@@ -126,6 +126,7 @@ class RealPlayerUniverseDetailView(BaseModel):
     playstyle: str | None = None
     traits: tuple[str, ...] = ()
     skills: tuple[str, ...] = ()
+    is_regen: bool = False
 
 
 class RealPlayerMatchRangePreference(BaseModel):
