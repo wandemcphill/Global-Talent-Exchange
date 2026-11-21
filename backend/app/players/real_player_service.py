@@ -890,9 +890,7 @@ class RealPlayerUniverseQueryService:
 
         if isinstance(raw_attrs, dict):
             numeric = {
-                str(k).lower(): float(v)
-                for k, v in raw_attrs.items()
-                if isinstance(v, (int, float)) and float(v) > 0
+                str(k).lower(): float(v) for k, v in raw_attrs.items() if isinstance(v, (int, float)) and float(v) > 0
             }
             fm_scale = bool(numeric) and max(numeric.values()) <= 20 and max(numeric.values()) > 1
             for key, raw in numeric.items():
@@ -1864,9 +1862,7 @@ class RealPlayerUniverseQueryService:
         cleaned = (foot or "").strip().lower()
         if not cleaned:
             return None
-        recorded = func.lower(
-            func.trim(func.coalesce(RealPlayerProfile.dominant_foot, Player.preferred_foot, ""))
-        )
+        recorded = func.lower(func.trim(func.coalesce(RealPlayerProfile.dominant_foot, Player.preferred_foot, "")))
         if cleaned in {"left", "l"}:
             return recorded.in_(("left", "l", "both", "either"))
         if cleaned in {"right", "r"}:
