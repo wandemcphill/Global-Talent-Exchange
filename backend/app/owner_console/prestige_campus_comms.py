@@ -1933,7 +1933,9 @@ def _legacy_get_club_communications_unused(
             "title": "First-Team Manager",
             "mood": mgr.get("mood"),
             "loyalty": mgr.get("loyalty"),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr.get("name") or "Seat empty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(
+                None, "staff_mgr", mgr.get("name") or "Seat empty"
+            ),
         },
         {
             "contact_id": "staff:general_manager",

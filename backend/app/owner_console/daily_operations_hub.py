@@ -259,9 +259,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "mood": _filed_int(mgr.get("mood")) if mgr_appointed else None,
             "loyalty": _filed_int(mgr.get("loyalty")) if mgr_appointed else 0,
             "temperament": str(mgr.get("temperament") or "Not filed") if mgr_appointed else "vacant",
-            "tactical_preference": (
-                str(mgr.get("tactical_preference") or "Not filed") if mgr_appointed else "Vacant"
-            ),
+            "tactical_preference": (str(mgr.get("tactical_preference") or "Not filed") if mgr_appointed else "Vacant"),
             "youth_development": _filed_int(mgr.get("youth_development")) if mgr_appointed else 0,
             "salary_gtex": _filed_salary(mgr) if mgr_appointed else 0,
             "personal_agenda": (

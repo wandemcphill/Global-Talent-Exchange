@@ -776,12 +776,39 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
         identity = mgr_profile.get("preferred_tactical_philosophy") or mgr_profile.get("tactical_preference")
         dimensions: dict[str, int] = {}
         for dim, raw in (
-            ("attacking_football", mgr_profile.get("attacking_vs_defensive") if "attacking_vs_defensive" in mgr_profile else None),
-            ("possession_football", mgr_profile.get("possession_vs_direct") if "possession_vs_direct" in mgr_profile else None),
+            (
+                "attacking_football",
+                mgr_profile.get("attacking_vs_defensive") if "attacking_vs_defensive" in mgr_profile else None,
+            ),
+            (
+                "possession_football",
+                mgr_profile.get("possession_vs_direct") if "possession_vs_direct" in mgr_profile else None,
+            ),
             ("high_pressing", mgr_profile.get("pressing_philosophy") if "pressing_philosophy" in mgr_profile else None),
-            ("youth_development", mgr_profile.get("youth_development_commitment") if "youth_development_commitment" in mgr_profile else None),
-            ("experienced_recruitment", mgr_profile.get("preference_for_experienced_players") if "preference_for_experienced_players" in mgr_profile else None),
-            ("academy_first_recruitment", gm_profile.get("youth_recruitment_preference") if "youth_recruitment_preference" in gm_profile else None),
+            (
+                "youth_development",
+                (
+                    mgr_profile.get("youth_development_commitment")
+                    if "youth_development_commitment" in mgr_profile
+                    else None
+                ),
+            ),
+            (
+                "experienced_recruitment",
+                (
+                    mgr_profile.get("preference_for_experienced_players")
+                    if "preference_for_experienced_players" in mgr_profile
+                    else None
+                ),
+            ),
+            (
+                "academy_first_recruitment",
+                (
+                    gm_profile.get("youth_recruitment_preference")
+                    if "youth_recruitment_preference" in gm_profile
+                    else None
+                ),
+            ),
         ):
             if raw is not None:
                 dimensions[dim] = int(raw)
@@ -789,7 +816,9 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
             dimensions["counterattacking"] = _clamp(100 - int(mgr_profile["possession_vs_direct"]))
         if "attacking_vs_defensive" in mgr_profile and mgr_profile.get("attacking_vs_defensive") is not None:
             dimensions["defensive_solidity"] = _clamp(100 - int(mgr_profile["attacking_vs_defensive"]))
-        youth_raw = mgr_profile.get("youth_development_commitment") if "youth_development_commitment" in mgr_profile else None
+        youth_raw = (
+            mgr_profile.get("youth_development_commitment") if "youth_development_commitment" in mgr_profile else None
+        )
         secondary = "youth_development" if youth_raw is not None and int(youth_raw) >= 70 else None
         if identity or dimensions:
             club_culture = {
@@ -1501,7 +1530,11 @@ def evaluate_layer_a_staff_decision(
     ) and role_key in ("first_team_manager", "head_coach")
 
     if is_selection_or_tactical_interference:
-        if is_challenge or (interference_tolerance is not None and interference_tolerance <= 45) or interference_count >= 1:
+        if (
+            is_challenge
+            or (interference_tolerance is not None and interference_tolerance <= 45)
+            or interference_count >= 1
+        ):
             interference_count += 1
             rel_meta["interference_count"] = interference_count
 
@@ -1523,11 +1556,11 @@ def evaluate_layer_a_staff_decision(
             if None not in (youth_commit, trust_youth, promote_academy, veteran_pref):
                 youth_index = round((youth_commit * 0.4) + (trust_youth * 0.3) + (promote_academy * 0.3))
                 readiness_threshold = round(58 + (veteran_pref * 0.22) - (youth_index * 0.14))
-            potential_term = ((p_potential - p_rating) * 0.22) if p_rating is not None and p_potential is not None else 0
-            fitness_term = ((p_fitness - 80) * 0.15) if p_fitness is not None else 0
-            effective_readiness = (
-                round(p_rating + potential_term + fitness_term) if p_rating is not None else None
+            potential_term = (
+                ((p_potential - p_rating) * 0.22) if p_rating is not None and p_potential is not None else 0
             )
+            fitness_term = ((p_fitness - 80) * 0.15) if p_fitness is not None else 0
+            effective_readiness = round(p_rating + potential_term + fitness_term) if p_rating is not None else None
 
             reasoning_trace.update(
                 {
@@ -1830,9 +1863,7 @@ def evaluate_layer_a_staff_decision(
                 "max_gsi": max_gsi,
                 "philosophy": philosophy,
             }
-            reasoning_trace["verdict_reason"] = (
-                f"{staff_name} will shortlist {pos} targets{band} under {philosophy}."
-            )
+            reasoning_trace["verdict_reason"] = f"{staff_name} will shortlist {pos} targets{band} under {philosophy}."
         elif role_key == "head_of_youth_development":
             philosophy = str(
                 personality.get("philosophy")
@@ -1870,10 +1901,7 @@ def evaluate_layer_a_staff_decision(
                 }
             )
             conservative = (
-                expensive
-                and fin_disc is not None
-                and fin_disc >= 68
-                and (risk_tol is None or risk_tol <= 60)
+                expensive and fin_disc is not None and fin_disc >= 68 and (risk_tol is None or risk_tol <= 60)
             )
             workflow = {
                 "target_position": pos,
@@ -1905,15 +1933,15 @@ def evaluate_layer_a_staff_decision(
     elif intent == "recruitment_spending_critique":
         if role_key not in ("general_manager", "finance_commercial_director"):
             outcome = "deferred"
-            reasoning_trace["verdict_reason"] = (
-                f"{staff_name} does not hold the wage book. The general manager does."
-            )
+            reasoning_trace["verdict_reason"] = f"{staff_name} does not hold the wage book. The general manager does."
         else:
             fin_disc = _optional_score(personality, "financial_discipline")
             reasoning_trace["gm_financial_discipline"] = fin_disc
             if fin_disc is None:
                 outcome = "deferred"
-                reasoning_trace["verdict_reason"] = "Financial discipline is not filed, so the wage ceiling was left unchanged."
+                reasoning_trace["verdict_reason"] = (
+                    "Financial discipline is not filed, so the wage ceiling was left unchanged."
+                )
             elif fin_disc >= 75:
                 outcome = "accepted"
                 deltas["alignment"] = 4
@@ -2239,7 +2267,9 @@ def _apply_layer_a_state_effects(
             max_gsi=int(rw["max_gsi"]) if rw.get("max_gsi") is not None else None,
             gm_verdict=str(rw.get("gm_verdict") or "shortlist_commissioned"),
             estimated_fee=float(rw["estimated_fee"]) if rw.get("estimated_fee") is not None else None,
-            estimated_weekly_wage=float(rw["estimated_weekly_wage"]) if rw.get("estimated_weekly_wage") is not None else None,
+            estimated_weekly_wage=(
+                float(rw["estimated_weekly_wage"]) if rw.get("estimated_weekly_wage") is not None else None
+            ),
         )
         state_effects["recruitment_assignment_id"] = assignment.id
         state_effects["candidate_shortlist"] = assignment.candidate_shortlist_json
@@ -2298,9 +2328,7 @@ def _apply_layer_a_state_effects(
             max_weekly_wage=0.0,
             gm_evaluation_status="scout_shortlist",
             gm_notes="",
-            scout_notes=(
-                f"{staff_name} filed {pos or 'any position'} at GSI {min_gsi}–{max_gsi} under {philosophy}."
-            ),
+            scout_notes=(f"{staff_name} filed {pos or 'any position'} at GSI {min_gsi}–{max_gsi} under {philosophy}."),
             candidate_shortlist_json=shortlist,
             recommended_candidate_json=shortlist[0] if shortlist else {},
             metadata_json={"philosophy": philosophy, "filed_count": len(shortlist)},
@@ -2442,6 +2470,7 @@ def _apply_layer_a_state_effects(
 # SECTION 6 & 7: INTER-STAFF RECRUITMENT WORKFLOW (MANAGER <-> GM <-> CHIEF SCOUT)
 # ---------------------------------------------------------------------------
 
+
 def execute_inter_staff_recruitment_workflow(
     db: Session,
     state: OwnerClubState,
@@ -2458,7 +2487,6 @@ def execute_inter_staff_recruitment_workflow(
     """Coordinate the First-Team Manager, General Manager, and Chief Scout on a recruitment requirement."""
     identities = ensure_club_staff_identities(db, state)
     gm = identities["general_manager"]
-    gm_profile = gm["personality_profile"]
     scout = identities["chief_scout"]
     mgr = identities["first_team_manager"]
     mgr_profile = mgr["personality_profile"]
@@ -3377,10 +3405,8 @@ def generate_proactive_staff_initiatives(
     mgr_profile = mgr["personality_profile"]
     gm = identities["general_manager"]
     hoyd = identities["head_of_youth_development"]
-    scout = identities["chief_scout"]
     med = identities["medical_director"]
     assistants = identities["assistant_coaches"]
-    treasury = _club_treasury_gtex(db, state)
 
     players = list(db.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     fac = dict(state.facilities_json or {})
@@ -3417,7 +3443,12 @@ def generate_proactive_staff_initiatives(
         and mgr.get("manager_id") != "gtex-staff-coach"
         and "vacant" not in mgr_name.lower()
     )
-    if mgr_seated and not lw_players and open_lw_assignment is None and _can_fire("mgr_lw_recruitment_request", min_days=7):
+    if (
+        mgr_seated
+        and not lw_players
+        and open_lw_assignment is None
+        and _can_fire("mgr_lw_recruitment_request", min_days=7)
+    ):
         generated.append(
             {
                 "sender_role": "first_team_manager",
@@ -3555,11 +3586,7 @@ def generate_proactive_staff_initiatives(
 
     if (
         protest_stage in ("petition", "banner_protest", "organised_boycott")
-        or (
-            ticket_tier in ("premium", "exploitative")
-            and overall_sent is not None
-            and overall_sent < 60
-        )
+        or (ticket_tier in ("premium", "exploitative") and overall_sent is not None and overall_sent < 60)
         or att_mod <= -8
     ) and _can_fire("gm_supporter_commercial_alert", min_days=7):
         generated.append(
@@ -3589,10 +3616,7 @@ def generate_proactive_staff_initiatives(
 
     high_media_pressure = any(int(st.leadership_pressure_delta or 0) >= 3 for st in recent_stories)
     if (
-        (
-            sup_profile.confidence_in_manager is not None
-            and int(sup_profile.confidence_in_manager) <= 55
-        )
+        (sup_profile.confidence_in_manager is not None and int(sup_profile.confidence_in_manager) <= 55)
         or protest_stage in ("banner_protest", "organised_boycott")
         or high_media_pressure
     ) and _can_fire("mgr_public_pressure_brief", min_days=7):
@@ -3682,19 +3706,13 @@ def simulate_boardroom_meeting_negotiation(
 
     sup_profile, _ = living_institution.ensure_club_institutional_ecosystem(db, state)
     protest_stage = str(sup_profile.active_protest_stage or "none")
-    overall_sent = (
-        int(sup_profile.overall_sentiment) if sup_profile.overall_sentiment is not None else None
-    )
+    overall_sent = int(sup_profile.overall_sentiment) if sup_profile.overall_sentiment is not None else None
     ticket_tier = str(sup_profile.ticket_price_tier or "standard")
     att_mod = int(sup_profile.attendance_modifier_pct or 0)
     agenda_lower = f"{title} {agenda} {meeting_type}".lower()
     has_supporter_pressure = (
         protest_stage in ("petition", "banner_protest", "organised_boycott")
-        or (
-            ticket_tier in ("premium", "exploitative")
-            and overall_sent is not None
-            and overall_sent < 58
-        )
+        or (ticket_tier in ("premium", "exploitative") and overall_sent is not None and overall_sent < 58)
         or any(k in agenda_lower for k in ("supporter", "protest", "ticket", "boycott", "public_trust"))
     )
 
@@ -3714,9 +3732,11 @@ def simulate_boardroom_meeting_negotiation(
                 "pro_youth_and_tactical_identity"
                 if isinstance(mgr_profile.get("youth_development_commitment"), (int, float))
                 and int(mgr_profile.get("youth_development_commitment")) >= 70
-                else "win_now_senior_experience"
-                if isinstance(mgr_profile.get("preference_for_experienced_players"), (int, float))
-                else "profile_not_filed"
+                else (
+                    "win_now_senior_experience"
+                    if isinstance(mgr_profile.get("preference_for_experienced_players"), (int, float))
+                    else "profile_not_filed"
+                )
             ),
             "statement": (
                 f"From the touchline, my priority is executing our {(mgr_profile.get('preferred_tactical_philosophy') or 'not filed').replace('_', ' ')} "
@@ -3748,9 +3768,11 @@ def simulate_boardroom_meeting_negotiation(
                 "strict_budget_and_resale_value"
                 if isinstance(gm_profile.get("financial_discipline"), (int, float))
                 and int(gm_profile.get("financial_discipline")) >= 70
-                else "aggressive_market_ambition"
-                if isinstance(gm_profile.get("financial_discipline"), (int, float))
-                else "budget_not_filed"
+                else (
+                    "aggressive_market_ambition"
+                    if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                    else "budget_not_filed"
+                )
             ),
             "statement": (
                 f"Looking at our liquid treasury of {treasury:,.0f} GTX and our {(gm_profile.get('wage_structure_philosophy') or 'not filed').replace('_', ' ')} wage model "
@@ -3763,9 +3785,11 @@ def simulate_boardroom_meeting_negotiation(
                     "I cannot rubber-stamp overpriced veteran signings that carry zero resale value. Any recruitment must stay within sustainable fee bands or target U23 profiles."
                     if isinstance(gm_profile.get("financial_discipline"), (int, float))
                     and int(gm_profile.get("financial_discipline")) >= 70
-                    else "we have a window to push for silverware, and I believe we should back ambitious marquee targets even if it stretches our wage ceiling."
-                    if isinstance(gm_profile.get("financial_discipline"), (int, float))
-                    else "I will not set a wage band until a financial-discipline score is filed."
+                    else (
+                        "we have a window to push for silverware, and I believe we should back ambitious marquee targets even if it stretches our wage ceiling."
+                        if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                        else "I will not set a wage band until a financial-discipline score is filed."
+                    )
                 )
                 + (
                     f" Crucially, supporter sentiment is {overall_sent if overall_sent is not None else 'not filed'}/100 under '{ticket_tier}' ticketing ({protest_stage}), impacting matchday gate projections by {att_mod:+d}%."
@@ -3899,7 +3923,9 @@ def simulate_boardroom_meeting_negotiation(
             "effects": {
                 "manager_trust_delta": 6,
                 "manager_autonomy_delta": 5,
-                "gm_tension_delta": 5 if gm_discipline is not None and gm_discipline >= 75 else (-2 if gm_discipline is not None else 0),
+                "gm_tension_delta": (
+                    5 if gm_discipline is not None and gm_discipline >= 75 else (-2 if gm_discipline is not None else 0)
+                ),
                 "culture_shift": mgr_profile.get("preferred_tactical_philosophy"),
             },
         },
@@ -4460,11 +4486,7 @@ def select_manager_matchday_lineup(
 
     def _manager_player_score(p: OwnerSquadPlayer) -> float:
         base = float(p.rating) if p.rating is not None else 0.0
-        fitness_adj = (
-            (float(_player_fitness(p)) - 80.0) * 0.18
-            if "fitness" in dict(p.personality_json or {})
-            else 0.0
-        )
+        fitness_adj = (float(_player_fitness(p)) - 80.0) * 0.18 if "fitness" in dict(p.personality_json or {}) else 0.0
         morale_adj = ((float(p.morale) - 70.0) * 0.08) if p.morale is not None else 0.0
         age = int(p.age) if p.age is not None else None
         age_adj = 0.0

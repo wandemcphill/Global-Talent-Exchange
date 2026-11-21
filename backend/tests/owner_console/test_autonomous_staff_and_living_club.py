@@ -779,7 +779,11 @@ def test_department_decisions_file_on_the_club_and_a_resignation_leaves_the_seat
             ).all()
         )
         assert any(row.initiated_by_role == "chief_scout" and row.target_position == "LW" for row in assignments)
-        assert all(not str(item.get("player_name") or "").startswith("Mateo") for row in assignments for item in (row.candidate_shortlist_json or []))
+        assert all(
+            not str(item.get("player_name") or "").startswith("Mateo")
+            for row in assignments
+            for item in (row.candidate_shortlist_json or [])
+        )
 
         youth = client.post(
             f"/owner/clubs/{state.club_id}/communications/messages",

@@ -77,7 +77,10 @@ class EventEngine:
                 ("central_combine", 1.05 + ((attacking_context.midfield_control - 60.0) / 90.0)),
                 ("wide_overlap", 0.90 + (attacking_context.width * 0.70)),
                 ("set_piece", 0.55 + (attacking_context.set_piece_threat * 0.80)),
-                ("press_break", 0.75 + ((attacking_context.press_resistance - defending_context.press_intensity) / 120.0)),
+                (
+                    "press_break",
+                    0.75 + ((attacking_context.press_resistance - defending_context.press_intensity) / 120.0),
+                ),
             ],
             rng,
         )
@@ -149,7 +152,15 @@ class EventEngine:
         defender_proximity = self._clamp(
             0.26
             + (pressure * 0.36)
-            + ((tactical_context.for_side("away" if state.possession_side == "home" else "home").defensive_compactness - 60.0) / 220.0)
+            + (
+                (
+                    tactical_context.for_side(
+                        "away" if state.possession_side == "home" else "home"
+                    ).defensive_compactness
+                    - 60.0
+                )
+                / 220.0
+            )
             - ((role_profile.transition - 1.0) * 0.12)
             + rng.uniform(-0.06, 0.06),
             0.08,

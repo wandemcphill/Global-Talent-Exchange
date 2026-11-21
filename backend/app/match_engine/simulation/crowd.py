@@ -51,10 +51,17 @@ class CrowdAtmosphereEngine:
         acting_state = self._acting_state(event=event, home_state=home_state, away_state=away_state)
         other_state = away_state if acting_state is home_state else home_state
 
-        if event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.PENALTY_GOAL} and event.metadata.get("review_decision") != "disallowed":
+        if (
+            event.event_type in {MatchEventType.GOAL, MatchEventType.PENALTY_SCORED, MatchEventType.PENALTY_GOAL}
+            and event.metadata.get("review_decision") != "disallowed"
+        ):
             self._shift(acting_state, other_state, swing=0.18 if acting_state.is_home else 0.15)
             return
-        if event.event_type in {MatchEventType.GOALKEEPER_SAVE, MatchEventType.DOUBLE_SAVE, MatchEventType.PENALTY_MISSED}:
+        if event.event_type in {
+            MatchEventType.GOALKEEPER_SAVE,
+            MatchEventType.DOUBLE_SAVE,
+            MatchEventType.PENALTY_MISSED,
+        }:
             self._shift(acting_state, other_state, swing=0.08 if acting_state.is_home else 0.06)
             return
         if event.event_type in {MatchEventType.RED_CARD, MatchEventType.INJURY}:
@@ -90,7 +97,9 @@ class CrowdAtmosphereEngine:
             return "muted"
         return "standard"
 
-    def _acting_state(self, *, event: MatchEvent, home_state: TeamRuntimeState, away_state: TeamRuntimeState) -> TeamRuntimeState:
+    def _acting_state(
+        self, *, event: MatchEvent, home_state: TeamRuntimeState, away_state: TeamRuntimeState
+    ) -> TeamRuntimeState:
         if event.team_id == away_state.team_id:
             return away_state
         return home_state
@@ -98,9 +107,15 @@ class CrowdAtmosphereEngine:
     def _shift(self, beneficiary: TeamRuntimeState, affected: TeamRuntimeState, *, swing: float) -> None:
         beneficiary.crowd_intensity = self._clamp(beneficiary.crowd_intensity + swing, 0.15, 0.98)
         affected.crowd_intensity = self._clamp(affected.crowd_intensity - (swing * 0.62), 0.12, 0.92)
-        beneficiary.dynamic_morale = self._clamp(beneficiary.dynamic_morale + (swing * (9.0 if beneficiary.is_home else 6.0)), 25.0, 99.0)
-        beneficiary.dynamic_motivation = self._clamp(beneficiary.dynamic_motivation + (swing * (7.0 if beneficiary.is_home else 5.0)), 25.0, 99.0)
-        affected.dynamic_morale = self._clamp(affected.dynamic_morale - (swing * (5.0 if beneficiary.is_home else 4.0)), 25.0, 99.0)
+        beneficiary.dynamic_morale = self._clamp(
+            beneficiary.dynamic_morale + (swing * (9.0 if beneficiary.is_home else 6.0)), 25.0, 99.0
+        )
+        beneficiary.dynamic_motivation = self._clamp(
+            beneficiary.dynamic_motivation + (swing * (7.0 if beneficiary.is_home else 5.0)), 25.0, 99.0
+        )
+        affected.dynamic_morale = self._clamp(
+            affected.dynamic_morale - (swing * (5.0 if beneficiary.is_home else 4.0)), 25.0, 99.0
+        )
 
     def _decay(self, state: TeamRuntimeState) -> None:
         state.crowd_intensity = round(0.5 + ((state.crowd_intensity - 0.5) * 0.94), 3)

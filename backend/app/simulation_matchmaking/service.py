@@ -9,7 +9,6 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.economy.economy_service import EconomyService
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.schemas import (
     MatchClubContextInput,
@@ -200,9 +199,7 @@ class SimulationMatchmakingService:
         # and settling the result up front. Bot / async pairings keep the one-shot
         # settle path unchanged. (Settlement-on-finish for live H2H is a follow-up.)
         live_session_view: LiveSessionBridgeView | None = None
-        is_live_head_to_head = (
-            queue_source == "player" and recommended_mode is SimulationExecutionMode.LIVE
-        )
+        is_live_head_to_head = queue_source == "player" and recommended_mode is SimulationExecutionMode.LIVE
         if is_live_head_to_head:
             live_session_view = self._create_live_session(
                 match_id=match_id,
@@ -333,9 +330,7 @@ class SimulationMatchmakingService:
 
         entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
 
-        existing = session.scalar(
-            select(FastMatchSession).where(FastMatchSession.match_id == match_id)
-        )
+        existing = session.scalar(select(FastMatchSession).where(FastMatchSession.match_id == match_id))
         if existing is not None:
             return self._live_settlement_view(
                 live=live,
@@ -792,12 +787,12 @@ class SimulationMatchmakingService:
         club = None
         if session is not None:
             club = session.scalar(
-                select(ClubProfile)
-                .where(ClubProfile.owner_user_id == actor.id)
-                .order_by(ClubProfile.created_at.asc())
+                select(ClubProfile).where(ClubProfile.owner_user_id == actor.id).order_by(ClubProfile.created_at.asc())
             )
         club_id = club.id if club is not None else f"user-club:{actor.id}"
-        club_name = club.club_name if club is not None else (getattr(actor, "display_name", None) or "GTEX Fast Match FC")
+        club_name = (
+            club.club_name if club is not None else (getattr(actor, "display_name", None) or "GTEX Fast Match FC")
+        )
         return SimulationGameProfileView(
             user_id=actor.id,
             club_id=club_id,
@@ -865,8 +860,7 @@ class SimulationMatchmakingService:
         idempotency_key = f"fast-match-settlement:{actor.id}:{match_id}"
         existing = session.scalar(
             select(FastMatchSettlement).where(
-                (FastMatchSettlement.match_id == match_id)
-                | (FastMatchSettlement.idempotency_key == idempotency_key)
+                (FastMatchSettlement.match_id == match_id) | (FastMatchSettlement.idempotency_key == idempotency_key)
             )
         )
         if existing is not None:

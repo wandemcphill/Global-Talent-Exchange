@@ -929,9 +929,7 @@ def _recompute_profile_aggregates(
         "banner_protest": -12,
         "organised_boycott": -24,
     }.get(profile.active_protest_stage, 0)
-    sentiment_mod = (
-        int(round((profile.overall_sentiment - 60) * 0.35)) if profile.overall_sentiment is not None else 0
-    )
+    sentiment_mod = int(round((profile.overall_sentiment - 60) * 0.35)) if profile.overall_sentiment is not None else 0
     profile.attendance_modifier_pct = _clamp(ticket_mod + protest_mod + sentiment_mod, -40, 30)
 
 
@@ -995,7 +993,9 @@ def apply_supporter_reaction(
         profile.accumulated_frustration = _clamp(int(profile.accumulated_frustration or 0) - decay, 0, 100)
 
     if credibility_delta != 0 and profile.owner_credibility_score is not None:
-        profile.owner_credibility_score = _clamp(_filed_int(profile.owner_credibility_score) + credibility_delta, 0, 100)
+        profile.owner_credibility_score = _clamp(
+            _filed_int(profile.owner_credibility_score) + credibility_delta, 0, 100
+        )
 
     segment_deltas: dict[str, dict[str, Any]] = {}
     for seg in segments:
@@ -1146,7 +1146,9 @@ def compute_matchday_atmosphere(
         crowd_intensity = None
         chant_volume_db = None
     else:
-        crowd_intensity = _clamp(int(round(enthusiasm * 0.6 + sentiment * 0.25)) + stakes_bonus + rivalry_bonus, 15, 100)
+        crowd_intensity = _clamp(
+            int(round(enthusiasm * 0.6 + sentiment * 0.25)) + stakes_bonus + rivalry_bonus, 15, 100
+        )
         chant_volume_db = _clamp(72 + int(round(crowd_intensity * 0.35)), 70, 112)
 
     banners: list[str] = []
@@ -1216,9 +1218,7 @@ def compute_matchday_atmosphere(
         "lifelong_loyalty": (
             int(lifelong.loyalty)
             if lifelong is not None and lifelong.loyalty is not None
-            else _filed_int(profile.loyalty_index)
-            if profile.loyalty_index is not None
-            else None
+            else _filed_int(profile.loyalty_index) if profile.loyalty_index is not None else None
         ),
     }
 
@@ -4526,14 +4526,6 @@ def reconcile_club_reputation_and_identity(
             OwnerClubManagerialTenure.status == "active",
         )
     )
-    all_mgr_tenures = list(
-        session.scalars(
-            select(OwnerClubManagerialTenure).where(
-                OwnerClubManagerialTenure.club_id == state.club_id,
-                OwnerClubManagerialTenure.role == "first_team_manager",
-            )
-        ).all()
-    )
     graduates = list(
         session.scalars(select(OwnerClubAcademyGraduate).where(OwnerClubAcademyGraduate.club_id == state.club_id)).all()
     )
@@ -4565,14 +4557,14 @@ def reconcile_club_reputation_and_identity(
     supporter_sent = _filed_score(profile.overall_sentiment)
     owner_cred = _filed_score(profile.owner_credibility_score)
     mgr_conf = _filed_score(profile.confidence_in_manager)
-    rel_mgr_score = (
-        int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else None
-    )
+    rel_mgr_score = int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else None
     mgr_trust_standing = _blend([(mgr_conf, 0.55), (rel_mgr_score, 0.45)])
 
     youth_reliance = _filed_score(culture.get("youth_reliance")) if "youth_reliance" in culture else None
     debut_count = sum(1 for g in graduates if g.debut_match_id is not None)
-    rejection_streak = int(fac["_manager_youth_rejection_streak"]) if fac.get("_manager_youth_rejection_streak") is not None else 0
+    rejection_streak = (
+        int(fac["_manager_youth_rejection_streak"]) if fac.get("_manager_youth_rejection_streak") is not None else 0
+    )
     hoyd_align = int(hoyd_rel.alignment) if hoyd_rel is not None and hoyd_rel.alignment is not None else None
     academy_parts: list[tuple[int | None, float]] = [(youth_reliance, 0.50), (hoyd_align, 0.30)]
     if graduates:

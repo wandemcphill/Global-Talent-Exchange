@@ -621,7 +621,11 @@ class MatchEventGenerator:
             consistency=self._resolve_rating(player.consistency, player.overall + 1),
             clutch_factor=self._resolve_rating(
                 player.clutch_factor,
-                player.finishing if player.finishing is not None and player.role is PlayerRole.FORWARD else player.overall,
+                (
+                    player.finishing
+                    if player.finishing is not None and player.role is PlayerRole.FORWARD
+                    else player.overall
+                ),
             ),
             big_match_temperament=self._resolve_rating(player.big_match_temperament, player.overall),
             recent_form=self._resolve_rating(player.recent_form, player.overall),

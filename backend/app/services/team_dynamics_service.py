@@ -48,11 +48,7 @@ class TeamDynamicsService:
             for teammate, teammate_role in squad[index + 1 :]:
                 del teammate_role
                 relationship = relationships.get(self._pair_key(player.id, teammate.id))
-                if (
-                    relationship is None
-                    or relationship.relationship_score is None
-                    or relationship.tactical_fit is None
-                ):
+                if relationship is None or relationship.relationship_score is None or relationship.tactical_fit is None:
                     continue
                 pair_scores.append((float(relationship.relationship_score) + float(relationship.tactical_fit)) / 2)
         filed_morale = list(morale_by_player.values())

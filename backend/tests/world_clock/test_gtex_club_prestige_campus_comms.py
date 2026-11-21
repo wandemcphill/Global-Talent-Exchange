@@ -1938,7 +1938,10 @@ def test_phase2_3_owner_daily_briefing_six_authoritative_sections_and_world_day_
 
     fin_sec = briefing["financial_commercial_report"]
     assert fin_sec["current_club_balance"]["cash_gtex"] == 177_000
-    assert fin_sec["wage_obligations"]["daily_staff_upkeep_fan_coin"] == fin_sec["wage_obligations"]["total_daily_obligations_gtex"]
+    assert (
+        fin_sec["wage_obligations"]["daily_staff_upkeep_fan_coin"]
+        == fin_sec["wage_obligations"]["total_daily_obligations_gtex"]
+    )
     assert fin_sec["matchday_revenue"]["operational_stadium_capacity"] >= 15_000
 
     # 2. Verify World-Day Idempotency: calling get_daily_briefing again on the same world_day
@@ -2126,12 +2129,7 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
 
     # Compare directly with service.tick_club formula for unappointed state
     campus_fx = prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=True)
-    unappointed_tick_heal = (
-        1
-        + int(facs.get("medical", 1)) // 2
-        + 0
-        + int(campus_fx.get("rehab_daily_bonus_days", 0))
-    )
+    unappointed_tick_heal = 1 + int(facs.get("medical", 1)) // 2 + 0 + int(campus_fx.get("rehab_daily_bonus_days", 0))
     assert unappointed_heal_rate == unappointed_tick_heal
 
     # 2. Appoint an authoritative Medical Director with expertise explicitly stored (18)
@@ -2213,12 +2211,7 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     assert med_profile_missing["medical_expertise"] is None
     missing_heal_rate = med_sec_missing["rehabilitation_status"]["daily_injury_heal_days"]
 
-    missing_tick_heal = (
-        1
-        + int(facs.get("medical", 1)) // 2
-        + 0
-        + int(campus_fx.get("rehab_daily_bonus_days", 0))
-    )
+    missing_tick_heal = 1 + int(facs.get("medical", 1)) // 2 + 0 + int(campus_fx.get("rehab_daily_bonus_days", 0))
     assert missing_heal_rate == missing_tick_heal
     assert missing_heal_rate == 6  # 1 + 1 + 0 + 4 = 6
 

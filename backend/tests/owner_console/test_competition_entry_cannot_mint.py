@@ -175,7 +175,9 @@ def test_gtex_competition_enters_free_and_plays_the_filed_eleven(app_session_fac
         club_id = _formed_club(session, user["user_id"], "GTEX Rail FC")
         state = service.get_state(session, club_id)
         players = service.squad(session, club_id)
-        filed = [str(player.id) for player in players if (player.personality_json or {}).get("squad_status") == "first_team"][:11]
+        filed = [
+            str(player.id) for player in players if (player.personality_json or {}).get("squad_status") == "first_team"
+        ][:11]
         facilities = dict(state.facilities_json or {})
         facilities["manager_selection"] = {
             "starting_xi_ids": filed,

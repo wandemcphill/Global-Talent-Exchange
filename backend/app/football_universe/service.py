@@ -101,7 +101,9 @@ class FootballUniverseBuilder:
         "Ruth Salazar",
     )
 
-    def build(self, *, request: MatchSimulationRequest, replay_payload: MatchReplayPayloadView) -> FootballUniverseBundle:
+    def build(
+        self, *, request: MatchSimulationRequest, replay_payload: MatchReplayPayloadView
+    ) -> FootballUniverseBundle:
         player_inputs = {
             player.player_id: player
             for player in [
@@ -305,27 +307,26 @@ class FootballUniverseBuilder:
         media_pressure = _context_score(team, "media_pressure")
         rivalry_pressure = max(_context_score(team, "rivalry_intensity"), _context_score(opponent, "rivalry_intensity"))
         pressure_score = _clamp_float(
-            (expectation_score * 0.42)
-            + (fan_pressure * 0.33)
-            + (media_pressure * 0.25)
-            + (rivalry_pressure * 0.18)
+            (expectation_score * 0.42) + (fan_pressure * 0.33) + (media_pressure * 0.25) + (rivalry_pressure * 0.18)
         )
         won = replay_payload.summary.winner_team_id == team.team_id
         drawn = replay_payload.summary.winner_team_id is None
         is_favorite = (
-            replay_payload.summary.home_stats.strength.overall >= replay_payload.summary.away_stats.strength.overall + 2.0
+            replay_payload.summary.home_stats.strength.overall
+            >= replay_payload.summary.away_stats.strength.overall + 2.0
             if team.team_id == replay_payload.summary.home_stats.team_id
-            else replay_payload.summary.away_stats.strength.overall >= replay_payload.summary.home_stats.strength.overall + 2.0
+            else replay_payload.summary.away_stats.strength.overall
+            >= replay_payload.summary.home_stats.strength.overall + 2.0
         )
         upset_loss = (not won and not drawn) and is_favorite and replay_payload.summary.upset
         sentiment = (
             FanSentiment.HAPPY.value
             if won
-            else FanSentiment.NEUTRAL.value
-            if drawn
-            else FanSentiment.VERY_NEGATIVE.value
-            if upset_loss
-            else FanSentiment.NEGATIVE.value
+            else (
+                FanSentiment.NEUTRAL.value
+                if drawn
+                else FanSentiment.VERY_NEGATIVE.value if upset_loss else FanSentiment.NEGATIVE.value
+            )
         )
         morale_delta = 4.0 if won else 1.0 if drawn else -7.0 if upset_loss else -4.0
         manager_reputation_delta = 3.0 if won else 0.5 if drawn else -5.0 if upset_loss else -2.0
@@ -367,7 +368,9 @@ class FootballUniverseBuilder:
                     intensity=3,
                 )
             )
-        elif drawn and (rivalry_pressure >= 70 or replay_payload.summary.home_score + replay_payload.summary.away_score >= 2):
+        elif drawn and (
+            rivalry_pressure >= 70 or replay_payload.summary.home_score + replay_payload.summary.away_score >= 2
+        ):
             fan_events.append(
                 FanEventView(
                     event_type="debate",
@@ -433,7 +436,11 @@ class FootballUniverseBuilder:
             )
         ]
         for team, reaction in ((request.home_team, home_reaction), (request.away_team, away_reaction)):
-            tone = "confident" if reaction.sentiment == FanSentiment.HAPPY.value else "aggressive" if reaction.sentiment == FanSentiment.VERY_NEGATIVE.value else "defensive"
+            tone = (
+                "confident"
+                if reaction.sentiment == FanSentiment.HAPPY.value
+                else "aggressive" if reaction.sentiment == FanSentiment.VERY_NEGATIVE.value else "defensive"
+            )
             events.append(
                 MediaEventView(
                     type=MediaEventType.INTERVIEW.value,
@@ -447,7 +454,10 @@ class FootballUniverseBuilder:
                     },
                 )
             )
-        if any(event.event_type.value == "red_card" for event in replay_payload.timeline.events) or replay_payload.summary.upset:
+        if (
+            any(event.event_type.value == "red_card" for event in replay_payload.timeline.events)
+            or replay_payload.summary.upset
+        ):
             losing_team = (
                 request.away_team
                 if replay_payload.summary.winner_team_id == request.home_team.team_id
@@ -506,7 +516,11 @@ class FootballUniverseBuilder:
                     notification_type="FAN_REACTION",
                     title=f"{reaction.club_name} fan mood: {reaction.sentiment.replace('_', ' ')}",
                     message=f"Supporter pressure is now {reaction.pressure_score:.0f}/100 for {reaction.club_name}.",
-                    severity="warning" if reaction.sentiment in {FanSentiment.NEGATIVE.value, FanSentiment.VERY_NEGATIVE.value} else "info",
+                    severity=(
+                        "warning"
+                        if reaction.sentiment in {FanSentiment.NEGATIVE.value, FanSentiment.VERY_NEGATIVE.value}
+                        else "info"
+                    ),
                     club_id=reaction.club_id,
                     match_id=replay_payload.match_id,
                     metadata=reaction.model_dump(mode="json"),
@@ -589,9 +603,7 @@ class FootballUniverseBuilder:
         player_inputs: dict[str, Any],
     ) -> BroadcastPlayerSpotlightView | None:
         candidates = [
-            stat
-            for stat in replay_payload.summary.player_stats
-            if (stat.rating or 0.0) >= 7.5 or stat.goals >= 1
+            stat for stat in replay_payload.summary.player_stats if (stat.rating or 0.0) >= 7.5 or stat.goals >= 1
         ]
         if not candidates:
             return None
@@ -600,9 +612,11 @@ class FootballUniverseBuilder:
             key=lambda item: (
                 item.rating or 0.0,
                 item.goals,
-                0.0
-                if (fit := _filed_player_attr(player_inputs, item.player_id, "identity_fit_score")) is None
-                else 100.0 - fit,
+                (
+                    0.0
+                    if (fit := _filed_player_attr(player_inputs, item.player_id, "identity_fit_score")) is None
+                    else 100.0 - fit
+                ),
             ),
         )
         return BroadcastPlayerSpotlightView(
@@ -670,8 +684,12 @@ class FootballUniverseBuilder:
         if tone == "aggressive":
             return f"{team_name} manager: Too much noise surrounds this club right now, but the dressing room will answer on the pitch."
         if replay_payload.summary.winner_team_name is None:
-            return f"{team_name} manager: We had control in phases, but the final action and final decision were missing."
-        return f"{team_name} manager: The pressure is real, but this group has to react faster and manage moments better."
+            return (
+                f"{team_name} manager: We had control in phases, but the final action and final decision were missing."
+            )
+        return (
+            f"{team_name} manager: The pressure is real, but this group has to react faster and manage moments better."
+        )
 
     @staticmethod
     def _expectation_bucket(score: float) -> str:
@@ -687,7 +705,9 @@ class FootballUniverseService:
     session: Session
     builder: FootballUniverseBuilder = field(default_factory=FootballUniverseBuilder)
 
-    def build_bundle(self, *, request: MatchSimulationRequest, replay_payload: MatchReplayPayloadView) -> FootballUniverseBundle:
+    def build_bundle(
+        self, *, request: MatchSimulationRequest, replay_payload: MatchReplayPayloadView
+    ) -> FootballUniverseBundle:
         return self.builder.build(request=request, replay_payload=replay_payload)
 
     def persist_match_universe(
@@ -727,8 +747,7 @@ class FootballUniverseService:
                 overlay_state=BroadcastOverlayView.model_validate(overlay_payload),
                 headline_intro=overlay_bundle.get("headline_intro"),
                 dual_commentary=[
-                    DualCommentaryLineView.model_validate(item)
-                    for item in overlay_bundle.get("dual_commentary", [])
+                    DualCommentaryLineView.model_validate(item) for item in overlay_bundle.get("dual_commentary", [])
                 ],
                 halftime_analysis=(
                     BroadcastHalftimeSegmentView.model_validate(overlay_bundle["halftime_analysis"])
@@ -785,7 +804,9 @@ class FootballUniverseService:
             fan_count=fan_base.fan_count,
             loyalty_score=float(fan_base.loyalty_score),
             expectation_level=fan_base.expectation_level,
-            sentiment=fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment),
+            sentiment=(
+                fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment)
+            ),
             metadata=dict(fan_base.metadata_json or {}),
         )
 
@@ -807,7 +828,11 @@ class FootballUniverseService:
             self.session.flush()
         return ClubIdentityView(
             club_id=identity.club_id,
-            philosophy=identity.philosophy.value if isinstance(identity.philosophy, ClubPhilosophy) else str(identity.philosophy),
+            philosophy=(
+                identity.philosophy.value
+                if isinstance(identity.philosophy, ClubPhilosophy)
+                else str(identity.philosophy)
+            ),
             culture_score=float(identity.culture_score),
             tactical_consistency=float(identity.tactical_consistency),
             brand_strength=float(identity.brand_strength),
@@ -846,7 +871,9 @@ class FootballUniverseService:
     def run_fan_update_cycle(self) -> dict[str, Any]:
         updated = 0
         for fan_base in self.session.scalars(select(FanBase)).all():
-            sentiment = fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment)
+            sentiment = (
+                fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment)
+            )
             if sentiment == FanSentiment.HAPPY.value:
                 fan_base.loyalty_score = _clamp_float(float(fan_base.loyalty_score) + 0.6)
             elif sentiment in {FanSentiment.NEGATIVE.value, FanSentiment.VERY_NEGATIVE.value}:
@@ -867,8 +894,13 @@ class FootballUniverseService:
             club = clubs.get(fan_base.club_id)
             if club is None:
                 continue
-            sentiment = fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment)
-            if sentiment not in {FanSentiment.NEGATIVE.value, FanSentiment.VERY_NEGATIVE.value} and float(fan_base.loyalty_score) < 70:
+            sentiment = (
+                fan_base.sentiment.value if isinstance(fan_base.sentiment, FanSentiment) else str(fan_base.sentiment)
+            )
+            if (
+                sentiment not in {FanSentiment.NEGATIVE.value, FanSentiment.VERY_NEGATIVE.value}
+                and float(fan_base.loyalty_score) < 70
+            ):
                 continue
             self.session.add(
                 MediaEvent(
@@ -892,12 +924,16 @@ class FootballUniverseService:
             consistency = float(identity.tactical_consistency)
             delta = 0.6 if consistency >= 62 else -0.6 if consistency <= 44 else 0.0
             identity.culture_score = _clamp_float(float(identity.culture_score) + delta)
-            identity.brand_strength = _clamp_float(float(identity.brand_strength) + (0.3 if consistency >= 62 else -0.2 if consistency <= 44 else 0.0))
+            identity.brand_strength = _clamp_float(
+                float(identity.brand_strength) + (0.3 if consistency >= 62 else -0.2 if consistency <= 44 else 0.0)
+            )
             identity.metadata_json = {
                 **dict(identity.metadata_json or {}),
                 "last_identity_evolution_at": utcnow().isoformat(),
             }
-            self._apply_identity_development_bonus(club_id=identity.club_id, identity=self.get_club_identity(identity.club_id))
+            self._apply_identity_development_bonus(
+                club_id=identity.club_id, identity=self.get_club_identity(identity.club_id)
+            )
             evolved += 1
         self.session.flush()
         return {"club_identities_evolved": evolved}
@@ -912,8 +948,14 @@ class FootballUniverseService:
             "overlay": session_view.overlay_state.model_dump(mode="json"),
             "headline_intro": session_view.headline_intro,
             "dual_commentary": [item.model_dump(mode="json") for item in session_view.dual_commentary],
-            "halftime_analysis": session_view.halftime_analysis.model_dump(mode="json") if session_view.halftime_analysis is not None else None,
-            "fulltime_wrap": session_view.fulltime_wrap.model_dump(mode="json") if session_view.fulltime_wrap is not None else None,
+            "halftime_analysis": (
+                session_view.halftime_analysis.model_dump(mode="json")
+                if session_view.halftime_analysis is not None
+                else None
+            ),
+            "fulltime_wrap": (
+                session_view.fulltime_wrap.model_dump(mode="json") if session_view.fulltime_wrap is not None else None
+            ),
             "rights_owner_id": session_view.rights_owner_id,
             "premium_features": dict(session_view.premium_features or {}),
         }
@@ -952,11 +994,11 @@ class FootballUniverseService:
                 + (
                     0.9
                     if reaction.sentiment == FanSentiment.HAPPY.value
-                    else -1.2
-                    if reaction.sentiment == FanSentiment.VERY_NEGATIVE.value
-                    else -0.4
-                    if reaction.sentiment == FanSentiment.NEGATIVE.value
-                    else 0.2
+                    else (
+                        -1.2
+                        if reaction.sentiment == FanSentiment.VERY_NEGATIVE.value
+                        else -0.4 if reaction.sentiment == FanSentiment.NEGATIVE.value else 0.2
+                    )
                 )
             )
             fan_base.expectation_level = reaction.expectation_level
@@ -997,14 +1039,12 @@ class FootballUniverseService:
                 evolution = (
                     0.0
                     if filed_consistency is None
-                    else 0.75
-                    if filed_consistency >= 62
-                    else -0.75
-                    if filed_consistency <= 44
-                    else 0.0
+                    else 0.75 if filed_consistency >= 62 else -0.75 if filed_consistency <= 44 else 0.0
                 )
                 if filed_culture is not None:
-                    record.culture_score = _clamp_float((float(record.culture_score) * 0.55) + (filed_culture * 0.45) + evolution)
+                    record.culture_score = _clamp_float(
+                        (float(record.culture_score) * 0.55) + (filed_culture * 0.45) + evolution
+                    )
                 if filed_consistency is not None:
                     record.tactical_consistency = _clamp_float(
                         (float(record.tactical_consistency) * 0.45) + (filed_consistency * 0.55)
@@ -1081,7 +1121,9 @@ class FootballUniverseService:
         player_ids = [player.id for player in players]
         states = {
             state.player_id: state
-            for state in self.session.scalars(select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(player_ids))).all()
+            for state in self.session.scalars(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(player_ids))
+            ).all()
         }
         for player in players:
             player.morale = _clamp_float(float(player.morale) + delta)
@@ -1102,7 +1144,9 @@ class FootballUniverseService:
         player_ids = [player.id for player in players]
         states = {
             state.player_id: state
-            for state in self.session.scalars(select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(player_ids))).all()
+            for state in self.session.scalars(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(player_ids))
+            ).all()
         }
         for player in players:
             state = states.get(player.id)
@@ -1127,10 +1171,14 @@ class FootballUniverseService:
         manager_user_id = manager_context.get("manager_id") or manager_context.get("user_id")
         competitive_manager_id = manager_context.get("competitive_manager_id")
         if manager_user_id is not None:
-            profile = self.session.scalar(select(ManagerProfile).where(ManagerProfile.manager_id == str(manager_user_id)))
+            profile = self.session.scalar(
+                select(ManagerProfile).where(ManagerProfile.manager_id == str(manager_user_id))
+            )
             if profile is not None:
                 profile.reputation_score = int(round(float(profile.reputation_score) + delta))
-            competitive_profiles = self.session.scalars(select(CompetitiveManager).where(CompetitiveManager.user_id == str(manager_user_id))).all()
+            competitive_profiles = self.session.scalars(
+                select(CompetitiveManager).where(CompetitiveManager.user_id == str(manager_user_id))
+            ).all()
             for profile in competitive_profiles:
                 profile.reputation_score = round(float(profile.reputation_score) + delta, 2)
         if competitive_manager_id is not None:

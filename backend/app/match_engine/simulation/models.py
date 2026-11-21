@@ -149,11 +149,7 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (
-                (self.overall * 0.17)
-                + (self.creativity * 0.24)
-                + (self.decision_making * 0.17)
-            )
+            ((self.overall * 0.17) + (self.creativity * 0.24) + (self.decision_making * 0.17))
             * self.performance_modifier()
             + (self.technique * 0.11)
             + (self.positioning * 0.09)
@@ -172,12 +168,7 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (
-                (self.overall * 0.14)
-                + (self.defending * 0.26)
-                + (self.positioning * 0.17)
-            )
-            * self.performance_modifier()
+            ((self.overall * 0.14) + (self.defending * 0.26) + (self.positioning * 0.17)) * self.performance_modifier()
             + (self.decision_making * 0.12)
             + (self.aerial_ability * 0.11)
             + (self.pace * 0.06)
@@ -575,7 +566,9 @@ class TeamRuntimeState:
     def substitutions_remaining(self) -> int:
         return max(self.tactics.max_substitutions - self.substitutions_used, 0)
 
-    def active_players(self, *, role: PlayerRole | None = None, include_goalkeeper: bool = True) -> list[InternalPlayer]:
+    def active_players(
+        self, *, role: PlayerRole | None = None, include_goalkeeper: bool = True
+    ) -> list[InternalPlayer]:
         players = [self.players_by_id[player_id] for player_id in self.active_player_ids]
         if not include_goalkeeper:
             players = [player for player in players if player.role is not PlayerRole.GOALKEEPER]

@@ -489,7 +489,9 @@ def record_staff_arrival_cinematic(
     role_label = str(appointed_staff.get("role_label") or role_key.replace("_", " ").title())
     staff_name = str(appointed_staff.get("name") or "")
     rating = int(appointed_staff["rating"]) if appointed_staff.get("rating") is not None else None
-    contract_years = int(appointed_staff["contract_years"]) if appointed_staff.get("contract_years") is not None else None
+    contract_years = (
+        int(appointed_staff["contract_years"]) if appointed_staff.get("contract_years") is not None else None
+    )
     salary_raw = appointed_staff.get("salary_gtex")
     if salary_raw is None:
         salary_raw = appointed_staff.get("salary")

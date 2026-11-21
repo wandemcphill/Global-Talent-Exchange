@@ -1964,9 +1964,7 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
             "relationship_status": (
                 "not filed"
                 if manager_data.get("mood") is None
-                else "strong"
-                if int(manager_data.get("mood")) >= 65
-                else "steady"
+                else "strong" if int(manager_data.get("mood")) >= 65 else "steady"
             ),
         },
         "players": [

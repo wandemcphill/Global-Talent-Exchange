@@ -77,6 +77,7 @@ def _staff_record(state: OwnerClubState, role_key: str) -> dict[str, Any]:
 def _staff_label(state: OwnerClubState, role_key: str) -> str | None:
     return _seat_name(_staff_record(state, role_key))
 
+
 # ==============================================================================
 # 1. Canonical Stage 6 Board Members & Political Personas
 # ==============================================================================
@@ -213,11 +214,11 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
                 "stance": (
                     None
                     if politics.get("board_confidence") is None
-                    else "satisfied"
-                    if int(politics.get("board_confidence")) >= 70
-                    else "concerned"
-                    if int(politics.get("board_confidence")) >= 50
-                    else "hostile"
+                    else (
+                        "satisfied"
+                        if int(politics.get("board_confidence")) >= 70
+                        else "concerned" if int(politics.get("board_confidence")) >= 50 else "hostile"
+                    )
                 ),
             }
         )
@@ -314,9 +315,7 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
             "fan_trust_rating": (
                 None
                 if politics.get("supporter_confidence") is None
-                else "Optimistic"
-                if int(politics.get("supporter_confidence")) >= 70
-                else "Anxious"
+                else "Optimistic" if int(politics.get("supporter_confidence")) >= 70 else "Anxious"
             ),
         },
         "media_and_rumours": {

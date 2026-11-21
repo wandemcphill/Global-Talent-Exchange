@@ -564,9 +564,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
                 "risk_level": (
                     "high"
                     if p.morale < 45
-                    else "medium"
-                    if ambition is not None and ambition >= 16 and (p.minutes or 0) < 90
-                    else "low"
+                    else "medium" if ambition is not None and ambition >= 16 and (p.minutes or 0) < 90 else "low"
                 ),
                 "owner_hook": (
                     "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
@@ -1979,9 +1977,7 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
                 new_staff_name=None,
             )
             comms_persistence.ensure_club_conversations_seeded(session, state)
-            autonomous_staff_engine.retire_staff_relationship_on_vacancy(
-                session, state, role_key="first_team_manager"
-            )
+            autonomous_staff_engine.retire_staff_relationship_on_vacancy(session, state, role_key="first_team_manager")
             living_club_world.reconcile_staff_relationships(session, state)
     except Exception as mgr_err:
         logger.warning("record_managerial_change dismissed failed: %s", mgr_err)
@@ -2414,7 +2410,9 @@ def tick_club(
     rehab_campus_bonus = int(campus_effects.get("rehab_daily_bonus_days", 0))
     injury_reduction_pct = int(campus_effects.get("injury_reduction_pct", 0))
     daily_injury_heal_days = 1 + int(facilities.get("medical", 1)) // 2 + med_bonus + rehab_campus_bonus
-    daily_fitness_gain = int(campus_effects["daily_fitness_recovery"]) if campus_effects.get("daily_fitness_recovery") is not None else 0
+    daily_fitness_gain = (
+        int(campus_effects["daily_fitness_recovery"]) if campus_effects.get("daily_fitness_recovery") is not None else 0
+    )
 
     ctx = {
         "training": int(facilities.get("training", 1)),
@@ -3241,17 +3239,9 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     institutional_pulse = living_institution.get_unified_club_pulse(session, state)
     players = [player_dict(p, session) for p in squad(session, club_id)]
     selection = facilities.get("_last_manager_matchday_selection") or {}
-    filed_ids = (
-        [str(pid) for pid in (selection.get("starting_xi_ids") or [])]
-        if isinstance(selection, dict)
-        else []
-    )
+    filed_ids = [str(pid) for pid in (selection.get("starting_xi_ids") or [])] if isinstance(selection, dict) else []
     by_id = {str(player["id"]): player for player in players}
-    bench_ids = (
-        [str(pid) for pid in (selection.get("bench_ids") or [])]
-        if isinstance(selection, dict)
-        else []
-    )
+    bench_ids = [str(pid) for pid in (selection.get("bench_ids") or [])] if isinstance(selection, dict) else []
     matchday_xi = [
         {"id": pid, "name": by_id[pid]["name"], "position": by_id[pid].get("position")}
         for pid in filed_ids
@@ -3531,17 +3521,13 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
         if r in exec_staff:
             record = exec_staff[r] or {}
             caretaker_seat = r == "first_team_manager" and (
-                not record.get("name")
-                or record.get("is_default")
-                or record.get("manager_id") == "gtex-staff-coach"
+                not record.get("name") or record.get("is_default") or record.get("manager_id") == "gtex-staff-coach"
             )
             appointed[r] = None if caretaker_seat else record
         elif r == "first_team_manager":
             manager = state.manager_json or {}
             caretaker = (
-                not manager.get("name")
-                or manager.get("is_default")
-                or manager.get("manager_id") == "gtex-staff-coach"
+                not manager.get("name") or manager.get("is_default") or manager.get("manager_id") == "gtex-staff-coach"
             )
             appointed[r] = None if caretaker else manager
         else:
@@ -3562,10 +3548,7 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
                 "poaching_risk",
                 (
                     "high"
-                    if (
-                        st_copy.get("mood") is not None
-                        and int(st_copy.get("mood")) < 55
-                    )
+                    if (st_copy.get("mood") is not None and int(st_copy.get("mood")) < 55)
                     or (
                         st_copy.get("ambition") is not None
                         and int(st_copy.get("ambition")) >= 16

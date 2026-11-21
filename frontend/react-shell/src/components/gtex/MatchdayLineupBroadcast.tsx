@@ -219,7 +219,7 @@ function buildTeamSheetFromRoster(opts: {
       short_name: extractBroadcastSurname(p.player_name),
       shirt_number: numBase,
       position: posShort(p.position),
-      rating: p.rating == null || p.rating === "" ? 0 : Math.round(Number(p.rating)),
+      rating: p.rating == null ? 0 : Math.round(Number(p.rating)),
       portrait_url: sanitizeRealPlayerImage(p.portrait_url, false),
       is_signed: true,
     };
@@ -327,7 +327,7 @@ function buildTeamSheetFromRoster(opts: {
       short_name: surname,
       shirt_number: shirt,
       position: posShort(p.position),
-      rating: p.rating == null || p.rating === "" ? 0 : Math.round(Number(p.rating)),
+      rating: p.rating == null ? 0 : Math.round(Number(p.rating)),
       portrait_url: sanitizeRealPlayerImage(p.portrait_url, false),
       is_signed: true,
     });

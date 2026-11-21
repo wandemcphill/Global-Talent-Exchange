@@ -951,9 +951,7 @@ class NationalTeamTournamentService:
     def _loan_price_coin(self, *, gsi: int, source_bucket: str) -> Decimal:
         # Player rental only. A 0.40 factor is a 60% cut on the previous quote.
         return (
-            self._normalize_amount(gsi)
-            * self._source_price_multiplier(source_bucket)
-            * Decimal("0.4000")
+            self._normalize_amount(gsi) * self._source_price_multiplier(source_bucket) * Decimal("0.4000")
         ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
 
     def _demand_multiplier(self, *, player_id: str) -> Decimal:

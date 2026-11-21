@@ -991,11 +991,11 @@ class SyntheticSquadFactory:
             consistency=self._clamp(base_overall + 1 + variation),
             clutch_factor=self._clamp(base_overall + 7 + variation),
             big_match_temperament=self._clamp(base_overall + 5 + variation),
-                recent_form=self._clamp(base_overall + 2 + variation),
-                morale=self._clamp(resolved_overall + variation),
-                motivation=self._clamp(resolved_overall + variation),
-                fatigue_load=0,
-                injury_risk=0,
+            recent_form=self._clamp(base_overall + 2 + variation),
+            morale=self._clamp(resolved_overall + variation),
+            motivation=self._clamp(resolved_overall + variation),
+            fatigue_load=0,
+            injury_risk=0,
             leadership=self._clamp(base_overall + 1),
         )
 
@@ -1033,7 +1033,9 @@ class SyntheticSquadFactory:
             stored_morale = player.morale
         morale = None
         if stored_morale is not None:
-            confidence_nudge = 0 if personality_confidence is None else max(-6, min(8, (personality_confidence - 50) // 4))
+            confidence_nudge = (
+                0 if personality_confidence is None else max(-6, min(8, (personality_confidence - 50) // 4))
+            )
             morale = self._clamp(int(round(stored_morale)) + confidence_nudge)
         motivation = None
         if morale is not None:
@@ -1048,7 +1050,9 @@ class SyntheticSquadFactory:
                     )
                 )
             )
-        consistency_bonus = 0 if personality_consistency is None else max(-4, min(6, (personality_consistency - 50) // 6))
+        consistency_bonus = (
+            0 if personality_consistency is None else max(-4, min(6, (personality_consistency - 50) // 6))
+        )
         clutch_bonus = 0 if personality_clutch is None else max(-4, min(8, (personality_clutch - 50) // 5))
         clutch_part = 0 if personality_clutch is None else personality_clutch - 50
         confidence_part = 0 if personality_confidence is None else personality_confidence - 50
@@ -1186,8 +1190,8 @@ class SyntheticSquadFactory:
             recent_form=recent_form,
             morale=morale,
             motivation=motivation,
-                fatigue_load=None,
-                injury_risk=None,
+            fatigue_load=None,
+            injury_risk=None,
             leadership=self._clamp(overall + 2),
         )
 
@@ -1286,7 +1290,9 @@ class SyntheticSquadFactory:
     ) -> MatchClubContextInput:
         del resolved_overall, manager_profile
         updates: dict[str, int] = {}
-        form_values = [value for value in (self._managed_recent_form(player) for player, _ in squad) if value is not None]
+        form_values = [
+            value for value in (self._managed_recent_form(player) for player, _ in squad) if value is not None
+        ]
         if form_values:
             updates["recent_form"] = self._clamp(int(round(sum(form_values) / len(form_values))))
         if dynamics_snapshot is not None and dynamics_snapshot.chemistry_score is not None:

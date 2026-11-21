@@ -635,15 +635,31 @@ def calculate_staff_effects(appointed_staff: dict[str, Any]) -> dict[str, Any]:
     med = appointed_staff.get("medical_director") or {}
 
     return {
-        "transfer_fee_discount_pct": round(float(gm["negotiation"]) * 0.5, 1) if gm.get("negotiation") is not None else 0.0,
-        "sponsor_revenue_bonus_pct": round(float(gm["commercial_acumen"]) * 0.6, 1) if gm.get("commercial_acumen") is not None else 0.0,
-        "academy_potential_bonus": int(hoyd["youth_development"]) // 3 if hoyd.get("youth_development") is not None else 0,
+        "transfer_fee_discount_pct": (
+            round(float(gm["negotiation"]) * 0.5, 1) if gm.get("negotiation") is not None else 0.0
+        ),
+        "sponsor_revenue_bonus_pct": (
+            round(float(gm["commercial_acumen"]) * 0.6, 1) if gm.get("commercial_acumen") is not None else 0.0
+        ),
+        "academy_potential_bonus": (
+            int(hoyd["youth_development"]) // 3 if hoyd.get("youth_development") is not None else 0
+        ),
         "tactical_match_bonus": (
-            round(float(mgr["tactical_flexibility"] if mgr.get("tactical_flexibility") is not None else mgr.get("tactical_quality")) * 0.4, 1)
+            round(
+                float(
+                    mgr["tactical_flexibility"]
+                    if mgr.get("tactical_flexibility") is not None
+                    else mgr.get("tactical_quality")
+                )
+                * 0.4,
+                1,
+            )
             if mgr.get("tactical_flexibility") is not None or mgr.get("tactical_quality") is not None
             else 0.0
         ),
-        "scouting_precision_bonus": round(float(scout["scouting_accuracy"]) * 0.5, 1) if scout.get("scouting_accuracy") is not None else 0.0,
+        "scouting_precision_bonus": (
+            round(float(scout["scouting_accuracy"]) * 0.5, 1) if scout.get("scouting_accuracy") is not None else 0.0
+        ),
         "injury_recovery_bonus": int(med["medical_expertise"]) // 3 if med.get("medical_expertise") is not None else 0,
     }
 
@@ -1130,8 +1146,12 @@ def club_strength(
     else:
         formation = None
     pressing = int(mgr_profile["pressing_philosophy"]) if mgr_profile.get("pressing_philosophy") is not None else None
-    attack = int(mgr_profile["attacking_vs_defensive"]) if mgr_profile.get("attacking_vs_defensive") is not None else None
-    possession = int(mgr_profile["possession_vs_direct"]) if mgr_profile.get("possession_vs_direct") is not None else None
+    attack = (
+        int(mgr_profile["attacking_vs_defensive"]) if mgr_profile.get("attacking_vs_defensive") is not None else None
+    )
+    possession = (
+        int(mgr_profile["possession_vs_direct"]) if mgr_profile.get("possession_vs_direct") is not None else None
+    )
     raw_quality = manager.get("tactical_quality")
     if raw_quality is None:
         tactical_quality = None

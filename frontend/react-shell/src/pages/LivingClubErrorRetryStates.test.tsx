@@ -74,6 +74,7 @@ jest.mock("@/components/gtex/ApexWidgets", () => ({
   HolographicPlayerCard: () => null,
   TacticalPitch25D: () => null,
   TelemetrySparklineCard: () => null,
+  placeFirstTeamOnPitch: () => [],
 }));
 
 jest.mock("@/lib/api", () => ({

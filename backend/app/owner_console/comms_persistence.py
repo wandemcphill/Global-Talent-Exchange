@@ -766,20 +766,20 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         )
         if len(squad) > 1:
             _append_message(
-            session,
-            conv=squad_conv,
-            sender_user_id=None,
-            sender_type="player",
-            sender_id="squad:vice_captain",
-            sender_name=squad[1].name,
-            sender_role="Dressing Room Leadership",
-            topic="Fixture Focus",
-            body=f"Training group ({len(squad)} players) completed conditioning on campus ahead of World Day {world_day}.",
-            source="player_event",
-            linked_event_key=f"seed:squad_room:2:{state.club_id}",
-            action_payload={"action_type": "open_route", "route": "/app/campus", "label": "Open Campus"},
-            is_read=False,
-        )
+                session,
+                conv=squad_conv,
+                sender_user_id=None,
+                sender_type="player",
+                sender_id="squad:vice_captain",
+                sender_name=squad[1].name,
+                sender_role="Dressing Room Leadership",
+                topic="Fixture Focus",
+                body=f"Training group ({len(squad)} players) completed conditioning on campus ahead of World Day {world_day}.",
+                source="player_event",
+                linked_event_key=f"seed:squad_room:2:{state.club_id}",
+                action_payload={"action_type": "open_route", "route": "/app/campus", "label": "Open Campus"},
+                is_read=False,
+            )
 
     existing_mtg_count = int(
         session.scalar(select(func.count(OwnerClubMeeting.id)).where(OwnerClubMeeting.club_id == state.club_id)) or 0
@@ -1264,9 +1264,7 @@ def _contextual_npc_reply(
             {"action_type": "open_route", "route": "/app/finance", "label": "Club Finance"},
         )
     filed_morale = [int(p.morale) for p in squad if p.morale is not None]
-    morale_text = (
-        f"{round(sum(filed_morale) / len(filed_morale), 1)}/100" if filed_morale else "not filed"
-    )
+    morale_text = f"{round(sum(filed_morale) / len(filed_morale), 1)}/100" if filed_morale else "not filed"
     return (
         f"Tactical desk acknowledges '{topic or 'match preparation'}' across {len(squad)} players (avg morale {morale_text}).",
         {"action_type": "open_route", "route": "/app/lineup", "label": "Tactical Lineup"},
@@ -1540,11 +1538,7 @@ def get_club_communications_durable(
             assistants = list(identities.get("assistant_coaches") or [])
             staff_obj = next((a for a in assistants if a.get("specialist_role") == spec), {})
             seat_name = str(staff_obj.get("name") or "").strip()
-            is_vacant = (
-                not seat_name
-                or bool(staff_obj.get("is_vacant"))
-                or "vacant" in seat_name.lower()
-            )
+            is_vacant = not seat_name or bool(staff_obj.get("is_vacant")) or "vacant" in seat_name.lower()
             resolved_name = f"{member['role']} (Vacant)" if is_vacant else seat_name
             personality = {} if is_vacant else dict(staff_obj.get("personality_profile") or {})
             rel_key = f"assistant_coach_{spec}"

@@ -3518,9 +3518,7 @@ def simulate_autonomous_staff_decisions(
                     for p in squad_players:
                         pers = dict(p.personality_json or {})
                         if pers.get("fitness") is not None:
-                            pers["fitness"] = int(
-                                engine.clamp(int(pers["fitness"]) + cons["squad_fitness"], 0, 100)
-                            )
+                            pers["fitness"] = int(engine.clamp(int(pers["fitness"]) + cons["squad_fitness"], 0, 100))
                         p.personality_json = pers
                 if "prestige" in cons:
                     state.prestige = int(engine.clamp(state.prestige + cons["prestige"], 0, 100))
@@ -3603,7 +3601,9 @@ def simulate_autonomous_staff_decisions(
                 decided_by_user_id=None if requires_approval else "staff_autonomous",
                 outcome_text=outcome_text,
                 payload_json={"world_day": w_day, "role_key": role_key, "consequences": spec["consequences"]},
-                staff_competence_rating=int(slot["rating"]) if isinstance(slot, dict) and slot.get("rating") is not None else None,
+                staff_competence_rating=(
+                    int(slot["rating"]) if isinstance(slot, dict) and slot.get("rating") is not None else None
+                ),
                 staff_impact_json=spec["deltas"],
             )
             session.add(decision_record)

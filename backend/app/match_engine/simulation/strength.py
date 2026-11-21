@@ -3,12 +3,17 @@ from __future__ import annotations
 from statistics import fmean
 from typing import Protocol
 
-from app.match_engine.simulation.models import MatchTeamProfile, PlayerRole, TacticalStyle, TeamStrengthSnapshot, filed_shift
+from app.match_engine.simulation.models import (
+    MatchTeamProfile,
+    PlayerRole,
+    TacticalStyle,
+    TeamStrengthSnapshot,
+    filed_shift,
+)
 
 
 class TeamStrengthCalculator(Protocol):
-    def calculate(self, team: MatchTeamProfile, *, is_home: bool) -> TeamStrengthSnapshot:
-        ...
+    def calculate(self, team: MatchTeamProfile, *, is_home: bool) -> TeamStrengthSnapshot: ...
 
 
 class DefaultTeamStrengthCalculator:
@@ -20,7 +25,9 @@ class DefaultTeamStrengthCalculator:
         attack = self._weighted_line_strength(starters, selector="attack")
         midfield = self._weighted_line_strength(starters, selector="midfield")
         defense = self._weighted_line_strength(starters, selector="defense")
-        goalkeeping = max((player.goalkeeping_value() for player in starters if player.role is PlayerRole.GOALKEEPER), default=40.0)
+        goalkeeping = max(
+            (player.goalkeeping_value() for player in starters if player.role is PlayerRole.GOALKEEPER), default=40.0
+        )
         depth = self._depth_value(starters, bench)
         discipline = fmean(player.discipline for player in starters)
         fitness = fmean(player.fitness for player in starters)
@@ -52,7 +59,9 @@ class DefaultTeamStrengthCalculator:
 
         style_attack, style_midfield, style_defense = self._style_adjustments(team.tactics.style)
         squad_balance = self._squad_balance_bonus(team)
-        manager_attack, manager_midfield, manager_defense, manager_depth, manager_fitness = self._manager_adjustments(team)
+        manager_attack, manager_midfield, manager_defense, manager_depth, manager_fitness = self._manager_adjustments(
+            team
+        )
         competition_tier = self._context_value(context, "competition_tier")
         club_tier = self._context_value(context, "club_tier")
         context_attack = 0.0 if competition_tier is None else (competition_tier - 60.0) * 0.04
@@ -66,9 +75,7 @@ class DefaultTeamStrengthCalculator:
         identity_fit_boost = (average_identity_fit - 65.0) * 0.07
         culture_boost = 0.0 if culture_score is None else (culture_score - 55.0) * 0.06
         filed_pressure = [value for value in (expectation_pressure, fan_pressure, media_pressure) if value is not None]
-        pressure_drag = (
-            max(0.0, ((sum(filed_pressure) / len(filed_pressure)) - 62.0) * 0.07) if filed_pressure else 0.0
-        )
+        pressure_drag = max(0.0, ((sum(filed_pressure) / len(filed_pressure)) - 62.0) * 0.07) if filed_pressure else 0.0
 
         attack = self._clamp(
             attack
@@ -117,7 +124,11 @@ class DefaultTeamStrengthCalculator:
         depth = self._clamp(depth + manager_depth + ((coach_quality - 60.0) * 0.06), 20.0, 99.0)
         fitness = self._clamp(fitness + manager_fitness - fatigue_drag + ((morale - 55.0) * 0.04), 20.0, 99.0)
         chemistry = self._clamp(
-            chemistry + squad_balance + ((coach_quality - 60.0) * 0.05) + (culture_boost * 1.2) + (identity_fit_boost * 1.4),
+            chemistry
+            + squad_balance
+            + ((coach_quality - 60.0) * 0.05)
+            + (culture_boost * 1.2)
+            + (identity_fit_boost * 1.4),
             20.0,
             99.0,
         )
@@ -316,7 +327,9 @@ class DefaultTeamStrengthCalculator:
             "epic": 5.0,
             "rare": 3.0,
         }.get(rarity, 0.0)
-        tactical_quality = float(team.tactics.tactical_quality) if team.tactics.tactical_quality is not None else squad_base
+        tactical_quality = (
+            float(team.tactics.tactical_quality) if team.tactics.tactical_quality is not None else squad_base
+        )
         adaptability = float(team.tactics.adaptability) if team.tactics.adaptability is not None else squad_base
         coach_quality = tactical_quality + rarity_bonus
 

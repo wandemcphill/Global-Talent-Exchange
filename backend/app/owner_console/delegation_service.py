@@ -792,7 +792,9 @@ def _calculate_staff_competence_impact(
         )
     else:
         impact["summary"] = (
-            f"Staff competence rating {rating}/100 evaluated." if rating is not None else "Staff competence rating is not filed."
+            f"Staff competence rating {rating}/100 evaluated."
+            if rating is not None
+            else "Staff competence rating is not filed."
         )
 
     return impact

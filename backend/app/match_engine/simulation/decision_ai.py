@@ -53,7 +53,11 @@ class PlayerDecisionAI:
                     (player.control_value() * 0.54)
                     + (player.attacking_value() * 0.28)
                     + (player.off_ball_movement * 0.18)
-                    + (10.0 if player.role is PlayerRole.MIDFIELDER else 6.0 if player.role is PlayerRole.FORWARD else 0.0),
+                    + (
+                        10.0
+                        if player.role is PlayerRole.MIDFIELDER
+                        else 6.0 if player.role is PlayerRole.FORWARD else 0.0
+                    ),
                 )
                 for player in candidates
             ],
@@ -102,7 +106,11 @@ class PlayerDecisionAI:
         if best.action_type == "pass" and target is not None:
             creator = actor
             shooter = target
-            family = "cutback" if target.role is PlayerRole.FORWARD and base_family != "long_range_effort" else "near_post_finish"
+            family = (
+                "cutback"
+                if target.role is PlayerRole.FORWARD and base_family != "long_range_effort"
+                else "near_post_finish"
+            )
             quality_modifier = 0.04 + ((best.success_probability - 0.5) * 0.08)
             on_target_modifier = 0.03
             goal_modifier = 0.01
@@ -172,24 +180,17 @@ class PlayerDecisionAI:
             0.88,
         )
         pass_success = self._clamp(
-            0.32
-            + ((actor.control_value() + actor.creativity) / 280.0)
-            + (receiver_value * 0.18)
-            - (pressure * 0.18),
+            0.32 + ((actor.control_value() + actor.creativity) / 280.0) + (receiver_value * 0.18) - (pressure * 0.18),
             0.10,
             0.94,
         )
         dribble_success = self._clamp(
-            0.24
-            + ((actor.technique + actor.pace + actor.composure) / 340.0)
-            - (pressure * 0.22),
+            0.24 + ((actor.technique + actor.pace + actor.composure) / 340.0) - (pressure * 0.22),
             0.08,
             0.86,
         )
         hold_success = self._clamp(
-            0.36
-            + ((actor.decision_making + actor.composure) / 300.0)
-            - (pressure * 0.10),
+            0.36 + ((actor.decision_making + actor.composure) / 300.0) - (pressure * 0.10),
             0.16,
             0.90,
         )
@@ -207,9 +208,7 @@ class PlayerDecisionAI:
             PlayerDecisionScore(
                 action_type="shoot",
                 score=round(
-                    shoot_success
-                    * (0.76 + (actor.finishing / 180.0))
-                    * (1.0 + (personality["selfishness"] * 0.28)),
+                    shoot_success * (0.76 + (actor.finishing / 180.0)) * (1.0 + (personality["selfishness"] * 0.28)),
                     3,
                 ),
                 success_probability=round(shoot_success, 3),
@@ -227,9 +226,7 @@ class PlayerDecisionAI:
             PlayerDecisionScore(
                 action_type="dribble",
                 score=round(
-                    dribble_success
-                    * (0.70 + (actor.technique / 210.0))
-                    * (1.0 + (personality["risk_taking"] * 0.18)),
+                    dribble_success * (0.70 + (actor.technique / 210.0)) * (1.0 + (personality["risk_taking"] * 0.18)),
                     3,
                 ),
                 success_probability=round(dribble_success, 3),

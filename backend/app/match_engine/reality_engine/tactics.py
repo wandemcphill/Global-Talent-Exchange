@@ -39,7 +39,9 @@ class TacticalEngine:
     def resolve(self, state: MatchState) -> TacticalContext:
         home = self._team_context(state, side="home")
         away = self._team_context(state, side="away")
-        filed_tempos = [float(value) for value in (state.home.tactics.tempo, state.away.tactics.tempo) if value is not None]
+        filed_tempos = [
+            float(value) for value in (state.home.tactics.tempo, state.away.tactics.tempo) if value is not None
+        ]
         average_tempo = (sum(filed_tempos) / len(filed_tempos) / 100.0) if filed_tempos else 0.5
         transition_intensity = self._clamp(
             0.40
