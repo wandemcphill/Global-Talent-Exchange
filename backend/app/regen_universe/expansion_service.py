@@ -915,8 +915,13 @@ class RegenUniverseExpansionService:
             for player in team.bench
         ]
         chemistry_bonus = self._dna_chemistry_bonus(updated_starters, players)
+        filed_chemistry = team.club_context.team_chemistry
         resolved_context = team.club_context.model_copy(
-            update={"team_chemistry": _clamp_int(team.club_context.team_chemistry + chemistry_bonus, 1, 100)}
+            update={
+                "team_chemistry": (
+                    None if filed_chemistry is None else _clamp_int(filed_chemistry + chemistry_bonus, 1, 100)
+                )
+            }
         )
         highest_heat = max(player_heat.values()) if player_heat else 0.0
         return (

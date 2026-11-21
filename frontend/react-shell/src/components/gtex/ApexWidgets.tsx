@@ -393,6 +393,8 @@ export interface TacticalPitchPlayer {
   position?: string;
   overall?: number;
   rating?: number;
+  potential?: number | null;
+  value_coin?: number | null;
   shirtNumber?: number;
 }
 

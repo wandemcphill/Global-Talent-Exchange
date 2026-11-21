@@ -228,11 +228,13 @@ class MatchViewerPresentationService:
         if not visible_complete:
             for identity in replay_payload.club_identities[:2]:
                 philosophy = self._string(identity.philosophy) or "identity profile"
+                culture = "not filed" if identity.culture_score is None else str(round(identity.culture_score))
+                brand = "not filed" if identity.brand_strength is None else str(round(identity.brand_strength))
                 cards.append(
                     MatchViewerReactionCardView(
                         source="Staff Desk",
                         headline=f"{identity.club_id} identity",
-                        detail=f"{philosophy.title()} football. Culture {round(identity.culture_score)} and brand {round(identity.brand_strength)}.",
+                        detail=f"{philosophy.title()} football. Culture {culture} and brand {brand}.",
                         tag="identity",
                     )
                 )

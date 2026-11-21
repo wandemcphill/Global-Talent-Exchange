@@ -334,7 +334,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   const filteredCandidates = marketData?.candidates || [];
 
   const recordedPrestige = vacanciesData?.club_prestige ?? marketData?.club_prestige;
-  const clubPrestige = recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
+  const clubPrestige = recordedPrestige == null ? null : Number(recordedPrestige);
 
   return (
     <div

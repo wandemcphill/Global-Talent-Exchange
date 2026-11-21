@@ -243,7 +243,7 @@ export function ClubStory() {
   // Supporter Ecosystem & Institutional Archive payloads
   const supportersData = data.supporters || {};
   const supProfile = supportersData.profile || {};
-  const filed = (value: unknown) => (value == null || value === "" ? "—" : value);
+  const filed = (value: unknown): string => (value == null || value === "" ? "—" : String(value));
   const supSegments: any[] = supportersData.segments || [];
   const supAtmosphere = supportersData.matchday_atmosphere || {};
   const supReactions: any[] = supportersData.recent_reactions || [];
