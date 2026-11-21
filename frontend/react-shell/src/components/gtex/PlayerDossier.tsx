@@ -245,13 +245,14 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
   const prestige = regenData?.prestige || {};
   const timeline = timelineData.length > 0 ? timelineData : regenData?.timeline || [];
 
-  const name = p.name || p.player_name || "Scouted Prospect";
-  const rating = Number(p.current_rating || p.rating || cardInfo.overall || 72);
-  const potential = Number(p.potential || cardInfo.potential || Math.min(99, rating + 14));
-  const position = p.position || p.primary_position || "MID";
-  const age = p.age ?? 18;
-  const nationality = p.nationality || "Global";
-  const club = p.current_club_name || "GTEX Academy";
+  const name = p.name || p.player_name || "Unnamed player";
+  const rating = Number(p.current_rating || p.rating || cardInfo.overall || 0);
+  const potential =
+    p.potential == null && cardInfo.potential == null ? null : Number(p.potential || cardInfo.potential);
+  const position = p.position || p.primary_position || "—";
+  const age = p.age ?? "—";
+  const nationality = p.nationality || "—";
+  const club = p.current_club_name || "—";
   const image = p.portrait_url || p.image_url;
   const playstyle: string | undefined =
     p.playstyle ||
@@ -637,8 +638,8 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                   <div className="bg-black/40 p-2 rounded">
                     <p className="text-[10px] text-slate-400 uppercase">Scouted Potential</p>
                     <p className="gx-mono text-sm font-bold text-emerald-300">
-                      {scoutReport.potential_range?.min ?? potential} -{" "}
-                      {scoutReport.potential_range?.max ?? Math.min(99, potential + 5)}
+                      {scoutReport.potential_range?.min ?? (potential == null ? "—" : potential)} -{" "}
+                      {scoutReport.potential_range?.max ?? (potential == null ? "—" : Math.min(99, potential + 5))}
                     </p>
                   </div>
                 </div>
@@ -653,7 +654,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                 <Chip tone="cyan">{position}</Chip>
                 {playstyle && <Chip tone="gold">{playstyle}</Chip>}
                 <Chip tone="gold">{nationality}</Chip>
-                {potential - rating >= 10 && <Chip tone="purple">Wonderkid Potential</Chip>}
+                {potential != null && potential - rating >= 10 && <Chip tone="purple">Wonderkid Potential</Chip>}
               </div>
               {regenData?.scouting_note && (
                 <p className="mt-2 text-xs italic text-slate-300 border-l-2 border-emerald-500/50 pl-2.5 py-1">
@@ -724,7 +725,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                   <span className="text-xs font-black uppercase tracking-wider">Living Star Character & Agency</span>
                 </div>
                 <span className="rounded bg-purple-500/20 px-2 py-0.5 text-[10px] font-bold text-purple-200">
-                  {p.archetype || p.personality?.archetype || cardInfo.archetype || (potential - rating >= 12 ? "Generational Prodigy" : "Technical Playmaker")}
+                  {p.archetype || p.personality?.archetype || cardInfo.archetype || "Archetype not filed"}
                 </span>
               </div>
 
@@ -732,7 +733,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
               <div className="rounded-lg border border-purple-500/20 bg-black/40 p-3">
                 <p className="text-[9px] font-black uppercase tracking-wider text-purple-400">Inner Monologue</p>
                 <p className="mt-1 text-xs italic text-purple-100">
-                  "{p.inner_monologue || p.thoughts || p.personality?.inner_monologue || "I am staying disciplined every session. My legacy will be defined on the continental stage."}"
+                  "{p.inner_monologue || p.thoughts || p.personality?.inner_monologue || "No monologue is filed."}"
                 </p>
               </div>
 
@@ -740,10 +741,10 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
               <div className="space-y-2">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Autonomous Decision Weights</p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
-                  <TraitBar label="Money / Wage Pull" value={p.decision_weights?.money ?? p.personality?.ambition ?? 65} max={100} />
-                  <TraitBar label="Legacy / Prestige" value={p.decision_weights?.legacy ?? p.personality?.marketability ?? 80} max={100} />
-                  <TraitBar label="First-Team Minutes" value={p.decision_weights?.playing_time ?? (100 - (p.personality?.adaptability ?? 30))} max={100} />
-                  <TraitBar label="Club Standing & Vision" value={p.decision_weights?.prestige ?? p.personality?.growth_responsiveness ?? 75} max={100} />
+                  <TraitBar label="Money / Wage Pull" value={p.decision_weights?.money ?? p.personality?.ambition ?? null} max={100} />
+                  <TraitBar label="Legacy / Prestige" value={p.decision_weights?.legacy ?? p.personality?.marketability ?? null} max={100} />
+                  <TraitBar label="First-Team Minutes" value={p.decision_weights?.playing_time ?? null} max={100} />
+                  <TraitBar label="Club Standing & Vision" value={p.decision_weights?.prestige ?? p.personality?.growth_responsiveness ?? null} max={100} />
                 </div>
               </div>
 
@@ -763,7 +764,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                 </div>
                 <p className="text-[11px] text-slate-300">
                   <b className="text-purple-300">Staff Verdict: </b>
-                  {p.hoyd_verdict || (potential >= 82 ? "Prime candidate for senior promotion and high-leverage fixtures." : "Conditioning and tactical tutoring recommended before top-flight minutes.")}
+                  {p.hoyd_verdict || "No youth-head verdict is filed."}
                 </p>
               </div>
             </div>
@@ -814,7 +815,7 @@ export function PlayerDossier({ playerId, onClose, onMakeOffer, onAddToWatchlist
                       {careerEntries.map((c: any, i: number) => (
                         <tr key={c.id || i}>
                           <td className="py-1.5 gx-mono text-slate-300">{c.season || `S${c.season_number ?? i + 1}`}</td>
-                          <td className="py-1.5 text-white font-medium">{c.club_name || c.club_id || "GTEX Academy"}</td>
+                          <td className="py-1.5 text-white font-medium">{c.club_name || c.club_id || "—"}</td>
                           <td className="py-1.5 text-right gx-mono text-slate-300">{c.matches ?? c.appearances ?? 0}</td>
                           <td className="py-1.5 text-right gx-mono text-emerald-400 font-bold">{c.goals ?? 0}</td>
                           <td className="py-1.5 text-right gx-mono text-amber-300">{c.average_rating ? Number(c.average_rating).toFixed(1) : "—"}</td>

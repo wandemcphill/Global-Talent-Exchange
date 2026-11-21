@@ -103,7 +103,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "4-3-3",
         "mentality": "possession",
         "tactical_rating": 92,
-        "fee_fan_coin": "350.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "High-retention Tiki-Taka triangles & tournament composure",
     },
     {
@@ -113,7 +113,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "4-2-3-1",
         "mentality": "attacking",
         "tactical_rating": 90,
-        "fee_fan_coin": "320.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "Relentless high line & rapid vertical counter-pressing",
     },
     {
@@ -123,7 +123,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "4-2-3-1",
         "mentality": "balanced",
         "tactical_rating": 91,
-        "fee_fan_coin": "340.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "Knockout tournament pragmatism & lethal transition speed",
     },
     {
@@ -133,7 +133,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "4-3-3",
         "mentality": "balanced",
         "tactical_rating": 93,
-        "fee_fan_coin": "380.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "Adaptive midfield overloads & penalty shootout mastery",
     },
     {
@@ -143,7 +143,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "4-4-2",
         "mentality": "defensive",
         "tactical_rating": 86,
-        "fee_fan_coin": "180.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "Set-piece dominance, aerial duels & compact two-bank block",
     },
     {
@@ -153,7 +153,7 @@ NATIONAL_TEAM_MANAGER_CATALOG: tuple[dict[str, Any], ...] = (
         "preferred_formation": "5-4-1",
         "mentality": "counter",
         "tactical_rating": 88,
-        "fee_fan_coin": "220.0000",
+        "fee_fan_coin": "0.0000",
         "specialty": "Ultra-disciplined defensive fortress & wingback breaks",
     },
 )
@@ -949,9 +949,12 @@ class NationalTeamTournamentService:
         return self._normalize_amount(gsi)
 
     def _loan_price_coin(self, *, gsi: int, source_bucket: str) -> Decimal:
-        return (self._normalize_amount(gsi) * self._source_price_multiplier(source_bucket)).quantize(
-            AMOUNT_QUANTUM, rounding=ROUND_HALF_UP
-        )
+        # Player rental only. A 0.40 factor is a 60% cut on the previous quote.
+        return (
+            self._normalize_amount(gsi)
+            * self._source_price_multiplier(source_bucket)
+            * Decimal("0.4000")
+        ).quantize(AMOUNT_QUANTUM, rounding=ROUND_HALF_UP)
 
     def _demand_multiplier(self, *, player_id: str) -> Decimal:
         active_contracts = int(

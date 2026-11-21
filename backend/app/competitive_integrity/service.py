@@ -1017,7 +1017,7 @@ def _style_to_tactical_style(value: Any, *, fallback: TacticalStyle) -> Tactical
     return fallback
 
 
-def _coerce_slider(raw: Any, *, low: int, medium: int, high: int, fallback: int) -> int:
+def _coerce_slider(raw: Any, *, low: int, medium: int, high: int, fallback: int | None) -> int | None:
     if raw is None:
         return fallback
     if isinstance(raw, (int, float)):

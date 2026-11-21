@@ -9,6 +9,10 @@ import { Btn, Chip } from "@/components/gtex/ui";
 function bookLink(item: any): { to: string; label: string } | null {
   const club = item.club_id ? `club_id=${encodeURIComponent(item.club_id)}` : "";
   const withClub = (path: string) => (club ? `${path}${path.includes("?") ? "&" : "?"}${club}` : path);
+  if (item.kind === "sheet_promotion" || item.kind === "sheet_move") {
+    const sheet = item.payload?.sheet === "reserve" || item.payload?.sheet === "academy" ? item.payload.sheet : "first_team";
+    return { to: withClub(`/app/squad?sheet=${sheet}`), label: "Open the squad sheet" };
+  }
   if (item.kind === "regen_breakthrough" || item.kind === "regen_endorsement") {
     return { to: withClub("/app/squad?sheet=academy"), label: "Open the academy sheet" };
   }

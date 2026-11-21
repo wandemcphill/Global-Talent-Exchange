@@ -59,12 +59,22 @@ def _deserialize_rng_state(payload: list[Any]) -> tuple[Any, ...]:
     return (int(payload[0]), tuple(int(item) for item in payload[1]), payload[2])
 
 
+def _stored_score(value: int | None) -> int | None:
+    return None if value is None else int(value)
+
+
+def _read_score(payload: dict[str, Any], key: str) -> int | None:
+    if key not in payload or payload[key] is None:
+        return None
+    return int(payload[key])
+
+
 def _serialize_tactical_plan(plan: TacticalPlan) -> dict[str, Any]:
     return {
         "style": plan.style.value,
-        "pressing": int(plan.pressing),
-        "tempo": int(plan.tempo),
-        "aggression": int(plan.aggression),
+        "pressing": _stored_score(plan.pressing),
+        "tempo": _stored_score(plan.tempo),
+        "aggression": _stored_score(plan.aggression),
         "substitution_windows": list(plan.substitution_windows),
         "red_card_fallback_formation": str(plan.red_card_fallback_formation),
         "injury_auto_substitution": bool(plan.injury_auto_substitution),
@@ -73,24 +83,24 @@ def _serialize_tactical_plan(plan: TacticalPlan) -> dict[str, Any]:
         "max_substitutions": int(plan.max_substitutions),
         "allow_substitutions": bool(plan.allow_substitutions),
         "allow_tactical_changes": bool(plan.allow_tactical_changes),
-        "defensive_line": int(plan.defensive_line),
-        "width": int(plan.width),
+        "defensive_line": _stored_score(plan.defensive_line),
+        "width": _stored_score(plan.width),
         "mentality": plan.mentality.value,
-        "set_piece_emphasis": int(plan.set_piece_emphasis),
+        "set_piece_emphasis": _stored_score(plan.set_piece_emphasis),
         "player_instructions": deepcopy(plan.player_instructions),
         "game_state_adjustments": deepcopy(plan.game_state_adjustments),
-        "tactical_quality": int(plan.tactical_quality),
-        "adaptability": int(plan.adaptability),
-        "game_management": int(plan.game_management),
+        "tactical_quality": _stored_score(plan.tactical_quality),
+        "adaptability": _stored_score(plan.adaptability),
+        "game_management": _stored_score(plan.game_management),
     }
 
 
 def _deserialize_tactical_plan(payload: dict[str, Any]) -> TacticalPlan:
     return TacticalPlan(
         style=TacticalStyle(str(payload["style"])),
-        pressing=int(payload["pressing"]),
-        tempo=int(payload["tempo"]),
-        aggression=int(payload["aggression"]),
+        pressing=_read_score(payload, "pressing"),
+        tempo=_read_score(payload, "tempo"),
+        aggression=_read_score(payload, "aggression"),
         substitution_windows=tuple(int(item) for item in payload["substitution_windows"]),
         red_card_fallback_formation=str(payload["red_card_fallback_formation"]),
         injury_auto_substitution=bool(payload["injury_auto_substitution"]),
@@ -99,15 +109,15 @@ def _deserialize_tactical_plan(payload: dict[str, Any]) -> TacticalPlan:
         max_substitutions=int(payload["max_substitutions"]),
         allow_substitutions=bool(payload.get("allow_substitutions", True)),
         allow_tactical_changes=bool(payload.get("allow_tactical_changes", True)),
-        defensive_line=int(payload.get("defensive_line", 50)),
-        width=int(payload.get("width", 50)),
+        defensive_line=_read_score(payload, "defensive_line"),
+        width=_read_score(payload, "width"),
         mentality=TacticalStyle(str(payload.get("mentality", payload["style"]))),
-        set_piece_emphasis=int(payload.get("set_piece_emphasis", 50)),
+        set_piece_emphasis=_read_score(payload, "set_piece_emphasis"),
         player_instructions=deepcopy(payload.get("player_instructions")),
         game_state_adjustments=deepcopy(payload.get("game_state_adjustments")),
-        tactical_quality=int(payload.get("tactical_quality", 60)),
-        adaptability=int(payload.get("adaptability", 60)),
-        game_management=int(payload.get("game_management", 60)),
+        tactical_quality=_read_score(payload, "tactical_quality"),
+        adaptability=_read_score(payload, "adaptability"),
+        game_management=_read_score(payload, "game_management"),
     )
 
 

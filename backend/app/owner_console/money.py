@@ -731,7 +731,7 @@ def internal_transfer(session: Session, user_id: str, player_id: str, to_club: s
             destination=ledger.club_account(from_club),
             currency=ledger.GTEX,
             gross=check["fee"],
-            fee_bps=200,
+            fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
             club_id=from_club,
             user_id=user_id,
             related_type="player",
@@ -751,6 +751,11 @@ def internal_transfer(session: Session, user_id: str, player_id: str, to_club: s
             fee=check["fee"],
         )
     )
+    seller_state = get_state(session, from_club)
+    if seller_state is not None:
+        from app.owner_console.service import _drop_from_filed_selection
+
+        _drop_from_filed_selection(seller_state, str(player.id))
     player.club_id = to_club
     player.morale = max(0, player.morale - 5)
     notes = ["Disclosed in both clubs' history."]

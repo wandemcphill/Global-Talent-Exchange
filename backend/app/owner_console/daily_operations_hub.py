@@ -39,6 +39,22 @@ DESTINATION_ORDER = (
 )
 
 
+def _filed_int(val: Any) -> int | None:
+    if val is None or val == "":
+        return None
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
+
+
+def _filed_salary(record: dict[str, Any]) -> int | None:
+    for key in ("salary_gtex", "salary"):
+        if record.get(key) is not None:
+            return _filed_int(record.get(key))
+    return None
+
+
 def _safe_int(val: Any, default: int = 0) -> int:
     try:
         return int(float(val))
@@ -56,7 +72,13 @@ def _safe_float(val: Any, default: float = 0.0) -> float:
 def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]:
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    stored_manager = dict(state.manager_json or {})
+    caretaker = (
+        not stored_manager.get("name")
+        or stored_manager.get("is_default")
+        or stored_manager.get("manager_id") == "gtex-staff-coach"
+    )
+    mgr = {} if caretaker else stored_manager
 
     # General Manager
     gm_raw = exec_staff.get("general_manager")
@@ -72,20 +94,20 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         gm_name = str(gm.get("name") or "General Manager")
         gm_label = "General Manager"
         gm_status = "appointed"
-        gm_negotiation = _safe_int(gm.get("negotiation"), 15)
-        gm_discipline = _safe_int(gm.get("financial_discipline"), 15)
-        gm_salary = _safe_int(gm.get("salary_gtex", gm.get("salary", 350)), 350)
-        gm_mood = _safe_int(gm.get("mood"), 78)
-        gm_loyalty = _safe_int(gm.get("loyalty"), 14)
-        gm_agenda = str(gm.get("personal_agenda") or "Maximize sponsor yield & wage-to-turnover discipline")
-        gm_trait = str(gm.get("signature_trait") or gm.get("special_trait") or "Clause Architect")
+        gm_negotiation = _filed_int(gm.get("negotiation"))
+        gm_discipline = _filed_int(gm.get("financial_discipline"))
+        gm_salary = _filed_salary(gm)
+        gm_mood = _filed_int(gm.get("mood"))
+        gm_loyalty = _filed_int(gm.get("loyalty"))
+        gm_agenda = str(gm.get("personal_agenda") or "Not filed")
+        gm_trait = str(gm.get("signature_trait") or gm.get("special_trait") or "Not filed")
     else:
         gm = {}
         gm_name = "General Manager (Vacant)"
         gm_label = "General Manager (Vacant)"
         gm_status = "vacant"
-        gm_negotiation = 10
-        gm_discipline = 10
+        gm_negotiation = 0
+        gm_discipline = 0
         gm_salary = 0
         gm_mood = None
         gm_loyalty = 0
@@ -106,18 +128,18 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
         hoyd_label = "Head of Youth Development"
         hoyd_status = "appointed"
-        hoyd_youth = _safe_int(hoyd.get("youth_development"), 15)
-        hoyd_salary = _safe_int(hoyd.get("salary_gtex", hoyd.get("salary", 300)), 300)
-        hoyd_mood = _safe_int(hoyd.get("mood"), 82)
-        hoyd_loyalty = _safe_int(hoyd.get("loyalty"), 15)
-        hoyd_agenda = str(hoyd.get("personal_agenda") or "Fast-track academy wonderkids & senior pathway integration")
-        hoyd_trait = str(hoyd.get("signature_trait") or hoyd.get("special_trait") or "Bloodline Whisperer")
+        hoyd_youth = _filed_int(hoyd.get("youth_development"))
+        hoyd_salary = _filed_salary(hoyd)
+        hoyd_mood = _filed_int(hoyd.get("mood"))
+        hoyd_loyalty = _filed_int(hoyd.get("loyalty"))
+        hoyd_agenda = str(hoyd.get("personal_agenda") or "Not filed")
+        hoyd_trait = str(hoyd.get("signature_trait") or hoyd.get("special_trait") or "Not filed")
     else:
         hoyd = {}
         hoyd_name = "Head of Youth Development (Vacant)"
         hoyd_label = "Head of Youth Development (Vacant)"
         hoyd_status = "vacant"
-        hoyd_youth = 10
+        hoyd_youth = 0
         hoyd_salary = 0
         hoyd_mood = None
         hoyd_loyalty = 0
@@ -138,18 +160,18 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         med_name = str(med.get("name") or "Medical Director")
         med_label = "Medical Director"
         med_status = "appointed"
-        med_expertise = _safe_int(med.get("medical_expertise"), 10)
-        med_salary = _safe_int(med.get("salary_gtex", med.get("salary", 300)), 300)
-        med_mood = _safe_int(med.get("mood"), 84)
-        med_loyalty = _safe_int(med.get("loyalty"), 16)
-        med_agenda = str(med.get("personal_agenda") or "Zero-tolerance sports science load management")
-        med_trait = str(med.get("signature_trait") or med.get("special_trait") or "Strict Recovery Veto")
+        med_expertise = _filed_int(med.get("medical_expertise"))
+        med_salary = _filed_salary(med)
+        med_mood = _filed_int(med.get("mood"))
+        med_loyalty = _filed_int(med.get("loyalty"))
+        med_agenda = str(med.get("personal_agenda") or "Not filed")
+        med_trait = str(med.get("signature_trait") or med.get("special_trait") or "Not filed")
     else:
         med = {}
         med_name = "Medical Director (Vacant)"
         med_label = "Medical Director (Vacant)"
         med_status = "vacant"
-        med_expertise = 10
+        med_expertise = 0
         med_salary = 0
         med_mood = None
         med_loyalty = 0
@@ -170,18 +192,18 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         scout_name = str(scout.get("name") or "Chief Scout")
         scout_label = "Chief Scout"
         scout_status = "appointed"
-        scout_reach = _safe_int(scout.get("scouting_reach"), 15)
-        scout_salary = _safe_int(scout.get("salary_gtex", scout.get("salary", 250)), 250)
-        scout_mood = _safe_int(scout.get("mood"), 76)
-        scout_loyalty = _safe_int(scout.get("loyalty"), 13)
-        scout_agenda = str(scout.get("personal_agenda") or "Uncover unheralded continental wonderkids")
-        scout_trait = str(scout.get("signature_trait") or scout.get("special_trait") or "Underground Agent Network")
+        scout_reach = _filed_int(scout.get("scouting_reach"))
+        scout_salary = _filed_salary(scout)
+        scout_mood = _filed_int(scout.get("mood"))
+        scout_loyalty = _filed_int(scout.get("loyalty"))
+        scout_agenda = str(scout.get("personal_agenda") or "Not filed")
+        scout_trait = str(scout.get("signature_trait") or scout.get("special_trait") or "Not filed")
     else:
         scout = {}
         scout_name = "Chief Scout (Vacant)"
         scout_label = "Chief Scout (Vacant)"
         scout_status = "vacant"
-        scout_reach = 10
+        scout_reach = 0
         scout_salary = 0
         scout_mood = None
         scout_loyalty = 0
@@ -202,20 +224,20 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         fin_name = str(fin.get("name") or "Finance & Commercial Director")
         fin_label = "Finance & Commercial Director"
         fin_status = "appointed"
-        fin_discipline = _safe_int(fin.get("financial_discipline"), 15)
-        fin_negotiation = _safe_int(fin.get("negotiation"), 14)
-        fin_salary = _safe_int(fin.get("salary_gtex", fin.get("salary", 320)), 320)
-        fin_mood = _safe_int(fin.get("mood"), 79)
-        fin_loyalty = _safe_int(fin.get("loyalty"), 14)
-        fin_agenda = str(fin.get("personal_agenda") or "Enforce treasury solvency, sponsorship yield & matchday ROI")
-        fin_trait = str(fin.get("signature_trait") or fin.get("special_trait") or "Treasury Auditor")
+        fin_discipline = _filed_int(fin.get("financial_discipline"))
+        fin_negotiation = _filed_int(fin.get("negotiation"))
+        fin_salary = _filed_salary(fin)
+        fin_mood = _filed_int(fin.get("mood"))
+        fin_loyalty = _filed_int(fin.get("loyalty"))
+        fin_agenda = str(fin.get("personal_agenda") or "Not filed")
+        fin_trait = str(fin.get("signature_trait") or fin.get("special_trait") or "Not filed")
     else:
         fin = {}
         fin_name = "Finance & Commercial Director (Vacant)"
         fin_label = "Finance & Commercial Director (Vacant)"
         fin_status = "vacant"
-        fin_discipline = 10
-        fin_negotiation = 10
+        fin_discipline = 0
+        fin_negotiation = 0
         fin_salary = 0
         fin_mood = None
         fin_loyalty = 0
@@ -234,21 +256,21 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
             "status": "appointed" if mgr_appointed else "vacant",
             "is_appointed": mgr_appointed,
             "is_vacant": not mgr_appointed,
-            "mood": _safe_int(mgr.get("mood"), 75) if mgr_appointed else None,
-            "loyalty": _safe_int(mgr.get("loyalty"), 12) if mgr_appointed else 0,
-            "temperament": str(mgr.get("temperament") or "ambitious") if mgr_appointed else "vacant",
+            "mood": _filed_int(mgr.get("mood")) if mgr_appointed else None,
+            "loyalty": _filed_int(mgr.get("loyalty")) if mgr_appointed else 0,
+            "temperament": str(mgr.get("temperament") or "Not filed") if mgr_appointed else "vacant",
             "tactical_preference": (
-                str(mgr.get("tactical_preference") or "Balanced Possession") if mgr_appointed else "Vacant"
+                str(mgr.get("tactical_preference") or "Not filed") if mgr_appointed else "Vacant"
             ),
-            "youth_development": _safe_int(mgr.get("youth_development"), 12) if mgr_appointed else 10,
-            "salary_gtex": _safe_int(mgr.get("salary_gtex", 500), 500) if mgr_appointed else 0,
+            "youth_development": _filed_int(mgr.get("youth_development")) if mgr_appointed else 0,
+            "salary_gtex": _filed_salary(mgr) if mgr_appointed else 0,
             "personal_agenda": (
-                str(mgr.get("personal_agenda") or "Win silverware & enforce high-press identity")
+                str(mgr.get("personal_agenda") or "Not filed")
                 if mgr_appointed
                 else "Appoint a First-Team Manager to take full matchday tactical command."
             ),
             "signature_trait": (
-                str(mgr.get("signature_trait") or mgr.get("special_trait") or "Touchline Firebrand")
+                str(mgr.get("signature_trait") or mgr.get("special_trait") or "Not filed")
                 if mgr_appointed
                 else "Position Vacant"
             ),
@@ -828,18 +850,22 @@ def build_authoritative_daily_briefing(
     ready_prospects = [p for p in regens if p.rating >= 58 and p.id not in injured_ids]
 
     # Medical recovery parameters (exact same formula as service.tick_club)
-    med_expertise = staff["medical_director"]["medical_expertise"]
+    med_expertise = staff["medical_director"]["medical_expertise"] or 0
     med_bonus = max(0, med_expertise // 5)
     rehab_campus_bonus = _safe_int(campus_effects.get("rehab_daily_bonus_days"), 0)
     medical_facility_level = _safe_int(facs.get("medical", 1), 1)
     daily_injury_heal_days = max(1, 1 + medical_facility_level // 2 + med_bonus + rehab_campus_bonus)
-    daily_fitness_recovery = _safe_int(campus_effects.get("daily_fitness_recovery"), 6)
+    daily_fitness_recovery = (
+        _safe_int(campus_effects.get("daily_fitness_recovery"))
+        if campus_effects.get("daily_fitness_recovery") is not None
+        else 0
+    )
     injury_reduction_pct = _safe_int(campus_effects.get("injury_reduction_pct"), 0)
 
     # Active XI calculation
     strength_info = engine.club_strength(
         [service.player_dict(pl) for pl in squad_players],
-        state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER),
+        state.manager_json or {},
         facs,
         campus_effects=campus_effects,
     )
@@ -1018,13 +1044,25 @@ def build_authoritative_daily_briefing(
     }
     stad_ops = {
         "stadium_level": _safe_int(facs.get("stadium", 1), 1),
-        "operational_stadium_capacity": _safe_int(campus_effects.get("stadium_capacity"), 15000),
-        "stadium_capacity": _safe_int(campus_effects.get("stadium_capacity"), 15000),
+        "operational_stadium_capacity": (
+            _safe_int(campus_effects.get("stadium_capacity"))
+            if campus_effects.get("stadium_capacity") is not None
+            else None
+        ),
+        "stadium_capacity": (
+            _safe_int(campus_effects.get("stadium_capacity"))
+            if campus_effects.get("stadium_capacity") is not None
+            else None
+        ),
         "placed_buildings_count": len(operational_modules),
         "operational_modules_count": len(operational_modules),
         "active_construction_count": len(construction_projects),
         "active_construction_projects_count": len(construction_projects),
-        "gate_revenue_bonus_pct": _safe_int(campus_effects.get("matchday_revenue_bonus_pct"), 15),
+        "gate_revenue_bonus_pct": (
+            _safe_int(campus_effects.get("matchday_revenue_bonus_pct"))
+            if campus_effects.get("matchday_revenue_bonus_pct") is not None
+            else None
+        ),
         "sponsor_bonus_pct": _safe_int(campus_effects.get("commercial_growth_bonus_pct"), 0),
         "active_projects": construction_projects[:4],
     }
@@ -1197,7 +1235,9 @@ def build_authoritative_daily_briefing(
         },
         "staff_and_organisation": {
             "executive_team": list(staff.values()),
-            "poaching_risks": [s for s in staff.values() if _safe_int(s.get("mood"), 75) < 60],
+            "poaching_risks": [
+                s for s in staff.values() if s.get("mood") is not None and _safe_int(s.get("mood")) < 60
+            ],
         },
         "recommendations": gm_recommendations,
     }
@@ -1410,11 +1450,15 @@ def build_authoritative_daily_briefing(
         _safe_int(d.get("per_match_gross"), 0) for d in active_sponsor_deals if d.get("status") == "active"
     )
     last_home_match = next((m for m in recent_results if m.get("home_club_id") == club_id), None)
-    stadium_cap = _safe_int(campus_effects.get("stadium_capacity"), 15000)
+    stadium_cap = (
+        _safe_int(campus_effects.get("stadium_capacity"))
+        if campus_effects.get("stadium_capacity") is not None
+        else None
+    )
     projected_attendance = engine.calculate_match_attendance(
         stadium_level=_safe_int(facs.get("stadium", 1), 1),
-        fans=int(state.fans or 1200),
-        prestige=int(state.prestige or 20),
+        fans=int(state.fans if state.fans is not None else 0),
+        prestige=int(state.prestige if state.prestige is not None else 0),
         campus_effects=campus_effects,
         gf=1,
         ga=1,
@@ -2482,12 +2526,12 @@ def execute_owner_operational_decision(
             exec_staff = dict(facs.get("_executive_staff") or {})
             if proposer_role == "first_team_manager":
                 mgr = dict(state.manager_json or {})
-                mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) - 3, 0, 100))
+                engine.apply_mood_delta(mgr, -3)
                 state.manager_json = mgr
                 flag_modified(state, "manager_json")
             elif proposer_role in exec_staff and isinstance(exec_staff[proposer_role], dict):
                 st = dict(exec_staff[proposer_role])
-                st["mood"] = int(engine.clamp(_safe_int(st.get("mood"), 75) - 3, 0, 100))
+                engine.apply_mood_delta(st, -3)
                 exec_staff[proposer_role] = st
                 facs["_executive_staff"] = exec_staff
             outcome_text = (
@@ -2549,7 +2593,7 @@ def execute_owner_operational_decision(
                 )
                 mgr = dict(state.manager_json or {})
                 if decision["implemented_as_requested"]:
-                    mgr["mood"] = int(engine.clamp(_safe_int(mgr.get("mood"), 75) + 4, 0, 100))
+                    engine.apply_mood_delta(mgr, 4)
                     state.manager_json = mgr
                     flag_modified(state, "manager_json")
                     for p in session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all():
@@ -2828,7 +2872,7 @@ def _apply_medical_recovery_protocol(
     appointed_med = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else None
     if appointed_med:
         med_st = dict(appointed_med)
-        med_st["mood"] = int(engine.clamp(_safe_int(med_st.get("mood"), 84) + 6, 0, 100))
+        engine.apply_mood_delta(med_st, 6)
         exec_staff["medical_director"] = med_st
         facs["_executive_staff"] = exec_staff
 
@@ -2874,7 +2918,7 @@ def run_medical_recovery_protocol(
         state=state,
         facs=facs,
         world_day=world_day,
-        cost=int(cost_gtex or 800),
+        cost=int(cost_gtex),
         related_id=protocol_id,
         now_iso=now_iso,
     )

@@ -605,7 +605,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
     squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    mgr = dict(state.manager_json or {})
     treasury = int(_treasury_gtex(session, state.club_id))
     world_day = int(state.world_day or 1)
     regen_count = sum(1 for p in squad if p.is_regen)
@@ -699,19 +699,21 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
         subject="Squad Morale, Matchday Preparation & Dressing Room",
     )
     gm_identity = dict(identities.get("general_manager") or {})
-    gm_is_vacant = bool(gm_identity.get("is_vacant"))
-    gm_name = (
-        str((exec_staff.get("general_manager") or {}).get("name") or gm_identity.get("name") or "General Manager")
-        if not gm_is_vacant
-        else "General Manager (Vacant)"
-    )
+    gm_name = str((exec_staff.get("general_manager") or {}).get("name") or gm_identity.get("name") or "").strip()
+    gm_is_vacant = bool(gm_identity.get("is_vacant") or not gm_name)
+    if gm_is_vacant:
+        gm_name = "General Manager (Vacant)"
     mgr_identity = dict(identities.get("first_team_manager") or {})
-    mgr_is_vacant = bool(mgr_identity.get("is_vacant"))
-    mgr_name = (
-        str(mgr.get("name") or mgr_identity.get("name") or "First-Team Manager")
-        if not mgr_is_vacant
-        else "First-Team Manager (Vacant)"
+    mgr_name = str(mgr.get("name") or mgr_identity.get("name") or "").strip()
+    mgr_is_vacant = bool(
+        mgr_identity.get("is_vacant")
+        or mgr.get("is_vacant")
+        or mgr.get("is_default")
+        or mgr.get("manager_id") == "gtex-staff-coach"
+        or not mgr_name
     )
+    if mgr_is_vacant:
+        mgr_name = "First-Team Manager (Vacant)"
     if staff_conv.last_message_seq == 0:
         if not gm_is_vacant:
             _append_message(
@@ -745,8 +747,8 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
                 action_payload={"action_type": "open_route", "route": "/app/lineup", "label": "Check Lineup"},
                 is_read=False,
             )
-    if squad_conv.last_message_seq == 0:
-        captain_name = squad[0].name if squad else "First-Team Captain"
+    if squad_conv.last_message_seq == 0 and squad:
+        captain_name = squad[0].name
         _append_message(
             session,
             conv=squad_conv,
@@ -762,13 +764,14 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
             action_payload={"action_type": "open_route", "route": "/app/squad", "label": "Inspect Squad"},
             is_read=False,
         )
-        _append_message(
+        if len(squad) > 1:
+            _append_message(
             session,
             conv=squad_conv,
             sender_user_id=None,
             sender_type="player",
             sender_id="squad:vice_captain",
-            sender_name=squad[1].name if len(squad) > 1 else "Squad Vice-Captain",
+            sender_name=squad[1].name,
             sender_role="Dressing Room Leadership",
             topic="Fixture Focus",
             body=f"Training group ({len(squad)} players) completed conditioning on campus ahead of World Day {world_day}.",
@@ -789,7 +792,9 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
 
         mgr_info = dict(identities.get("first_team_manager") or {})
         mgr_vacant = bool(mgr_info.get("is_vacant"))
-        mgr_name = str(mgr_info.get("name") or mgr.get("name") or "First-Team Manager").strip()
+        mgr_name = str(mgr_info.get("name") or mgr.get("name") or "").strip()
+        if mgr.get("is_default") or mgr.get("is_vacant") or mgr.get("manager_id") == "gtex-staff-coach":
+            mgr_vacant = True
 
         hoyd_info = dict(identities.get("head_of_youth_development") or {})
         hoyd_exec = (
@@ -864,7 +869,7 @@ def ensure_club_conversations_seeded(session: Session, state: OwnerClubState) ->
                 meeting_type="tactical",
                 world_day=world_day + 1,
                 status="scheduled",
-                attendees_json=["Club Owner", mgr_name, "Dr. Amara Okafor", "Kelechi Nwosu"],
+                attendees_json=list(attendees),
                 minutes_summary=f"Scheduled for World Day {world_day + 1} with technical and medical leads.",
                 decisions_json=[],
                 created_by_user_id=state.owner_user_id,
@@ -888,7 +893,10 @@ def sync_living_club_communications(
     squad = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     regens = [p for p in squad if p.is_regen]
     injured = [p for p in squad if int(p.injured_days or 0) > 0]
-    low_morale = sorted([p for p in squad if int(p.morale or 50) <= 45], key=lambda item: int(item.morale or 50))
+    low_morale = sorted(
+        [p for p in squad if p.morale is not None and int(p.morale) <= 45],
+        key=lambda item: int(item.morale),
+    )
     pending_inbox = int(
         session.scalar(
             select(func.count(OwnerInboxItem.id)).where(
@@ -1255,9 +1263,12 @@ def _contextual_npc_reply(
             f"Logged for executive operations. Treasury is {treasury} GTX with Prestige {prestige}.",
             {"action_type": "open_route", "route": "/app/finance", "label": "Club Finance"},
         )
-    avg_morale = round(sum(int(p.morale or 50) for p in squad) / len(squad), 1) if squad else 70
+    filed_morale = [int(p.morale) for p in squad if p.morale is not None]
+    morale_text = (
+        f"{round(sum(filed_morale) / len(filed_morale), 1)}/100" if filed_morale else "not filed"
+    )
     return (
-        f"Tactical desk acknowledges '{topic or 'match preparation'}' across {len(squad)} players (avg morale {avg_morale}/100).",
+        f"Tactical desk acknowledges '{topic or 'match preparation'}' across {len(squad)} players (avg morale {morale_text}).",
         {"action_type": "open_route", "route": "/app/lineup", "label": "Tactical Lineup"},
     )
 
@@ -1496,7 +1507,7 @@ def get_club_communications_durable(
     )
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    mgr = dict(state.manager_json or {})
 
     convs_all = list(
         session.scalars(
@@ -1528,9 +1539,14 @@ def get_club_communications_durable(
         else:
             assistants = list(identities.get("assistant_coaches") or [])
             staff_obj = next((a for a in assistants if a.get("specialist_role") == spec), {})
-            is_vacant = False
-            resolved_name = str(staff_obj.get("name") or member["name"])
-            personality = dict(staff_obj.get("personality_profile") or {})
+            seat_name = str(staff_obj.get("name") or "").strip()
+            is_vacant = (
+                not seat_name
+                or bool(staff_obj.get("is_vacant"))
+                or "vacant" in seat_name.lower()
+            )
+            resolved_name = f"{member['role']} (Vacant)" if is_vacant else seat_name
+            personality = {} if is_vacant else dict(staff_obj.get("personality_profile") or {})
             rel_key = f"assistant_coach_{spec}"
 
         if is_vacant:
@@ -1587,8 +1603,8 @@ def get_club_communications_durable(
                 "department": member["department"],
                 "is_vacant": False,
                 "is_appointed": True,
-                "mood": int((mgr if rk == "first_team_manager" else exec_staff.get(rk) or {}).get("mood", 78)),
-                "loyalty": int(rel_serialized.get("loyalty", 70)),
+                "mood": (mgr if rk == "first_team_manager" else exec_staff.get(rk) or {}).get("mood"),
+                "loyalty": rel_serialized.get("loyalty"),
                 "portrait_url": member["portrait_url"],
                 "route": member["route"],
                 "thread_id": conv.id if conv else None,
@@ -1606,10 +1622,14 @@ def get_club_communications_durable(
                 "player_id": p.id,
                 "name": p.name,
                 "position": p.position,
-                "rating": int(p.rating or 60),
-                "morale": int(p.morale or 70),
+                "rating": int(p.rating) if p.rating is not None else None,
+                "morale": int(p.morale) if p.morale is not None else None,
                 "injured_days": int(p.injured_days or 0),
-                "fitness": max(45, 100 - int(p.injured_days or 0) * 6),
+                "fitness": (
+                    int((p.personality_json or {}).get("fitness"))
+                    if (p.personality_json or {}).get("fitness") is not None
+                    else None
+                ),
                 "is_regen": bool(p.is_regen),
                 "squad_status": "academy" if p.is_regen else "senior",
                 "portrait_url": storytelling.resolve_player_portrait_url(session, p.id, p.name),
@@ -2054,8 +2074,8 @@ def send_club_message_durable(
         plr = session.get(OwnerSquadPlayer, conv.participant_id)
         if plr is not None and plr.club_id == club_id:
             boost_key = f"day:{world_day}:player:{plr.id}"
-            if is_substantive and not boost_log.get(boost_key):
-                old_m = int(plr.morale or 50)
+            if is_substantive and not boost_log.get(boost_key) and plr.morale is not None:
+                old_m = int(plr.morale)
                 plr.morale = int(engine.clamp(old_m + 4, 0, 100))
                 morale_delta = int(plr.morale) - old_m
                 morale_boost_applied = morale_delta > 0
@@ -2069,10 +2089,14 @@ def send_club_message_durable(
             squad_players = list(
                 session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
             )
+            boosted = False
             for p in squad_players:
-                p.morale = int(engine.clamp(int(p.morale or 50) + 2, 0, 100))
-            morale_delta = 2 if squad_players else 0
-            morale_boost_applied = bool(squad_players)
+                if p.morale is None:
+                    continue
+                p.morale = int(engine.clamp(int(p.morale) + 2, 0, 100))
+                boosted = True
+            morale_delta = 2 if boosted else 0
+            morale_boost_applied = boosted
             boost_log[boost_key] = True
             facs["_comms_boost_log"] = boost_log
             state.facilities_json = facs
@@ -2404,11 +2428,17 @@ def schedule_club_meeting_durable(
         boost_key = f"day:{world_day}:meeting"
         if not boost_log.get(boost_key):
             for p in squad:
-                p.morale = int(engine.clamp(int(p.morale or 50) + 3, 0, 100))
+                if p.morale is not None:
+                    p.morale = int(engine.clamp(int(p.morale) + 3, 0, 100))
             mgr = dict(state.manager_json or {})
-            mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 72)) + 3, 0, 100))
-            state.manager_json = mgr
-            flag_modified(state, "manager_json")
+            if (
+                mgr.get("name")
+                and not mgr.get("is_vacant")
+                and not mgr.get("is_default")
+                and engine.apply_mood_delta(mgr, 3) is not None
+            ):
+                state.manager_json = mgr
+                flag_modified(state, "manager_json")
             boost_log[boost_key] = True
             facs["_comms_boost_log"] = boost_log
             state.facilities_json = facs

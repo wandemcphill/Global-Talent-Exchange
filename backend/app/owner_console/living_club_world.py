@@ -703,6 +703,8 @@ def apply_relationship_delta(
     source_event_id: str | None = None,
     world_day: int = 1,
 ) -> OwnerClubRelationship | None:
+    if not str(part_b_name or "").strip():
+        return None
     resolved_a = _resolve_participant_for_club(session, club_id, part_a_type, part_a_id, part_a_name)
     if resolved_a is None:
         return None
@@ -1223,10 +1225,15 @@ def _capture_directive_baseline_snapshot(
 
     injured_count = sum(1 for p in active_players if int(p.injured_days or 0) > 0)
     total_injured_days = sum(int(p.injured_days or 0) for p in active_players)
-    fitness_values = [int((p.personality_json or {}).get("fitness", 95)) for p in active_players]
-    min_fitness = min(fitness_values, default=95)
-    avg_fitness = int(sum(fitness_values) / max(1, len(fitness_values)))
-    avg_morale = int(sum(int(p.morale or 70) for p in active_players) / max(1, len(active_players)))
+    fitness_values = [
+        int((p.personality_json or {}).get("fitness"))
+        for p in active_players
+        if (p.personality_json or {}).get("fitness") is not None
+    ]
+    morale_values = [int(p.morale) for p in active_players if p.morale is not None]
+    min_fitness = min(fitness_values) if fitness_values else None
+    avg_fitness = int(sum(fitness_values) / len(fitness_values)) if fitness_values else None
+    avg_morale = int(sum(morale_values) / len(morale_values)) if morale_values else None
     max_fatigue = max((int((p.personality_json or {}).get("fatigue", 0)) for p in active_players), default=0)
 
     campus_projects = list(facs.get("_campus_projects") or [])
@@ -1274,10 +1281,10 @@ def _capture_directive_baseline_snapshot(
             snapshot["target_player"] = {
                 "id": target_player.id,
                 "injured_days": int(target_player.injured_days or 0),
-                "fitness": int(t_pers.get("fitness", 95)),
-                "fatigue": int(t_pers.get("fatigue", 0)),
-                "morale": int(target_player.morale or 70),
-                "rating": int(target_player.rating or 60),
+                "fitness": int(t_pers["fitness"]) if t_pers.get("fitness") is not None else None,
+                "fatigue": int(t_pers["fatigue"]) if t_pers.get("fatigue") is not None else None,
+                "morale": int(target_player.morale) if target_player.morale is not None else None,
+                "rating": int(target_player.rating) if target_player.rating is not None else None,
                 "minutes": int(target_player.minutes or 0),
                 "squad_status": str(t_pers.get("squad_status") or "squad"),
                 "contract_renewal_day": int(t_pers.get("contract_renewal_talks_opened_day", 0)),
@@ -2315,7 +2322,7 @@ def resolve_club_event(
                 )
             if isinstance(state.manager_json, dict) and state.manager_json:
                 mgr_dict = dict(state.manager_json)
-                mgr_dict["mood"] = int(engine.clamp(int(mgr_dict.get("mood", 70)) + 15, 0, 100))
+                engine.apply_mood_delta(mgr_dict, 15)
                 state.manager_json = mgr_dict
                 flag_modified(state, "manager_json")
             consequences_applied["manager_mood_delta"] = 15
@@ -2340,7 +2347,7 @@ def resolve_club_event(
                 )
             if isinstance(state.manager_json, dict) and state.manager_json:
                 mgr_dict = dict(state.manager_json)
-                mgr_dict["mood"] = int(engine.clamp(int(mgr_dict.get("mood", 70)) - 10, 0, 100))
+                engine.apply_mood_delta(mgr_dict, -10)
                 state.manager_json = mgr_dict
                 flag_modified(state, "manager_json")
             consequences_applied["manager_mood_delta"] = -10
@@ -2439,7 +2446,8 @@ def resolve_club_event(
             for p in active_players:
                 pers = dict(p.personality_json or {})
                 pers["last_training_workload_tier"] = "light"
-                pers["fitness"] = int(engine.clamp(int(pers.get("fitness", 90)) + 4, 0, 100))
+                if pers.get("fitness") is not None:
+                    pers["fitness"] = int(engine.clamp(int(pers["fitness"]) + 4, 0, 100))
                 p.personality_json = pers
                 flag_modified(p, "personality_json")
             if med_slot["is_appointed"] and med_slot["person_id"]:
@@ -3480,7 +3488,7 @@ def simulate_autonomous_staff_decisions(
         tension = rel.tension if rel else 20
         cost = spec["cost_gtex"]
         threshold_info = (policy.financial_thresholds_json or {}).get(role_key) or {}
-        max_amount = threshold_info.get("max_amount_gtex", 1000)
+        max_amount = threshold_info.get("max_amount_gtex") if "max_amount_gtex" in threshold_info else None
 
         is_alienated = tension >= 75 and alignment < 35
         if is_alienated:
@@ -3489,7 +3497,7 @@ def simulate_autonomous_staff_decisions(
             requires_approval = True
             outcome_text = f"Action halted: {staff_name} escalated due to acute boardroom misalignment (Tension: {tension}, Alignment: {alignment})."
             chat_msg = f"[{slot['role_label']}] {staff_name}: Strategic misalignment has reached an impasse. I require board intervention before executing further actions."
-        elif cost <= max_amount and policy.mode != "hands_on":
+        elif max_amount is not None and cost <= float(max_amount) and policy.mode != "hands_on":
             decision_status = "approved"
             exec_status = "executed"
             requires_approval = False
@@ -3500,17 +3508,19 @@ def simulate_autonomous_staff_decisions(
                 cons = spec["consequences"]
                 if "squad_morale" in cons:
                     for p in squad_players:
-                        p.morale = int(engine.clamp(p.morale + cons["squad_morale"], 0, 100))
+                        if p.morale is not None:
+                            p.morale = int(engine.clamp(p.morale + cons["squad_morale"], 0, 100))
                 if "regen_morale" in cons:
                     for p in squad_players:
-                        if p.is_regen:
+                        if p.is_regen and p.morale is not None:
                             p.morale = int(engine.clamp(p.morale + cons["regen_morale"], 0, 100))
                 if "squad_fitness" in cons:
                     for p in squad_players:
                         pers = dict(p.personality_json or {})
-                        pers["fitness"] = int(
-                            engine.clamp(int(pers.get("fitness", 90)) + cons["squad_fitness"], 0, 100)
-                        )
+                        if pers.get("fitness") is not None:
+                            pers["fitness"] = int(
+                                engine.clamp(int(pers["fitness"]) + cons["squad_fitness"], 0, 100)
+                            )
                         p.personality_json = pers
                 if "prestige" in cons:
                     state.prestige = int(engine.clamp(state.prestige + cons["prestige"], 0, 100))
@@ -3593,7 +3603,7 @@ def simulate_autonomous_staff_decisions(
                 decided_by_user_id=None if requires_approval else "staff_autonomous",
                 outcome_text=outcome_text,
                 payload_json={"world_day": w_day, "role_key": role_key, "consequences": spec["consequences"]},
-                staff_competence_rating=85,
+                staff_competence_rating=int(slot["rating"]) if isinstance(slot, dict) and slot.get("rating") is not None else None,
                 staff_impact_json=spec["deltas"],
             )
             session.add(decision_record)
@@ -3928,15 +3938,19 @@ def resolve_living_boardroom_dilemma(
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
     if choice_id == "back_manager_recruitment":
         for p in squad_players:
-            p.morale = int(engine.clamp(p.morale + 8, 0, 100))
+            if p.morale is not None:
+                p.morale = int(engine.clamp(p.morale + 8, 0, 100))
     elif choice_id == "enforce_gm_wage_discipline":
         for p in squad_players:
-            p.morale = int(engine.clamp(p.morale - 3, 0, 100))
+            if p.morale is not None:
+                p.morale = int(engine.clamp(p.morale - 3, 0, 100))
     elif choice_id == "ratify_performance_compromise":
         for p in squad_players:
-            p.morale = int(engine.clamp(p.morale + 4, 0, 100))
-        state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
-        service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
+            if p.morale is not None:
+                p.morale = int(engine.clamp(p.morale + 4, 0, 100))
+        if state.prestige is not None:
+            state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
+            service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
 
     delegated_dec = ClubDelegatedDecision(
         club_id=club_id,

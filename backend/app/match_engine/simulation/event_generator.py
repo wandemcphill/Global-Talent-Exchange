@@ -35,6 +35,8 @@ from app.match_engine.simulation.models import (
     SimulationResult,
     TacticalPlan,
     TeamMatchStats,
+    filed_part,
+    filed_shift,
     TeamRuntimeState,
     TeamVisualIdentity,
 )
@@ -590,12 +592,15 @@ class MatchEventGenerator:
             player_name=player.player_name,
             role=player.role,
             overall=player.overall,
-            finishing=player.finishing,
-            creativity=player.creativity,
-            defending=player.defending,
-            goalkeeping=player.goalkeeping,
-            discipline=player.discipline,
-            fitness=player.fitness,
+            finishing=self._resolve_rating(player.finishing, player.overall),
+            creativity=self._resolve_rating(player.creativity, player.overall),
+            defending=self._resolve_rating(player.defending, player.overall),
+            goalkeeping=self._resolve_rating(
+                player.goalkeeping,
+                player.overall if player.role is PlayerRole.GOALKEEPER else 1,
+            ),
+            discipline=self._resolve_rating(player.discipline, player.overall),
+            fitness=self._resolve_rating(player.fitness, player.overall),
             shirt_number=player.shirt_number,
             display_name=player.display_name,
             position_archetype=player.position_archetype,
@@ -605,22 +610,28 @@ class MatchEventGenerator:
             positioning=self._resolve_rating(player.positioning, player.overall + positioning),
             off_ball_movement=self._resolve_rating(player.off_ball_movement, player.overall + off_ball),
             aerial_ability=self._resolve_rating(player.aerial_ability, player.overall + aerial),
-            technique=self._resolve_rating(player.technique, player.creativity + technique),
-            stamina_curve=self._resolve_rating(player.stamina_curve, player.fitness - 2),
+            technique=self._resolve_rating(
+                player.technique,
+                (player.creativity if player.creativity is not None else player.overall) + technique,
+            ),
+            stamina_curve=self._resolve_rating(
+                player.stamina_curve,
+                (player.fitness if player.fitness is not None else player.overall) - 2,
+            ),
             consistency=self._resolve_rating(player.consistency, player.overall + 1),
             clutch_factor=self._resolve_rating(
                 player.clutch_factor,
-                player.finishing if player.role is PlayerRole.FORWARD else player.overall,
+                player.finishing if player.finishing is not None and player.role is PlayerRole.FORWARD else player.overall,
             ),
             big_match_temperament=self._resolve_rating(player.big_match_temperament, player.overall),
             recent_form=self._resolve_rating(player.recent_form, player.overall),
-            morale=self._resolve_rating(player.morale, 60),
-            motivation=self._resolve_rating(player.motivation, 60),
-            fatigue_load=max(0, min(100, player.fatigue_load if player.fatigue_load is not None else 36)),
-            injury_risk=max(0, min(100, player.injury_risk if player.injury_risk is not None else 20)),
+            morale=self._resolve_rating(player.morale, player.overall),
+            motivation=self._resolve_rating(player.motivation, player.overall),
+            fatigue_load=max(0, min(100, player.fatigue_load if player.fatigue_load is not None else 0)),
+            injury_risk=max(0, min(100, player.injury_risk if player.injury_risk is not None else 0)),
             leadership=self._resolve_rating(player.leadership, player.overall),
             identity_fit_score=max(
-                0, min(100, player.identity_fit_score if player.identity_fit_score is not None else 68)
+                0, min(100, player.identity_fit_score if player.identity_fit_score is not None else player.overall)
             ),
         )
 
@@ -1034,7 +1045,7 @@ class MatchEventGenerator:
     def _yellow_card_count(self, state: TeamRuntimeState, rng: Random, *, narrative: MatchNarrativeContext) -> int:
         base = (
             ((100.0 - state.strength.discipline) / 24.0)
-            + (state.tactics.aggression / 62.0)
+            + filed_part(state.tactics.aggression, 62.0)
             + ((state.dynamic_motivation - 60.0) / 48.0)
             + (narrative.rivalry_intensity * 0.8)
             - 0.8
@@ -1044,7 +1055,7 @@ class MatchEventGenerator:
     def _red_card_count(self, state: TeamRuntimeState, rng: Random, *, narrative: MatchNarrativeContext) -> int:
         risk = max(
             0.0,
-            ((state.tactics.aggression - 72.0) / 30.0)
+            filed_shift(state.tactics.aggression, 72.0, 30.0)
             + ((44.0 - state.strength.discipline) / 28.0)
             + ((state.fatigue_level - 46.0) / 65.0)
             + (narrative.rivalry_intensity * 0.18),
@@ -1055,15 +1066,15 @@ class MatchEventGenerator:
         risk = max(
             0.0,
             ((state.fatigue_level - 36.0) / 25.0)
-            + ((state.tactics.tempo - 55.0) / 70.0)
-            + ((state.tactics.pressing - 55.0) / 85.0),
+            + filed_shift(state.tactics.tempo, 55.0, 70.0)
+            + filed_shift(state.tactics.pressing, 55.0, 85.0),
         )
         return min(int(rng.random() < min(0.78, 0.10 + (risk * 0.24))) if risk > 0 else 0, 2)
 
     def _tactical_foul_count(self, state: TeamRuntimeState, rng: Random, *, narrative: MatchNarrativeContext) -> int:
         risk = max(
             0.0,
-            ((state.tactics.aggression - 55.0) / 38.0)
+            filed_shift(state.tactics.aggression, 55.0, 38.0)
             + ((60.0 - state.strength.discipline) / 60.0)
             + (narrative.rivalry_intensity * 0.6),
         )
@@ -1092,7 +1103,7 @@ class MatchEventGenerator:
         ) / 6.0
         base = (
             8
-            + round((((home.tactics.tempo + away.tactics.tempo) / 2.0) - 50.0) / 14.0)
+            + round(self._filed_pair_shift(home.tactics.tempo, away.tactics.tempo, 50.0, 14.0))
             + round((quality - 66.0) / 10.0)
             + round(narrative.stage_pressure * 4.0)
             + rng.randint(0, 3)
@@ -1226,8 +1237,17 @@ class MatchEventGenerator:
         if updates:
             state.tactics = replace(state.tactics, **updates)
 
-        tempo_delta = (updates.get("tempo", old_tactics.tempo) - old_tactics.tempo) if updates else 0
-        pressing_delta = (updates.get("pressing", old_tactics.pressing) - old_tactics.pressing) if updates else 0
+        tempo_delta = (
+            filed_shift(updates.get("tempo", old_tactics.tempo), 50.0, 1.0) - filed_shift(old_tactics.tempo, 50.0, 1.0)
+            if updates
+            else 0
+        )
+        pressing_delta = (
+            filed_shift(updates.get("pressing", old_tactics.pressing), 50.0, 1.0)
+            - filed_shift(old_tactics.pressing, 50.0, 1.0)
+            if updates
+            else 0
+        )
         impact = 0.0
         impact += abs(tempo_delta) / 18.0 if tempo_delta else 0.0
         impact += abs(pressing_delta) / 18.0 if pressing_delta else 0.0
@@ -2530,10 +2550,10 @@ class MatchEventGenerator:
         momentum = 1.0 + max(-0.08, min(0.10, team.momentum / 45.0))
         crowd = 1.0 + ((team.crowd_intensity - 0.5) * (0.12 if team.is_home else 0.08))
         red = 1.0 - (0.15 * len(team.red_carded_ids))
-        tempo = 1.0 + ((team.tactics.tempo - 50.0) / 520.0)
-        width = 1.0 + ((team.tactics.width - 50.0) / 600.0)
-        line_push = 1.0 + ((team.tactics.defensive_line - 50.0) / 650.0)
-        press = 1.0 + ((team.tactics.pressing - 50.0) / 640.0)
+        tempo = 1.0 + filed_shift(team.tactics.tempo, 50.0, 520.0)
+        width = 1.0 + filed_shift(team.tactics.width, 50.0, 600.0)
+        line_push = 1.0 + filed_shift(team.tactics.defensive_line, 50.0, 650.0)
+        press = 1.0 + filed_shift(team.tactics.pressing, 50.0, 640.0)
         return (
             team.strength.attack
             * style
@@ -2574,8 +2594,8 @@ class MatchEventGenerator:
         home_recovery = 1.02 if team.is_home and score_delta <= 0 and narrative.stage_pressure >= 0.40 else 1.0
         crowd = 1.0 + ((team.crowd_intensity - 0.5) * (0.10 if team.is_home else 0.06))
         red = 1.0 - (0.10 * len(team.red_carded_ids))
-        line_hold = 1.0 + ((team.tactics.defensive_line - 50.0) / 700.0)
-        width = 1.0 + ((team.tactics.width - 50.0) / 750.0)
+        line_hold = 1.0 + filed_shift(team.tactics.defensive_line, 50.0, 700.0)
+        width = 1.0 + filed_shift(team.tactics.width, 50.0, 750.0)
         return (
             team.strength.defense
             * style
@@ -2598,7 +2618,7 @@ class MatchEventGenerator:
             max(
                 1.0,
                 (110.0 - player.discipline)
-                + (state.tactics.aggression * 0.28)
+                + filed_part(state.tactics.aggression, 1 / 0.28)
                 + (state.fatigue_level * 0.12)
                 + ((player.motivation - 55.0) * 0.18)
                 + (10.0 if player.role in {PlayerRole.DEFENDER, PlayerRole.MIDFIELDER} else 0.0),
@@ -2613,7 +2633,7 @@ class MatchEventGenerator:
             max(
                 1.0,
                 (118.0 - player.discipline)
-                + (state.tactics.aggression * 0.34)
+                + filed_part(state.tactics.aggression, 1 / 0.34)
                 + (state.fatigue_level * 0.16)
                 + (18.0 if player.player_id in state.yellow_carded_ids else 0.0),
             )
@@ -2709,10 +2729,10 @@ class MatchEventGenerator:
             ("counterattack", 1.0 + (0.35 if mentality == "defensive" else 0.0) + (0.25 if score_delta < 0 else 0.0)),
             ("through_ball_one_on_one", 1.15 + (attacking.strength.attack / 140.0)),
             ("cutback", 1.05 + (attacking.strength.midfield / 180.0)),
-            ("set_piece_header", 0.82 + (attacking.tactics.aggression / 180.0)),
+            ("set_piece_header", 0.82 + filed_part(attacking.tactics.aggression, 180.0)),
             ("penalty_box_scramble", 0.78 + (0.20 if minute >= 75 else 0.0)),
             ("long_range_effort", 0.65 + (attacking.strength.midfield / 260.0)),
-            ("near_post_finish", 0.72 + (attacking.tactics.tempo / 220.0)),
+            ("near_post_finish", 0.72 + filed_part(attacking.tactics.tempo, 220.0)),
             ("back_post_header", 0.66 + (attacking.strength.attack / 220.0)),
         ]
         if minute >= 78 and score_delta <= 0 and attacking.is_home:
@@ -2730,7 +2750,7 @@ class MatchEventGenerator:
             return "late_home_push"
         if attacking.tactics.mentality.value == "defensive":
             return "low_block_counter"
-        if attacking.tactics.pressing >= 68:
+        if attacking.tactics.pressing is not None and attacking.tactics.pressing >= 68:
             return "high_press"
         return "structured_build_up"
 
@@ -2769,7 +2789,7 @@ class MatchEventGenerator:
             "cutback": 0.06,
             "near_post_finish": 0.05,
         }.get(chance_family, 0.03)
-        base += max(0.0, (attacking.tactics.tempo - 58.0) / 420.0)
+        base += max(0.0, filed_shift(attacking.tactics.tempo, 58.0, 420.0))
         base += max(0.0, (attacking.strength.attack - defending.strength.defense) / 900.0)
         base += 0.02 if minute >= 70 and attacking.tactics.mentality.value == "attacking" else 0.0
         return self._clamp(base, 0.02, 0.24)
@@ -3038,13 +3058,13 @@ class MatchEventGenerator:
         return tuple(notes[:4])
 
     @staticmethod
-    def _shape_instructions(state) -> dict[str, int]:
+    def _shape_instructions(state) -> dict[str, int | None]:
         tactics = state.tactics
         return {
-            "pressing": int(tactics.pressing),
-            "defensive_line": int(tactics.defensive_line),
-            "width": int(tactics.width),
-            "tempo": int(tactics.tempo),
+            "pressing": None if tactics.pressing is None else int(tactics.pressing),
+            "defensive_line": None if tactics.defensive_line is None else int(tactics.defensive_line),
+            "width": None if tactics.width is None else int(tactics.width),
+            "tempo": None if tactics.tempo is None else int(tactics.tempo),
         }
 
     def _make_event(
@@ -3418,8 +3438,8 @@ class MatchEventGenerator:
             else 0.0
         )
         contextual_signal = max(
-            float((home_context or {}).get("rivalry_intensity", 0)) / 100.0,
-            float((away_context or {}).get("rivalry_intensity", 0)) / 100.0,
+            self._filed_context_unit(home_context, "rivalry_intensity"),
+            self._filed_context_unit(away_context, "rivalry_intensity"),
         )
         return min(1.0, shared_name_signal + contextual_signal)
 
@@ -3431,7 +3451,12 @@ class MatchEventGenerator:
                 -0.4 if team.tactics.style.value == "attacking" and opponent.tactics.style.value == "defensive" else 0.0
             )
         )
-        if team.tactics.pressing >= 68 and opponent.tactics.tempo <= 52:
+        if (
+            team.tactics.pressing is not None
+            and team.tactics.pressing >= 68
+            and opponent.tactics.tempo is not None
+            and opponent.tactics.tempo <= 52
+        ):
             style_bonus += 0.5
         return round(((team.strength.tactical_quality - opponent.strength.tactical_quality) * 0.08) + style_bonus, 2)
 
@@ -3480,6 +3505,19 @@ class MatchEventGenerator:
             if running >= threshold:
                 return item
         return entries[-1][0]
+
+    @staticmethod
+    def _filed_pair_shift(left: int | None, right: int | None, center: float, scale: float) -> float:
+        filed = [float(value) for value in (left, right) if value is not None]
+        if not filed or scale == 0:
+            return 0.0
+        return ((sum(filed) / len(filed)) - center) / scale
+
+    @staticmethod
+    def _filed_context_unit(context: dict[str, object] | None, key: str) -> float:
+        if not context or context.get(key) is None:
+            return 0.0
+        return float(context[key]) / 100.0
 
     def _resolve_rating(self, value: int | None, fallback: int) -> int:
         return max(1, min(99, value if value is not None else fallback))

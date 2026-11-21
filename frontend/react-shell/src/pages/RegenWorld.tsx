@@ -211,16 +211,16 @@ export function RegenWorld() {
       return {
         id: pid,
         name: cleanName,
-        rating: Number(p.current_rating || p.rating || 71),
-        potential: Number(p.potential || 88),
-        position: p.position || p.primary_position || "MID",
-        age: Number(p.age ?? 18),
-        nationality: p.nationality || "Global",
-        club: p.current_club_name || "GTEX Academy",
-        generation: Number(p.generation ?? 1),
-        archetype: p.archetype || "Tactical Prodigy",
+        rating: Number(p.current_rating ?? p.rating ?? 0),
+        potential: Number(p.potential ?? 0),
+        position: p.position || p.primary_position || "—",
+        age: p.age == null ? 0 : Number(p.age),
+        nationality: p.nationality || "—",
+        club: p.current_club_name || "—",
+        generation: p.generation == null ? 0 : Number(p.generation),
+        archetype: p.archetype || "—",
         serial: p.serial_number,
-        price: Number(p.market_value_coin ?? item.market_value_coin ?? 350),
+        price: Number(p.market_value_coin ?? item.market_value_coin ?? 0),
         rawItem: item,
       };
     });
@@ -455,17 +455,17 @@ export function RegenWorld() {
                     key={item.feed_id || id}
                     testid={`regen-card-${id}`}
                     name={cleanName}
-                    rating={p.current_rating || p.rating || 71}
-                    potential={p.potential || 88}
-                    position={p.position || p.primary_position || "MID"}
-                    age={p.age ?? 18}
-                    nationality={p.nationality || "Global"}
-                    club={p.current_club_name || "GTEX Academy"}
+                    rating={p.current_rating || p.rating}
+                    potential={p.potential}
+                    position={p.position || p.primary_position}
+                    age={p.age}
+                    nationality={p.nationality}
+                    club={p.current_club_name}
                     image={p.portrait_url || p.image_url}
-                    generation={p.generation ?? 1}
-                    archetype={p.archetype || "Tactical Prodigy"}
+                    generation={p.generation}
+                    archetype={p.archetype}
                     serial={p.serial_number}
-                    price={p.market_value_coin ?? item.market_value_coin ?? 350}
+                    price={p.market_value_coin ?? item.market_value_coin}
                     variant="full"
                     onClick={() => updateSelectedPlayer(id)}
                   />
@@ -557,16 +557,16 @@ export function RegenWorld() {
           <GtexSceneViewport
             sceneId="world_gala"
             compact
-            title={`3D GTEX World Player of the Year Gala · ${rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "Global #1 Laureate"}`}
+            title={`3D GTEX World Player of the Year Gala · ${rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "No laureate filed"}`}
             subtitle="Monaco Theatre · Official GTEX d'Or & Golden Boy 3D Presentation"
             badgeText="3D BALLON D'OR STAGE"
             clubName={activeClub?.club_name || "GTEX World XI"}
-            subjectName={rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "World #1 Wonderkid"}
-            overallRating={94}
-            quote="Standing under these lights with the GTEX d'Or is the pinnacle of my career."
+            subjectName={rankingsData?.[0]?.player_name || rankingsData?.[0]?.name || "No laureate filed"}
+            overallRating={Number(rankingsData?.[0]?.rating ?? rankingsData?.[0]?.overall_rating ?? 0)}
+            quote={rankingsData?.[0]?.quote || ""}
             stats={[
-              { label: "World Rank", value: "#1 GLOBAL", accent: "#F5B83D" },
-              { label: "Gala Score", value: `${rankingsData?.[0]?.score || 985} PTS`, accent: "#00E676" },
+              { label: "World Rank", value: rankingsData?.[0]?.rank == null ? "—" : `#${rankingsData[0].rank}`, accent: "#F5B83D" },
+              { label: "Gala Score", value: rankingsData?.[0]?.score == null ? "—" : `${rankingsData[0].score} PTS`, accent: "#00E676" },
             ]}
           />
           <p className="gx-eyebrow text-emerald-400">Official GTEX World Leaderboard</p>

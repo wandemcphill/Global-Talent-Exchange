@@ -1324,7 +1324,7 @@ export function ClubOperationsCentre3D({
         `/owner/clubs/${encodeURIComponent(clubId)}/academy/${encodeURIComponent(playerId)}/promote`,
       );
       await invalidateAll();
-      toast.success(`Promoted ${playerName} into the senior squad.`);
+      toast.success(`Youth head filed a first-team recommendation for ${playerName}.`);
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -1771,7 +1771,7 @@ export function ClubOperationsCentre3D({
                               ? `Executive Command · ${dest.staff_lead.role_label}`
                               : dest.staff_lead.is_vacant
                                 ? `Position Vacant · ${dest.staff_lead.role_label}`
-                                : `Mood: ${dest.staff_lead.mood ?? 78}% · ${dest.staff_lead.role_label}`}
+                                : `Mood: ${dest.staff_lead.mood == null ? "not filed" : `${dest.staff_lead.mood}%`} · ${dest.staff_lead.role_label}`}
                           </p>
                         </div>
                         <div className="mt-3 flex flex-wrap gap-1 pt-2 border-t border-white/10">
@@ -1987,7 +1987,7 @@ export function ClubOperationsCentre3D({
                       </span>
                     ) : (
                       <span className="gx-mono rounded bg-emerald-950/70 border border-emerald-500/30 px-2 py-0.5 text-[10px] text-emerald-300">
-                        Mood {activeDestination.staff_lead.mood ?? 78}%
+                        Mood {activeDestination.staff_lead.mood == null ? "not filed" : `${activeDestination.staff_lead.mood}%`}
                       </span>
                     )}
                   </div>
@@ -2405,10 +2405,9 @@ export function ClubOperationsCentre3D({
                       Stadium Capacity
                     </p>
                     <p className="gx-mono text-sm font-black text-sky-300 mt-0.5">
-                      {fmt(
-                        rpt.stadium_and_campus_operations?.operational_stadium_capacity ?? 15000,
-                      )}{" "}
-                      Seats
+                      {rpt.stadium_and_campus_operations?.operational_stadium_capacity == null
+                        ? "Not filed"
+                        : `${fmt(rpt.stadium_and_campus_operations.operational_stadium_capacity)} Seats`}
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2.5">
@@ -2737,8 +2736,8 @@ export function ClubOperationsCentre3D({
                       Squad Readiness &amp; Matchday Prep
                     </p>
                     <span className="gx-mono text-[10px] text-slate-300">
-                      Shape: {rpt.tactical_and_squad_concerns?.formation || "4-3-3"} · XI{" "}
-                      {rpt.fitness_and_selection?.starting_xi_count ?? 11}
+                      Shape: {rpt.tactical_and_squad_concerns?.formation || "Not filed"} · XI{" "}
+                      {rpt.fitness_and_selection?.starting_xi_count ?? "—"}
                     </span>
                   </div>
                   <div className="grid grid-cols-3 gap-2 text-center text-[10px]">
@@ -2751,7 +2750,7 @@ export function ClubOperationsCentre3D({
                     <div className="rounded border border-white/10 bg-slate-950/70 p-1.5">
                       <span className="block text-slate-400">Avg Fitness</span>
                       <span className="gx-mono font-black text-sky-300">
-                        {rpt.fitness_and_selection?.avg_fitness ?? 95}%
+                        {rpt.fitness_and_selection?.avg_fitness == null ? "—" : `${rpt.fitness_and_selection.avg_fitness}%`}
                       </span>
                     </div>
                     <div className="rounded border border-white/10 bg-slate-950/70 p-1.5">
@@ -3094,7 +3093,12 @@ export function ClubOperationsCentre3D({
                 >
                   {busyAction === "academy-intake"
                     ? "Scouting & Enrolling Regens…"
-                    : `Commission New Youth Intake (${fmt(rpt.intake_recommendations?.next_intake_cost_gtex ?? rpt.intake_recommendations?.intake_cost_gtex ?? 1500)} GTEX)`}
+                    : `Commission New Youth Intake (${
+                        rpt.intake_recommendations?.next_intake_cost_gtex == null &&
+                        rpt.intake_recommendations?.intake_cost_gtex == null
+                          ? "cost not filed"
+                          : `${fmt(rpt.intake_recommendations?.next_intake_cost_gtex ?? rpt.intake_recommendations?.intake_cost_gtex)} GTEX`
+                      })`}
                 </button>
 
                 <div
@@ -3175,7 +3179,7 @@ export function ClubOperationsCentre3D({
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Heal Rate</p>
                     <p className="gx-mono text-sm font-black text-emerald-300">
-                      {rpt.rehabilitation_status?.daily_injury_heal_days ?? 1}d / Tick
+                      {rpt.rehabilitation_status?.daily_injury_heal_days == null ? "—" : `${rpt.rehabilitation_status.daily_injury_heal_days}d / Tick`}
                     </p>
                   </div>
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
@@ -3187,7 +3191,7 @@ export function ClubOperationsCentre3D({
                   <div className="rounded-lg border border-white/10 bg-black/40 p-2">
                     <p className="text-[9px] uppercase font-bold text-slate-400">Avg Fitness</p>
                     <p className="gx-mono text-sm font-black text-amber-300">
-                      {rpt.squad_fitness_concerns?.avg_squad_fitness ?? 95}%
+                      {rpt.squad_fitness_concerns?.avg_squad_fitness == null ? "—" : `${rpt.squad_fitness_concerns.avg_squad_fitness}%`}
                     </p>
                   </div>
                 </div>
@@ -3219,7 +3223,7 @@ export function ClubOperationsCentre3D({
                       }
                       onClick={() =>
                         handleRunMedicalRecoveryProtocol(
-                          Number(rpt.rehabilitation_status?.protocol_cost_gtex ?? 800),
+                          Number(rpt.rehabilitation_status?.protocol_cost_gtex ?? 0),
                         )
                       }
                       className="rounded-lg border border-pink-400/50 bg-pink-500/20 px-2.5 py-1 text-[10px] font-black uppercase text-pink-200 hover:bg-pink-500/30 disabled:opacity-50"
@@ -3228,13 +3232,12 @@ export function ClubOperationsCentre3D({
                         ? "Running Protocol…"
                         : rpt.rehabilitation_status?.protocol_executed_today
                           ? "Protocol Active Today"
-                          : `Run Hydro & Cryo (${fmt(rpt.rehabilitation_status?.protocol_cost_gtex ?? 800)} GTEX)`}
+                          : `Run Hydro & Cryo (${rpt.rehabilitation_status?.protocol_cost_gtex == null ? "cost not filed" : `${fmt(rpt.rehabilitation_status.protocol_cost_gtex)} GTEX`})`}
                     </button>
                   </div>
                   {(rpt.injured_players || []).length === 0 ? (
                     <p className="text-xs text-emerald-300">
-                      Zero players in the treatment room. Preventive recovery protocol restores +6%
-                      squad conditioning.
+                      No injured players are in the treatment room.
                     </p>
                   ) : (
                     <div className="space-y-2">
@@ -3350,7 +3353,9 @@ export function ClubOperationsCentre3D({
                     </p>
                     <p className="gx-mono text-sm font-black text-amber-300 mt-0.5">
                       {fmt(rpt.matchday_revenue?.projected_next_home_attendance ?? 0)} /{" "}
-                      {fmt(rpt.matchday_revenue?.operational_stadium_capacity ?? 15000)}
+                      {rpt.matchday_revenue?.operational_stadium_capacity == null
+                        ? "Not filed"
+                        : fmt(rpt.matchday_revenue.operational_stadium_capacity)}
                     </p>
                   </div>
                 </div>

@@ -476,7 +476,7 @@ export function PlayersTab() {
         {!sel ? <Empty title="Search a player, then edit age, GSI and cost" /> : (
           <div className="space-y-3">
             <div className="mx-auto w-48">
-              <PlayerCard name={sel.full_name} rating={Number(val("overall")) || 60} position={sel.position} club={sel.real_world_club_name || sel.current_club_name} image={val("image_url") || null} regen={sel.is_regen} tier={sel.real_player_tier === "legend" ? "legendary" : undefined} />
+              <PlayerCard name={sel.full_name} rating={val("overall") === "" || val("overall") == null ? undefined : Number(val("overall"))} position={sel.position} club={sel.real_world_club_name || sel.current_club_name} image={val("image_url") || null} regen={sel.is_regen} tier={sel.real_player_tier === "legend" ? "legendary" : undefined} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Field name="Age" type="number" value={val("age")} onChange={(v) => setEdit({ ...edit, age: v })} testid="admin-player-age" />

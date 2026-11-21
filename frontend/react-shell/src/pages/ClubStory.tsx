@@ -238,23 +238,12 @@ export function ClubStory() {
   const club_news = data.club_news || [];
   const achievements = data.achievements || [];
   const owner_legacy = data.owner_legacy || {};
-  const prestige = owner_legacy.prestige ?? club.prestige ?? data.prestige ?? 50;
+  const prestige = owner_legacy.prestige ?? club.prestige ?? data.prestige;
 
   // Supporter Ecosystem & Institutional Archive payloads
   const supportersData = data.supporters || {};
-  const supProfile = supportersData.profile || {
-    supporter_culture_label: "Community & Youth Traditionalists",
-    overall_sentiment: 65,
-    confidence_in_owner: 65,
-    confidence_in_manager: 68,
-    loyalty_index: 72,
-    matchday_enthusiasm: 66,
-    accumulated_frustration: 0,
-    ticket_price_tier: "standard",
-    active_protest_stage: "none",
-    attendance_modifier_pct: 0,
-    owner_credibility_score: 72,
-  };
+  const supProfile = supportersData.profile || {};
+  const filed = (value: unknown) => (value == null || value === "" ? "—" : value);
   const supSegments: any[] = supportersData.segments || [];
   const supAtmosphere = supportersData.matchday_atmosphere || {};
   const supReactions: any[] = supportersData.recent_reactions || [];
@@ -284,7 +273,7 @@ export function ClubStory() {
           {
             name: manager.name || "Head Coach",
             role: manager.role || "Head Coach",
-            rating: manager.rating ?? 75,
+            rating: manager.rating,
             mentality: manager.mentality || "Tactical",
             reputation: manager.reputation ?? "Regional",
             portrait_url: manager.portrait_url,
@@ -416,8 +405,11 @@ export function ClubStory() {
               {club_name}
             </h1>
             <p className="text-xs text-slate-400">
-              {owner_legacy.tier || owner_legacy.era_label || "Modern Football Era"} · Prestige Level {prestige}/100 ·{" "}
-              <span className="text-emerald-400 font-semibold">{supProfile.supporter_culture_label}</span>
+              {owner_legacy.tier || owner_legacy.era_label || "Era not filed"} · Prestige Level{" "}
+              {prestige == null ? "not filed" : `${prestige}/100`} ·{" "}
+              <span className="text-emerald-400 font-semibold">
+                {supProfile.supporter_culture_label || "No supporter profile"}
+              </span>
             </p>
           </div>
         </div>
@@ -434,7 +426,9 @@ export function ClubStory() {
           </div>
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
             <div className="text-[10px] uppercase font-bold text-slate-400">Fan Sentiment</div>
-            <div className="text-xl font-bold text-cyan-400 mt-0.5">{supProfile.overall_sentiment}/100</div>
+            <div className="text-xl font-bold text-cyan-400 mt-0.5">
+              {supProfile.overall_sentiment == null ? "—" : `${supProfile.overall_sentiment}/100`}
+            </div>
           </div>
           <div className="bg-slate-950/60 border border-slate-800 rounded-xl px-4 py-3">
             <div className="text-[10px] uppercase font-bold text-slate-400">Squad</div>
@@ -677,8 +671,7 @@ export function ClubStory() {
                   Active Supporter Campaign · Stage: {String(supProfile.active_protest_stage).replace(/_/g, " ")}
                 </div>
                 <h3 className="text-base font-bold text-white">
-                  {supProfile.active_campaign_headline ||
-                    "Supporter Groups Demand Accountability & Clear Institutional Direction"}
+                  {supProfile.active_campaign_headline || "A supporter campaign is open."}
                 </h3>
                 <p className="text-xs text-slate-300">
                   Accumulated frustration ({supProfile.accumulated_frustration}/100) and recent decisions have triggered
@@ -692,38 +685,43 @@ export function ClubStory() {
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Overall Sentiment</div>
-              <div className="text-2xl font-black text-emerald-400 mt-1">{supProfile.overall_sentiment}/100</div>
+              <div className="text-2xl font-black text-emerald-400 mt-1">{filed(supProfile.overall_sentiment)}{supProfile.overall_sentiment == null ? "" : "/100"}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">Weighted across 6 segments</div>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Owner Credibility</div>
-              <div className="text-2xl font-black text-amber-400 mt-1">{supProfile.owner_credibility_score}/100</div>
+              <div className="text-2xl font-black text-amber-400 mt-1">{filed(supProfile.owner_credibility_score)}{supProfile.owner_credibility_score == null ? "" : "/100"}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">Statement vs action alignment</div>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Loyalty Index</div>
-              <div className="text-2xl font-black text-cyan-400 mt-1">{supProfile.loyalty_index}/100</div>
+              <div className="text-2xl font-black text-cyan-400 mt-1">{filed(supProfile.loyalty_index)}{supProfile.loyalty_index == null ? "" : "/100"}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">Institutional attachment</div>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Scar Tissue Memory</div>
-              <div className="text-2xl font-black text-rose-400 mt-1">{supProfile.accumulated_frustration}/100</div>
+              <div className="text-2xl font-black text-rose-400 mt-1">{filed(supProfile.accumulated_frustration)}{supProfile.accumulated_frustration == null ? "" : "/100"}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">Dampens single-win recovery</div>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Ticket Policy</div>
-              <div className="text-lg font-black text-white uppercase mt-1">{supProfile.ticket_price_tier}</div>
+              <div className="text-lg font-black text-white uppercase mt-1">{filed(supProfile.ticket_price_tier)}</div>
               <div className="text-[11px] text-slate-500 mt-0.5">
-                Attendance mod: {supProfile.attendance_modifier_pct >= 0 ? "+" : ""}
-                {supProfile.attendance_modifier_pct}%
+                Attendance mod:{" "}
+                {supProfile.attendance_modifier_pct == null
+                  ? "—"
+                  : `${supProfile.attendance_modifier_pct >= 0 ? "+" : ""}${supProfile.attendance_modifier_pct}%`}
               </div>
             </div>
             <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4">
               <div className="text-[10px] uppercase font-bold text-slate-400">Matchday Atmosphere</div>
               <div className="text-2xl font-black text-purple-400 mt-1">
-                {supAtmosphere.crowd_intensity ?? supProfile.matchday_enthusiasm}/100
+                {supAtmosphere.crowd_intensity ?? supProfile.matchday_enthusiasm ?? "—"}
+                {supAtmosphere.crowd_intensity == null && supProfile.matchday_enthusiasm == null ? "" : "/100"}
               </div>
-              <div className="text-[11px] text-slate-500 mt-0.5">{supAtmosphere.chant_volume_db ?? 94} dB roar</div>
+              <div className="text-[11px] text-slate-500 mt-0.5">
+                {supAtmosphere.chant_volume_db == null ? "Volume not filed" : `${supAtmosphere.chant_volume_db} dB`}
+              </div>
             </div>
           </div>
 
@@ -835,12 +833,12 @@ export function ClubStory() {
 
               <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2">
                 <div className="text-xs font-bold text-emerald-300">
-                  {supAtmosphere.stadium_ambience || "Vibrant Home Support — Steady Chants from the Match-Going Core"}
+                  {supAtmosphere.stadium_ambience || "Not filed"}
                 </div>
                 <div className="text-[11px] text-slate-400">
                   Dominant Mood:{" "}
-                  <b className="text-white uppercase">{String(supAtmosphere.dominant_mood || "committed").replace(/_/g, " ")}</b>{" "}
-                  · Rivalry Heat: <b className="text-amber-300">{supAtmosphere.rivalry_intensity ?? 15}/100</b>
+                  <b className="text-white uppercase">{String(supAtmosphere.dominant_mood || "Not filed").replace(/_/g, " ")}</b>{" "}
+                  · Rivalry Heat: <b className="text-amber-300">{supAtmosphere.rivalry_intensity == null ? "Not filed" : `${supAtmosphere.rivalry_intensity}/100`}</b>
                 </div>
               </div>
 
@@ -1362,11 +1360,11 @@ export function ClubStory() {
                         <span className="font-semibold text-amber-400 uppercase text-[10px]">
                           {s.role || "Technical Staff"}
                         </span>
-                        <span>Rating: {s.rating ?? 75}/99</span>
+                        <span>Rating: {s.rating == null ? "—" : `${s.rating}/99`}</span>
                       </div>
                       <h3 className="text-sm font-bold text-white">{s.name}</h3>
                       <p className="text-xs text-slate-400">
-                        Mentality: {s.mentality || "Tactical"} · {s.reputation || "Professional"}
+                        Mentality: {s.mentality || "Not filed"} · {s.reputation || "Not filed"}
                       </p>
                     </div>
                   </div>
@@ -1424,18 +1422,20 @@ export function ClubStory() {
                     <div className="space-y-0.5">
                       <div className="flex justify-between text-[10px] text-slate-400">
                         <span>Morale</span>
-                        <span>{p.morale ?? 75}%</span>
+                        <span>{p.morale == null ? "—" : `${p.morale}%`}</span>
                       </div>
                       <div className="w-full bg-slate-800 rounded-full h-1.5 overflow-hidden">
                         <div
                           className={`h-full rounded-full ${
-                            (p.morale ?? 75) > 75
+                            p.morale == null
+                              ? "bg-slate-600"
+                              : p.morale > 75
                               ? "bg-emerald-400"
-                              : (p.morale ?? 75) > 50
+                              : p.morale > 50
                               ? "bg-amber-400"
                               : "bg-red-400"
                           }`}
-                          style={{ width: `${Math.min(100, p.morale ?? 75)}%` }}
+                          style={{ width: `${p.morale == null ? 0 : Math.min(100, p.morale)}%` }}
                         ></div>
                       </div>
                     </div>

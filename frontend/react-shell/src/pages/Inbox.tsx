@@ -442,6 +442,12 @@ export default function InboxPage() {
         action={
           <div className="flex flex-wrap items-center gap-2">
             <Link
+              to="/app/governance"
+              className="px-3 py-1.5 rounded-lg border border-white/15 text-xs font-bold text-slate-200"
+            >
+              Authority
+            </Link>
+            <Link
               to="/app/campus"
               className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold flex items-center gap-1"
             >
@@ -916,7 +922,7 @@ export default function InboxPage() {
                       className="rounded-lg bg-slate-900/90 border border-white/5 px-2 py-1 text-center"
                     >
                       <div className="text-slate-400 truncate">{label}</div>
-                      <div className="font-black text-white">{val ?? 70}</div>
+                      <div className="font-black text-white">{val == null || val === "" ? "—" : val}</div>
                     </div>
                   ))}
                 </div>
@@ -1283,11 +1289,16 @@ export default function InboxPage() {
                     Long-Term Club Culture & Identity
                   </span>
                   <h3 className="text-base font-black text-white mt-0.5">
-                    Primary Identity: {String(clubCulture.primary_identity || "positional_play").replace(/_/g, " ")}
+                    Primary Identity:{" "}
+                    {clubCulture.primary_identity
+                      ? String(clubCulture.primary_identity).replace(/_/g, " ")
+                      : "Not filed"}
                     {clubCulture.target_identity
-                      ? ` → Transitioning to ${String(clubCulture.target_identity).replace(/_/g, " ")} (${
-                          clubCulture.transition_progress_pct ?? 25
-                        }%)`
+                      ? ` → Transitioning to ${String(clubCulture.target_identity).replace(/_/g, " ")}${
+                          clubCulture.transition_progress_pct == null
+                            ? ""
+                            : ` (${clubCulture.transition_progress_pct}%)`
+                        }`
                       : ""}
                   </h3>
                 </div>

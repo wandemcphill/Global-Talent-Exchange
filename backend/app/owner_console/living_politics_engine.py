@@ -50,6 +50,33 @@ from app.owner_console.models import (
 
 logger = logging.getLogger(__name__)
 
+
+def _seat_name(record: Any) -> str | None:
+    if not isinstance(record, dict):
+        return None
+    name = str(record.get("name") or record.get("display_name") or "").strip()
+    if (
+        not name
+        or record.get("is_vacant")
+        or record.get("is_default")
+        or record.get("manager_id") == "gtex-staff-coach"
+        or "vacant" in name.lower()
+    ):
+        return None
+    return name
+
+
+def _staff_record(state: OwnerClubState, role_key: str) -> dict[str, Any]:
+    if role_key == "first_team_manager":
+        raw = state.manager_json
+    else:
+        raw = ((state.facilities_json or {}).get("_executive_staff") or {}).get(role_key)
+    return dict(raw) if isinstance(raw, dict) else {}
+
+
+def _staff_label(state: OwnerClubState, role_key: str) -> str | None:
+    return _seat_name(_staff_record(state, role_key))
+
 # ==============================================================================
 # 1. Canonical Stage 6 Board Members & Political Personas
 # ==============================================================================
@@ -109,6 +136,12 @@ def _clamp(v: int, lo: int = 0, hi: int = 100) -> int:
     return max(lo, min(hi, v))
 
 
+def _nudge(politics: dict[str, Any], key: str, delta: int, *, low: int = 0, high: int = 100) -> None:
+    if politics.get(key) is None:
+        return
+    politics[key] = min(high, max(low, int(politics[key]) + delta))
+
+
 # ==============================================================================
 # 2. Politics Overview & Data Resolution
 # ==============================================================================
@@ -124,23 +157,27 @@ def get_or_initialize_club_politics(session: Session, club_id: str, owner_user_i
     politics = fac.get("_club_politics")
 
     if not politics:
+        squad_rows = list(
+            session.scalars(
+                select(OwnerSquadPlayer)
+                .where(OwnerSquadPlayer.club_id == club_id, OwnerSquadPlayer.status == "active")
+                .order_by(OwnerSquadPlayer.rating.desc())
+            ).all()
+        )
+        captain = squad_rows[0] if squad_rows else None
+        vice = squad_rows[1] if len(squad_rows) > 1 else None
         politics = {
-            "board_confidence": 78,
-            "investor_sentiment": 82,
-            "board_mood": "supportive",
-            "supporter_confidence": 76,
-            "matchday_atmosphere_multiplier": 1.1,
-            "squad_factions": {
-                "domestic_core": {"name": "Domestic Veteran Core", "size": 8, "influence": "high"},
-                "star_signings": {"name": "International Star Signings", "size": 6, "influence": "moderate"},
-                "academy_graduates": {"name": "Academy Pathway Scholars", "size": 5, "influence": "rising"},
-            },
+            "board_confidence": None,
+            "investor_sentiment": None,
+            "board_mood": None,
+            "supporter_confidence": None,
+            "matchday_atmosphere_multiplier": None,
+            "squad_factions": {},
             "leadership_group": {
-                "captain_name": "Ifeanyi Nwachukwu",
-                "captain_position": "CB",
-                "vice_captain_name": "Obinna Okoye",
-                "vice_captain_position": "CM",
-                "captain_trust": 75,
+                "captain_name": captain.name if captain is not None else None,
+                "captain_position": captain.position if captain is not None else None,
+                "vice_captain_name": vice.name if vice is not None else None,
+                "vice_captain_position": vice.position if vice is not None else None,
             },
             "unresolved_grievances_count": 0,
             "active_rumours": [],
@@ -172,14 +209,15 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
         board_members.append(
             {
                 **m,
-                "confidence_score": min(
-                    100,
-                    max(0, politics.get("board_confidence", 75) + (5 if m["archetype"] == "traditionalist" else -2)),
-                ),
+                "confidence_score": politics.get("board_confidence"),
                 "stance": (
-                    "satisfied"
-                    if politics.get("board_confidence", 75) >= 70
-                    else "concerned" if politics.get("board_confidence", 75) >= 50 else "hostile"
+                    None
+                    if politics.get("board_confidence") is None
+                    else "satisfied"
+                    if int(politics.get("board_confidence")) >= 70
+                    else "concerned"
+                    if int(politics.get("board_confidence")) >= 50
+                    else "hostile"
                 ),
             }
         )
@@ -187,7 +225,8 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
     # 2. Dressing Room & Squad Players
     players = session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
 
-    avg_morale = int(sum(p.morale for p in players) / len(players)) if players else 75
+    filed_morale = [int(p.morale) for p in players if p.morale is not None]
+    avg_morale = int(sum(filed_morale) / len(filed_morale)) if filed_morale else None
     injured_players = [
         {
             "id": p.id,
@@ -212,26 +251,20 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
             "issue": "Playing time deficit" if p.minutes < 180 else "Contract dissatisfaction",
         }
         for p in players
-        if p.morale < 60
+        if p.morale is not None and p.morale < 60
     ]
 
     # 3. Medical Authority
-    med_staff = exec_staff.get("medical_director") or {
-        "id": "staff_med_default",
-        "name": "Dr. Chidi Obi",
-        "role": "Medical Director",
-        "rating": 82,
-        "mood": 80,
-    }
+    med_raw = exec_staff.get("medical_director") if isinstance(exec_staff.get("medical_director"), dict) else {}
+    med_staff = dict(med_raw) if _seat_name(med_raw) else {"name": "Seat empty", "is_vacant": True}
 
     # 4. Youth Development
-    hoyd_staff = exec_staff.get("head_of_youth_development") or {
-        "id": "staff_hoyd_default",
-        "name": "Kunle Adeyemi",
-        "role": "Head of Youth Development",
-        "rating": 81,
-        "mood": 78,
-    }
+    hoyd_raw = (
+        exec_staff.get("head_of_youth_development")
+        if isinstance(exec_staff.get("head_of_youth_development"), dict)
+        else {}
+    )
+    hoyd_staff = dict(hoyd_raw) if _seat_name(hoyd_raw) else {"name": "Seat empty", "is_vacant": True}
 
     # 5. Active Political Events & Inquiries
     active_events = session.scalars(
@@ -252,9 +285,9 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
         "club_id": club_id,
         "world_day": state.world_day or 1,
         "board_politics": {
-            "board_confidence": politics.get("board_confidence", 78),
-            "investor_sentiment": politics.get("investor_sentiment", 82),
-            "board_mood": politics.get("board_mood", "supportive"),
+            "board_confidence": politics.get("board_confidence"),
+            "investor_sentiment": politics.get("investor_sentiment"),
+            "board_mood": politics.get("board_mood"),
             "directors": board_members,
         },
         "dressing_room": {
@@ -268,17 +301,23 @@ def get_club_politics_overview(session: Session, user_id: str, club_id: str) -> 
         "medical_department": {
             "director": med_staff,
             "injured_players": injured_players,
-            "recovery_protocol": fac.get("medical_level", 2),
+            "recovery_protocol": fac.get("medical_level"),
         },
         "youth_development": {
             "hoyd": hoyd_staff,
-            "academy_tier": fac.get("academy_level", 2),
+            "academy_tier": fac.get("academy_level"),
             "prospects_monitored": len([p for p in players if p.age <= 20]),
         },
         "supporter_sentiment": {
-            "confidence": politics.get("supporter_confidence", 76),
-            "atmosphere_multiplier": politics.get("matchday_atmosphere_multiplier", 1.1),
-            "fan_trust_rating": "Optimistic" if politics.get("supporter_confidence", 76) >= 70 else "Anxious",
+            "confidence": politics.get("supporter_confidence"),
+            "atmosphere_multiplier": politics.get("matchday_atmosphere_multiplier"),
+            "fan_trust_rating": (
+                None
+                if politics.get("supporter_confidence") is None
+                else "Optimistic"
+                if int(politics.get("supporter_confidence")) >= 70
+                else "Anxious"
+            ),
         },
         "media_and_rumours": {
             "active_rumours": politics.get("active_rumours", []),
@@ -318,7 +357,9 @@ def evaluate_political_cycle(session: Session, user_id: str, club_id: str) -> di
             select(OwnerClubEvent).where(OwnerClubEvent.idempotency_key == med_event_key)
         ).first()
 
-        if not existing_med:
+        med_name = _staff_label(state, "medical_director")
+        mgr_name = _staff_label(state, "first_team_manager")
+        if not existing_med and med_name and mgr_name:
             med_event = OwnerClubEvent(
                 club_id=club_id,
                 category="medical",
@@ -329,12 +370,12 @@ def evaluate_political_cycle(session: Session, user_id: str, club_id: str) -> di
                 source_id="medical_director",
                 title=f"Medical Clearance Dispute: {injured_player.name}",
                 description=(
-                    f"Dr. Chidi Obi insists {injured_player.name} ({injured_player.position}) needs {injured_player.injured_days} "
-                    f"more days of recovery. Manager Emmanuel Amuneke is pressing to clear the player immediately for the upcoming clash."
+                    f"{med_name} insists {injured_player.name} ({injured_player.position}) needs {injured_player.injured_days} "
+                    f"more days of recovery. Manager {mgr_name} is pressing to clear the player immediately for the upcoming clash."
                 ),
                 participants_json=[
-                    {"role": "medical_director", "name": "Dr. Chidi Obi"},
-                    {"role": "first_team_manager", "name": "Emmanuel Amuneke"},
+                    {"role": "medical_director", "name": med_name},
+                    {"role": "first_team_manager", "name": mgr_name},
                     {"player_id": injured_player.id, "name": injured_player.name},
                 ],
                 world_day=current_day,
@@ -374,8 +415,11 @@ def evaluate_political_cycle(session: Session, user_id: str, club_id: str) -> di
 
         if not existing_cap:
             lead_grp = politics.get("leadership_group") or {}
-            cap_name = lead_grp.get("captain_name", "Ifeanyi Nwachukwu")
+            cap_name = str(lead_grp.get("captain_name") or "").strip()
+        else:
+            cap_name = ""
 
+        if not existing_cap and cap_name:
             cap_event = OwnerClubEvent(
                 club_id=club_id,
                 category="squad",
@@ -519,7 +563,7 @@ def resolve_political_event(
                 part_a_name="Club Owner",
                 part_b_type="staff",
                 part_b_id="medical_director",
-                part_b_name="Dr. Chidi Obi",
+                part_b_name=_staff_label(state, "medical_director") or "",
                 delta_trust=5,
                 delta_tension=-4,
                 delta_alignment=4,
@@ -537,7 +581,7 @@ def resolve_political_event(
                 part_a_name="Club Owner",
                 part_b_type="staff",
                 part_b_id="medical_director",
-                part_b_name="Dr. Chidi Obi",
+                part_b_name=_staff_label(state, "medical_director") or "",
                 delta_trust=-10,
                 delta_tension=12,
                 delta_alignment=-6,
@@ -561,7 +605,7 @@ def resolve_political_event(
             if player:
                 player.morale = min(100, player.morale + 12)
                 session.add(player)
-            politics["supporter_confidence"] = min(100, politics.get("supporter_confidence", 75) + 3)
+            _nudge(politics, "supporter_confidence", 3)
             delta_report["player_morale"] = "+12"
             delta_report["captain_trust"] = "+5"
         elif action_id == "affirm_manager_standard":
@@ -573,27 +617,27 @@ def resolve_political_event(
                 part_a_name="Club Owner",
                 part_b_type="staff",
                 part_b_id="first_team_manager",
-                part_b_name="Emmanuel Amuneke",
+                part_b_name=_staff_label(state, "first_team_manager") or "",
                 delta_trust=6,
                 delta_tension=-3,
                 delta_alignment=4,
                 reason="Owner backed manager selection authority against dressing room challenge",
             )
-            politics["board_confidence"] = min(100, politics.get("board_confidence", 75) + 2)
+            _nudge(politics, "board_confidence", 2)
             delta_report["manager_trust"] = "+6"
             delta_report["board_confidence"] = "+2"
 
     # Handle Press & Media Statement
     elif event.event_type == "press_inquiry":
         if action_id == "affirm_ambition":
-            politics["supporter_confidence"] = min(100, politics.get("supporter_confidence", 75) + 6)
-            politics["investor_sentiment"] = min(100, politics.get("investor_sentiment", 75) + 5)
+            _nudge(politics, "supporter_confidence", 6)
+            _nudge(politics, "investor_sentiment", 5)
             politics["matchday_atmosphere_multiplier"] = 1.15
             delta_report["supporter_confidence"] = "+6"
             delta_report["investor_sentiment"] = "+5"
         elif action_id == "preach_patience":
-            politics["board_confidence"] = min(100, politics.get("board_confidence", 75) + 4)
-            politics["supporter_confidence"] = max(0, politics.get("supporter_confidence", 75) - 2)
+            _nudge(politics, "board_confidence", 4)
+            _nudge(politics, "supporter_confidence", -2)
             delta_report["board_confidence"] = "+4"
             delta_report["supporter_confidence"] = "-2"
 
@@ -638,8 +682,8 @@ def dispatch_owner_media_statement(
 
     statement_effects: dict[str, Any] = {}
     if statement_type == "vote_of_confidence":
-        politics["board_confidence"] = min(100, politics.get("board_confidence", 75) + 5)
-        politics["supporter_confidence"] = min(100, politics.get("supporter_confidence", 75) + 3)
+        _nudge(politics, "board_confidence", 5)
+        _nudge(politics, "supporter_confidence", 3)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -648,7 +692,7 @@ def dispatch_owner_media_statement(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="first_team_manager",
-            part_b_name="Emmanuel Amuneke",
+            part_b_name=_staff_label(state, "first_team_manager") or "",
             delta_trust=7,
             delta_tension=-5,
             delta_loyalty=6,
@@ -658,8 +702,8 @@ def dispatch_owner_media_statement(
         statement_effects["board_confidence"] = "+5"
 
     elif statement_type == "demand_performance":
-        politics["supporter_confidence"] = min(100, politics.get("supporter_confidence", 75) + 5)
-        politics["investor_sentiment"] = min(100, politics.get("investor_sentiment", 75) + 4)
+        _nudge(politics, "supporter_confidence", 5)
+        _nudge(politics, "investor_sentiment", 4)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -668,7 +712,7 @@ def dispatch_owner_media_statement(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="first_team_manager",
-            part_b_name="Emmanuel Amuneke",
+            part_b_name=_staff_label(state, "first_team_manager") or "",
             delta_trust=-3,
             delta_tension=8,
             delta_influence=5,
@@ -678,8 +722,8 @@ def dispatch_owner_media_statement(
         statement_effects["tension"] = "+8"
 
     elif statement_type == "praise_youth_academy":
-        politics["board_confidence"] = min(100, politics.get("board_confidence", 75) + 4)
-        politics["supporter_confidence"] = min(100, politics.get("supporter_confidence", 75) + 6)
+        _nudge(politics, "board_confidence", 4)
+        _nudge(politics, "supporter_confidence", 6)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -688,7 +732,7 @@ def dispatch_owner_media_statement(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="head_of_youth_development",
-            part_b_name="Kunle Adeyemi",
+            part_b_name=_staff_label(state, "head_of_youth_development") or "",
             delta_trust=6,
             delta_alignment=5,
             reason="Owner public acclaim for academy pathway and scholar progress",
@@ -758,9 +802,12 @@ def process_matchday_consequence_bridge(
             raise ValueError(f"Rushed player {rushed_player_id} not found in club {club_id}")
 
         rushed_player.injured_days = max(10, int(rushed_player.injured_days or 0) + 10)
-        rushed_player.morale = max(25, int(rushed_player.morale or 65) - 10)
-        politics["board_confidence"] = _clamp(int(politics.get("board_confidence", 68)) - 6)
-        politics["supporter_confidence"] = _clamp(int(politics.get("supporter_confidence", 65)) - 5)
+        if rushed_player.morale is not None:
+            rushed_player.morale = max(25, int(rushed_player.morale) - 10)
+        if politics.get("board_confidence") is not None:
+            politics["board_confidence"] = _clamp(int(politics["board_confidence"]) - 6)
+        if politics.get("supporter_confidence") is not None:
+            politics["supporter_confidence"] = _clamp(int(politics["supporter_confidence"]) - 5)
 
         living_club_world.apply_relationship_delta(
             session,
@@ -770,7 +817,7 @@ def process_matchday_consequence_bridge(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="medical_director",
-            part_b_name="Dr. Chidi Obi",
+            part_b_name=_staff_label(state, "medical_director") or "",
             delta_trust=-7,
             delta_respect=-5,
             delta_tension=9,
@@ -788,10 +835,11 @@ def process_matchday_consequence_bridge(
             title=f"Medical Fallout: {rushed_player.name} Suffers Matchday Recurrence",
             description=(
                 f"Overriding medical protocol backfired: {rushed_player.name} aggravated their injury on matchday "
-                f"and is sidelined for {rushed_player.injured_days} days. Dr. Chidi Obi has demanded a boardroom review."
+                f"and is sidelined for {rushed_player.injured_days} days. "
+                f"{_staff_label(state, 'medical_director') or 'The medical seat'} has demanded a boardroom review."
             ),
             participants_json=[
-                {"role": "medical_director", "name": "Dr. Chidi Obi"},
+                {"role": "medical_director", "name": _staff_label(state, "medical_director") or "Seat empty"},
                 {"role": "player", "id": rushed_player.id, "name": rushed_player.name},
             ],
             world_day=current_day,
@@ -822,9 +870,12 @@ def process_matchday_consequence_bridge(
         if wonderkid is None or wonderkid.club_id != club_id:
             raise ValueError(f"Wonderkid player {wonderkid_scorer_id} not found in club {club_id}")
 
-        wonderkid.morale = min(99, int(wonderkid.morale or 72) + 8)
-        politics["supporter_confidence"] = _clamp(int(politics.get("supporter_confidence", 65)) + 5)
-        politics["board_confidence"] = _clamp(int(politics.get("board_confidence", 68)) + 4)
+        if wonderkid.morale is not None:
+            wonderkid.morale = min(99, int(wonderkid.morale) + 8)
+        if politics.get("supporter_confidence") is not None:
+            politics["supporter_confidence"] = _clamp(int(politics["supporter_confidence"]) + 5)
+        if politics.get("board_confidence") is not None:
+            politics["board_confidence"] = _clamp(int(politics["board_confidence"]) + 4)
 
         hoyd_rel = living_club_world.apply_relationship_delta(
             session,
@@ -834,7 +885,7 @@ def process_matchday_consequence_bridge(
             part_a_name="Club Owner",
             part_b_type="staff",
             part_b_id="head_of_youth_development",
-            part_b_name="Kunle Adeyemi",
+            part_b_name=_staff_label(state, "head_of_youth_development") or "",
             delta_respect=8,
             delta_influence=6,
             delta_alignment=7,
@@ -856,8 +907,8 @@ def process_matchday_consequence_bridge(
                 "type": "wonderkid_matchday_breakthrough",
                 "player_id": wonderkid.id,
                 "player_name": wonderkid.name,
-                "hoyd_respect": hoyd_rel.respect,
-                "hoyd_influence": hoyd_rel.influence,
+                "hoyd_respect": hoyd_rel.respect if hoyd_rel is not None else None,
+                "hoyd_influence": hoyd_rel.influence if hoyd_rel is not None else None,
                 "cinematic_event_id": wonderkid_cinematic["event_id"],
             }
         )
@@ -872,8 +923,10 @@ def process_matchday_consequence_bridge(
             if p.id != rushed_player_id and int(p.injured_days or 0) > 1 and recovery_days_saved > 0:
                 p.injured_days = max(1, int(p.injured_days) - recovery_days_saved)
             if morale_floor_bonus > 0:
-                p.morale = min(99, int(p.morale or 65) + morale_floor_bonus)
-        politics["team_spirit"] = min(100, int(politics.get("team_spirit", 70)) + morale_floor_bonus)
+                if p.morale is not None:
+                    p.morale = min(99, int(p.morale) + morale_floor_bonus)
+        if politics.get("team_spirit") is not None:
+            politics["team_spirit"] = min(100, int(politics["team_spirit"]) + morale_floor_bonus)
         bridge_actions.append(
             {
                 "type": "showroom_travel_perks_applied",
@@ -892,7 +945,7 @@ def process_matchday_consequence_bridge(
         "match_outcome": match_outcome,
         "board_confidence": politics.get("board_confidence"),
         "supporter_confidence": politics.get("supporter_confidence"),
-        "team_spirit": politics.get("team_spirit", 70),
+        "team_spirit": politics.get("team_spirit"),
         "bridge_actions": bridge_actions,
         "wonderkid_cinematic": wonderkid_cinematic,
     }

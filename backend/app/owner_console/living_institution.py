@@ -176,6 +176,15 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _filed_int(value: Any) -> int | None:
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
 def _clamp(value: float | int, low: int = 0, high: int = 100) -> int:
     return int(max(low, min(high, round(value))))
 
@@ -471,35 +480,36 @@ def ensure_club_institutional_ecosystem(
     ensure_media_outlets(session)
 
     profile = session.scalar(select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == state.club_id))
-    total_fans = max(200, int(state.fans or 1200))
+    total_fans = int(state.fans) if state.fans is not None else None
     world_day = int(state.world_day or 1)
 
     if profile is None:
         div_int = _division_level_int(state.division_level)
-        culture_label = "Community & Youth Traditionalists"
-        if int(state.prestige or 10) >= 65:
+        culture_label = None
+        if state.prestige is not None and int(state.prestige) >= 65:
             culture_label = "Continental Title Expectants"
         elif div_int <= 2:
             culture_label = "Passionate Top-Flight Contenders"
+        ticket_tier = (state.facilities_json or {}).get("_ticket_price_tier")
 
         profile = OwnerSupporterProfile(
             club_id=state.club_id,
             owner_user_id=state.owner_user_id,
             supporter_culture_label=culture_label,
-            overall_sentiment=65,
-            confidence_in_owner=66,
-            confidence_in_manager=68,
-            loyalty_index=74,
-            matchday_enthusiasm=67,
+            overall_sentiment=None,
+            confidence_in_owner=None,
+            confidence_in_manager=None,
+            loyalty_index=None,
+            matchday_enthusiasm=None,
             accumulated_frustration=0,
             consecutive_disappointments=0,
             consecutive_victories=0,
-            ticket_price_tier=str((state.facilities_json or {}).get("_ticket_price_tier", "standard")),
-            matchday_experience_rating=_clamp(55 + int((state.facilities_json or {}).get("stadium", 1)) * 6),
+            ticket_price_tier=str(ticket_tier) if ticket_tier else None,
+            matchday_experience_rating=None,
             active_protest_stage="none",
             active_campaign_headline=None,
             attendance_modifier_pct=0,
-            owner_credibility_score=74,
+            owner_credibility_score=None,
             expectations_json={
                 "season_target": "promotion_challenge" if div_int > 1 else "title_contender",
                 "minimum_acceptable_finish": "top_half",
@@ -525,7 +535,7 @@ def ensure_club_institutional_ecosystem(
     for spec in DEFAULT_SUPPORTER_SEGMENTS:
         seg_key = spec["segment_key"]
         share = int(spec["population_share_pct"])
-        member_count = max(15, int(round(total_fans * (share / 100.0))))
+        member_count = int(round(total_fans * (share / 100.0))) if total_fans is not None else None
         if seg_key not in by_key:
             seg = OwnerSupporterSegment(
                 club_id=state.club_id,
@@ -533,12 +543,12 @@ def ensure_club_institutional_ecosystem(
                 segment_name=spec["segment_name"],
                 population_share_pct=share,
                 member_count=member_count,
-                sentiment=int(spec["sentiment"]),
-                loyalty=int(spec["loyalty"]),
-                enthusiasm=int(spec["enthusiasm"]),
-                owner_approval=int(profile.confidence_in_owner),
-                scar_tissue=int(profile.accumulated_frustration),
-                status_label=_status_label_for_sentiment(int(spec["sentiment"])),
+                sentiment=None,
+                loyalty=None,
+                enthusiasm=None,
+                owner_approval=None,
+                scar_tissue=int(profile.accumulated_frustration or 0),
+                status_label="not_filed",
                 priorities_json=dict(spec["priorities"]),
                 expectations_json=dict(spec["expectations"]),
                 recent_memory_json=[],
@@ -563,7 +573,7 @@ def ensure_club_institutional_ecosystem(
         title=f"{state.club_name} Established under Current Ownership",
         narrative_summary=(
             f"{state.club_name} entered the GTEX football pyramid in Division {div_int} "
-            f"with a supporter base of {total_fans:,} and institutional prestige {state.prestige}."
+            f"with a supporter base of {total_fans if total_fans is not None else 'not filed'} and institutional prestige {state.prestige if state.prestige is not None else 'not filed'}."
         ),
         entity_type="club",
         entity_id=state.club_id,
@@ -573,7 +583,7 @@ def ensure_club_institutional_ecosystem(
             "club_name": state.club_name,
             "division_level": div_int,
             "initial_fans": total_fans,
-            "initial_prestige": int(state.prestige or 10),
+            "initial_prestige": int(state.prestige) if state.prestige is not None else None,
         },
         is_major_milestone=True,
         idempotency_key=f"history:club_creation:{state.club_id}",
@@ -811,24 +821,54 @@ def _recompute_profile_aggregates(
     segments: list[OwnerSupporterSegment],
 ) -> None:
     """Update club-wide supporter sentiment and protest stage from weighted segment values."""
-    if not segments:
+    scored = [s for s in segments if s.sentiment is not None and s.population_share_pct]
+    if not scored:
         return
-    total_share = sum(max(1, int(s.population_share_pct)) for s in segments)
-    weighted_sentiment = sum(int(s.sentiment) * max(1, int(s.population_share_pct)) for s in segments) / total_share
-    weighted_loyalty = sum(int(s.loyalty) * max(1, int(s.population_share_pct)) for s in segments) / total_share
-    weighted_enthusiasm = sum(int(s.enthusiasm) * max(1, int(s.population_share_pct)) for s in segments) / total_share
-    weighted_owner = sum(int(s.owner_approval) * max(1, int(s.population_share_pct)) for s in segments) / total_share
+    total_share = sum(max(1, int(s.population_share_pct)) for s in scored)
+    weighted_sentiment = sum(int(s.sentiment) * max(1, int(s.population_share_pct)) for s in scored) / total_share
+    loyalty_rows = [s for s in scored if s.loyalty is not None]
+    enthusiasm_rows = [s for s in scored if s.enthusiasm is not None]
+    owner_rows = [s for s in scored if s.owner_approval is not None]
+    weighted_loyalty = (
+        sum(int(s.loyalty) * max(1, int(s.population_share_pct)) for s in loyalty_rows)
+        / sum(max(1, int(s.population_share_pct)) for s in loyalty_rows)
+        if loyalty_rows
+        else None
+    )
+    weighted_enthusiasm = (
+        sum(int(s.enthusiasm) * max(1, int(s.population_share_pct)) for s in enthusiasm_rows)
+        / sum(max(1, int(s.population_share_pct)) for s in enthusiasm_rows)
+        if enthusiasm_rows
+        else None
+    )
+    weighted_owner = (
+        sum(int(s.owner_approval) * max(1, int(s.population_share_pct)) for s in owner_rows)
+        / sum(max(1, int(s.population_share_pct)) for s in owner_rows)
+        if owner_rows
+        else None
+    )
 
     profile.overall_sentiment = _clamp(weighted_sentiment)
-    profile.loyalty_index = _clamp(weighted_loyalty)
-    profile.matchday_enthusiasm = _clamp(weighted_enthusiasm)
-    profile.confidence_in_owner = _clamp(weighted_owner)
+    if weighted_loyalty is not None:
+        profile.loyalty_index = _clamp(weighted_loyalty)
+    if weighted_enthusiasm is not None:
+        profile.matchday_enthusiasm = _clamp(weighted_enthusiasm)
+    if weighted_owner is not None:
+        profile.confidence_in_owner = _clamp(weighted_owner)
 
     by_key = {s.segment_key: s for s in segments}
     organised = by_key.get("organised_groups")
     matchgoing = by_key.get("regular_matchgoing")
-    org_sent = int(organised.sentiment) if organised else profile.overall_sentiment
-    mg_sent = int(matchgoing.sentiment) if matchgoing else profile.overall_sentiment
+    org_sent = (
+        int(organised.sentiment)
+        if organised is not None and organised.sentiment is not None
+        else profile.overall_sentiment
+    )
+    mg_sent = (
+        int(matchgoing.sentiment)
+        if matchgoing is not None and matchgoing.sentiment is not None
+        else profile.overall_sentiment
+    )
 
     # Grounded protest escalation / de-escalation rules
     if (
@@ -866,9 +906,12 @@ def _recompute_profile_aggregates(
         profile.active_campaign_headline = None
 
     for seg in segments:
+        if seg.sentiment is None:
+            seg.status_label = "not_filed"
+            continue
         seg.status_label = _status_label_for_sentiment(
             int(seg.sentiment),
-            int(seg.scar_tissue),
+            int(seg.scar_tissue or 0),
             profile.active_protest_stage,
         )
 
@@ -886,7 +929,9 @@ def _recompute_profile_aggregates(
         "banner_protest": -12,
         "organised_boycott": -24,
     }.get(profile.active_protest_stage, 0)
-    sentiment_mod = int(round((profile.overall_sentiment - 60) * 0.35))
+    sentiment_mod = (
+        int(round((profile.overall_sentiment - 60) * 0.35)) if profile.overall_sentiment is not None else 0
+    )
     profile.attendance_modifier_pct = _clamp(ticket_mod + protest_mod + sentiment_mod, -40, 30)
 
 
@@ -935,7 +980,7 @@ def apply_supporter_reaction(
         return existing
 
     profile, segments = ensure_club_institutional_ecosystem(session, state)
-    old_sentiment = int(profile.overall_sentiment)
+    old_sentiment = _filed_int(profile.overall_sentiment) if profile.overall_sentiment is not None else None
 
     if is_disappointment:
         profile.consecutive_disappointments = int(profile.consecutive_disappointments or 0) + 1
@@ -949,8 +994,8 @@ def apply_supporter_reaction(
         decay = 8 if int(profile.accumulated_frustration or 0) >= 25 else 12
         profile.accumulated_frustration = _clamp(int(profile.accumulated_frustration or 0) - decay, 0, 100)
 
-    if credibility_delta != 0:
-        profile.owner_credibility_score = _clamp(int(profile.owner_credibility_score or 70) + credibility_delta, 0, 100)
+    if credibility_delta != 0 and profile.owner_credibility_score is not None:
+        profile.owner_credibility_score = _clamp(_filed_int(profile.owner_credibility_score) + credibility_delta, 0, 100)
 
     segment_deltas: dict[str, dict[str, Any]] = {}
     for seg in segments:
@@ -975,6 +1020,8 @@ def apply_supporter_reaction(
         elif raw_delta < 0 and int_delta == 0:
             int_delta = -1
 
+        if seg.sentiment is None or seg.enthusiasm is None or seg.owner_approval is None:
+            continue
         old_seg_sentiment = int(seg.sentiment)
         new_seg_sentiment = _clamp(old_seg_sentiment + int_delta, 5, max_cap)
         actual_delta = new_seg_sentiment - old_seg_sentiment
@@ -1015,7 +1062,11 @@ def apply_supporter_reaction(
         }
 
     _recompute_profile_aggregates(profile, segments)
-    overall_delta = int(profile.overall_sentiment) - old_sentiment
+    overall_delta = (
+        _filed_int(profile.overall_sentiment) - old_sentiment
+        if old_sentiment is not None and profile.overall_sentiment is not None
+        else 0
+    )
 
     profile.atmosphere_profile_json = compute_matchday_atmosphere(
         session,
@@ -1077,21 +1128,26 @@ def compute_matchday_atmosphere(
                 OwnerClubRivalry.rival_club_id == str(opponent_club_id),
             )
         )
-    rivalry_intensity = int(rivalry.intensity_score) if rivalry else 15
-    rivalry_tier = str(rivalry.rivalry_tier) if rivalry else "standard"
+    rivalry_intensity = int(rivalry.intensity_score) if rivalry is not None else None
+    rivalry_tier = str(rivalry.rivalry_tier) if rivalry is not None and rivalry.rivalry_tier else None
 
     by_key = {s.segment_key: s for s in segments}
     organised = by_key.get("organised_groups")
     matchgoing = by_key.get("regular_matchgoing")
     lifelong = by_key.get("loyal_lifelong")
 
-    enthusiasm = int(profile.matchday_enthusiasm or 65)
-    sentiment = int(profile.overall_sentiment or 65)
+    enthusiasm = _filed_int(profile.matchday_enthusiasm) if profile.matchday_enthusiasm is not None else None
+    sentiment = _filed_int(profile.overall_sentiment) if profile.overall_sentiment is not None else None
     protest_stage = str(profile.active_protest_stage or "none")
 
     stakes_bonus = 14 if is_knockout_or_decider else 0
-    rivalry_bonus = int(round(rivalry_intensity * 0.22)) if rivalry_intensity >= 35 else 0
-    crowd_intensity = _clamp(int(round(enthusiasm * 0.6 + sentiment * 0.25)) + stakes_bonus + rivalry_bonus, 15, 100)
+    rivalry_bonus = int(round((rivalry_intensity or 0) * 0.22)) if (rivalry_intensity or 0) >= 35 else 0
+    if enthusiasm is None or sentiment is None:
+        crowd_intensity = None
+        chant_volume_db = None
+    else:
+        crowd_intensity = _clamp(int(round(enthusiasm * 0.6 + sentiment * 0.25)) + stakes_bonus + rivalry_bonus, 15, 100)
+        chant_volume_db = _clamp(72 + int(round(crowd_intensity * 0.35)), 70, 112)
 
     banners: list[str] = []
     chants: list[str] = []
@@ -1107,7 +1163,7 @@ def compute_matchday_atmosphere(
             banners.append("DEMANDING STANDARDS & ACCOUNTABILITY FROM THE BOARDROOM")
         chants.append("We want our club back — accountability now!")
         visible_reactions.append("Organised supporter groups hold up protest banners in the 18th minute.")
-    elif rivalry_intensity >= 55:
+    elif rivalry_intensity is not None and rivalry_intensity >= 55:
         dominant_mood = "ferocious_derby_cauldron"
         stadium_ambience = (
             f"Electric Derby Cauldron vs {opponent_name or (rivalry.rival_club_name if rivalry else 'Rivals')}"
@@ -1115,12 +1171,15 @@ def compute_matchday_atmosphere(
         banners.append(f"PRIDE OF {state.club_name.upper()} — NEVER YIELD THIS DERBY")
         chants.append(f"Stand up for {state.club_name} — Derby Day Roar!")
         visible_reactions.append("Full-stand tifo display and flares welcome the players onto the pitch.")
-    elif sentiment >= 75:
+    elif sentiment is not None and sentiment >= 75:
         dominant_mood = "electric_belief"
         stadium_ambience = "Roaring Fortress — Scarves Held High Across Every Tier"
         banners.append(f"IN {state.club_name.upper()} WE TRUST — MARCHING TOWARD GLORY")
         chants.append("Ole, Ole — The Fortress Is Ours!")
         visible_reactions.append("Continuous rhythmic drumming and standing ovations from the lifelong stand.")
+    elif sentiment is None:
+        dominant_mood = None
+        stadium_ambience = None
     elif sentiment <= 42:
         dominant_mood = "anxious_scrutiny"
         stadium_ambience = "Restless & Expectant — Every Misplaced Pass Draws Groans"
@@ -1138,7 +1197,7 @@ def compute_matchday_atmosphere(
         "club_id": state.club_id,
         "dominant_mood": dominant_mood,
         "crowd_intensity": crowd_intensity,
-        "chant_volume_db": _clamp(72 + int(round(crowd_intensity * 0.35)), 70, 112),
+        "chant_volume_db": chant_volume_db,
         "stadium_ambience": stadium_ambience,
         "attendance_modifier_pct": int(profile.attendance_modifier_pct or 0),
         "ticket_price_tier": profile.ticket_price_tier,
@@ -1148,9 +1207,19 @@ def compute_matchday_atmosphere(
         "banners": banners,
         "chants": chants,
         "visible_reactions": visible_reactions,
-        "organised_group_enthusiasm": int(organised.enthusiasm) if organised else enthusiasm,
-        "matchgoing_sentiment": int(matchgoing.sentiment) if matchgoing else sentiment,
-        "lifelong_loyalty": int(lifelong.loyalty) if lifelong else int(profile.loyalty_index),
+        "organised_group_enthusiasm": (
+            int(organised.enthusiasm) if organised is not None and organised.enthusiasm is not None else enthusiasm
+        ),
+        "matchgoing_sentiment": (
+            int(matchgoing.sentiment) if matchgoing is not None and matchgoing.sentiment is not None else sentiment
+        ),
+        "lifelong_loyalty": (
+            int(lifelong.loyalty)
+            if lifelong is not None and lifelong.loyalty is not None
+            else _filed_int(profile.loyalty_index)
+            if profile.loyalty_index is not None
+            else None
+        ),
     }
 
 
@@ -1799,11 +1868,12 @@ def record_match_institutional_impact(
 
     # Update manager confidence on profile
     if tenure is not None:
-        profile.confidence_in_manager = _clamp(
-            int(profile.confidence_in_manager or 68) + (5 if gf > ga else 0 if gf == ga else -6),
-            5,
-            100,
-        )
+        if profile.confidence_in_manager is not None:
+            profile.confidence_in_manager = _clamp(
+                _filed_int(profile.confidence_in_manager) + (5 if gf > ga else 0 if gf == ga else -6),
+                5,
+                100,
+            )
 
     # 6. Inject Matchday Atmosphere into OwnerMatch.narrative_json
     atmosphere = side.get("atmosphere_snapshot") or compute_matchday_atmosphere(
@@ -1860,7 +1930,7 @@ def record_match_institutional_impact(
             "manager_wins": int(tenure.wins) if tenure else 0,
             "manager_draws": int(tenure.draws) if tenure else 0,
             "manager_losses": int(tenure.losses) if tenure else 0,
-            "supporter_sentiment": int(profile.overall_sentiment),
+            "supporter_sentiment": _filed_int(profile.overall_sentiment),
             "sentiment_delta": abs(sup_delta_val),
         },
         idempotency_key=f"{idem_prefix}:media_match_report",
@@ -1896,7 +1966,7 @@ def record_match_institutional_impact(
                 "consecutive_disappointments": int(profile.consecutive_disappointments),
                 "club_goals": gf,
                 "opponent_goals": ga,
-                "supporter_sentiment": int(profile.overall_sentiment),
+                "supporter_sentiment": _filed_int(profile.overall_sentiment),
                 "accumulated_frustration": int(profile.accumulated_frustration),
             },
             idempotency_key=f"{idem_prefix}:media_scrutiny_column",
@@ -3249,7 +3319,8 @@ def engage_supporters(
                     )
             except Exception as exc:
                 logger.debug("Community initiative ledger note: %s", exc)
-        profile.matchday_experience_rating = _clamp(int(profile.matchday_experience_rating or 60) + 6, 0, 100)
+        if profile.matchday_experience_rating is not None:
+            profile.matchday_experience_rating = _clamp(_filed_int(profile.matchday_experience_rating) + 6, 0, 100)
         drivers = {
             "youth_academy": 9.0,
             "owner_conduct": 10.0,
@@ -3334,8 +3405,8 @@ def engage_supporters(
         established_facts={
             "action_type": action_type,
             "ticket_price_tier": profile.ticket_price_tier,
-            "overall_sentiment": int(profile.overall_sentiment),
-            "owner_credibility_score": int(profile.owner_credibility_score),
+            "overall_sentiment": _filed_int(profile.overall_sentiment),
+            "owner_credibility_score": _filed_int(profile.owner_credibility_score),
             "contradiction_detected": contradiction_detected,
             "canonical_event_id": canon_ev.id,
             "correlation_id": corr_id,
@@ -3371,8 +3442,8 @@ def engage_supporters(
         source_type="owner_engagement",
         source_id=sup_event.id,
         established_facts={
-            "overall_sentiment": int(profile.overall_sentiment),
-            "owner_credibility_score": int(profile.owner_credibility_score),
+            "overall_sentiment": _filed_int(profile.overall_sentiment),
+            "owner_credibility_score": _filed_int(profile.owner_credibility_score),
             "community_investment_gtex": (
                 int(community_investment_gtex or 250) if action_type == "community_initiative" else 0
             ),
@@ -3637,7 +3708,7 @@ def process_world_day_institutional_tick(
         metrics_unchanged = prev_audit is not None and (
             int(prev_facts.get("treasury_balance_gtex", -1)) == bal
             and int(prev_facts.get("prestige", -1)) == int(state.prestige or 10)
-            and int(prev_facts.get("supporter_sentiment", -1)) == int(profile.overall_sentiment)
+            and int(prev_facts.get("supporter_sentiment", -1)) == _filed_int(profile.overall_sentiment)
         )
         if not metrics_unchanged:
             publish_media_story(
@@ -3659,7 +3730,7 @@ def process_world_day_institutional_tick(
                     "world_day": world_day,
                     "treasury_balance_gtex": bal,
                     "prestige": int(state.prestige or 10),
-                    "supporter_sentiment": int(profile.overall_sentiment),
+                    "supporter_sentiment": _filed_int(profile.overall_sentiment),
                 },
                 idempotency_key=f"media:weekly_audit:{state.club_id}:d{world_day}",
                 reputation_delta=1 if bal >= 5000 else 0,
@@ -3776,11 +3847,11 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
                 "identity_summary",
                 f"{profile.supporter_culture_label} supporter base with expectation target: {exp_dict.get('season_target', 'competitive_progress')}.",
             ),
-            "overall_sentiment": int(profile.overall_sentiment),
-            "confidence_in_owner": int(profile.confidence_in_owner),
-            "confidence_in_manager": int(profile.confidence_in_manager),
-            "loyalty_index": int(profile.loyalty_index),
-            "matchday_enthusiasm": int(profile.matchday_enthusiasm),
+            "overall_sentiment": _filed_int(profile.overall_sentiment),
+            "confidence_in_owner": _filed_int(profile.confidence_in_owner),
+            "confidence_in_manager": _filed_int(profile.confidence_in_manager),
+            "loyalty_index": _filed_int(profile.loyalty_index),
+            "matchday_enthusiasm": _filed_int(profile.matchday_enthusiasm),
             "scar_tissue_score": int(profile.accumulated_frustration),
             "accumulated_frustration": int(profile.accumulated_frustration),
             "consecutive_disappointments": int(profile.consecutive_disappointments),
@@ -3789,7 +3860,7 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
             "ticket_price_gtex": {"affordable": 10, "standard": 18, "premium": 32, "exploitative": 50}.get(
                 profile.ticket_price_tier, 18
             ),
-            "matchday_experience_rating": int(profile.matchday_experience_rating),
+            "matchday_experience_rating": _filed_int(profile.matchday_experience_rating),
             "expectation_level": exp_dict.get("season_target", "top_half"),
             "protest_stage": profile.active_protest_stage,
             "active_protest_stage": profile.active_protest_stage,
@@ -3797,7 +3868,7 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
             "active_campaign_headline": profile.active_campaign_headline,
             "active_campaign_summary": profile.active_campaign_headline,
             "attendance_modifier_pct": int(profile.attendance_modifier_pct),
-            "owner_credibility_score": int(profile.owner_credibility_score),
+            "owner_credibility_score": _filed_int(profile.owner_credibility_score),
             "expectations": exp_dict,
         },
         "segments": [
@@ -3884,8 +3955,8 @@ def get_media_ecosystem_overview(
         "public_reputation": rep_score,
         "public_reputation_score": rep_score,
         "reputation_tier": rep_tier,
-        "supporter_sentiment": int(profile.overall_sentiment),
-        "owner_credibility_score": int(profile.owner_credibility_score),
+        "supporter_sentiment": _filed_int(profile.overall_sentiment),
+        "owner_credibility_score": _filed_int(profile.owner_credibility_score),
         "commercial_attractiveness_index": _clamp(50 + rep_score // 2 + comm_bonus, 10, 100),
         "sponsorship_interest_index": _clamp(50 + rep_score // 2 + spon_bonus, 10, 100),
         "leadership_pressure_index": pressure,
@@ -4475,49 +4546,63 @@ def reconcile_club_reputation_and_identity(
         ).all()
     )
 
-    prestige = int(state.prestige or 10)
-    supporter_sent = int(profile.overall_sentiment or 65)
-    owner_cred = int(profile.owner_credibility_score or 70)
-    mgr_conf = int(profile.confidence_in_manager or 68)
-    rel_mgr_score = int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else mgr_conf
-    mgr_trust_standing = _clamp((mgr_conf * 0.55) + (rel_mgr_score * 0.45))
+    def _filed_score(value: Any) -> int | None:
+        if value is None or value == "":
+            return None
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return None
 
-    youth_reliance = int(culture.get("youth_reliance", 55))
-    debut_count = sum(1 for g in graduates if g.debut_match_id is not None)
-    rejection_streak = int(fac.get("_manager_youth_rejection_streak") or 0)
-    hoyd_align = int(hoyd_rel.alignment) if hoyd_rel is not None else 60
-    academy_identity = _clamp(
-        (youth_reliance * 0.50)
-        + (hoyd_align * 0.30)
-        + min(20, len(graduates) * 4 + debut_count * 6)
-        - min(16, rejection_streak * 5)
+    def _blend(parts: list[tuple[int | None, float]]) -> int | None:
+        present = [(value, weight) for value, weight in parts if value is not None and weight > 0]
+        if not present:
+            return None
+        total_weight = sum(weight for _, weight in present)
+        return _clamp(sum(value * weight for value, weight in present) / total_weight)
+
+    prestige = _filed_score(state.prestige)
+    supporter_sent = _filed_score(profile.overall_sentiment)
+    owner_cred = _filed_score(profile.owner_credibility_score)
+    mgr_conf = _filed_score(profile.confidence_in_manager)
+    rel_mgr_score = (
+        int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else None
     )
+    mgr_trust_standing = _blend([(mgr_conf, 0.55), (rel_mgr_score, 0.45)])
+
+    youth_reliance = _filed_score(culture.get("youth_reliance")) if "youth_reliance" in culture else None
+    debut_count = sum(1 for g in graduates if g.debut_match_id is not None)
+    rejection_streak = int(fac["_manager_youth_rejection_streak"]) if fac.get("_manager_youth_rejection_streak") is not None else 0
+    hoyd_align = int(hoyd_rel.alignment) if hoyd_rel is not None and hoyd_rel.alignment is not None else None
+    academy_parts: list[tuple[int | None, float]] = [(youth_reliance, 0.50), (hoyd_align, 0.30)]
+    if graduates:
+        academy_parts.append((min(20, len(graduates) * 4 + debut_count * 6), 0.20))
+    academy_identity = _blend(academy_parts)
+    if academy_identity is not None and rejection_streak:
+        academy_identity = _clamp(academy_identity - min(16, rejection_streak * 5))
 
     win_rate_pct = (
         int(round((active_mgr_tenure.wins / active_mgr_tenure.matches_managed) * 100))
         if active_mgr_tenure and active_mgr_tenure.matches_managed > 0
-        else 50
+        else None
     )
-    ambition_culture = int(culture.get("ambition", 60))
-    sporting_ambition = _clamp((prestige * 0.45) + (ambition_culture * 0.35) + (win_rate_pct * 0.20))
+    ambition_culture = _filed_score(culture.get("ambition")) if "ambition" in culture else None
+    sporting_ambition = _blend([(prestige, 0.45), (ambition_culture, 0.35), (win_rate_pct, 0.20)])
 
-    attacking_bias = int(culture.get("attacking_bias", 55))
-    mgr_style = str((state.manager_json or {}).get("style") or "balanced")
-    tactical_score = _clamp(
-        (attacking_bias * 0.60)
-        + (
-            (72 if mgr_style in ("high_press", "attacking", "possession") else 62 if mgr_style == "balanced" else 56)
-            * 0.40
-        )
-    )
+    attacking_bias = _filed_score(culture.get("attacking_bias")) if "attacking_bias" in culture else None
+    mgr_style = (state.manager_json or {}).get("style") or None
+    tactical_score = attacking_bias
 
     commercial_bonus = sum(int(st.commercial_attractiveness_delta or 0) for st in stories[:8])
-    commercial_attractiveness = _clamp(
-        (prestige * 0.42)
-        + (supporter_sent * 0.33)
-        + (int(profile.matchday_enthusiasm or 65) * 0.25)
-        + max(-12, min(15, commercial_bonus))
+    commercial_attractiveness = _blend(
+        [
+            (prestige, 0.42),
+            (supporter_sent, 0.33),
+            (_filed_score(profile.matchday_enthusiasm), 0.25),
+        ]
     )
+    if commercial_attractiveness is not None and commercial_bonus:
+        commercial_attractiveness = _clamp(commercial_attractiveness + max(-12, min(15, commercial_bonus)))
 
     protest_penalty = {
         "none": 0,
@@ -4525,25 +4610,32 @@ def reconcile_club_reputation_and_identity(
         "petition": 13,
         "banner_protest": 22,
         "organised_boycott": 34,
-    }.get(profile.active_protest_stage, 0)
-    turnover_penalty = max(0, (len(all_mgr_tenures) - 1) * 6)
-    avg_tension = int(round(sum(int(r.tension) for r in rels) / len(rels))) if rels else 22
-    institutional_stability = _clamp(88 - protest_penalty - min(24, turnover_penalty) - max(0, avg_tension - 30) * 0.5)
+    }.get(profile.active_protest_stage or "none", 0)
+    avg_tension = int(round(sum(int(r.tension) for r in rels) / len(rels))) if rels else None
+    institutional_stability = None
+    if avg_tension is not None or (profile.active_protest_stage and profile.active_protest_stage != "none"):
+        institutional_stability = _clamp(100 - protest_penalty - (avg_tension or 0))
 
     pressure_net = sum(int(st.leadership_pressure_delta or 0) for st in stories[:6])
-    public_trust_governance = _clamp(
-        (owner_cred * 0.50)
-        + (int(profile.confidence_in_owner or 68) * 0.35)
-        + (int(culture.get("professionalism", 60)) * 0.15)
-        - max(0, min(18, pressure_net))
+    professionalism = _filed_score(culture.get("professionalism")) if "professionalism" in culture else None
+    public_trust_governance = _blend(
+        [
+            (owner_cred, 0.50),
+            (_filed_score(profile.confidence_in_owner), 0.35),
+            (professionalism, 0.15),
+        ]
     )
+    if public_trust_governance is not None and pressure_net:
+        public_trust_governance = _clamp(public_trust_governance - max(0, min(18, pressure_net)))
 
-    overall_reputation = _clamp(
-        (prestige * 0.35)
-        + (commercial_attractiveness * 0.20)
-        + (public_trust_governance * 0.20)
-        + (institutional_stability * 0.15)
-        + (sporting_ambition * 0.10)
+    overall_reputation = _blend(
+        [
+            (prestige, 0.35),
+            (commercial_attractiveness, 0.20),
+            (public_trust_governance, 0.20),
+            (institutional_stability, 0.15),
+            (sporting_ambition, 0.10),
+        ]
     )
 
     dimensions = {
@@ -4783,7 +4875,7 @@ def get_unified_club_pulse(
                 "title": f"Address Terrace Protest Stage: {profile.active_protest_stage.replace('_', ' ').title()}",
                 "severity": "critical" if profile.active_protest_stage == "organised_boycott" else "high",
                 "ticket_price_tier": profile.ticket_price_tier,
-                "overall_sentiment": int(profile.overall_sentiment),
+                "overall_sentiment": _filed_int(profile.overall_sentiment),
             }
         )
     if profile.ticket_price_tier in ("premium", "exploitative") and profile.overall_sentiment < 58:
@@ -4802,10 +4894,10 @@ def get_unified_club_pulse(
         "world_day": int(state.world_day or 1),
         "reputation_dimensions": reputation,
         "supporters": {
-            "overall_sentiment": int(profile.overall_sentiment),
-            "confidence_in_owner": int(profile.confidence_in_owner),
-            "confidence_in_manager": int(profile.confidence_in_manager),
-            "owner_credibility_score": int(profile.owner_credibility_score),
+            "overall_sentiment": _filed_int(profile.overall_sentiment),
+            "confidence_in_owner": _filed_int(profile.confidence_in_owner),
+            "confidence_in_manager": _filed_int(profile.confidence_in_manager),
+            "owner_credibility_score": _filed_int(profile.owner_credibility_score),
             "accumulated_frustration": int(profile.accumulated_frustration),
             "active_protest_stage": profile.active_protest_stage,
             "active_campaign_headline": profile.active_campaign_headline,

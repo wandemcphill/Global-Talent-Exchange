@@ -162,7 +162,9 @@ _FM = re.compile(
     r"^(GK|(?:D|WB|DM|M|AM|ST|F)(?:/(?:D|WB|DM|M|AM|ST|F))*)(?:\s+([RLC]+))?$",
     re.IGNORECASE,
 )
-_SPLIT = re.compile(r"[,/;|]+")
+# A slash belongs to a Football Manager code such as D/WB L. Do not split it
+# into a lone "D", or a left wing-back is filed as a centre-back.
+_SPLIT = re.compile(r"[,;|]+")
 
 
 def person_key(name: str | None) -> str:
@@ -298,6 +300,18 @@ def _parse(raw: str | None) -> tuple[list[str], bool]:
         return list(_COARSE[lowered]), True
     if lowered in _WORDS:
         return list(_WORDS[lowered]), False
+
+    if " / " in text:
+        codes: list[str] = []
+        coarse = True
+        for part in text.split(" / "):
+            parsed, was_coarse = _parse(part.strip())
+            coarse = coarse and was_coarse
+            for code in parsed:
+                if code not in codes:
+                    codes.append(code)
+        if codes:
+            return codes, coarse
 
     parts = [part.strip() for part in _SPLIT.split(text) if part.strip()]
     if len(parts) > 1:

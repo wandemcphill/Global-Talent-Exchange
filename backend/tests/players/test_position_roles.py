@@ -66,6 +66,16 @@ def test_berisha_and_chiesa_are_wingers():
     assert display_codes(chiesa, chiesa_extras) == "RW / LW / ST"
 
 
+def test_wing_back_code_is_not_a_centre_back():
+    primary, extras, reason = resolve_positions(name="A Left Wing Back", position="D/WB L")
+    assert reason == "unchanged"
+    assert display_codes(primary, extras) == "LB / LWB"
+
+    attack, attack_extras, attack_reason = resolve_positions(name="An Attacking Mid", position="AM RLC")
+    assert attack_reason == "unchanged"
+    assert display_codes(attack, attack_extras) == "AM / LW / RW"
+
+
 def test_coarse_defender_bucket_loses_to_a_specific_profile():
     primary, extras, reason = resolve_positions(
         name="A Coarse Defender",

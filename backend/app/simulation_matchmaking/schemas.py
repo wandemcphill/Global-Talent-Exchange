@@ -192,7 +192,7 @@ class QuickGameResponse(CommonSchema):
     simulation_bridge: MatchSimulationBridgeView
     free_matches_remaining: int = Field(default=10, ge=0, le=10)
     free_matches_used: int = Field(default=0, ge=0, le=10)
-    charge_on_loss: bool = True
+    charge_on_loss: bool = False
     charge_required_now: bool = False
     entry_currency: str = "credit"
     entry_currency_label: str = "Fan Coin"
@@ -200,7 +200,7 @@ class QuickGameResponse(CommonSchema):
     entitlement_status: str = "free_run_active"
     settlement_status: str | None = None
     result: str | None = None
-    rules_copy: str = "Play free until you lose or reach 10 matches."
+    rules_copy: str = "Entry is free."
 
 
 class FastMatchEntitlementResponse(CommonSchema):

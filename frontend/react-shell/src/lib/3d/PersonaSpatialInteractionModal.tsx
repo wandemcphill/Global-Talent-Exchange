@@ -198,7 +198,7 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                     Bilateral Relationship Spine
                   </span>
                   <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-medium text-emerald-300 ring-1 ring-emerald-500/30">
-                    {rel?.status_label || "Active Relationship"}
+                    {rel?.status_label || "Not filed"}
                   </span>
                 </div>
 
@@ -207,12 +207,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-emerald-400">Alignment</span>
-                      <span className="font-mono font-bold text-white">{rel?.alignment ?? 65}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.alignment == null ? "—" : `${rel.alignment}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-emerald-400 transition-all duration-500"
-                        style={{ width: `${rel?.alignment ?? 65}%` }}
+                        style={{ width: `${rel?.alignment ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -220,12 +220,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-indigo-400">Influence</span>
-                      <span className="font-mono font-bold text-white">{rel?.influence ?? 60}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.influence == null ? "—" : `${rel.influence}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-indigo-400 transition-all duration-500"
-                        style={{ width: `${rel?.influence ?? 60}%` }}
+                        style={{ width: `${rel?.influence ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -233,12 +233,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-purple-400">Loyalty</span>
-                      <span className="font-mono font-bold text-white">{rel?.loyalty ?? 60}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.loyalty == null ? "—" : `${rel.loyalty}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-purple-400 transition-all duration-500"
-                        style={{ width: `${rel?.loyalty ?? 60}%` }}
+                        style={{ width: `${rel?.loyalty ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -246,12 +246,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-rose-500/20 bg-rose-500/5 p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="font-semibold text-rose-400">Tension</span>
-                      <span className="font-mono font-bold text-white">{rel?.tension ?? 10}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.tension == null ? "—" : `${rel.tension}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-rose-400 transition-all duration-500"
-                        style={{ width: `${rel?.tension ?? 10}%` }}
+                        style={{ width: `${rel?.tension ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -260,12 +260,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-slate-400">Trust</span>
-                      <span className="font-mono font-bold text-white">{rel?.trust ?? 55}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.trust == null ? "—" : `${rel.trust}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-teal-400 transition-all duration-500"
-                        style={{ width: `${rel?.trust ?? 55}%` }}
+                        style={{ width: `${rel?.trust ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -273,12 +273,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-slate-400">Respect</span>
-                      <span className="font-mono font-bold text-white">{rel?.respect ?? 60}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.respect == null ? "—" : `${rel.respect}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-amber-400 transition-all duration-500"
-                        style={{ width: `${rel?.respect ?? 60}%` }}
+                        style={{ width: `${rel?.respect ?? 0}%` }}
                       />
                     </div>
                   </div>
@@ -286,12 +286,12 @@ export const PersonaSpatialInteractionModal: React.FC<PersonaSpatialInteractionM
                   <div className="rounded-lg border border-white/5 bg-white/[0.02] p-2.5">
                     <div className="flex items-center justify-between text-[11px]">
                       <span className="text-slate-400">Affinity</span>
-                      <span className="font-mono font-bold text-white">{rel?.affinity ?? 50}%</span>
+                      <span className="font-mono font-bold text-white">{rel?.affinity == null ? "—" : `${rel.affinity}%`}</span>
                     </div>
                     <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-800">
                       <div
                         className="h-full bg-sky-400 transition-all duration-500"
-                        style={{ width: `${rel?.affinity ?? 50}%` }}
+                        style={{ width: `${rel?.affinity ?? 0}%` }}
                       />
                     </div>
                   </div>

@@ -32,7 +32,7 @@ import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/compone
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
 import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
-import { HolographicPlayerCard, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
+import { HolographicPlayerCard, placeFirstTeamOnPitch, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
 import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
 import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
@@ -890,13 +890,8 @@ function StaffChatModal({
 }
 
 function BoardroomSection({ club }: any) {
-  const refresh = useRefreshOwner();
   const [chatRole, setChatRole] = useState<string | null>(null);
-  const [hiringBusy, setHiringBusy] = useState<string | null>(null);
-  const [marqueePremiums, setMarqueePremiums] = useState<Record<string, boolean>>({});
-  const [contractYears, setContractYears] = useState<Record<string, number>>({});
   const [delegationBusy, setDelegationBusy] = useState(false);
-  const [roleFilter, setRoleFilter] = useState("all");
 
   const { data: staffData, refetch: refetchStaff } = useQuery({
     queryKey: ["club-staff", club.club_id],
@@ -921,54 +916,22 @@ function BoardroomSection({ club }: any) {
     manager_tactics_autonomy: true,
   };
 
-  const clubPrestige = staffData?.club_prestige ?? club.health?.prestige ?? 55;
+  const recordedPrestige = staffData?.club_prestige ?? club.health?.prestige;
+  const clubPrestige =
+    recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
   const prestigeTier =
     staffData?.prestige_tier ??
-    (clubPrestige >= 85
-      ? 1
-      : clubPrestige >= 70
-        ? 2
-        : clubPrestige >= 50
-          ? 3
-          : clubPrestige >= 35
-            ? 4
-            : 5);
-  const candidates: any[] = staffData?.candidates || [];
-
-  const handleHire = async (candidate: any) => {
-    setHiringBusy(candidate.staff_id);
-    const usePremium = Boolean(marqueePremiums[candidate.staff_id]);
-    const years = contractYears[candidate.staff_id] || 3;
-    try {
-      await api.post(`/owner/clubs/${club.club_id}/staff/hire`, {
-        staff_id: candidate.staff_id,
-        role: candidate.role,
-        marquee_wage_premium: usePremium,
-        contract_years: years,
-        pay_with_fan_coin: true,
-      });
-      toast.success(`Appointed ${candidate.name} as ${candidate.role.replace(/_/g, " ")}.`);
-      await refetchStaff();
-      refresh();
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setHiringBusy(null);
-    }
-  };
-
-  const handleFireStaff = async (role: string) => {
-    if (!window.confirm(`Dismiss ${role.replace(/_/g, " ")} from executive staff?`)) return;
-    try {
-      await api.post(`/owner/clubs/${club.club_id}/staff/${role}/fire`);
-      toast.warning(`Dismissed ${role.replace(/_/g, " ")}.`);
-      await refetchStaff();
-      refresh();
-    } catch (e) {
-      toast.error(errMsg(e));
-    }
-  };
-
+    (clubPrestige == null
+      ? null
+      : clubPrestige >= 85
+        ? 1
+        : clubPrestige >= 70
+          ? 2
+          : clubPrestige >= 50
+            ? 3
+            : clubPrestige >= 35
+              ? 4
+              : 5);
   const handleUpdateDelegation = async (updates: Partial<typeof delegation>) => {
     setDelegationBusy(true);
     const nextPolicy = { ...delegation, ...updates };
@@ -982,9 +945,6 @@ function BoardroomSection({ club }: any) {
       setDelegationBusy(false);
     }
   };
-
-  const filteredCandidates =
-    roleFilter === "all" ? candidates : candidates.filter((c) => c.role === roleFilter);
 
   return (
     <section className="space-y-6 mb-8" data-testid="executive-boardroom-section">
@@ -1007,9 +967,11 @@ function BoardroomSection({ club }: any) {
           <div className="flex items-center gap-3">
             <div className="rounded-xl border border-white/10 bg-black/50 p-3 text-right">
               <p className="text-[10px] uppercase font-bold text-slate-400">Club Prestige</p>
-              <p className="gx-mono text-2xl font-black text-amber-300">{clubPrestige}/100</p>
+              <p className="gx-mono text-2xl font-black text-amber-300">
+                {clubPrestige == null ? "Not filed" : `${clubPrestige}/100`}
+              </p>
               <span className="text-[10px] font-bold uppercase text-emerald-400">
-                Tier {prestigeTier} Standing
+                {prestigeTier == null ? "Tier not filed" : `Tier ${prestigeTier} Standing`}
               </span>
             </div>
           </div>
@@ -1067,7 +1029,8 @@ function BoardroomSection({ club }: any) {
         {STAFF_ROLES.map((roleDef) => {
           const person = appointed[roleDef.key];
           const Icon = roleDef.icon;
-          const isAppointed = Boolean(person?.name);
+          const isAppointed =
+            Boolean(person?.name) && !person?.is_default && person?.manager_id !== "gtex-staff-coach";
 
           return (
             <div
@@ -1106,13 +1069,12 @@ function BoardroomSection({ club }: any) {
                   <span>{isAppointed ? "Talk to Staff" : "Seat empty"}</span>
                 </button>
                 {isAppointed && (
-                  <button
-                    type="button"
-                    onClick={() => handleFireStaff(roleDef.key)}
-                    className="w-full text-center text-[10px] font-bold uppercase text-red-400 hover:text-red-300 py-1 transition"
+                  <Link
+                    to={`/app/staff-market?club_id=${encodeURIComponent(club.club_id)}`}
+                    className="block w-full text-center text-[10px] font-bold uppercase text-red-400 hover:text-red-300 py-1 transition"
                   >
-                    Dismiss / Replace
-                  </button>
+                    Replace on the staff market
+                  </Link>
                 )}
               </div>
             </div>
@@ -1200,153 +1162,21 @@ function BoardroomSection({ club }: any) {
         </div>
       </Panel>
 
-      {/* 4. Candidate Market per Role */}
       <Panel
         eyebrow="Talent Acquisition"
-        title="Executive & Coaching Candidate Market"
+        title="Staff market"
         testid="staff-candidates-panel"
       >
-        <div className="flex flex-wrap gap-2 mb-5">
-          <button
-            onClick={() => setRoleFilter("all")}
-            className={`gx-btn ${roleFilter === "all" ? "gx-btn-primary" : "gx-btn-ghost"} text-xs`}
-          >
-            All Candidates ({candidates.length})
-          </button>
-          {STAFF_ROLES.map((r) => (
-            <button
-              key={r.key}
-              onClick={() => setRoleFilter(r.key)}
-              className={`gx-btn ${roleFilter === r.key ? "gx-btn-primary" : "gx-btn-ghost"} text-xs`}
-            >
-              {r.label.split(" (")[0]}
-            </button>
-          ))}
-        </div>
-
-        {filteredCandidates.length === 0 ? (
-          <p className="text-sm text-slate-400" data-testid="staff-candidates-empty">
-            No candidates are on this seat.
-          </p>
-        ) : null}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {filteredCandidates.map((cand) => {
-            const meetsPrestige = clubPrestige >= (cand.min_prestige || 50);
-            const isHiring = hiringBusy === cand.staff_id;
-            const usePremium = Boolean(marqueePremiums[cand.staff_id]);
-
-            return (
-              <div
-                key={cand.staff_id}
-                className="flex flex-col justify-between rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 space-y-3"
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-bold text-white text-sm">{cand.name}</p>
-                      <p className="text-xs text-purple-300 font-semibold uppercase">
-                        {cand.role.replace(/_/g, " ")}
-                      </p>
-                    </div>
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[9px] font-black uppercase border ${
-                        meetsPrestige
-                          ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/40"
-                          : "bg-amber-500/20 text-amber-300 border-amber-500/40"
-                      }`}
-                    >
-                      Min Prestige {cand.min_prestige || 50}
-                    </span>
-                  </div>
-
-                  <p className="text-xs text-slate-300 mt-2 leading-relaxed">{cand.specialty}</p>
-
-                  <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
-                    <span>Upfront Fan Coin Contract:</span>
-                    <b className="gx-mono text-amber-300">
-                      {coinWithNaira(
-                        Math.floor((cand.salary_fan_coin || cand.salary || 1600) * 0.35) *
-                          (contractYears[cand.staff_id] || 3),
-                        "FAN",
-                      )}
-                    </b>
-                  </div>
-                  <div className="mt-1.5 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>Contract Length:</span>
-                    <select
-                      value={contractYears[cand.staff_id] || 3}
-                      onChange={(e) =>
-                        setContractYears((prev) => ({
-                          ...prev,
-                          [cand.staff_id]: Number(e.target.value),
-                        }))
-                      }
-                      className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 text-xs font-bold text-white"
-                    >
-                      <option value={1}>
-                        1 Year ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 1)} FAN)
-                      </option>
-                      <option value={2}>
-                        2 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 2)} FAN)
-                      </option>
-                      <option value={3}>
-                        3 Years (Recommended ·{" "}
-                        {fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 3)} FAN)
-                      </option>
-                      <option value={4}>
-                        4 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 4)} FAN)
-                      </option>
-                      <option value={5}>
-                        5 Years ({fmt(Math.floor((cand.salary_fan_coin || 1200) * 0.35) * 5)} FAN)
-                      </option>
-                    </select>
-                  </div>
-                  <p className="text-[10px] text-emerald-400 mt-1">
-                    Paid once upfront · club owes zero recurring debt
-                  </p>
-
-                  {!meetsPrestige && (
-                    <label className="mt-3 flex items-center gap-2 rounded bg-amber-950/40 border border-amber-500/30 p-2 text-[10px] text-amber-200 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        checked={usePremium}
-                        onChange={(e) =>
-                          setMarqueePremiums((prev) => ({
-                            ...prev,
-                            [cand.staff_id]: e.target.checked,
-                          }))
-                        }
-                        className="rounded border-amber-500/40 bg-slate-900 text-amber-500"
-                      />
-                      <span>Offer Marquee Wage Premium (+25% wage to bypass prestige deficit)</span>
-                    </label>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => handleHire(cand)}
-                  disabled={Boolean(hiringBusy) || (!meetsPrestige && !usePremium)}
-                  className={`w-full rounded-lg py-2 text-xs font-bold transition flex items-center justify-center gap-1.5 ${
-                    meetsPrestige || usePremium
-                      ? "bg-emerald-600 hover:bg-emerald-500 text-white shadow-md"
-                      : "bg-slate-800 text-slate-500 cursor-not-allowed"
-                  }`}
-                  data-testid={`hire-staff-${cand.staff_id}`}
-                >
-                  <UserCheck size={14} />
-                  <span>
-                    {isHiring
-                      ? "Appointing…"
-                      : !meetsPrestige && !usePremium
-                        ? "Prestige Too Low"
-                        : "Appoint to Role"}
-                  </span>
-                </button>
-              </div>
-            );
-          })}
-        </div>
+        <p className="text-sm text-slate-300">
+          Later contracts are signed on the staff market. This boardroom shows who holds each seat.
+        </p>
+        <Link
+          to={`/app/staff-market?club_id=${encodeURIComponent(club.club_id)}`}
+          className="gx-btn gx-btn-primary mt-4 inline-flex text-xs"
+          data-testid="open-staff-market"
+        >
+          Open the staff market
+        </Link>
       </Panel>
 
       {/* Staff AI Chat Modal */}
@@ -1458,15 +1288,17 @@ export default function Squad() {
     ...club,
     squad: players.filter((player: any) => sheetOf(player) === "first_team"),
   };
+  const pitchLead = placeFirstTeamOnPitch(firstTeamClub.squad).find((slot) => slot.player);
   const placeOnSheet = async (player: any, target: SquadSheet) => {
     setMovingId(String(player.id));
     try {
       if (target === "first_team" && sheetOf(player) === "academy") {
         await api.post(`/owner/clubs/${club.club_id}/academy/${player.id}/promote`);
+        toast.success(`Youth head filed a first-team recommendation for ${player.name}.`);
       } else {
         await api.post(`/owner/clubs/${club.club_id}/squad/${player.id}/sheet`, { sheet: target });
+        toast.success(`${player.name} is on the ${SHEET_LABEL[target].toLowerCase()} sheet.`);
       }
-      toast.success(`${player.name} is on the ${SHEET_LABEL[target].toLowerCase()} sheet.`);
       await refresh();
     } catch (error) {
       toast.error(errMsg(error));
@@ -1636,25 +1468,23 @@ export default function Squad() {
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <TacticalPitch25D
-                formation={club.formation || "4-3-3"}
+                formation={club.matchday_formation || undefined}
                 players={firstTeamClub.squad || []}
                 onSelectPlayer={setSelectedPlayer}
               />
             </div>
             <div className="lg:col-span-4">
               <HolographicPlayerCard
-                name={firstTeamClub.squad?.[0]?.name || "First-team sheet"}
-                position={firstTeamClub.squad?.[0]?.position || "ST"}
-                overall={Number(firstTeamClub.squad?.[0]?.rating || 0)}
-                potential={Number(firstTeamClub.squad?.[0]?.potential || 0)}
+                name={pitchLead?.player?.name || "First-team sheet"}
+                position={pitchLead?.player?.position || "ST"}
+                overall={Number(pitchLead?.ovr || 0)}
+                potential={Number(pitchLead?.player?.potential || 0)}
                 clubName={club.club_name}
-                priceGtx={Number(firstTeamClub.squad?.[0]?.value_coin || 0)}
-                jerseyNumber={9}
+                priceGtx={Number(pitchLead?.player?.value_coin || 0)}
+                jerseyNumber={pitchLead?.shirt}
                 badgeLabel="FIRST TEAM"
                 actionLabel="Open Dossier →"
-                onAction={() =>
-                  firstTeamClub.squad?.[0] && setSelectedPlayer(firstTeamClub.squad[0])
-                }
+                onAction={() => pitchLead?.player && setSelectedPlayer(pitchLead.player)}
               />
             </div>
           </div>

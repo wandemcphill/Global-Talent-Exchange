@@ -262,7 +262,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
   // Handle start contract negotiation
   const handleOpenNegotiation = (cand: StaffMarketCandidate) => {
     setNegotiatingCandidate(cand);
-    setOfferSalary(cand.expected_salary_fan_coin ?? cand.expected_salary_gtex ?? 600);
+    setOfferSalary(cand.expected_salary_fan_coin ?? cand.expected_salary_gtex ?? 0);
     setOfferYears(2);
     setMarqueePremium(false);
     setPitchNote("");
@@ -333,7 +333,8 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
 
   const filteredCandidates = marketData?.candidates || [];
 
-  const clubPrestige = vacanciesData?.club_prestige || marketData?.club_prestige || 50;
+  const recordedPrestige = vacanciesData?.club_prestige ?? marketData?.club_prestige;
+  const clubPrestige = recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
 
   return (
     <div
@@ -355,7 +356,7 @@ export const StaffEmploymentModal: React.FC<StaffEmploymentModalProps> = ({
                   Executive Career & Employment Market
                 </h2>
                 <span className="rounded bg-emerald-500/20 px-2 py-0.5 text-[11px] font-mono font-semibold text-emerald-300">
-                  Prestige: {clubPrestige}
+                  Prestige: {clubPrestige == null ? "Not filed" : clubPrestige}
                 </span>
               </div>
               <p className="text-xs text-slate-400">

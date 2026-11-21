@@ -108,17 +108,23 @@ export function Showroom() {
   }, [squad, eligibleRegens, selectedPlayerId]);
 
   const clubCash = officeSummary?.cash_balance_gtex ?? clubDetail?.economy?.cash_gtex ?? active?.cash ?? 0;
-  const clubPrestige = showroomData?.club_prestige ?? clubDetail?.health?.prestige ?? 60;
+  const recordedPrestige = showroomData?.club_prestige ?? clubDetail?.health?.prestige;
+  const clubPrestige =
+    recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
   const prestigeTierLabel =
     typeof showroomData?.prestige_tier === "string"
       ? showroomData.prestige_tier
+      : clubPrestige == null
+      ? "Prestige not filed"
       : clubPrestige >= 85
       ? "Tier 1: Global Superclub"
       : clubPrestige >= 70
       ? "Tier 2: Continental Challenger"
       : clubPrestige >= 50
       ? "Tier 3: National Contender"
-      : "Tier 4: Regional Pioneer";
+      : clubPrestige >= 35
+      ? "Tier 4: Regional Pioneer"
+      : "Tier 5: Grassroots Foundation";
 
   const keyOf = (it: any) => it?.catalog_key || it?.id || it?.sku || "";
 
@@ -263,7 +269,7 @@ export function Showroom() {
       });
       toast.success(
         recipientType === "staff"
-          ? `Delivered luxury gift to ${recipient.name} (+15 Mood, +3 Loyalty)!`
+          ? `Delivered luxury gift to ${recipient.name}.`
           : resultData?.broadcast_event
           ? `GTEX confirmed ${giftingItem.name} for ${recipient?.name || "your academy regen"}; verified broadcast published!`
           : `GTEX recorded luxury gift for ${recipient?.name || "your academy regen"}.`
@@ -370,7 +376,7 @@ export function Showroom() {
             <div className="rounded-xl border border-gtex-gold/40 bg-gtex-gold/10 px-4 py-2.5 text-right shadow-inner">
               <div className="text-[10px] uppercase tracking-wider text-amber-300 font-bold">Club Prestige Standing</div>
               <div className="font-mono text-sm font-black text-white">
-                {clubPrestige}/100 · {prestigeTierLabel}
+                {clubPrestige == null ? "Not filed" : `${clubPrestige}/100`} · {prestigeTierLabel}
               </div>
             </div>
           </div>
@@ -1070,7 +1076,7 @@ export function Showroom() {
                             {p.position || "Player"} · {p.rating ?? p.overall_rating ?? "—"} OVR{" "}
                             {p.is_regen ? "· Regen" : ""}
                           </div>
-                          <div className="text-[9px] font-bold text-emerald-400">Morale: {p.morale ?? 75}%</div>
+                          <div className="text-[9px] font-bold text-emerald-400">Morale: {p.morale == null ? "—" : `${p.morale}%`}</div>
                         </div>
                         {selectedPlayerId === p.id && <CheckCircle className="h-4 w-4 shrink-0 text-purple-300" />}
                       </button>
@@ -1080,7 +1086,7 @@ export function Showroom() {
               ) : (
                 <div>
                   <label className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                    Select Staff Recipient (+15 Mood, +3 Loyalty)
+                    Select staff recipient
                   </label>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
                     {[

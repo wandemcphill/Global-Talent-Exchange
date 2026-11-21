@@ -702,8 +702,8 @@ class OwnerRecruitmentAssignment(UUIDPrimaryKeyMixin, Base):
     initiated_by_role: Mapped[str] = mapped_column(String(64), nullable=False, default="first_team_manager")
     initiated_by_name: Mapped[str] = mapped_column(String(160), nullable=False)
     target_position: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
-    min_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=80, server_default="80")
-    max_gsi: Mapped[int] = mapped_column(Integer, nullable=False, default=85, server_default="85")
+    min_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_gsi: Mapped[int | None] = mapped_column(Integer, nullable=True)
     tactical_profile: Mapped[str] = mapped_column(
         String(128), nullable=False, default="balanced", server_default="balanced"
     )

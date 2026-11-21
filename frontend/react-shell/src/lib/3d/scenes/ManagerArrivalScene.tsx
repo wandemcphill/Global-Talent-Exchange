@@ -129,21 +129,21 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
   const medicalClearance =
     (cinematicEvent as any)?.medical_clearance_status ||
     meta?.medical_clearance_status ||
-    "cleared_fit_for_duty";
+    "Not filed";
   const pressQaPayload = (cinematicEvent as any)?.press_conference_qa || meta?.press_conference_qa || null;
 
   const resolvedName =
-    cinematicEvent?.subject_name || meta.staff_name || subjectName || "Emmanuel Amuneke";
+    cinematicEvent?.subject_name || meta.staff_name || subjectName || "Unnamed arrival";
   const resolvedRole =
     cinematicEvent?.subject_role_label || meta.role_label || subjectRoleLabel || "First-Team Manager";
   const resolvedRating =
-    cinematicEvent?.overall_rating ?? meta.rating ?? overallRating ?? 86;
+    cinematicEvent?.overall_rating ?? meta.rating ?? overallRating ?? null;
   const resolvedYears =
-    cinematicEvent?.contract_years ?? meta.contract_years ?? contractYears ?? 3;
+    cinematicEvent?.contract_years ?? meta.contract_years ?? contractYears ?? null;
   const resolvedSalary =
-    cinematicEvent?.salary_gtex ?? meta.annual_salary_gtex ?? salaryGtex ?? 2500;
+    cinematicEvent?.salary_gtex ?? meta.annual_salary_gtex ?? salaryGtex ?? null;
   const resolvedClub =
-    cinematicEvent?.club_name || branding.club_name || clubName || "GTEX FC";
+    cinematicEvent?.club_name || branding.club_name || clubName || "Club not filed";
   const resolvedTitle =
     cinematicEvent?.title ||
     title ||
@@ -488,8 +488,8 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
           </span>
           <h3 className="mt-3 text-xl font-black text-white">{resolvedTitle}</h3>
           <p className="mt-1 text-xs text-slate-300">
-            {resolvedName} ({resolvedRole} • OVR {resolvedRating}) • {resolvedYears}-Year Contract •{" "}
-            {resolvedSalary.toLocaleString()} GTEX/wk
+            {resolvedName} ({resolvedRole} • OVR {resolvedRating ?? "—"}) • {resolvedYears == null ? "Term not filed" : `${resolvedYears}-Year Contract`} •{" "}
+            {resolvedSalary == null ? "Wage not filed" : `${resolvedSalary.toLocaleString()} GTEX/wk`}
           </p>
         </div>
       )}
@@ -639,7 +639,7 @@ export const ManagerArrivalScene: React.FC<ManagerArrivalSceneProps> = ({
           <h3 className="text-lg font-black text-white">{resolvedTitle}</h3>
           <div className="mt-0.5 text-xs text-slate-300">
             <strong className="text-white">{resolvedName}</strong> ({resolvedRole} • OVR{" "}
-            {resolvedRating}) • {resolvedYears}-Year Deal ({resolvedSalary.toLocaleString()} GTEX/wk)
+            {resolvedRating ?? "—"}) • {resolvedYears == null ? "Term not filed" : `${resolvedYears}-Year Deal`} ({resolvedSalary == null ? "Wage not filed" : `${resolvedSalary.toLocaleString()} GTEX/wk`})
           </div>
         </div>
 

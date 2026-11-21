@@ -1795,7 +1795,12 @@ def staff_item_from_seed(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def _paint(item: dict[str, Any], updates: dict[str, Any]) -> None:
-    rating = int(updates.get("rating") or item.get("rating") or 75)
+    raw_rating = updates.get("rating")
+    if raw_rating is None:
+        raw_rating = item.get("rating")
+    if raw_rating is None:
+        return
+    rating = int(raw_rating)
     annual = _fan_wage(rating)
     item["role"] = "first_team_manager"
     item["role_label"] = "First Team Manager"

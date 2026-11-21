@@ -48,12 +48,12 @@ class MatchPlayerInput(CommonSchema):
     player_name: str = Field(min_length=1)
     role: PlayerRole
     overall: int = Field(ge=1, le=100)
-    finishing: int = Field(default=50, ge=1, le=100)
-    creativity: int = Field(default=50, ge=1, le=100)
-    defending: int = Field(default=50, ge=1, le=100)
-    goalkeeping: int = Field(default=1, ge=1, le=100)
-    discipline: int = Field(default=70, ge=1, le=100)
-    fitness: int = Field(default=70, ge=1, le=100)
+    finishing: int | None = Field(default=None, ge=1, le=100)
+    creativity: int | None = Field(default=None, ge=1, le=100)
+    defending: int | None = Field(default=None, ge=1, le=100)
+    goalkeeping: int | None = Field(default=None, ge=1, le=100)
+    discipline: int | None = Field(default=None, ge=1, le=100)
+    fitness: int | None = Field(default=None, ge=1, le=100)
     shirt_number: int | None = Field(default=None, ge=1, le=99)
     display_name: str | None = Field(default=None, min_length=1, max_length=32)
     position_archetype: str | None = Field(default=None, min_length=2, max_length=32)
@@ -79,13 +79,13 @@ class MatchPlayerInput(CommonSchema):
 
 class TeamTacticalPlanInput(CommonSchema):
     style: TacticalStyle = TacticalStyle.BALANCED
-    pressing: int = Field(default=55, ge=0, le=100)
-    tempo: int = Field(default=55, ge=0, le=100)
-    aggression: int = Field(default=50, ge=0, le=100)
-    defensive_line: int = Field(default=50, ge=0, le=100)
-    width: int = Field(default=50, ge=0, le=100)
+    pressing: int | None = Field(default=None, ge=0, le=100)
+    tempo: int | None = Field(default=None, ge=0, le=100)
+    aggression: int | None = Field(default=None, ge=0, le=100)
+    defensive_line: int | None = Field(default=None, ge=0, le=100)
+    width: int | None = Field(default=None, ge=0, le=100)
     mentality: TacticalStyle = TacticalStyle.BALANCED
-    set_piece_emphasis: int = Field(default=50, ge=0, le=100)
+    set_piece_emphasis: int | None = Field(default=None, ge=0, le=100)
     player_instructions: dict[str, Any] | None = None
     game_state_adjustments: dict[str, Any] | None = None
     substitution_windows: tuple[int, ...] = Field(default=(60, 72, 82), min_length=1, max_length=5)
@@ -99,9 +99,9 @@ class TeamTacticalPlanInput(CommonSchema):
     max_substitutions: int = Field(default=5, ge=1, le=5)
     allow_substitutions: bool = True
     allow_tactical_changes: bool = True
-    tactical_quality: int = Field(default=60, ge=1, le=100)
-    adaptability: int = Field(default=60, ge=1, le=100)
-    game_management: int = Field(default=60, ge=1, le=100)
+    tactical_quality: int | None = Field(default=None, ge=1, le=100)
+    adaptability: int | None = Field(default=None, ge=1, le=100)
+    game_management: int | None = Field(default=None, ge=1, le=100)
 
     @model_validator(mode="after")
     def validate_tactics(self) -> TeamTacticalPlanInput:
@@ -149,21 +149,21 @@ class MatchTeamIdentityInput(CommonSchema):
 
 
 class MatchClubContextInput(CommonSchema):
-    club_tier: int = Field(default=60, ge=1, le=100)
-    competition_tier: int = Field(default=60, ge=1, le=100)
-    team_chemistry: int = Field(default=62, ge=1, le=100)
-    recent_form: int = Field(default=58, ge=1, le=100)
-    morale: int = Field(default=60, ge=1, le=100)
-    motivation: int = Field(default=60, ge=1, le=100)
-    fatigue_load: int = Field(default=36, ge=0, le=100)
-    travel_load: int = Field(default=28, ge=0, le=100)
-    rivalry_intensity: int = Field(default=0, ge=0, le=100)
-    schedule_pressure: int = Field(default=34, ge=0, le=100)
-    expectation_level: int = Field(default=55, ge=0, le=100)
-    fan_pressure: int = Field(default=48, ge=0, le=100)
-    media_pressure: int = Field(default=45, ge=0, le=100)
-    culture_score: int = Field(default=55, ge=0, le=100)
-    brand_strength: int = Field(default=50, ge=0, le=100)
+    club_tier: int | None = Field(default=None, ge=1, le=100)
+    competition_tier: int | None = Field(default=None, ge=1, le=100)
+    team_chemistry: int | None = Field(default=None, ge=1, le=100)
+    recent_form: int | None = Field(default=None, ge=1, le=100)
+    morale: int | None = Field(default=None, ge=1, le=100)
+    motivation: int | None = Field(default=None, ge=1, le=100)
+    fatigue_load: int | None = Field(default=None, ge=0, le=100)
+    travel_load: int | None = Field(default=None, ge=0, le=100)
+    rivalry_intensity: int | None = Field(default=None, ge=0, le=100)
+    schedule_pressure: int | None = Field(default=None, ge=0, le=100)
+    expectation_level: int | None = Field(default=None, ge=0, le=100)
+    fan_pressure: int | None = Field(default=None, ge=0, le=100)
+    media_pressure: int | None = Field(default=None, ge=0, le=100)
+    culture_score: int | None = Field(default=None, ge=0, le=100)
+    brand_strength: int | None = Field(default=None, ge=0, le=100)
 
 
 class MatchTeamInput(CommonSchema):

@@ -14,7 +14,6 @@ import {
   lineupRoleLabels,
   lineupFormationRows,
   lineupSheet,
-  normalizeLineupPlan,
   normalizeLineupSquad,
   type LineupPlayer,
 } from "./lineupModel";
@@ -32,44 +31,31 @@ export default function Lineup() {
   const [saving, setSaving] = useState(false);
   const initializedClubRef = useRef<string | null>(null);
   const rosterQuery = useQuery({
-    queryKey: ["lineup-squad", clubId],
+    queryKey: ["lineup-editor", clubId],
     queryFn: async () => {
       const clubDetail = (await api.get("/owner/clubs/" + encodeURIComponent(String(clubId)))).data;
-      return normalizeLineupSquad({
-        items: (clubDetail.squad || []).map((player: any) => ({
-          player_id: player.id,
-          player_name: player.name,
-          position: player.position,
-          rating: player.rating,
-          portrait_url: player.portrait_url,
-          squad_status: player.squad_status,
-          is_regen: player.is_regen,
-          age: player.age,
-          minutes: player.minutes,
-        })),
-      });
+      return {
+        squad: normalizeLineupSquad({
+          items: (clubDetail.squad || []).map((player: any) => ({
+            player_id: player.id,
+            player_name: player.name,
+            position: player.position,
+            rating: player.rating,
+            portrait_url: player.portrait_url,
+            squad_status: player.squad_status,
+            is_regen: player.is_regen,
+            age: player.age,
+            minutes: player.minutes,
+          })),
+        }),
+        filedIds: (clubDetail.matchday_xi || []).map((player: any) => String(player.id)),
+        filedBench: (clubDetail.matchday_bench || []).map((player: any) => String(player.id)),
+        filedFormation: clubDetail.matchday_formation || "",
+      };
     },
     enabled: Boolean(clubId),
   });
-  const planQuery = useQuery({
-    queryKey: ["lineup-plan", clubId],
-    queryFn: async () => {
-      try {
-        return normalizeLineupPlan(
-          (await api.get("/clubs/" + encodeURIComponent(String(clubId)) + "/lineup")).data,
-        );
-      } catch {
-        return normalizeLineupPlan({
-          club_id: clubId,
-          formation: "4-3-3",
-          starter_player_ids: [],
-          bench_player_ids: [],
-        });
-      }
-    },
-    enabled: Boolean(clubId),
-  });
-  const players: LineupPlayer[] = rosterQuery.data || [];
+  const players: LineupPlayer[] = rosterQuery.data?.squad || [];
   const firstTeam = players.filter((player) => lineupSheet(player) === "first_team");
   const reserve = players.filter((player) => lineupSheet(player) === "reserve");
   const benchPool = reserve.length
@@ -83,14 +69,13 @@ export default function Lineup() {
   );
 
   useEffect(() => {
-    if (!planQuery.data || initializedClubRef.current === clubId) return;
+    if (!rosterQuery.data || initializedClubRef.current === clubId) return;
     initializedClubRef.current = clubId || null;
-    setFormation(planQuery.data.formation);
-    setStarters(
-      [...planQuery.data.starter_player_ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11),
-    );
-    setBench(planQuery.data.bench_player_ids);
-  }, [clubId, planQuery.data]);
+    const filedIds = rosterQuery.data.filedIds || [];
+    setFormation(rosterQuery.data.filedFormation || "4-3-3");
+    setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
+    setBench(rosterQuery.data.filedBench || []);
+  }, [clubId, rosterQuery.data]);
 
   const setStarter = (index: number, playerId: string) => {
     setStarters((current) =>
@@ -139,16 +124,28 @@ export default function Lineup() {
     }
     setSaving(true);
     try {
-      const saved = (await api.put("/clubs/" + encodeURIComponent(clubId) + "/lineup", payload))
-        .data;
-      queryClient.setQueryData(["lineup-plan", clubId], normalizeLineupPlan(saved));
       const filed = (
         await api.post("/owner/clubs/" + encodeURIComponent(clubId) + "/lineup-preference", {
           preferred_formation: formation,
           preferred_player_ids: payload.starter_player_ids,
+          preferred_bench_ids: payload.bench_player_ids,
           note: "Owner lineup request from the first-team sheet",
         })
       ).data;
+      const filedIds = filed?.manager_selection?.starting_xi_ids || payload.starter_player_ids;
+      const filedBench = filed?.manager_selection?.bench_ids || payload.bench_player_ids;
+      setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
+      setBench(filedBench);
+      queryClient.setQueryData(["lineup-editor", clubId], (current: any) => ({
+        ...(current || {}),
+        filedIds,
+        filedBench,
+        filedFormation: formation,
+      }));
+      queryClient.setQueryData(["lineup-squad", clubId], (current: any) => {
+        if (!current || Array.isArray(current)) return current;
+        return { ...current, ownerBook: true, filedIds, filedBench, filedFormation: formation };
+      });
       const verdict = filed?.manager_selection?.verdict_reason;
       toast.success(verdict || "The first-team manager filed this eleven.");
     } catch (error) {
@@ -182,11 +179,10 @@ export default function Lineup() {
     );
   }
 
-  if (rosterQuery.isLoading || planQuery.isLoading)
-    return <Loading label="Loading lineup and squad" />;
+  if (rosterQuery.isLoading) return <Loading label="Loading lineup and squad" />;
 
   if (rosterQuery.isError && !rosterQuery.data) {
-    const message = rosterQuery.error ? errMsg(rosterQuery.error) : errMsg(planQuery.error);
+    const message = rosterQuery.error ? errMsg(rosterQuery.error) : "The filed eleven could not be loaded.";
     return (
       <div className="space-y-6">
         <PageHeader
@@ -201,7 +197,6 @@ export default function Lineup() {
               variant="secondary"
               onClick={() => {
                 void rosterQuery.refetch();
-                void planQuery.refetch();
               }}
             >
               Retry

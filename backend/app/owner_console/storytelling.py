@@ -1428,21 +1428,30 @@ def gift_asset_to_squad_player(
         facs = dict(state.facilities_json or {})
         exec_staff = dict(facs.get("_executive_staff") or {})
         target_staff = exec_staff.get(role)
-        if not target_staff:
-            if role == "first_team_manager":
-                target_staff = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
-            else:
-                candidate = next((c for c in engine.EXECUTIVE_STAFF_CATALOG if c["role"] == role), None)
-                target_staff = (
-                    dict(candidate)
-                    if candidate
-                    else {"id": f"staff_{role}", "name": role.replace("_", " ").title(), "role": role}
-                )
+        if role == "first_team_manager" and not isinstance(target_staff, dict):
+            target_staff = dict(state.manager_json or {})
+        if not isinstance(target_staff, dict):
+            target_staff = {}
+        seat_name = str(target_staff.get("name") or "").strip()
+        seat_empty = (
+            not seat_name
+            or target_staff.get("is_vacant")
+            or target_staff.get("is_default")
+            or target_staff.get("manager_id") == "gtex-staff-coach"
+            or "vacant" in seat_name.lower()
+        )
+        if seat_empty:
+            raise OwnerError(
+                "staff_seat_vacant",
+                400,
+                "That staff seat is empty. Appoint someone before sending a gift.",
+            )
 
         mood_boost = int(item.get("staff_mood_boost", 15))
         loyalty_boost = int(item.get("staff_loyalty_boost", 3))
-        target_staff["mood"] = min(100, int(target_staff.get("mood", 70)) + mood_boost)
-        target_staff["loyalty"] = min(20, int(target_staff.get("loyalty", 12)) + loyalty_boost)
+        engine.apply_mood_delta(target_staff, mood_boost)
+        if target_staff.get("loyalty") is not None:
+            target_staff["loyalty"] = min(20, int(target_staff["loyalty"]) + loyalty_boost)
 
         if role == "first_team_manager":
             state.manager_json = target_staff
@@ -1947,12 +1956,18 @@ def build_club_story(session: Session, user_id: str, club_id: str) -> dict[str, 
 
     relationships = {
         "manager": {
-            "name": manager_data.get("name") or "First Team Manager",
-            "mood": manager_data.get("mood", 70),
-            "loyalty": manager_data.get("loyalty", 12),
-            "tactical_preference": manager_data.get("tactical_preference", "Balanced Possession"),
-            "temperament": manager_data.get("temperament", "ambitious"),
-            "relationship_status": "strong" if manager_data.get("mood", 70) >= 65 else "steady",
+            "name": manager_data.get("name") or "Seat empty",
+            "mood": manager_data.get("mood"),
+            "loyalty": manager_data.get("loyalty"),
+            "tactical_preference": manager_data.get("tactical_preference") or "Not filed",
+            "temperament": manager_data.get("temperament") or "Not filed",
+            "relationship_status": (
+                "not filed"
+                if manager_data.get("mood") is None
+                else "strong"
+                if int(manager_data.get("mood")) >= 65
+                else "steady"
+            ),
         },
         "players": [
             {
@@ -2340,13 +2355,22 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
 
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    stored_mgr = dict(state.manager_json or {})
+    mgr_name_raw = str(stored_mgr.get("name") or "").strip()
+    mgr_appointed = bool(
+        mgr_name_raw
+        and not stored_mgr.get("is_vacant")
+        and not stored_mgr.get("is_default")
+        and stored_mgr.get("manager_id") != "gtex-staff-coach"
+        and "vacant" not in mgr_name_raw.lower()
+    )
+    mgr = stored_mgr if mgr_appointed else {}
     squad_players = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all())
 
     def _shift_exec_mood(role_key: str, delta: int) -> None:
         if role_key in exec_staff and isinstance(exec_staff[role_key], dict):
             st = dict(exec_staff[role_key])
-            st["mood"] = int(engine.clamp(int(st.get("mood", 75)) + delta, 0, 100))
+            engine.apply_mood_delta(st, delta)
             exec_staff[role_key] = st
 
     outcome_notes: list[str] = []
@@ -2371,7 +2395,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
             memo="Boardroom dilemma: GM wage cap efficiency rebate",
         )
         _shift_exec_mood("general_manager", 8)
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) - 4, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, -4)
         outcome_notes.append(
             "Enforced GM's wage discipline (+500 GTEX treasury efficiency, +8 GM mood, -4 Manager mood)."
         )
@@ -2409,7 +2434,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
     elif choice_id == "back_manager_target":
         for p in squad_players:
             p.morale = int(engine.clamp(p.morale + 6, 0, 100))
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 10, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, 10)
         _shift_exec_mood("general_manager", -4)
         outcome_notes.append(
             "Backed First-Team Manager's squad priority (+6 Squad Morale, +10 Manager mood, -4 GM mood)."
@@ -2462,7 +2488,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
                 memo="Boardroom dilemma: performance-linked incentive compromise",
             )
         _shift_exec_mood("general_manager", 5)
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 5, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, 5)
         for p in squad_players:
             p.morale = int(engine.clamp(p.morale + 4, 0, 100))
         state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
@@ -2470,7 +2497,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
         outcome_notes.append("Funded performance-linked clause (+5 GM & Manager mood, +4 Squad Morale, +1 Prestige).")
     elif choice_id == "mandate_youth_minutes":
         _shift_exec_mood("head_of_youth_development", 10)
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) - 3, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, -3)
         for p in squad_players:
             if p.is_regen:
                 p.morale = int(engine.clamp(p.morale + 8, 0, 100))
@@ -2481,7 +2509,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
         service.sync_club_prestige_to_reputation(session, club_id, state.prestige)
         outcome_notes.append("Mandated youth pathway minutes (+10 HOYD mood, +8 Regen morale, +1 Prestige).")
     elif choice_id == "prioritize_senior_results":
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 8, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, 8)
         _shift_exec_mood("head_of_youth_development", -4)
         for p in squad_players:
             if not p.is_regen:
@@ -2490,7 +2519,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
     else:
         _shift_exec_mood("head_of_youth_development", 5)
         _shift_exec_mood("general_manager", 5)
-        mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 70)) + 5, 0, 100))
+        if mgr_appointed:
+            engine.apply_mood_delta(mgr, 5)
         for p in squad_players:
             p.morale = int(engine.clamp(p.morale + 4, 0, 100))
         state.prestige = int(engine.clamp(state.prestige + 1, 0, 100))
@@ -2507,7 +2537,8 @@ def resolve_briefing_dilemma(session: Session, user_id: str, club_id: str, choic
     facs["_executive_staff"] = exec_staff
     facs["_daily_briefing"] = briefing
     state.facilities_json = facs
-    state.manager_json = mgr
+    if mgr_appointed:
+        state.manager_json = mgr
     session.flush()
 
     refreshed = get_daily_briefing(session, user_id, club_id, force_refresh=True)

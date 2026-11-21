@@ -195,7 +195,7 @@ def test_router_returns_broadcast_fan_identity_and_media_views(session_factory, 
     identity_payload = identity_response.json()
     assert identity_payload["club_id"] == "home"
     assert identity_payload["philosophy"] == "youth_development"
-    assert identity_payload["average_identity_fit"] > 0
+    assert identity_payload["average_identity_fit"] is None
 
     media_response = client.get("/media", params={"match_id": "router-match", "limit": 10})
     assert media_response.status_code == 200, media_response.text

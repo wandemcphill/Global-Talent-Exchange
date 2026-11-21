@@ -37,7 +37,6 @@ function Balances({ w, rates }: any) {
           subtitle="Unified GTEX Coin & Commercial Liquidity Curve"
           amount={Number(w.gtex_total || 0)}
           currency="GTX"
-          deltaLabel="▲ LIVE LIQUIDITY PULSE"
         />
       </div>
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">

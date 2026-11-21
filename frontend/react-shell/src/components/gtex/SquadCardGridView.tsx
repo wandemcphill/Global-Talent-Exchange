@@ -31,8 +31,9 @@ export function SquadCardGridView({ squad, onSelectPlayer, targetPlayerId }: Squ
       {squad.map((p: any) => {
         const pid = String(p.player_ref || p.player_id || p.id);
         const isTarget = targetPlayerId && String(targetPlayerId) === pid;
-        const rating = Number(p.rating || p.overall_rating || 72);
-        const tier = rating >= 85 ? "legendary" : rating >= 78 ? "elite" : "standard";
+        const rating =
+          p.rating == null && p.overall_rating == null ? undefined : Number(p.rating || p.overall_rating);
+        const tier = rating == null ? "standard" : rating >= 85 ? "legendary" : rating >= 78 ? "elite" : "standard";
 
         return (
           <div
@@ -54,10 +55,10 @@ export function SquadCardGridView({ squad, onSelectPlayer, targetPlayerId }: Squ
               badge={p.archetype || (p.is_regen ? "ACADEMY REGEN" : undefined)}
               onClick={() => onSelectPlayer(p)}
               stats={[
-                { k: "Morale", v: p.morale || 85 },
-                { k: "Value", v: fmt(p.value_coin || 0, 1) },
-                { k: "Wage", v: `${fmt(p.wage || 0)}/m` },
-                { k: "Form", v: p.average_rating || 7.0 },
+                { k: "Morale", v: p.morale == null ? "—" : p.morale },
+                { k: "Value", v: p.value_coin == null ? "—" : fmt(p.value_coin, 1) },
+                { k: "Wage", v: p.wage == null ? "—" : `${fmt(p.wage)}/m` },
+                { k: "Form", v: p.average_rating == null ? "—" : p.average_rating },
               ]}
               footer={
                 <Btn

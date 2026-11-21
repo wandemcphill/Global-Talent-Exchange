@@ -148,12 +148,13 @@ describe("React lineup page", () => {
     const save = container.querySelector('[data-testid="save-lineup-button"]') as HTMLButtonElement;
     await act(async () => save.dispatchEvent(new MouseEvent("click", { bubbles: true })));
 
-    expect(api.put).toHaveBeenCalledTimes(1);
-    const [url, payload] = (api.put as any).mock.calls[0];
-    expect(url).toBe("/clubs/club-1/lineup");
-    expect(payload.formation).toBe("4-3-3");
-    expect(payload.starter_player_ids).toHaveLength(11);
-    expect(payload.starter_player_ids[0]).toBe("gk-1");
-    expect(new Set(payload.starter_player_ids).size).toBe(11);
+    expect(api.put).not.toHaveBeenCalled();
+    expect(api.post).toHaveBeenCalledTimes(1);
+    const [url, payload] = (api.post as any).mock.calls[0];
+    expect(url).toBe("/owner/clubs/club-1/lineup-preference");
+    expect(payload.preferred_formation).toBe("4-3-3");
+    expect(payload.preferred_player_ids).toHaveLength(11);
+    expect(payload.preferred_player_ids[0]).toBe("gk-1");
+    expect(new Set(payload.preferred_player_ids).size).toBe(11);
   });
 });

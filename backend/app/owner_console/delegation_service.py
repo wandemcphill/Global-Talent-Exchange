@@ -630,7 +630,10 @@ def evaluate_action_authority(
         is_appointed = False
 
     staff_name = staff_member.get("name") or ROLE_LABELS.get(target_role, target_role)
-    staff_rating = int(staff_member.get("rating") or staff_member.get("tactical_rating") or 65)
+    raw_staff_rating = staff_member.get("rating")
+    if raw_staff_rating is None:
+        raw_staff_rating = staff_member.get("tactical_rating")
+    staff_rating = int(raw_staff_rating) if raw_staff_rating is not None else None
 
     # Calculate competence impact
     competence_impact = _calculate_staff_competence_impact(
@@ -723,46 +726,74 @@ def _calculate_staff_competence_impact(
     Competence calculations are strictly informational decision-support metrics and do not modify core
     game invariants or bypass financial ledger authorization.
     """
-    rating = int(staff_member.get("rating") or staff_member.get("tactical_rating") or 65)
+    raw_rating = staff_member.get("rating")
+    if raw_rating is None:
+        raw_rating = staff_member.get("tactical_rating")
+    rating = int(raw_rating) if raw_rating is not None else None
     impact: dict[str, Any] = {
         "rating": rating,
         "is_appointed_staff": is_appointed,
         "is_informational_only": True,
         "advisory_notice": "Staff competence metrics provide informational advisory guidance for executive decision-making and do not override platform rules or mutate ledger balances.",
-        "scoring_methodology": f"Calculated using {'actual appointed staff attributes' if is_appointed else 'baseline catalog attributes'} for {role} (rating={rating}).",
+        "scoring_methodology": (
+            f"Calculated using actual appointed staff attributes for {role} (rating={rating})."
+            if rating is not None
+            else f"No competence rating is filed for {role}."
+        ),
     }
 
+    def _skill(*keys: str) -> int | None:
+        for key in keys:
+            if staff_member.get(key) is not None:
+                return int(staff_member[key])
+        return None
+
     if role == "general_manager":
-        nego = int(staff_member.get("negotiation") or staff_member.get("ambition") or (rating // 5))
-        discount_pct = min(15, max(3, round((nego / 20) * 15, 1)))
-        impact["negotiation_discount_pct"] = discount_pct
-        impact["summary"] = (
-            f"GM {staff_member.get('name', 'Appointee')} achieved a {discount_pct}% cost efficiency on negotiation."
-        )
+        nego = _skill("negotiation", "ambition")
+        if nego is None:
+            impact["negotiation_discount_pct"] = None
+            impact["summary"] = "Negotiation score is not filed."
+        else:
+            discount_pct = min(15, round((nego / 20) * 15, 1))
+            impact["negotiation_discount_pct"] = discount_pct
+            impact["summary"] = (
+                f"GM {staff_member.get('name') or 'Appointee'} negotiation score {nego} gives a {discount_pct}% efficiency."
+            )
     elif role == "first_team_manager":
-        tactics = int(staff_member.get("tactical_flexibility") or (rating // 5))
-        morale_boost = 2 if tactics >= 18 else (1 if tactics >= 14 else 0)
+        tactics = _skill("tactical_flexibility")
         impact["tactical_synergy_boost"] = tactics
-        impact["morale_boost"] = morale_boost
-        impact["summary"] = f"Manager tactical flexibility ({tactics}/20) applied to selection."
-    elif role == "head_of_youth_development":
-        youth = int(staff_member.get("youth_development") or (rating // 5))
-        potential_reveal_pct = min(100, 50 + youth * 2.5)
-        impact["potential_reveal_accuracy"] = potential_reveal_pct
-        impact["summary"] = f"HoYD youth scouting accuracy at {potential_reveal_pct}%."
-    elif role == "chief_scout":
-        scouting = int(staff_member.get("scouting_accuracy") or (rating // 5))
-        impact["scouting_accuracy_score"] = scouting
-        impact["summary"] = f"Scout accuracy rating {scouting}/20."
-    elif role == "medical_director":
-        medical = int(staff_member.get("medical_expertise") or (rating // 5))
-        recovery_pct = min(40, medical * 2)
-        impact["medical_recovery_pct"] = recovery_pct
+        impact["morale_boost"] = None if tactics is None else (2 if tactics >= 18 else (1 if tactics >= 14 else 0))
         impact["summary"] = (
-            f"Medical Director expertise ({medical}/20) provides {recovery_pct}% accelerated rehabilitation."
+            "Tactical flexibility is not filed."
+            if tactics is None
+            else f"Manager tactical flexibility ({tactics}/20) applied to selection."
+        )
+    elif role == "head_of_youth_development":
+        youth = _skill("youth_development")
+        impact["potential_reveal_accuracy"] = None if youth is None else min(100, 50 + youth * 2.5)
+        impact["summary"] = (
+            "Youth development score is not filed."
+            if youth is None
+            else f"HoYD youth scouting accuracy at {impact['potential_reveal_accuracy']}%."
+        )
+    elif role == "chief_scout":
+        scouting = _skill("scouting_accuracy")
+        impact["scouting_accuracy_score"] = scouting
+        impact["summary"] = (
+            "Scouting accuracy is not filed." if scouting is None else f"Scout accuracy rating {scouting}/20."
+        )
+    elif role == "medical_director":
+        medical = _skill("medical_expertise")
+        impact["medical_recovery_pct"] = None if medical is None else min(40, medical * 2)
+        impact["summary"] = (
+            "Medical expertise is not filed."
+            if medical is None
+            else f"Medical Director expertise ({medical}/20) provides {impact['medical_recovery_pct']}% accelerated rehabilitation."
         )
     else:
-        impact["summary"] = f"Staff competence rating {rating}/100 evaluated."
+        impact["summary"] = (
+            f"Staff competence rating {rating}/100 evaluated." if rating is not None else "Staff competence rating is not filed."
+        )
 
     return impact
 
@@ -1223,7 +1254,7 @@ def get_club_org_structure(session: Session, club_id: str, owner_user_id: str) -
                     "role_key": "owner",
                     "title": "Club Owner & Chairman",
                     "appointee_name": state.club_name + " Executive Ownership",
-                    "rating": 100,
+                    "rating": None,
                     "is_appointed": True,
                     "can_fire": False,
                 }
@@ -1238,7 +1269,7 @@ def get_club_org_structure(session: Session, club_id: str, owner_user_id: str) -
                     "title": role_title,
                     "appointee_name": staff_data.get("name"),
                     "staff_id": staff_data.get("id") or staff_data.get("staff_id"),
-                    "rating": int(staff_data.get("rating") or 65),
+                    "rating": int(staff_data["rating"]) if staff_data.get("rating") is not None else None,
                     "temperament": staff_data.get("temperament"),
                     "specialty": staff_data.get("specialty"),
                     "salary_gtex": float(staff_data.get("salary_gtex") or 0.0),
@@ -1252,7 +1283,7 @@ def get_club_org_structure(session: Session, club_id: str, owner_user_id: str) -
                     "role_key": role_key,
                     "title": role_title,
                     "appointee_name": f"Vacant ({role_title})",
-                    "rating": 50,
+                    "rating": None,
                     "is_appointed": False,
                     "can_fire": False,
                 }

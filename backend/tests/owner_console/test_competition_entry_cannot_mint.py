@@ -167,3 +167,74 @@ def test_two_clubs_of_one_owner_are_rejected_even_if_allow_same_owner_requested(
         assert stored.value.code == "same_owner_bracket_blocked"
         assert _forbidden_entry_events(session, first_club_id, second_club_id, competition_id=comp.id) == []
         session.rollback()
+
+
+def test_gtex_competition_enters_free_and_plays_the_filed_eleven(app_session_factory, auth_user_factory) -> None:
+    user = auth_user_factory(suffix=f"gtex-play-{uuid4().hex[:8]}")
+    with app_session_factory() as session:
+        club_id = _formed_club(session, user["user_id"], "GTEX Rail FC")
+        state = service.get_state(session, club_id)
+        players = service.squad(session, club_id)
+        filed = [str(player.id) for player in players if (player.personality_json or {}).get("squad_status") == "first_team"][:11]
+        facilities = dict(state.facilities_json or {})
+        facilities["manager_selection"] = {
+            "starting_xi_ids": filed,
+            "bench_ids": [],
+            "formation": "4-3-3",
+        }
+        state.facilities_json = facilities
+        comp = OwnerCompetition(
+            name="GTEX Foundation League",
+            host_type="gtex",
+            format="league",
+            tier="Foundation",
+            entry_fee=Decimal("500"),
+            sponsored_pool=Decimal("1000"),
+            max_clubs=2,
+            allow_same_owner=False,
+            prize_sensitive=False,
+            platform_fee_bps=0,
+            status="open",
+            description="Free entry. GTEX funds the purse.",
+        )
+        session.add(comp)
+        session.flush()
+
+        balance_before = ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)
+        comps.enter_competition(session, user["user_id"], comp.id, club_id)
+        assert comp.entry_fee == Decimal("0")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) == balance_before
+        assert _forbidden_entry_events(session, club_id, competition_id=comp.id) == []
+        view = comps.comp_dict(session, comp, user["user_id"])
+        assert view["entry_fee"] == "0"
+        assert Decimal(view["prize_pool"]) == Decimal("1000")
+        assert view["prize_funded_by"] == "gtex"
+        assert view["execution_model"] == "owner_simulator"
+        assert view["history_read_only"] is False
+
+        played = comps.play_next(session, user["user_id"], comp.id, club_id, "balanced", "strongest")
+        match = played["match"]
+        assert match["status"] == "played"
+        assert club_id in (match["home_club_id"], match["away_club_id"])
+        funding = session.scalar(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type == "gtex_prize_funding",
+                LedgerEvent.related_object_id == comp.id,
+            )
+        )
+        assert funding is not None
+        assert funding.gross_amount == Decimal("1000.00")
+        assert funding.source_account == ledger.COMPETITION_PRIZE_POOL
+        assert funding.destination_account == comps.comp_account(comp.id)
+        prize_rows = session.scalars(
+            select(LedgerEvent).where(
+                LedgerEvent.event_type.in_(("competition_prize", "competition_unclaimed_prize")),
+                LedgerEvent.related_object_id == comp.id,
+            )
+        ).all()
+        paid = sum((row.gross_amount for row in prize_rows), Decimal("0.00"))
+        remaining = ledger.balance(session, comps.comp_account(comp.id), ledger.GTEX)
+        assert paid + remaining == Decimal("1000.00")
+        assert ledger.balance(session, ledger.club_account(club_id), ledger.GTEX) >= balance_before
+        assert _forbidden_entry_events(session, club_id, competition_id=comp.id) == []
+        session.rollback()

@@ -1578,15 +1578,26 @@ def _ensure_default_communications(
     now_iso = datetime.now(timezone.utc).isoformat()
 
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
-    gm = exec_staff.get("general_manager") or {"name": "Dayo Adeleke", "role": "general_manager", "mood": 78}
-    hoyd = exec_staff.get("head_of_youth_development") or {
-        "name": "Femi Ogunleye",
-        "role": "head_of_youth_development",
-        "mood": 82,
-    }
-    scout = exec_staff.get("chief_scout") or {"name": "Kelechi Nwosu", "role": "chief_scout", "mood": 76}
-    med = exec_staff.get("medical_director") or {"name": "Dr. Amara Okafor", "role": "medical_director", "mood": 84}
+    mgr = dict(state.manager_json or {})
+    if (
+        not str(mgr.get("name") or "").strip()
+        or mgr.get("is_vacant")
+        or mgr.get("is_default")
+        or mgr.get("manager_id") == "gtex-staff-coach"
+    ):
+        mgr = {}
+    gm = exec_staff.get("general_manager") or {}
+    if not str(gm.get("name") or "").strip() or gm.get("is_vacant"):
+        gm = {}
+    hoyd = exec_staff.get("head_of_youth_development") or {}
+    if not str(hoyd.get("name") or "").strip() or hoyd.get("is_vacant"):
+        hoyd = {}
+    scout = exec_staff.get("chief_scout") or {}
+    if not str(scout.get("name") or "").strip() or scout.get("is_vacant"):
+        scout = {}
+    med = exec_staff.get("medical_director") or {}
+    if not str(med.get("name") or "").strip() or med.get("is_vacant"):
+        med = {}
 
     threads: dict[str, dict[str, Any]] = dict(facs.get("_club_threads") or {})
     if not threads:
@@ -1623,7 +1634,7 @@ def _ensure_default_communications(
             "channel_type": "direct",
             "participant_type": "staff",
             "participant_id": "general_manager",
-            "participant_name": gm.get("name", "Dayo Adeleke"),
+            "participant_name": gm.get("name", "Seat empty"),
             "participant_role": "General Manager",
             "subject": "Treasury Allocation, Sponsors & Campus ROI",
             "unread_count": 1,
@@ -1631,7 +1642,7 @@ def _ensure_default_communications(
             "messages": [
                 {
                     "id": f"m_gm_{club_id}_1",
-                    "sender_name": gm.get("name", "Dayo Adeleke"),
+                    "sender_name": gm.get("name", "Seat empty"),
                     "sender_role": "General Manager",
                     "sender_type": "staff",
                     "body": (
@@ -1648,7 +1659,7 @@ def _ensure_default_communications(
             "channel_type": "direct",
             "participant_type": "staff",
             "participant_id": "head_of_youth_development",
-            "participant_name": hoyd.get("name", "Femi Ogunleye"),
+            "participant_name": hoyd.get("name", "Seat empty"),
             "participant_role": "Head of Youth Development",
             "subject": "Academy Regen Pathway & Scholar Development",
             "unread_count": 0,
@@ -1656,7 +1667,7 @@ def _ensure_default_communications(
             "messages": [
                 {
                     "id": f"m_hoyd_{club_id}_1",
-                    "sender_name": hoyd.get("name", "Femi Ogunleye"),
+                    "sender_name": hoyd.get("name", "Seat empty"),
                     "sender_role": "Head of Youth Development",
                     "sender_type": "staff",
                     "body": (
@@ -1673,7 +1684,7 @@ def _ensure_default_communications(
             "channel_type": "direct",
             "participant_type": "staff",
             "participant_id": "chief_scout",
-            "participant_name": scout.get("name", "Kelechi Nwosu"),
+            "participant_name": scout.get("name", "Seat empty"),
             "participant_role": "Chief Scout",
             "subject": "Regional Recruitment & Watchlist Dossiers",
             "unread_count": 0,
@@ -1681,7 +1692,7 @@ def _ensure_default_communications(
             "messages": [
                 {
                     "id": f"m_scout_{club_id}_1",
-                    "sender_name": scout.get("name", "Kelechi Nwosu"),
+                    "sender_name": scout.get("name", "Seat empty"),
                     "sender_role": "Chief Scout",
                     "sender_type": "staff",
                     "body": "Director, we have updated the confidential scouting watchlist with two high-ceiling regional talents.",
@@ -1695,7 +1706,7 @@ def _ensure_default_communications(
             "channel_type": "direct",
             "participant_type": "staff",
             "participant_id": "medical_director",
-            "participant_name": med.get("name", "Dr. Amara Okafor"),
+            "participant_name": med.get("name", "Seat empty"),
             "participant_role": "Medical Director",
             "subject": "Hydrotherapy Protocols & Squad Load Management",
             "unread_count": 0,
@@ -1703,7 +1714,7 @@ def _ensure_default_communications(
             "messages": [
                 {
                     "id": f"m_med_{club_id}_1",
-                    "sender_name": med.get("name", "Dr. Amara Okafor"),
+                    "sender_name": med.get("name", "Seat empty"),
                     "sender_role": "Medical Director",
                     "sender_type": "staff",
                     "body": "Cryo and hydrotherapy recovery sessions have kept hamstring fatigue markers well below league thresholds.",
@@ -1744,7 +1755,7 @@ def _ensure_default_communications(
         staff_room = [
             {
                 "id": f"sr_{club_id}_1",
-                "sender_name": gm.get("name", "Dayo Adeleke"),
+                "sender_name": gm.get("name", "Seat empty"),
                 "sender_role": "General Manager",
                 "department": "Executive Boardroom",
                 "body": f"World Day {world_day} alignment: Treasury and wage ratio remain compliant with GTEX financial governance.",
@@ -1753,7 +1764,7 @@ def _ensure_default_communications(
             },
             {
                 "id": f"sr_{club_id}_2",
-                "sender_name": med.get("name", "Dr. Amara Okafor"),
+                "sender_name": med.get("name", "Seat empty"),
                 "sender_role": "Medical Director",
                 "department": "Sports Science & Medical",
                 "body": "Post-training telemetry cleared all starters for high-tempo tactical drills tomorrow morning.",
@@ -1762,7 +1773,7 @@ def _ensure_default_communications(
             },
             {
                 "id": f"sr_{club_id}_3",
-                "sender_name": hoyd.get("name", "Femi Ogunleye"),
+                "sender_name": hoyd.get("name", "Seat empty"),
                 "sender_role": "Head of Youth Development",
                 "department": "Youth Academy",
                 "body": "Two academy regens have requested additional finishing sessions with the first-team coaching staff.",
@@ -1844,6 +1855,18 @@ def _ensure_default_communications(
             }
         ]
 
+    _empty_speakers = {"", "Seat empty", "First-Team Manager", "General Manager", "HOYD"}
+    threads = {
+        key: thread
+        for key, thread in threads.items()
+        if str(thread.get("participant_name") or "") not in _empty_speakers
+    }
+    staff_room = [item for item in staff_room if str(item.get("sender_name") or "") not in _empty_speakers]
+    squad_room = [item for item in squad_room if str(item.get("sender_name") or "") not in _empty_speakers]
+    for meeting in meetings:
+        meeting["participants"] = [
+            name for name in list(meeting.get("participants") or []) if str(name or "") not in _empty_speakers
+        ]
     facs["_club_threads"] = threads
     facs["_staff_room_feed"] = staff_room
     facs["_squad_room_feed"] = squad_room
@@ -1901,52 +1924,52 @@ def _legacy_get_club_communications_unused(
 
     # Build directory of all contactable staff & players with resolved portraits
     exec_staff = dict(facs.get("_executive_staff") or {})
-    mgr = dict(state.manager_json or engine.manager_profile(engine.DEFAULT_MANAGER))
+    mgr = dict(state.manager_json or {})
     staff_contacts = [
         {
             "contact_id": "staff:first_team_manager",
             "role_key": "first_team_manager",
-            "name": mgr.get("name", "First-Team Manager"),
+            "name": mgr.get("name") or "Seat empty",
             "title": "First-Team Manager",
-            "mood": int(mgr.get("mood", 75)),
-            "loyalty": int(mgr.get("loyalty", 12)),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr.get("name", "Manager")),
+            "mood": mgr.get("mood"),
+            "loyalty": mgr.get("loyalty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_mgr", mgr.get("name") or "Seat empty"),
         },
         {
             "contact_id": "staff:general_manager",
             "role_key": "general_manager",
-            "name": (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke"),
+            "name": (exec_staff.get("general_manager") or {}).get("name") or "Seat empty",
             "title": "General Manager",
-            "mood": int((exec_staff.get("general_manager") or {}).get("mood", 78)),
-            "loyalty": int((exec_staff.get("general_manager") or {}).get("loyalty", 14)),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_gm", "Dayo Adeleke"),
+            "mood": (exec_staff.get("general_manager") or {}).get("mood"),
+            "loyalty": (exec_staff.get("general_manager") or {}).get("loyalty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_gm", "Seat empty"),
         },
         {
             "contact_id": "staff:head_of_youth_development",
             "role_key": "head_of_youth_development",
-            "name": (exec_staff.get("head_of_youth_development") or {}).get("name", "Femi Ogunleye"),
+            "name": (exec_staff.get("head_of_youth_development") or {}).get("name") or "Seat empty",
             "title": "Head of Youth Development",
-            "mood": int((exec_staff.get("head_of_youth_development") or {}).get("mood", 82)),
-            "loyalty": int((exec_staff.get("head_of_youth_development") or {}).get("loyalty", 15)),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_hoyd", "Femi Ogunleye"),
+            "mood": (exec_staff.get("head_of_youth_development") or {}).get("mood"),
+            "loyalty": (exec_staff.get("head_of_youth_development") or {}).get("loyalty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_hoyd", "Seat empty"),
         },
         {
             "contact_id": "staff:chief_scout",
             "role_key": "chief_scout",
-            "name": (exec_staff.get("chief_scout") or {}).get("name", "Kelechi Nwosu"),
+            "name": (exec_staff.get("chief_scout") or {}).get("name") or "Seat empty",
             "title": "Chief Scout",
-            "mood": int((exec_staff.get("chief_scout") or {}).get("mood", 76)),
-            "loyalty": int((exec_staff.get("chief_scout") or {}).get("loyalty", 13)),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_scout", "Kelechi Nwosu"),
+            "mood": (exec_staff.get("chief_scout") or {}).get("mood"),
+            "loyalty": (exec_staff.get("chief_scout") or {}).get("loyalty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_scout", "Seat empty"),
         },
         {
             "contact_id": "staff:medical_director",
             "role_key": "medical_director",
-            "name": (exec_staff.get("medical_director") or {}).get("name", "Dr. Amara Okafor"),
+            "name": (exec_staff.get("medical_director") or {}).get("name") or "Seat empty",
             "title": "Medical Director",
-            "mood": int((exec_staff.get("medical_director") or {}).get("mood", 84)),
-            "loyalty": int((exec_staff.get("medical_director") or {}).get("loyalty", 16)),
-            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_med", "Amara Okafor"),
+            "mood": (exec_staff.get("medical_director") or {}).get("mood"),
+            "loyalty": (exec_staff.get("medical_director") or {}).get("loyalty"),
+            "portrait_url": storytelling.resolve_player_portrait_url(None, "staff_med", "Seat empty"),
         },
     ]
 
@@ -2400,9 +2423,9 @@ def _legacy_schedule_club_meeting_unused(
     boost_log = dict(facs.get("_comms_boost_log") or {})
 
     exec_staff = dict(facs.get("_executive_staff") or {})
-    gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
+    gm_name = (exec_staff.get("general_manager") or {}).get("name", "Seat empty")
     mgr_name = (state.manager_json or {}).get("name", "First-Team Manager")
-    hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name", "Femi Ogunleye")
+    hoyd_name = (exec_staff.get("head_of_youth_development") or {}).get("name", "Seat empty")
 
     parts = participants or ["Club Owner", gm_name, mgr_name]
     outcome = None
@@ -2414,9 +2437,10 @@ def _legacy_schedule_club_meeting_unused(
             for p in squad_players:
                 p.morale = int(engine.clamp(p.morale + 3, 0, 100))
             mgr = dict(state.manager_json or {})
-            mgr["mood"] = int(engine.clamp(int(mgr.get("mood", 72)) + 5, 0, 100))
-            state.manager_json = mgr
-            flag_modified(state, "manager_json")
+            if str(mgr.get("name") or "").strip() and not mgr.get("is_vacant") and not mgr.get("is_default"):
+                mgr["mood"] = int(engine.clamp(int(mgr.get("mood") or 0) + 5, 0, 100))
+                state.manager_json = mgr
+                flag_modified(state, "manager_json")
             boost_log[boost_key] = True
             facs["_comms_boost_log"] = boost_log
             morale_applied = True

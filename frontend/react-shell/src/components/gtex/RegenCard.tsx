@@ -72,10 +72,14 @@ export function formatGtexCoin(val?: number | string): string {
   return num.toLocaleString();
 }
 
-export function RegenPotentialBar({ current, low, high }: { current: number; low: number; high: number }) {
+export function RegenPotentialBar({ current, low, high }: { current: number | null; low: number | null; high: number | null }) {
+  if (current == null && low == null && high == null) {
+    return <div className="mt-3 text-[10px] text-emerald-300/80">Rating and ceiling are not filed.</div>;
+  }
   const min = 40;
   const span = Math.max(1, 99 - min);
-  const pct = (v: number) => `${Math.max(0, Math.min(100, ((v - min) / span) * 100))}%`;
+  const pct = (v: number | null) =>
+    v == null ? "0%" : `${Math.max(0, Math.min(100, ((v - min) / span) * 100))}%`;
   const currPct = pct(current);
   const lowPct = pct(low);
   const highPct = pct(high);
@@ -84,10 +88,10 @@ export function RegenPotentialBar({ current, low, high }: { current: number; low
     <div className="relative mt-3 flex flex-col gap-1 w-full" aria-label={`Current: ${current}, Potential Ceiling: ${low}-${high}`}>
       <div className="flex items-baseline justify-between text-[10px] font-semibold tracking-wider text-emerald-300/80">
         <span className="flex items-center gap-1">
-          CURRENT <span className="gx-mono text-sm font-black text-white">{current}</span>
+          CURRENT <span className="gx-mono text-sm font-black text-white">{current ?? "—"}</span>
         </span>
         <span className="flex items-center gap-1">
-          CEILING <span className="gx-mono text-sm font-black text-amber-300">{low === high ? high : `${low}–${high}`}</span>
+          CEILING <span className="gx-mono text-sm font-black text-amber-300">{low == null && high == null ? "—" : low === high ? high : `${low ?? "—"}–${high ?? "—"}`}</span>
         </span>
       </div>
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-900/80 border border-emerald-500/20">
@@ -110,18 +114,20 @@ export function RegenPotentialBar({ current, low, high }: { current: number; low
 
 export function RegenCard(props: RegenCardProps) {
   const r: Partial<RegenData> = (typeof props.regen === "object" && props.regen !== null) ? props.regen : {};
-  const name = props.name || r.name || "Prospect Regen";
-  const rating = Number(props.rating ?? r.rating ?? r.currentRating ?? 68);
-  const potential = Number(props.potential ?? r.potential ?? Math.min(99, rating + 14));
-  const low = r.potentialLow ?? Math.max(rating, potential - 3);
-  const high = r.potentialHigh ?? Math.max(low, potential + 3);
-  const position = props.position || r.position || "MID";
-  const age = props.age ?? r.age ?? 17;
-  const nationality = props.nationality || r.nationality || "Global Academy";
-  const club = props.club || r.club || "GTEX Academy";
-  const generation = props.generation ?? r.generation ?? 1;
-  const archetype = props.archetype || r.archetype || "Tactical Prospect";
-  const serial = props.serial || r.serial || `RGN-${generation}-${Math.floor(1000 + (rating * 17) % 9000)}`;
+  const name = props.name || r.name || "Unnamed player";
+  const rawRating = props.rating ?? r.rating ?? r.currentRating;
+  const rating = rawRating == null || rawRating === "" ? null : Number(rawRating);
+  const rawPotential = props.potential ?? r.potential;
+  const potential = rawPotential == null || rawPotential === "" ? null : Number(rawPotential);
+  const low = r.potentialLow ?? potential;
+  const high = r.potentialHigh ?? potential;
+  const position = props.position || r.position || "—";
+  const age = props.age ?? r.age ?? "—";
+  const nationality = props.nationality || r.nationality || "—";
+  const club = props.club || r.club || "—";
+  const generation = props.generation ?? r.generation ?? "—";
+  const archetype = props.archetype || r.archetype || "—";
+  const serial = props.serial || r.serial || "—";
   const price = props.price ?? r.price;
   const rawImage = props.image ?? r.image;
   const variant = props.variant || "full";
@@ -306,7 +312,7 @@ export function RegenCard(props: RegenCardProps) {
         </div>
         <div className="flex items-baseline gap-2 text-[11px]">
           <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">Lineage</span>
-          <span className="truncate text-emerald-100 font-medium">{nationality} Founding Cohort</span>
+          <span className="truncate text-emerald-100 font-medium">{nationality}</span>
         </div>
         <div className="flex items-baseline gap-2 text-[11px]">
           <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">Status</span>

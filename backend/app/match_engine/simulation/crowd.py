@@ -13,10 +13,10 @@ class CrowdAtmosphereEngine:
         rivalry_intensity: float,
         is_final: bool,
     ) -> tuple[float, float]:
-        home_fan_pressure = float((home_context or {}).get("fan_pressure", 48)) / 100.0
-        away_fan_pressure = float((away_context or {}).get("fan_pressure", 48)) / 100.0
-        home_brand = float((home_context or {}).get("brand_strength", 50)) / 100.0
-        away_brand = float((away_context or {}).get("brand_strength", 50)) / 100.0
+        home_fan_pressure = self._filed_unit(home_context, "fan_pressure")
+        away_fan_pressure = self._filed_unit(away_context, "fan_pressure")
+        home_brand = self._filed_unit(home_context, "brand_strength")
+        away_brand = self._filed_unit(away_context, "brand_strength")
 
         home = self._clamp(
             0.50
@@ -104,6 +104,12 @@ class CrowdAtmosphereEngine:
 
     def _decay(self, state: TeamRuntimeState) -> None:
         state.crowd_intensity = round(0.5 + ((state.crowd_intensity - 0.5) * 0.94), 3)
+
+    @staticmethod
+    def _filed_unit(context: dict[str, object] | None, key: str) -> float:
+        if not context or context.get(key) is None:
+            return 0.0
+        return float(context[key]) / 100.0
 
     def _clamp(self, value: float, minimum: float, maximum: float) -> float:
         return max(minimum, min(maximum, value))

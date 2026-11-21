@@ -136,11 +136,7 @@ class SimulationMatchmakingService:
         session: Session,
     ) -> FastMatchEntitlementResponse:
         entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
-        quote = EconomyService(session).quote_match_entry(
-            payment_unit=FAST_MATCH_CURRENCY,
-            service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
-        )
-        return self._entitlement_response(entitlement, fee=quote.gross_amount)
+        return self._entitlement_response(entitlement, fee=Decimal("0.0000"))
 
     def create_quick_game(
         self,
@@ -216,32 +212,9 @@ class SimulationMatchmakingService:
 
         if actor is not None and session is not None and not is_live_head_to_head:
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
-            quote = EconomyService(session).quote_match_entry(
-                payment_unit=FAST_MATCH_CURRENCY,
-                service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
-            )
-            fan_coin_entry_fee = quote.gross_amount
-            charge_required_now = self._charge_required(entitlement)
+            fan_coin_entry_fee = Decimal("0.0000")
+            charge_required_now = False
             wallet_ledger_id: str | None = None
-            if charge_required_now and fan_coin_entry_fee > Decimal("0.0000"):
-                payment = EconomyService(session).collect_match_entry(
-                    user=actor,
-                    payment_unit=FAST_MATCH_CURRENCY,
-                    service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
-                    reference=f"fast-match-entry:{match_id}",
-                    external_reference=live_match_key,
-                    description="Fast Match Fan Coin entry fee",
-                    actor=actor,
-                    idempotency_key=f"fast-match-entry:{actor.id}:{match_id}",
-                    metadata={
-                        "fast_match": {
-                            "match_id": match_id,
-                            "live_match_key": live_match_key,
-                            "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
-                        }
-                    },
-                )
-                wallet_ledger_id = payment.transaction_id
 
             replay_payload = MatchSimulationService().build_replay_payload(match_engine_request)
             viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
@@ -254,8 +227,8 @@ class SimulationMatchmakingService:
                 match_id=match_id,
                 live_match_key=live_match_key,
                 result=result,
-                was_free=not charge_required_now,
-                fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
+                was_free=True,
+                fan_coin_charged=Decimal("0.0000"),
                 wallet_ledger_id=wallet_ledger_id,
             )
             settlement_status = (
@@ -321,15 +294,15 @@ class SimulationMatchmakingService:
             ),
             free_matches_remaining=free_matches_remaining,
             free_matches_used=free_matches_used,
-            charge_on_loss=True,
-            charge_required_now=charge_required_now,
+            charge_on_loss=False,
+            charge_required_now=False,
             entry_currency=FAST_MATCH_CURRENCY.value,
             entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
-            fan_coin_entry_fee=fan_coin_entry_fee,
+            fan_coin_entry_fee=Decimal("0.0000"),
             entitlement_status=entitlement_status,
             settlement_status=settlement_status,
             result=result_label,
-            rules_copy="Play free until you lose or reach 10 matches.",
+            rules_copy="Entry is free.",
         )
 
     def settle_live_match(
@@ -381,33 +354,9 @@ class SimulationMatchmakingService:
             result = FastMatchResult.DRAW
 
         live_match_key = f"fast-match:{match_id}"
-        quote = EconomyService(session).quote_match_entry(
-            payment_unit=FAST_MATCH_CURRENCY,
-            service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
-        )
-        fan_coin_entry_fee = quote.gross_amount
-        charge_required_now = self._charge_required(entitlement)
+        fan_coin_entry_fee = Decimal("0.0000")
+        charge_required_now = False
         wallet_ledger_id: str | None = None
-        if charge_required_now and fan_coin_entry_fee > Decimal("0.0000"):
-            payment = EconomyService(session).collect_match_entry(
-                user=actor,
-                payment_unit=FAST_MATCH_CURRENCY,
-                service_key=FAST_MATCH_ENTRY_SERVICE_KEY,
-                reference=f"fast-match-entry:{match_id}",
-                external_reference=live_match_key,
-                description="Live head-to-head Fan Coin entry fee",
-                actor=actor,
-                idempotency_key=f"fast-match-entry:{actor.id}:{match_id}",
-                metadata={
-                    "fast_match": {
-                        "match_id": match_id,
-                        "live_match_key": live_match_key,
-                        "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
-                        "mode": "live_head_to_head",
-                    }
-                },
-            )
-            wallet_ledger_id = payment.transaction_id
 
         settlement = self._settle_fast_match(
             session=session,
@@ -416,8 +365,8 @@ class SimulationMatchmakingService:
             match_id=match_id,
             live_match_key=live_match_key,
             result=result,
-            was_free=not charge_required_now,
-            fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
+            was_free=True,
+            fan_coin_charged=Decimal("0.0000"),
             wallet_ledger_id=wallet_ledger_id,
         )
         session.add(
@@ -965,15 +914,7 @@ class SimulationMatchmakingService:
         else:
             entitlement.losses_count += 1
             entitlement.current_streak = 0
-            if was_free:
-                entitlement.has_lost_free_run = True
-                entitlement.free_eligibility_exhausted = True
-                entitlement.charge_required = True
 
-        if entitlement.free_matches_used >= entitlement.free_match_limit:
-            entitlement.free_eligibility_exhausted = True
-            entitlement.charge_required = True
-            entitlement.free_matches_remaining = 0
         entitlement.last_match_id = match_id
 
     def _entitlement_response(self, entitlement: FastMatchEntitlement, *, fee: Decimal) -> FastMatchEntitlementResponse:

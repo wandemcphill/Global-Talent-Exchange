@@ -98,7 +98,7 @@ const BOARDROOM_PERSONAS: BoardroomPersonaConfig[] = [
   {
     roleKey: "general_manager",
     roleLabel: "General Manager",
-    name: "Dayo Adeleke",
+    name: "Seat empty",
     position: [-2.6, 0, -1.8],
     rotationY: Math.PI / 2,
     suitColor: 0x1e293b, // Charcoal slate
@@ -106,7 +106,7 @@ const BOARDROOM_PERSONAS: BoardroomPersonaConfig[] = [
   {
     roleKey: "first_team_manager",
     roleLabel: "First-Team Manager",
-    name: "Emmanuel Amuneke",
+    name: "Seat empty",
     position: [2.6, 0, -1.8],
     rotationY: -Math.PI / 2,
     suitColor: 0x097969, // Club-accent dark emerald
@@ -114,7 +114,7 @@ const BOARDROOM_PERSONAS: BoardroomPersonaConfig[] = [
   {
     roleKey: "chief_scout",
     roleLabel: "Chief Scout",
-    name: "Kofi Mensah",
+    name: "Seat empty",
     position: [-2.6, 0, 1.8],
     rotationY: Math.PI / 2,
     suitColor: 0x334155, // Steel grey
@@ -122,7 +122,7 @@ const BOARDROOM_PERSONAS: BoardroomPersonaConfig[] = [
   {
     roleKey: "head_of_youth_development",
     roleLabel: "Head of Youth Development",
-    name: "Chidi Eze",
+    name: "Seat empty",
     position: [2.6, 0, 1.8],
     rotationY: -Math.PI / 2,
     suitColor: 0x1e3a8a, // Classic sapphire

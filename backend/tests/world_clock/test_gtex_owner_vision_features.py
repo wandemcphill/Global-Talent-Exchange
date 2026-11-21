@@ -96,7 +96,17 @@ def _seed_club(session: Session, *, prestige: int = 50, cash: int = 100_000) -> 
         club_name="Lagos Sovereign FC",
         stage="active",
         prestige=prestige,
-        manager_json=owner_engine.manager_profile(owner_engine.DEFAULT_MANAGER),
+        manager_json={
+            "manager_id": "mgr_seed_amuneke",
+            "name": "Emmanuel Amuneke",
+            "display_name": "Emmanuel Amuneke",
+            "mood": 70,
+            "loyalty": 12,
+            "is_default": False,
+            "is_appointed": True,
+            "is_vacant": False,
+            "tactical_preference": "possession",
+        },
         facilities_json={"training": 2, "academy": 2, "medical": 2, "stadium": 2, "commercial": 2},
         world_day=10,
         last_tick_at=WORLD_NOW,
@@ -248,7 +258,23 @@ def test_academy_readiness_youth_contract_and_senior_promotion():
     assert ledger.balance(session, ledger.club_account("club-1"), ledger.GTEX) == gtex_before
 
     promo_res = service.academy_promote(session, "user-1", "club-1", prospect.id)
-    assert promo_res["player"]["squad_status"] == "first_team"
+    assert promo_res["status"] == "recommendation_filed"
+    assert promo_res["player"]["squad_status"] != "first_team"
+    service.resolve_item(session, "user-1", promo_res["inbox_item_id"], "accept")
+    session.refresh(prospect)
+    assert service.player_dict(prospect, session)["squad_status"] == "first_team"
+    from sqlalchemy import select
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.owner_console.models import OwnerClubState
+
+    state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == "club-1"))
+    facilities = dict(state.facilities_json or {})
+    facilities["_last_manager_matchday_selection"] = {"starting_xi_ids": [prospect.id]}
+    state.facilities_json = facilities
+    flag_modified(state, "facilities_json")
+    service.place_on_squad_sheet(session, "user-1", "club-1", prospect.id, "reserve")
+    session.refresh(state)
+    assert prospect.id not in (state.facilities_json["_last_manager_matchday_selection"]["starting_xi_ids"])
 
 
 def test_daily_briefing_and_boardroom_staff_chat():

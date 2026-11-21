@@ -591,6 +591,7 @@ def delete_watchlist(
 class OwnerLineupPreferenceRequest(BaseModel):
     preferred_formation: str | None = Field(default=None, max_length=32)
     preferred_player_ids: list[str] = Field(default_factory=list)
+    preferred_bench_ids: list[str] = Field(default_factory=list)
     note: str = Field(default="", max_length=600)
 
 
@@ -651,6 +652,7 @@ def save_owner_lineup_preference(
         fac["_owner_lineup_preference"] = {
             "preferred_formation": body.preferred_formation,
             "preferred_player_ids": list(body.preferred_player_ids),
+            "preferred_bench_ids": list(body.preferred_bench_ids),
             "note": body.note,
             "submitted_at": datetime.now(timezone.utc).isoformat(),
             "is_non_binding_preference": True,

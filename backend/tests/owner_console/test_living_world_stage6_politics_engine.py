@@ -232,7 +232,7 @@ def test_club_politics_overview_initialization():
 
     # Verify board members
     board = overview["board_politics"]
-    assert board["board_confidence"] >= 70
+    assert board["board_confidence"] is None
     assert len(board["directors"]) == 4
     chair = next((d for d in board["directors"] if d["archetype"] == "traditionalist"), None)
     assert chair is not None
@@ -251,8 +251,8 @@ def test_club_politics_overview_initialization():
     assert overview["youth_development"]["hoyd"]["name"] == "Kunle Adeyemi"
 
     # Verify supporter sentiment
-    assert overview["supporter_sentiment"]["confidence"] >= 70
-    assert overview["supporter_sentiment"]["atmosphere_multiplier"] >= 1.0
+    assert overview["supporter_sentiment"]["confidence"] is None
+    assert overview["supporter_sentiment"]["atmosphere_multiplier"] is None
 
 
 def test_evaluate_political_cycle_triggers_medical_clearance_dispute():

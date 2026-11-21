@@ -353,6 +353,34 @@ def test_scenario_e_gm_and_chief_scout_recruitment_workflow_and_counterproposal(
         fac["_executive_staff"] = exec_staff
         state.facilities_json = fac
         flag_modified(state, "facilities_json")
+        session.add(
+            OwnerSquadPlayer(
+                id=f"ext-lw-{state.club_id}",
+                club_id=f"other-{state.club_id}",
+                name="Ibrahim Sule",
+                position="LW",
+                age=24,
+                rating=82,
+                potential=84,
+                value_coin=Decimal("4000"),
+                morale=70,
+                status="active",
+            )
+        )
+        session.add(
+            OwnerSquadPlayer(
+                id=f"ext-young-lw-{state.club_id}",
+                club_id=f"other-{state.club_id}",
+                name="Tomi Adebayo",
+                position="LW",
+                age=20,
+                rating=77,
+                potential=86,
+                value_coin=Decimal("1800"),
+                morale=70,
+                status="active",
+            )
+        )
         session.commit()
 
         res1 = client.post(
@@ -369,8 +397,9 @@ def test_scenario_e_gm_and_chief_scout_recruitment_workflow_and_counterproposal(
         assert data1["decision_record"]["decision_outcome"] in ("accepted", "conditional_acceptance")
         effects1 = data1["decision_record"]["state_effects"]
         assert "recruitment_workflow" in effects1
+        assert effects1["recommended_candidate"]["player_name"] == "Ibrahim Sule"
         assert effects1["recommended_candidate"]["position"] == "LW"
-        assert 80 <= effects1["recommended_candidate"]["gsi"] <= 85
+        assert effects1["recommended_candidate"]["gsi"] == 82
 
         # Verify Chief Scout posted shortlist coordination into the Staff Technical Room
         staff_room_msgs = data1["communications"]["staff_room"]
@@ -426,6 +455,7 @@ def test_scenario_e_gm_and_chief_scout_recruitment_workflow_and_counterproposal(
         data2 = res2.json()
         assert data2["decision_record"]["decision_outcome"] == "counterproposal"
         rec_cand = data2["decision_record"]["state_effects"]["recommended_candidate"]
+        assert rec_cand["player_name"] == "Tomi Adebayo"
         assert rec_cand["age"] <= 21
     finally:
         session.close()
@@ -438,6 +468,31 @@ def test_scenario_f_boardroom_meeting_multi_staff_disagreement_and_resolution() 
     """
     session, client, state = _setup_test_env()
     try:
+        _assign_manager_archetype(session, state, "veteran_pragmatist")
+        fac = dict(state.facilities_json or {})
+        exec_staff = dict(fac.get("_executive_staff") or {})
+        exec_staff["general_manager"] = {
+            "id": "gm_board_1",
+            "name": "Damian Cross",
+            "role": "general_manager",
+            "personality_profile": dict(autonomous_staff_engine.GM_ARCHETYPES["financially_conservative_guardian"]),
+        }
+        exec_staff["head_of_youth_development"] = {
+            "id": "hoyd_board_1",
+            "name": "Chinedu Obi",
+            "role": "head_of_youth_development",
+            "personality_profile": {"staff_name": "Chinedu Obi", "philosophy": "Academy pathway"},
+        }
+        exec_staff["chief_scout"] = {
+            "id": "scout_board_1",
+            "name": "Amina Bello",
+            "role": "chief_scout",
+            "personality_profile": {"staff_name": "Amina Bello", "philosophy": "Filed players only"},
+        }
+        fac["_executive_staff"] = exec_staff
+        state.facilities_json = fac
+        flag_modified(state, "facilities_json")
+        session.commit()
         res = client.post(
             f"/owner/clubs/{state.club_id}/communications/meetings",
             json={
@@ -648,5 +703,139 @@ def test_scenario_j_idempotency_and_grounded_fallback_when_ai_provider_unavailab
             ).all()
         )
         assert len(records) == 1
+    finally:
+        session.close()
+
+
+def test_department_decisions_file_on_the_club_and_a_resignation_leaves_the_seat_empty() -> None:
+    session, client, state = _setup_test_env()
+    try:
+        fac = dict(state.facilities_json or {})
+        exec_staff = dict(fac.get("_executive_staff") or {})
+        exec_staff["chief_scout"] = {
+            "id": "scout_filed_1",
+            "name": "Amina Bello",
+            "role": "chief_scout",
+            "philosophy_summary": "Wide players who arrive early.",
+            "personality_profile": {
+                "staff_name": "Amina Bello",
+                "philosophy": "Wide players who arrive early.",
+                "professional_independence": 70,
+            },
+        }
+        exec_staff["head_of_youth_development"] = {
+            "id": "hoyd_filed_1",
+            "name": "Chinedu Obi",
+            "role": "head_of_youth_development",
+            "philosophy_summary": "Sixteen to twenty-one.",
+            "personality_profile": {
+                "staff_name": "Chinedu Obi",
+                "philosophy": "Sixteen to twenty-one.",
+                "professional_independence": 70,
+            },
+        }
+        exec_staff["medical_director"] = {
+            "id": "med_filed_1",
+            "name": "Dr. Ngozi Adeyemi",
+            "role": "medical_director",
+            "protocol_strictness": 90,
+            "personality_profile": {
+                "staff_name": "Dr. Ngozi Adeyemi",
+                "protocol_strictness": 90,
+                "professional_independence": 80,
+            },
+        }
+        exec_staff["finance_commercial_director"] = {
+            "id": "fin_filed_1",
+            "name": "Ifeoma Okeke",
+            "role": "finance_commercial_director",
+            "financial_discipline": 90,
+            "personality_profile": {
+                "staff_name": "Ifeoma Okeke",
+                "financial_discipline": 90,
+                "professional_independence": 70,
+            },
+        }
+        fac["_executive_staff"] = exec_staff
+        state.facilities_json = fac
+        flag_modified(state, "facilities_json")
+        session.commit()
+
+        scout = client.post(
+            f"/owner/clubs/{state.club_id}/communications/messages",
+            json={
+                "thread_id": "staff:chief_scout",
+                "message": "Shortlist a left winger with a GSI between 80 and 85.",
+                "topic": "Scouting brief",
+            },
+        )
+        assert scout.status_code == 200
+        scout_body = scout.json()
+        assert scout_body["decision_record"]["decision_outcome"] == "accepted"
+        assert scout_body["decision_record"]["state_effects"]["scout_shortlist"]["target_position"] == "LW"
+        assignments = list(
+            session.scalars(
+                select(OwnerRecruitmentAssignment).where(OwnerRecruitmentAssignment.club_id == state.club_id)
+            ).all()
+        )
+        assert any(row.initiated_by_role == "chief_scout" and row.target_position == "LW" for row in assignments)
+        assert all(not str(item.get("player_name") or "").startswith("Mateo") for row in assignments for item in (row.candidate_shortlist_json or []))
+
+        youth = client.post(
+            f"/owner/clubs/{state.club_id}/communications/messages",
+            json={
+                "thread_id": "staff:head_of_youth_development",
+                "message": "Sign a young left winger with a GSI between 80 and 85.",
+                "topic": "Youth brief",
+            },
+        )
+        assert youth.status_code == 200
+        session.refresh(state)
+        brief = dict((state.facilities_json or {}).get("_youth_recruitment_brief") or {})
+        assert brief.get("age_band") == "16-21"
+        assert brief.get("filed_by") == "Chinedu Obi"
+
+        medical = client.post(
+            f"/owner/clubs/{state.club_id}/communications/messages",
+            json={
+                "thread_id": "staff:medical_director",
+                "message": "Give him medical clearance and rush him back.",
+                "topic": "Return to play",
+            },
+        )
+        assert medical.status_code == 200
+        assert medical.json()["decision_record"]["decision_outcome"] == "declined"
+        session.refresh(state)
+        hold = dict((state.facilities_json or {}).get("_medical_protocol_hold") or {})
+        assert hold.get("staff_name") == "Dr. Ngozi Adeyemi"
+        assert hold.get("reason") == "return_to_play_refused"
+
+        finance = client.post(
+            f"/owner/clubs/{state.club_id}/communications/messages",
+            json={
+                "thread_id": "staff:finance_commercial_director",
+                "message": "The wage bill is too high and we are overpaying.",
+                "topic": "Wage book",
+            },
+        )
+        assert finance.status_code == 200
+        assert finance.json()["decision_record"]["decision_outcome"] == "accepted"
+        session.refresh(state)
+        assert (state.facilities_json or {}).get("_contract_wage_ceiling") == "catalog"
+
+        _assign_manager_archetype(session, state, "veteran_pragmatist")
+        for idx in range(1, 5):
+            client.post(
+                f"/owner/clubs/{state.club_id}/communications/messages",
+                json={
+                    "thread_id": "staff:first_team_manager",
+                    "message": f"I am overriding you ({idx}): start our 16-year-old academy striker Lucas Vance in the next match.",
+                    "topic": "Selection Override",
+                },
+            )
+        session.refresh(state)
+        manager = dict(state.manager_json or {})
+        assert manager.get("is_vacant") is True
+        assert not str(manager.get("name") or "").strip()
     finally:
         session.close()

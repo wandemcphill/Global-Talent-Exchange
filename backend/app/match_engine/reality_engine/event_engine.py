@@ -214,10 +214,10 @@ class EventEngine:
         score_delta = attacking.stats.goals - defending.stats.goals
         options = [
             ("through_ball_one_on_one", 1.02 + (attacking.strength.attack / 180.0)),
-            ("cutback", 0.98 + (attacking.tactics.width / 180.0)),
+            ("cutback", 0.98 + (0.0 if attacking.tactics.width is None else attacking.tactics.width / 180.0)),
             ("penalty_box_scramble", 0.80 + (0.20 if minute >= 70 else 0.0)),
             ("counterattack", 0.88 + (0.18 if route in {"transition", "press_break"} else 0.0)),
-            ("near_post_finish", 0.72 + (attacking.tactics.tempo / 240.0)),
+            ("near_post_finish", 0.72 + (0.0 if attacking.tactics.tempo is None else attacking.tactics.tempo / 240.0)),
         ]
         if minute >= 78 and score_delta <= 0 and attacking.is_home:
             options.append(("late_siege", 0.96 + attacking.home_advantage_score / 10.0))

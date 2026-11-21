@@ -376,7 +376,7 @@ def test_staff_poaching_accept_buyout_credits_treasury_and_vacates_role():
     )
     session.commit()
 
-    cash_before = ledger.balance(session, ledger.club_account(cp.id), ledger.GTEX)
+    cash_before = ledger.balance(session, ledger.club_account(cp.id), ledger.FAN)
     res = living_staff_market.resolve_external_poaching_approach(
         session,
         u.id,
@@ -388,10 +388,11 @@ def test_staff_poaching_accept_buyout_credits_treasury_and_vacates_role():
 
     assert res["resolution"]["retained"] is False
     assert res["resolution"]["role_vacated"] == "general_manager"
-    assert res["resolution"]["buyout_credited_gtex"] == approach["buyout_clause_gtex"]
+    net_buyout = int(Decimal(str(approach["buyout_clause_gtex"])) * Decimal("0.8"))
+    assert res["resolution"]["buyout_credited_gtex"] == net_buyout
 
-    cash_after = ledger.balance(session, ledger.club_account(cp.id), ledger.GTEX)
-    assert cash_after == cash_before + Decimal(str(approach["buyout_clause_gtex"]))
+    cash_after = ledger.balance(session, ledger.club_account(cp.id), ledger.FAN)
+    assert cash_after == cash_before + Decimal(net_buyout)
 
     session.refresh(state)
     roster = living_club_world.resolve_club_staff_roster(state)

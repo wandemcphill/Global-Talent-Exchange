@@ -624,22 +624,24 @@ export function TransferHub() {
               {filteredListings.map((listing: any) => {
                 const p = listing.player || {};
                 const playerId = listing.player_id || p.id;
-                const rating = Number(p.gsi_rating || p.rating || 76);
-                const tier = rating >= 85 ? "legendary" : rating >= 75 ? "elite" : "standard";
+                const rating = p.gsi_rating == null && p.rating == null ? null : Number(p.gsi_rating || p.rating);
+                const tier = rating == null ? "standard" : rating >= 85 ? "legendary" : rating >= 75 ? "elite" : "standard";
+                const tierNorm = String(p.real_player_tier || "").toLowerCase();
+                const isLegend = tierNorm === "legend" || tierNorm === "icon";
 
                 return (
                   <div key={listing.id} className="flex flex-col w-full max-w-[310px] items-center">
                     <PlayerCard
                       name={p.full_name || p.name || p.canonical_display_name || playerId}
-                      rating={rating}
-                      position={p.normalized_position || p.position || "MID"}
+                      rating={rating ?? undefined}
+                      position={p.normalized_position || p.position || "—"}
                       age={p.age}
-                      nationality={p.nationality || p.country_name || "Global"}
-                      club={p.current_club_name || "Free Agent"}
+                      nationality={p.nationality || p.country_name || "—"}
+                      club={p.current_club_name || "—"}
                       image={p.image_url || p.image}
                       tier={tier}
                       price={listing.base_price}
-                      badge={tier === "legendary" ? "ICON · 1 OF 1" : "TRANSFER LISTED"}
+                      badge={isLegend ? "ICON · 1 OF 1" : "TRANSFER LISTED"}
                       onClick={() => setSelectedPlayerId(playerId)}
                       stats={[
                         { k: "Valuation", v: `${fmt(listing.base_price)}` },
@@ -1454,8 +1456,8 @@ export function TransferHub() {
               clubName={activeClub?.club_name || "GTEX FC"}
               subjectName={unveilingPlayer.name}
               subjectRole={unveilingPlayer.position || "First-Team Signing"}
-              jerseyNumber={shirtNumber || 9}
-              overallRating={unveilingPlayer.rating || 84}
+              jerseyNumber={shirtNumber || undefined}
+              overallRating={Number(unveilingPlayer.rating ?? 0)}
               spectacleTier={
                 unveilTheme === "viral_helicopter"
                   ? "galactico_helicopter"
@@ -1572,7 +1574,7 @@ export function TransferHub() {
               clubName={activeClub?.club_name || "GTEX FC"}
               subjectName={unveiledReceipt.player.name}
               jerseyNumber={unveiledReceipt.shirtNumber}
-              overallRating={unveiledReceipt.player.rating || 85}
+              overallRating={Number(unveiledReceipt.player.rating ?? 0)}
               quote={unveiledReceipt.quote}
               stats={[
                 { label: "Shirt Surge", value: `+${fmt(unveiledReceipt.shirtSalesBonus)} GTX`, accent: "#F5B83D" },

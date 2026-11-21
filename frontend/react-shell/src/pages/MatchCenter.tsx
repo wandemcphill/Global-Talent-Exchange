@@ -1077,7 +1077,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               <HolographicPlayerCard
                 name={keyDuel.home_player.name}
                 position={keyDuel.home_player.role || "ST"}
-                overall={Number(keyDuel.home_player.rating) || 89}
+                overall={Number(keyDuel.home_player.rating) || 0}
                 clubName={match.home_name}
                 tier="diamond"
               />
@@ -1103,7 +1103,7 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
               <HolographicPlayerCard
                 name={keyDuel.away_player.name}
                 position={keyDuel.away_player.role || "RW"}
-                overall={Number(keyDuel.away_player.rating) || 88}
+                overall={Number(keyDuel.away_player.rating) || 0}
                 clubName={match.away_name}
                 tier="gold"
               />

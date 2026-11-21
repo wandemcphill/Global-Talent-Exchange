@@ -238,14 +238,15 @@ function loadGlbTemplateLazy(rawUrl: string): Promise<CachedGlbEntry | null> {
   return promise;
 }
 
-function resolveStageGlbUrl(stage?: string, progressPct = 100, fallbackUrl?: string): string {
-  if (!stage || stage === "completed" || progressPct >= 100) {
+function resolveStageGlbUrl(stage?: string, progressPct?: number | null, fallbackUrl?: string): string {
+  if (stage === "completed" || (progressPct != null && progressPct >= 100)) {
     return fallbackUrl || "/models/campus/high_performance_centre.glb";
   }
-  if (stage === "site_prep" || progressPct < 20) return "/models/campus/stage_1_site_prep.glb";
-  if (stage === "groundworks" || progressPct < 40) return "/models/campus/stage_2_groundworks.glb";
-  if (stage === "foundations" || progressPct < 60) return "/models/campus/stage_3_foundations.glb";
-  if (stage === "structural" || progressPct < 80) return "/models/campus/stage_4_structural.glb";
+  const pct = progressPct ?? -1;
+  if (stage === "site_prep" || pct < 20) return "/models/campus/stage_1_site_prep.glb";
+  if (stage === "groundworks" || pct < 40) return "/models/campus/stage_2_groundworks.glb";
+  if (stage === "foundations" || pct < 60) return "/models/campus/stage_3_foundations.glb";
+  if (stage === "structural" || pct < 80) return "/models/campus/stage_4_structural.glb";
   return "/models/campus/stage_5_finishing.glb";
 }
 
@@ -934,11 +935,12 @@ export const CampusBuilder3D: React.FC<CampusBuilder3DProps> = ({
         container.userData = { instanceId: mod.instance_id, moduleKey: mod.module_key };
 
         const isSelected = mod.instance_id === selectedInstanceId;
+        const progressPct = mod.progress_pct == null ? null : Number(mod.progress_pct);
         const isUnderConstruction =
-          mod.status === "under_construction" || Number(mod.progress_pct ?? 100) < 100;
-        const progressPct = Number(mod.progress_pct ?? 100);
+          mod.status === "under_construction" || (progressPct != null && progressPct < 100);
         const isReadyForCompletion =
-          isUnderConstruction && (mod.construction_stage === "finishing" || progressPct >= 80);
+          isUnderConstruction &&
+          (mod.construction_stage === "finishing" || (progressPct != null && progressPct >= 80));
         const isUpgradeEligible = !isUnderConstruction && Number(mod.level || 1) < Number(mod.max_level || 5);
 
         // Architectural Status & Selection Plinth Ring

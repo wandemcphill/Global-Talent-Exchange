@@ -292,7 +292,7 @@ class PlayerDecisionAI:
         family_bonus = 0.10 if base_family in {"counterattack", "through_ball_one_on_one"} else 0.0
         return self._clamp(
             ((defending.strength.defense - actor.control_value()) / 120.0)
-            + (defending.tactics.pressing / 125.0)
+            + (0.0 if defending.tactics.pressing is None else defending.tactics.pressing / 125.0)
             + max(0.0, minute - 68) / 130.0
             - family_bonus,
             0.0,

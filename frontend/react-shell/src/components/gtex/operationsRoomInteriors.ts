@@ -282,7 +282,7 @@ export function buildDestinationScreenSnapshot(
           const rehab = report?.rehabilitation_status;
           return [
             { label: "INJURED / REHAB", value: rehab?.active_rehab_count != null ? `${rehab.active_rehab_count} IN REHAB` : "DATA UNAVAILABLE", tone: (rehab?.active_rehab_count ?? 0) > 0 ? "warning" : "positive" },
-            { label: "HYDRO & CRYO", value: rehab ? (rehab.protocol_executed_today ? "ACTIVE TODAY" : `STANDBY (${rehab.protocol_cost_gtex ?? 800} GTX)`) : "DATA UNAVAILABLE", tone: rehab?.protocol_executed_today ? "positive" : "accent" },
+            { label: "HYDRO & CRYO", value: rehab ? (rehab.protocol_executed_today ? "ACTIVE TODAY" : `STANDBY (${rehab.protocol_cost_gtex == null ? "cost not filed" : `${rehab.protocol_cost_gtex} GTX`})`) : "DATA UNAVAILABLE", tone: rehab?.protocol_executed_today ? "positive" : "accent" },
           ];
         }
         case "inspect_workloads":
@@ -504,7 +504,7 @@ export function buildDestinationScreenSnapshot(
           },
           {
             label: "HYDRO & CRYO",
-            value: rehab ? (rehab.protocol_executed_today ? "ACTIVE TODAY" : `STANDBY (${rehab.protocol_cost_gtex ?? 800} GTX)`) : "DATA UNAVAILABLE",
+            value: rehab ? (rehab.protocol_executed_today ? "ACTIVE TODAY" : `STANDBY (${rehab.protocol_cost_gtex == null ? "cost not filed" : `${rehab.protocol_cost_gtex} GTX`})`) : "DATA UNAVAILABLE",
             tone: rehab?.protocol_executed_today ? "positive" : "accent",
           },
           {

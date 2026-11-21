@@ -23,12 +23,13 @@ const TIER_FILTERS = [
 export function marketLane(player: any): "welcome" | "paid" {
   const quoted = player?.quote?.lane;
   if (quoted === "welcome" || quoted === "paid") return quoted;
-  const rating = Number(player?.quote?.rating ?? player?.rating ?? player?.overall_rating ?? 60);
+  const rawRating = player?.quote?.rating ?? player?.rating ?? player?.overall_rating;
+  const rating = rawRating == null || rawRating === "" ? null : Number(rawRating);
   const tierNorm = String(player?.real_player_tier || "").toLowerCase();
   const isLegend = tierNorm === "legend" || tierNorm === "icon";
   const isRegen =
     Boolean(player?.is_regen) || player?.is_real_player === false || tierNorm === "regen";
-  return isLegend || isRegen || rating >= 75 ? "paid" : "welcome";
+  return isLegend || isRegen || rating == null || rating >= 75 ? "paid" : "welcome";
 }
 
 const PRICE_PRESETS = [
@@ -345,7 +346,7 @@ export function MarketTable({
           {filteredPlayers.map((p: any) => {
             const owned = signedRefs.includes(p.player_id);
             const price = p.quote?.price ?? 0;
-            const rating = p.quote?.rating ?? 60;
+            const rating = p.quote?.rating ?? p.overall_rating ?? null;
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
             const tierNorm = String(p.real_player_tier || "").toLowerCase();
             const isLegend = tierNorm === "legend";
@@ -360,7 +361,7 @@ export function MarketTable({
                 key={p.player_id}
                 testid={`market-card-${p.player_id}`}
                 name={p.canonical_display_name || p.player_name}
-                rating={rating}
+                rating={rating ?? undefined}
                 position={p.position}
                 age={p.age}
                 nationality={p.nationality}

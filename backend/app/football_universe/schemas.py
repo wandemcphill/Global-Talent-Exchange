@@ -107,12 +107,12 @@ class FanBaseView(CommonSchema):
 class ClubIdentityView(CommonSchema):
     club_id: str
     philosophy: str
-    culture_score: float = Field(ge=0.0, le=100.0)
-    tactical_consistency: float = Field(ge=0.0, le=100.0)
-    brand_strength: float = Field(ge=0.0, le=100.0)
+    culture_score: float | None = Field(default=None, ge=0.0, le=100.0)
+    tactical_consistency: float | None = Field(default=None, ge=0.0, le=100.0)
+    brand_strength: float | None = Field(default=None, ge=0.0, le=100.0)
     chemistry_bonus: float = 0.0
     player_development_bonus: float = 0.0
-    average_identity_fit: float = Field(default=0.0, ge=0.0, le=100.0)
+    average_identity_fit: float | None = Field(default=None, ge=0.0, le=100.0)
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 

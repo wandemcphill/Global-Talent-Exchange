@@ -316,7 +316,7 @@ export default function ClubCampus() {
             <div className="px-4 py-2.5 rounded-2xl bg-slate-900/90 border border-amber-500/30">
               <div className="text-[11px] uppercase tracking-wider text-slate-400">Prestige & World Day</div>
               <div className="text-lg font-black text-amber-300">
-                {campus?.prestige || 50} <span className="text-xs font-normal text-slate-300">· Day {campus?.world_day || 1}</span>
+                {campus?.prestige == null ? "Not filed" : campus.prestige} <span className="text-xs font-normal text-slate-300">· Day {campus?.world_day ?? "—"}</span>
               </div>
             </div>
           </div>
@@ -799,12 +799,12 @@ export default function ClubCampus() {
                       <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
                         <div
                           className="h-full bg-gradient-to-r from-amber-400 to-emerald-400 transition-all duration-500"
-                          style={{ width: `${selectedModule.progress_pct || 100}%` }}
+                          style={{ width: `${selectedModule.progress_pct == null ? 0 : selectedModule.progress_pct}%` }}
                         />
                       </div>
                       <div className="flex justify-between text-[11px] text-slate-400">
-                        <span>Progress: {selectedModule.progress_pct || 100}%</span>
-                        <span>Structural Integrity: {selectedModule.condition || 98}%</span>
+                        <span>Progress: {selectedModule.progress_pct == null ? "—" : `${selectedModule.progress_pct}%`}</span>
+                        <span>Structural Integrity: {selectedModule.condition == null ? "—" : `${selectedModule.condition}%`}</span>
                       </div>
 
                       {/* 6-Stage Progression Stepper */}

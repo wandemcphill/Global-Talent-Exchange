@@ -1938,10 +1938,7 @@ def test_phase2_3_owner_daily_briefing_six_authoritative_sections_and_world_day_
 
     fin_sec = briefing["financial_commercial_report"]
     assert fin_sec["current_club_balance"]["cash_gtex"] == 177_000
-    assert (
-        fin_sec["wage_obligations"]["daily_staff_upkeep_fan_coin"]
-        == fin_sec["wage_obligations"]["total_daily_obligations_gtex"]
-    )
+    assert fin_sec["wage_obligations"]["daily_staff_upkeep_fan_coin"] == fin_sec["wage_obligations"]["total_daily_obligations_gtex"]
     assert fin_sec["matchday_revenue"]["operational_stadium_capacity"] >= 15_000
 
     # 2. Verify World-Day Idempotency: calling get_daily_briefing again on the same world_day
@@ -2121,18 +2118,18 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     assert med_profile["is_appointed"] is False
     assert med_profile["status"] == "vacant"
     assert "Vacant" in med_profile["name"]
-    assert med_profile["medical_expertise"] == 10
+    assert med_profile["medical_expertise"] == 0
     assert med_profile["salary_gtex"] == 0
-    # Formula: 1 + medical//2 (2//2=1) + med_bonus (10//5=2) + rehab_campus_bonus (4) = 8
+    # Vacant seat adds no medical expertise. 1 + medical//2 (1) + 0 + rehab campus bonus (4) = 6
     unappointed_heal_rate = med_sec_unappointed["rehabilitation_status"]["daily_injury_heal_days"]
-    assert unappointed_heal_rate == 8
+    assert unappointed_heal_rate == 6
 
     # Compare directly with service.tick_club formula for unappointed state
     campus_fx = prestige_campus_comms.compute_authoritative_campus_effects(session, state, reconcile=True)
     unappointed_tick_heal = (
         1
         + int(facs.get("medical", 1)) // 2
-        + max(0, int(dict(exec_staff.get("medical_director") or {}).get("medical_expertise", 10)) // 5)
+        + 0
         + int(campus_fx.get("rehab_daily_bonus_days", 0))
     )
     assert unappointed_heal_rate == unappointed_tick_heal
@@ -2168,7 +2165,7 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     # Formula: 1 + 1 (facility) + med_bonus (18//5=3) + rehab_campus_bonus (4) = 9
     appointed_heal_rate = med_sec_appointed["rehabilitation_status"]["daily_injury_heal_days"]
     assert appointed_heal_rate == 9
-    assert appointed_heal_rate == unappointed_heal_rate + 1
+    assert appointed_heal_rate == unappointed_heal_rate + 3
 
     # Compare directly with service.tick_club formula for appointed state with explicit expertise
     appointed_tick_heal = (
@@ -2213,25 +2210,24 @@ def test_phase2_3_medical_director_appointment_and_healing_calculations():
     assert med_profile_missing["is_appointed"] is True
     assert med_profile_missing["status"] == "appointed"
     assert med_profile_missing["name"] == "Dr. Chidi Obi"
-    # Both briefing and service.tick_club MUST default to 10
-    assert med_profile_missing["medical_expertise"] == 10
+    assert med_profile_missing["medical_expertise"] is None
     missing_heal_rate = med_sec_missing["rehabilitation_status"]["daily_injury_heal_days"]
 
     missing_tick_heal = (
         1
         + int(facs.get("medical", 1)) // 2
-        + max(0, int(exec_staff["medical_director"].get("medical_expertise", 10)) // 5)
+        + 0
         + int(campus_fx.get("rehab_daily_bonus_days", 0))
     )
     assert missing_heal_rate == missing_tick_heal
-    assert missing_heal_rate == 8  # 1 + 1 + 2 + 4 = 8
+    assert missing_heal_rate == 6  # 1 + 1 + 0 + 4 = 6
 
     # Verify tick_club execution with missing expertise profile
     regens[0].injured_days = 10
     session.commit()
     service.tick_club(session, state)
-    # 10 - 8 = 2 days remaining after tick
-    assert regens[0].injured_days == 2
+    # 10 - 6 = 4 days remaining after tick
+    assert regens[0].injured_days == 4
 
 
 def test_phase2_3_medical_injury_dossier_recorded_and_unrecorded_classifications():

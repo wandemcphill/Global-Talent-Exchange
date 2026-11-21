@@ -28,7 +28,7 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
   potential,
   clubName = "GTEX FC",
   priceGtx,
-  jerseyNumber = 9,
+  jerseyNumber,
   badgeLabel,
   tier,
   stats6,
@@ -70,25 +70,14 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
       : "linear-gradient(145deg, #062e22 0%, #090d16 58%, #0c192e 100%)";
 
   // Compute 6-axis radar points (PAC, SHO, PAS, DRI, DEF, PHY)
-  const radarValues = useMemo(() => {
-    if (stats6) return stats6;
-    const base = Math.max(60, Math.min(98, Number(overall) || 85));
-    const isDef = ["CB", "LB", "RB", "CDM", "GK"].includes(position.toUpperCase());
-    return [
-      Math.min(99, base + 4),
-      isDef ? Math.max(52, base - 14) : Math.min(99, base + 2),
-      Math.min(99, base),
-      Math.min(99, base + 3),
-      isDef ? Math.min(99, base + 5) : Math.max(48, base - 18),
-      Math.min(99, base - 1),
-    ];
-  }, [stats6, overall, position]);
+  const radarValues = stats6;
 
   const radarPolygonPoints = useMemo(() => {
     const cx = 50;
     const cy = 50;
     const maxR = 40;
     const angles = [-90, -30, 30, 90, 150, 210];
+    if (!radarValues) return "";
     return radarValues
       .map((v, idx) => {
         const r = (Math.max(35, Math.min(99, v)) / 100) * maxR;
@@ -155,7 +144,8 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
             </div>
             <div>
               <span className="gx-mono text-[10px] font-bold uppercase text-amber-300/90 block">
-                #{jerseyNumber} · {clubName}
+                {jerseyNumber != null && jerseyNumber !== "" ? `#${jerseyNumber} · ` : ""}
+                {clubName}
               </span>
               <h4 className="gx-display text-lg font-black uppercase tracking-tight text-white leading-tight truncate max-w-[145px]">
                 {name}
@@ -168,7 +158,7 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
           </span>
         </div>
 
-        {/* Center Row: 6-Axis Attribute Breakdown + SVG Radar Polygon */}
+        {radarValues ? (
         <div
           className="relative z-10 my-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-2.5"
           style={{ transform: "translateZ(24px)" }}
@@ -222,6 +212,11 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
             />
           </svg>
         </div>
+        ) : (
+          <p className="relative z-10 my-3 text-[11px] text-slate-400">
+            Pace, shooting, and the other attributes are not on this card.
+          </p>
+        )}
 
         {/* Bottom Row: Potential / Valuation & Shimmer Action Pill */}
         <div
@@ -265,13 +260,13 @@ export interface TelemetrySparklineCardProps {
 
 export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
   title,
-  subtitle = "Real-Time Club Treasury & Commercial Pulse",
-  amount = 248500,
+  subtitle = "Club treasury",
+  amount = 0,
   currency = "GTX",
-  deltaLabel = "▲ +14.8% LIVE VELOCITY",
-  trustScore = 92,
-  hypeScore = 96,
-  series = [62, 68, 64, 78, 74, 88, 94, 100],
+  deltaLabel,
+  trustScore,
+  hypeScore,
+  series,
 }) => {
   const [displayAmount, setDisplayAmount] = useState<number>(amount);
 
@@ -292,13 +287,15 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
     return () => cancelAnimationFrame(rafId);
   }, [amount]);
 
+  const hasSeries = Array.isArray(series) && series.length > 1;
   const { linePath, areaPath, lastPoint } = useMemo(() => {
+    const points = hasSeries ? series : [0, 0];
     const w = 280;
     const h = 76;
-    const min = Math.min(...series);
-    const max = Math.max(...series, min + 1);
-    const pts = series.map((v, i) => {
-      const x = (i / Math.max(1, series.length - 1)) * (w - 12) + 6;
+    const min = Math.min(...points);
+    const max = Math.max(...points, min + 1);
+    const pts = points.map((v, i) => {
+      const x = (i / Math.max(1, points.length - 1)) * (w - 12) + 6;
       const y = h - 10 - ((v - min) / (max - min)) * (h - 22);
       return { x, y };
     });
@@ -306,7 +303,7 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
     const last = pts[pts.length - 1] || { x: w - 6, y: 14 };
     const dArea = `${dLine} L${last.x.toFixed(1)},${h} L6,${h} Z`;
     return { linePath: dLine, areaPath: dArea, lastPoint: last };
-  }, [series]);
+  }, [hasSeries, series]);
 
   return (
     <div className="gx-panel gx-panel-live flex flex-col justify-between">
@@ -326,12 +323,14 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
           </div>
           <p className="mt-0.5 text-xs font-medium text-slate-400">{subtitle}</p>
         </div>
-        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
-          <TrendingUp size={12} /> {deltaLabel}
-        </span>
+        {deltaLabel ? (
+          <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2.5 py-1 text-[11px] font-extrabold text-emerald-300">
+            <TrendingUp size={12} /> {deltaLabel}
+          </span>
+        ) : null}
       </div>
 
-      {/* Glowing SVG Area Sparkline */}
+      {hasSeries ? (
       <div className="my-3 h-20 w-full">
         <svg viewBox="0 0 280 76" className="h-full w-full overflow-visible">
           <defs>
@@ -357,8 +356,9 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
           />
         </svg>
       </div>
+      ) : null}
 
-      {/* Radial Gauge Footer */}
+      {(trustScore != null || hypeScore != null) && (
       <div className="grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3">
         <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-slate-950/60 p-2.5">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-emerald-400 text-xs font-black text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]">
@@ -379,6 +379,7 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 };
@@ -386,15 +387,67 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
 /* ============================================================================
    3. INTERACTIVE 2.5D TACTICAL TURF PITCH WITH CHEMISTRY LINKS
    ============================================================================ */
+export interface TacticalPitchPlayer {
+  id?: string | number;
+  name: string;
+  position?: string;
+  overall?: number;
+  rating?: number;
+  shirtNumber?: number;
+}
+
 export interface TacticalPitch25DProps {
   formation?: string | Record<string, unknown>;
-  players?: Array<{
-    id?: string | number;
-    name: string;
-    position?: string;
-    overall?: number;
-  }>;
+  players?: TacticalPitchPlayer[];
   onSelectPlayer?: (player: any) => void;
+}
+
+const PITCH_SLOTS = [
+  { x: 50, y: 16, role: "ST", bucket: "FWD", shirt: 9 },
+  { x: 22, y: 26, role: "LW", bucket: "FWD", shirt: 11 },
+  { x: 78, y: 26, role: "RW", bucket: "FWD", shirt: 7 },
+  { x: 50, y: 44, role: "CAM", bucket: "MID", shirt: 10 },
+  { x: 30, y: 54, role: "CM", bucket: "MID", shirt: 8 },
+  { x: 70, y: 54, role: "CM", bucket: "MID", shirt: 6 },
+  { x: 16, y: 74, role: "LB", bucket: "DEF", shirt: 3 },
+  { x: 38, y: 76, role: "CB", bucket: "DEF", shirt: 5 },
+  { x: 62, y: 76, role: "CB", bucket: "DEF", shirt: 4 },
+  { x: 84, y: 74, role: "RB", bucket: "DEF", shirt: 2 },
+  { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+] as const;
+
+function pitchBucket(position?: string): "GK" | "DEF" | "MID" | "FWD" {
+  const raw = String(position || "").toUpperCase();
+  if (/(GK|GOAL|KEEPER)/.test(raw)) return "GK";
+  if (/(CB|LB|RB|WB|DEF|BACK)/.test(raw)) return "DEF";
+  if (/(ST|CF|FW|LW|RW|WING|ATT)/.test(raw)) return "FWD";
+  return "MID";
+}
+
+export function placeFirstTeamOnPitch(players: TacticalPitchPlayer[] = []) {
+  const slots = PITCH_SLOTS.map((slot) => ({ ...slot, player: undefined as TacticalPitchPlayer | undefined }));
+  const unplaced = [...players];
+  for (const player of unplaced) {
+    const bucket = pitchBucket(player.position);
+    const raw = String(player.position || "").toUpperCase();
+    const exact = slots.find((slot) => !slot.player && slot.bucket === bucket && raw.includes(slot.role));
+    if (exact) exact.player = player;
+  }
+  for (const player of unplaced) {
+    if (slots.some((slot) => slot.player === player)) continue;
+    const bucket = pitchBucket(player.position);
+    const open = slots.find((slot) => !slot.player && slot.bucket === bucket);
+    if (open) open.player = player;
+  }
+  return slots.map((slot) => {
+    const rating = Number(slot.player?.overall ?? slot.player?.rating ?? 0);
+    return {
+      ...slot,
+      label: slot.player?.name ? String(slot.player.name).split(" ").slice(-1)[0] : "",
+      ovr: slot.player && rating > 0 ? rating : null,
+      shirt: slot.player?.shirtNumber || slot.shirt,
+    };
+  });
 }
 
 function tacticalFormationLabel(formation: TacticalPitch25DProps["formation"]): string {
@@ -407,52 +460,25 @@ function tacticalFormationLabel(formation: TacticalPitch25DProps["formation"]): 
       return preferred.trim();
     }
   }
-  return "4-3-3";
+  return "";
 }
 
 export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
-  formation = "4-3-3",
+  formation,
   players = [],
   onSelectPlayer,
 }) => {
   const formationLabel = tacticalFormationLabel(formation);
-  const nodes = useMemo(() => {
-    const coords = [
-      { x: 50, y: 16, role: "ST" },
-      { x: 22, y: 26, role: "LW" },
-      { x: 78, y: 26, role: "RW" },
-      { x: 50, y: 44, role: "CAM" },
-      { x: 30, y: 54, role: "CM" },
-      { x: 70, y: 54, role: "CM" },
-      { x: 16, y: 74, role: "LB" },
-      { x: 38, y: 76, role: "CB" },
-      { x: 62, y: 76, role: "CB" },
-      { x: 84, y: 74, role: "RB" },
-      { x: 50, y: 90, role: "GK" },
-    ];
-    return coords.map((c, idx) => {
-      const p = players[idx];
-      const surname = p?.name ? String(p.name).split(" ").slice(-1)[0] : c.role;
-      return {
-        ...c,
-        player: p,
-        label: surname,
-        ovr: p?.overall || 84 + (idx % 6),
-      };
-    });
-  }, [players]);
+  const nodes = useMemo(() => placeFirstTeamOnPitch(players), [players]);
 
   return (
     <div className="gx-panel overflow-hidden">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div>
-          <span className="gx-eyebrow">2.5D INTERACTIVE TACTICAL PITCH</span>
-          <h3 className="gx-h3 mt-0.5">Formation {formationLabel} · Chemistry Matrix</h3>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-lg border border-amber-400/50 bg-amber-400/15 px-2.5 py-1 text-xs font-black text-amber-300">
-            ⚡ SQUAD CHEM 98/100
-          </span>
+          <span className="gx-eyebrow">FIRST-TEAM SHEET</span>
+          <h3 className="gx-h3 mt-0.5">
+            {formationLabel ? `Formation ${formationLabel}` : "First-team sheet"}
+          </h3>
         </div>
       </div>
 
@@ -492,18 +518,29 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
           </svg>
 
           {/* Player Tokens */}
-          {nodes.map((n, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => n.player && onSelectPlayer?.(n.player)}
-              style={{ left: `${n.x}%`, top: `${n.y}%` }}
-              className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full border border-amber-300/80 bg-slate-950/90 px-2 py-0.5 text-[10px] font-black text-white shadow-lg transition transform hover:scale-110 hover:border-emerald-400"
-            >
-              <span className="text-amber-300">{n.ovr}</span>
-              <span className="truncate max-w-[64px] uppercase">{n.label}</span>
-            </button>
-          ))}
+          {nodes.map((n) =>
+            n.player ? (
+              <button
+                key={`${n.role}-${n.shirt}-${n.player.id || n.label}`}
+                type="button"
+                onClick={() => onSelectPlayer?.(n.player)}
+                style={{ left: `${n.x}%`, top: `${n.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full border border-amber-300/80 bg-slate-950/90 px-2 py-0.5 text-[10px] font-black text-white shadow-lg transition transform hover:scale-110 hover:border-emerald-400"
+              >
+                <span className="text-amber-300">#{n.shirt}</span>
+                {n.ovr != null && <span className="text-emerald-300">{n.ovr}</span>}
+                <span className="truncate max-w-[64px] uppercase">{n.label}</span>
+              </button>
+            ) : (
+              <span
+                key={n.role + n.x}
+                style={{ left: `${n.x}%`, top: `${n.y}%` }}
+                className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-white/35"
+              >
+                {n.role}
+              </span>
+            ),
+          )}
         </div>
       </div>
     </div>

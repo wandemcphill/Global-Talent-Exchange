@@ -43,27 +43,36 @@ def _stable_hash_int(seed: str) -> int:
 
 def _club_treasury_gtex(db: Session, state: OwnerClubState) -> float:
     try:
-        bal = float(ledger.balance(db, ledger.club_account(state.club_id), ledger.GTEX))
-        if bal > 0:
-            return bal
+        return float(ledger.balance(db, ledger.club_account(state.club_id), ledger.GTEX))
     except Exception:
-        pass
-    fac = dict(state.facilities_json or {})
-    if "_treasury_override_gtex" in fac:
-        return float(fac["_treasury_override_gtex"])
-    return 1500000.0
+        fac = dict(state.facilities_json or {})
+        if "_treasury_override_gtex" in fac:
+            return float(fac["_treasury_override_gtex"])
+        return 0.0
 
 
-def _player_fitness(p: OwnerSquadPlayer) -> int:
+def _player_fitness(p: OwnerSquadPlayer) -> int | None:
     pers = dict(p.personality_json or {})
-    if "fitness" in pers:
-        return _clamp(int(pers["fitness"]), 10, 100)
-    return _clamp(100 - int(p.injured_days or 0) * 6, 35, 100)
+    if "fitness" not in pers or pers.get("fitness") is None:
+        return None
+    return _clamp(int(pers["fitness"]), 10, 100)
 
 
 def _player_is_academy(p: OwnerSquadPlayer) -> bool:
     pers = dict(p.personality_json or {})
-    return bool(p.is_regen or pers.get("is_academy") or int(p.age or 24) <= 18)
+    return bool(p.is_regen or pers.get("is_academy") or (p.age is not None and int(p.age) <= 18))
+
+
+def _optional_score(source: dict[str, Any] | None, *keys: str) -> int | None:
+    record = source or {}
+    for key in keys:
+        if key not in record or record.get(key) is None:
+            continue
+        try:
+            return int(record[key])
+        except (TypeError, ValueError):
+            continue
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -523,29 +532,8 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
                 merged[k] = _clamp(manager_data[k])
         return merged
 
-    name = str(manager_data.get("name") or manager_data.get("display_name") or "First-Team Manager")
-    style = str(manager_data.get("style") or manager_data.get("tactical_preference") or "tactics").lower()
     explicit_archetype = str(manager_data.get("archetype_key") or "").strip()
-
-    seed_int = _stable_hash_int(f"{manager_data.get('id') or manager_data.get('manager_id') or ''}:{name}:{style}")
-    if explicit_archetype in MANAGER_ARCHETYPES:
-        base_archetype = MANAGER_ARCHETYPES[explicit_archetype]
-    elif any(k in style for k in ("youth", "academy", "development", "collective")) or manager_data.get(
-        "uses_academy_players"
-    ):
-        base_archetype = MANAGER_ARCHETYPES["youth_development_visionary"]
-    elif any(k in style for k in ("pragmatic", "defensive", "veteran", "experienced", "catenaccio")):
-        base_archetype = MANAGER_ARCHETYPES["veteran_pragmatist"]
-    elif any(k in style for k in ("pressing", "gegenpress", "high-intensity", "intense")):
-        base_archetype = MANAGER_ARCHETYPES["high_pressing_autocrat"]
-    elif any(k in style for k in ("possession", "positional", "technical")):
-        base_archetype = MANAGER_ARCHETYPES["possession_architect"]
-    else:
-        keys = list(MANAGER_ARCHETYPES.keys())
-        base_archetype = MANAGER_ARCHETYPES[keys[seed_int % len(keys)]]
-
-    jitter = lambda offset, span=4: ((seed_int >> offset) % (span * 2 + 1)) - span
-    profile = dict(base_archetype)
+    profile = dict(MANAGER_ARCHETYPES[explicit_archetype]) if explicit_archetype in MANAGER_ARCHETYPES else {}
     for numeric_key in (
         "attacking_vs_defensive",
         "possession_vs_direct",
@@ -567,8 +555,6 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
     ):
         if numeric_key in manager_data and isinstance(manager_data[numeric_key], (int, float)):
             profile[numeric_key] = _clamp(manager_data[numeric_key])
-        else:
-            profile[numeric_key] = _clamp(profile[numeric_key] + jitter(len(numeric_key), 3))
 
     for str_key in (
         "preferred_tactical_philosophy",
@@ -583,10 +569,41 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
     if isinstance(manager_data.get("preferred_formations"), list) and manager_data["preferred_formations"]:
         profile["preferred_formations"] = list(manager_data["preferred_formations"])
 
-    profile["staff_id"] = str(
-        manager_data.get("id") or manager_data.get("manager_id") or f"mgr_{_stable_hash_int(name) % 100000}"
-    )
-    profile["staff_name"] = name
+    staff_id = manager_data.get("id") or manager_data.get("manager_id")
+    if staff_id:
+        profile["staff_id"] = str(staff_id)
+    name = str(manager_data.get("name") or manager_data.get("display_name") or "").strip()
+    if name:
+        profile["staff_name"] = name
+    return profile
+
+
+def derive_department_personality(role_key: str, staff_data: dict[str, Any]) -> dict[str, Any]:
+    """The appointed person's own style, not another catalog employee's profile."""
+    name = str(staff_data.get("name") or staff_data.get("display_name") or "").strip()
+    style = str(staff_data.get("style") or staff_data.get("philosophy_summary") or "")
+    philosophy = str(staff_data.get("philosophy_summary") or style or "")
+    profile: dict[str, Any] = {
+        "archetype_key": str(staff_data.get("archetype_key") or f"{role_key}_appointed"),
+        "archetype_label": style or role_key.replace("_", " ").title(),
+        "role_key": role_key,
+    }
+    if philosophy:
+        profile["philosophy"] = philosophy
+        profile["operating_philosophy"] = philosophy
+    if style:
+        profile["style"] = style
+    if staff_data.get("communication_style"):
+        profile["communication_style"] = staff_data["communication_style"]
+    if staff_data.get("id") or staff_data.get("staff_id"):
+        profile["staff_id"] = str(staff_data.get("id") or staff_data.get("staff_id"))
+    if name:
+        profile["staff_name"] = name
+    filed = dict(staff_data.get("personality_profile") or {})
+    for key in ("protocol_strictness", "financial_discipline", "professional_independence"):
+        raw = staff_data.get(key) if staff_data.get(key) is not None else filed.get(key)
+        if isinstance(raw, (int, float)):
+            profile[key] = int(raw)
     return profile
 
 
@@ -609,20 +626,8 @@ def derive_gm_personality(gm_data: dict[str, Any]) -> dict[str, Any]:
                 merged[k] = _clamp(gm_data[k])
         return merged
 
-    name = str(gm_data.get("name") or "Matteo Valenti")
-    style = str(gm_data.get("style") or "analytics").lower()
     explicit_archetype = str(gm_data.get("archetype_key") or "").strip()
-
-    if explicit_archetype in GM_ARCHETYPES:
-        base = GM_ARCHETYPES[explicit_archetype]
-    elif any(k in style for k in ("star", "ambitious", "marquee")):
-        base = GM_ARCHETYPES["ambitious_squad_architect"]
-    elif any(k in style for k in ("youth", "moneyball", "value")):
-        base = GM_ARCHETYPES["analytics_moneyball_strategist"]
-    else:
-        base = GM_ARCHETYPES["financially_conservative_guardian"]
-
-    profile = dict(base)
+    profile = dict(GM_ARCHETYPES[explicit_archetype]) if explicit_archetype in GM_ARCHETYPES else {}
     for numeric_key in (
         "financial_discipline",
         "transfer_risk_tolerance",
@@ -646,8 +651,12 @@ def derive_gm_personality(gm_data: dict[str, Any]) -> dict[str, Any]:
         if str_key in gm_data and gm_data[str_key]:
             profile[str_key] = gm_data[str_key]
 
-    profile["staff_id"] = str(gm_data.get("id") or gm_data.get("staff_id") or f"gm_{_stable_hash_int(name) % 100000}")
-    profile["staff_name"] = name
+    staff_id = gm_data.get("id") or gm_data.get("staff_id")
+    if staff_id:
+        profile["staff_id"] = str(staff_id)
+    name = str(gm_data.get("name") or "").strip()
+    if name:
+        profile["staff_name"] = name
     return profile
 
 
@@ -657,7 +666,9 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
     """
 
     def _is_appointed_manager(raw: Any) -> bool:
-        if not isinstance(raw, dict) or not raw or raw.get("is_vacant"):
+        if not isinstance(raw, dict) or not raw or raw.get("is_vacant") or raw.get("is_default"):
+            return False
+        if raw.get("manager_id") == "gtex-staff-coach":
             return False
         raw_name = str(raw.get("name") or raw.get("display_name") or "").strip()
         return bool(raw_name and "vacant" not in raw_name.lower())
@@ -741,14 +752,16 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
     }
     resolved_depts: dict[str, dict[str, Any]] = {}
     for role_key, role_title in _role_titles.items():
-        default_entry = dict((FICTIONAL_STAFF_CATALOG.get(role_key) or [{}])[0] or {})
         raw_entry = exec_staff.get(role_key)
         if _is_appointed_record(raw_entry):
             current_entry = dict(raw_entry)
             current_entry["is_vacant"] = False
             current_entry["is_appointed"] = True
-            if not current_entry.get("personality_profile"):
-                current_entry["personality_profile"] = dict(default_entry.get("personality_profile") or {})
+            appointed_name = str(current_entry.get("name") or "")
+            stored_personality = dict(current_entry.get("personality_profile") or {})
+            stored_name = str(stored_personality.get("staff_name") or "")
+            if not stored_personality or (stored_name and stored_name != appointed_name):
+                current_entry["personality_profile"] = derive_department_personality(role_key, current_entry)
             if exec_staff.get(role_key) != current_entry:
                 exec_staff[role_key] = current_entry
                 mutated = True
@@ -757,36 +770,38 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
             resolved_depts[role_key] = _vacant_identity(role_key, role_title)
 
     coaching_staff = list(fac.get("_coaching_staff") or [])
-    if not coaching_staff:
-        coaching_staff = [dict(item) for item in FICTIONAL_STAFF_CATALOG["assistant_coaches"]]
-        fac["_coaching_staff"] = coaching_staff
-        mutated = True
 
     club_culture = dict(fac.get("_club_culture") or {})
-    if not club_culture.get("primary_identity"):
-        club_culture = {
-            "primary_identity": mgr_profile.get("preferred_tactical_philosophy", "positional_play"),
-            "secondary_identity": (
-                "youth_development"
-                if int(mgr_profile.get("youth_development_commitment", 60)) >= 70
-                else "balanced_competitiveness"
-            ),
-            "target_identity": None,
-            "transition_progress_pct": 100,
-            "dimensions": {
-                "attacking_football": int(mgr_profile.get("attacking_vs_defensive", 60)),
-                "possession_football": int(mgr_profile.get("possession_vs_direct", 60)),
-                "high_pressing": int(mgr_profile.get("pressing_philosophy", 65)),
-                "counterattacking": _clamp(100 - int(mgr_profile.get("possession_vs_direct", 60))),
-                "defensive_solidity": _clamp(100 - int(mgr_profile.get("attacking_vs_defensive", 60)) + 20),
-                "youth_development": int(mgr_profile.get("youth_development_commitment", 60)),
-                "academy_first_recruitment": int(gm_profile.get("youth_recruitment_preference", 65)),
-                "experienced_recruitment": int(mgr_profile.get("preference_for_experienced_players", 55)),
-            },
-            "last_discussed_at": None,
-        }
-        fac["_club_culture"] = club_culture
-        mutated = True
+    if mgr_profile and not club_culture.get("primary_identity"):
+        identity = mgr_profile.get("preferred_tactical_philosophy") or mgr_profile.get("tactical_preference")
+        dimensions: dict[str, int] = {}
+        for dim, raw in (
+            ("attacking_football", mgr_profile.get("attacking_vs_defensive") if "attacking_vs_defensive" in mgr_profile else None),
+            ("possession_football", mgr_profile.get("possession_vs_direct") if "possession_vs_direct" in mgr_profile else None),
+            ("high_pressing", mgr_profile.get("pressing_philosophy") if "pressing_philosophy" in mgr_profile else None),
+            ("youth_development", mgr_profile.get("youth_development_commitment") if "youth_development_commitment" in mgr_profile else None),
+            ("experienced_recruitment", mgr_profile.get("preference_for_experienced_players") if "preference_for_experienced_players" in mgr_profile else None),
+            ("academy_first_recruitment", gm_profile.get("youth_recruitment_preference") if "youth_recruitment_preference" in gm_profile else None),
+        ):
+            if raw is not None:
+                dimensions[dim] = int(raw)
+        if "possession_vs_direct" in mgr_profile and mgr_profile.get("possession_vs_direct") is not None:
+            dimensions["counterattacking"] = _clamp(100 - int(mgr_profile["possession_vs_direct"]))
+        if "attacking_vs_defensive" in mgr_profile and mgr_profile.get("attacking_vs_defensive") is not None:
+            dimensions["defensive_solidity"] = _clamp(100 - int(mgr_profile["attacking_vs_defensive"]))
+        youth_raw = mgr_profile.get("youth_development_commitment") if "youth_development_commitment" in mgr_profile else None
+        secondary = "youth_development" if youth_raw is not None and int(youth_raw) >= 70 else None
+        if identity or dimensions:
+            club_culture = {
+                "primary_identity": identity,
+                "secondary_identity": secondary,
+                "target_identity": None,
+                "transition_progress_pct": 100 if identity else None,
+                "dimensions": dimensions,
+                "last_discussed_at": None,
+            }
+            fac["_club_culture"] = club_culture
+            mutated = True
 
     if fac.get("_executive_staff") != exec_staff:
         fac["_executive_staff"] = exec_staff
@@ -1153,7 +1168,7 @@ def classify_owner_request(
 
     # If the owner explicitly asks about a 16-year-old or academy player and none exists yet in a minimal test fixture, ensure one exists
     if is_academy_mention and db is not None and club_id is not None:
-        created_or_found = _ensure_academy_striker_prospect(db, club_id, force=True)
+        created_or_found = _ensure_academy_striker_prospect(db, club_id, force=False)
         if created_or_found is not None and all(p.id != created_or_found.id for p in squad_players):
             squad_players = [*squad_players, created_or_found]
 
@@ -1174,18 +1189,28 @@ def classify_owner_request(
         candidates = [
             p
             for p in squad_players
-            if (_player_is_academy(p) or int(p.age or 22) <= 19)
+            if (_player_is_academy(p) or (p.age is not None and int(p.age) <= 19))
             and (detected_position is None or str(p.position or "").upper() == detected_position)
         ]
         if not candidates:
-            candidates = [p for p in squad_players if _player_is_academy(p) or int(p.age or 22) <= 19]
+            candidates = [p for p in squad_players if _player_is_academy(p) or (p.age is not None and int(p.age) <= 19)]
         if candidates:
-            candidates.sort(key=lambda p: (abs(int(p.age or 16) - (requested_age or 16)), -int(p.potential or 80)))
+            target_age = requested_age
+
+            def _age_rank(p: OwnerSquadPlayer) -> tuple[int, int, int]:
+                age_gap = abs(int(p.age) - target_age) if p.age is not None and target_age is not None else 0
+                potential = int(p.potential) if p.potential is not None else 0
+                return (0 if p.age is not None else 1, age_gap, -potential)
+
+            candidates.sort(key=_age_rank)
             matched_player = candidates[0]
 
     if matched_player is None and ("this player" in lower or "that player" in lower or "him" in lower):
         if squad_players:
-            matched_player = sorted(squad_players, key=lambda p: int(p.morale or 75))[0]
+            matched_player = sorted(
+                squad_players,
+                key=lambda p: (p.morale is None, int(p.morale) if p.morale is not None else 0),
+            )[0]
 
     gsi_range_match = re.search(
         r"(?:gsi|rating|rated)?[^0-9]{0,20}\b(6\d|7\d|8\d|9\d)\s*(?:to|and|-|–)\s*(6\d|7\d|8\d|9\d)\b", lower
@@ -1198,29 +1223,26 @@ def classify_owner_request(
         val = int(single_gsi_match.group(1))
         min_gsi, max_gsi = val - 2, val + 2
     else:
-        min_gsi, max_gsi = 80, 85
+        min_gsi, max_gsi = None, None
 
-    expensive_request = (
-        any(
-            kw in lower
-            for kw in (
-                "expensive",
-                "marquee",
-                "blockbuster",
-                "record fee",
-                "galáctico",
-                "galactico",
-                "superstar",
-                "at any cost",
-                "big money",
-                "50m",
-                "60m",
-                "80m",
-                "100m",
-            )
+    expensive_request = any(
+        kw in lower
+        for kw in (
+            "expensive",
+            "marquee",
+            "blockbuster",
+            "record fee",
+            "galáctico",
+            "galactico",
+            "superstar",
+            "at any cost",
+            "big money",
+            "50m",
+            "60m",
+            "80m",
+            "100m",
         )
-        or min_gsi >= 88
-    )
+    ) or (min_gsi is not None and min_gsi >= 88)
 
     is_challenge = any(
         kw in lower
@@ -1436,19 +1458,19 @@ def evaluate_layer_a_staff_decision(
     interference_count = int(rel_meta.get("interference_count", 0))
     unresolved = list(rel_meta.get("unresolved_disagreements") or [])
 
-    independence = int(
-        personality.get("professional_independence", personality.get("decision_making_independence", 75))
-    )
-    interference_tolerance = int(personality.get("tolerance_for_owner_interference", 50))
-    youth_commit = int(
-        personality.get("youth_development_commitment", personality.get("youth_recruitment_preference", 60))
-    )
-    trust_youth = int(personality.get("trust_in_young_players", youth_commit))
-    promote_academy = int(personality.get("willingness_to_promote_academy", youth_commit))
-    veteran_pref = int(personality.get("preference_for_experienced_players", 55))
-    tactical_flex = int(personality.get("tactical_flexibility", 65))
-    adaptability = int(personality.get("adaptability", 65))
-    ego_sensitivity = int(personality.get("ego_reputation_sensitivity", 65))
+    independence = _optional_score(personality, "professional_independence", "decision_making_independence")
+    interference_tolerance = _optional_score(personality, "tolerance_for_owner_interference")
+    youth_commit = _optional_score(personality, "youth_development_commitment", "youth_recruitment_preference")
+    trust_youth = _optional_score(personality, "trust_in_young_players")
+    if trust_youth is None:
+        trust_youth = youth_commit
+    promote_academy = _optional_score(personality, "willingness_to_promote_academy")
+    if promote_academy is None:
+        promote_academy = youth_commit
+    veteran_pref = _optional_score(personality, "preference_for_experienced_players")
+    tactical_flex = _optional_score(personality, "tactical_flexibility")
+    adaptability = _optional_score(personality, "adaptability")
+    ego_sensitivity = _optional_score(personality, "ego_reputation_sensitivity")
 
     deltas = {
         "trust": 0,
@@ -1479,131 +1501,170 @@ def evaluate_layer_a_staff_decision(
     ) and role_key in ("first_team_manager", "head_coach")
 
     if is_selection_or_tactical_interference:
-        if is_challenge or interference_tolerance <= 45 or interference_count >= 1:
+        if is_challenge or (interference_tolerance is not None and interference_tolerance <= 45) or interference_count >= 1:
             interference_count += 1
             rel_meta["interference_count"] = interference_count
 
     if intent in ("academy_player_opportunity", "player_selection_request"):
-        p_age = int((player or {}).get("age") or 16)
-        p_rating = int((player or {}).get("rating") or 66)
-        p_potential = int((player or {}).get("potential") or 87)
-        p_fitness = int((player or {}).get("fitness") or 92)
-        p_injured = int((player or {}).get("injured_days") or 0)
-        p_name = str((player or {}).get("name") or "Lucas Vance")
-        p_id = str((player or {}).get("id") or f"{state.club_id}-acad-st-16")
+        if not player or not player.get("id") or not player.get("name"):
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = "No academy player is named on the squad for this request."
+        else:
+            p_age = int(player["age"]) if player.get("age") is not None else None
+            p_rating = int(player["rating"]) if player.get("rating") is not None else None
+            p_potential = int(player["potential"]) if player.get("potential") is not None else None
+            p_fitness = int(player["fitness"]) if player.get("fitness") is not None else None
+            p_injured = int(player["injured_days"]) if player.get("injured_days") is not None else 0
+            p_name = str(player.get("name"))
+            p_id = str(player.get("id"))
 
-        youth_index = round((youth_commit * 0.4) + (trust_youth * 0.3) + (promote_academy * 0.3))
-        readiness_threshold = round(58 + (veteran_pref * 0.22) - (youth_index * 0.14))
-        effective_readiness = round(p_rating + ((p_potential - p_rating) * 0.22) + ((p_fitness - 80) * 0.15))
+            youth_index = None
+            readiness_threshold = None
+            if None not in (youth_commit, trust_youth, promote_academy, veteran_pref):
+                youth_index = round((youth_commit * 0.4) + (trust_youth * 0.3) + (promote_academy * 0.3))
+                readiness_threshold = round(58 + (veteran_pref * 0.22) - (youth_index * 0.14))
+            potential_term = ((p_potential - p_rating) * 0.22) if p_rating is not None and p_potential is not None else 0
+            fitness_term = ((p_fitness - 80) * 0.15) if p_fitness is not None else 0
+            effective_readiness = (
+                round(p_rating + potential_term + fitness_term) if p_rating is not None else None
+            )
 
-        reasoning_trace.update(
-            {
-                "player_id": p_id,
-                "player_name": p_name,
-                "player_age": p_age,
-                "player_rating": p_rating,
-                "player_potential": p_potential,
-                "player_fitness": p_fitness,
-                "player_injured_days": p_injured,
-                "manager_youth_index": youth_index,
-                "manager_veteran_preference": veteran_pref,
-                "computed_readiness_threshold": readiness_threshold,
-                "player_effective_readiness": effective_readiness,
-            }
-        )
-
-        if role_key == "head_of_youth_development":
-            if p_injured > 0 or p_fitness < 60:
-                outcome = "deferred"
-                reasoning_trace["verdict_reason"] = "Prospect requires medical recovery before first-team exposure."
-            else:
-                outcome = "accepted"
-                deltas["trust"] = 4
-                deltas["alignment"] = 5
-                deltas["culture_alignment"] = 4
-                state_effects["hoyd_endorsement"] = {
+            reasoning_trace.update(
+                {
                     "player_id": p_id,
                     "player_name": p_name,
-                    "recommended_role": "first_team_pathway",
+                    "player_age": p_age,
+                    "player_rating": p_rating,
+                    "player_potential": p_potential,
+                    "player_fitness": p_fitness,
+                    "player_injured_days": p_injured,
+                    "manager_youth_index": youth_index,
+                    "manager_veteran_preference": veteran_pref,
+                    "computed_readiness_threshold": readiness_threshold,
+                    "player_effective_readiness": effective_readiness,
+                }
+            )
+
+            if p_rating is None:
+                outcome = "deferred"
+                reasoning_trace["verdict_reason"] = f"{p_name} has no filed rating, so no matchday role was assigned."
+            elif role_key == "head_of_youth_development":
+                if p_injured > 0 or (p_fitness is not None and p_fitness < 60):
+                    outcome = "deferred"
+                    reasoning_trace["verdict_reason"] = "Prospect requires medical recovery before first-team exposure."
+                else:
+                    outcome = "accepted"
+                    deltas["trust"] = 4
+                    deltas["alignment"] = 5
+                    deltas["culture_alignment"] = 4
+                    state_effects["hoyd_endorsement"] = {
+                        "player_id": p_id,
+                        "player_name": p_name,
+                        "recommended_role": "first_team_pathway",
+                    }
+                    reasoning_trace["verdict_reason"] = (
+                        "HOYD strongly endorses promoting the academy prospect and will table a joint development brief with the First-Team Manager."
+                    )
+            elif p_injured > 0 or (p_fitness is not None and p_fitness < 58):
+                outcome = "declined"
+                deltas["respect"] = 1
+                reasoning_trace["verdict_reason"] = (
+                    f"{p_name} is not medically or physically fit for competitive selection (fitness {p_fitness}%, injured_days={p_injured})."
+                )
+            elif p_rating < 52:
+                outcome = "declined"
+                deltas["tension"] = 3
+                deltas["autonomy"] = -2
+                reasoning_trace["verdict_reason"] = (
+                    f"Despite strong commitment to youth, {p_name} (GSI {p_rating}) is below minimum senior competitive readiness."
+                )
+            elif youth_index is None or readiness_threshold is None or effective_readiness is None:
+                outcome = "deferred"
+                reasoning_trace["verdict_reason"] = (
+                    f"{p_name}'s youth preference or readiness inputs are not filed, so no matchday role was assigned."
+                )
+            elif (
+                youth_index >= 72
+                and effective_readiness >= readiness_threshold
+                and not (is_challenge and interference_count >= 3)
+            ):
+                outcome = "accepted" if p_rating >= 64 else "partially_accepted"
+                assigned_role = "starting_xi" if p_rating >= 64 and youth_index >= 80 else "matchday_squad_bench"
+                deltas["trust"] = 3
+                deltas["alignment"] = 4
+                deltas["culture_alignment"] = 3
+                state_effects["manager_matchday_commitment"] = {
+                    "player_id": p_id,
+                    "player_name": p_name,
+                    "matchday_role": assigned_role,
+                    "decision_outcome": outcome,
                 }
                 reasoning_trace["verdict_reason"] = (
-                    "HOYD strongly endorses promoting the academy prospect and will table a joint development brief with the First-Team Manager."
+                    f"Manager's youth commitment ({youth_index}/100) and {p_name}'s readiness ({effective_readiness} vs threshold {readiness_threshold}) support inclusion ({assigned_role})."
                 )
-        elif p_injured > 0 or p_fitness < 58:
-            outcome = "declined"
-            deltas["respect"] = 1
-            reasoning_trace["verdict_reason"] = (
-                f"{p_name} is not medically or physically fit for competitive selection (fitness {p_fitness}%, injured_days={p_injured})."
-            )
-        elif p_rating < 52:
-            outcome = "declined"
-            deltas["tension"] = 3
-            deltas["autonomy"] = -2
-            reasoning_trace["verdict_reason"] = (
-                f"Despite strong commitment to youth, {p_name} (GSI {p_rating}) is below minimum senior competitive readiness."
-            )
-        elif (
-            youth_index >= 72
-            and effective_readiness >= readiness_threshold
-            and not (is_challenge and interference_count >= 3)
-        ):
-            outcome = "accepted" if p_rating >= 64 else "partially_accepted"
-            assigned_role = "starting_xi" if p_rating >= 64 and youth_index >= 80 else "matchday_squad_bench"
-            deltas["trust"] = 3
-            deltas["alignment"] = 4
-            deltas["culture_alignment"] = 3
-            state_effects["manager_matchday_commitment"] = {
-                "player_id": p_id,
-                "player_name": p_name,
-                "matchday_role": assigned_role,
-                "decision_outcome": outcome,
-            }
-            reasoning_trace["verdict_reason"] = (
-                f"Manager's youth commitment ({youth_index}/100) and {p_name}'s readiness ({effective_readiness} vs threshold {readiness_threshold}) support inclusion ({assigned_role})."
-            )
-        elif veteran_pref >= 68 or youth_index <= 45 or effective_readiness < readiness_threshold - 4:
-            if interference_count >= 4 and independence >= 72 and interference_tolerance <= 45:
-                outcome = "resignation_notice"
-            elif interference_count == 3 and independence >= 72 and interference_tolerance <= 45:
-                outcome = "ultimatum"
-            elif is_challenge or interference_count >= 2:
-                outcome = "formal_disagreement"
-            else:
-                outcome = "declined"
+            elif (
+                (veteran_pref is not None and veteran_pref >= 68)
+                or youth_index <= 45
+                or effective_readiness < readiness_threshold - 4
+            ):
+                if (
+                    interference_count >= 4
+                    and independence is not None
+                    and independence >= 72
+                    and interference_tolerance is not None
+                    and interference_tolerance <= 45
+                ):
+                    outcome = "resignation_notice"
+                elif (
+                    interference_count == 3
+                    and independence is not None
+                    and independence >= 72
+                    and interference_tolerance is not None
+                    and interference_tolerance <= 45
+                ):
+                    outcome = "ultimatum"
+                elif is_challenge or interference_count >= 2:
+                    outcome = "formal_disagreement"
+                else:
+                    outcome = "declined"
 
-            severity = 2 if (is_challenge or interference_count >= 2) else 1
-            deltas["tension"] = 8 * severity + max(0, (independence - 60) // 5)
-            deltas["autonomy"] = -(6 * severity + max(0, (70 - interference_tolerance) // 6))
-            deltas["trust"] = -(4 * severity)
-            deltas["alignment"] = -(5 * severity)
-            state_effects["manager_matchday_rejection"] = {
-                "player_id": p_id,
-                "player_name": p_name,
-                "reason": "insufficient_physical_and_tactical_maturity",
-            }
-            reasoning_trace["verdict_reason"] = (
-                f"Manager prioritises experienced players ({veteran_pref}/100) and evaluates {p_name} (age {p_age}, GSI {p_rating}) as below senior readiness threshold ({readiness_threshold})."
-            )
-        else:
-            outcome = "partially_accepted"
-            deltas["trust"] = 2
-            deltas["alignment"] = 2
-            deltas["autonomy"] = -1
-            state_effects["manager_matchday_commitment"] = {
-                "player_id": p_id,
-                "player_name": p_name,
-                "matchday_role": "substitute_impact",
-                "decision_outcome": outcome,
-            }
-            reasoning_trace["verdict_reason"] = (
-                f"Manager balances development with competitive risk: {p_name} is not ready to lead the line from kick-off but will be named on the bench for controlled second-half substitute minutes."
-            )
+                severity = 2 if (is_challenge or interference_count >= 2) else 1
+                independence_penalty = max(0, (independence - 60) // 5) if independence is not None else 0
+                tolerance_penalty = (
+                    max(0, (70 - interference_tolerance) // 6) if interference_tolerance is not None else 0
+                )
+                deltas["tension"] = 8 * severity + independence_penalty
+                deltas["autonomy"] = -(6 * severity + tolerance_penalty)
+                deltas["trust"] = -(4 * severity)
+                deltas["alignment"] = -(5 * severity)
+                state_effects["manager_matchday_rejection"] = {
+                    "player_id": p_id,
+                    "player_name": p_name,
+                    "reason": "insufficient_physical_and_tactical_maturity",
+                }
+                reasoning_trace["verdict_reason"] = (
+                    f"Manager prioritises experienced players ({veteran_pref}/100) and evaluates {p_name} (age {p_age}, GSI {p_rating}) as below senior readiness threshold ({readiness_threshold})."
+                )
+            else:
+                outcome = "partially_accepted"
+                deltas["trust"] = 2
+                deltas["alignment"] = 2
+                deltas["autonomy"] = -1
+                state_effects["manager_matchday_commitment"] = {
+                    "player_id": p_id,
+                    "player_name": p_name,
+                    "matchday_role": "substitute_impact",
+                    "decision_outcome": outcome,
+                }
+                reasoning_trace["verdict_reason"] = (
+                    f"Manager balances development with competitive risk: {p_name} is not ready to lead the line from kick-off but will be named on the bench for controlled second-half substitute minutes."
+                )
 
     elif intent == "drop_or_discipline_player":
         p_name = str((player or {}).get("name") or "the player")
         p_id = str((player or {}).get("id") or "unknown")
-        p_morale = int((player or {}).get("morale") or 72)
-        discipline_strictness = int(personality.get("player_discipline_philosophy", 75))
+        p_morale = int(player["morale"]) if player and player.get("morale") is not None else None
+        discipline_strictness = _optional_score(personality, "player_discipline_philosophy")
         reasoning_trace.update(
             {
                 "player_id": p_id,
@@ -1612,7 +1673,13 @@ def evaluate_layer_a_staff_decision(
                 "discipline_strictness": discipline_strictness,
             }
         )
-        if independence >= 80 and interference_tolerance <= 35 and (is_challenge or interference_count >= 2):
+        if (
+            independence is not None
+            and independence >= 80
+            and interference_tolerance is not None
+            and interference_tolerance <= 35
+            and (is_challenge or interference_count >= 2)
+        ):
             if interference_count >= 4:
                 outcome = "resignation_notice"
             elif interference_count == 3:
@@ -1624,6 +1691,11 @@ def evaluate_layer_a_staff_decision(
             deltas["trust"] = -8
             reasoning_trace["verdict_reason"] = (
                 "Manager guards dressing-room and selection authority against direct owner exclusion orders."
+            )
+        elif discipline_strictness is None or p_morale is None:
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                f"Discipline or morale for {p_name} is not filed, so nobody was dropped."
             )
         elif discipline_strictness >= 75 and p_morale <= 78:
             outcome = "accepted"
@@ -1646,20 +1718,29 @@ def evaluate_layer_a_staff_decision(
             )
 
     elif intent in ("tactical_style_shift", "formation_request", "club_culture_direction"):
-        req_style = str(intent_data.get("requested_style") or "attacking")
-        atk_def = int(personality.get("attacking_vs_defensive", 60))
-        poss_dir = int(personality.get("possession_vs_direct", 60))
-        press = int(personality.get("pressing_philosophy", 65))
+        req_style = intent_data.get("requested_style")
+        atk_def = _optional_score(personality, "attacking_vs_defensive")
+        poss_dir = _optional_score(personality, "possession_vs_direct")
+        press = _optional_score(personality, "pressing_philosophy")
 
-        style_gap = 0
-        if req_style == "attacking":
-            style_gap = max(0, 72 - atk_def)
-        elif req_style == "defensive":
-            style_gap = max(0, atk_def - 42)
-        elif req_style == "possession":
-            style_gap = max(0, 72 - poss_dir)
-        elif req_style == "high_pressing":
-            style_gap = max(0, 75 - press)
+        measured_styles = {
+            "attacking": atk_def,
+            "defensive": atk_def,
+            "possession": poss_dir,
+            "high_pressing": press,
+        }
+        style_gap = None
+        if req_style and req_style not in measured_styles:
+            style_gap = 0
+        elif req_style and measured_styles.get(req_style) is not None:
+            if req_style == "attacking":
+                style_gap = max(0, 72 - atk_def)
+            elif req_style == "defensive":
+                style_gap = max(0, atk_def - 42)
+            elif req_style == "possession":
+                style_gap = max(0, 72 - poss_dir)
+            elif req_style == "high_pressing":
+                style_gap = max(0, 75 - press)
 
         reasoning_trace.update(
             {
@@ -1672,7 +1753,23 @@ def evaluate_layer_a_staff_decision(
             }
         )
 
-        if style_gap <= 15:
+        if intent != "club_culture_direction" and role_key not in ("first_team_manager", "head_coach"):
+            philosophy = str(
+                personality.get("philosophy")
+                or personality.get("operating_philosophy")
+                or personality.get("style")
+                or "their filed brief"
+            )
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                f"{staff_name} leaves the shape to the first-team manager. Their own brief is {philosophy}."
+            )
+        elif style_gap is None or tactical_flex is None or adaptability is None:
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                "The requested style or the manager's tactical scores are not filed, so the shape was left unchanged."
+            )
+        elif style_gap <= 15:
             outcome = "accepted"
             deltas["alignment"] = 5
             deltas["culture_alignment"] = 6
@@ -1709,102 +1806,154 @@ def evaluate_layer_a_staff_decision(
             )
 
     elif intent == "transfer_recruitment_target":
-        pos = str(intent_data.get("detected_position") or "LW").upper()
-        min_gsi = int(intent_data.get("min_gsi") or 80)
-        max_gsi = int(intent_data.get("max_gsi") or 85)
+        pos = str(intent_data.get("detected_position") or "").upper()
+        min_gsi = intent_data.get("min_gsi")
+        max_gsi = intent_data.get("max_gsi")
+        min_gsi = int(min_gsi) if min_gsi is not None else None
+        max_gsi = int(max_gsi) if max_gsi is not None else None
         expensive = bool(intent_data.get("expensive_request", False))
-        treasury = _club_treasury_gtex(db, state)
-        fin_disc = int(personality.get("financial_discipline", 75))
-        risk_tol = int(personality.get("transfer_risk_tolerance", 50))
-
-        estimated_fee = round(((min_gsi + max_gsi) / 2.0 - 65) * 420.0 * (4.0 if expensive else 1.0), 2)
-        estimated_wage = round(((min_gsi + max_gsi) / 2.0 - 60) * 45.0 * (2.5 if expensive else 1.0), 2)
-        budget_ratio = estimated_fee / max(treasury, 1.0)
-
-        reasoning_trace.update(
-            {
-                "target_position": pos,
-                "min_gsi": min_gsi,
-                "max_gsi": max_gsi,
-                "expensive_request": expensive,
-                "treasury_balance": treasury,
-                "estimated_fee": estimated_fee,
-                "estimated_weekly_wage": estimated_wage,
-                "budget_ratio": round(budget_ratio, 3),
-                "gm_financial_discipline": fin_disc,
-                "gm_transfer_risk_tolerance": risk_tol,
-            }
-        )
-
-        if (expensive or budget_ratio > 0.38) and fin_disc >= 68 and risk_tol <= 60:
-            outcome = "counterproposal"
-            deltas["respect"] = 2
-            deltas["tension"] = 4
-            deltas["alignment"] = -2
-            state_effects["recruitment_workflow"] = {
-                "target_position": pos,
-                "min_gsi": min_gsi,
-                "max_gsi": max_gsi,
-                "estimated_fee": estimated_fee,
-                "estimated_weekly_wage": estimated_wage,
-                "gm_verdict": "counterproposal_younger_value",
-                "counterproposal_gsi_range": [max(75, min_gsi - 4), max(81, min_gsi)],
-                "counterproposal_fee": round(estimated_fee * 0.48, 2),
-            }
-            reasoning_trace["verdict_reason"] = (
-                f"Financially disciplined assessment ({fin_disc}/100): committing {estimated_fee:,.0f} GTX ({budget_ratio*100:.0f}% of liquid treasury) breaches wage/fee sustainability. Counterproposing a high-ceiling U22 {pos} alternative at roughly half the capital outlay."
+        band = f" at GSI {min_gsi}–{max_gsi}" if min_gsi is not None and max_gsi is not None else ""
+        if not pos:
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = "No position was named, so no recruitment search was opened."
+        elif role_key == "chief_scout":
+            philosophy = str(
+                personality.get("philosophy")
+                or personality.get("operating_philosophy")
+                or personality.get("style")
+                or "the filed scouting brief"
             )
-        elif budget_ratio > 0.90:
-            outcome = "declined"
-            deltas["tension"] = 5
+            outcome = "accepted"
+            state_effects["scout_shortlist"] = {
+                "target_position": pos,
+                "min_gsi": min_gsi,
+                "max_gsi": max_gsi,
+                "philosophy": philosophy,
+            }
             reasoning_trace["verdict_reason"] = (
-                f"Insufficient recruitment capital: estimated package ({estimated_fee:,.0f} GTX) approaches or exceeds available club treasury ({treasury:,.0f} GTX)."
+                f"{staff_name} will shortlist {pos} targets{band} under {philosophy}."
+            )
+        elif role_key == "head_of_youth_development":
+            philosophy = str(
+                personality.get("philosophy")
+                or personality.get("operating_philosophy")
+                or personality.get("style")
+                or "the filed youth brief"
+            )
+            outcome = "accepted"
+            state_effects["youth_recruitment_note"] = {
+                "target_position": pos,
+                "age_band": "16-21",
+                "philosophy": philosophy,
+            }
+            reasoning_trace["verdict_reason"] = (
+                f"{staff_name} will judge {pos} targets on the 16–21 age profile under {philosophy}. The general manager holds the fee."
+            )
+        elif role_key == "medical_director":
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                f"{staff_name} does not run recruitment. The general manager holds the fee."
             )
         else:
-            outcome = "accepted" if budget_ratio <= 0.25 else "conditional_acceptance"
-            deltas["trust"] = 3
-            deltas["alignment"] = 4
-            state_effects["recruitment_workflow"] = {
+            treasury = _club_treasury_gtex(db, state)
+            fin_disc = _optional_score(personality, "financial_discipline")
+            risk_tol = _optional_score(personality, "transfer_risk_tolerance")
+            reasoning_trace.update(
+                {
+                    "target_position": pos,
+                    "min_gsi": min_gsi,
+                    "max_gsi": max_gsi,
+                    "expensive_request": expensive,
+                    "treasury_balance": treasury,
+                    "gm_financial_discipline": fin_disc,
+                    "gm_transfer_risk_tolerance": risk_tol,
+                }
+            )
+            conservative = (
+                expensive
+                and fin_disc is not None
+                and fin_disc >= 68
+                and (risk_tol is None or risk_tol <= 60)
+            )
+            workflow = {
                 "target_position": pos,
                 "min_gsi": min_gsi,
                 "max_gsi": max_gsi,
-                "estimated_fee": estimated_fee,
-                "estimated_weekly_wage": estimated_wage,
-                "gm_verdict": "shortlist_commissioned",
+                "gm_verdict": "counterproposal_younger_value" if conservative else "shortlist_commissioned",
             }
-            reasoning_trace["verdict_reason"] = (
-                f"Recruitment assignment activated for {pos} (GSI {min_gsi}–{max_gsi}), estimated fee {estimated_fee:,.0f} GTX against treasury {treasury:,.0f} GTX."
-            )
+            if conservative:
+                outcome = "counterproposal"
+                deltas["respect"] = 2
+                deltas["tension"] = 4
+                deltas["alignment"] = -2
+                state_effects["recruitment_workflow"] = workflow
+                reasoning_trace["verdict_reason"] = (
+                    f"Financial discipline is {fin_disc}/100 and the request is a marquee {pos}. "
+                    f"The fee will be the value already filed on each player, against treasury {treasury:,.0f} GTX. "
+                    "A younger filed alternative is the counterproposal."
+                )
+            else:
+                outcome = "accepted"
+                deltas["trust"] = 3
+                deltas["alignment"] = 4
+                state_effects["recruitment_workflow"] = workflow
+                reasoning_trace["verdict_reason"] = (
+                    f"Recruitment assignment opened for {pos}{band}. "
+                    f"Fees stay on the player records. Treasury on the day is {treasury:,.0f} GTX."
+                )
 
     elif intent == "recruitment_spending_critique":
-        fin_disc = int(personality.get("financial_discipline", 75))
-        reasoning_trace["gm_financial_discipline"] = fin_disc
-        if fin_disc >= 75:
-            outcome = "accepted"
-            deltas["alignment"] = 4
-            deltas["trust"] = 2
+        if role_key not in ("general_manager", "finance_commercial_director"):
+            outcome = "deferred"
             reasoning_trace["verdict_reason"] = (
-                "General Manager shares strict cost-control philosophy and tightens valuation ceilings on active targets."
+                f"{staff_name} does not hold the wage book. The general manager does."
             )
         else:
-            outcome = "formal_disagreement"
-            deltas["tension"] = 8
-            deltas["alignment"] = -6
-            deltas["autonomy"] = -5
-            reasoning_trace["verdict_reason"] = (
-                "Ambitious recruitment lead defends squad investment levels as essential to compete at the club's target tier."
-            )
+            fin_disc = _optional_score(personality, "financial_discipline")
+            reasoning_trace["gm_financial_discipline"] = fin_disc
+            if fin_disc is None:
+                outcome = "deferred"
+                reasoning_trace["verdict_reason"] = "Financial discipline is not filed, so the wage ceiling was left unchanged."
+            elif fin_disc >= 75:
+                outcome = "accepted"
+                deltas["alignment"] = 4
+                deltas["trust"] = 2
+                state_effects["wage_ceiling"] = {"mode": "catalog"}
+                reasoning_trace["verdict_reason"] = (
+                    "General Manager shares strict cost-control philosophy and tightens valuation ceilings on active targets."
+                )
+            else:
+                outcome = "formal_disagreement"
+                deltas["tension"] = 8
+                deltas["alignment"] = -6
+                deltas["autonomy"] = -5
+                reasoning_trace["verdict_reason"] = (
+                    "Ambitious recruitment lead defends squad investment levels as essential to compete at the club's target tier."
+                )
 
     elif intent == "medical_clearance_pressure":
-        strictness = int(personality.get("protocol_strictness", 90))
-        reasoning_trace["medical_protocol_strictness"] = strictness
-        outcome = "declined" if strictness >= 70 else "conditional_acceptance"
-        deltas["tension"] = 6
-        deltas["autonomy"] = -4
-        deltas["respect"] = 2
-        reasoning_trace["verdict_reason"] = (
-            "Medical Director refuses to override return-to-play biometrics where reinjury risk exceeds clinical thresholds."
-        )
+        if role_key != "medical_director":
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                f"{staff_name} does not clear players. The medical director holds return-to-play."
+            )
+        else:
+            if personality.get("protocol_strictness") is not None:
+                strictness = int(personality["protocol_strictness"])
+            else:
+                strictness = independence
+            reasoning_trace["medical_protocol_strictness"] = strictness
+            if strictness is None:
+                outcome = "deferred"
+                reasoning_trace["verdict_reason"] = "Medical strictness is not filed, so no clearance was changed."
+            else:
+                outcome = "declined" if strictness >= 70 else "conditional_acceptance"
+                deltas["tension"] = 6
+                deltas["autonomy"] = -4
+                deltas["respect"] = 2
+                reasoning_trace["verdict_reason"] = (
+                    "Medical Director refuses to override return-to-play biometrics where reinjury risk exceeds clinical thresholds."
+                )
 
     elif intent == "challenge_or_override_decision":
         reasoning_trace.update(
@@ -1815,7 +1964,12 @@ def evaluate_layer_a_staff_decision(
                 "ego_reputation_sensitivity": ego_sensitivity,
             }
         )
-        if interference_count >= 4 and independence >= 72 and interference_tolerance <= 45:
+        if independence is None or interference_tolerance is None:
+            outcome = "deferred"
+            reasoning_trace["verdict_reason"] = (
+                "Independence and interference tolerance are not filed, so no override was judged."
+            )
+        elif interference_count >= 4 and independence >= 72 and interference_tolerance <= 45:
             outcome = "resignation_notice"
             deltas["tension"] = 22
             deltas["trust"] = -20
@@ -1996,28 +2150,28 @@ def _apply_layer_a_state_effects(
         # Public supporters and media do NOT learn of private chats here; public consequences only follow observable
         # matchday lineups with zero youth appearances.
         hoyd = (fac.get("_executive_staff") or {}).get("head_of_youth_development") or {}
-        hoyd_id = str(hoyd.get("id") or "head_of_youth_development")
-        hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
-        hoyd_rel = ensure_staff_relationship(
-            db,
-            state,
-            role_key="head_of_youth_development",
-            staff_id=hoyd_id,
-            staff_name=hoyd_name,
-            staff_title="Head of Youth Development",
-            personality_profile=dict(hoyd.get("personality_profile") or {}),
-        )
-        hoyd_rel.tension = _clamp(int(hoyd_rel.tension) + 4)
-        hoyd_rel.alignment = _clamp(int(hoyd_rel.alignment) - 4)
-        hoyd_meta = dict(hoyd_rel.metadata_json or {})
-        hoyd_meta["internal_academy_concern"] = {
-            "player_id": str(item.get("player_id") or ""),
-            "player_name": str(item.get("player_name") or "Academy Prospect"),
-            "rejected_by_manager": staff_name,
-            "world_day": int(state.world_day or 1),
-        }
-        hoyd_rel.metadata_json = hoyd_meta
-        flag_modified(hoyd_rel, "metadata_json")
+        hoyd_name = str(hoyd.get("name") or "").strip()
+        if hoyd_name and not hoyd.get("is_vacant") and not hoyd.get("is_default"):
+            hoyd_rel = ensure_staff_relationship(
+                db,
+                state,
+                role_key="head_of_youth_development",
+                staff_id=str(hoyd.get("id") or hoyd.get("staff_id") or "head_of_youth_development"),
+                staff_name=hoyd_name,
+                staff_title="Head of Youth Development",
+                personality_profile=dict(hoyd.get("personality_profile") or {}),
+            )
+            hoyd_rel.tension = _clamp(int(hoyd_rel.tension) + 4)
+            hoyd_rel.alignment = _clamp(int(hoyd_rel.alignment) - 4)
+            hoyd_meta = dict(hoyd_rel.metadata_json or {})
+            hoyd_meta["internal_academy_concern"] = {
+                "player_id": str(item.get("player_id") or ""),
+                "player_name": str(item.get("player_name") or ""),
+                "rejected_by_manager": staff_name,
+                "world_day": int(state.world_day or 1),
+            }
+            hoyd_rel.metadata_json = hoyd_meta
+            flag_modified(hoyd_rel, "metadata_json")
 
         from app.owner_console import living_institution
 
@@ -2080,16 +2234,100 @@ def _apply_layer_a_state_effects(
             state,
             initiated_by_role="owner" if role_key == "general_manager" else role_key,
             initiated_by_name=staff_name,
-            target_position=str(rw.get("target_position") or "LW"),
-            min_gsi=int(rw.get("min_gsi") or 80),
-            max_gsi=int(rw.get("max_gsi") or 85),
+            target_position=str(rw.get("target_position") or ""),
+            min_gsi=int(rw["min_gsi"]) if rw.get("min_gsi") is not None else None,
+            max_gsi=int(rw["max_gsi"]) if rw.get("max_gsi") is not None else None,
             gm_verdict=str(rw.get("gm_verdict") or "shortlist_commissioned"),
-            estimated_fee=float(rw.get("estimated_fee") or 6500.0),
-            estimated_weekly_wage=float(rw.get("estimated_weekly_wage") or 850.0),
+            estimated_fee=float(rw["estimated_fee"]) if rw.get("estimated_fee") is not None else None,
+            estimated_weekly_wage=float(rw["estimated_weekly_wage"]) if rw.get("estimated_weekly_wage") is not None else None,
         )
         state_effects["recruitment_assignment_id"] = assignment.id
         state_effects["candidate_shortlist"] = assignment.candidate_shortlist_json
         state_effects["recommended_candidate"] = assignment.recommended_candidate_json
+
+    if "scout_shortlist" in state_effects:
+        brief = dict(state_effects["scout_shortlist"])
+        pos = str(brief.get("target_position") or "").upper()
+        min_gsi = int(brief["min_gsi"]) if brief.get("min_gsi") is not None else None
+        max_gsi = int(brief["max_gsi"]) if brief.get("max_gsi") is not None else None
+        philosophy = str(brief.get("philosophy") or "")
+        rows = list(
+            db.scalars(
+                select(OwnerSquadPlayer).where(
+                    OwnerSquadPlayer.club_id != state.club_id,
+                    OwnerSquadPlayer.status == "active",
+                )
+            ).all()
+        )
+        shortlist: list[dict[str, Any]] = []
+        for row in rows:
+            if row.rating is None:
+                continue
+            rating = int(row.rating)
+            if min_gsi is not None and rating < min_gsi:
+                continue
+            if max_gsi is not None and rating > max_gsi:
+                continue
+            row_pos = str(row.position or "").upper()
+            if pos and pos not in row_pos and row_pos not in pos:
+                continue
+            shortlist.append(
+                {
+                    "candidate_id": row.id,
+                    "player_name": row.name,
+                    "position": row.position,
+                    "age": row.age,
+                    "gsi": rating,
+                    "potential": int(row.potential) if row.potential is not None else None,
+                    "club_id": row.club_id,
+                    "source": "filed_squad",
+                }
+            )
+            if len(shortlist) >= 8:
+                break
+        assignment = OwnerRecruitmentAssignment(
+            id=str(uuid4()),
+            club_id=state.club_id,
+            initiated_by_role="chief_scout",
+            initiated_by_name=staff_name,
+            target_position=pos or "ANY",
+            min_gsi=min_gsi,
+            max_gsi=max_gsi,
+            tactical_profile=(philosophy or "filed")[:128],
+            max_fee=0.0,
+            max_weekly_wage=0.0,
+            gm_evaluation_status="scout_shortlist",
+            gm_notes="",
+            scout_notes=(
+                f"{staff_name} filed {pos or 'any position'} at GSI {min_gsi}–{max_gsi} under {philosophy}."
+            ),
+            candidate_shortlist_json=shortlist,
+            recommended_candidate_json=shortlist[0] if shortlist else {},
+            metadata_json={"philosophy": philosophy, "filed_count": len(shortlist)},
+            created_at=_utcnow(),
+            updated_at=_utcnow(),
+        )
+        db.add(assignment)
+        db.flush()
+        state_effects["recruitment_assignment_id"] = assignment.id
+        state_effects["candidate_shortlist"] = shortlist
+
+    if "youth_recruitment_note" in state_effects:
+        fac["_youth_recruitment_brief"] = {
+            **dict(state_effects["youth_recruitment_note"]),
+            "filed_by": staff_name,
+            "world_day": int(state.world_day or 1),
+        }
+
+    if "wage_ceiling" in state_effects and str(state_effects["wage_ceiling"].get("mode") or "") == "catalog":
+        fac["_contract_wage_ceiling"] = "catalog"
+
+    if role_key == "medical_director" and outcome == "declined":
+        fac["_medical_protocol_hold"] = {
+            "world_day": int(state.world_day or 1),
+            "staff_name": staff_name,
+            "reason": "return_to_play_refused",
+        }
 
     if "staff_resigned" in state_effects:
         from app.owner_console import comms_persistence, living_club_world, living_institution
@@ -2109,23 +2347,14 @@ def _apply_layer_a_state_effects(
         fac["_staff_career_history"] = history[-40:]
         prev_mgr_snapshot = dict(state.manager_json or {})
         if role_key in ("first_team_manager", "head_coach"):
-            caretaker_mgr = {
-                "id": f"mgr_caretaker_{uuid4().hex[:6]}",
-                "manager_id": f"mgr_caretaker_{uuid4().hex[:6]}",
-                "name": "Marco Bellini (Caretaker)",
-                "display_name": "Marco Bellini (Caretaker)",
-                "style": "tactics",
-                "tactic": "4-2-3-1 Balanced",
-                "level": 2,
-                "is_caretaker": True,
-                "previous_resigned_manager": {
-                    "id": staff_id,
-                    "name": staff_name,
-                    "resigned_at": _utcnow().isoformat(),
-                },
-            }
-            caretaker_mgr["personality_profile"] = derive_manager_personality(caretaker_mgr)
-            state.manager_json = caretaker_mgr
+            vacant_mgr = {"name": "", "is_vacant": True, "status": "vacant", "is_appointed": False}
+            state.manager_json = vacant_mgr
+            exec_staff = dict(fac.get("_executive_staff") or {})
+            exec_staff.pop("first_team_manager", None)
+            fac["_executive_staff"] = exec_staff
+            setup = dict(fac.get("_tactical_setup") or {})
+            setup.pop("ratified_manager_id", None)
+            fac["_tactical_setup"] = setup
             flag_modified(state, "manager_json")
             state.facilities_json = fac
             flag_modified(state, "facilities_json")
@@ -2135,7 +2364,7 @@ def _apply_layer_a_state_effects(
                 db,
                 state,
                 action="resigned",
-                new_manager=caretaker_mgr,
+                new_manager=vacant_mgr,
                 previous_manager={**prev_mgr_snapshot, "id": staff_id, "name": staff_name},
                 reason="resigned_owner_interference",
                 severance_gtex=0,
@@ -2143,22 +2372,14 @@ def _apply_layer_a_state_effects(
                 idempotency_key=f"resign:{state.club_id}:{staff_id}:d{int(state.world_day or 1)}",
             )
             state_effects["canonical_event_id"] = resign_ev.id
-            ensure_staff_relationship(
-                db,
-                state,
-                role_key="first_team_manager",
-                staff_id=str(caretaker_mgr["id"]),
-                staff_name=str(caretaker_mgr["name"]),
-                staff_title="First-Team Manager (Caretaker)",
-                personality_profile=caretaker_mgr["personality_profile"],
-            )
+            retire_staff_relationship_on_vacancy(db, state, role_key="first_team_manager")
             living_club_world.reconcile_staff_relationships(db, state)
             comms_persistence.rotate_staff_conversation_on_change(
                 db,
                 state,
                 role_key="first_team_manager",
                 previous_staff_name=staff_name,
-                new_staff_name=str(caretaker_mgr["name"]),
+                new_staff_name=None,
             )
         else:
             exec_staff = dict(fac.get("_executive_staff") or {})
@@ -2221,15 +2442,6 @@ def _apply_layer_a_state_effects(
 # SECTION 6 & 7: INTER-STAFF RECRUITMENT WORKFLOW (MANAGER <-> GM <-> CHIEF SCOUT)
 # ---------------------------------------------------------------------------
 
-CANDIDATE_NAME_POOL: dict[str, list[tuple[str, str]]] = {
-    "LW": [("Mateo", "Alvarado"), ("Kofi", "Mensah"), ("Lukas", "Lindholm"), ("Tiago", "Nogueira")],
-    "RW": [("Yanis", "Benali"), ("Enzo", "Castellanos"), ("Soren", "Dahl"), ("Caio", "Teixeira")],
-    "ST": [("Viktor", "Kovacevic"), ("Amadou", "Traoré"), ("Rafael", "Moretti"), ("Stijn", "Verhoeven")],
-    "CB": [("Nikola", "Milovanovic"), ("Benoît", "Delacroix"), ("Mamadou", "Sarr"), ("Henrik", "Solberg")],
-    "CM": [("Alessio", "Conti"), ("Ruben", "Van Der Berg"), ("Cheick", "Doumbia"), ("Mikel", "Etxebarria")],
-}
-
-
 def execute_inter_staff_recruitment_workflow(
     db: Session,
     state: OwnerClubState,
@@ -2237,11 +2449,11 @@ def execute_inter_staff_recruitment_workflow(
     initiated_by_role: str,
     initiated_by_name: str,
     target_position: str,
-    min_gsi: int,
-    max_gsi: int,
+    min_gsi: int | None,
+    max_gsi: int | None,
     gm_verdict: str = "shortlist_commissioned",
-    estimated_fee: float = 6500.0,
-    estimated_weekly_wage: float = 850.0,
+    estimated_fee: float | None = None,
+    estimated_weekly_wage: float | None = None,
 ) -> OwnerRecruitmentAssignment:
     """Coordinate the First-Team Manager, General Manager, and Chief Scout on a recruitment requirement."""
     identities = ensure_club_staff_identities(db, state)
@@ -2253,72 +2465,77 @@ def execute_inter_staff_recruitment_workflow(
     treasury = _club_treasury_gtex(db, state)
 
     pos = target_position.upper()
-    names = CANDIDATE_NAME_POOL.get(pos, CANDIDATE_NAME_POOL["LW"])
-    seed = _stable_hash_int(f"{state.club_id}:{pos}:{min_gsi}:{max_gsi}")
 
-    shortlist: list[dict[str, Any]] = []
-    gsi_1 = min(max_gsi, max(min_gsi, min_gsi + (seed % max(1, max_gsi - min_gsi + 1))))
-    fee_1 = round(max(1200.0, estimated_fee), 2)
-    wage_1 = round(max(250.0, estimated_weekly_wage), 2)
-    c1_first, c1_last = names[seed % len(names)]
-    shortlist.append(
-        {
-            "candidate_id": f"target_{pos.lower()}_{gsi_1}_a",
-            "player_name": f"{c1_first} {c1_last}",
-            "position": pos,
-            "age": 24,
-            "gsi": gsi_1,
-            "potential": min(93, gsi_1 + 4),
-            "estimated_fee": fee_1,
-            "weekly_wage_demand": wage_1,
-            "tactical_fit": mgr_profile.get("preferred_tactical_philosophy", "positional_play"),
-            "scout_grade": "A",
-            "profile_tag": "prime_tactical_fit",
-            "summary": f"Proven {pos} with pace, crossing delivery, and immediate tactical readiness.",
-        }
-    )
+    def _filed_targets(low: int | None, high: int | None, *, max_age: int | None = None) -> list[dict[str, Any]]:
+        rows = list(
+            db.scalars(
+                select(OwnerSquadPlayer).where(
+                    OwnerSquadPlayer.club_id != state.club_id,
+                    OwnerSquadPlayer.status == "active",
+                )
+            ).all()
+        )
+        found: list[dict[str, Any]] = []
+        for row in rows:
+            if row.rating is None:
+                continue
+            rating = int(row.rating)
+            age = int(row.age) if row.age is not None else None
+            row_pos = str(row.position or "").upper()
+            if low is not None and rating < low:
+                continue
+            if high is not None and rating > high:
+                continue
+            if pos and pos not in row_pos and row_pos not in pos:
+                continue
+            if max_age is not None and (age is None or age > max_age):
+                continue
+            fee = float(row.value_coin or 0)
+            found.append(
+                {
+                    "candidate_id": row.id,
+                    "player_name": row.name,
+                    "position": row.position,
+                    "age": age,
+                    "gsi": rating,
+                    "potential": int(row.potential) if row.potential is not None else None,
+                    "estimated_fee": fee,
+                    "weekly_wage_demand": 0,
+                    "club_id": row.club_id,
+                    "source": "filed_squad",
+                    "tactical_fit": str(mgr_profile.get("preferred_tactical_philosophy") or ""),
+                    "summary": f"{row.name} is already on another club's squad.",
+                }
+            )
+        found.sort(key=lambda item: (item["age"] is None, item["age"] or 0, -int(item["gsi"])))
+        return found
 
-    gsi_2 = max_gsi
-    fee_2 = round(fee_1 * 1.22, 2)
-    wage_2 = round(wage_1 * 1.25, 2)
-    c2_first, c2_last = names[(seed + 1) % len(names)]
-    shortlist.append(
-        {
-            "candidate_id": f"target_{pos.lower()}_{gsi_2}_b",
-            "player_name": f"{c2_first} {c2_last}",
+    prime = _filed_targets(min_gsi, max_gsi)
+    younger_low = max(1, min_gsi - 8) if min_gsi is not None else None
+    younger = _filed_targets(younger_low, max_gsi, max_age=21)
+    if gm_verdict == "counterproposal_younger_value" and younger:
+        shortlist = younger
+        recommended = younger[0]
+        gm_status = "counterproposal_younger_value"
+    elif prime:
+        shortlist = prime
+        recommended = prime[0]
+        gm_status = "awaiting_owner_approval"
+    else:
+        shortlist = []
+        recommended = {
+            "candidate_id": "",
+            "player_name": "",
             "position": pos,
-            "age": 26,
-            "gsi": gsi_2,
-            "potential": min(92, gsi_2 + 2),
-            "estimated_fee": fee_2,
-            "weekly_wage_demand": wage_2,
-            "tactical_fit": "immediate_impact",
-            "scout_grade": "A-",
-            "profile_tag": "premium_starter",
-            "summary": f"High-output {pos} at peak maturity; commands premium fee and top-band wages.",
+            "age": None,
+            "gsi": None,
+            "potential": None,
+            "estimated_fee": 0,
+            "weekly_wage_demand": 0,
+            "source": "none_filed",
+            "summary": "No player in this band is filed on another club's squad.",
         }
-    )
-
-    gsi_3 = max(74, min_gsi - 3)
-    fee_3 = round(fee_1 * 0.48, 2)
-    wage_3 = round(wage_1 * 0.55, 2)
-    c3_first, c3_last = names[(seed + 2) % len(names)]
-    shortlist.append(
-        {
-            "candidate_id": f"target_{pos.lower()}_{gsi_3}_c",
-            "player_name": f"{c3_first} {c3_last}",
-            "position": pos,
-            "age": 20,
-            "gsi": gsi_3,
-            "potential": min(92, max_gsi + 4),
-            "estimated_fee": fee_3,
-            "weekly_wage_demand": wage_3,
-            "tactical_fit": "u21_high_ceiling_value",
-            "scout_grade": "A",
-            "profile_tag": "value_development_alternative",
-            "summary": f"Explosive 20-year-old {pos} who protects the wage cap and projects to exceed GSI {max_gsi} within 18 months.",
-        }
-    )
+        gm_status = "no_filed_target"
 
     existing_watchlist_names = {
         str(w.player_name)
@@ -2338,32 +2555,28 @@ def execute_inter_staff_recruitment_workflow(
                     current_rating=cand["gsi"],
                     potential_rating=cand["potential"],
                     estimated_value_gtex=Decimal(str(cand["estimated_fee"])),
-                    priority="high" if cand["profile_tag"] == "prime_tactical_fit" else "medium",
+                    priority="high",
                     scout_notes=cand["summary"],
-                    recommendation=cand["tactical_fit"],
+                    recommendation=cand.get("tactical_fit") or "",
                     created_at=_utcnow(),
                 )
             )
 
-    if gm_verdict == "counterproposal_younger_value" or (
-        int(gm_profile.get("financial_discipline", 75)) >= 85 and fee_1 > treasury * 0.35
-    ):
-        recommended = shortlist[2]
-        gm_status = "counterproposal_younger_value"
-    else:
-        recommended = shortlist[0]
-        gm_status = "awaiting_owner_approval"
-
     policy = db.scalar(select(ClubDelegationPolicy).where(ClubDelegationPolicy.club_id == state.club_id))
     operating_mode = str(policy.mode) if policy else "balanced"
     thresholds = dict((policy.financial_thresholds_json if policy else None) or {})
-    max_auto_spend = float(
-        thresholds.get("max_single_transfer_auto_approve_gtex", thresholds.get("max_auto_spend_gtex", 5000.0))
-    )
+    if "max_single_transfer_auto_approve_gtex" in thresholds:
+        max_auto_spend = float(thresholds["max_single_transfer_auto_approve_gtex"])
+    elif "max_auto_spend_gtex" in thresholds:
+        max_auto_spend = float(thresholds["max_auto_spend_gtex"])
+    else:
+        max_auto_spend = None
     delegated_decision_id: str | None = None
 
     if (
-        operating_mode in ("gm_led", "full_delegation")
+        recommended.get("player_name")
+        and operating_mode in ("gm_led", "full_delegation")
+        and max_auto_spend is not None
         and float(recommended["estimated_fee"]) <= max_auto_spend
         and gm_status != "counterproposal_younger_value"
     ):
@@ -2384,7 +2597,7 @@ def execute_inter_staff_recruitment_workflow(
             requires_owner_approval=False,
             status="auto_executed",
             execution_status="executed",
-            staff_competence_rating=int(gm.get("rating", 88)),
+            staff_competence_rating=int(gm["rating"]) if gm.get("rating") is not None else None,
             payload_json={
                 "target_position": pos,
                 "min_gsi": min_gsi,
@@ -2397,7 +2610,7 @@ def execute_inter_staff_recruitment_workflow(
         db.add(decision)
         db.flush()
         delegated_decision_id = decision.id
-    else:
+    elif recommended.get("player_name"):
         decision = ClubDelegatedDecision(
             id=str(uuid4()),
             club_id=state.club_id,
@@ -2417,7 +2630,7 @@ def execute_inter_staff_recruitment_workflow(
             approval_reason="Transfer package requires owner sign-off under current delegation policy.",
             status="pending_approval",
             execution_status="pending_execution",
-            staff_competence_rating=int(gm.get("rating", 88)),
+            staff_competence_rating=int(gm["rating"]) if gm.get("rating") is not None else None,
             payload_json={
                 "target_position": pos,
                 "min_gsi": min_gsi,
@@ -2431,11 +2644,20 @@ def execute_inter_staff_recruitment_workflow(
         db.flush()
         delegated_decision_id = decision.id
 
-    gm_notes = (
-        f"{gm['name']} reviewed liquid treasury ({treasury:,.0f} GTX) and wage structure ({gm_profile.get('wage_structure_philosophy')}). "
-        f"Recommended option: {recommended['player_name']} ({pos}, GSI {recommended['gsi']}) at {recommended['estimated_fee']:,.0f} GTX."
-    )
-    scout_notes = f"{scout['name']} compiled 3 verified {pos} profiles across the {min_gsi}–{max_gsi} GSI window plus a U21 high-resale alternative."
+    if recommended.get("player_name"):
+        gm_notes = (
+            f"{gm.get('name') or 'The general manager'} reviewed liquid treasury ({treasury:,.0f} GTX). "
+            f"Recommended option: {recommended['player_name']} ({pos}, GSI {recommended['gsi']}) at {float(recommended['estimated_fee']):,.0f} GTX."
+        )
+        scout_notes = (
+            f"Filed {len(shortlist)} {pos} player(s) already on other squads in the {min_gsi}–{max_gsi} window."
+        )
+    else:
+        gm_notes = (
+            f"No {pos} player between GSI {min_gsi} and {max_gsi} is filed on another club's squad. "
+            f"Treasury on the day is {treasury:,.0f} GTX."
+        )
+        scout_notes = "No matching player is filed."
 
     assignment = OwnerRecruitmentAssignment(
         id=str(uuid4()),
@@ -2445,7 +2667,7 @@ def execute_inter_staff_recruitment_workflow(
         target_position=pos,
         min_gsi=min_gsi,
         max_gsi=max_gsi,
-        tactical_profile=str(mgr_profile.get("preferred_tactical_philosophy", "positional_play")),
+        tactical_profile=str(mgr_profile.get("preferred_tactical_philosophy") or ""),
         max_fee=float(recommended["estimated_fee"]),
         max_weekly_wage=float(recommended["weekly_wage_demand"]),
         gm_evaluation_status=gm_status,
@@ -2651,14 +2873,21 @@ def execute_authorized_recruitment_signing(
                 portion = min(ledger.D(available_amount), remaining_fee)
                 if portion <= 0:
                     continue
+                selling_club_id = str(candidate.get("selling_club_id") or "")
+                seller_account = (
+                    ledger.club_account(selling_club_id)
+                    if selling_club_id and selling_club_id != state.club_id
+                    else ledger.WORLD_MARKET
+                )
                 ledger_events.append(
                     ledger.record(
                         db,
                         event_type="transfer_purchase",
                         source=ledger.club_account(state.club_id),
-                        destination=ledger.WORLD_MARKET,
+                        destination=seller_account,
                         currency=ledger.GTEX,
                         gross=portion,
+                        fee_bps=ledger.TRANSFER_PLATFORM_FEE_BPS,
                         balance_class=balance_class,
                         club_id=state.club_id,
                         user_id=user_id or state.owner_user_id,
@@ -2689,41 +2918,78 @@ def execute_authorized_recruitment_signing(
         }
 
     ledger_ev = ledger_events[0]
+    selling_club_id = str(candidate.get("selling_club_id") or "")
+    source_player_id = str(candidate.get("source_player_id") or "")
+    moved_player = None
+    if selling_club_id and selling_club_id != state.club_id:
+        if source_player_id:
+            moved_player = db.get(OwnerSquadPlayer, source_player_id)
+        if moved_player is None:
+            moved_player = db.scalar(
+                select(OwnerSquadPlayer).where(
+                    OwnerSquadPlayer.club_id == selling_club_id,
+                    OwnerSquadPlayer.name == player_name,
+                    OwnerSquadPlayer.status == "active",
+                )
+            )
+        if moved_player is not None and moved_player.club_id != selling_club_id:
+            moved_player = None
 
-    sq_player = OwnerSquadPlayer(
-        id=str(uuid4()),
-        club_id=state.club_id,
-        player_ref=cand_id,
-        name=player_name,
-        position=pos,
-        age=age,
-        rating=gsi,
-        potential=pot,
-        value_coin=fee_dec,
-        morale=78,
-        minutes=0,
-        injured_days=0,
-        is_regen=False,
-        acquired_via="staff_recruitment",
-        personality_json={
-            "weekly_wage_gtex": float(wage_dec),
-            "tactical_fit": candidate.get("tactical_fit") or "first_team_target",
-            "signed_world_day": int(state.world_day or 1),
-            "assignment_id": assignment.id if assignment else None,
-            "ledger_event_id": ledger_ev.id,
-            "ledger_event_ids": [event.id for event in ledger_events],
-        },
-        growth_log_json=[
+    if moved_player is not None:
+        moved_player.club_id = state.club_id
+        moved_player.status = "active"
+        moved_player.acquired_via = "staff_recruitment"
+        moved_player.acquired_at = _utcnow()
+        moved_player.value_coin = fee_dec
+        pers = dict(moved_player.personality_json or {})
+        pers.update(
             {
-                "world_day": int(state.world_day or 1),
-                "event": f"Signed via staff recruitment for {int(fee_dec):,} GTX.",
+                "weekly_wage_gtex": float(wage_dec),
+                "signed_world_day": int(state.world_day or 1),
+                "assignment_id": assignment.id if assignment else None,
+                "ledger_event_id": ledger_ev.id,
+                "previous_club_id": selling_club_id,
             }
-        ],
-        status="active",
-        acquired_at=_utcnow(),
-    )
-    db.add(sq_player)
-    db.flush()
+        )
+        moved_player.personality_json = pers
+        flag_modified(moved_player, "personality_json")
+        sq_player = moved_player
+        db.flush()
+    else:
+        sq_player = OwnerSquadPlayer(
+            id=str(uuid4()),
+            club_id=state.club_id,
+            player_ref=cand_id,
+            name=player_name,
+            position=pos,
+            age=age,
+            rating=gsi,
+            potential=pot,
+            value_coin=fee_dec,
+            morale=78,
+            minutes=0,
+            injured_days=0,
+            is_regen=False,
+            acquired_via="staff_recruitment",
+            personality_json={
+                "weekly_wage_gtex": float(wage_dec),
+                "tactical_fit": candidate.get("tactical_fit") or "first_team_target",
+                "signed_world_day": int(state.world_day or 1),
+                "assignment_id": assignment.id if assignment else None,
+                "ledger_event_id": ledger_ev.id,
+                "ledger_event_ids": [event.id for event in ledger_events],
+            },
+            growth_log_json=[
+                {
+                    "world_day": int(state.world_day or 1),
+                    "event": f"Signed via staff recruitment for {int(fee_dec):,} GTX.",
+                }
+            ],
+            status="active",
+            acquired_at=_utcnow(),
+        )
+        db.add(sq_player)
+        db.flush()
 
     if assignment is not None:
         assignment.gm_evaluation_status = "signed_to_first_team"
@@ -2848,14 +3114,14 @@ def generate_layer_b_staff_response(
         )
 
     player_name = str(trace.get("player_name") or intent_data.get("target_player_name") or "the player")
-    player_age = trace.get("player_age", 16)
-    player_rating = trace.get("player_rating", 66)
-    player_potential = trace.get("player_potential", 87)
+    player_age = trace.get("player_age") if trace.get("player_age") is not None else "not filed"
+    player_rating = trace.get("player_rating") if trace.get("player_rating") is not None else "not filed"
+    player_potential = trace.get("player_potential") if trace.get("player_potential") is not None else "not filed"
 
     if outcome == "resignation_notice":
         body = (
             f"{opener} Your repeated attempts to dictate sporting decisions have crossed a line I cannot accept "
-            f"(professional independence {personality.get('professional_independence', 85)}/100). A First-Team Manager "
+            f"(professional independence {personality.get('professional_independence') if personality.get('professional_independence') is not None else 'not filed'}/100). A First-Team Manager "
             f"must own his dressing room and team sheet. Please accept this message as my formal resignation notice "
             f"effective immediately."
         )
@@ -2878,8 +3144,8 @@ def generate_layer_b_staff_response(
             role_label = "starting XI" if commitment.get("matchday_role") == "starting_xi" else "matchday squad"
             body = (
                 f"{opener} I share your belief in developing our academy talent (youth commitment "
-                f"{personality.get('youth_development_commitment', 88)}/100). I have evaluated {player_name} "
-                f"(age {player_age}, GSI {player_rating}, potential {player_potential}, fitness {trace.get('player_fitness', 90)}%) "
+                f"{personality.get('youth_development_commitment') if personality.get('youth_development_commitment') is not None else 'not filed'}/100). I have evaluated {player_name} "
+                f"(age {player_age}, GSI {player_rating}, potential {player_potential}, fitness {trace.get('player_fitness') if trace.get('player_fitness') is not None else 'not filed'}%) "
                 f"in training this week, and his movement in our {tactical_phil} system justifies an opportunity. "
                 f"I am including {player_name} in the {role_label} for the next match."
             )
@@ -2925,48 +3191,57 @@ def generate_layer_b_staff_response(
                 f"I am recording a formal disagreement on this request."
             )
     elif intent in ("tactical_style_shift", "formation_request", "club_culture_direction"):
-        req_style = str(trace.get("requested_style") or "attacking")
-        if outcome == "accepted":
+        req_style = str(trace.get("requested_style") or "not filed")
+        if outcome == "deferred":
+            body = f"{opener} {trace.get('verdict_reason') or 'The shape sits with the first-team manager.'}"
+        elif outcome == "accepted":
             body = (
                 f"{opener} Moving further toward {req_style} football aligns naturally with my {tactical_phil} identity "
-                f"and preferred formations ({', '.join(personality.get('preferred_formations', ['4-3-3']))}). "
+                f"and preferred formations ({', '.join(personality.get('preferred_formations') or []) or 'not filed'}). "
                 f"We are accelerating that transition on the training pitch immediately."
             )
         elif outcome == "conditional_acceptance":
             body = (
                 f"{opener} I am open to evolving our identity toward {req_style} football, and my tactical flexibility "
-                f"({personality.get('tactical_flexibility', 70)}/100) allows us to adapt. However, a stylistic shift cannot happen "
+                f"({personality.get('tactical_flexibility') if personality.get('tactical_flexibility') is not None else 'not filed'}/100) allows us to adapt. However, a stylistic shift cannot happen "
                 f"overnight without exposing the squad. I will phase this transition across our microcycles provided recruitment "
                 f"supports the profile we need."
             )
         else:
             body = (
                 f"{opener} You hired me knowing my footballing identity is built on {tactical_phil} "
-                f"(attacking/defensive index {personality.get('attacking_vs_defensive', 35)}/100). Asking me to abandon my core "
+                f"(attacking/defensive index {personality.get('attacking_vs_defensive') if personality.get('attacking_vs_defensive') is not None else 'not filed'}/100). Asking me to abandon my core "
                 f"principles for {req_style} football overnight is neither realistic nor suited to our current squad. "
                 f"If you want to debate a fundamental change in club playing culture, we should convene a formal boardroom meeting."
             )
     elif intent == "transfer_recruitment_target":
-        pos = str(trace.get("target_position") or "LW")
-        min_gsi = trace.get("min_gsi", 80)
-        max_gsi = trace.get("max_gsi", 85)
+        pos = str(trace.get("target_position") or "not filed")
+        min_gsi = trace.get("min_gsi") if trace.get("min_gsi") is not None else "not filed"
+        max_gsi = trace.get("max_gsi") if trace.get("max_gsi") is not None else "not filed"
         shortlist = list(effects.get("candidate_shortlist") or [])
         rec = dict(effects.get("recommended_candidate") or {})
-        if outcome == "counterproposal":
+        if outcome == "deferred" or effects.get("scout_shortlist") or effects.get("youth_recruitment_note"):
+            body = f"{opener} {trace.get('verdict_reason') or 'That request sits with the general manager.'}"
+        elif outcome == "counterproposal":
+            fee_text = (
+                f"{float(rec.get('estimated_fee')):,.0f} GTX already filed on the player record"
+                if rec.get("estimated_fee") is not None
+                else "no fee is filed"
+            )
             body = (
                 f"{opener} I have evaluated your request for a {pos} signing against our liquid treasury "
-                f"({trace.get('treasury_balance', 0):,.0f} GTX) and wage structure ({personality.get('wage_structure_philosophy', 'strict_tiered_cap')}). "
-                f"Committing roughly {trace.get('estimated_fee', 0):,.0f} GTX on an expensive marquee deal carries excessive financial risk "
-                f"(my financial discipline rating is {personality.get('financial_discipline', 90)}/100). "
-                f"Instead, after consulting our Chief Scout, I counterpropose {rec.get('player_name', 'our U21 value target')} "
-                f"(age {rec.get('age', 20)}, GSI {rec.get('gsi', 77)}, potential {rec.get('potential', 89)}) at an estimated fee of "
-                f"{rec.get('estimated_fee', 3000):,.0f} GTX and weekly wage {rec.get('weekly_wage_demand', 450):,.0f} GTX."
+                f"({trace.get('treasury_balance', 0):,.0f} GTX). "
+                f"My financial discipline is {personality.get('financial_discipline') if personality.get('financial_discipline') is not None else 'not filed'}/100. "
+                f"I counterpropose {rec.get('player_name') or 'no filed alternative'} "
+                f"(age {rec.get('age') if rec.get('age') is not None else 'not filed'}, "
+                f"GSI {rec.get('gsi') if rec.get('gsi') is not None else 'not filed'}, "
+                f"potential {rec.get('potential') if rec.get('potential') is not None else 'not filed'}) at {fee_text}."
             )
         elif outcome == "declined":
             body = (
-                f"{opener} I cannot sanction this recruitment outlay for a {pos} right now. An estimated package of "
-                f"{trace.get('estimated_fee', 0):,.0f} GTX exceeds our safe operating liquidity ({trace.get('treasury_balance', 0):,.0f} GTX). "
-                f"Unless the board injects additional capital or approves player sales, we must defer this target."
+                f"{opener} I cannot sanction this recruitment outlay for a {pos} right now. "
+                f"Treasury on the day is {trace.get('treasury_balance', 0):,.0f} GTX. "
+                f"The fee is the value already filed on the player, and it is not covered."
             )
         else:
             names_str = ", ".join(
@@ -2980,10 +3255,12 @@ def generate_layer_b_staff_response(
                 f"The proposal is ready for your executive review."
             )
     elif intent == "recruitment_spending_critique":
-        if outcome == "accepted":
+        if outcome == "deferred":
+            body = f"{opener} {trace.get('verdict_reason') or 'The general manager holds the wage book.'}"
+        elif outcome == "accepted":
             body = (
                 f"{opener} We are completely aligned on capital efficiency. With a financial discipline index of "
-                f"{personality.get('financial_discipline', 88)}/100, I am enforcing strict fee-to-GSI ceilings and rejecting "
+                f"{personality.get('financial_discipline') if personality.get('financial_discipline') is not None else 'not filed'}/100, I am enforcing strict fee-to-GSI ceilings and rejecting "
                 f"agent premiums that distort our {personality.get('wage_structure_philosophy', 'tiered')} wage structure."
             )
         else:
@@ -2993,11 +3270,14 @@ def generate_layer_b_staff_response(
                 f"will leave the First-Team Manager short of elite quality in decisive fixtures."
             )
     elif intent == "medical_clearance_pressure":
-        body = (
-            f"{opener} As Medical Director (protocol strictness {personality.get('protocol_strictness', 93)}/100), "
-            f"my clinical duty is to protect the club's playing assets from catastrophic soft-tissue relapse. "
-            f"I will not sign off on premature matchday clearance when biometric load markers remain in the red zone."
-        )
+        if outcome == "deferred":
+            body = f"{opener} {trace.get('verdict_reason') or 'The medical director holds return-to-play.'}"
+        else:
+            body = (
+                f"{opener} As Medical Director (protocol strictness {trace.get('medical_protocol_strictness', personality.get('protocol_strictness', '—'))}/100), "
+                f"my clinical duty is to protect the club's playing assets from catastrophic soft-tissue relapse. "
+                f"I will not sign off on premature matchday clearance when biometric load markers remain in the red zone."
+            )
     elif intent == "challenge_or_override_decision":
         body = (
             f"{opener} You have made your displeasure clear, and as owner you always hold the right to dismiss me. "
@@ -3115,7 +3395,7 @@ def generate_proactive_staff_initiatives(
         cooldowns[key] = world_day
         return True
 
-    lw_players = [p for p in players if str(p.position or "").upper() in ("LW", "LM") and int(p.rating or 0) >= 80]
+    lw_players = [p for p in players if str(p.position or "").upper() in ("LW", "LM")]
     cb_players = [
         p for p in players if str(p.position or "").upper() in ("CB", "DEFENDER") and int(p.injured_days or 0) == 0
     ]
@@ -3129,67 +3409,29 @@ def generate_proactive_staff_initiatives(
             ),
         )
     )
-    if not lw_players and open_lw_assignment is None and _can_fire("mgr_lw_recruitment_request", min_days=7):
-        assignment = execute_inter_staff_recruitment_workflow(
-            db,
-            state,
-            initiated_by_role="first_team_manager",
-            initiated_by_name=str(mgr["name"]),
-            target_position="LW",
-            min_gsi=80,
-            max_gsi=85,
-            gm_verdict="shortlist_commissioned",
-            estimated_fee=6500.0,
-            estimated_weekly_wage=850.0,
-        )
-        rec = assignment.recommended_candidate_json
+    mgr_name = str(mgr.get("name") or "").strip()
+    mgr_seated = bool(
+        mgr_name
+        and not mgr.get("is_vacant")
+        and not mgr.get("is_default")
+        and mgr.get("manager_id") != "gtex-staff-coach"
+        and "vacant" not in mgr_name.lower()
+    )
+    if mgr_seated and not lw_players and open_lw_assignment is None and _can_fire("mgr_lw_recruitment_request", min_days=7):
         generated.append(
             {
                 "sender_role": "first_team_manager",
                 "sender_id": str(mgr.get("id") or "mgr"),
-                "sender_name": str(mgr["name"]),
+                "sender_name": mgr_name,
                 "sender_title": "First-Team Manager",
-                "topic": "Sporting Requirement: Left Winger (GSI 80–85)",
-                "priority": "high",
-                "event_key": f"proactive:mgr_lw_gap:{assignment.id}",
+                "topic": "Squad Depth: Left Wing",
+                "priority": "normal",
+                "event_key": f"proactive:mgr_lw_gap:w{(world_day - 1) // 7 + 1}",
                 "body": (
-                    f"Our current wide attacking options are limited for our {mgr_profile.get('preferred_tactical_philosophy', 'positional_play').replace('_', ' ')} shape. "
-                    f"I have submitted a formal sporting requirement to {gm['name']} (GM) to recruit a left winger with a GSI between 80 and 85 "
-                    f"who brings pace, crossing quality, and off-ball movement."
+                    f"No left winger is filed on the squad ({len(lw_players)} available). "
+                    "I have not set a rating band or a fee."
                 ),
-                "action_payload": {
-                    "type": "recruitment_workflow_initiated",
-                    "assignment_id": assignment.id,
-                    "target_position": "LW",
-                    "gsi_range": [80, 85],
-                    "recommended_candidate": rec,
-                    "candidate_shortlist": assignment.candidate_shortlist_json,
-                },
-            }
-        )
-        generated.append(
-            {
-                "sender_role": "general_manager",
-                "sender_id": str(gm.get("id") or "gm"),
-                "sender_name": str(gm["name"]),
-                "sender_title": "General Manager",
-                "topic": f"GM Recruitment Assessment: {rec.get('player_name', 'Left Winger Target')} (LW)",
-                "priority": "high",
-                "event_key": f"proactive:gm_lw_evaluation:{assignment.id}",
-                "body": (
-                    f"Following {mgr['name']}'s sporting request for an 80–85 GSI left winger, I reviewed our recruitment budget "
-                    f"(treasury {treasury:,.0f} GTX) and tasked {scout['name']} (Chief Scout) with compiling targets. "
-                    f"Our top recommendation is {rec.get('player_name')} (GSI {rec.get('gsi')}, est. fee {rec.get('estimated_fee', 0):,.0f} GTX, "
-                    f"wage {rec.get('weekly_wage_demand', 0):,.0f} GTX/wk). Status: {assignment.gm_evaluation_status.replace('_', ' ')}."
-                ),
-                "action_payload": {
-                    "type": "gm_recruitment_recommendation",
-                    "assignment_id": assignment.id,
-                    "delegated_decision_id": assignment.delegated_decision_id,
-                    "gm_evaluation_status": assignment.gm_evaluation_status,
-                    "recommended_candidate": rec,
-                    "candidate_shortlist": assignment.candidate_shortlist_json,
-                },
+                "action_payload": {"type": "squad_depth_warning", "position": "LW", "available_count": len(lw_players)},
             }
         )
 
@@ -3205,13 +3447,15 @@ def generate_proactive_staff_initiatives(
                 "event_key": f"proactive:mgr_cb_depth:w{(world_day - 1) // 14 + 1}",
                 "body": (
                     f"I am concerned about our defensive depth. We currently have only {len(cb_players)} healthy natural centre-backs available, "
-                    f"and our {mgr_profile.get('preferred_formations', ['4-3-3'])[0]} structure leaves us exposed if injuries or suspensions hit."
+                    f"and our {(list(mgr_profile.get('preferred_formations') or []) or ['not filed'])[0]} structure leaves us exposed if injuries or suspensions hit."
                 ),
                 "action_payload": {"type": "squad_depth_warning", "position": "CB", "available_count": len(cb_players)},
             }
         )
 
-    academy_prospects = [p for p in players if _player_is_academy(p) and int(p.potential or 0) >= 82]
+    academy_prospects = [
+        p for p in players if _player_is_academy(p) and p.potential is not None and int(p.potential) >= 82
+    ]
     if academy_prospects and _can_fire("hoyd_academy_promotion", min_days=14):
         top_prospect = sorted(academy_prospects, key=lambda p: -int(p.potential or 0))[0]
         rating_band = (int(top_prospect.rating or 0) // 5) * 5
@@ -3241,7 +3485,11 @@ def generate_proactive_staff_initiatives(
             }
         )
 
-    injured_or_fatigued = [p for p in players if int(p.injured_days or 0) > 0 or _player_fitness(p) < 72]
+    injured_or_fatigued = [
+        p
+        for p in players
+        if int(p.injured_days or 0) > 0 or (_player_fitness(p) is not None and _player_fitness(p) < 72)
+    ]
     if injured_or_fatigued and _can_fire("med_load_warning", min_days=7):
         names_list = ", ".join(p.name for p in injured_or_fatigued[:3])
         generated.append(
@@ -3301,13 +3549,17 @@ def generate_proactive_staff_initiatives(
         ).all()
     )
     protest_stage = str(sup_profile.active_protest_stage or "none")
-    overall_sent = int(sup_profile.overall_sentiment or 65)
+    overall_sent = int(sup_profile.overall_sentiment) if sup_profile.overall_sentiment is not None else None
     att_mod = int(sup_profile.attendance_modifier_pct or 0)
     ticket_tier = str(sup_profile.ticket_price_tier or "standard")
 
     if (
         protest_stage in ("petition", "banner_protest", "organised_boycott")
-        or (ticket_tier in ("premium", "exploitative") and overall_sent < 60)
+        or (
+            ticket_tier in ("premium", "exploitative")
+            and overall_sent is not None
+            and overall_sent < 60
+        )
         or att_mod <= -8
     ) and _can_fire("gm_supporter_commercial_alert", min_days=7):
         generated.append(
@@ -3320,7 +3572,7 @@ def generate_proactive_staff_initiatives(
                 "priority": "high" if protest_stage in ("banner_protest", "organised_boycott") else "normal",
                 "event_key": f"proactive:gm_supporter_alert:{protest_stage}:w{(world_day - 1) // 7 + 1}",
                 "body": (
-                    f"From a commercial and governance perspective, our supporter sentiment sits at {overall_sent}/100 "
+                    f"From a commercial and governance perspective, our supporter sentiment sits at {overall_sent if overall_sent is not None else 'not filed'}/100 "
                     f"with active protest stage '{protest_stage.replace('_', ' ')}' under '{ticket_tier}' ticket pricing. "
                     f"Matchday attendance projection is shifted by {att_mod:+d}%. I advise scheduling a boardroom "
                     f"supporter-confidence review or easing matchday ticketing tiers immediately."
@@ -3337,7 +3589,10 @@ def generate_proactive_staff_initiatives(
 
     high_media_pressure = any(int(st.leadership_pressure_delta or 0) >= 3 for st in recent_stories)
     if (
-        int(sup_profile.confidence_in_manager or 68) <= 55
+        (
+            sup_profile.confidence_in_manager is not None
+            and int(sup_profile.confidence_in_manager) <= 55
+        )
         or protest_stage in ("banner_protest", "organised_boycott")
         or high_media_pressure
     ) and _can_fire("mgr_public_pressure_brief", min_days=7):
@@ -3427,19 +3682,25 @@ def simulate_boardroom_meeting_negotiation(
 
     sup_profile, _ = living_institution.ensure_club_institutional_ecosystem(db, state)
     protest_stage = str(sup_profile.active_protest_stage or "none")
-    overall_sent = int(sup_profile.overall_sentiment or 65)
+    overall_sent = (
+        int(sup_profile.overall_sentiment) if sup_profile.overall_sentiment is not None else None
+    )
     ticket_tier = str(sup_profile.ticket_price_tier or "standard")
     att_mod = int(sup_profile.attendance_modifier_pct or 0)
     agenda_lower = f"{title} {agenda} {meeting_type}".lower()
     has_supporter_pressure = (
         protest_stage in ("petition", "banner_protest", "organised_boycott")
-        or (ticket_tier in ("premium", "exploitative") and overall_sent < 58)
+        or (
+            ticket_tier in ("premium", "exploitative")
+            and overall_sent is not None
+            and overall_sent < 58
+        )
         or any(k in agenda_lower for k in ("supporter", "protest", "ticket", "boycott", "public_trust"))
     )
 
     players = list(db.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
     academy_striker = next((p for p in players if _player_is_academy(p)), players[0] if players else None)
-    prospect_name = academy_striker.name if academy_striker else "Lucas Vance"
+    prospect_name = academy_striker.name if academy_striker else "an academy player"
     treasury = _club_treasury_gtex(db, state)
 
     contributions: list[dict[str, Any]] = [
@@ -3451,19 +3712,27 @@ def simulate_boardroom_meeting_negotiation(
             "archetype": mgr_profile.get("archetype_label"),
             "stance": (
                 "pro_youth_and_tactical_identity"
-                if int(mgr_profile.get("youth_development_commitment", 60)) >= 70
+                if isinstance(mgr_profile.get("youth_development_commitment"), (int, float))
+                and int(mgr_profile.get("youth_development_commitment")) >= 70
                 else "win_now_senior_experience"
+                if isinstance(mgr_profile.get("preference_for_experienced_players"), (int, float))
+                else "profile_not_filed"
             ),
             "statement": (
-                f"From the touchline, my priority is executing our {mgr_profile.get('preferred_tactical_philosophy', 'positional_play').replace('_', ' ')} "
-                f"system ({', '.join(mgr_profile.get('preferred_formations', ['4-3-3'])[:2])}). "
+                f"From the touchline, my priority is executing our {(mgr_profile.get('preferred_tactical_philosophy') or 'not filed').replace('_', ' ')} "
+                f"system ({', '.join(mgr_profile.get('preferred_formations') or []) or 'not filed'}). "
                 + (
-                    f"I am prepared to give academy talents like {prospect_name} structured minutes, but we also need an 80–85 GSI wide option."
-                    if int(mgr_profile.get("youth_development_commitment", 60)) >= 65
-                    else f"Results come first; I need proven senior starters (experience preference {mgr_profile.get('preference_for_experienced_players', 85)}/100) rather than gambling on unready teenagers like {prospect_name}."
+                    f"I am prepared to give academy talents like {prospect_name} structured minutes."
+                    if isinstance(mgr_profile.get("youth_development_commitment"), (int, float))
+                    and int(mgr_profile.get("youth_development_commitment")) >= 65
+                    else (
+                        f"Results come first; experience preference is {int(mgr_profile.get('preference_for_experienced_players'))}/100."
+                        if isinstance(mgr_profile.get("preference_for_experienced_players"), (int, float))
+                        else "Recruitment stays with players already filed on a squad."
+                    )
                 )
                 + (
-                    f" We also hear terrace frustration (manager confidence {sup_profile.confidence_in_manager}/100) and must respond on the pitch."
+                    f" We also hear terrace frustration (manager confidence {int(sup_profile.confidence_in_manager) if sup_profile.confidence_in_manager is not None else 'not filed'}/100) and must respond on the pitch."
                     if has_supporter_pressure
                     else ""
                 )
@@ -3477,19 +3746,29 @@ def simulate_boardroom_meeting_negotiation(
             "archetype": gm_profile.get("archetype_label"),
             "stance": (
                 "strict_budget_and_resale_value"
-                if int(gm_profile.get("financial_discipline", 75)) >= 70
+                if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                and int(gm_profile.get("financial_discipline")) >= 70
                 else "aggressive_market_ambition"
+                if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                else "budget_not_filed"
             ),
             "statement": (
-                f"Looking at our liquid treasury of {treasury:,.0f} GTX and our {gm_profile.get('wage_structure_philosophy', 'strict_tiered_cap').replace('_', ' ')} wage model "
-                f"(financial discipline {gm_profile.get('financial_discipline', 85)}/100): "
+                f"Looking at our liquid treasury of {treasury:,.0f} GTX and our {(gm_profile.get('wage_structure_philosophy') or 'not filed').replace('_', ' ')} wage model "
                 + (
-                    "I cannot rubber-stamp overpriced veteran signings that carry zero resale value. Any recruitment must stay within sustainable fee bands or target U23 profiles."
-                    if int(gm_profile.get("financial_discipline", 75)) >= 70
-                    else "we have a window to push for silverware, and I believe we should back ambitious marquee targets even if it stretches our wage ceiling."
+                    f"(financial discipline {int(gm_profile.get('financial_discipline'))}/100): "
+                    if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                    else "(financial discipline not filed): "
                 )
                 + (
-                    f" Crucially, supporter sentiment is {overall_sent}/100 under '{ticket_tier}' ticketing ({protest_stage}), impacting matchday gate projections by {att_mod:+d}%."
+                    "I cannot rubber-stamp overpriced veteran signings that carry zero resale value. Any recruitment must stay within sustainable fee bands or target U23 profiles."
+                    if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                    and int(gm_profile.get("financial_discipline")) >= 70
+                    else "we have a window to push for silverware, and I believe we should back ambitious marquee targets even if it stretches our wage ceiling."
+                    if isinstance(gm_profile.get("financial_discipline"), (int, float))
+                    else "I will not set a wage band until a financial-discipline score is filed."
+                )
+                + (
+                    f" Crucially, supporter sentiment is {overall_sent if overall_sent is not None else 'not filed'}/100 under '{ticket_tier}' ticketing ({protest_stage}), impacting matchday gate projections by {att_mod:+d}%."
                     if has_supporter_pressure
                     else ""
                 )
@@ -3500,7 +3779,7 @@ def simulate_boardroom_meeting_negotiation(
             "speaker_id": str(hoyd.get("id") or "hoyd"),
             "speaker_name": str(hoyd["name"]),
             "speaker_title": "Head of Youth Development",
-            "archetype": hoyd.get("personality_profile", {}).get("archetype_label", "Academy Pathway Champion"),
+            "archetype": (hoyd.get("personality_profile") or {}).get("archetype_label") or "Not filed",
             "stance": "protect_academy_pathway",
             "statement": (
                 f"If we spend heavily on external squad fillers without guaranteeing a pathway for {prospect_name}, "
@@ -3512,11 +3791,11 @@ def simulate_boardroom_meeting_negotiation(
             "speaker_id": str(scout.get("id") or "scout"),
             "speaker_name": str(scout["name"]),
             "speaker_title": "Chief Scout",
-            "archetype": scout.get("personality_profile", {}).get("archetype_label", "Predictive Tactical Scout"),
+            "archetype": (scout.get("personality_profile") or {}).get("archetype_label") or "Not filed",
             "stance": "data_driven_shortlist",
             "statement": (
-                "Our scouting models show we can satisfy the tactical profile in the 80–85 GSI band, "
-                "or acquire a 20-year-old 77-GSI breakout winger at 48% of the fee if the board prefers capital preservation."
+                f"{scout.get('name')} will only name players already filed on a squad. "
+                "If the board names a position and a rating band, that is the shortlist."
             ),
         },
         {
@@ -3524,7 +3803,7 @@ def simulate_boardroom_meeting_negotiation(
             "speaker_id": str(med.get("id") or "med"),
             "speaker_name": str(med["name"]),
             "speaker_title": "Medical Director",
-            "archetype": med.get("personality_profile", {}).get("archetype_label", "Evidence-First Load Scientist"),
+            "archetype": (med.get("personality_profile") or {}).get("archetype_label") or "Not filed",
             "stance": "biometric_load_protection",
             "statement": (
                 "Whatever squad size we settle on, fixture congestion requires rotation. I will not clear fatigued starters "
@@ -3532,12 +3811,32 @@ def simulate_boardroom_meeting_negotiation(
             ),
         },
     ]
+    seats = {
+        "first_team_manager": mgr,
+        "general_manager": gm,
+        "head_of_youth_development": hoyd,
+        "chief_scout": scout,
+        "medical_director": med,
+    }
+
+    def _seat_speaks(person: dict[str, Any] | None) -> bool:
+        if not isinstance(person, dict):
+            return False
+        name = str(person.get("name") or "").strip()
+        return bool(
+            name
+            and not person.get("is_vacant")
+            and not person.get("is_default")
+            and person.get("manager_id") != "gtex-staff-coach"
+            and "vacant" not in name.lower()
+        )
+
+    contributions = [item for item in contributions if _seat_speaks(seats.get(item["speaker_role"]))]
 
     disagreements: list[dict[str, Any]] = []
-    if (
-        int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65
-        and int(gm_profile.get("financial_discipline", 75)) >= 70
-    ):
+    veteran_pref = _optional_score(mgr_profile, "preference_for_experienced_players")
+    gm_discipline = _optional_score(gm_profile, "financial_discipline")
+    if veteran_pref is not None and veteran_pref >= 65 and gm_discipline is not None and gm_discipline >= 70:
         disagreements.append(
             {
                 "axis": "Manager vs General Manager",
@@ -3595,13 +3894,13 @@ def simulate_boardroom_meeting_negotiation(
             "resolution_id": "back_manager_sporting_plan",
             "title": f"Back {mgr['name']}'s Immediate Sporting Plan",
             "description": (
-                "Authorise the primary 80–85 GSI tactical target and reaffirm the First-Team Manager's full selection autonomy."
+                "Authorise the filed recruitment target and reaffirm the First-Team Manager's full selection autonomy."
             ),
             "effects": {
                 "manager_trust_delta": 6,
                 "manager_autonomy_delta": 5,
-                "gm_tension_delta": 5 if int(gm_profile.get("financial_discipline", 75)) >= 75 else -2,
-                "culture_shift": mgr_profile.get("preferred_tactical_philosophy", "positional_play"),
+                "gm_tension_delta": 5 if gm_discipline is not None and gm_discipline >= 75 else (-2 if gm_discipline is not None else 0),
+                "culture_shift": mgr_profile.get("preferred_tactical_philosophy"),
             },
         },
         {
@@ -3612,9 +3911,14 @@ def simulate_boardroom_meeting_negotiation(
             ),
             "effects": {
                 "manager_trust_delta": (
-                    -4 if int(mgr_profile.get("preference_for_experienced_players", 55)) >= 65 else 3
+                    -4 if veteran_pref is not None and veteran_pref >= 65 else (3 if veteran_pref is not None else 0)
                 ),
-                "manager_tension_delta": 7 if int(mgr_profile.get("professional_independence", 75)) >= 75 else 2,
+                "manager_tension_delta": (
+                    7
+                    if _optional_score(mgr_profile, "professional_independence") is not None
+                    and _optional_score(mgr_profile, "professional_independence") >= 75
+                    else (2 if _optional_score(mgr_profile, "professional_independence") is not None else 0)
+                ),
                 "gm_trust_delta": 6,
                 "hoyd_trust_delta": 6,
                 "culture_shift": "youth_development",
@@ -3668,6 +3972,11 @@ def simulate_boardroom_meeting_negotiation(
             }
         )
 
+    disagreements = [
+        item
+        for item in disagreements
+        if all(_seat_speaks(seats.get(role)) for role in item.get("roles") or [] if role in seats)
+    ]
     minutes_lines = [
         f"Boardroom Session: {title} ({meeting_type.replace('_', ' ')})",
         f"Agenda: {agenda or 'Sporting direction, recruitment budget, and academy pathway alignment.'}",
@@ -4140,26 +4449,31 @@ def select_manager_matchday_lineup(
             p for p in players if int(p.injured_days or 0) <= 0 and str(p.player_ref or "") not in active_injury_refs
         ]
 
-    youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
-    veteran_pref = int(mgr_profile.get("preference_for_experienced_players", 55))
-    formations = list(mgr_profile.get("preferred_formations") or ["4-3-3"])
+    youth_commit = _optional_score(mgr_profile, "youth_development_commitment")
+    veteran_pref = _optional_score(mgr_profile, "preference_for_experienced_players")
+    formations = list(mgr_profile.get("preferred_formations") or [])
     tactical_setup = {**dict(fac.get("_tactical_setup") or {}), **dict(fac.get("_tactical_config") or {})}
-    chosen_formation = str(tactical_setup.get("formation") or (formations[0] if formations else "4-3-3"))
+    chosen_formation = str(tactical_setup.get("formation") or "") or (formations[0] if formations else None)
 
     mentality_authority = resolve_manager_mentality_decision(state)
     chosen_mentality = str(mentality_authority["effective_mentality"])
 
     def _manager_player_score(p: OwnerSquadPlayer) -> float:
-        base = float(p.rating or 70)
-        fitness_adj = (float(_player_fitness(p)) - 80.0) * 0.18
-        morale_adj = (float(p.morale or 75) - 70.0) * 0.08
-        age = int(p.age or 24)
+        base = float(p.rating) if p.rating is not None else 0.0
+        fitness_adj = (
+            (float(_player_fitness(p)) - 80.0) * 0.18
+            if "fitness" in dict(p.personality_json or {})
+            else 0.0
+        )
+        morale_adj = ((float(p.morale) - 70.0) * 0.08) if p.morale is not None else 0.0
+        age = int(p.age) if p.age is not None else None
         age_adj = 0.0
-        if age <= 19 or _player_is_academy(p):
-            age_adj += ((youth_commit - 50) / 50.0) * 6.5
-            age_adj -= ((veteran_pref - 50) / 50.0) * 6.0
-        elif age >= 27:
-            age_adj += ((veteran_pref - 50) / 50.0) * 4.5
+        if age is not None and youth_commit is not None and veteran_pref is not None:
+            if age <= 19 or _player_is_academy(p):
+                age_adj += ((youth_commit - 50) / 50.0) * 6.5
+                age_adj -= ((veteran_pref - 50) / 50.0) * 6.0
+            elif age >= 27:
+                age_adj += ((veteran_pref - 50) / 50.0) * 4.5
 
         commitment = commitments.get(str(p.id))
         if commitment and commitment.get("matchday_role") == "starting_xi":
@@ -4173,7 +4487,7 @@ def select_manager_matchday_lineup(
         raw = str(pers.get("squad_status") or "").lower()
         if raw == "reserve":
             return "reserve"
-        if raw in {"academy", "u21"}:
+        if pers.get("is_academy") or raw in {"academy", "u21"}:
             return "academy"
         if raw in {"first_team", "senior"}:
             return "first_team"
@@ -4230,6 +4544,17 @@ def select_manager_matchday_lineup(
     remaining = [p for p in sorted(eligible, key=_manager_player_score, reverse=True) if p.id not in starter_ids]
 
     bench: list[OwnerSquadPlayer] = []
+    pref_bench_ids = [str(pid) for pid in (owner_pref.get("preferred_bench_ids") or [])]
+    for pid in pref_bench_ids:
+        player = by_id.get(pid)
+        if (
+            player is not None
+            and player.id not in starter_ids
+            and player not in bench
+            and _sheet_name(player) != "academy"
+            and len(bench) < 7
+        ):
+            bench.append(player)
     for p in remaining:
         commitment = commitments.get(str(p.id))
         if commitment and commitment.get("matchday_role") in ("matchday_squad_bench", "substitute_impact"):

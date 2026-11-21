@@ -1220,13 +1220,12 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
           >
             {regens.map((p: any) => {
               const pers = p.personality || p.personality_json || {};
-              const archetype = p.archetype || pers.archetype || "Ambitious Prodigy";
-              const mood = p.mood_state || pers.mood || "Thriving";
+              const archetype = p.archetype || pers.archetype || "Archetype not filed";
+              const mood = p.mood_state || pers.mood || "Mood not filed";
               const monologue =
-                p.inner_monologue ||
-                pers.inner_monologue ||
-                `Grinding daily with the academy coaches. When my call-up comes, I'll be 100% ready.`;
-              const ceiling = Math.max(0, (p.potential || 85) - (p.rating || 60));
+                p.inner_monologue || pers.inner_monologue || "No monologue is filed.";
+              const ceiling =
+                p.potential == null || p.rating == null ? null : Math.max(0, p.potential - p.rating);
 
               return (
                 <div
@@ -1242,14 +1241,14 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                         </span>
                         <h4 className="mt-1 text-sm font-bold text-white">{p.name}</h4>
                         <p className="text-[11px] text-slate-400">
-                          Age {p.age || 17} · {posShort(p.position)}
+                          Age {p.age ?? "—"} · {posShort(p.position)}
                         </p>
                       </div>
                       <div className="text-right">
-                        <span className="gx-mono text-lg font-black text-white">{p.rating}</span>
+                        <span className="gx-mono text-lg font-black text-white">{p.rating ?? "—"}</span>
                         <span className="text-[10px] text-slate-500"> OVR</span>
                         <p className="gx-mono text-[11px] font-bold text-amber-300">
-                          POT {p.potential || 88}
+                          POT {p.potential ?? "—"}
                         </p>
                       </div>
                     </div>
@@ -1258,14 +1257,14 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                       <div className="flex items-center justify-between text-[11px] text-slate-400">
                         <span>Ceiling</span>
                         <span className="gx-mono text-emerald-300 font-bold">
-                          +{ceiling} Growth
+                          {ceiling == null ? "—" : `+${ceiling} Growth`}
                         </span>
                       </div>
                       <div className="h-1.5 rounded-sm bg-white/5">
                         <div
                           className="h-1.5 rounded-sm bg-gradient-to-r from-emerald-500 to-amber-400"
                           style={{
-                            width: `${Math.min(100, ((p.rating || 60) / Math.max(1, p.potential || 90)) * 100)}%`,
+                            width: `${p.rating == null || p.potential == null ? 0 : Math.min(100, (p.rating / Math.max(1, p.potential)) * 100)}%`,
                           }}
                         />
                       </div>
@@ -1281,7 +1280,7 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                   <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-400">
                     <span className="text-purple-300">HOYD Monitored</span>
                     <span className="gx-mono text-emerald-300">
-                      {fmt(p.value_coin || 3500)} GTX
+                      {p.value_coin == null ? "—" : `${fmt(p.value_coin)} GTX`}
                     </span>
                   </div>
                 </div>

@@ -331,8 +331,9 @@ def compute_club_showroom_perks(session: Session, club_id: str) -> dict[str, Any
     )
     facs = dict((state.facilities_json if state else None) or {})
     politics = dict(facs.get("_club_politics") or {})
-    fan_sentiment = int(politics.get("supporter_confidence") or 60)
-    sentiment_multiplier = round(max(0.6, min(1.75, fan_sentiment / 60.0)), 2)
+    raw_sentiment = politics.get("supporter_confidence")
+    fan_sentiment = int(raw_sentiment) if raw_sentiment is not None else None
+    sentiment_multiplier = 1.0 if fan_sentiment is None else round(max(0.6, min(1.75, fan_sentiment / 60.0)), 2)
 
     total_wage_bonus_pct = 0.0
     total_recovery_days = 0
@@ -486,11 +487,14 @@ def record_staff_arrival_cinematic(
     perks = compute_club_showroom_perks(session, club_id)
     role_key = str(appointed_staff.get("role") or "first_team_manager")
     role_label = str(appointed_staff.get("role_label") or role_key.replace("_", " ").title())
-    staff_name = str(appointed_staff.get("name") or "Appointed Executive")
-    rating = int(appointed_staff.get("rating") or 75)
-    contract_years = int(appointed_staff.get("contract_years") or 2)
-    salary_gtex = int(appointed_staff.get("salary_gtex") or appointed_staff.get("salary") or 1000)
-    style = str(appointed_staff.get("style") or "Balanced")
+    staff_name = str(appointed_staff.get("name") or "")
+    rating = int(appointed_staff["rating"]) if appointed_staff.get("rating") is not None else None
+    contract_years = int(appointed_staff["contract_years"]) if appointed_staff.get("contract_years") is not None else None
+    salary_raw = appointed_staff.get("salary_gtex")
+    if salary_raw is None:
+        salary_raw = appointed_staff.get("salary")
+    salary_gtex = int(salary_raw) if salary_raw is not None else None
+    style = appointed_staff.get("style") or appointed_staff.get("tactical_preference") or None
 
     is_manager = role_key == "first_team_manager"
     event_type = "manager_arrival" if is_manager else "staff_signing"
@@ -1103,14 +1107,18 @@ def answer_cinematic_press_question(
 
     facs = dict(state.facilities_json or {})
     politics = dict(facs.get("_club_politics") or {})
-    fan_sentiment = int(politics.get("supporter_confidence") or 62)
-    board_conf = int(politics.get("board_confidence") or 68)
+    fan_sentiment = politics.get("supporter_confidence")
+    board_conf = politics.get("board_confidence")
+    fan_sentiment = int(fan_sentiment) if fan_sentiment is not None else None
+    board_conf = int(board_conf) if board_conf is not None else None
     effects: dict[str, int] = {}
     subj_name = str(meta.get("subject_name") or "First-Team Manager")
 
     if stance == "championship_ambition":
-        fan_sentiment = min(100, fan_sentiment + 6)
-        board_conf = min(100, board_conf + 4)
+        if fan_sentiment is not None:
+            fan_sentiment = min(100, fan_sentiment + 6)
+        if board_conf is not None:
+            board_conf = min(100, board_conf + 4)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -1134,8 +1142,10 @@ def answer_cinematic_press_question(
             "manager_influence": "+4",
         }
     elif stance == "tactical_pragmatism":
-        board_conf = min(100, board_conf + 5)
-        fan_sentiment = min(100, fan_sentiment + 2)
+        if board_conf is not None:
+            board_conf = min(100, board_conf + 5)
+        if fan_sentiment is not None:
+            fan_sentiment = min(100, fan_sentiment + 2)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -1159,8 +1169,10 @@ def answer_cinematic_press_question(
             "manager_alignment": "+6",
         }
     else:
-        fan_sentiment = min(100, fan_sentiment + 3)
-        board_conf = min(100, board_conf + 3)
+        if fan_sentiment is not None:
+            fan_sentiment = min(100, fan_sentiment + 3)
+        if board_conf is not None:
+            board_conf = min(100, board_conf + 3)
         living_club_world.apply_relationship_delta(
             session,
             club_id=club_id,
@@ -1184,8 +1196,10 @@ def answer_cinematic_press_question(
         }
 
     resolved_quote = custom_quote or default_quote
-    politics["supporter_confidence"] = fan_sentiment
-    politics["board_confidence"] = board_conf
+    if fan_sentiment is not None:
+        politics["supporter_confidence"] = fan_sentiment
+    if board_conf is not None:
+        politics["board_confidence"] = board_conf
     facs["_club_politics"] = politics
     state.facilities_json = facs
     flag_modified(state, "facilities_json")

@@ -590,7 +590,7 @@ def test_replay_payload_includes_broadcast_fan_identity_and_media_layers() -> No
     home_identity = next(identity for identity in payload.club_identities if identity.club_id == "home")
     assert home_identity.philosophy == "youth_development"
     assert home_identity.culture_score >= 70
-    assert home_identity.average_identity_fit > 0
+    assert home_identity.average_identity_fit is None
 
     assert payload.media_events
     assert any(event.type == "headline" for event in payload.media_events)

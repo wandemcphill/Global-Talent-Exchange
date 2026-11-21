@@ -180,7 +180,7 @@ export const ClubPoliticsModal: React.FC<ClubPoliticsModalProps> = ({
       const actionsCount = Array.isArray(res?.bridge_actions) ? res.bridge_actions.length : 0;
       setStatusMessage({
         type: "success",
-        text: `Matchday Consequence Bridge synced (${actionsCount} consequence action(s) applied • Board: ${res?.board_confidence ?? 68}% • Supporters: ${res?.supporter_confidence ?? 65}%).`,
+        text: `Matchday Consequence Bridge synced (${actionsCount} consequence action(s) applied • Board: ${res?.board_confidence == null ? "not filed" : `${res.board_confidence}%`} • Supporters: ${res?.supporter_confidence == null ? "not filed" : `${res.supporter_confidence}%`}).`,
       });
     },
     onError: (err) => {

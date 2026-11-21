@@ -5,7 +5,7 @@ from statistics import fmean
 
 from app.match_engine.reality_engine.match_state import MatchState
 from app.match_engine.reality_engine.roles import resolve_role_profile
-from app.match_engine.simulation.models import TeamRuntimeState
+from app.match_engine.simulation.models import TeamRuntimeState, filed_shift, filed_unit
 from app.match_engine.simulation.models import PlayerRole as PlayerRole
 
 
@@ -39,12 +39,15 @@ class TacticalEngine:
     def resolve(self, state: MatchState) -> TacticalContext:
         home = self._team_context(state, side="home")
         away = self._team_context(state, side="away")
-        average_tempo = (state.home.tactics.tempo + state.away.tactics.tempo) / 200.0
+        filed_tempos = [float(value) for value in (state.home.tactics.tempo, state.away.tactics.tempo) if value is not None]
+        average_tempo = (sum(filed_tempos) / len(filed_tempos) / 100.0) if filed_tempos else 0.5
         transition_intensity = self._clamp(
             0.40
             + ((home.progression_bias + away.progression_bias - 2.0) * 0.24)
-            + ((state.home.tactics.tempo + state.away.tactics.tempo - 100.0) / 260.0)
-            + ((state.home.tactics.pressing + state.away.tactics.pressing - 100.0) / 320.0),
+            + filed_shift(state.home.tactics.tempo, 50.0, 260.0)
+            + filed_shift(state.away.tactics.tempo, 50.0, 260.0)
+            + filed_shift(state.home.tactics.pressing, 50.0, 320.0)
+            + filed_shift(state.away.tactics.pressing, 50.0, 320.0),
             0.18,
             0.92,
         )
@@ -125,18 +128,19 @@ class TacticalEngine:
         midfield_control = self._clamp(
             (team.strength.midfield * 0.62)
             + (buildup_layer * 0.38)
-            + ((team.tactics.width - 50.0) * 0.04)
+            + (filed_shift(team.tactics.width, 50.0, 1.0) * 0.04)
             + (game_state_aggression * 12.0)
             - (len(team.red_carded_ids) * 2.2),
             24.0,
             110.0,
         )
+        press_base = (
+            pressing_layer
+            if team.tactics.pressing is None
+            else (team.tactics.pressing * 0.52) + (pressing_layer * 0.48)
+        )
         press_intensity = self._clamp(
-            (
-                ((team.tactics.pressing * 0.52) + (pressing_layer * 0.48))
-                * fatigue_multiplier
-                * (1.0 + game_state_aggression * 0.18)
-            ),
+            press_base * fatigue_multiplier * (1.0 + game_state_aggression * 0.18),
             18.0,
             110.0,
         )
@@ -151,7 +155,7 @@ class TacticalEngine:
                 + (recovery_layer * 0.24)
                 + (team.strength.goalkeeping * 0.12)
                 + (opponent.strength.attack * -0.06)
-                + ((60.0 - abs(team.tactics.width - 50.0)) * 0.05)
+                + (0.0 if team.tactics.width is None else (60.0 - abs(team.tactics.width - 50.0)) * 0.05)
             )
             * fatigue_multiplier
             * (1.0 + max(0.0, score_delta) * 0.04),
@@ -165,9 +169,9 @@ class TacticalEngine:
         )
         progression_bias = self._clamp(
             1.0
-            + ((team.tactics.tempo - 50.0) / 170.0)
-            + ((team.tactics.width - 50.0) / 240.0)
-            + ((team.tactics.defensive_line - 50.0) / 280.0)
+            + filed_shift(team.tactics.tempo, 50.0, 170.0)
+            + filed_shift(team.tactics.width, 50.0, 240.0)
+            + filed_shift(team.tactics.defensive_line, 50.0, 280.0)
             + ((buildup_layer - opponent.strength.midfield) / 400.0)
             + ((width_profile - 1.0) * 0.26)
             + (game_state_aggression * 0.22),
@@ -182,8 +186,8 @@ class TacticalEngine:
             press_intensity=press_intensity,
             defensive_compactness=defensive_compactness,
             chance_suppression=chance_suppression,
-            width=self._clamp((team.tactics.width / 100.0) * width_profile, 0.30, 1.25),
-            line_height=self._clamp(team.tactics.defensive_line / 100.0, 0.18, 0.90),
+            width=self._clamp(filed_unit(team.tactics.width) * width_profile, 0.30, 1.25),
+            line_height=self._clamp(filed_unit(team.tactics.defensive_line), 0.18, 0.90),
             game_state_aggression=game_state_aggression,
             set_piece_threat=self._clamp(set_piece_threat / 100.0, 0.35, 1.25),
         )

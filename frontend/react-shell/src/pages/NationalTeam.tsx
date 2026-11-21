@@ -49,7 +49,7 @@ function EnterForm({ comp, onDone }: any) {
           Free Entry · Open to All User IDs (0–3 Clubs Supported) · Pre-Qualifier Representative System
         </p>
         <p className="mt-1 text-slate-400">
-          Joining any GTEX or User-Hosted National Team tournament is 100% free. You only rent players (real + regens at a fraction of club market value) and hire a tournament Manager in Fan Coin. If multiple users pick the same nation (e.g. 1,000 users pick England), an automatic single-elimination pre-qualifier crowns the #1 Country Representative who leads that nation through Qualifiers and keeps their exclusive spot in the World Cup Finals.
+          Joining any GTEX or user-hosted national tournament is free. The squad rental is the only cost. The tournament coach is appointed with no fee. If several users pick the same nation, a pre-qualifier crowns the country representative who leads that nation through the finals.
         </p>
       </div>
       <div className="flex flex-wrap items-end gap-3">
@@ -252,7 +252,7 @@ function NationalManagerPanel({ entryId, refreshKey, onHired }: any) {
     try {
       const { data } = await api.post(`${BASE}/entries/${entryId}/manager/hire`, { manager_id: mgrId });
       toast.success(
-        `Hired ${data?.hired_manager?.display_name}! Paid ${fmt(data?.hired_manager?.fee_fan_coin, 0)} Fan Coin upfront.`
+        `Appointed ${data?.hired_manager?.display_name}. The squad rental is the only cost.`
       );
       onHired(data?.hired_manager);
     } catch (e) {
@@ -264,7 +264,7 @@ function NationalManagerPanel({ entryId, refreshKey, onHired }: any) {
 
   return (
     <Panel
-      eyebrow="Tournament Head Coach Only (No GM / HOYD / Scout Needed · Paid Once Upfront in Fan Coin)"
+      eyebrow="Tournament head coach. No fee. The squad rental is the only cost."
       title="Hire National Team Manager"
       testid="national-manager-panel"
       action={
@@ -302,9 +302,7 @@ function NationalManagerPanel({ entryId, refreshKey, onHired }: any) {
                 <p className="mt-1.5 text-slate-400">{m.specialty}</p>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-white/10 pt-2.5">
-                <span className="gx-mono text-amber-300 font-semibold">
-                  {fmt(m.fee_fan_coin, 0)} Fan Coin (Upfront)
-                </span>
+                <span className="gx-mono text-emerald-300 font-semibold">No fee</span>
                 <Btn
                   variant={isCurrent ? "ghost" : "secondary"}
                   disabled={!!hiringId || isCurrent}
@@ -800,7 +798,7 @@ export default function NationalTeam() {
       <PageHeader
         eyebrow="International duty · World Cup, AFCON, Euros, Copa America & Asian Cup"
         title="National team rentals"
-        sub="Free entry for all users (0 to 3 clubs). Rent real players and regens for a fraction of club market value, hire your tournament Manager upfront in Fan Coin, win your country's Pre-Qualifier representative spot, and earn guaranteed World Cup match & stage prizes."
+        sub="Free entry. Rent the squad in GTEX Coin. Appoint the tournament coach with no fee. A pre-qualifier crowns your country's representative."
         action={
           <div className="flex flex-wrap gap-2">
             <Btn

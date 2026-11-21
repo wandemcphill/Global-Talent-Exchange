@@ -196,32 +196,10 @@ function Facilities({ club }: any) {
 // 2. Organisational Structure & Executive Staff Panel
 // ============================================================================
 function OrganisationalStructurePanel({ club }: any) {
-  const { data: staffData, isLoading, refetch } = useClubStaff(club.club_id);
+  const { data: staffData, isLoading } = useClubStaff(club.club_id);
   const [activeTab, setActiveTab] = useState<"hierarchy" | "effects" | "candidates">("hierarchy");
-  const [hiringBusy, setHiringBusy] = useState<string | null>(null);
-
-  const appointed = staffData?.appointed || {};
+  const appointed = staffData?.appointed_staff || staffData?.appointed || {};
   const staffEffects = staffData?.staff_effects || {};
-  const candidates: any[] = staffData?.candidates || [];
-
-  const handleHire = async (candidate: any) => {
-    setHiringBusy(candidate.id || candidate.staff_id);
-    try {
-      await api.post(`/owner/clubs/${club.club_id}/staff/hire`, {
-        staff_id: candidate.id || candidate.staff_id,
-        role: candidate.role,
-        contract_years: 3,
-        pay_with_fan_coin: true,
-      });
-      toast.success(`Hired ${candidate.name} as ${label(candidate.role)}.`);
-      refetch();
-    } catch (e) {
-      toast.error(errMsg(e));
-    } finally {
-      setHiringBusy(null);
-    }
-  };
-
   const ROLES = [
     {
       key: "first_team_manager",
@@ -288,7 +266,7 @@ function OrganisationalStructurePanel({ club }: any) {
             onClick={() => setActiveTab("candidates")}
             className={`rounded-lg px-3 py-1.5 text-xs font-bold transition ${activeTab === "candidates" ? "bg-indigo-500 text-white" : "border border-slate-700 bg-slate-900 text-slate-400 hover:text-white"}`}
           >
-            Executive Market ({candidates.length})
+            Staff market
           </button>
         </div>
       </div>
@@ -326,14 +304,21 @@ function OrganisationalStructurePanel({ club }: any) {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {ROLES.map(({ key, title, fallbackDesc }) => {
               const staff = appointed[key];
-              const isAppointed = !!staff && typeof staff === "object";
+              const isAppointed =
+                !!staff &&
+                typeof staff === "object" &&
+                Boolean(staff.name) &&
+                !staff.is_default &&
+                staff.manager_id !== "gtex-staff-coach";
               const name = isAppointed
                 ? staff.name || staff.display_name || "Appointed Executive"
                 : "Vacant Position";
-              const rating = isAppointed
-                ? staff.tactical_flexibility || staff.rating || staff.overall || 75
+              const recordedRating = isAppointed
+                ? staff.rating ?? staff.tactical_flexibility ?? staff.overall
                 : null;
-              const agenda = isAppointed ? staff.personal_agenda || "Elevate club standard" : null;
+              const rating =
+                recordedRating == null || recordedRating === "" ? null : Number(recordedRating);
+              const agenda = isAppointed ? staff.personal_agenda || null : null;
               const secretTrait = isAppointed ? staff.secret_trait : null;
               const poachingRisk = isAppointed ? staff.poaching_risk : null;
 
@@ -396,7 +381,9 @@ function OrganisationalStructurePanel({ club }: any) {
                     <span className="text-slate-500">
                       {poachingRisk
                         ? `Poaching Risk: ${poachingRisk.toUpperCase()}`
-                        : "Operational Ready"}
+                        : isAppointed
+                          ? "No poaching note"
+                          : "Seat empty"}
                     </span>
                     <button
                       type="button"
@@ -427,7 +414,7 @@ function OrganisationalStructurePanel({ club }: any) {
                 Tactical Synergy
               </span>
               <div className="mt-1 text-2xl font-black text-white">
-                +{staffEffects.tactical_synergy ?? 12}%
+                {staffEffects.tactical_synergy == null ? "—" : `+${staffEffects.tactical_synergy}%`}
               </div>
               <p className="mt-1 text-xs text-slate-400">
                 Matchday formation discipline and in-game tactical adjustments.
@@ -438,7 +425,7 @@ function OrganisationalStructurePanel({ club }: any) {
                 Youth Intake Multiplier
               </span>
               <div className="mt-1 text-2xl font-black text-white">
-                +{staffEffects.youth_multiplier ?? 15}%
+                {staffEffects.youth_multiplier == null ? "—" : `+${staffEffects.youth_multiplier}%`}
               </div>
               <p className="mt-1 text-xs text-slate-400">
                 Probability of discovering generational wonderkids in the annual intake.
@@ -449,7 +436,7 @@ function OrganisationalStructurePanel({ club }: any) {
                 Physical Recovery Speed
               </span>
               <div className="mt-1 text-2xl font-black text-white">
-                +{staffEffects.recovery_bonus ?? 10}%
+                {staffEffects.recovery_bonus == null ? "—" : `+${staffEffects.recovery_bonus}%`}
               </div>
               <p className="mt-1 text-xs text-slate-400">
                 Accelerated player fitness recharge between congested fixtures.
@@ -460,7 +447,7 @@ function OrganisationalStructurePanel({ club }: any) {
                 Commercial Pull
               </span>
               <div className="mt-1 text-2xl font-black text-white">
-                +{staffEffects.commercial_pull ?? 8}%
+                {staffEffects.commercial_pull == null ? "—" : `+${staffEffects.commercial_pull}%`}
               </div>
               <p className="mt-1 text-xs text-slate-400">
                 Reputation premium applied to incoming sponsorship contracts.
@@ -470,43 +457,13 @@ function OrganisationalStructurePanel({ club }: any) {
         </div>
       ) : (
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {candidates.map((cand) => (
-              <div
-                key={cand.id || cand.staff_id}
-                className="rounded-xl border border-slate-800 bg-slate-950/70 p-4 flex flex-col justify-between space-y-3"
-              >
-                <div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-400">
-                      {label(cand.role)}
-                    </span>
-                    <span className="text-xs font-mono font-bold text-amber-300">
-                      OVR {cand.tactical_flexibility || cand.youth_development || cand.rating || 78}
-                    </span>
-                  </div>
-                  <h5 className="mt-1 text-sm font-extrabold text-white">{cand.name}</h5>
-                  <p className="mt-1 text-xs text-slate-400 line-clamp-2">
-                    {cand.bio || `Seasoned ${label(cand.role)} with high tactical flexibility.`}
-                  </p>
-                  <div className="mt-2 text-[11px] text-slate-300">
-                    <span className="text-slate-500">Signing Fee:</span>{" "}
-                    <span className="font-mono font-bold text-amber-300">
-                      {fmt(cand.signing_fee_gtex || cand.salary || 2000)} GTX
-                    </span>
-                  </div>
-                </div>
-                <Btn
-                  variant="secondary"
-                  className="w-full text-xs"
-                  disabled={hiringBusy === (cand.id || cand.staff_id)}
-                  onClick={() => handleHire(cand)}
-                >
-                  {hiringBusy === (cand.id || cand.staff_id) ? "Appointing..." : "Appoint to Role"}
-                </Btn>
-              </div>
-            ))}
-          </div>
+          <p className="text-sm text-slate-300">Later staff contracts are signed on the staff market.</p>
+          <Link
+            to={`/app/staff-market?club_id=${encodeURIComponent(club.club_id)}`}
+            className="gx-btn gx-btn-primary inline-flex text-xs"
+          >
+            Open the staff market
+          </Link>
         </div>
       )}
     </Panel>
@@ -1240,19 +1197,23 @@ function ShowroomPanel({ club }: any) {
     }
   };
 
+  const recordedPrestige =
+    data?.club_prestige ?? clubDetail?.health?.prestige ?? club?.health?.prestige;
   const clubPrestige =
-    data?.club_prestige ?? clubDetail?.health?.prestige ?? club?.health?.prestige ?? 60;
+    recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
   const prestigeTierNum =
     data?.prestige_tier ??
-    (clubPrestige >= 90
-      ? 1
-      : clubPrestige >= 75
-        ? 2
-        : clubPrestige >= 55
-          ? 3
-          : clubPrestige >= 35
-            ? 4
-            : 5);
+    (clubPrestige == null
+      ? null
+      : clubPrestige >= 90
+        ? 1
+        : clubPrestige >= 75
+          ? 2
+          : clubPrestige >= 55
+            ? 3
+            : clubPrestige >= 35
+              ? 4
+              : 5);
   const prestigeTierLabel =
     prestigeTierNum === 1
       ? "Tier 1: Global Superclub"
@@ -1262,7 +1223,9 @@ function ShowroomPanel({ club }: any) {
           ? "Tier 3: National Contender"
           : prestigeTierNum === 4
             ? "Tier 4: Regional Pioneer"
-            : "Tier 5: Grassroots Foundation";
+            : prestigeTierNum === 5
+              ? "Tier 5: Grassroots Foundation"
+              : "Prestige not filed";
 
   const staffRoles = [
     {
@@ -1362,7 +1325,7 @@ function ShowroomPanel({ club }: any) {
               Prestige Rating
             </div>
             <div className="font-mono text-sm font-black text-amber-200">
-              {clubPrestige}/100{" "}
+              {clubPrestige == null ? "Not filed" : `${clubPrestige}/100`}{" "}
               <span className="text-[10px] text-slate-400">· Tier {prestigeTierNum}</span>
             </div>
             <div className="text-[9px] text-amber-300/80 font-medium">{prestigeTierLabel}</div>
@@ -2012,10 +1975,10 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
             </span>
           </div>
           <div className="mt-2 text-base font-black text-white">
-            {club.home_venue_name || "Cathedral Stadium"}
+            {club.home_venue_name || "Not filed"}
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            Capacity ~{stadiumLevel * 15000 + 10000} · Hybrid Pitch Ready
+            {club.stadium_capacity == null ? "Capacity not filed" : `Capacity ${club.stadium_capacity}`}
           </p>
           <button
             type="button"
@@ -2239,14 +2202,23 @@ export default function MyClubs() {
             <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
               <Stat label="Club value" value={<Coin amount={club.value} />} />
               <Stat label="Fans" value={fmt(club.health?.fans)} />
-              <Stat label="Prestige" value={club.health?.prestige ?? 60} />
+              <Stat label="Prestige" value={club.health?.prestige == null ? "—" : club.health.prestige} />
               <Stat label="Squad" value={club.health?.squad_size ?? 0} />
-              <Stat label="Manager" value={club.manager?.name || "-"} />
+              <Stat
+                label="Manager"
+                value={
+                  !club.manager?.name ||
+                  club.manager?.is_default ||
+                  club.manager?.manager_id === "gtex-staff-coach"
+                    ? "—"
+                    : club.manager.name
+                }
+              />
               <Stat
                 label="Status"
                 value={
                   <Chip tone={club.stage === "active" ? "emerald" : "gold"}>
-                    {club.stage || "Active"}
+                    {club.stage || "—"}
                   </Chip>
                 }
               />

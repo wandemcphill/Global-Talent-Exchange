@@ -158,6 +158,16 @@ export function Chip({ children, tone = "slate", testid }: any) {
 }
 
 export function TraitBar({ label, value, max = 20, testid }: any) {
+  if (value == null || value === "") {
+    return (
+      <div data-testid={testid} className="space-y-1">
+        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-slate-400">
+          <span>{label}</span>
+          <span>—</span>
+        </div>
+      </div>
+    );
+  }
   const pct = Math.max(0, Math.min(100, (Number(value) / max) * 100));
   const gradient =
     pct >= 75

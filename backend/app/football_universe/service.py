@@ -49,6 +49,27 @@ def _clamp_float(value: float, minimum: float = 0.0, maximum: float = 100.0) -> 
     return max(minimum, min(maximum, value))
 
 
+def _first_filed(*values: object) -> float | None:
+    for value in values:
+        if value is not None:
+            return float(value)
+    return None
+
+
+def _context_score(team, key: str) -> float:
+    context = getattr(team, "club_context", None)
+    value = getattr(context, key, None) if context is not None else None
+    return 0.0 if value is None else float(value)
+
+
+def _filed_player_attr(player_inputs: dict[str, Any], player_id: str, key: str) -> float | None:
+    player = player_inputs.get(player_id)
+    if player is None:
+        return None
+    value = getattr(player, key, None)
+    return None if value is None else float(value)
+
+
 def _club_exists_map(session: Session, club_ids: list[str]) -> dict[str, ClubProfile]:
     if not club_ids:
         return {}
@@ -223,33 +244,46 @@ class FootballUniverseBuilder:
         identity = team.identity
         context = team.club_context
         philosophy = getattr(identity, "philosophy", None) or self._infer_philosophy(team)
-        culture_score = float(getattr(identity, "culture_score", None) or getattr(context, "culture_score", 55))
-        tactical_consistency = float(
-            getattr(identity, "tactical_consistency", None)
-            or (team.tactics.tactical_quality * 0.55) + (team.tactics.adaptability * 0.25) + 14.0
+        culture_score = _first_filed(
+            getattr(identity, "culture_score", None) if identity is not None else None,
+            getattr(context, "culture_score", None) if context is not None else None,
         )
-        brand_strength = float(getattr(identity, "brand_strength", None) or getattr(context, "brand_strength", 50))
+        filed_consistency = getattr(identity, "tactical_consistency", None) if identity is not None else None
+        if filed_consistency is not None:
+            tactical_consistency = float(filed_consistency)
+        elif team.tactics.tactical_quality is None and team.tactics.adaptability is None:
+            tactical_consistency = None
+        else:
+            tactical_consistency = ((team.tactics.tactical_quality or 0) * 0.55) + (
+                (team.tactics.adaptability or 0) * 0.25
+            )
+            if team.tactics.tactical_quality is not None and team.tactics.adaptability is not None:
+                tactical_consistency += 14.0
+        brand_strength = _first_filed(
+            getattr(identity, "brand_strength", None) if identity is not None else None,
+            getattr(context, "brand_strength", None) if context is not None else None,
+        )
         squad_fit = [
-            float(getattr(player_inputs[player.player_id], "identity_fit_score", 68) or 68)
+            fit
             for player in team.starters
-            if player.player_id in player_inputs
+            if (fit := _filed_player_attr(player_inputs, player.player_id, "identity_fit_score")) is not None
         ]
-        average_fit = mean(squad_fit) if squad_fit else 68.0
-        chemistry_bonus = round(max(0.0, culture_score - 60.0) * 0.12, 2)
+        average_fit = mean(squad_fit) if squad_fit else None
+        chemistry_bonus = 0.0 if culture_score is None else round(max(0.0, culture_score - 60.0) * 0.12, 2)
         development_bonus = round(
-            max(0.0, culture_score - 58.0) * 0.08
+            (0.0 if culture_score is None else max(0.0, culture_score - 58.0) * 0.08)
             + (1.8 if philosophy == ClubPhilosophy.YOUTH_DEVELOPMENT.value else 0.0),
             2,
         )
         return ClubIdentityView(
             club_id=team.team_id,
             philosophy=str(philosophy),
-            culture_score=round(_clamp_float(culture_score), 2),
-            tactical_consistency=round(_clamp_float(tactical_consistency), 2),
-            brand_strength=round(_clamp_float(brand_strength), 2),
+            culture_score=None if culture_score is None else round(_clamp_float(culture_score), 2),
+            tactical_consistency=None if tactical_consistency is None else round(_clamp_float(tactical_consistency), 2),
+            brand_strength=None if brand_strength is None else round(_clamp_float(brand_strength), 2),
             chemistry_bonus=chemistry_bonus,
             player_development_bonus=development_bonus,
-            average_identity_fit=round(_clamp_float(average_fit), 2),
+            average_identity_fit=None if average_fit is None else round(_clamp_float(average_fit), 2),
             metadata={
                 "team_name": team.team_name,
                 "style": team.tactics.style.value,
@@ -266,13 +300,10 @@ class FootballUniverseBuilder:
         replay_payload: MatchReplayPayloadView,
         identity: ClubIdentityView,
     ) -> FanReactionView:
-        expectation_score = float(getattr(team.club_context, "expectation_level", 55))
-        fan_pressure = float(getattr(team.club_context, "fan_pressure", 48))
-        media_pressure = float(getattr(team.club_context, "media_pressure", 45))
-        rivalry_pressure = max(
-            float(getattr(team.club_context, "rivalry_intensity", 0)),
-            float(getattr(opponent.club_context, "rivalry_intensity", 0)),
-        )
+        expectation_score = _context_score(team, "expectation_level")
+        fan_pressure = _context_score(team, "fan_pressure")
+        media_pressure = _context_score(team, "media_pressure")
+        rivalry_pressure = max(_context_score(team, "rivalry_intensity"), _context_score(opponent, "rivalry_intensity"))
         pressure_score = _clamp_float(
             (expectation_score * 0.42)
             + (fan_pressure * 0.33)
@@ -379,8 +410,8 @@ class FootballUniverseBuilder:
     ) -> list[MediaEventView]:
         reaction_by_team = {item.club_id: item for item in fan_reactions}
         rivalry_level = max(
-            float(getattr(request.home_team.club_context, "rivalry_intensity", 0)),
-            float(getattr(request.away_team.club_context, "rivalry_intensity", 0)),
+            _context_score(request.home_team, "rivalry_intensity"),
+            _context_score(request.away_team, "rivalry_intensity"),
         )
         coverage_multiplier = round(
             1.0 + (rivalry_level / 100.0 * 0.85) + (0.35 if replay_payload.summary.is_final else 0.0),
@@ -540,7 +571,7 @@ class FootballUniverseBuilder:
             reverse=True,
         )
         pick = ranked[0]
-        identity_fit = float(getattr(player_inputs.get(pick.player_id), "identity_fit_score", 68) or 68)
+        identity_fit = _filed_player_attr(player_inputs, pick.player_id, "identity_fit_score")
         return BroadcastPlayerSpotlightView(
             player_id=pick.player_id,
             player_name=pick.player_name,
@@ -548,7 +579,7 @@ class FootballUniverseBuilder:
             team_name=pick.team_name,
             rating=pick.rating,
             headline=pick.rating_summary or f"{pick.player_name} shaped the decisive moments.",
-            identity_fit_score=round(identity_fit, 2),
+            identity_fit_score=None if identity_fit is None else round(identity_fit, 2),
         )
 
     def _rumor_player(
@@ -569,7 +600,9 @@ class FootballUniverseBuilder:
             key=lambda item: (
                 item.rating or 0.0,
                 item.goals,
-                100.0 - float(getattr(player_inputs.get(item.player_id), "identity_fit_score", 68) or 68),
+                0.0
+                if (fit := _filed_player_attr(player_inputs, item.player_id, "identity_fit_score")) is None
+                else 100.0 - fit,
             ),
         )
         return BroadcastPlayerSpotlightView(
@@ -579,7 +612,7 @@ class FootballUniverseBuilder:
             team_name=pick.team_name,
             rating=pick.rating,
             headline=f"{pick.player_name} is becoming the center of the next rumor cycle.",
-            identity_fit_score=float(getattr(player_inputs.get(pick.player_id), "identity_fit_score", 68) or 68),
+            identity_fit_score=_filed_player_attr(player_inputs, pick.player_id, "identity_fit_score"),
         )
 
     def _commentators(self, match_id: str) -> list[BroadcastCommentatorView]:
@@ -780,7 +813,7 @@ class FootballUniverseService:
             brand_strength=float(identity.brand_strength),
             chemistry_bonus=round(max(0.0, float(identity.culture_score) - 60.0) * 0.12, 2),
             player_development_bonus=round(max(0.0, float(identity.culture_score) - 58.0) * 0.08, 2),
-            average_identity_fit=float((identity.metadata_json or {}).get("average_identity_fit", 68.0)),
+            average_identity_fit=_first_filed((identity.metadata_json or {}).get("average_identity_fit")),
             metadata=dict(identity.metadata_json or {}),
         )
 
@@ -945,25 +978,40 @@ class FootballUniverseService:
             if club is None:
                 continue
             record = self.session.scalar(select(ClubIdentity).where(ClubIdentity.club_id == identity_view.club_id))
+            filed_culture = identity_view.culture_score
+            filed_consistency = identity_view.tactical_consistency
+            filed_brand = identity_view.brand_strength
             if record is None:
+                if filed_culture is None and filed_consistency is None and filed_brand is None:
+                    continue
                 record = ClubIdentity(
                     club_id=identity_view.club_id,
-                    philosophy=ClubPhilosophy.POSSESSION,
-                    culture_score=50.0,
-                    tactical_consistency=50.0,
-                    brand_strength=50.0,
+                    philosophy=ClubPhilosophy(identity_view.philosophy),
+                    culture_score=filed_culture if filed_culture is not None else 0.0,
+                    tactical_consistency=filed_consistency if filed_consistency is not None else 0.0,
+                    brand_strength=filed_brand if filed_brand is not None else 0.0,
                     metadata_json={},
                 )
                 self.session.add(record)
-            existing_culture = float(record.culture_score or 50.0)
-            existing_consistency = float(record.tactical_consistency or 50.0)
-            existing_brand_strength = float(record.brand_strength or 50.0)
-            consistency = float(identity_view.tactical_consistency)
-            evolution = 0.75 if consistency >= 62 else -0.75 if consistency <= 44 else 0.0
+            else:
+                evolution = (
+                    0.0
+                    if filed_consistency is None
+                    else 0.75
+                    if filed_consistency >= 62
+                    else -0.75
+                    if filed_consistency <= 44
+                    else 0.0
+                )
+                if filed_culture is not None:
+                    record.culture_score = _clamp_float((float(record.culture_score) * 0.55) + (filed_culture * 0.45) + evolution)
+                if filed_consistency is not None:
+                    record.tactical_consistency = _clamp_float(
+                        (float(record.tactical_consistency) * 0.45) + (filed_consistency * 0.55)
+                    )
+                if filed_brand is not None:
+                    record.brand_strength = _clamp_float((float(record.brand_strength) * 0.5) + (filed_brand * 0.5))
             record.philosophy = ClubPhilosophy(identity_view.philosophy)
-            record.culture_score = _clamp_float((existing_culture * 0.55) + (identity_view.culture_score * 0.45) + evolution)
-            record.tactical_consistency = _clamp_float((existing_consistency * 0.45) + (identity_view.tactical_consistency * 0.55))
-            record.brand_strength = _clamp_float((existing_brand_strength * 0.5) + (identity_view.brand_strength * 0.5))
             record.metadata_json = {
                 **dict(record.metadata_json or {}),
                 "club_name": club.club_name,

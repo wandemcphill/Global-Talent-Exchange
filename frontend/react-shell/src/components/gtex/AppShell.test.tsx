@@ -202,4 +202,40 @@ describe("AppShell control-center resilience and admin bypass", () => {
     expect(container.querySelector('[data-testid="loading-state"]')).toBeNull();
     expect(container.querySelector('[data-testid="mock-outlet"]')?.textContent).toBe("Route:/app/admin");
   });
+
+  test("an active club shows the eight club-day destinations", async () => {
+    mockApiGet.mockResolvedValue({
+      data: {
+        clubs: [{ club_id: "c1", club_name: "Lagos United", stage: "active" }],
+        economy: { naira_per_gtex: 60, naira_per_fan: 4, fan_coin_per_gtex: 15, wallet: {} },
+        inbox_open_count: 0,
+      },
+    });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <AppShell />
+        </QueryClientProvider>,
+      );
+    });
+    await flushPromises();
+
+    const nav = container.querySelector('[data-testid="primary-nav"]');
+    const labels = Array.from(nav?.querySelectorAll("a") || []).map((link) =>
+      (link.querySelector("span")?.textContent || "").trim(),
+    );
+    expect(labels).toEqual([
+      "Today",
+      "Squad",
+      "Staff",
+      "Academy",
+      "Competitions",
+      "Inbox",
+      "Market",
+      "Wallet",
+    ]);
+    expect(nav?.textContent).not.toContain("Control Centre");
+    expect(nav?.textContent).not.toContain("Trophy Cabinet");
+  });
 });

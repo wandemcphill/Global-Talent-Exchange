@@ -275,22 +275,18 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
 
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    gm_profile = exec_staff.get("general_manager") or {
-        "name": "Dayo Adeleke",
-        "role": "General Manager",
-        "rating": 82,
-        "temperament": "Methodical",
-        "style": "Fiscal Discipline",
-    }
+    gm_profile = exec_staff.get("general_manager") or {}
+    if not str(gm_profile.get("name") or "").strip() or gm_profile.get("is_vacant"):
+        gm_profile = {"name": "Seat empty", "role": "General Manager", "is_vacant": True}
 
     rel = _get_gm_relationship(session, club_id)
     rel_summary = {
-        "trust": rel.trust if rel else 60,
-        "tension": rel.tension if rel else 20,
-        "alignment": rel.alignment if rel else 65,
-        "loyalty": rel.loyalty if rel else 70,
-        "influence": rel.influence if rel else 60,
-        "status": rel.status if rel else "active",
+        "trust": rel.trust if rel else 0,
+        "tension": rel.tension if rel else 0,
+        "alignment": rel.alignment if rel else 0,
+        "loyalty": rel.loyalty if rel else 0,
+        "influence": rel.influence if rel else 0,
+        "status": rel.status if rel else "vacant",
     }
 
     # Normalize mode for Stage 5 display
@@ -438,7 +434,7 @@ def get_gm_delegation_overview(session: Session, user_id: str, club_id: str) -> 
     total_expenditure_approved = sum(float(d.financial_amount_gtex or 0) for d in executed_rows)
     gm_staff = {
         "id": str(gm_profile.get("id") or gm_profile.get("staff_id") or ""),
-        "name": gm_profile.get("name", "Dayo Adeleke"),
+        "name": str(gm_profile.get("name") or "").strip() or "Seat empty",
         "role": gm_profile.get("role", "General Manager"),
         "rating": int(gm_profile.get("rating") or 0),
         "salary_gtex": float(gm_profile.get("salary_gtex") or gm_profile.get("salary") or 0),
@@ -643,7 +639,7 @@ def evaluate_gm_operational_cycle(session: Session, user_id: str, club_id: str) 
 
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
-    gm_name = (exec_staff.get("general_manager") or {}).get("name", "Dayo Adeleke")
+    gm_name = str((exec_staff.get("general_manager") or {}).get("name") or "").strip() or "Seat empty"
 
     max_unapproved_spend = float(financial_controls.get("max_expenditure_unapproved_gtex", 10000.0))
     max_staff_salary = float(financial_controls.get("max_staff_salary_unapproved_gtex", 1500.0))

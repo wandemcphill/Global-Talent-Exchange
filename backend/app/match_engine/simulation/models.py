@@ -248,26 +248,47 @@ class InternalPlayer:
 @dataclass(frozen=True, slots=True)
 class TacticalPlan:
     style: TacticalStyle
-    pressing: int
-    tempo: int
-    aggression: int
-    substitution_windows: tuple[int, ...]
-    red_card_fallback_formation: str
-    injury_auto_substitution: bool
-    yellow_card_substitution_minute: int
-    yellow_card_replacement_roles: tuple[PlayerRole, ...]
-    max_substitutions: int
+    pressing: int | None = None
+    tempo: int | None = None
+    aggression: int | None = None
+    substitution_windows: tuple[int, ...] = (60, 72, 82)
+    red_card_fallback_formation: str = "4-4-1"
+    injury_auto_substitution: bool = True
+    yellow_card_substitution_minute: int = 70
+    yellow_card_replacement_roles: tuple[PlayerRole, ...] = (PlayerRole.DEFENDER, PlayerRole.MIDFIELDER)
+    max_substitutions: int = 5
     allow_substitutions: bool = True
     allow_tactical_changes: bool = True
-    defensive_line: int = 50
-    width: int = 50
+    defensive_line: int | None = None
+    width: int | None = None
     mentality: TacticalStyle = TacticalStyle.BALANCED
-    set_piece_emphasis: int = 50
+    set_piece_emphasis: int | None = None
     player_instructions: dict[str, Any] | None = None
     game_state_adjustments: dict[str, Any] | None = None
-    tactical_quality: int = 60
-    adaptability: int = 60
-    game_management: int = 60
+    tactical_quality: int | None = None
+    adaptability: int | None = None
+    game_management: int | None = None
+
+
+def filed_shift(value: int | None, center: float, scale: float) -> float:
+    """How far a filed tactic sits from the formula's zero point. An unfiled tactic adds nothing."""
+    if value is None or scale == 0:
+        return 0.0
+    return (float(value) - center) / scale
+
+
+def filed_part(value: int | None, scale: float = 1.0) -> float:
+    """A filed tactic as a fraction of the formula. An unfiled tactic contributes nothing."""
+    if value is None or scale == 0:
+        return 0.0
+    return float(value) / scale
+
+
+def filed_unit(value: int | None) -> float:
+    """Map a filed 0–100 tactic onto 0–1. An unfiled tactic sits on the formula's midpoint."""
+    if value is None:
+        return 0.5
+    return float(value) / 100.0
 
 
 @dataclass(frozen=True, slots=True)

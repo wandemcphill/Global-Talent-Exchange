@@ -148,7 +148,8 @@ export function ScoutingTableView({
         </thead>
         <tbody className="divide-y divide-white/5">
           {sortedItems.map((p) => {
-            const potentialDelta = Math.max(0, p.potential - p.rating);
+            const potentialDelta =
+              p.rating > 0 && p.potential > 0 ? Math.max(0, p.potential - p.rating) : 0;
 
             return (
               <tr
@@ -174,7 +175,7 @@ export function ScoutingTableView({
                 </td>
 
                 {/* Age */}
-                <td className="px-3 py-3 font-semibold text-slate-300">{p.age}</td>
+                <td className="px-3 py-3 font-semibold text-slate-300">{p.age || "—"}</td>
 
                 {/* Nation & Club */}
                 <td className="px-3 py-3">
@@ -187,20 +188,20 @@ export function ScoutingTableView({
                 {/* Gen */}
                 <td className="px-3 py-3">
                   <span className="gx-mono text-[11px] font-bold text-emerald-400">
-                    Gen {p.generation}
+                    {p.generation ? `Gen ${p.generation}` : "—"}
                   </span>
                 </td>
 
                 {/* Current Rating */}
                 <td className="px-3 py-3">
-                  <span className="gx-mono text-sm font-black text-white">{p.rating}</span>
+                  <span className="gx-mono text-sm font-black text-white">{p.rating || "—"}</span>
                 </td>
 
                 {/* Potential Rating */}
                 <td className="px-3 py-3">
                   <div className="flex items-center gap-1.5">
                     <span className="gx-mono text-sm font-black text-amber-400">
-                      {p.potential}
+                      {p.potential || "—"}
                     </span>
                     {potentialDelta > 0 && (
                       <span className="text-[10px] font-bold text-emerald-400">

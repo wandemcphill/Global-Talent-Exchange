@@ -6,6 +6,7 @@ Test Suite: Autonomous Staff Career & Professional Employment Market
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -30,7 +31,7 @@ from app.models.wallet import (
     LedgerTransaction,
 )
 from app.models.user import User
-from app.owner_console import ledger, living_staff_market, router as owner_router
+from app.owner_console import ledger, living_staff_market, service as owner_service, router as owner_router
 from app.owner_console.staff_supply import (
     GENERAL_MANAGER_FREE_AGENT_FLOOR,
     replenish_scarce_staff,
@@ -38,6 +39,7 @@ from app.owner_console.staff_supply import (
 from app.owner_console.models import (
     OWNER_CONSOLE_TABLES,
     OwnerClubState,
+    OwnerSquadPlayer,
 )
 
 WORLD_NOW = datetime(2026, 11, 8, 12, 0, 0, tzinfo=timezone.utc)
@@ -431,6 +433,124 @@ def test_rehire_dismissed_staff_by_second_club():
     assert prof.metadata_json["career_history"][1]["club_id"] == c2.id
 
 
+def test_hired_manager_plays_advertised_shape_and_a_sale_settles_both_clubs():
+    session = _session()
+    seller_user, seller_club, seller_state = _bootstrap_club(session, "u_sell", "c_sell", prestige=70)
+    buyer_user, buyer_club, buyer_state = _bootstrap_club(session, "u_buy", "c_buy", prestige=80)
+
+    profile = ClubStaffProfile(
+        market_key="staff:advertised_shape",
+        display_name="Nia Okonkwo",
+        staff_type="first_team_manager",
+        rating=86,
+        salary_minor=100000,
+        metadata_json={
+            "min_prestige": 40,
+            "style": "Gegenpress",
+            "philosophy_summary": "High press, fast vertical attacks.",
+            "preferred_formation": "3-4-3",
+            "preferred_formations": ["3-4-3", "4-2-3-1"],
+            "employment_status": "unemployed",
+            "career_history": [],
+        },
+    )
+    session.add(profile)
+    session.flush()
+
+    first = living_staff_market.hire_staff_from_market(
+        session,
+        seller_user.id,
+        seller_club.id,
+        profile.id,
+        role="first_team_manager",
+        offered_salary_fan_coin=1200,
+        contract_years=3,
+    )
+    assert first["success"] is True
+    assert seller_state.manager_json["philosophy"] == "High press, fast vertical attacks."
+    assert seller_state.facilities_json["_tactical_setup"]["formation"] == "3-4-3"
+    assert first["platform_fee_fan_coin"] == int(first["total_contract_fee_fan_coin"] * 0.2)
+
+    session.refresh(profile)
+    seller_before = ledger.balance(session, ledger.club_account(seller_club.id), ledger.FAN)
+    buyer_before = ledger.balance(session, ledger.club_account(buyer_club.id), ledger.FAN)
+    platform_before = ledger.balance(session, ledger.PLATFORM_FEES, ledger.FAN)
+
+    second = living_staff_market.hire_staff_from_market(
+        session,
+        buyer_user.id,
+        buyer_club.id,
+        profile.id,
+        role="first_team_manager",
+        offered_salary_fan_coin=1400,
+        contract_years=3,
+    )
+    assert second["success"] is True
+    assert second["seller_club_id"] == seller_club.id
+    buyout = second["buyout_fan_coin"]
+    contract_fee = second["total_contract_fee_fan_coin"]
+    assert buyout == max(1800, int(round(1200 * 2.5)))
+    seller_after = ledger.balance(session, ledger.club_account(seller_club.id), ledger.FAN)
+    buyer_after = ledger.balance(session, ledger.club_account(buyer_club.id), ledger.FAN)
+    platform_after = ledger.balance(session, ledger.PLATFORM_FEES, ledger.FAN)
+    assert buyer_before - buyer_after == contract_fee + buyout
+    assert seller_after - seller_before == int(buyout * 0.8)
+    assert platform_after - platform_before == int((contract_fee + buyout) * 0.2)
+    assert seller_state.manager_json.get("is_vacant") is True
+    assert buyer_state.manager_json["name"] == "Nia Okonkwo"
+    assert buyer_state.facilities_json["_tactical_setup"]["formation"] == "3-4-3"
+    session.refresh(profile)
+    assert profile.metadata_json["current_club_id"] == buyer_club.id
+    assert profile.metadata_json["career_history"][-2]["status"] == "transferred"
+
+
+def test_agreed_player_sale_moves_the_player_and_settles_both_clubs():
+    session = _session()
+    seller_user, seller_club, seller_state = _bootstrap_club(session, "u_psell", "c_psell", prestige=60)
+    buyer_user, buyer_club, buyer_state = _bootstrap_club(session, "u_pbuy", "c_pbuy", prestige=60)
+    player = OwnerSquadPlayer(
+        id="squad-adaeze",
+        club_id=seller_club.id,
+        name="Adaeze Nwosu",
+        position="ST",
+        age=24,
+        rating=72,
+        potential=80,
+        value_coin=Decimal("1000"),
+        morale=70,
+        status="active",
+    )
+    session.add(player)
+    seller_state.facilities_json = {
+        "_executive_staff": {},
+        "_last_manager_matchday_selection": {"starting_xi_ids": ["squad-adaeze"], "bench_ids": []},
+    }
+    session.flush()
+
+    seller_before = ledger.balance(session, ledger.club_account(seller_club.id), ledger.GTEX)
+    buyer_before = ledger.balance(session, ledger.club_account(buyer_club.id), ledger.GTEX)
+    platform_before = ledger.balance(session, ledger.PLATFORM_FEES, ledger.GTEX)
+
+    moved = owner_service.buy_squad_player_from_club(
+        session,
+        buyer_user.id,
+        buyer_club.id,
+        player.id,
+        agreed_fee=Decimal("1000"),
+    )
+
+    assert moved.club_id == buyer_club.id
+    assert moved.status == "active"
+    assert moved.acquired_via == "club_transfer"
+    assert ledger.balance(session, ledger.club_account(buyer_club.id), ledger.GTEX) == buyer_before - Decimal("1000")
+    assert ledger.balance(session, ledger.club_account(seller_club.id), ledger.GTEX) == seller_before + Decimal("800")
+    assert ledger.balance(session, ledger.PLATFORM_FEES, ledger.GTEX) == platform_before + Decimal("200")
+    assert "squad-adaeze" not in seller_state.facilities_json["_last_manager_matchday_selection"]["starting_xi_ids"]
+    assert owner_service.squad(session, seller_club.id) == []
+    assert owner_service.squad(session, buyer_club.id)[0].name == "Adaeze Nwosu"
+    assert buyer_state.club_id == buyer_club.id
+
+
 def test_stage4_router_endpoints():
     session = _session()
     u, c, state = _bootstrap_club(session, "u_router_s4", "c_router_s4", prestige=50)
@@ -555,3 +675,48 @@ def test_general_manager_bench_refills_when_clubs_hire():
         and (profile.salary_minor or 0) // 100 <= 1100
     ]
     assert len(affordable) >= 20
+
+
+def test_empty_manager_seat_has_no_name_and_a_later_hire_replaces_the_seat():
+    from app.owner_console import service
+
+    session = _session()
+    user, club, state = _bootstrap_club(session, "u_one_seat", "c_one_seat", prestige=60)
+    appointed = service.get_club_staff(session, user.id, club.id)["appointed_staff"]
+    assert appointed["first_team_manager"] is None
+    assert appointed["general_manager"] is None
+
+    first = ClubStaffProfile(
+        market_key="staff:first_seat",
+        display_name="First Scout",
+        staff_type="chief_scout",
+        rating=70,
+        salary_minor=50000,
+        metadata_json={"min_prestige": 10, "employment_status": "unemployed", "career_history": []},
+    )
+    second = ClubStaffProfile(
+        market_key="staff:second_seat",
+        display_name="Second Scout",
+        staff_type="chief_scout",
+        rating=74,
+        salary_minor=55000,
+        metadata_json={"min_prestige": 10, "employment_status": "unemployed", "career_history": []},
+    )
+    session.add_all([first, second])
+    session.flush()
+
+    first_hire = living_staff_market.hire_staff_from_market(
+        session, user.id, club.id, first.id, role="chief_scout", offered_salary_gtex=600
+    )
+    second_hire = living_staff_market.hire_staff_from_market(
+        session, user.id, club.id, second.id, role="chief_scout", offered_salary_gtex=650
+    )
+    assert first_hire["success"] is True
+    assert second_hire["success"] is True
+
+    session.refresh(state)
+    session.refresh(first)
+    executives = (state.facilities_json or {}).get("_executive_staff") or {}
+    assert executives["chief_scout"]["name"] == "Second Scout"
+    assert first.metadata_json["employment_status"] == "unemployed"
+    assert service.get_club_staff(session, user.id, club.id)["appointed_staff"]["chief_scout"]["name"] == "Second Scout"

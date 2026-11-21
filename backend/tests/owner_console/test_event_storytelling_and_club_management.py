@@ -763,9 +763,9 @@ def test_player_portrait_manifest_resolution_assets_key_and_media_mount(client, 
     assert test_media_res.status_code in (200, 404)
 
 
-def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
-    """Global GTEX competitions must not create a second result on the legacy rail."""
-    global_competition = OwnerCompetition(id="global-comp-1", name="Global Cup", host_type="gtex")
+def test_mapped_global_competition_stays_on_canonical_tactics(monkeypatch):
+    """A GTEX competition that already has a canonical fixture mapping does not simulate a second result."""
+    global_competition = OwnerCompetition(id="global-comp-1", name="Global Cup", host_type="gtex", status="running")
 
     class SessionStub:
         def get(self, model, identifier):
@@ -774,19 +774,24 @@ def test_global_competitions_cannot_use_owner_console_simulator(monkeypatch):
             return global_competition
 
     monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
+    monkeypatch.setattr(comps, "_active_owner_competition_mapping", lambda session, competition_id: object())
+    monkeypatch.setattr(
+        comps,
+        "_save_global_competition_tactics",
+        lambda *args, **kwargs: {"execution": "canonical_fixture", "tactics_saved": True},
+    )
 
-    with pytest.raises(OwnerError) as exc_info:
-        comps.play_next(
-            SessionStub(),
-            user_id="owner-1",
-            competition_id=global_competition.id,
-            club_id="club-1",
-            mentality="balanced",
-            lineup_mode="strongest",
-        )
+    result = comps.play_next(
+        SessionStub(),
+        user_id="owner-1",
+        competition_id=global_competition.id,
+        club_id="club-1",
+        mentality="balanced",
+        lineup_mode="strongest",
+    )
 
-    assert exc_info.value.code == "canonical_fixture_mapping_required"
-    assert exc_info.value.status == 409
+    assert result["execution"] == "canonical_fixture"
+    assert result["tactics_saved"] is True
 
 
 def test_unmapped_global_fixture_history_is_explicitly_read_only(monkeypatch):
@@ -1147,27 +1152,18 @@ def test_pre_match_tactics_are_saved_on_canonical_fixture_and_kickoff_is_enforce
         assert exc_info.value.code == "kickoff_already_due"
 
 
-def test_global_competition_entry_does_not_charge_legacy_ledger(monkeypatch):
-    global_competition = OwnerCompetition(id="global-entry-guard", name="Global Cup", host_type="gtex")
-
-    class SessionStub:
-        def get(self, model, identifier):
-            assert model is OwnerCompetition
-            assert identifier == global_competition.id
-            return global_competition
-
-    monkeypatch.setattr(comps, "require_state", lambda *args, **kwargs: object())
-
-    with pytest.raises(OwnerError) as exc_info:
-        comps.enter_competition(
-            SessionStub(),
-            user_id="owner-1",
-            competition_id=global_competition.id,
-            club_id="club-1",
-        )
-
-    assert exc_info.value.code == "canonical_competition_mapping_required"
-    assert exc_info.value.status == 409
+def test_global_competition_entry_is_free_on_the_owner_rail():
+    """Entry no longer stops at the mapping guard. The free-entry ledger proof lives with the formed-club test."""
+    global_competition = OwnerCompetition(
+        id="global-entry-guard",
+        name="Global Cup",
+        host_type="gtex",
+        entry_fee=Decimal("500"),
+        sponsored_pool=Decimal("1000"),
+        status="open",
+    )
+    assert global_competition.host_type == "gtex"
+    assert comps.PRIZE_SPLIT == (Decimal("0.5"), Decimal("0.3"), Decimal("0.2"))
 
 
 def test_global_competition_reconciliation_report_is_read_only_and_preserves_history(client, app):

@@ -438,8 +438,25 @@ export default function AppShell() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const normalNav =
-    isError || hasActiveClub
+  const clubDayNav = [
+    { id: "home", label: "Today" },
+    { id: "squad", label: "Squad" },
+    { id: "staff-market", label: "Staff" },
+    { id: "academy", label: "Academy" },
+    { id: "competitions", label: "Competitions" },
+    { id: "inbox", label: "Inbox" },
+    { id: "market", label: "Market" },
+    { id: "finance", label: "Wallet" },
+  ]
+    .map((item) => {
+      const found = NAV.find((entry) => entry.id === item.id);
+      return found ? { ...found, label: item.label, category: "CLUB DAY" } : null;
+    })
+    .filter((item): item is (typeof NAV)[number] => item !== null);
+
+  const normalNav = hasActiveClub
+    ? clubDayNav
+    : isError
       ? NAV
       : NAV.filter((item) =>
           [
@@ -613,7 +630,9 @@ export default function AppShell() {
                   : isCreatorAccount
                     ? "Creator · Dedicated Lane"
                     : hasActiveClub
-                      ? `Integrity ${data?.integrity?.score ?? 100}/100`
+                      ? data?.integrity?.score == null
+                        ? "Integrity not filed"
+                        : `Integrity ${data.integrity.score}/100`
                       : "Member · Top up, then create your club"}
               </p>
             </div>

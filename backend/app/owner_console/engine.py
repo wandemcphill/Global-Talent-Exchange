@@ -125,6 +125,22 @@ def clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, value))
 
 
+def apply_mood_delta(record: dict[str, Any] | None, delta: int, *, key: str = "mood") -> int | None:
+    """Move a mood that is already on the record. An unfiled mood stays unfiled."""
+    if not isinstance(record, dict):
+        return None
+    raw = record.get(key)
+    if raw is None:
+        return None
+    try:
+        current = int(raw)
+    except (TypeError, ValueError):
+        return None
+    updated = int(clamp(current + int(delta), 0, 100))
+    record[key] = updated
+    return updated
+
+
 def prestige_tier_label(prestige: int) -> str:
 
     p = int(prestige or 0)
@@ -619,72 +635,76 @@ def calculate_staff_effects(appointed_staff: dict[str, Any]) -> dict[str, Any]:
     med = appointed_staff.get("medical_director") or {}
 
     return {
-        "transfer_fee_discount_pct": round(float(gm.get("negotiation", 10)) * 0.5, 1),
-        "sponsor_revenue_bonus_pct": round(float(gm.get("commercial_acumen", 10)) * 0.6, 1),
-        "academy_potential_bonus": max(1, int(hoyd.get("youth_development", 10)) // 3),
-        "tactical_match_bonus": round(float(mgr.get("tactical_flexibility", mgr.get("tactical_quality", 10))) * 0.4, 1),
-        "scouting_precision_bonus": round(float(scout.get("scouting_accuracy", 10)) * 0.5, 1),
-        "injury_recovery_bonus": max(1, int(med.get("medical_expertise", 10)) // 3),
+        "transfer_fee_discount_pct": round(float(gm["negotiation"]) * 0.5, 1) if gm.get("negotiation") is not None else 0.0,
+        "sponsor_revenue_bonus_pct": round(float(gm["commercial_acumen"]) * 0.6, 1) if gm.get("commercial_acumen") is not None else 0.0,
+        "academy_potential_bonus": int(hoyd["youth_development"]) // 3 if hoyd.get("youth_development") is not None else 0,
+        "tactical_match_bonus": (
+            round(float(mgr["tactical_flexibility"] if mgr.get("tactical_flexibility") is not None else mgr.get("tactical_quality")) * 0.4, 1)
+            if mgr.get("tactical_flexibility") is not None or mgr.get("tactical_quality") is not None
+            else 0.0
+        ),
+        "scouting_precision_bonus": round(float(scout["scouting_accuracy"]) * 0.5, 1) if scout.get("scouting_accuracy") is not None else 0.0,
+        "injury_recovery_bonus": int(med["medical_expertise"]) // 3 if med.get("medical_expertise") is not None else 0,
     }
 
 
 def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
 
-    manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "gtex-staff-coach")
-
-    rng = seeded("manager", manager_id)
-
-    traits = list(snapshot.get("traits") or [])
-
-    rarity = str(snapshot.get("rarity") or "staff")
-
-    rarity_bonus = {"legendary": 5, "elite": 4, "popular": 2, "rising": 1}.get(rarity, 0)
-
-    youth = int(clamp(rng.randint(7, 16) + (3 if "academy_promotion_bias" in traits else 0) + rarity_bonus // 2, 1, 20))
-
-    profile = {
-        "manager_id": manager_id,
-        "name": snapshot.get("display_name") or snapshot.get("name") or "Tunde Bakare",
-        "rarity": rarity,
-        "tactical_preference": snapshot.get("mentality")
-        or rng.choice(["technical", "pressing", "counter", "balanced"]),
-        "tactics": list(snapshot.get("tactics") or ["balanced_shape"]),
-        "catalog_traits": traits,
-        "philosophy": snapshot.get("philosophy_summary")
-        or "A pragmatic staff coach assigned by GTEX until the board appoints its own manager.",
-        "temperament": rng.choice(TEMPERAMENTS),
-        "ambition": rng.randint(6, 15) + rarity_bonus,
-        "loyalty": rng.randint(5, 18),
-        "discipline_style": rng.choice(DISCIPLINE),
-        "youth_development": youth,
-        "media_style": rng.choice(MEDIA),
-        "transfer_preference": "youth-first" if youth >= 15 else rng.choice(TRANSFER_PREFS),
-        "tactical_quality": int(clamp(rng.randint(8, 14) + rarity_bonus, 1, 20)),
-        "mood": 70,
-        "is_default": manager_id == "gtex-staff-coach",
+    manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "")
+    name = str(snapshot.get("display_name") or snapshot.get("name") or "").strip()
+    profile: dict[str, Any] = {
+        "manager_id": manager_id or None,
+        "name": name,
+        "is_default": manager_id == "gtex-staff-coach" or bool(snapshot.get("is_default")),
+        "is_vacant": (not name) or manager_id == "gtex-staff-coach" or bool(snapshot.get("is_vacant")),
     }
+    if snapshot.get("rarity") is not None:
+        profile["rarity"] = snapshot["rarity"]
+    if snapshot.get("mentality") is not None:
+        profile["tactical_preference"] = snapshot["mentality"]
+    elif snapshot.get("tactical_preference") is not None:
+        profile["tactical_preference"] = snapshot["tactical_preference"]
+    if snapshot.get("tactics"):
+        profile["tactics"] = list(snapshot["tactics"])
+    if snapshot.get("traits"):
+        profile["catalog_traits"] = list(snapshot["traits"])
+    if snapshot.get("philosophy_summary"):
+        profile["philosophy"] = snapshot["philosophy_summary"]
+    elif snapshot.get("philosophy"):
+        profile["philosophy"] = snapshot["philosophy"]
+    for key in (
+        "temperament",
+        "ambition",
+        "loyalty",
+        "discipline_style",
+        "youth_development",
+        "media_style",
+        "transfer_preference",
+        "tactical_quality",
+        "tactical_flexibility",
+        "mood",
+        "rating",
+        "age",
+        "gsi",
+        "potential",
+        "preferred_formation",
+        "youth_age_max",
+        "nation",
+        "style",
+    ):
+        if snapshot.get(key) is not None:
+            profile[key] = snapshot[key]
     if snapshot.get("profile_locked"):
-        profile["temperament"] = snapshot.get("temperament") or profile["temperament"]
-        profile["ambition"] = int(snapshot.get("ambition") or profile["ambition"])
-        profile["loyalty"] = int(snapshot.get("loyalty") or profile["loyalty"])
-        profile["youth_development"] = int(snapshot.get("youth_development") or profile["youth_development"])
-        profile["tactical_quality"] = int(snapshot.get("tactical_flexibility") or profile["tactical_quality"])
-        profile["discipline_style"] = "balanced"
-        profile["transfer_preference"] = "youth-first"
-        for field in (
-            "age",
-            "gsi",
-            "potential",
-            "preferred_formation",
-            "youth_age_max",
-            "nation",
-        ):
-            if snapshot.get(field) is not None:
-                profile[field] = snapshot[field]
-        if snapshot.get("preferred_formations"):
-            profile["preferred_formations"] = list(snapshot["preferred_formations"])
+        profile["profile_locked"] = True
+        if snapshot.get("tactical_flexibility") is not None and profile.get("tactical_quality") is None:
+            profile["tactical_quality"] = int(snapshot["tactical_flexibility"])
         if snapshot.get("uses_academy_players"):
             profile["uses_academy_players"] = True
+            profile["transfer_preference"] = "youth-first"
+        if snapshot.get("preferred_formations"):
+            profile["preferred_formations"] = list(snapshot["preferred_formations"])
+    elif snapshot.get("preferred_formations"):
+        profile["preferred_formations"] = list(snapshot["preferred_formations"])
     if snapshot.get("portrait_url"):
         profile["portrait_url"] = snapshot["portrait_url"]
     return profile
@@ -934,21 +954,24 @@ def club_strength(
     rejections = dict((facilities or {}).get("_manager_matchday_rejections") or {})
     exclusions = dict((facilities or {}).get("_manager_disciplinary_exclusions") or {})
 
-    youth_commit = int(mgr_profile.get("youth_development_commitment", 60))
-    veteran_pref = int(mgr_profile.get("preference_for_experienced_players", 55))
+    youth_commit = mgr_profile.get("youth_development_commitment")
+    veteran_pref = mgr_profile.get("preference_for_experienced_players")
+    youth_commit = int(youth_commit) if youth_commit is not None else None
+    veteran_pref = int(veteran_pref) if veteran_pref is not None else None
 
     def _manager_selection_score(p: dict[str, Any]) -> float:
         pid = str(p.get("id") or "")
-        base = float(p.get("rating", 65))
-        fitness_adj = (float(p.get("fitness", 90)) - 80.0) * 0.15
-        morale_adj = (float(p.get("morale", 75)) - 70.0) * 0.08
-        age = int(p.get("age", 24) or 24)
+        base = float(p["rating"]) if p.get("rating") is not None else 0.0
+        fitness_adj = (float(p["fitness"]) - 80.0) * 0.15 if p.get("fitness") is not None else 0.0
+        morale_adj = (float(p["morale"]) - 70.0) * 0.08 if p.get("morale") is not None else 0.0
+        age = int(p["age"]) if p.get("age") is not None else None
         age_adj = 0.0
-        if age <= 19 or p.get("is_academy"):
-            age_adj += ((youth_commit - 50) / 50.0) * 6.5
-            age_adj -= ((veteran_pref - 50) / 50.0) * 6.0
-        elif age >= 27:
-            age_adj += ((veteran_pref - 50) / 50.0) * 4.5
+        if age is not None and youth_commit is not None and veteran_pref is not None:
+            if age <= 19 or p.get("is_academy"):
+                age_adj += ((youth_commit - 50) / 50.0) * 6.5
+                age_adj -= ((veteran_pref - 50) / 50.0) * 6.0
+            elif age >= 27:
+                age_adj += ((veteran_pref - 50) / 50.0) * 4.5
         comm = commitments.get(pid)
         if comm and comm.get("matchday_role") == "starting_xi":
             age_adj += 30.0
@@ -970,7 +993,7 @@ def club_strength(
             return "academy"
         if raw in {"first_team", "senior"}:
             return "first_team"
-        if p.get("is_regen") and int(p.get("age") or 24) <= 18 and int(p.get("minutes") or 0) == 0:
+        if p.get("is_regen") and p.get("age") is not None and int(p["age"]) <= 18 and int(p.get("minutes") or 0) == 0:
             return "academy"
         return "first_team"
 
@@ -1025,13 +1048,19 @@ def club_strength(
     fit = chosen[:11]
     if not fit:
         return {
-            "strength": 40.0,
+            "strength": None,
             "xi": [],
             "bench": [],
             "promised_sub_ids": [],
-            "avg_rating": 40,
-            "avg_morale": 50,
-            "avg_fitness": 75.0,
+            "formation": None,
+            "pressing": None,
+            "tempo": None,
+            "width": None,
+            "defensive_line": None,
+            "tactical_quality": None,
+            "avg_rating": None,
+            "avg_morale": None,
+            "avg_fitness": None,
         }
     starter_ids = {p["id"] for p in fit}
 
@@ -1058,41 +1087,77 @@ def club_strength(
         if p not in bench and len(bench) < 7:
             bench.append(p)
 
-    avg_rating = sum(p["rating"] for p in fit) / len(fit)
-    avg_morale = sum(p["morale"] for p in fit) / len(fit)
-    avg_fitness = sum(float(p.get("fitness", 95)) for p in fit) / len(fit)
+    ratings = [float(p["rating"]) for p in fit if p.get("rating") is not None]
+    morales = [float(p["morale"]) for p in fit if p.get("morale") is not None]
+    fitnesses = [float(p["fitness"]) for p in fit if p.get("fitness") is not None]
+    avg_rating = sum(ratings) / len(ratings) if ratings else None
+    avg_morale = sum(morales) / len(morales) if morales else None
+    avg_fitness = sum(fitnesses) / len(fitnesses) if fitnesses else None
     depth_penalty = (11 - len(fit)) * 2.5
-    tactical_cohesion_bonus = float((campus_effects or {}).get("tactical_cohesion_pct", 0)) * 0.08
-    fitness_modifier = (avg_fitness - 85.0) * 0.06
-    strength = (
-        avg_rating
-        + manager.get("tactical_quality", 10) * 0.35
-        + (avg_morale - 60) * 0.08
-        + int(facilities.get("medical", 1) or 1) * 0.4
-        + tactical_cohesion_bonus
-        + fitness_modifier
-        - depth_penalty
-    )
+    strength = avg_rating
+    if strength is not None:
+        if manager.get("tactical_quality") is not None:
+            strength += float(manager["tactical_quality"]) * 0.35
+        if avg_morale is not None:
+            strength += (avg_morale - 60) * 0.08
+        if facilities.get("medical") is not None:
+            strength += int(facilities["medical"]) * 0.4
+        cohesion = (campus_effects or {}).get("tactical_cohesion_pct")
+        if cohesion is not None:
+            strength += float(cohesion) * 0.08
+        if avg_fitness is not None:
+            strength += (avg_fitness - 85.0) * 0.06
+        strength -= depth_penalty
     from app.owner_console import autonomous_staff_engine
 
     mentality_authority = autonomous_staff_engine.resolve_manager_mentality_decision(
         manager,
         facilities_json=facilities,
     )
+    preferred = [str(item) for item in (mgr_profile.get("preferred_formations") or []) if item]
+    if not preferred and manager.get("preferred_formation"):
+        preferred = [str(manager["preferred_formation"])]
+    setup = dict((facilities or {}).get("_tactical_setup") or {})
+    manager_id = str(manager.get("manager_id") or manager.get("id") or "")
+    stored_formation = str(setup.get("formation") or "")
+    ratified_for_this_manager = bool(manager_id) and str(setup.get("ratified_manager_id") or "") == manager_id
+    if preferred and not ratified_for_this_manager:
+        formation = preferred[0]
+    elif stored_formation:
+        formation = stored_formation
+    elif preferred:
+        formation = preferred[0]
+    else:
+        formation = None
+    pressing = int(mgr_profile["pressing_philosophy"]) if mgr_profile.get("pressing_philosophy") is not None else None
+    attack = int(mgr_profile["attacking_vs_defensive"]) if mgr_profile.get("attacking_vs_defensive") is not None else None
+    possession = int(mgr_profile["possession_vs_direct"]) if mgr_profile.get("possession_vs_direct") is not None else None
+    raw_quality = manager.get("tactical_quality")
+    if raw_quality is None:
+        tactical_quality = None
+    else:
+        raw_quality_int = int(raw_quality)
+        tactical_quality = int(clamp(raw_quality_int * 5 if raw_quality_int <= 20 else raw_quality_int, 1, 100))
+    width = None
+    if possession is not None:
+        width = 68 if possession <= 40 else 46 if possession >= 70 else 55
     return {
-        "strength": round(strength, 2),
+        "strength": round(strength, 2) if strength is not None else None,
         "xi": [p["id"] for p in fit],
         "bench": [p["id"] for p in bench],
         "promised_sub_ids": promised_sub_ids,
-        "formation": str(
-            (facilities or {}).get("_tactical_setup", {}).get("formation")
-            or (mgr_profile.get("preferred_formations") or ["4-3-3"])[0]
-        ),
+        "formation": formation,
+        "pressing": pressing,
+        "tempo": attack,
+        "width": width,
+        "defensive_line": attack,
+        "philosophy": str(mgr_profile.get("preferred_tactical_philosophy") or manager.get("philosophy") or ""),
+        "tactical_quality": tactical_quality,
         "manager_mentality": mentality_authority["manager_preferred_mentality"],
         "mentality_authority": mentality_authority,
-        "avg_rating": round(avg_rating, 1),
-        "avg_morale": round(avg_morale, 1),
-        "avg_fitness": round(avg_fitness, 1),
+        "avg_rating": round(avg_rating, 1) if avg_rating is not None else None,
+        "avg_morale": round(avg_morale, 1) if avg_morale is not None else None,
+        "avg_fitness": round(avg_fitness, 1) if avg_fitness is not None else None,
     }
 
 
@@ -1107,8 +1172,20 @@ def calculate_match_attendance(
 ) -> dict[str, Any]:
     """Calculate authoritative home match attendance (hard-capped by operational stadium capacity) and gate receipts."""
     eff = dict(campus_effects or {})
-    stadium_capacity = max(1_000, int(eff.get("stadium_capacity", 30_000)))
-    matchday_rev_pct = int(eff.get("matchday_revenue_bonus_pct", 15))
+    raw_capacity = eff.get("stadium_capacity")
+    if raw_capacity is None:
+        return {
+            "attendance": 0,
+            "stadium_capacity": None,
+            "raw_demand": 0,
+            "capacity_utilization_pct": None,
+            "sold_out": False,
+            "gate_receipts_gtex": 0,
+        }
+    stadium_capacity = max(1_000, int(raw_capacity))
+    matchday_rev_pct = (
+        int(eff["matchday_revenue_bonus_pct"]) if eff.get("matchday_revenue_bonus_pct") is not None else 0
+    )
     vip_hospitality_gtex = int(eff.get("vip_hospitality_flat_gtex", 0))
     commercial_growth_pct = int(eff.get("commercial_growth_bonus_pct", 0))
     home_advantage_bonus = int(eff.get("home_advantage_bonus", 0))
@@ -1282,6 +1359,27 @@ def _poisson(rng: random.Random, lam: float) -> int:
         k += 1
 
 
+def _playable_formation(formation: str) -> str:
+    parts = [part for part in str(formation or "").split("-") if part.isdigit()]
+    if len(parts) >= 2 and sum(int(part) for part in parts) == 10:
+        return "-".join(parts)
+    return "4-3-3"
+
+
+def _roles_for_formation(formation: str) -> list[Any]:
+    from app.match_engine.simulation.models import PlayerRole
+
+    parts = [int(part) for part in _playable_formation(formation).split("-")]
+    defenders, forwards = parts[0], parts[-1]
+    midfielders = sum(parts[1:-1])
+    return (
+        [PlayerRole.GOALKEEPER]
+        + ([PlayerRole.DEFENDER] * defenders)
+        + ([PlayerRole.MIDFIELDER] * midfielders)
+        + ([PlayerRole.FORWARD] * forwards)
+    )
+
+
 def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dict[str, Any]:
     """Simulate a match using the canonical MatchSimulationService exclusively.
 
@@ -1314,21 +1412,12 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
             "defensive": TacticalStyle.DEFENSIVE,
         }.get(mentality, TacticalStyle.BALANCED)
 
-        base_rating = int(clamp(float(side_data.get("strength", 70)), 40, 95))
-
-        roles = [
-            PlayerRole.GOALKEEPER,
-            PlayerRole.DEFENDER,
-            PlayerRole.DEFENDER,
-            PlayerRole.DEFENDER,
-            PlayerRole.DEFENDER,
-            PlayerRole.MIDFIELDER,
-            PlayerRole.MIDFIELDER,
-            PlayerRole.MIDFIELDER,
-            PlayerRole.FORWARD,
-            PlayerRole.FORWARD,
-            PlayerRole.FORWARD,
-        ]
+        raw_strength = side_data.get("strength")
+        if raw_strength is None:
+            raise ValueError("match strength was not filed")
+        base_rating = int(clamp(float(raw_strength), 40, 95))
+        formation = _playable_formation(str(side_data.get("formation") or "4-3-3"))
+        roles = _roles_for_formation(formation)
 
         scorers = list(side_data.get("scorers") or [])
 
@@ -1344,9 +1433,7 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
                     player_name=p_name,
                     role=role,
                     overall=base_rating,
-                    finishing=base_rating if role == PlayerRole.FORWARD else 50,
-                    defending=base_rating if role in (PlayerRole.DEFENDER, PlayerRole.GOALKEEPER) else 50,
-                    goalkeeping=base_rating if role == PlayerRole.GOALKEEPER else 1,
+                    goalkeeping=base_rating if role == PlayerRole.GOALKEEPER else None,
                 )
             )
 
@@ -1362,7 +1449,16 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         return MatchTeamInput(
             team_id=side_id,
             team_name=str(side_data.get("name", side_id)),
-            tactics=TeamTacticalPlanInput(style=style, mentality=style),
+            formation=formation,
+            tactics=TeamTacticalPlanInput(
+                style=style,
+                mentality=style,
+                **{
+                    key: int(clamp(int(side_data[key]), 0 if key != "tactical_quality" else 1, 100))
+                    for key in ("pressing", "tempo", "width", "defensive_line", "tactical_quality")
+                    if side_data.get(key) is not None
+                },
+            ),
             starters=starters,
             bench=bench,
         )

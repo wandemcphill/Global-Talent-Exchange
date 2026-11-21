@@ -168,7 +168,9 @@ export default function CompetitionDetail() {
       <div className="grid gap-6 lg:grid-cols-12">
         <Panel eyebrow="Table" title="Standings" className="lg:col-span-7" testid="standings-panel"><Standings rows={comp.standings} myIds={myIds} /></Panel>
         <Panel eyebrow="Pre-match" title="Owner decisions" className="lg:col-span-5" live testid="owner-match-panel">
-          {myIds.length ? (
+          {comp.history_read_only ? (
+            <p className="text-sm text-slate-400">This competition is already on the record. There is no fixture left to play.</p>
+          ) : myIds.length ? (
             <PlayPanel comp={comp} clubId={myClub} lineup={lineupMode} setLineup={setLineupMode} />
           ) : (
             <p className="text-sm text-slate-400">You haven't entered this competition.</p>
@@ -201,22 +203,24 @@ export default function CompetitionDetail() {
             <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Competition Prize Pool</p>
               <p className="gx-mono text-xl font-black text-amber-300 mt-1">{fmt(comp.prize_pool)} <span className="text-xs">GTX</span></p>
-              <p className="text-[10px] text-slate-400 mt-0.5">35% Ecosystem allocation</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                {comp.host_type === "gtex" ? "Funded by GTEX. Entry is free." : "Entry is free. The purse is the amount the host filed."}
+              </p>
             </div>
             <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">TV & Broadcast Rights</p>
-              <p className="gx-mono text-xl font-black text-cyan-300 mt-1">{fmt(comp.broadcast_pool ?? Math.round(Number(comp.prize_pool || 0) * 1.14))} <span className="text-xs">GTX</span></p>
-              <p className="text-[10px] text-slate-400 mt-0.5">40% Matchday broadcast share</p>
+              <p className="gx-mono text-xl font-black text-cyan-300 mt-1">{comp.broadcast_pool == null ? "Not filed" : <>{fmt(comp.broadcast_pool)} <span className="text-xs">GTX</span></>}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Recorded rights fee</p>
             </div>
             <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Participation Grants</p>
-              <p className="gx-mono text-xl font-black text-emerald-300 mt-1">{fmt(comp.participation_grant ?? 2500)} <span className="text-xs">GTX / club</span></p>
-              <p className="text-[10px] text-slate-400 mt-0.5">Base stipend per entrant</p>
+              <p className="gx-mono text-xl font-black text-emerald-300 mt-1">{comp.participation_grant == null ? "None" : <>{fmt(comp.participation_grant)} <span className="text-xs">GTX / club</span></>}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">No entry fee is charged</p>
             </div>
             <div className="rounded-xl border border-gtex-graphite bg-gtex-midnight/70 p-4">
               <p className="text-[10px] uppercase font-bold text-slate-400">Jackpot Contribution</p>
-              <p className="gx-mono text-xl font-black text-purple-300 mt-1">{fmt(comp.jackpot_contribution ?? Math.round(Number(comp.prize_pool || 0) * 0.71))} <span className="text-xs">GTX</span></p>
-              <p className="text-[10px] text-slate-400 mt-0.5">25% Recycled to Global Jackpot</p>
+              <p className="gx-mono text-xl font-black text-purple-300 mt-1">{comp.jackpot_contribution == null ? "Not filed" : <>{fmt(comp.jackpot_contribution)} <span className="text-xs">GTX</span></>}</p>
+              <p className="text-[10px] text-slate-400 mt-0.5">Only a filed contribution is shown</p>
             </div>
           </div>
 
@@ -249,7 +253,7 @@ export default function CompetitionDetail() {
             <div className="flex items-center gap-2">
               <Sparkles size={15} className="text-emerald-400 shrink-0" />
               <span>
-                Settlement Status: <b className="uppercase text-white">{label(comp.status === "finished" ? "settled_to_ledger" : "escrow_locked")}</b> · 40% TV Broadcast · 35% Competition Prize Pool · 25% Global Jackpot
+                Settlement Status: <b className="uppercase text-white">{label(comp.status === "finished" ? "settled_to_ledger" : "prize_pending")}</b> · Podium split 50% / 30% / 20% of the filed prize
               </span>
             </div>
             <div className="flex items-center gap-2">

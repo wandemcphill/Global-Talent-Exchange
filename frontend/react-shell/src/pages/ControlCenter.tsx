@@ -55,6 +55,7 @@ import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D
 import { VogueStaffStill } from "@/components/gtex/StaticPresentation";
 import {
   HolographicPlayerCard,
+  placeFirstTeamOnPitch,
   TacticalPitch25D,
   TelemetrySparklineCard,
 } from "@/components/gtex/ApexWidgets";
@@ -421,14 +422,19 @@ export function ControlCenter() {
     null;
 
   const appointed = clubDetail?.executive_staff || clubDetail?.staff || {};
-  const managerRecord =
-    appointed.first_team_manager || clubDetail?.manager_profile || activeClubProfile.manager || {};
+  const managerRecord = appointed.first_team_manager || {};
+  const managerIsCaretaker =
+    !managerRecord?.name ||
+    managerRecord.is_default ||
+    managerRecord.manager_id === "gtex-staff-coach";
   const staffMap = {
     ...appointed,
-    first_team_manager: {
-      ...managerRecord,
-      name: managerRecord.name || managerRecord.display_name || activeClubProfile.manager?.name,
-    },
+    first_team_manager: managerIsCaretaker
+      ? null
+      : {
+          ...managerRecord,
+          name: managerRecord.name || managerRecord.display_name,
+        },
   };
   const homeKit = clubIdentity?.jersey_set?.home;
   const filedXi = clubDetail?.matchday_xi || [];
@@ -440,6 +446,7 @@ export function ControlCenter() {
     const status = String(player.squad_status || "first_team").toLowerCase();
     return status === "first_team" || status === "senior";
   });
+  const pitchLead = placeFirstTeamOnPitch(firstTeamPitch).find((slot) => slot.player);
   const seat = (person: any) => Boolean(person?.name);
   const executives = [
     {
@@ -653,9 +660,7 @@ export function ControlCenter() {
               Club Valuation
             </p>
             <p className="gx-mono text-2xl font-black text-emerald-300 mt-1">
-              {activeClubProfile.value
-                ? fmt(activeClubProfile.value)
-                : fmt(activeClubProfile.cash || 0)}{" "}
+              {activeClubProfile.value != null ? fmt(activeClubProfile.value) : "Not valued"}{" "}
               <span className="text-xs text-emerald-400/80">GTX</span>
             </p>
             <p className="text-[11px] text-slate-400 mt-1">
@@ -668,7 +673,7 @@ export function ControlCenter() {
               Broadcast & TV Rights
             </p>
             <p className="gx-mono text-2xl font-black text-cyan-300 mt-1">
-              {tvRevenue ? `${fmt(tvRevenue)} GTX` : "Active Pool"}
+              {tvRevenue ? `${fmt(tvRevenue)} GTX` : "No fee recorded"}
             </p>
             <p className="text-[11px] text-slate-400 mt-1">Continental Matchday Allocation</p>
           </div>
@@ -682,13 +687,13 @@ export function ControlCenter() {
       >
         <div className="lg:col-span-4">
           <HolographicPlayerCard
-            name={firstTeamPitch[0]?.name || "First-team sheet"}
-            position={firstTeamPitch[0]?.position || "ST"}
-            overall={Number(firstTeamPitch[0]?.rating || 0)}
-            potential={Number(firstTeamPitch[0]?.potential || 0)}
+            name={pitchLead?.player?.name || "First-team sheet"}
+            position={pitchLead?.player?.position || "ST"}
+            overall={Number(pitchLead?.ovr || 0)}
+            potential={Number(pitchLead?.player?.potential || 0)}
             clubName={activeClubProfile.club_name || "GTEX FC"}
-            priceGtx={Number(firstTeamPitch[0]?.value_coin || 0)}
-            jerseyNumber={9}
+            priceGtx={Number(pitchLead?.player?.value_coin || 0)}
+            jerseyNumber={pitchLead?.shirt}
             badgeLabel="★ CLUB TALISMAN FOIL"
             actionLabel="Inspect Squad →"
             onAction={() => navigate("/app/squad")}
@@ -697,18 +702,16 @@ export function ControlCenter() {
         <div className="lg:col-span-4 flex">
           <div className="w-full">
             <TelemetrySparklineCard
-              title="LIVE TREASURY & YIELD PULSE"
-              subtitle={`${activeClubProfile.club_name || "Club"} · 7-Day Commercial & Matchday Curve`}
-              amount={Number(wallet.gtex_total || activeClubProfile.cash || 248500)}
+              title="CLUB TREASURY"
+              subtitle={`${activeClubProfile.club_name || "Club"} · ${fmt(clubDetail?.economy?.gifts_fan_coin || 0)} Fan Coin`}
+              amount={Number(clubDetail?.economy?.cash_gtex || 0)}
               currency="GTX"
-              trustScore={Number(data?.integrity?.score || 94)}
-              hypeScore={96}
             />
           </div>
         </div>
         <div className="lg:col-span-4">
           <TacticalPitch25D
-            formation={clubDetail?.formation || "4-3-3"}
+            formation={clubDetail?.matchday_formation || undefined}
             players={firstTeamPitch}
             onSelectPlayer={() => navigate("/app/squad")}
           />
@@ -775,20 +778,24 @@ export function ControlCenter() {
             </span>
             <Chip
               tone={
-                (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 65
-                  ? "emerald"
-                  : (clubDetail?.supporters_summary?.overall_sentiment ?? 65) >= 45
-                    ? "gold"
-                    : "red"
+                clubDetail?.supporters_summary?.overall_sentiment == null
+                  ? "default"
+                  : clubDetail.supporters_summary.overall_sentiment >= 65
+                    ? "emerald"
+                    : clubDetail.supporters_summary.overall_sentiment >= 45
+                      ? "gold"
+                      : "red"
               }
             >
-              Sentiment {clubDetail?.supporters_summary?.overall_sentiment ?? 65}/100
+              {clubDetail?.supporters_summary?.overall_sentiment == null
+                ? "No sentiment filed"
+                : `Sentiment ${clubDetail.supporters_summary.overall_sentiment}/100`}
             </Chip>
           </div>
           <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-emerald-300">
             {clubDetail?.supporters_summary?.identity_archetype
               ? label(clubDetail.supporters_summary.identity_archetype)
-              : "6 Supporter Segments"}
+              : "No supporter profile yet"}
           </h3>
           <p className="text-xs text-slate-400">
             Protest stage:{" "}
@@ -813,23 +820,26 @@ export function ControlCenter() {
               Media Scrutiny & Public Standing
             </span>
             <Chip tone="blue">
-              Rep{" "}
-              {clubDetail?.media_standing?.public_reputation_score ??
-                activeClubProfile.prestige ??
-                50}
+              {clubDetail?.media_standing?.public_reputation_score == null
+                ? "No standing filed"
+                : `Rep ${clubDetail.media_standing.public_reputation_score}`}
             </Chip>
           </div>
           <h3 className="gx-display text-base font-bold uppercase text-white group-hover:text-cyan-300">
-            {clubDetail?.media_standing?.reputation_tier || "Established"} Standing
+            {clubDetail?.media_standing?.reputation_tier || "No media standing yet"}
           </h3>
           <p className="text-xs text-slate-400">
             Leadership pressure:{" "}
             <b className="text-amber-300">
-              {clubDetail?.media_standing?.leadership_pressure_index ?? 25}/100
+              {clubDetail?.media_standing?.leadership_pressure_index == null
+                ? "not filed"
+                : `${clubDetail.media_standing.leadership_pressure_index}/100`}
             </b>{" "}
             · Commercial:{" "}
             <b className="text-emerald-300">
-              {clubDetail?.media_standing?.commercial_attractiveness_index ?? 50}/100
+              {clubDetail?.media_standing?.commercial_attractiveness_index == null
+                ? "not filed"
+                : `${clubDetail.media_standing.commercial_attractiveness_index}/100`}
             </b>
           </p>
         </Link>
@@ -854,8 +864,12 @@ export function ControlCenter() {
               {institutionalPulse?.reputation_dimensions?.overall_reputation_prestige ??
                 clubDetail?.reputation_dimensions?.overall_reputation_prestige ??
                 activeClubProfile.prestige ??
-                50}
-              /100
+                "not filed"}
+              {institutionalPulse?.reputation_dimensions?.overall_reputation_prestige != null ||
+              clubDetail?.reputation_dimensions?.overall_reputation_prestige != null ||
+              activeClubProfile.prestige != null
+                ? "/100"
+                : ""}
             </b>{" "}
             · Correlated chains:{" "}
             <b className="text-white">{(institutionalPulse?.unified_timeline || []).length}</b>{" "}
@@ -1253,10 +1267,24 @@ export function ControlCenter() {
             },
             {
               to: "/app/showroom",
-              label: "Luxury Room",
-              sub: "Jets, Watches & Gifts",
+              label: "Club Prestige",
+              sub: "Showroom",
               icon: Gift,
               color: "text-purple-300",
+            },
+            {
+              to: "/app/campus",
+              label: "Campus",
+              sub: "Ground and buildings",
+              icon: Compass,
+              color: "text-cyan-300",
+            },
+            {
+              to: "/app/trophies",
+              label: "Trophy cabinet",
+              sub: "Inside club story",
+              icon: Crown,
+              color: "text-amber-300",
             },
             {
               to: "/app/jackpot",

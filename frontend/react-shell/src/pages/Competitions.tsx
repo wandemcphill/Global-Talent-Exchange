@@ -413,26 +413,33 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       toast.error("Select an active club before entering matchmaking.");
       return;
     }
+    const prestige = activeClub.prestige ?? activeClub.health?.prestige;
+    const squadOvr = activeClub.squad_ovr ?? activeClub.health?.squad_ovr;
+    const depth = activeClub.squad_depth ?? activeClub.health?.squad_depth;
+    const region = activeClub.region || user?.region;
+    const filedProfile =
+      prestige != null && squadOvr != null && typeof depth === "number" && Boolean(region);
     setBusy(true);
     try {
-      // Ensure simulation profile is registered for the active user/club
-      await api.put(`/simulation-matchmaking/profiles/${user.id}`, {
-        user_id: user.id,
-        club_id: activeClub.club_id,
-        club_name: activeClub.club_name || "GTEX FC",
-        manager_rating: 1200 + Number(activeClub.prestige || 50) * 5,
-        tactical_profile: {
-          style,
-          pressing: style === "counter" ? "medium" : "high",
-          tempo: style === "possession" ? "normal" : "fast",
-        },
-        squad_strength: Math.min(99, Math.max(50, Number(activeClub.squad_ovr || 74))),
-        squad_depth: 78,
-        preferred_match_type: ["quick"],
-        connection_quality: "excellent",
-        region: "AF-WEST",
-        availability: "online",
-      });
+      if (filedProfile) {
+        await api.put(`/simulation-matchmaking/profiles/${user.id}`, {
+          user_id: user.id,
+          club_id: activeClub.club_id,
+          club_name: activeClub.club_name || "Unnamed club",
+          manager_rating: 1200 + Number(prestige) * 5,
+          tactical_profile: {
+            style,
+            pressing: style === "counter" ? "medium" : "high",
+            tempo: style === "possession" ? "normal" : "fast",
+          },
+          squad_strength: Math.min(99, Math.max(1, Number(squadOvr))),
+          squad_depth: Math.min(100, Math.max(1, Number(depth))),
+          preferred_match_type: ["quick"],
+          connection_quality: "good",
+          region,
+          availability: "online",
+        });
+      }
 
       const { data } = await api.post("/simulation-matchmaking/quick-game", {
         mode: "quick_game",
@@ -488,10 +495,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
             .
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
-            <Chip tone="emerald">
-              Free Run: {entitlement?.free_matches_remaining ?? 10}/
-              {entitlement?.free_match_limit ?? 10} Remaining
-            </Chip>
+            <Chip tone="emerald">Entry is free</Chip>
             <Chip tone="gold">Wins: {entitlement?.wins_count ?? 0}</Chip>
           </div>
         </div>
@@ -705,7 +709,7 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
                   <td className="gx-mono font-bold text-amber-300">#{idx + 1}</td>
                   <td className="font-semibold text-white">{c.club_name}</td>
                   <td className="text-slate-300">{c.country || "Global"}</td>
-                  <td className="gx-mono text-emerald-300">{c.prestige ?? 60}</td>
+                  <td className="gx-mono text-emerald-300">{c.prestige == null ? "—" : c.prestige}</td>
                   <td className="gx-mono text-amber-300">{c.trophies ?? 0}</td>
                   <td>
                     {c.multi_club_group ? (

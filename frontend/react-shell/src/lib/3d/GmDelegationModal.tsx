@@ -302,14 +302,14 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-bold text-white">{gm?.name || "Dayo Adeleke"}</span>
+                  <span className="text-sm font-bold text-white">{gm?.name || "Seat empty"}</span>
                   <span className="text-xs text-slate-400">({gm?.role || "General Manager"})</span>
                   <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-[10px] font-mono text-sky-400">
-                    OVR {gm?.rating || 84}
+                    OVR {gm?.rating == null ? "—" : gm.rating}
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-400">
-                  Annual salary: <span className="text-emerald-400 font-mono">{coinWithNaira(gm?.salary_fan_coin || gm?.salary_gtex || 1800, "FAN")}</span>
+                  Annual salary: <span className="text-emerald-400 font-mono">{gm?.salary_fan_coin == null && gm?.salary_gtex == null ? "—" : coinWithNaira(gm?.salary_fan_coin || gm?.salary_gtex, "FAN")}</span>
                 </div>
               </div>
             </div>
@@ -318,19 +318,19 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
             <div className="flex items-center gap-4 text-xs">
               <div className="flex items-center gap-1.5" title="Bilateral Trust Level">
                 <span className="text-slate-400 text-[11px]">Trust:</span>
-                <span className="font-mono font-bold text-emerald-400">{gm?.trust ?? 60}%</span>
+                <span className="font-mono font-bold text-emerald-400">{gm?.trust == null ? "—" : `${gm.trust}%`}</span>
               </div>
               <div className="flex items-center gap-1.5" title="Bilateral Tension (Lower is better)">
                 <span className="text-slate-400 text-[11px]">Tension:</span>
-                <span className="font-mono font-bold text-amber-400">{gm?.tension ?? 20}%</span>
+                <span className="font-mono font-bold text-amber-400">{gm?.tension == null ? "—" : `${gm.tension}%`}</span>
               </div>
               <div className="flex items-center gap-1.5" title="Strategic Alignment">
                 <span className="text-slate-400 text-[11px]">Alignment:</span>
-                <span className="font-mono font-bold text-sky-400">{gm?.alignment ?? 65}%</span>
+                <span className="font-mono font-bold text-sky-400">{gm?.alignment == null ? "—" : `${gm.alignment}%`}</span>
               </div>
               <div className="flex items-center gap-1.5" title="Executive Loyalty">
                 <span className="text-slate-400 text-[11px]">Loyalty:</span>
-                <span className="font-mono font-bold text-purple-400">{gm?.loyalty ?? 70}%</span>
+                <span className="font-mono font-bold text-purple-400">{gm?.loyalty == null ? "—" : `${gm.loyalty}%`}</span>
               </div>
             </div>
           </div>
@@ -704,7 +704,7 @@ export const GmDelegationModal: React.FC<GmDelegationModalProps> = ({
                   <CheckCircle2 className="h-10 w-10 text-emerald-400/60 mb-2" />
                   <span className="text-sm font-semibold text-white">No Pending Proposals</span>
                   <p className="text-xs text-slate-400 mt-1 max-w-sm">
-                    GM Dayo Adeleke has resolved all active operational matters within authorized policy.
+                    No proposal is waiting on the owner.
                   </p>
                 </div>
               ) : (

@@ -21,8 +21,8 @@ from app.team_dynamics.models import PlayerRelationship
 @dataclass(frozen=True, slots=True)
 class TeamDynamicsSnapshot:
     morale_by_player: dict[str, float]
-    chemistry_score: float
-    average_morale: float
+    chemistry_score: float | None
+    average_morale: float | None
     morale_penalty: float
     chemistry_penalty: float
 
@@ -34,31 +34,40 @@ class TeamDynamicsService:
     def build_snapshot(self, *, club_id: str | None, squad: list[tuple[Player, object]]) -> TeamDynamicsSnapshot:
         players = [player for player, _role in squad]
         if not players:
-            return TeamDynamicsSnapshot({}, 55.0, 55.0, 0.0, 0.0)
+            return TeamDynamicsSnapshot({}, None, None, 0.0, 0.0)
         player_ids = [player.id for player in players]
-        morale_by_player = {player.id: self.player_morale(player.id, fallback=player.morale) for player in players}
+        morale_by_player = {
+            player.id: morale
+            for player in players
+            if (morale := self.player_morale(player.id, fallback=player.morale)) is not None
+        }
         pair_scores: list[float] = []
         relationships = self._relationship_map(player_ids)
         for index, (player, role) in enumerate(squad):
+            del role
             for teammate, teammate_role in squad[index + 1 :]:
+                del teammate_role
                 relationship = relationships.get(self._pair_key(player.id, teammate.id))
-                relationship_score = relationship.relationship_score if relationship is not None else 50.0
-                tactical_fit = (
-                    relationship.tactical_fit
-                    if relationship is not None
-                    else self._default_tactical_fit(role, teammate_role)
-                )
-                pair_scores.append((relationship_score + tactical_fit) / 2)
-        average_morale = mean(morale_by_player.values())
-        chemistry_score = mean(pair_scores) if pair_scores else 55.0
+                if (
+                    relationship is None
+                    or relationship.relationship_score is None
+                    or relationship.tactical_fit is None
+                ):
+                    continue
+                pair_scores.append((float(relationship.relationship_score) + float(relationship.tactical_fit)) / 2)
+        filed_morale = list(morale_by_player.values())
+        average_morale = mean(filed_morale) if filed_morale else None
+        chemistry_score = mean(pair_scores) if pair_scores else None
         morale_penalty = 0.0
         chemistry_penalty = 0.0
         if club_id is not None:
             penalties = self._club_penalties(club_id=club_id, player_ids=player_ids)
             morale_penalty = penalties["morale_penalty"]
             chemistry_penalty = penalties["chemistry_penalty"]
-            average_morale = max(0.0, average_morale - morale_penalty)
-            chemistry_score = max(0.0, chemistry_score - chemistry_penalty)
+            if average_morale is not None:
+                average_morale = max(0.0, average_morale - morale_penalty)
+            if chemistry_score is not None:
+                chemistry_score = max(0.0, chemistry_score - chemistry_penalty)
         return TeamDynamicsSnapshot(
             morale_by_player=morale_by_player,
             chemistry_score=chemistry_score,
@@ -67,17 +76,19 @@ class TeamDynamicsService:
             chemistry_penalty=chemistry_penalty,
         )
 
-    def player_morale(self, player_id: str, *, fallback: float | None = None) -> float:
+    def player_morale(self, player_id: str, *, fallback: float | None = None) -> float | None:
         player = self.session.get(Player, player_id)
         agency_state = self.session.scalar(select(PlayerAgencyState).where(PlayerAgencyState.player_id == player_id))
         values = []
-        if player is not None:
+        if player is not None and player.morale is not None:
             values.append(float(player.morale))
-        if agency_state is not None:
+        if agency_state is not None and agency_state.morale is not None:
             values.append(float(agency_state.morale))
         if not values and fallback is not None:
             values.append(float(fallback))
-        return max(0.0, min(100.0, mean(values) if values else 50.0))
+        if not values:
+            return None
+        return max(0.0, min(100.0, mean(values)))
 
     def apply_match_outcome(
         self,

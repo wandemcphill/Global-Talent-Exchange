@@ -88,16 +88,16 @@ export function RegenAwards() {
       {/* 3D World Player of the Year & Ballon d'Or Stage */}
       <GtexSceneViewport
         sceneId="world_gala"
-        title={`3D GTEX Ballon d'Or de Demain · ${featuredWinner?.player_name || "World #1 Laureate"}`}
+        title={`3D GTEX Ballon d'Or de Demain · ${featuredWinner?.player_name || "No laureate filed"}`}
         subtitle="Monaco Theatre · Volumetric 3D Golden Globe Pedestal & Spotlight Sweep"
         badgeText="3D BALLON D'OR GALA"
-        clubName={featuredWinner?.club_name || "GTEX World XI"}
-        subjectName={featuredWinner?.player_name || "Golden Boy Laureate"}
-        overallRating={featuredWinner?.rating || 94}
-        quote="Crowned on the 3D Monaco stage as the most dominant prodigy of the GTEX season."
+        clubName={featuredWinner?.club_name || "Club not filed"}
+        subjectName={featuredWinner?.player_name || "No laureate filed"}
+        overallRating={Number(featuredWinner?.rating ?? 0)}
+        quote={featuredWinner?.quote || ""}
         stats={[
-          { label: "Gala Rank", value: "#1 WORLDWIDE", accent: "#FDE047" },
-          { label: "Award Score", value: `${featuredWinner?.ranking_score ?? "98.6"} PTS`, accent: "#00E676" },
+          { label: "Gala Rank", value: featuredWinner?.rank == null ? "—" : `#${featuredWinner.rank}`, accent: "#FDE047" },
+          { label: "Award Score", value: featuredWinner?.ranking_score == null ? "—" : `${featuredWinner.ranking_score} PTS`, accent: "#00E676" },
         ]}
       />
 
@@ -152,9 +152,9 @@ export function RegenAwards() {
             <div className="shrink-0 flex justify-center">
               <RegenCard
                 name={featuredWinner.player_name || featuredWinner.name}
-                rating={featuredWinner.rating || 82}
-                potential={featuredWinner.potential || 94}
-                position={featuredWinner.position || "FWD"}
+                rating={featuredWinner.rating}
+                potential={featuredWinner.potential}
+                position={featuredWinner.position}
                 variant="full"
                 onClick={() => featuredWinner.player_id && setSelectedPlayerId(featuredWinner.player_id)}
                 testid="featured-winner-card"
@@ -218,8 +218,8 @@ export function RegenAwards() {
                       <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300/80 mb-2">Category Winner</p>
                       <RegenCard
                         name={winner.player_name || winner.name}
-                        rating={winner.rating || winner.overall || 78}
-                        position={winner.position || "MID"}
+                        rating={winner.rating || winner.overall}
+                        position={winner.position}
                         variant="compact"
                         onClick={() => winner.player_id && setSelectedPlayerId(winner.player_id)}
                       />

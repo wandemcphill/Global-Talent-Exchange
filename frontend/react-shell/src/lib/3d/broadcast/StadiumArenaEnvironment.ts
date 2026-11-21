@@ -289,7 +289,7 @@ export class StadiumArenaEnvironment {
     this.buildPlayerTunnelAndDressingAccess();
     this.buildPerimeterAdBoards();
     this.buildGrandstands();
-    this.buildCrowd(options.attendancePct ?? 94);
+    this.buildCrowd(options.attendancePct ?? 0);
     this.buildFloodlightsAndEnvironment(scene);
     this.applyStadiumTierVisibility(this.stadiumTier);
 

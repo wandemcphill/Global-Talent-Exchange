@@ -600,9 +600,9 @@ def test_rental_pool_filters_by_country_and_source_bucket_with_bucket_pricing(
     real_player = players_by_id[player_ids["home-st"]]
     preseeded_player = players_by_id[player_ids["home-gk"]]
     club_player = players_by_id[player_ids["home-cm"]]
-    assert Decimal(str(real_player["loan_price_coin"])) == Decimal("80.0000")
-    assert Decimal(str(preseeded_player["loan_price_coin"])) == Decimal("42.0000")
-    assert Decimal(str(club_player["loan_price_coin"])) == Decimal("67.5000")
+    assert Decimal(str(real_player["loan_price_coin"])) == Decimal("32.0000")
+    assert Decimal(str(preseeded_player["loan_price_coin"])) == Decimal("16.8000")
+    assert Decimal(str(club_player["loan_price_coin"])) == Decimal("27.0000")
     assert all(Decimal(str(item["demand_multiplier"])) == Decimal("1.0000") for item in players_by_id.values())
 
 
@@ -662,7 +662,7 @@ def test_rent_player_enforces_country_lock_and_auto_build_returns_budgeted_squad
     assert repriced_pool.status_code == 200, repriced_pool.text
     repriced_player = next(item for item in repriced_pool.json()["items"] if item["player_id"] == player_ids["home-st"])
     assert Decimal(str(repriced_player["demand_multiplier"])) >= Decimal("1.1500")
-    assert Decimal(str(repriced_player["loan_price_coin"])) > Decimal("80.0000")
+    assert Decimal(str(repriced_player["loan_price_coin"])) > Decimal("32.0000")
 
     auto_build_response = client.post(
         f"/api/national-team-engine/competitions/{competition['id']}/auto-build-squad",

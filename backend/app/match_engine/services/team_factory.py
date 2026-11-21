@@ -147,8 +147,8 @@ class SyntheticSquadFactory:
                 )
 
         resolved_overall = max(50, min(96, base_overall))
-        discipline = self._clamp(58 + ((resolved_overall - 55) // 2))
-        fitness = self._clamp(62 + ((resolved_overall - 55) // 2))
+        discipline = resolved_overall
+        fitness = resolved_overall
         starters = [
             self._build_synthetic_player(
                 team_id=team_id,
@@ -701,73 +701,82 @@ class SyntheticSquadFactory:
             return "4-5-1"
         return "4-3-3"
 
+    def _optional_tactic(self, profile: dict[str, object] | None, key: str) -> int | None:
+        if not profile or key not in profile or profile[key] is None:
+            return None
+        try:
+            return int(profile[key])
+        except (TypeError, ValueError):
+            return None
+
+    def _adjust_filed(self, value: int | None, delta: int) -> int | None:
+        if value is None:
+            return None
+        return self._clamp(value + delta)
+
     def _build_tactics(
         self, resolved_overall: int, manager_profile: dict[str, object] | None = None
     ) -> TeamTacticalPlanInput:
-        style = (
-            TacticalStyle.ATTACKING
-            if resolved_overall >= 84
-            else TacticalStyle.DEFENSIVE if resolved_overall <= 68 else TacticalStyle.BALANCED
-        )
-        pressing = self._clamp(resolved_overall - 15)
-        tempo = self._clamp(resolved_overall - 12)
-        aggression = self._clamp(42 + ((resolved_overall - 60) // 2))
+        del resolved_overall
+        style = TacticalStyle.BALANCED
         substitution_windows = (60, 72, 82)
-        tactical_quality = self._clamp(54 + ((resolved_overall - 55) // 2))
-        adaptability = self._clamp(52 + ((resolved_overall - 55) // 3))
-        game_management = self._clamp(55 + ((resolved_overall - 55) // 3))
+        pressing = self._optional_tactic(manager_profile, "pressing")
+        tempo = self._optional_tactic(manager_profile, "tempo")
+        aggression = self._optional_tactic(manager_profile, "aggression")
+        tactical_quality = self._optional_tactic(manager_profile, "tactical_quality")
+        adaptability = self._optional_tactic(manager_profile, "adaptability")
+        game_management = self._optional_tactic(manager_profile, "game_management")
         if manager_profile is not None:
-            mentality = str(manager_profile.get("mentality", "balanced"))
+            mentality = str(manager_profile.get("mentality") or "").strip().lower()
             tactics = set(manager_profile.get("tactics") or [])
             traits = set(manager_profile.get("traits") or [])
             if mentality in {"attacking", "pressing"} or "high_press_attack" in tactics:
                 style = TacticalStyle.ATTACKING
-                pressing = self._clamp(pressing + 10)
-                tempo = self._clamp(tempo + 8)
+                pressing = self._adjust_filed(pressing, 10)
+                tempo = self._adjust_filed(tempo, 8)
             elif (
                 mentality in {"defensive", "pragmatic"}
                 or "low_block_counter" in tactics
                 or "compact_midblock" in tactics
             ):
                 style = TacticalStyle.DEFENSIVE
-                pressing = self._clamp(pressing - 6)
-                aggression = self._clamp(aggression - 3)
+                pressing = self._adjust_filed(pressing, -6)
+                aggression = self._adjust_filed(aggression, -3)
             elif mentality in {"technical", "possession"} or "tiki_taka" in tactics or "possession_control" in tactics:
                 style = TacticalStyle.BALANCED
-                tempo = self._clamp(tempo + 4)
+                tempo = self._adjust_filed(tempo, 4)
             if "quick_substitution" in traits:
                 substitution_windows = (56, 67, 78)
-                adaptability = self._clamp(adaptability + 8)
-                game_management = self._clamp(game_management + 6)
+                adaptability = self._adjust_filed(adaptability, 8)
+                game_management = self._adjust_filed(game_management, 6)
             elif "late_substitution" in traits:
                 substitution_windows = (67, 78, 86)
-                adaptability = self._clamp(adaptability - 3)
+                adaptability = self._adjust_filed(adaptability, -3)
             if {"tactical_flexibility", "in_game_adjustments"} & traits:
-                tactical_quality = self._clamp(tactical_quality + 8)
-                adaptability = self._clamp(adaptability + 10)
+                tactical_quality = self._adjust_filed(tactical_quality, 8)
+                adaptability = self._adjust_filed(adaptability, 10)
             if {"defensive_organization", "strict_structure"} & traits:
-                tactical_quality = self._clamp(tactical_quality + 5)
-                game_management = self._clamp(game_management + 5)
+                tactical_quality = self._adjust_filed(tactical_quality, 5)
+                game_management = self._adjust_filed(game_management, 5)
             if {"great motivator", "great_motivator"} & traits:
-                game_management = self._clamp(game_management + 4)
-            # Manager Impact plate (1–99): elite dugouts visibly change outcomes.
+                game_management = self._adjust_filed(game_management, 4)
             impact = manager_profile.get("manager_impact")
             try:
                 impact_score = int(impact) if impact is not None else 0
             except (TypeError, ValueError):
                 impact_score = 0
             if impact_score >= 85:
-                tactical_quality = self._clamp(tactical_quality + 10)
-                adaptability = self._clamp(adaptability + 8)
-                game_management = self._clamp(game_management + 10)
-                pressing = self._clamp(pressing + 4)
+                tactical_quality = self._adjust_filed(tactical_quality, 10)
+                adaptability = self._adjust_filed(adaptability, 8)
+                game_management = self._adjust_filed(game_management, 10)
+                pressing = self._adjust_filed(pressing, 4)
             elif impact_score >= 75:
-                tactical_quality = self._clamp(tactical_quality + 6)
-                adaptability = self._clamp(adaptability + 5)
-                game_management = self._clamp(game_management + 6)
+                tactical_quality = self._adjust_filed(tactical_quality, 6)
+                adaptability = self._adjust_filed(adaptability, 5)
+                game_management = self._adjust_filed(game_management, 6)
             elif impact_score >= 65:
-                tactical_quality = self._clamp(tactical_quality + 3)
-                game_management = self._clamp(game_management + 3)
+                tactical_quality = self._adjust_filed(tactical_quality, 3)
+                game_management = self._adjust_filed(game_management, 3)
         return TeamTacticalPlanInput(
             style=style,
             pressing=pressing,
@@ -885,10 +894,10 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(base_overall + 2 + variation),
                 big_match_temperament=self._clamp(base_overall + 1 + variation),
                 recent_form=self._clamp(base_overall + variation),
-                morale=self._clamp(60 + variation),
-                motivation=self._clamp(62 + variation),
-                fatigue_load=max(12, 32 - variation),
-                injury_risk=18,
+                morale=self._clamp(resolved_overall + variation),
+                motivation=self._clamp(resolved_overall + variation),
+                fatigue_load=0,
+                injury_risk=0,
                 leadership=self._clamp(base_overall + 5),
             )
         if role is PlayerRole.DEFENDER:
@@ -918,10 +927,10 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(base_overall - 2 + variation),
                 big_match_temperament=self._clamp(base_overall + 1 + variation),
                 recent_form=self._clamp(base_overall + variation),
-                morale=self._clamp(59 + variation),
-                motivation=self._clamp(61 + variation),
-                fatigue_load=max(18, 34 - variation),
-                injury_risk=24,
+                morale=self._clamp(resolved_overall + variation),
+                motivation=self._clamp(resolved_overall + variation),
+                fatigue_load=0,
+                injury_risk=0,
                 leadership=self._clamp(base_overall + 3),
             )
         if role is PlayerRole.MIDFIELDER:
@@ -951,10 +960,10 @@ class SyntheticSquadFactory:
                 clutch_factor=self._clamp(base_overall + 1 + variation),
                 big_match_temperament=self._clamp(base_overall + 1 + variation),
                 recent_form=self._clamp(base_overall + 1 + variation),
-                morale=self._clamp(61 + variation),
-                motivation=self._clamp(62 + variation),
-                fatigue_load=max(20, 38 - variation),
-                injury_risk=22,
+                morale=self._clamp(resolved_overall + variation),
+                motivation=self._clamp(resolved_overall + variation),
+                fatigue_load=0,
+                injury_risk=0,
                 leadership=self._clamp(base_overall + 4),
             )
         return MatchPlayerInput(
@@ -982,11 +991,11 @@ class SyntheticSquadFactory:
             consistency=self._clamp(base_overall + 1 + variation),
             clutch_factor=self._clamp(base_overall + 7 + variation),
             big_match_temperament=self._clamp(base_overall + 5 + variation),
-            recent_form=self._clamp(base_overall + 2 + variation),
-            morale=self._clamp(62 + variation),
-            motivation=self._clamp(64 + variation),
-            fatigue_load=max(22, 40 - variation),
-            injury_risk=20,
+                recent_form=self._clamp(base_overall + 2 + variation),
+                morale=self._clamp(resolved_overall + variation),
+                motivation=self._clamp(resolved_overall + variation),
+                fatigue_load=0,
+                injury_risk=0,
             leadership=self._clamp(base_overall + 1),
         )
 
@@ -999,40 +1008,51 @@ class SyntheticSquadFactory:
         dynamics_snapshot: TeamDynamicsSnapshot | None = None,
         personality: PlayerPersonality | None = None,
     ) -> MatchPlayerInput:
-        personality_confidence = int(personality.confidence) if personality is not None else 50
-        personality_clutch = int(personality.clutch_factor) if personality is not None else 50
-        personality_consistency = int(personality.consistency) if personality is not None else 50
-        personality_aggression = int(personality.aggression) if personality is not None else 50
+        personality_confidence = self._personality_score(personality, "confidence")
+        personality_clutch = self._personality_score(personality, "clutch_factor")
+        personality_consistency = self._personality_score(personality, "consistency")
+        personality_aggression = self._personality_score(personality, "aggression")
         overall = self._estimate_player_overall(player, base_overall=base_overall)
-        overall = self._clamp(overall + max(-2, min(3, (personality_confidence - 50) // 12)))
-        discipline = self._clamp(70 - max(0, min(8, (personality_aggression - 55) // 5)))
-        fitness = self._clamp(78 + max(0, min(5, (personality_consistency - 50) // 8)))
+        if personality_confidence is not None:
+            overall = self._clamp(overall + max(-2, min(3, (personality_confidence - 50) // 12)))
+        discipline = (
+            overall
+            if personality_aggression is None
+            else self._clamp(overall - max(0, min(8, (personality_aggression - 55) // 5)))
+        )
+        fitness = (
+            overall
+            if personality_consistency is None
+            else self._clamp(overall + max(0, min(5, (personality_consistency - 50) // 8)))
+        )
         recent_form = self._managed_recent_form(player)
-        morale_value = int(
-            round(
-                (
-                    dynamics_snapshot.morale_by_player.get(player.id, player.morale)
-                    if dynamics_snapshot is not None
-                    else player.morale
+        stored_morale = None
+        if dynamics_snapshot is not None and player.id in dynamics_snapshot.morale_by_player:
+            stored_morale = dynamics_snapshot.morale_by_player.get(player.id)
+        elif player.morale is not None:
+            stored_morale = player.morale
+        morale = None
+        if stored_morale is not None:
+            confidence_nudge = 0 if personality_confidence is None else max(-6, min(8, (personality_confidence - 50) // 4))
+            morale = self._clamp(int(round(stored_morale)) + confidence_nudge)
+        motivation = None
+        if morale is not None:
+            motivation = self._clamp(
+                int(
+                    round(
+                        58
+                        + ((morale - 50) * 0.45)
+                        + (0 if recent_form is None else (recent_form - 55) * 0.25)
+                        + (0 if personality_confidence is None else (personality_confidence - 50) * 0.20)
+                        + (0 if personality_clutch is None else (personality_clutch - 50) * 0.15)
+                    )
                 )
-                or player.morale
             )
-        )
-        morale = self._clamp(morale_value + max(-6, min(8, (personality_confidence - 50) // 4)))
-        motivation = self._clamp(
-            int(
-                round(
-                    58
-                    + ((morale - 50) * 0.45)
-                    + ((recent_form - 55) * 0.25)
-                    + ((personality_confidence - 50) * 0.20)
-                    + ((personality_clutch - 50) * 0.15)
-                )
-            )
-        )
-        consistency_bonus = max(-4, min(6, (personality_consistency - 50) // 6))
-        clutch_bonus = max(-4, min(8, (personality_clutch - 50) // 5))
-        big_match_bonus = max(-3, min(6, ((personality_clutch - 50) + (personality_confidence - 50)) // 10))
+        consistency_bonus = 0 if personality_consistency is None else max(-4, min(6, (personality_consistency - 50) // 6))
+        clutch_bonus = 0 if personality_clutch is None else max(-4, min(8, (personality_clutch - 50) // 5))
+        clutch_part = 0 if personality_clutch is None else personality_clutch - 50
+        confidence_part = 0 if personality_confidence is None else personality_confidence - 50
+        big_match_bonus = max(-3, min(6, (clutch_part + confidence_part) // 10))
         if assigned_role is PlayerRole.GOALKEEPER:
             recent_form = self._managed_recent_form(player)
             return MatchPlayerInput(
@@ -1063,8 +1083,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=26,
-                injury_risk=18,
+                fatigue_load=None,
+                injury_risk=None,
                 leadership=self._clamp(overall + 4),
             )
         if assigned_role is PlayerRole.DEFENDER:
@@ -1099,8 +1119,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=30,
-                injury_risk=24,
+                fatigue_load=None,
+                injury_risk=None,
                 leadership=self._clamp(overall + 3),
             )
         if assigned_role is PlayerRole.MIDFIELDER:
@@ -1133,8 +1153,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=32,
-                injury_risk=22,
+                fatigue_load=None,
+                injury_risk=None,
                 leadership=self._clamp(overall + 4),
             )
         recent_form = self._managed_recent_form(player)
@@ -1166,19 +1186,22 @@ class SyntheticSquadFactory:
             recent_form=recent_form,
             morale=morale,
             motivation=motivation,
-            fatigue_load=34,
-            injury_risk=20,
+                fatigue_load=None,
+                injury_risk=None,
             leadership=self._clamp(overall + 2),
         )
 
     def _estimate_player_overall(self, player: Player, *, base_overall: int) -> int:
-        ratings = [stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None]
+        ratings = [stat.average_rating for stat in player.season_stats if stat.average_rating]
         best_rating = max(ratings, default=0.0)
         output = max(((stat.goals or 0) + (stat.assists or 0) for stat in player.season_stats), default=0)
+        market_value = player.market_value_eur or 0.0
+        if not best_rating and not market_value and not output:
+            return self._clamp(base_overall)
         rating_bonus = round((best_rating - 6.5) * 5) if best_rating else 0
-        market_bonus = min(10, int((player.market_value_eur or 0.0) / 12_000_000))
+        market_bonus = min(10, int(market_value / 12_000_000))
         output_bonus = min(6, output // 5)
-        anchor = 58 + rating_bonus + market_bonus + output_bonus
+        anchor = base_overall + rating_bonus + market_bonus + output_bonus
         return self._clamp(int(round((base_overall * 0.6) + (anchor * 0.4))))
 
     def _managed_player_sort_key(self, player: Player) -> tuple[int, float, float]:
@@ -1219,13 +1242,19 @@ class SyntheticSquadFactory:
     def _clamp(value: int) -> int:
         return max(1, min(99, value))
 
-    def _managed_recent_form(self, player: Player) -> int:
-        rating = max(
-            (stat.average_rating or 0.0 for stat in player.season_stats if stat.average_rating is not None), default=0.0
-        )
-        if rating <= 0:
-            return 58
-        return self._clamp(int(round(48 + (rating * 5.5))))
+    def _personality_score(self, personality: PlayerPersonality | None, key: str) -> int | None:
+        if personality is None:
+            return None
+        value = getattr(personality, key, None)
+        if value is None:
+            return None
+        return int(value)
+
+    def _managed_recent_form(self, player: Player) -> int | None:
+        ratings = [stat.average_rating for stat in player.season_stats if stat.average_rating]
+        if not ratings:
+            return None
+        return self._clamp(int(round(48 + (max(ratings) * 5.5))))
 
     def _normalize_shirt_number(self, value: int | None) -> int | None:
         if value is None:
@@ -1244,22 +1273,8 @@ class SyntheticSquadFactory:
         *,
         manager_profile: dict[str, object] | None = None,
     ) -> MatchClubContextInput:
-        traits = {str(item).strip().lower() for item in (manager_profile or {}).get("traits", [])}
-        chemistry = self._clamp(
-            58 + ((resolved_overall - 55) // 2) + (4 if {"great motivator", "great_motivator"} & traits else 0)
-        )
-        return MatchClubContextInput(
-            club_tier=self._clamp(resolved_overall),
-            competition_tier=self._clamp(resolved_overall - 1),
-            team_chemistry=chemistry,
-            recent_form=self._clamp(56 + ((resolved_overall - 55) // 3)),
-            morale=self._clamp(58 + ((resolved_overall - 55) // 3)),
-            motivation=self._clamp(60 + ((resolved_overall - 55) // 4)),
-            fatigue_load=max(18, 42 - ((resolved_overall - 50) // 2)),
-            travel_load=28,
-            rivalry_intensity=0,
-            schedule_pressure=34,
-        )
+        del resolved_overall, manager_profile
+        return MatchClubContextInput()
 
     def _build_managed_club_context(
         self,
@@ -1269,27 +1284,18 @@ class SyntheticSquadFactory:
         manager_profile: dict[str, object] | None = None,
         dynamics_snapshot: TeamDynamicsSnapshot | None = None,
     ) -> MatchClubContextInput:
-        form_values = [self._managed_recent_form(player) for player, _ in squad]
-        base = self._build_club_context(resolved_overall, manager_profile=manager_profile)
-        average_form = int(round(sum(form_values) / max(1, len(form_values))))
-        average_morale = (
-            self._clamp(int(round(dynamics_snapshot.average_morale)))
-            if dynamics_snapshot is not None
-            else self._clamp(base.morale + ((average_form - 58) // 3))
-        )
-        chemistry_score = (
-            self._clamp(int(round(dynamics_snapshot.chemistry_score)))
-            if dynamics_snapshot is not None
-            else base.team_chemistry
-        )
-        return base.model_copy(
-            update={
-                "team_chemistry": chemistry_score,
-                "recent_form": self._clamp(average_form),
-                "morale": average_morale,
-                "motivation": self._clamp(int(round(base.motivation + ((average_morale - 50) * 0.4)))),
-            }
-        )
+        del resolved_overall, manager_profile
+        updates: dict[str, int] = {}
+        form_values = [value for value in (self._managed_recent_form(player) for player, _ in squad) if value is not None]
+        if form_values:
+            updates["recent_form"] = self._clamp(int(round(sum(form_values) / len(form_values))))
+        if dynamics_snapshot is not None and dynamics_snapshot.chemistry_score is not None:
+            updates["team_chemistry"] = self._clamp(int(round(dynamics_snapshot.chemistry_score)))
+        if dynamics_snapshot is not None and dynamics_snapshot.average_morale is not None:
+            morale = self._clamp(int(round(dynamics_snapshot.average_morale)))
+            updates["morale"] = morale
+            updates["motivation"] = morale
+        return MatchClubContextInput(**updates)
 
     def _resolve_team_identity(
         self,

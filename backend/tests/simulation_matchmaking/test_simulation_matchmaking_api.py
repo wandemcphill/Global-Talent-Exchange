@@ -242,13 +242,13 @@ def test_quick_game_falls_back_to_ai_when_queue_empty(client: TestClient, prefix
     body = response.json()
     assert body["opponent"]["is_bot"] is True
     assert body["match_context"]["queue_source"] == "bot"
-    assert body["charge_on_loss"] is True
+    assert body["charge_on_loss"] is False
     assert body["entry_currency"] == "credit"
     assert body["entry_currency_label"] == "Fan Coin"
-    assert body["fan_coin_entry_fee"] == "25.0000"
+    assert body["fan_coin_entry_fee"] == "0.0000"
     assert body["free_matches_used"] == 1
     assert body["live_match_key"].startswith("fast-match:")
-    assert body["rules_copy"] == "Play free until you lose or reach 10 matches."
+    assert body["rules_copy"] == "Entry is free."
 
 
 @pytest.mark.parametrize("prefix", ["/simulation-matchmaking", "/api/simulation-matchmaking"])

@@ -143,6 +143,7 @@ def test_national_team_manager_hiring_upfront_fan_coin_and_tactical_autobuild():
         catalog = service.list_available_national_managers()
         assert len(catalog) >= 5
         tiki_mgr = next(m for m in catalog if m["tactical_style"] == "tiki_taka")
+        assert all(m["fee_fan_coin"] == "0.0000" for m in catalog)
 
         ws = WalletService()
         before_fan = ws.get_balance(session, ws.get_user_account(session, user_no_club, LedgerUnit.CREDIT))

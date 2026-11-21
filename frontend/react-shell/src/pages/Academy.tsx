@@ -598,27 +598,12 @@ function AcademyProspectCard({
 
   const [busyAction, setBusyAction] = useState<string | null>(null);
 
-  const archetype =
-    p.archetype || t.archetype || (ceiling >= 15 ? "Generational Prodigy" : "Technical Playmaker");
-  const moodState =
-    p.mood_state ||
-    t.mood ||
-    (p.morale >= 75
-      ? "Hungry & Motivated"
-      : p.morale >= 50
-        ? "Focused on Training"
-        : "Needs Minutes & Assurance");
-  const monologue =
-    p.inner_monologue ||
-    t.inner_monologue ||
-    "I am working on my first touch every single session so the first-team coach notices.";
-  const readiness = p.readiness_score ?? (p.rating >= 68 ? 92 : p.rating >= 62 ? 76 : 54);
-  const hoydVerdict =
-    p.hoyd_verdict ||
-    (p.potential >= 82
-      ? "Prime candidate for senior promotion"
-      : "Conditioning recommended before top-flight minutes");
-  const managerApproved = p.manager_approved ?? p.rating >= 60;
+  const archetype = p.archetype || t.archetype || "Archetype not filed";
+  const moodState = p.mood_state || t.mood || "Mood not filed";
+  const monologue = p.inner_monologue || t.inner_monologue || "No monologue is filed.";
+  const readiness = p.readiness_score ?? null;
+  const hoydVerdict = p.hoyd_verdict || "No youth-head verdict is filed.";
+  const managerApproved = p.manager_approved === true;
   const originBackstory = p.origin_backstory || t.origin_backstory;
   const superAgent = p.super_agent || t.super_agent;
   const dramaArc = p.drama_arc || t.drama_arc;
@@ -628,7 +613,7 @@ function AcademyProspectCard({
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/contract`);
       toast.success(
-        `Signed enhanced youth contract for ${p.name} (1,000 Fan Coin). Loyalty and retention secured.`,
+        `Youth contract signed for ${p.name}.`,
       );
       onRefresh();
     } catch (e) {
@@ -642,7 +627,7 @@ function AcademyProspectCard({
     setBusyAction("promote");
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/promote`);
-      toast.success(`Moved ${p.name} onto the first-team sheet.`);
+      toast.success(`Youth head filed a first-team recommendation for ${p.name}.`);
       onRefresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -754,7 +739,7 @@ function AcademyProspectCard({
                 <span
                   className={`text-[10px] font-bold uppercase ${managerApproved ? "text-emerald-400" : "text-amber-400"}`}
                 >
-                  {managerApproved ? "Manager Approved" : "Development Track"}
+                  {p.manager_approved == null ? "Approval not filed" : managerApproved ? "Manager Approved" : "Development Track"}
                 </span>
               </div>
               <p className="text-slate-300 mt-1">{hoydVerdict}</p>
@@ -865,24 +850,37 @@ export default function Academy() {
   if (!club) return <Loading label="Opening your academy..." />;
 
   const regens: any[] = club.squad.filter((p: any) => Boolean(p.is_regen));
+  const facilitySource =
+    typeof club.facilities?.academy === "object" && club.facilities?.academy !== null
+      ? club.facilities?.academy?.level
+      : (club.facilities?.academy ?? club.academy_level);
   const facilityLevel =
-    Number(
-      typeof club.facilities?.academy === "object" && club.facilities?.academy !== null
-        ? club.facilities?.academy?.level
-        : (club.facilities?.academy ?? club.academy_level ?? 2),
-    ) || 2;
-  const clubPrestige = club.health?.prestige ?? 55;
+    facilitySource == null || facilitySource === "" || Number.isNaN(Number(facilitySource))
+      ? null
+      : Number(facilitySource);
+  const recordedPrestige = club.health?.prestige;
+  const clubPrestige =
+    recordedPrestige == null || recordedPrestige === "" ? null : Number(recordedPrestige);
   const prestigeTier =
-    clubPrestige >= 85
-      ? 1
-      : clubPrestige >= 70
-        ? 2
-        : clubPrestige >= 50
-          ? 3
-          : clubPrestige >= 35
-            ? 4
-            : 5;
-  const hoydRating = club.staff?.head_of_youth_development?.rating ?? club.hoyd?.rating ?? 78;
+    clubPrestige == null
+      ? null
+      : clubPrestige >= 85
+        ? 1
+        : clubPrestige >= 70
+          ? 2
+          : clubPrestige >= 50
+            ? 3
+            : clubPrestige >= 35
+              ? 4
+              : 5;
+  const youthHead = club.staff?.head_of_youth_development;
+  const youthHeadNamed = Boolean(
+    youthHead?.name && !youthHead?.is_default && youthHead?.manager_id !== "gtex-staff-coach",
+  );
+  const hoydRating =
+    youthHeadNamed && youthHead?.rating != null && youthHead?.rating !== ""
+      ? Number(youthHead.rating)
+      : null;
 
   const prospects = regens.filter((p) => !p.promoted);
   const promotedRegens = regens.filter((p) => Boolean(p.promoted));
@@ -900,7 +898,7 @@ export default function Academy() {
     setBusy("intake");
     try {
       const { data } = await api.post(`/owner/clubs/${club.club_id}/academy/intake`);
-      toast.success(`Academy intake signed ${data.regens?.length || 3} new youth regens.`);
+      toast.success(`Academy intake signed ${data.regens?.length || 0} new youth regens.`);
       setPack(data.regens || []);
       refresh();
     } catch (e) {
@@ -941,11 +939,11 @@ export default function Academy() {
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">Academy Facility Level</p>
           <p className="gx-mono text-3xl font-black text-white mt-1">
-            Level {facilityLevel}
-            <span className="text-sm text-slate-500">/5</span>
+            {facilityLevel == null ? "Not filed" : `Level ${facilityLevel}`}
+            {facilityLevel == null ? null : <span className="text-sm text-slate-500">/5</span>}
           </p>
           <p className="text-[11px] text-emerald-300 mt-1">
-            +{facilityLevel * 4}% Regen Growth Speed
+            {facilityLevel == null ? "Growth speed is not filed" : `+${facilityLevel * 4}% Regen Growth Speed`}
           </p>
         </div>
 
@@ -955,9 +953,13 @@ export default function Academy() {
             <span className="text-[10px] font-black uppercase tracking-wider">Club Standing</span>
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">Prestige Tier Impact</p>
-          <p className="gx-mono text-3xl font-black text-amber-300 mt-1">Tier {prestigeTier}</p>
+          <p className="gx-mono text-3xl font-black text-amber-300 mt-1">
+            {prestigeTier == null ? "Not filed" : `Tier ${prestigeTier}`}
+          </p>
           <p className="text-[11px] text-amber-200 mt-1">
-            +{Math.max(0, 6 - prestigeTier) * 3} Max Potential Ceiling
+            {prestigeTier == null
+              ? "Potential ceiling is not filed"
+              : `+${Math.max(0, 6 - prestigeTier) * 3} Max Potential Ceiling`}
           </p>
         </div>
 
@@ -970,10 +972,12 @@ export default function Academy() {
           </div>
           <p className="text-xs uppercase font-bold text-slate-400">HOYD Youth Rating</p>
           <p className="gx-mono text-3xl font-black text-purple-300 mt-1">
-            {hoydRating}
-            <span className="text-sm text-slate-500">/100</span>
+            {hoydRating == null ? "Seat empty" : hoydRating}
+            {hoydRating == null ? null : <span className="text-sm text-slate-500">/100</span>}
           </p>
-          <p className="text-[11px] text-purple-200 mt-1">Senior Transition Autonomy Active</p>
+          <p className="text-[11px] text-purple-200 mt-1">
+            {youthHeadNamed ? youthHead.name : "No youth head appointed"}
+          </p>
         </div>
       </section>
 

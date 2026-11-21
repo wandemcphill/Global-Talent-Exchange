@@ -126,11 +126,21 @@ def comp_dict(session: Session, comp: OwnerCompetition, user_id: str | None = No
     }
     if comp.host_type == "gtex":
         mapping = _active_owner_competition_mapping(session, comp.id)
-        data["execution_model"] = "canonical"
-        data["canonical_lifecycle_status"] = "active" if mapping is not None else "unmapped"
-        data["history_read_only"] = mapping is None
-        data["standings_source"] = "canonical" if mapping is not None else "legacy_historical"
-        if mapping is not None:
+        if mapping is None:
+            data["execution_model"] = "owner_simulator"
+            data["canonical_lifecycle_status"] = "unmapped"
+            data["history_read_only"] = comp.status in {"finished", "cancelled"}
+            data["standings_source"] = "owner_simulator"
+            data["entry_fee"] = "0"
+            data["prize_funded_by"] = "gtex"
+            declared = Decimal(comp.sponsored_pool or 0)
+            funded = Decimal(str(data.get("prize_pool") or 0))
+            data["prize_pool"] = str(max(declared, funded))
+        else:
+            data["execution_model"] = "canonical"
+            data["canonical_lifecycle_status"] = "active"
+            data["history_read_only"] = False
+            data["standings_source"] = "canonical"
             from app.common.enums.competition_status import CompetitionStatus
             from app.models.competition import UserCompetition
             from app.models.competition_match import CompetitionMatch
@@ -512,11 +522,7 @@ def enter_competition(session: Session, user_id: str, competition_id: str, club_
     if comp is None:
         raise OwnerError("competition_not_found", 404)
     if comp.host_type == "gtex":
-        raise OwnerError(
-            "canonical_competition_mapping_required",
-            409,
-            "Global GTEX entry must be processed by the canonical competition system; the legacy owner-console entry and fee path is disabled.",
-        )
+        comp.entry_fee = Decimal("0")
     formation = owner_service.get_club_formation_status(session, club_id)
     if not formation["is_formed"]:
         raise OwnerError(
@@ -814,6 +820,7 @@ def _start(session: Session, comp: OwnerCompetition) -> None:
     comp.status = "running"
     comp.current_round = 1
     session.flush()
+    _fund_gtex_prize(session, comp)
 
 
 def _side(
@@ -855,7 +862,12 @@ def _side(
         venue_bonus = float(campus_effects.get("home_advantage_bonus", 0)) * 0.25
     elif is_home is False:
         venue_bonus = float(campus_effects.get("away_travel_readiness_pct", 0)) * 0.10
-    value = round(strength["strength"] + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
+    raw_strength = strength.get("strength")
+    value = (
+        None
+        if raw_strength is None
+        else round(float(raw_strength) + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
+    )
     xi = [p for p in players if p["id"] in strength["xi"]]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
 
@@ -879,7 +891,13 @@ def _side(
         "owner_requested_mentality": mentality_authority["owner_requested_mentality"],
         "manager_decision_status": mentality_authority["decision_status"],
         "manager_decision_reasoning": mentality_authority["reasoning"],
-        "formation": strength.get("formation", "4-3-3"),
+        "formation": strength.get("formation"),
+        "pressing": strength.get("pressing"),
+        "tempo": strength.get("tempo"),
+        "width": strength.get("width"),
+        "defensive_line": strength.get("defensive_line"),
+        "philosophy": strength.get("philosophy") or "",
+        "tactical_quality": strength.get("tactical_quality"),
         "scorers": scorers,
         "manager": state.manager_json if state else None,
         "state": state,
@@ -888,7 +906,7 @@ def _side(
         "promised_sub_ids": list(strength.get("promised_sub_ids") or []),
         "substitutes_used": list(strength.get("promised_sub_ids") or [])[:3],
         "avg_morale": strength["avg_morale"],
-        "avg_fitness": strength.get("avg_fitness", 95.0),
+        "avg_fitness": strength.get("avg_fitness"),
         "campus_effects": campus_effects,
     }
 
@@ -931,7 +949,7 @@ def _post_match_club(
     facs_dict = dict(state.facilities_json or {})
     med_level = int(facs_dict.get("medical", 1) or 1)
     med_director = dict((facs_dict.get("_executive_staff") or {}).get("medical_director") or {})
-    med_expertise = int(med_director.get("medical_expertise", 10))
+    med_expertise = int(med_director["medical_expertise"]) if med_director.get("medical_expertise") is not None else 0
     base_fatigue = 14 + (0 if is_home else max(0, 3 - away_travel_pct // 8))
     effective_fatigue = max(4, int(round(base_fatigue * (1.0 - min(0.55, stamina_ret_pct / 100.0)))))
 
@@ -1026,15 +1044,19 @@ def _post_match_club(
     state.fans = max(200, state.fans + result * 60 + gf * 15)
     state.prestige = int(engine.clamp(state.prestige + result, 0, 100))
     manager = dict(state.manager_json or {})
-    if manager:
-        manager["mood"] = int(engine.clamp(manager.get("mood", 70) + result * 5, 0, 100))
-        state.manager_json = manager
+    if manager.get("name") and not manager.get("is_vacant") and not manager.get("is_default"):
+        if engine.apply_mood_delta(manager, result * 5) is not None:
+            state.manager_json = manager
     if is_home:
         from app.owner_console import living_institution
 
         sup_profile, _ = living_institution.ensure_club_institutional_ecosystem(session, state)
         stadium_level = int((state.facilities_json or {}).get("stadium", 1))
-        matchday_rev_pct = int(campus_effects.get("matchday_revenue_bonus_pct", 15))
+        matchday_rev_pct = (
+            int(campus_effects["matchday_revenue_bonus_pct"])
+            if campus_effects.get("matchday_revenue_bonus_pct") is not None
+            else 0
+        )
         vip_hospitality_gtex = int(campus_effects.get("vip_hospitality_flat_gtex", 0))
         att_mod_pct = int(sup_profile.attendance_modifier_pct or 0)
         effective_fans = max(200, int(round(state.fans * (1.0 + att_mod_pct / 100.0))))
@@ -1063,21 +1085,27 @@ def _post_match_club(
         )
         match.narrative_json = match_narrative
         flag_modified(match, "narrative_json")
-        ledger.record(
-            session,
-            event_type="gate_receipts",
-            source=ledger.WORLD_CLUBS,
-            destination=ledger.club_account(state.club_id),
-            currency=ledger.GTEX,
-            gross=gate,
-            club_id=state.club_id,
-            user_id=state.owner_user_id,
-            related_type="match",
-            related_id=match.id,
-            memo=f"Gate receipts vs {match.away_name} (att {attendance:,}/{stadium_capacity:,}, +{matchday_rev_pct}% rev, VIP {vip_hospitality_gtex} GTX)",
-        )
-        notes.append(f"Attendance {attendance:,}/{stadium_capacity:,}")
-        notes.append(f"Gate receipts {gate:,}")
+        if stadium_capacity is not None:
+            ledger.record(
+                session,
+                event_type="gate_receipts",
+                source=ledger.WORLD_CLUBS,
+                destination=ledger.club_account(state.club_id),
+                currency=ledger.GTEX,
+                gross=gate,
+                club_id=state.club_id,
+                user_id=state.owner_user_id,
+                related_type="match",
+                related_id=match.id,
+                memo=(
+                    f"Gate receipts vs {match.away_name} "
+                    f"(att {attendance:,}/{stadium_capacity:,}, +{matchday_rev_pct}% rev, VIP {vip_hospitality_gtex} GTX)"
+                ),
+            )
+            notes.append(f"Attendance {attendance:,}/{stadium_capacity:,}")
+            notes.append(f"Gate receipts {gate:,}")
+        else:
+            notes.append("Stadium capacity not filed; no gate receipt credited")
     sponsor_bonus_pct = int(campus_effects.get("sponsor_revenue_bonus_pct", 0))
     for deal in session.scalars(
         select(OwnerSponsorDeal).where(OwnerSponsorDeal.club_id == state.club_id, OwnerSponsorDeal.status == "active")
@@ -1189,15 +1217,38 @@ def _post_match_club(
 
 
 def ensure_owner_console_execution_allowed(comp: OwnerCompetition) -> None:
-    """Keep global GTEX fixtures on the canonical CompetitionMatch execution rail."""
-    if comp.host_type == "gtex":
-        raise OwnerError(
-            "global_competition_uses_canonical_lifecycle",
-            409,
-            "Global GTEX fixtures must be executed by the canonical CompetitionMatch lifecycle. "
-            "The owner-console simulator is retained for historical reads and user-hosted tournaments "
-            "until the explicit fixture mapping is available.",
-        )
+    """GTEX and user-hosted competitions share the filed-eleven simulator.
+
+    A GTEX competition that already has an active canonical fixture mapping
+    stays on that rail. play_next checks the mapping before it simulates.
+    """
+    return None
+
+
+def _fund_gtex_prize(session: Session, comp: OwnerCompetition) -> None:
+    """Put the declared purse in the competition pot. Entrants do not pay it."""
+    if comp.host_type != "gtex":
+        return
+    declared = ledger.D(comp.sponsored_pool or 0)
+    if declared <= 0:
+        return
+    funded = ledger.balance(session, comp_account(comp.id), ledger.GTEX)
+    shortfall = declared - funded
+    if shortfall <= 0:
+        return
+    ledger.record(
+        session,
+        event_type="gtex_prize_funding",
+        source=ledger.COMPETITION_PRIZE_POOL,
+        destination=comp_account(comp.id),
+        currency=ledger.GTEX,
+        gross=shortfall,
+        related_type="competition",
+        related_id=comp.id,
+        memo="GTEX funds the prize. Entry is free.",
+        check_funds=False,
+        wallet_idempotency_key=f"gtex-prize:{comp.id}",
+    )
 
 
 def _save_global_competition_tactics(
@@ -1289,9 +1340,8 @@ def play_next(
     comp = session.get(OwnerCompetition, competition_id)
     if comp is None:
         raise OwnerError("competition_not_found", 404)
-    if comp.host_type == "gtex":
+    if comp.host_type == "gtex" and _active_owner_competition_mapping(session, comp.id) is not None:
         return _save_global_competition_tactics(session, user_id, comp, club_id, mentality, lineup_mode)
-    ensure_owner_console_execution_allowed(comp)
     if mentality not in engine.MENTALITY:
         raise OwnerError("invalid_mentality")
     by_id = {e.club_id: e for e in entries(session, comp.id)}
@@ -1365,7 +1415,12 @@ def play_next(
         hg, ag = sim["home_goals"], sim["away_goals"]
         if comp.format == "knockout" and hg == ag:
             rng = engine.seeded("pens", m.id)
-            home_wins = rng.random() < home["strength"] / (home["strength"] + away["strength"])
+            home_strength = home.get("strength")
+            away_strength = away.get("strength")
+            if home_strength is None or away_strength is None or (home_strength + away_strength) == 0:
+                home_wins = rng.random() < 0.5
+            else:
+                home_wins = rng.random() < home_strength / (home_strength + away_strength)
             sim["events"].append(
                 {
                     "minute": 120,
@@ -1383,6 +1438,8 @@ def play_next(
             "momentum": sim["momentum"],
             "expected_goals": sim["lambda"],
             "mentality": {"home": home["mentality"], "away": away["mentality"]},
+            "formation": {"home": home.get("formation"), "away": away.get("formation")},
+            "philosophy": {"home": home.get("philosophy"), "away": away.get("philosophy")},
         }
         if home["state"] is None:
             ai_att = engine.calculate_match_attendance(
@@ -1555,11 +1612,15 @@ def forfeit(session: Session, user_id: str, match_id: str, club_id: str) -> dict
     if m is None or club_id not in (m.home_club_id, m.away_club_id) or m.status != "scheduled":
         raise OwnerError("match_not_forfeitable", 409)
     comp = session.get(OwnerCompetition, m.competition_id)
-    if comp is not None and comp.host_type == "gtex":
+    if (
+        comp is not None
+        and comp.host_type == "gtex"
+        and _active_owner_competition_mapping(session, comp.id) is not None
+    ):
         raise OwnerError(
             "global_competition_uses_canonical_lifecycle",
             409,
-            "Global GTEX fixtures cannot be forfeited on the legacy owner-console rail.",
+            "This GTEX competition is already on the canonical fixture rail.",
         )
     by_id = {e.club_id: e for e in entries(session, comp.id)}
     opp = by_id[m.away_club_id if m.home_club_id == club_id else m.home_club_id]

@@ -114,8 +114,9 @@ export function resolvePlayerFallback(position?: string, isLegendary?: boolean):
   return buildSilhouetteDataUri(position, isLegendary);
 }
 
-function buildRadarPolygon(rating: number, position?: string): string {
-  const base = Math.max(58, Math.min(98, rating || 78));
+function buildRadarPolygon(rating: number, position?: string): string | null {
+  if (!Number.isFinite(rating) || rating <= 0) return null;
+  const base = Math.max(58, Math.min(98, rating));
   const pos = (position || "").toUpperCase();
   const isDef = pos.includes("DEF") || pos.includes("CB") || pos.includes("FB") || pos.includes("GK");
   const vals = [
@@ -325,12 +326,14 @@ export function PlayerCard(props: PlayerCardProps) {
                 stroke="rgba(255,255,255,0.22)"
                 strokeWidth="1.2"
               />
-              <polygon
-                points={radarPts}
-                fill="rgba(0,201,145,0.35)"
-                stroke="#00C991"
-                strokeWidth="2.2"
-              />
+              {radarPts ? (
+                <polygon
+                  points={radarPts}
+                  fill="rgba(0,201,145,0.35)"
+                  stroke="#00C991"
+                  strokeWidth="2.2"
+                />
+              ) : null}
             </svg>
             <div className="relative size-14 shrink-0 overflow-hidden rounded-full border-2 border-white/20 bg-[#080F1C] shadow-md">
               <img
@@ -423,12 +426,14 @@ export function PlayerCard(props: PlayerCardProps) {
           stroke="rgba(255,255,255,0.22)"
           strokeWidth="1.2"
         />
-        <polygon
-          points={radarPts}
-          fill="rgba(0,201,145,0.35)"
-          stroke="#00C991"
-          strokeWidth="2.2"
-        />
+        {radarPts ? (
+          <polygon
+            points={radarPts}
+            fill="rgba(0,201,145,0.35)"
+            stroke="#00C991"
+            strokeWidth="2.2"
+          />
+        ) : null}
       </svg>
 
       {/* Header bar: EA FC Shield Rating Bezel & Tier badge */}

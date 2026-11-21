@@ -59,12 +59,12 @@ export function MarketTableView({
             const pid = p.player_id;
             const owned = signedRefs.includes(pid);
             const price = p.quote?.price ?? 0;
-            const rating = Number(p.quote?.rating ?? p.overall_rating ?? 60);
+            const rating = p.quote?.rating == null && p.overall_rating == null ? null : Number(p.quote?.rating ?? p.overall_rating);
             const unaffordable = cashNum > 0 && price > cashNum && !owned;
             const tierNorm = String(p.real_player_tier || "").toLowerCase();
             const isLegend = tierNorm === "legend";
             const isRegen = p.is_regen || p.is_real_player === false || tierNorm === "regen";
-            const isRestricted = isLegend || isRegen || rating >= 75;
+            const isRestricted = isLegend || isRegen || rating == null || rating >= 75;
             const queued = queuedIds.includes(pid);
             const isWonderkid = tierNorm === "wonderkid";
             const isBusy = busyPlayerId === pid;
@@ -103,7 +103,7 @@ export function MarketTableView({
                           : "text-slate-200"
                     }
                   >
-                    {rating}
+                    {rating ?? "—"}
                   </span>
                 </td>
 
