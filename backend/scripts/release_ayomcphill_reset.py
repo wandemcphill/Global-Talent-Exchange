@@ -69,9 +69,7 @@ def _reconcile_projection(session, account: LedgerAccount | None) -> dict[str, s
     if account is None:
         return {"action": "missing_account"}
     entries = _entry_sum(session, account.id)
-    projection = session.scalar(
-        select(LedgerBalanceProjection).where(LedgerBalanceProjection.account_id == account.id)
-    )
+    projection = session.scalar(select(LedgerBalanceProjection).where(LedgerBalanceProjection.account_id == account.id))
     if projection is None:
         return {"code": account.code, "action": "missing_projection", "entries": _money(entries)}
     current = Decimal(str(projection.balance or "0")).quantize(Decimal("0.0001"))
@@ -158,9 +156,7 @@ def main() -> int:
         )
         current_clubs = [club for club in clubs if club.club_id != VIDA_CLUB_ID]
         current = current_clubs[-1] if current_clubs else None
-        squad_rows = session.scalars(
-            select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == VIDA_CLUB_ID)
-        ).all()
+        squad_rows = session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == VIDA_CLUB_ID)).all()
 
         report: dict[str, object] = {
             "dry_run": not args.activate,

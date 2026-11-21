@@ -675,9 +675,7 @@ def test_user_wallet_deposit_transfers_provenance_to_club_treasury(client, auth_
         assert funding["available_deposited"] == Decimal("10000")
 
 
-def test_wallet_topup_without_deposited_provenance_lands_as_deposited(
-    client, auth_user_factory, app_session_factory
-):
+def test_wallet_topup_without_deposited_provenance_lands_as_deposited(client, auth_user_factory, app_session_factory):
     """Moving personal GTEX into the club is purchase capital, even if the wallet was not tagged deposited."""
     user = auth_user_factory(suffix="topup-deposited", funded_coin=Decimal("8000"))
     claimed = client.post("/api/owner/clubs/claim", headers=user["headers"])

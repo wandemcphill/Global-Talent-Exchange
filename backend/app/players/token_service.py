@@ -451,9 +451,7 @@ class PlayerTokenMarketService(_legacy.PlayerTokenMarketService):
     def _release_holding(self, *, user: User, holding: PlayerShareHolding) -> dict[str, Any]:
         share_count = int(holding.share_count or 0)
         market = self.session.scalar(
-            select(PlayerShareMarket)
-            .where(PlayerShareMarket.player_id == holding.player_id)
-            .with_for_update()
+            select(PlayerShareMarket).where(PlayerShareMarket.player_id == holding.player_id).with_for_update()
         )
         if market is None:
             raise PlayerTokenMarketError(

@@ -1638,9 +1638,7 @@ class RealPlayerUniverseQueryService:
         lowered = cleaned.lower()
         if RealPlayerUniverseQueryService._PLACEHOLDER_IMAGE_TOKEN in lowered:
             return None
-        if not allow_facebank and any(
-            tok in lowered for tok in RealPlayerUniverseQueryService._FACEBANK_IMAGE_TOKENS
-        ):
+        if not allow_facebank and any(tok in lowered for tok in RealPlayerUniverseQueryService._FACEBANK_IMAGE_TOKENS):
             return None
         return cleaned
 
