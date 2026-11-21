@@ -14,10 +14,13 @@
     "foot": "Right",
     "position": "LW",
     "secondary": [
+      "LM",
+      "ST",
+      "RW",
       "AM"
     ],
-    "gsi": 70,
-    "potential": 86,
+    "gsi": 76,
+    "potential": 88,
     "playstyle": "Explosive left winger with pace and close dribbling",
     "traits": [
       "Explosive Pace",
@@ -34,9 +37,12 @@
     "age": 16,
     "positions": [
       "LW",
+      "LM",
+      "ST",
+      "RW",
       "AM"
     ],
-    "position_display": "LW/AM",
+    "position_display": "LW/LM/ST/RW/AM",
     "portrait": "https://res.cloudinary.com/dvxiniqew/image/upload/v1794959206/players/portraits/p_8b846c16_eduardo_concei%C3%A7%C3%A3o.jpg",
     "attributes": {
       "pace": 76,
