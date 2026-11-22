@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any, Iterable
 
 from fastapi import FastAPI, HTTPException, Request, status
-from fastapi.datastructures import DefaultPlaceholder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
 from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response
