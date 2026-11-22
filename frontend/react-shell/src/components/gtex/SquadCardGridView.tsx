@@ -14,7 +14,11 @@ interface SquadCardGridViewProps {
   targetPlayerId?: string | null;
 }
 
-export function SquadCardGridView({ squad, onSelectPlayer, targetPlayerId }: SquadCardGridViewProps) {
+export function SquadCardGridView({
+  squad,
+  onSelectPlayer,
+  targetPlayerId,
+}: SquadCardGridViewProps) {
   if (!squad || squad.length === 0) {
     return (
       <div className="py-12 text-center text-slate-500 rounded-xl border border-white/10 bg-black/30">
@@ -32,8 +36,17 @@ export function SquadCardGridView({ squad, onSelectPlayer, targetPlayerId }: Squ
         const pid = String(p.player_ref || p.player_id || p.id);
         const isTarget = targetPlayerId && String(targetPlayerId) === pid;
         const rating =
-          p.rating == null && p.overall_rating == null ? undefined : Number(p.rating || p.overall_rating);
-        const tier = rating == null ? "standard" : rating >= 85 ? "legendary" : rating >= 78 ? "elite" : "standard";
+          p.rating == null && p.overall_rating == null
+            ? undefined
+            : Number(p.rating || p.overall_rating);
+        const tier =
+          rating == null
+            ? "standard"
+            : rating >= 85
+              ? "legendary"
+              : rating >= 78
+                ? "elite"
+                : "standard";
 
         return (
           <div

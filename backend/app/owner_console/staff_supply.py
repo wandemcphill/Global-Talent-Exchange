@@ -69,6 +69,7 @@ def _face_group_for_nation(nation: str, index: int) -> str:
         return "mixed_braids"
     return "north_european"
 
+
 _GIVEN_NAMES = (
     "Adaeze",
     "Chinedu",

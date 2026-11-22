@@ -876,7 +876,11 @@ class SyntheticSquadFactory:
                         traits.append("develops_youth")
                     rarity = str(
                         mgr.get("rarity")
-                        or ("legendary" if rating >= 86 else "epic" if rating >= 80 else "rare" if rating >= 74 else "common")
+                        or (
+                            "legendary"
+                            if rating >= 86
+                            else "epic" if rating >= 80 else "rare" if rating >= 74 else "common"
+                        )
                     )
                     coach_tactical_bonus = 0
                     coach_fitness_bonus = 0
@@ -888,7 +892,9 @@ class SyntheticSquadFactory:
                             coach_tactical_bonus += max(0, (c_rating - 60) // 6)
                         elif role_key == "fitness":
                             coach_fitness_bonus += max(0, (c_rating - 60) // 5)
-                    med_exp = int(med_director.get("medical_expertise") or (int(med_director.get("rating") or 60) // 5) or 0)
+                    med_exp = int(
+                        med_director.get("medical_expertise") or (int(med_director.get("rating") or 60) // 5) or 0
+                    )
                     tactical_quality = self._clamp(rating + coach_tactical_bonus)
                     adaptability = self._clamp(50 + flex_skill * 2 + coach_tactical_bonus)
                     game_management = self._clamp(rating + (2 if med_exp >= 15 else 0))
@@ -1452,9 +1458,7 @@ class SyntheticSquadFactory:
                     session.scalars(select(OwnerClubRivalry).where(OwnerClubRivalry.club_id == team_id)).all()
                 )
                 if rivalries:
-                    updates["rivalry_intensity"] = self._clamp(
-                        max(int(r.intensity_score or 0) for r in rivalries)
-                    )
+                    updates["rivalry_intensity"] = self._clamp(max(int(r.intensity_score or 0) for r in rivalries))
             except Exception:
                 pass
         return MatchClubContextInput(**updates)

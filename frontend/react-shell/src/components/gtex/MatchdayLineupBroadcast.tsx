@@ -163,7 +163,10 @@ function buildTeamSheetFromRoster(opts: {
   const usedIds = new Set<string>();
 
   // The filed eleven is the matchday document. A short list stays short.
-  if (exactFiled || (!useSmartSuggestion && lineupMode !== "rotate" && savedStarterIds.length > 0)) {
+  if (
+    exactFiled ||
+    (!useSmartSuggestion && lineupMode !== "rotate" && savedStarterIds.length > 0)
+  ) {
     savedStarterIds.forEach((id) => {
       const found = byId.get(id);
       if (!found || usedIds.has(found.player_id) || chosenSignedStarters.length >= 11) return;
@@ -475,9 +478,7 @@ export function useClubMatchdaySheet(opts: {
       savedStarterIds: showFiled
         ? packet?.filedIds || []
         : planQuery.data?.starter_player_ids || [],
-      savedBenchIds: showFiled
-        ? packet?.filedBench || []
-        : planQuery.data?.bench_player_ids || [],
+      savedBenchIds: showFiled ? packet?.filedBench || [] : planQuery.data?.bench_player_ids || [],
       formation:
         opts.formationOverride ||
         (showFiled && packet?.filedFormation) ||
@@ -488,18 +489,16 @@ export function useClubMatchdaySheet(opts: {
       exactFiled: showFiled,
       pitchPlayers: opts.pitchPlayers,
     });
-  },
-    [
-      clubId,
-      opts.clubName,
-      rosterQuery.data,
-      planQuery.data,
-      opts.formationOverride,
-      opts.lineupMode,
-      opts.useSmartSuggestion,
-      opts.pitchPlayers,
-    ],
-  );
+  }, [
+    clubId,
+    opts.clubName,
+    rosterQuery.data,
+    planQuery.data,
+    opts.formationOverride,
+    opts.lineupMode,
+    opts.useSmartSuggestion,
+    opts.pitchPlayers,
+  ]);
 
   const roster = Array.isArray(rosterQuery.data)
     ? rosterQuery.data
@@ -974,11 +973,14 @@ export function MatchdayLineupBroadcast({
           filedFormation: myTarget.sheet.formation,
         };
       });
-      queryClient.setQueryData(["lineup-plan", editableClubId], normalizeLineupPlan({
-        formation: myTarget.sheet.formation,
-        starter_player_ids: filedIds,
-        bench_player_ids: filedBench,
-      }));
+      queryClient.setQueryData(
+        ["lineup-plan", editableClubId],
+        normalizeLineupPlan({
+          formation: myTarget.sheet.formation,
+          starter_player_ids: filedIds,
+          bench_player_ids: filedBench,
+        }),
+      );
       setUseSmartSuggestion(false);
       toast.success(
         `${myTarget.sheet.formation} filed with the first-team manager for ${myTarget.sheet.clubName}.`,

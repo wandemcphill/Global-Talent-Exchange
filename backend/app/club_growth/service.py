@@ -1160,13 +1160,19 @@ class ClubGrowthService:
             item.staff_profile.rating
             for item in active
             if role_keys[item.id] in {"medical", "medical_director", "physio", "doctor", "sports_scientist"}
-            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"medical", "medical_director", "physio", "doctor"})
+            or (
+                role_keys[item.id] == "club"
+                and item.staff_profile.staff_type in {"medical", "medical_director", "physio", "doctor"}
+            )
         )
         tactical_analysis_bonus = sum(
             item.staff_profile.rating
             for item in active
             if role_keys[item.id] in {"performance_analyst", "tactical_coach", ROLE_FIRST_TEAM_MANAGER}
-            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"performance_analyst", "tactical_coach"})
+            or (
+                role_keys[item.id] == "club"
+                and item.staff_profile.staff_type in {"performance_analyst", "tactical_coach"}
+            )
         )
         return {
             "scout_quality": min(100, scout_quality),
@@ -1272,9 +1278,7 @@ class ClubGrowthService:
             nation = str(meta.get("nation") or "")
             seed_idx = zlib.crc32(f"{profile.id}:{profile.display_name}".encode("utf-8")) & 0xFFFFFFFF
             group = str(meta.get("face_group") or "") or (
-                _face_group_for_nation(nation, seed_idx)
-                if nation
-                else FACE_GROUPS[seed_idx % len(FACE_GROUPS)]
+                _face_group_for_nation(nation, seed_idx) if nation else FACE_GROUPS[seed_idx % len(FACE_GROUPS)]
             )
             portrait_url = f"{PORTRAIT_PUBLIC_PREFIX}/{portrait_filename(group, gender, seed_idx)}"
             meta["portrait_url"] = portrait_url

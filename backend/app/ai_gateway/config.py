@@ -11,7 +11,7 @@ _SECRET_PREFIXES = ("sk-", "sk-proj-", "rk-")
 
 SAFE_MESSAGES = {
     "disabled": "OpenAI is turned off.",
-    "missing_api_key": "OpenAI is not configured on the server.",
+    "missing_api_key": "OpenAI is not configured on the server.",  # pragma: allowlist secret
     "configuration_invalid": "OpenAI configuration is invalid.",
     "feature_disabled": "This AI feature is turned off.",
     "rate_limited": "Too many AI requests. Try again shortly.",

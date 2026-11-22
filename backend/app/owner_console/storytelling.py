@@ -404,11 +404,7 @@ def _fallback_portrait_for_seed(seed_key: str, name: str) -> str:
     import urllib.parse
 
     manifest = _load_face_manifest()
-    items = [
-        item
-        for item in (manifest.get("assets") or manifest.get("items") or [])
-        if isinstance(item, dict)
-    ]
+    items = [item for item in (manifest.get("assets") or manifest.get("items") or []) if isinstance(item, dict)]
     if items:
         h = int(hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()[:8], 16)
         chosen = items[h % len(items)]

@@ -314,7 +314,7 @@ function OrganisationalStructurePanel({ club }: any) {
                 ? staff.name || staff.display_name || "Appointed Executive"
                 : "Vacant Position";
               const recordedRating = isAppointed
-                ? staff.rating ?? staff.tactical_flexibility ?? staff.overall
+                ? (staff.rating ?? staff.tactical_flexibility ?? staff.overall)
                 : null;
               const rating =
                 recordedRating == null || recordedRating === "" ? null : Number(recordedRating);
@@ -465,7 +465,9 @@ function OrganisationalStructurePanel({ club }: any) {
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-slate-300">Later staff contracts are signed on the staff market.</p>
+          <p className="text-sm text-slate-300">
+            Later staff contracts are signed on the staff market.
+          </p>
           <Link
             to={`/app/staff-market?club_id=${encodeURIComponent(club.club_id)}`}
             className="gx-btn gx-btn-primary inline-flex text-xs"
@@ -1986,7 +1988,9 @@ function HQOverview({ club, onSelectTab }: { club: any; onSelectTab: (tabId: str
             {club.home_venue_name || "Not filed"}
           </div>
           <p className="mt-1 text-xs text-slate-400">
-            {club.stadium_capacity == null ? "Capacity not filed" : `Capacity ${club.stadium_capacity}`}
+            {club.stadium_capacity == null
+              ? "Capacity not filed"
+              : `Capacity ${club.stadium_capacity}`}
           </p>
           <button
             type="button"
@@ -2210,7 +2214,10 @@ export default function MyClubs() {
             <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
               <Stat label="Club value" value={<Coin amount={club.value} />} />
               <Stat label="Fans" value={fmt(club.health?.fans)} />
-              <Stat label="Prestige" value={club.health?.prestige == null ? "—" : club.health.prestige} />
+              <Stat
+                label="Prestige"
+                value={club.health?.prestige == null ? "—" : club.health.prestige}
+              />
               <Stat label="Squad" value={club.health?.squad_size ?? 0} />
               <Stat
                 label="Manager"

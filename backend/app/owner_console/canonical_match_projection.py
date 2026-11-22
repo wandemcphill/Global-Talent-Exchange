@@ -235,9 +235,7 @@ def _apply_post_match_morale_and_board_politics(
         politics["board_mood"] = (
             "Backing the Project"
             if conf_val >= 70
-            else "Cautious Scrutiny"
-            if conf_val >= 45
-            else "Emergency Session Risk"
+            else "Cautious Scrutiny" if conf_val >= 45 else "Emergency Session Risk"
         )
         facs["_club_politics"] = politics
         state.facilities_json = facs

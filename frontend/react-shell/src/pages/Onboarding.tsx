@@ -91,7 +91,9 @@ function useOnboardingMoney(clubId?: string) {
     grant: numberOrNull(row?.squad_grant),
     earned: numberOrNull(row?.earned),
     clubFan: numberOrNull(row?.gifts_fan_coin),
-    nairaPerFan: Number(query.data?.naira_per_fan || query.data?.treasury_rates?.fan_coin_deposit_rate || 0),
+    nairaPerFan: Number(
+      query.data?.naira_per_fan || query.data?.treasury_rates?.fan_coin_deposit_rate || 0,
+    ),
     fanPerGtex: Number(query.data?.fan_coin_per_gtex || 0),
     refetch: query.refetch,
   };
@@ -145,9 +147,9 @@ function IdentityStep({ club, onboarding, onDone }: any) {
         Your club identity is registered. Activating it unlocks a{" "}
         <b className="text-white">{fmt(launchGrant)} GTX squad-signing grant</b> if you are among
         the first {fmt(launchGrantLimit)} eligible club owners, plus 1,000 FAN toward staff
-        contracts and gifting. Named staff are paid in Fan Coin, and that grant may not cover
-        every role. You can convert deposited or earned GTEX, or buy more Fan Coin. The GTX grant
-        stays ring-fenced for eligible player signings.
+        contracts and gifting. Named staff are paid in Fan Coin, and that grant may not cover every
+        role. You can convert deposited or earned GTEX, or buy more Fan Coin. The GTX grant stays
+        ring-fenced for eligible player signings.
       </p>
       <Btn
         className="mt-6"
@@ -174,7 +176,9 @@ function SquadFundingPanel({
   const [nairaAmount, setNairaAmount] = useState("");
   const [provider, setProvider] = useState<"korapay" | "paystack">("korapay");
   const [providerTouched, setProviderTouched] = useState(false);
-  const [buyCurrency, setBuyCurrency] = useState<"gtex" | "fan">(purpose === "wages" ? "fan" : "gtex");
+  const [buyCurrency, setBuyCurrency] = useState<"gtex" | "fan">(
+    purpose === "wages" ? "fan" : "gtex",
+  );
   const [convertAmount, setConvertAmount] = useState("");
   const [convertFrom, setConvertFrom] = useState<"club" | "wallet">("club");
   const money = useOnboardingMoney(clubId);
@@ -215,9 +219,7 @@ function SquadFundingPanel({
         : Math.max(0, Number(shortfall) || 0)
       : squadGap;
   const wageMode = purpose === "wages";
-  const fanRateForSuggestion = Number(
-    money.nairaPerFan || rates.fan_coin_deposit_rate || 0,
-  );
+  const fanRateForSuggestion = Number(money.nairaPerFan || rates.fan_coin_deposit_rate || 0);
   const suggestedNaira = wageMode
     ? fanRateForSuggestion > 0 && estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0
       ? Math.max(100, Math.ceil(estimatedCoinsNeeded * fanRateForSuggestion))
@@ -244,14 +246,20 @@ function SquadFundingPanel({
   const fanQuote = fanRate > 0 ? amountToPay / fanRate : 0;
   const fanPerGtex = Number(money.fanPerGtex || finance?.fan_coin_per_gtex || 15);
   const spendableClubGtx =
-    depositedCoins == null || earnedCoins == null ? null : Math.max(0, depositedCoins + earnedCoins);
+    depositedCoins == null || earnedCoins == null
+      ? null
+      : Math.max(0, depositedCoins + earnedCoins);
   const platformReady = Boolean(finance?.payment_providers?.[provider]);
   const buyingFan = buyCurrency === "fan";
 
   const buyFromPlatform = async () => {
     const amount = Math.trunc(amountToPay);
     if (!Number.isFinite(amount) || amount < 100) {
-      toast.error(buyingFan ? "Enter at least ₦100 to buy Fan Coin." : "Enter at least ₦100 to buy GTEX Coin.");
+      toast.error(
+        buyingFan
+          ? "Enter at least ₦100 to buy Fan Coin."
+          : "Enter at least ₦100 to buy GTEX Coin.",
+      );
       return;
     }
     if (buyingFan && fanRate <= 0) {
@@ -345,7 +353,9 @@ function SquadFundingPanel({
           <p className="text-[10px] uppercase tracking-widest text-slate-400">Club treasury</p>
           <p className="gx-mono text-xl font-bold text-emerald-300">{moneyText(clubCoins)}</p>
           <p className="mt-1 text-[10px] text-slate-400">Deposited: {moneyText(depositedCoins)}</p>
-          <p className="text-[10px] text-slate-400">Squad grant remaining: {moneyText(squadGrant)}</p>
+          <p className="text-[10px] text-slate-400">
+            Squad grant remaining: {moneyText(squadGrant)}
+          </p>
           <p className="text-[10px] text-slate-400">Earned: {moneyText(earnedCoins)}</p>
           <p className="mt-2 text-[10px] uppercase tracking-widest text-slate-400">Fan Coin</p>
           <p className="text-[10px] text-slate-400">Wallet: {fanText(money.fan)}</p>
@@ -357,8 +367,8 @@ function SquadFundingPanel({
         <div className="rounded-lg border border-white/10 bg-black/20 p-4">
           <p className="gx-label text-slate-300">Option 1 · Buy from GTEX</p>
           <p className="mt-1 text-xs text-slate-400">
-            Pay through the platform. Choose GTEX Coin for the squad treasury, or Fan Coin for staff.
-            A verified payment credits your personal wallet.
+            Pay through the platform. Choose GTEX Coin for the squad treasury, or Fan Coin for
+            staff. A verified payment credits your personal wallet.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             {(
@@ -411,12 +421,16 @@ function SquadFundingPanel({
           />
           <p className="mt-2 text-xs text-slate-400" data-testid="squad-platform-quote">
             This payment buys <b className="text-white">{fmt(previewCoins, 2)} GTX</b> or{" "}
-            <b className="text-white">{fanRate > 0 ? `${fmt(fanQuote, 2)} FAN` : "Fan Coin once a naira rate is set"}</b>.
-            You selected {buyingFan ? "Fan Coin" : "GTEX Coin"}.
+            <b className="text-white">
+              {fanRate > 0 ? `${fmt(fanQuote, 2)} FAN` : "Fan Coin once a naira rate is set"}
+            </b>
+            . You selected {buyingFan ? "Fan Coin" : "GTEX Coin"}.
           </p>
           <Btn
             className="mt-3 w-full"
-            disabled={(buyingFan ? fanRate <= 0 : !rate) || !platformReady || financeQuery.isLoading}
+            disabled={
+              (buyingFan ? fanRate <= 0 : !rate) || !platformReady || financeQuery.isLoading
+            }
             onClick={buyFromPlatform}
             data-testid="squad-platform-buy"
           >
@@ -467,7 +481,10 @@ function SquadFundingPanel({
           )}
         </div>
       </div>
-      <div className="mt-3 rounded-lg border border-amber-500/25 bg-black/20 p-4" data-testid="fan-coin-convert">
+      <div
+        className="mt-3 rounded-lg border border-amber-500/25 bg-black/20 p-4"
+        data-testid="fan-coin-convert"
+      >
         <p className="gx-label text-amber-200">Convert GTEX Coin to Fan Coin</p>
         <p className="mt-1 text-xs text-slate-400">
           1 GTX becomes {fmt(fanPerGtex)} FAN. Club conversion spends deposited and earned coins
@@ -507,7 +524,8 @@ function SquadFundingPanel({
           data-testid="fan-convert-amount"
         />
         <p className="mt-2 text-xs text-slate-400">
-          You receive <b className="text-white">{fmt((Number(convertAmount) || 0) * fanPerGtex)} FAN</b>
+          You receive{" "}
+          <b className="text-white">{fmt((Number(convertAmount) || 0) * fanPerGtex)} FAN</b>
           {convertFrom === "club" ? " in the club" : " in your wallet"}.
         </p>
         <Btn
@@ -521,7 +539,11 @@ function SquadFundingPanel({
       </div>
       <div className="mt-4">
         <ClubCoinTraderFundingPanel
-          initialAmount={estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0 ? String(estimatedCoinsNeeded) : ""}
+          initialAmount={
+            estimatedCoinsNeeded != null && estimatedCoinsNeeded > 0
+              ? String(estimatedCoinsNeeded)
+              : ""
+          }
         />
       </div>
     </div>
@@ -564,13 +586,16 @@ function SquadStep({ clubId, knownCash, onDone }: any) {
     formationStatus?.has_goalkeeper ??
     allRegisteredSquad.some((p: any) => {
       const position = String(p.position || "").toLowerCase();
-      return position.includes("goal") || position === "gk" || position.startsWith("gk/") || position.startsWith("gk ");
+      return (
+        position.includes("goal") ||
+        position === "gk" ||
+        position.startsWith("gk/") ||
+        position.startsWith("gk ")
+      );
     }),
   );
   const isMatchEligible = Boolean(formationStatus?.is_formed ?? (registeredCount >= 22 && hasGk));
-  const clubCash =
-    money.cash ??
-    (knownCash == null || knownCash === "" ? null : Number(knownCash));
+  const clubCash = money.cash ?? (knownCash == null || knownCash === "" ? null : Number(knownCash));
   const squadCeiling = Number(roster?.maximum_squad ?? 80);
 
   const handleTacticChange = (nextTactic: string) => {
@@ -716,10 +741,10 @@ function SquadStep({ clubId, knownCash, onDone }: any) {
           <div>
             <p className="gx-eyebrow text-emerald-400">Recruitment settings</p>
             <p className="text-xs text-slate-300">
-              These four controls are sent with Auto-Pick. Style sets the formation it prefers.
-              A blank budget spends the club treasury. The target is how many players Auto-Pick
-              tries to reach, and 22 is the match-eligibility minimum, not a cap. Staff are hired
-              on the next page.
+              These four controls are sent with Auto-Pick. Style sets the formation it prefers. A
+              blank budget spends the club treasury. The target is how many players Auto-Pick tries
+              to reach, and 22 is the match-eligibility minimum, not a cap. Staff are hired on the
+              next page.
             </p>
           </div>
           <Chip tone="cyan">Welcome grant buys active players at GSI 74 and under</Chip>
@@ -789,8 +814,7 @@ function SquadStep({ clubId, knownCash, onDone }: any) {
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 bg-slate-950/60 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <Chip tone={isMatchEligible ? "emerald" : "gold"} testid="onboarding-squad-count">
-            {formationStatus?.progress_label ||
-              `${registeredCount} registered · 22 to play`}
+            {formationStatus?.progress_label || `${registeredCount} registered · 22 to play`}
           </Chip>
           <Chip tone={hasGk ? "emerald" : "red"}>
             {hasGk ? "✓ Goalkeeper registered" : "⚠ Needs a goalkeeper"}
@@ -1075,7 +1099,9 @@ export function staffDevelopment(person: any, role: string) {
     Number.isFinite(rating) && rating > 0 ? Math.max(8, Math.min(20, Math.round(rating / 5))) : 10;
   const filed = (key: string) => {
     const value = Number(person?.[key]);
-    return Number.isFinite(value) && value > 0 ? Math.max(1, Math.min(20, Math.round(value))) : null;
+    return Number.isFinite(value) && value > 0
+      ? Math.max(1, Math.min(20, Math.round(value)))
+      : null;
   };
   if (role === "head_of_youth_development") {
     const skill = filed("youth_development") ?? derived;
@@ -1193,7 +1219,10 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
               rating: Number(manager.manager_impact || 0),
               fit:
                 manager.philosophy_fit ||
-                staffFitsPhilosophy(philosophy, `${mentality} ${blurb} ${(manager.traits || []).join(" ")}`),
+                staffFitsPhilosophy(
+                  philosophy,
+                  `${mentality} ${blurb} ${(manager.traits || []).join(" ")}`,
+                ),
               salary: seasonSalaryFan(
                 manager.annual_wage_fancoin || manager.recruit_price_fancoin || 3500,
               ),
@@ -1227,14 +1256,15 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
             name: candidate.name,
             portrait_url: candidate.portrait_url,
             detail,
-            blurb: candidate.philosophy_fit || candidate.philosophy_summary || candidate.nation || "",
+            blurb:
+              candidate.philosophy_fit || candidate.philosophy_summary || candidate.nation || "",
             rating: Number(candidate.rating || 0),
             fit: Boolean(
               candidate.philosophy_fit ||
-                staffFitsPhilosophy(
-                  philosophy,
-                  `${detail} ${candidate.mentality || ""} ${candidate.philosophy_summary || ""} ${candidate.style || ""}`,
-                ),
+              staffFitsPhilosophy(
+                philosophy,
+                `${detail} ${candidate.mentality || ""} ${candidate.philosophy_summary || ""} ${candidate.style || ""}`,
+              ),
             ),
             salary:
               candidate.expected_salary_fan_coin || candidate.expected_salary_gtex
@@ -1269,7 +1299,9 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
               ),
               salary:
                 candidate.salary_gtx || candidate.salary
-                  ? seasonSalaryFan(candidate.salary_fan_coin || candidate.salary_gtx || candidate.salary)
+                  ? seasonSalaryFan(
+                      candidate.salary_fan_coin || candidate.salary_gtx || candidate.salary,
+                    )
                   : null,
               profile_id: candidate.id || candidate.staff_id,
             });
@@ -1286,7 +1318,9 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
       });
       const seen = new Set<string>();
       const unique = people.filter((person) => {
-        const name = String(person.name || "").trim().toLowerCase();
+        const name = String(person.name || "")
+          .trim()
+          .toLowerCase();
         if (!name || seen.has(name)) return false;
         seen.add(name);
         return true;
@@ -1305,9 +1339,11 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
           <p className="text-xs text-slate-400">{role.hint}</p>
           <p className="mt-1 text-[11px] text-slate-500">
             You do not need to know a name. Highest rated people are listed first
-            {philosophy ? `, and recommended ones fit ${String(philosophy).replace(/_/g, " ")}` : ""}.
-            Choose 1 to 5 years. The season salary is multiplied by those years and taken once, when
-            you agree the contract.
+            {philosophy
+              ? `, and recommended ones fit ${String(philosophy).replace(/_/g, " ")}`
+              : ""}
+            . Choose 1 to 5 years. The season salary is multiplied by those years and taken once,
+            when you agree the contract.
           </p>
         </div>
         <div className="flex flex-col items-end gap-2">
@@ -1381,7 +1417,9 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
               ) : null}
               <div>
                 <p className="text-sm font-semibold text-white">
-                  {person.rating ? <span className="mr-2 font-black text-amber-200">{person.rating}</span> : null}
+                  {person.rating ? (
+                    <span className="mr-2 font-black text-amber-200">{person.rating}</span>
+                  ) : null}
                   {person.name}
                 </p>
                 <p className="text-[11px] text-slate-400">{person.detail}</p>
@@ -1417,7 +1455,9 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
           </div>
         ))}
         {!isLoading && isError ? (
-          <p className="text-xs text-rose-300">The staff list did not load. Try the search again.</p>
+          <p className="text-xs text-rose-300">
+            The staff list did not load. Try the search again.
+          </p>
         ) : null}
         {!isLoading && !isError && (data || []).length === 0 ? (
           <p className="text-xs text-slate-500">
@@ -1491,9 +1531,7 @@ function ManagerStep({ clubId, onboardingClub, onDone }: any) {
     0,
   );
   const fanAvailable =
-    money.fan == null && money.clubFan == null
-      ? null
-      : (money.fan ?? 0) + (money.clubFan ?? 0);
+    money.fan == null && money.clubFan == null ? null : (money.fan ?? 0) + (money.clubFan ?? 0);
   const shortfall = fanAvailable == null ? null : Math.max(0, salaryDue - fanAvailable);
   const ready = STAFF_ROLES.every((role) => choices[role.key]);
   const confirm = async () => {
@@ -1548,9 +1586,9 @@ function ManagerStep({ clubId, onboardingClub, onDone }: any) {
         ))}
       </div>
       <p className="mb-3 text-xs text-slate-400" data-testid="staff-salary-total">
-        Contracts selected, paid once: <b className="text-white">{fmt(salaryDue)} FAN</b>. Fan Coin on
-        hand, wallet plus club: <b className="text-white">{fanText(fanAvailable)}</b>. Each contract
-        is paid from whichever of those balances can cover it.
+        Contracts selected, paid once: <b className="text-white">{fmt(salaryDue)} FAN</b>. Fan Coin
+        on hand, wallet plus club: <b className="text-white">{fanText(fanAvailable)}</b>. Each
+        contract is paid from whichever of those balances can cover it.
       </p>
       <SquadFundingPanel
         clubId={clubId}
@@ -1650,14 +1688,10 @@ function AcademyStep({
   };
 
   return (
-    <Panel
-      eyebrow="Step 4 · Youth academy"
-      title="Academy list"
-      testid="onboarding-academy-step"
-    >
+    <Panel eyebrow="Step 4 · Youth academy" title="Academy list" testid="onboarding-academy-step">
       <p className="mb-4 text-sm text-slate-300">
-        These are the players filed on the academy list. A card shows the age, main position,
-        rating and potential stored for that player. Opening the club does not charge for an intake.
+        These are the players filed on the academy list. A card shows the age, main position, rating
+        and potential stored for that player. Opening the club does not charge for an intake.
       </p>
 
       <div className="mb-4 grid gap-2 sm:grid-cols-3" data-testid="academy-facts">
@@ -1679,7 +1713,10 @@ function AcademyStep({
         </div>
       </div>
 
-      <div className="mb-4 rounded border border-white/10 bg-slate-950/40 p-3" data-testid="academy-staff">
+      <div
+        className="mb-4 rounded border border-white/10 bg-slate-950/40 p-3"
+        data-testid="academy-staff"
+      >
         <div className="flex items-start gap-3">
           <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-300" />
           <div>
@@ -1731,8 +1768,8 @@ function AcademyStep({
         </div>
         <p className="text-xs text-slate-400" data-testid="academy-intake-cost">
           This charges <b className="text-white">{fmt(quote.cost)} GTX</b> from club cash
-          {cash != null && Number.isFinite(cash) ? ` (${fmt(cash)} GTX on hand)` : ""}. Academy level{" "}
-          {quote.level} brings at least {quote.minimumArrivals} player
+          {cash != null && Number.isFinite(cash) ? ` (${fmt(cash)} GTX on hand)` : ""}. Academy
+          level {quote.level} brings at least {quote.minimumArrivals} player
           {quote.minimumArrivals === 1 ? "" : "s"}. A higher level, campus bonus, or head-of-youth
           rating can add players and raise the potential band. They arrive aged 16–18 with a current
           rating below that potential.
@@ -1761,7 +1798,10 @@ function AcademyStep({
               const fill =
                 player.rating == null || player.potential == null
                   ? 0
-                  : Math.min(100, (Number(player.rating) / Math.max(1, Number(player.potential))) * 100);
+                  : Math.min(
+                      100,
+                      (Number(player.rating) / Math.max(1, Number(player.potential))) * 100,
+                    );
               return (
                 <article
                   key={player.id || player.name}
@@ -1804,7 +1844,10 @@ function AcademyStep({
                       </p>
                     </div>
                   </div>
-                  <div className="mt-3 h-1.5 rounded-sm bg-white/5" title="Current rating against potential">
+                  <div
+                    className="mt-3 h-1.5 rounded-sm bg-white/5"
+                    title="Current rating against potential"
+                  >
                     <div
                       className="h-1.5 rounded-sm bg-emerald-400"
                       style={{ width: `${fill}%` }}
@@ -1813,7 +1856,9 @@ function AcademyStep({
                   <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
                     <span>{gap == null ? "Gap not filed" : `${gap} below potential`}</span>
                     <span className="gx-mono text-emerald-300">
-                      {player.value_coin == null ? "Value not filed" : `${fmt(player.value_coin)} GTX`}
+                      {player.value_coin == null
+                        ? "Value not filed"
+                        : `${fmt(player.value_coin)} GTX`}
                     </span>
                   </div>
                   {archetype || mood ? (
@@ -1838,7 +1883,8 @@ function AcademyStep({
 
       <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
         <p className="text-xs text-slate-400">
-          Academy players stay there until they are promoted. Rating moves through training and minutes.
+          Academy players stay there until they are promoted. Rating moves through training and
+          minutes.
         </p>
         <Btn
           onClick={onDone}
@@ -2900,9 +2946,7 @@ export default function Onboarding() {
         <h1 className="gx-h2 mb-8">{club.club_name}: from paperwork to matchday</h1>
         <Stepper index={index} />
         {index === 0 && <IdentityStep club={club} onboarding={data} onDone={next} />}
-        {index === 1 && (
-          <SquadStep clubId={club.club_id} knownCash={club.cash} onDone={next} />
-        )}
+        {index === 1 && <SquadStep clubId={club.club_id} knownCash={club.cash} onDone={next} />}
         {index === 2 && <ManagerStep clubId={club.club_id} onboardingClub={club} onDone={next} />}
         {index === 3 && (
           <AcademyStep clubId={club.club_id} onboardingClub={club} onDone={openClub} />

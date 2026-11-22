@@ -209,8 +209,7 @@ class InternalPlayer:
     def pressing_value(self) -> float:
         return max(
             5.0,
-            ((self.fitness * 0.28) + (self.pace * 0.19) + (self.decision_making * 0.14))
-            * self.performance_modifier()
+            ((self.fitness * 0.28) + (self.pace * 0.19) + (self.decision_making * 0.14)) * self.performance_modifier()
             + (self.consistency * 0.12)
             + (self.motivation * 0.10)
             + (self.defending * 0.09)

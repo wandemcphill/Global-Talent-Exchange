@@ -89,9 +89,7 @@ def upgrade() -> None:
     if not inspector.has_table("club_staff_profiles"):
         return
 
-    rows = bind.execute(
-        sa.text("SELECT id, display_name, metadata_json FROM club_staff_profiles")
-    ).fetchall()
+    rows = bind.execute(sa.text("SELECT id, display_name, metadata_json FROM club_staff_profiles")).fetchall()
 
     for row in rows:
         profile_id = str(row[0])
@@ -120,9 +118,7 @@ def upgrade() -> None:
         face_group = str(meta.get("face_group") or "").strip()
         if not face_group:
             face_group = (
-                _face_group_for_nation(nation, seed_idx)
-                if nation
-                else _FACE_GROUPS[seed_idx % len(_FACE_GROUPS)]
+                _face_group_for_nation(nation, seed_idx) if nation else _FACE_GROUPS[seed_idx % len(_FACE_GROUPS)]
             )
             meta["face_group"] = face_group
             changed = True

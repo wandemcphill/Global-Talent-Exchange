@@ -485,10 +485,9 @@ class MatchViewerPresentationService:
         )
         if inst_manager is not None:
             return inst_manager
-        return (
-            self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "name")
-            or self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "display_name")
-        )
+        return self._nested_string(
+            metadata, "replay_request", f"{side}_team", "manager_profile", "name"
+        ) or self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "display_name")
 
     def _team_mentality(self, metadata: dict[str, object], *, side: str) -> str | None:
         return (

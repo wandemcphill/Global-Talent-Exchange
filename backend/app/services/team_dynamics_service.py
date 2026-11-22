@@ -7,7 +7,7 @@ from statistics import mean
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from typing import TYPE_CHECKING
+from typing import Any, TYPE_CHECKING
 
 from app.ingestion.models import Player
 from app.models.player_agency_state import PlayerAgencyState
