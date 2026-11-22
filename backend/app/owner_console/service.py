@@ -442,10 +442,14 @@ def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
 
 
 def squad(session: Session, club_id: str, include_inactive: bool = False) -> list[OwnerSquadPlayer]:
+    from app.owner_console import storytelling
+
     stmt = select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)
     if not include_inactive:
         stmt = stmt.where(OwnerSquadPlayer.status.in_(("active", "listed")))
-    return list(session.scalars(stmt.order_by(OwnerSquadPlayer.rating.desc())).all())
+    rows = list(session.scalars(stmt.order_by(OwnerSquadPlayer.rating.desc())).all())
+    storytelling.prefetch_squad_portrait_urls(session, rows)
+    return rows
 
 
 def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
@@ -486,36 +490,81 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     else:
         archetype = "Model Professional"
 
-    if p.morale is None:
-        mood_state = "Not filed"
-    elif p.morale >= 75:
-        mood_state = "Thriving"
-    elif p.morale >= 55:
-        mood_state = "Content"
-    elif p.morale >= 40:
-        mood_state = "Restless"
-    else:
-        mood_state = "Unsettled"
+    mood_profile = engine.player_mood_profile(
+        p.morale,
+        rating=p.rating,
+        potential=p.potential,
+        age=p.age,
+        minutes=p.minutes,
+        loyalty=loyalty,
+        ambition=ambition,
+        contract_tier=pers.get("contract_tier"),
+        promised_minutes=bool(pers.get("promised_minutes")),
+        promoted=bool(pers.get("promoted_to_senior")),
+    )
+    mood_state = mood_profile["mood_state"]
 
     decision_factors = {
         "legacy_weight": round(float(loyalty) / 20.0, 2) if loyalty is not None else None,
         "money_weight": round(float(ambition) / 20.0, 2) if ambition is not None else None,
         "playing_time_weight": 0.85 if (p.minutes or 0) < 180 else 0.45,
         "prestige_fit": round(min(1.0, float(p.rating) / 75.0), 2) if p.rating is not None else None,
+        "mood_state": mood_state,
+        "contract_stance": mood_profile["contract_stance"],
+        "contract_willing": mood_profile["contract_willing"],
+        "contract_cost_fan_coin": mood_profile["contract_cost_fan_coin"],
+        "performance_shift": mood_profile["performance_shift"],
     }
 
     if p.rating is None or p.potential is None:
         readiness_score = None
+        manager_approved = None
+        hoyd_verdict = None
     else:
         readiness_score = min(
             100, int(p.rating * 0.9 + (p.potential - p.rating) * 0.3 + min(20, (p.minutes or 0) // 20))
         )
+        manager_approved = bool(readiness_score >= 58 and (p.morale is None or p.morale >= 45))
+        gap = max(0, int(p.potential) - int(p.rating))
+        if bool(pers.get("promoted_to_senior")):
+            hoyd_verdict = (
+                f"Graduated to the first-team sheet (readiness {readiness_score}/100, {gap} below ceiling). "
+                f"{mood_profile['performance_summary']}."
+            )
+        elif manager_approved:
+            hoyd_verdict = (
+                f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
+                f"Cleared for a first-team call-up · {mood_profile['contract_summary']}"
+            )
+        else:
+            hoyd_verdict = (
+                f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
+                f"Keep developing on the academy sheet · {mood_profile['contract_summary']}"
+            )
     readiness_assessment = {
         "readiness_score": readiness_score,
-        "hoyd_verdict": None,
-        "manager_approved": None,
-        "recommendation": None,
+        "hoyd_verdict": hoyd_verdict,
+        "manager_approved": manager_approved,
+        "recommendation": "promote_to_first_team" if manager_approved else "continue_academy_development",
     }
+    if p.morale is None:
+        inner_monologue = None
+    elif mood_state == "Thriving":
+        inner_monologue = (
+            f"Confidence is high ({p.morale}/100). I'm sharp in training and ready to commit and deliver on the pitch."
+        )
+    elif mood_state == "Content":
+        inner_monologue = (
+            f"Settled at the club ({p.morale}/100). Consistent minutes and clear terms keep my focus on matchday."
+        )
+    elif mood_state == "Restless":
+        inner_monologue = (
+            f"I need reassurance on my pathway ({p.morale}/100). Without minutes or stronger terms, my focus slips."
+        )
+    else:
+        inner_monologue = (
+            f"Unsettled ({p.morale}/100). I won't commit to a new contract until my role and morale improve."
+        )
 
     needs_portrait = (
         session is not None
@@ -535,7 +584,16 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "name": p.name,
         "portrait_url": portrait_url,
         "position": p.position,
+        "position_display": pers.get("position_display") or p.position,
+        "positions": pers.get("positions"),
+        "secondary_positions": pers.get("secondary_positions"),
         "age": p.age,
+        "height_cm": pers.get("height_cm"),
+        "preferred_foot": pers.get("preferred_foot") or pers.get("dominant_foot"),
+        "dominant_foot": pers.get("dominant_foot") or pers.get("preferred_foot"),
+        "playstyle": pers.get("playstyle"),
+        "traits": pers.get("traits"),
+        "attributes": pers.get("attributes"),
         "rating": p.rating,
         "potential": p.potential,
         "value_coin": str(p.value_coin),
@@ -554,22 +612,31 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "acquired_via": p.acquired_via,
         "squad_status": squad_status,
         "promoted": bool(pers.get("promoted_to_senior")),
+        "contract_tier": pers.get("contract_tier"),
         "archetype": archetype,
         "mood_state": mood_state,
-        "inner_monologue": None,
+        "performance_shift": mood_profile["performance_shift"],
+        "effective_match_rating": mood_profile["effective_match_rating"],
+        "performance_summary": mood_profile["performance_summary"],
+        "contract_stance": mood_profile["contract_stance"],
+        "contract_willing": mood_profile["contract_willing"],
+        "contract_cost_fan_coin": mood_profile["contract_cost_fan_coin"],
+        "contract_summary": mood_profile["contract_summary"],
+        "inner_monologue": inner_monologue,
         "decision_factors": decision_factors,
+        "readiness_score": readiness_score,
+        "hoyd_verdict": hoyd_verdict,
+        "manager_approved": manager_approved,
         "readiness_assessment": readiness_assessment,
         "origin_backstory": None,
         "super_agent": (
             {
+                "name": "Apex Power-Broker Representation" if ambition >= 15 else "Meridian Football Advisory",
                 "agency_name": "Apex Power-Broker Representation" if ambition >= 15 else "Meridian Football Advisory",
+                "style": "Mino-Style Super-Agent" if ambition >= 15 else "Pragmatic Career Planner",
                 "agent_style": "Mino-Style Super-Agent" if ambition >= 15 else "Pragmatic Career Planner",
                 "aggression": 18 if ambition >= 15 else 10,
-                "current_demand": (
-                    "Monitoring Tier-1 club interest; expects improved contract or Showroom luxury gift."
-                    if ambition >= 15
-                    else "Prioritizing consistent match minutes and high-level training facilities."
-                ),
+                "current_demand": mood_profile["contract_summary"],
             }
             if ambition is not None
             else None
@@ -1546,6 +1613,9 @@ def assign_academy_regen_portrait(
         seed = f"{player.club_id}:{player.id}"
         chosen: dict[str, Any] | None = None
         fallback: dict[str, Any] | None = None
+        has_new_styles = any(
+            "new_styles/" in str(a.get("storage_key") or "") for a in portrait_service._face_bank_assets()
+        )
         for attempt in range(_PORTRAIT_PICK_ATTEMPTS):
             attempt_seed = seed if attempt == 0 else f"{seed}:retry:{attempt}"
             candidate = portrait_service._select_regen_face_bank_asset(seed=attempt_seed, recipe=recipe)
@@ -1555,8 +1625,11 @@ def assign_academy_regen_portrait(
                 fallback = candidate
             storage_key = str(candidate.get("storage_key") or "")
             if storage_key and storage_key not in reserved:
-                chosen = candidate
-                break
+                if fallback is None or str(fallback.get("storage_key") or "") in reserved:
+                    fallback = candidate
+                if not has_new_styles or "new_styles/" in storage_key:
+                    chosen = candidate
+                    break
         asset = chosen or fallback
         if asset is None:
             return None
@@ -3253,25 +3326,68 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
             outcome = "Ignored. Player morale -10, squad morale -2."
     elif kind == "regen_breakthrough" and player:
         if action == "new_contract":
+            traits = dict(player.personality_json or {})
+            mood_info = engine.player_mood_profile(
+                player.morale,
+                rating=player.rating,
+                potential=player.potential,
+                age=player.age,
+                minutes=player.minutes,
+                loyalty=traits.get("loyalty", 10),
+                ambition=traits.get("ambition", 10),
+                contract_tier=traits.get("contract_tier") or "academy",
+                promised_minutes=bool(traits.get("promised_minutes")),
+                promoted=bool(traits.get("promoted_to_first_team") or player.squad_status == "first_team"),
+            )
+            if not mood_info["contract_willing"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail={
+                        "code": "player_unsettled_contract_refused",
+                        "message": mood_info["contract_summary"],
+                        "mood_state": mood_info["mood_state"],
+                        "morale": mood_info["morale"],
+                    },
+                )
+            contract_cost = int(mood_info["contract_cost_fan_coin"])
+            club_fan_balance = ledger.balance(
+                session,
+                ledger.club_account(item.club_id),
+                ledger.GTEX,
+            )
+            charge_source = (
+                ledger.club_account(item.club_id)
+                if club_fan_balance >= Decimal(contract_cost)
+                else ledger.user_account(user_id)
+            )
             ledger.record(
                 session,
                 event_type="contract_bonus",
-                source=ledger.club_account(item.club_id),
+                source=charge_source,
                 destination=ledger.WORLD_CLUBS,
                 currency=ledger.GTEX,
-                gross=1000,
+                gross=contract_cost,
                 club_id=item.club_id,
                 user_id=user_id,
                 related_type="player",
                 related_id=player.id,
-                memo=f"Improved academy contract for {player.name}",
+                memo=f"Improved academy contract for {player.name} ({mood_info['mood_state']})",
             )
-            traits = dict(player.personality_json)
-            traits["loyalty"] = min(20, traits.get("loyalty", 10) + 2)
-            traits["transfer_pressure"] = max(0, traits.get("transfer_pressure", 0) - 15)
+            traits["loyalty"] = min(20, traits.get("loyalty", 10) + int(mood_info["contract_loyalty_boost"]))
+            traits["transfer_pressure"] = max(
+                0,
+                traits.get("transfer_pressure", 0) - int(mood_info["contract_pressure_drop"]),
+            )
+            traits["contract_tier"] = "improved_youth"
             player.personality_json = traits
-            player.morale = min(100, player.morale + 10)
-            outcome = f"{player.name} signs an improved deal: loyalty +2, morale +10, transfer pressure -15."
+            flag_modified(player, "personality_json")
+            player.morale = min(100, player.morale + int(mood_info["contract_morale_boost"]))
+            outcome = (
+                f"{player.name} signs an improved deal ({contract_cost:,} Fan Coin): "
+                f"loyalty +{mood_info['contract_loyalty_boost']}, "
+                f"morale +{mood_info['contract_morale_boost']}, "
+                f"transfer pressure -{mood_info['contract_pressure_drop']}."
+            )
         else:
             outcome = "Acknowledged."
     elif kind in ("sponsor_opportunity", "regen_endorsement"):
@@ -3521,9 +3637,13 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             if isinstance(note, dict)
         },
         "tactics": engine.manager_tactics(state.manager_json, facilities),
-        "executive_staff": get_club_staff(session, user_id, club_id).get("appointed_staff"),
-        "staff_effects": get_club_staff(session, user_id, club_id).get("staff_effects"),
-        "delegation_policy": get_club_staff(session, user_id, club_id).get("delegation_policy"),
+        **(
+            lambda staff_bundle: {
+                "executive_staff": staff_bundle.get("appointed_staff"),
+                "staff_effects": staff_bundle.get("staff_effects"),
+                "delegation_policy": staff_bundle.get("delegation_policy"),
+            }
+        )(get_club_staff(session, user_id, club_id)),
     }
 
 
@@ -4187,26 +4307,57 @@ def hire_manager(
 
 
 def academy_contract(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    from sqlalchemy.orm.attributes import flag_modified
+
     require_state(session, club_id, user_id)
     player = session.get(OwnerSquadPlayer, player_id)
     if not player or player.club_id != club_id:
         raise OwnerError("player_not_found", 404, "Academy player not found in club squad.")
 
-    cost_fan_coin = 1_000
+    pers = dict(player.personality_json or {})
+    mood_profile = engine.player_mood_profile(
+        player.morale,
+        rating=player.rating,
+        potential=player.potential,
+        age=player.age,
+        minutes=player.minutes,
+        loyalty=pers.get("loyalty"),
+        ambition=pers.get("ambition"),
+        contract_tier=pers.get("contract_tier"),
+        promised_minutes=bool(pers.get("promised_minutes")),
+        promoted=bool(pers.get("promoted_to_senior")),
+    )
+    if not mood_profile["contract_willing"]:
+        raise OwnerError(
+            "player_unsettled_contract_refused",
+            409,
+            (
+                f"{player.name} is unsettled (morale {player.morale}/100) and refuses to sign a new contract "
+                "until his morale lifts or first-team minutes are promised."
+            ),
+        )
+
+    cost_fan_coin = int(mood_profile["contract_cost_fan_coin"])
     club_acct = ledger.club_account(club_id)
-    fan_balance = ledger.balance(session, club_acct, ledger.FAN)
-    if fan_balance < cost_fan_coin:
+    user_acct = ledger.user_account(user_id)
+    club_fan = ledger.balance(session, club_acct, ledger.FAN)
+    user_fan = ledger.balance(session, user_acct, ledger.FAN)
+    if club_fan >= cost_fan_coin:
+        source_acct = club_acct
+    elif user_fan >= cost_fan_coin:
+        source_acct = user_acct
+    else:
         raise OwnerError(
             "insufficient_fan_coin",
             400,
-            f"Club balance {fan_balance} Fan Coin is insufficient for the {cost_fan_coin} Fan Coin academy contract upgrade.",
+            f"Club balance {club_fan} Fan Coin (wallet {user_fan} Fan Coin) is insufficient for the {cost_fan_coin} Fan Coin academy contract ({mood_profile['mood_state']}).",
         )
 
     try:
         ledger.record(
             session,
             event_type="academy_contract_spend",
-            source=club_acct,
+            source=source_acct,
             destination=ledger.WORLD_CLUBS,
             currency=ledger.FAN,
             gross=cost_fan_coin,
@@ -4214,25 +4365,31 @@ def academy_contract(session: Session, user_id: str, club_id: str, player_id: st
             user_id=user_id,
             related_type="player",
             related_id=player_id,
-            memo=f"Improved academy player contract for {player.name} (Fan Coin)",
+            memo=f"Improved academy player contract for {player.name} ({mood_profile['mood_state']}, Fan Coin)",
         )
     except ledger.LedgerError as exc:
         raise OwnerError(str(exc), 402) from exc
 
-    player.morale = min(100, player.morale + 12)
-    pers = dict(player.personality_json or {})
-    pers["loyalty"] = min(20, pers.get("loyalty", 10) + 2)
-    pers["transfer_pressure"] = max(0, pers.get("transfer_pressure", 10) - 25)
+    morale_boost = int(mood_profile["contract_morale_boost"])
+    loyalty_boost = int(mood_profile["contract_loyalty_boost"])
+    pressure_drop = int(mood_profile["contract_pressure_drop"])
+    if player.morale is not None:
+        player.morale = min(100, int(player.morale) + morale_boost)
+    pers["loyalty"] = min(20, int(pers.get("loyalty", 10)) + loyalty_boost)
+    pers["transfer_pressure"] = max(0, int(pers.get("transfer_pressure", 10)) - pressure_drop)
     pers["contract_tier"] = "improved_youth"
     player.personality_json = pers
+    flag_modified(player, "personality_json")
     session.flush()
 
     return {
         "status": "contract_extended",
+        "contract_stance": mood_profile["contract_stance"],
+        "mood_state_at_signing": mood_profile["mood_state"],
         "player": player_dict(player, session),
         "cost_fan_coin": cost_fan_coin,
-        "morale_boost": 12,
-        "loyalty_boost": 2,
+        "morale_boost": morale_boost,
+        "loyalty_boost": loyalty_boost,
     }
 
 

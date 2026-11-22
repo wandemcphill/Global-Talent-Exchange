@@ -123,7 +123,17 @@ function SheetMove({
 }
 
 function ManagerSheet({ club }: any) {
-  const m = club.manager_profile || {};
+  const m = {
+    ...(club.executive_staff?.first_team_manager || {}),
+    ...(club.manager_profile || {}),
+  };
+  const tactics = club.tactics || {};
+  const tacticalVision =
+    m.tactics_stat ?? tactics.tactical_flexibility ?? m.tactical_flexibility ?? m.tactical_quality;
+  const youthDev = m.youth_dev ?? m.youth_development;
+  const styleLabel =
+    m.tactical_preference || tactics.mentality || m.mentality || m.style || "Balanced";
+  const philosophyText = m.philosophy_summary || m.philosophy;
   const refresh = useRefreshOwner();
   const fire = async () => {
     if (
@@ -143,7 +153,7 @@ function ManagerSheet({ club }: any) {
   return (
     <Panel
       eyebrow="Manager realism engine"
-      title={m.name}
+      title={m.name || tactics.manager_name || "No manager appointed"}
       testid="manager-sheet"
       className="lg:col-span-5"
       action={
@@ -156,27 +166,33 @@ function ManagerSheet({ club }: any) {
         <GtexSceneViewport
           sceneId="manager_arrival"
           compact
-          title={`3D First-Day Training Ground & Press Suite · ${m.name || "Head Coach"}`}
-          subtitle={`${club.club_name} · ${m.tactical_preference || "Balanced"} · Temperament: ${m.temperament || "Composed"}`}
+          title={`3D First-Day Training Ground & Press Suite · ${m.name || tactics.manager_name || "Head Coach"}`}
+          subtitle={`${club.club_name} · ${styleLabel} · Temperament: ${m.temperament || "Composed"}`}
           badgeText="3D MANAGER DAY 1"
           clubName={club.club_name}
-          subjectName={m.name || "First-Team Manager"}
-          subjectRole={`${m.tactical_preference || "Tactical"} · ${m.rarity || "Elite"}`}
-          quote={m.philosophy_summary}
+          subjectName={m.name || tactics.manager_name || "First-Team Manager"}
+          subjectRole={`${styleLabel} · ${m.rarity || "Appointed"}`}
+          quote={philosophyText}
         />
       </div>
       <div className="mb-5 flex flex-wrap gap-2">
-        <Chip tone="cyan">{m.tactical_preference}</Chip>
-        <Chip tone="gold">Temperament: {m.temperament}</Chip>
-        <Chip tone="purple">{m.rarity}</Chip>
+        {tactics.formation && <Chip tone="emerald">Shape: {tactics.formation}</Chip>}
+        {tactics.tactical_match_bonus != null && (
+          <Chip tone="cyan">Match +{tactics.tactical_match_bonus}</Chip>
+        )}
+        {styleLabel && <Chip tone="cyan">{styleLabel}</Chip>}
+        {m.temperament && <Chip tone="gold">Temperament: {m.temperament}</Chip>}
+        {m.rarity && <Chip tone="purple">{m.rarity}</Chip>}
       </div>
       <div className="space-y-3">
-        <TraitBar label="Tactical Vision" value={m.tactics_stat} />
+        <TraitBar label="Tactical Flexibility" value={tacticalVision} />
         <TraitBar label="Discipline" value={m.discipline} />
-        <TraitBar label="Youth Development" value={m.youth_dev} />
+        <TraitBar label="Youth Development" value={youthDev} />
         <TraitBar label="Player Loyalty" value={m.loyalty} />
       </div>
-      <p className="mt-4 text-xs italic text-slate-400">"{m.philosophy_summary}"</p>
+      {philosophyText ? (
+        <p className="mt-4 text-xs italic text-slate-400">"{philosophyText}"</p>
+      ) : null}
     </Panel>
   );
 }
@@ -255,8 +271,12 @@ function SquadCards({ club, onSelectPlayer, onPlace, movingId }: any) {
             name={p.name}
             rating={p.rating}
             potential={p.potential}
-            position={p.position}
+            position={p.position_display || p.position}
             age={p.age}
+            heightCm={p.height_cm}
+            foot={p.preferred_foot || p.dominant_foot}
+            archetype={p.playstyle || p.archetype}
+            traits={p.traits}
             nationality={p.nationality}
             club={club.club_name}
             image={p.image || p.portrait_url || p.image_url}
@@ -381,13 +401,23 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }:
                       {isTarget && <Chip tone="cyan">Target Prospect</Chip>}
                       <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
                     </td>
-                    <td className="capitalize">{p.position}</td>
+                    <td className="capitalize">{p.position_display || p.position}</td>
                     <td className="gx-mono">{p.age}</td>
                     <td className="gx-mono">
                       {p.rating}
                       <span className="text-slate-500">/{p.potential}</span>
                     </td>
-                    <td className="gx-mono">{p.morale}</td>
+                    <td className="gx-mono">
+                      {p.morale ?? "—"}
+                      {p.mood_state && p.mood_state !== "Not filed" ? (
+                        <span className="ml-1 text-[11px] font-sans text-slate-400">
+                          · {p.mood_state}
+                          {p.performance_shift
+                            ? ` (${p.performance_shift > 0 ? "+" : ""}${p.performance_shift})`
+                            : ""}
+                        </span>
+                      ) : null}
+                    </td>
                     <td className="gx-mono">{p.minutes}</td>
                     <td className="gx-mono font-medium text-emerald-300">{fmt(p.value_coin)}</td>
                   </tr>
@@ -1472,7 +1502,7 @@ export default function Squad() {
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <TacticalPitch25D
-                formation={club.matchday_formation || undefined}
+                formation={club.tactics?.formation || club.matchday_formation || undefined}
                 players={firstTeamClub.squad || []}
                 onSelectPlayer={setSelectedPlayer}
               />
@@ -1520,6 +1550,7 @@ export default function Squad() {
             ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id)
             : null
         }
+        player={selectedPlayer}
         onClose={() => setSelectedPlayer(null)}
       />
     </div>

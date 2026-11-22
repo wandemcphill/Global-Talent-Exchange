@@ -997,6 +997,7 @@ def apply_supporter_reaction(
             _filed_int(profile.owner_credibility_score) + credibility_delta, 0, 100
         )
 
+    segment_specs = {spec["segment_key"]: spec for spec in DEFAULT_SUPPORTER_SEGMENTS}
     segment_deltas: dict[str, dict[str, Any]] = {}
     for seg in segments:
         priorities = dict(seg.priorities_json or {})
@@ -1007,10 +1008,10 @@ def apply_supporter_reaction(
 
         # Apply scar-tissue dampening when recovering from repeated disappointments
         if raw_delta > 0 and int(seg.scar_tissue or 0) >= 18:
-            dampener = max(0.32, 1.0 - (int(seg.scar_tissue) / 125.0))
+            dampener = max(0.32, 1.0 - (int(seg.scar_tissue or 0) / 125.0))
             raw_delta = raw_delta * dampener
             # Prevent immediate jump to maximum confidence (>82) while scar tissue remains high
-            max_cap = 76 if int(seg.scar_tissue) >= 35 else 86
+            max_cap = 76 if int(seg.scar_tissue or 0) >= 35 else 86
         else:
             max_cap = 100
 
@@ -1020,8 +1021,17 @@ def apply_supporter_reaction(
         elif raw_delta < 0 and int_delta == 0:
             int_delta = -1
 
-        if seg.sentiment is None or seg.enthusiasm is None or seg.owner_approval is None:
-            continue
+        spec = segment_specs.get(seg.segment_key) or {}
+        if seg.sentiment is None:
+            seg.sentiment = int(spec.get("sentiment", 65))
+        if seg.loyalty is None:
+            seg.loyalty = int(spec.get("loyalty", 70))
+        if seg.enthusiasm is None:
+            seg.enthusiasm = int(spec.get("enthusiasm", 68))
+        if seg.owner_approval is None:
+            seg.owner_approval = int(
+                profile.confidence_in_owner if profile.confidence_in_owner is not None else spec.get("sentiment", 65)
+            )
         old_seg_sentiment = int(seg.sentiment)
         new_seg_sentiment = _clamp(old_seg_sentiment + int_delta, 5, max_cap)
         actual_delta = new_seg_sentiment - old_seg_sentiment
@@ -3852,10 +3862,10 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
             "confidence_in_manager": _filed_int(profile.confidence_in_manager),
             "loyalty_index": _filed_int(profile.loyalty_index),
             "matchday_enthusiasm": _filed_int(profile.matchday_enthusiasm),
-            "scar_tissue_score": int(profile.accumulated_frustration),
-            "accumulated_frustration": int(profile.accumulated_frustration),
-            "consecutive_disappointments": int(profile.consecutive_disappointments),
-            "consecutive_victories": int(profile.consecutive_victories),
+            "scar_tissue_score": int(profile.accumulated_frustration or 0),
+            "accumulated_frustration": int(profile.accumulated_frustration or 0),
+            "consecutive_disappointments": int(profile.consecutive_disappointments or 0),
+            "consecutive_victories": int(profile.consecutive_victories or 0),
             "ticket_price_tier": profile.ticket_price_tier,
             "ticket_price_gtex": {"affordable": 10, "standard": 18, "premium": 32, "exploitative": 50}.get(
                 profile.ticket_price_tier, 18
@@ -3867,7 +3877,7 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
             "active_campaign_title": profile.active_campaign_headline,
             "active_campaign_headline": profile.active_campaign_headline,
             "active_campaign_summary": profile.active_campaign_headline,
-            "attendance_modifier_pct": int(profile.attendance_modifier_pct),
+            "attendance_modifier_pct": int(profile.attendance_modifier_pct or 0),
             "owner_credibility_score": _filed_int(profile.owner_credibility_score),
             "expectations": exp_dict,
         },
@@ -3877,16 +3887,16 @@ def get_supporters_overview(session: Session, state: OwnerClubState) -> dict[str
                 "segment_key": seg.segment_key,
                 "display_name": seg.segment_name,
                 "segment_name": seg.segment_name,
-                "share_pct": int(seg.population_share_pct),
-                "population_share_pct": int(seg.population_share_pct),
-                "population_estimate": int(seg.member_count),
-                "member_count": int(seg.member_count),
-                "sentiment": int(seg.sentiment),
-                "loyalty": int(seg.loyalty),
-                "engagement": int(seg.enthusiasm),
-                "enthusiasm": int(seg.enthusiasm),
-                "owner_approval": int(seg.owner_approval),
-                "scar_tissue": int(seg.scar_tissue),
+                "share_pct": int(seg.population_share_pct or 0),
+                "population_share_pct": int(seg.population_share_pct or 0),
+                "population_estimate": _filed_int(seg.member_count),
+                "member_count": _filed_int(seg.member_count),
+                "sentiment": _filed_int(seg.sentiment),
+                "loyalty": _filed_int(seg.loyalty),
+                "engagement": _filed_int(seg.enthusiasm),
+                "enthusiasm": _filed_int(seg.enthusiasm),
+                "owner_approval": _filed_int(seg.owner_approval),
+                "scar_tissue": int(seg.scar_tissue or 0),
                 "status_label": seg.status_label,
                 "primary_expectation": (seg.expectations_json or {}).get("core_demand", "Competitive progress"),
                 "recent_reaction": (
@@ -4557,7 +4567,11 @@ def reconcile_club_reputation_and_identity(
     supporter_sent = _filed_score(profile.overall_sentiment)
     owner_cred = _filed_score(profile.owner_credibility_score)
     mgr_conf = _filed_score(profile.confidence_in_manager)
-    rel_mgr_score = int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2)) if mgr_rel is not None else None
+    rel_mgr_score = (
+        int(round((int(mgr_rel.trust) + int(mgr_rel.respect)) / 2))
+        if mgr_rel is not None and mgr_rel.trust is not None and mgr_rel.respect is not None
+        else None
+    )
     mgr_trust_standing = _blend([(mgr_conf, 0.55), (rel_mgr_score, 0.45)])
 
     youth_reliance = _filed_score(culture.get("youth_reliance")) if "youth_reliance" in culture else None
@@ -4603,7 +4617,8 @@ def reconcile_club_reputation_and_identity(
         "banner_protest": 22,
         "organised_boycott": 34,
     }.get(profile.active_protest_stage or "none", 0)
-    avg_tension = int(round(sum(int(r.tension) for r in rels) / len(rels))) if rels else None
+    filed_tensions = [int(r.tension) for r in rels if r.tension is not None]
+    avg_tension = int(round(sum(filed_tensions) / len(filed_tensions))) if filed_tensions else None
     institutional_stability = None
     if avg_tension is not None or (profile.active_protest_stage and profile.active_protest_stage != "none"):
         institutional_stability = _clamp(100 - protest_penalty - (avg_tension or 0))
@@ -4870,7 +4885,11 @@ def get_unified_club_pulse(
                 "overall_sentiment": _filed_int(profile.overall_sentiment),
             }
         )
-    if profile.ticket_price_tier in ("premium", "exploitative") and profile.overall_sentiment < 58:
+    if (
+        profile.ticket_price_tier in ("premium", "exploitative")
+        and profile.overall_sentiment is not None
+        and profile.overall_sentiment < 58
+    ):
         supporter_driven_agenda.append(
             {
                 "agenda_key": "ticketing_fairness_review",
@@ -4890,11 +4909,11 @@ def get_unified_club_pulse(
             "confidence_in_owner": _filed_int(profile.confidence_in_owner),
             "confidence_in_manager": _filed_int(profile.confidence_in_manager),
             "owner_credibility_score": _filed_int(profile.owner_credibility_score),
-            "accumulated_frustration": int(profile.accumulated_frustration),
+            "accumulated_frustration": int(profile.accumulated_frustration or 0),
             "active_protest_stage": profile.active_protest_stage,
             "active_campaign_headline": profile.active_campaign_headline,
             "ticket_price_tier": profile.ticket_price_tier,
-            "attendance_modifier_pct": int(profile.attendance_modifier_pct),
+            "attendance_modifier_pct": int(profile.attendance_modifier_pct or 0),
             "culture_label": profile.supporter_culture_label,
         },
         "media": {

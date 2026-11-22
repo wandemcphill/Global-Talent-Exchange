@@ -79,11 +79,137 @@ function PlayerAcquisition({ playerId }: { playerId: string }) {
   );
 }
 
-function RegenDossier({ playerId }: { playerId: string }) {
-  const { data: m, isLoading } = useQuery({
+function RegenDossier({ playerId, fallbackPlayer }: { playerId: string; fallbackPlayer?: any }) {
+  const { data: m, isLoading, isError } = useQuery({
     queryKey: ["market-player", playerId],
     queryFn: async () => (await api.get(`/market/players/${playerId}`)).data,
+    retry: false,
   });
+  if ((isError || !m) && fallbackPlayer) {
+    const pers = fallbackPlayer.personality || {};
+    const attrs = fallbackPlayer.attributes || pers.attributes || {};
+    const regenPlaystyle: string | undefined =
+      fallbackPlayer.playstyle || pers.playstyle || fallbackPlayer.archetype;
+    const regenTraits: string[] = Array.isArray(fallbackPlayer.traits)
+      ? fallbackPlayer.traits
+      : Array.isArray(pers.traits)
+        ? pers.traits
+        : [];
+    const posText = fallbackPlayer.position_display || fallbackPlayer.position || "";
+    const footText =
+      footMark(
+        fallbackPlayer.preferred_foot ||
+          fallbackPlayer.dominant_foot ||
+          pers.preferred_foot ||
+          pers.dominant_foot,
+      ) || "Not filed";
+    const heightCm = fallbackPlayer.height_cm || pers.height_cm;
+    const ceiling = Math.max(
+      0,
+      Number(fallbackPlayer.potential || 0) - Number(fallbackPlayer.rating || 0),
+    );
+    return (
+      <div className="space-y-5" data-testid="drawer-regen-dossier">
+        <div className="mx-auto max-w-[240px]">
+          <PlayerCard
+            testid="drawer-regen-card"
+            name={fallbackPlayer.name}
+            rating={fallbackPlayer.rating}
+            potential={fallbackPlayer.potential}
+            position={posText}
+            age={fallbackPlayer.age}
+            heightCm={heightCm}
+            foot={
+              fallbackPlayer.preferred_foot ||
+              fallbackPlayer.dominant_foot ||
+              pers.preferred_foot ||
+              pers.dominant_foot
+            }
+            image={fallbackPlayer.portrait_url || fallbackPlayer.image}
+            regen
+            archetype={regenPlaystyle}
+            traits={regenTraits}
+            badge={ceiling >= 15 ? "Wonderkid" : "Academy Prospect"}
+            stats={[
+              { k: "Ceiling", v: `+${ceiling}` },
+              { k: "Morale", v: fallbackPlayer.morale ?? "-" },
+              { k: "Value", v: fmt(fallbackPlayer.value_coin) },
+            ]}
+          />
+        </div>
+        <div className="flex flex-wrap gap-2" data-testid="drawer-positions">
+          <Chip tone="emerald">
+            {fallbackPlayer.squad_status === "academy" ? "Academy prospect" : "Club regen"}
+          </Chip>
+          {positionParts(posText).map((part) => (
+            <Chip key={part} tone="cyan">
+              {posShort(part)}
+            </Chip>
+          ))}
+          {fallbackPlayer.mood_state && fallbackPlayer.mood_state !== "Not filed" && (
+            <Chip tone="gold">Mood: {fallbackPlayer.mood_state}</Chip>
+          )}
+          {heightCm && <Chip>{heightCm} cm</Chip>}
+        </div>
+        <p className="text-sm font-semibold text-amber-200" data-testid="drawer-foot">
+          Favoured foot: {footText}
+        </p>
+        {(fallbackPlayer.performance_summary || fallbackPlayer.contract_summary) && (
+          <div className="rounded-sm border border-emerald-500/20 bg-emerald-500/[0.04] p-3.5 text-xs space-y-1.5">
+            {fallbackPlayer.performance_summary && (
+              <p className="text-emerald-200">
+                <b>Match performance:</b> {fallbackPlayer.performance_summary}
+              </p>
+            )}
+            {fallbackPlayer.contract_summary && (
+              <p className="text-slate-300">
+                <b>Contract decision:</b> {fallbackPlayer.contract_summary}
+              </p>
+            )}
+          </div>
+        )}
+        {(regenPlaystyle || regenTraits.length > 0) && (
+          <div
+            className="rounded-sm border border-cyan-500/20 bg-cyan-500/[0.04] p-3.5 text-xs space-y-2"
+            data-testid="drawer-regen-traits"
+          >
+            {regenPlaystyle && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="gx-eyebrow text-cyan-300">Style of Play</span>
+                <span className="rounded bg-cyan-500/20 px-2 py-0.5 text-[11px] font-bold text-cyan-200">
+                  {regenPlaystyle}
+                </span>
+              </div>
+            )}
+            {regenTraits.length > 0 && (
+              <div>
+                <p className="gx-eyebrow text-slate-400 mb-1.5">Traits & Skills</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {regenTraits.map((trait, i) => (
+                    <span
+                      key={`${trait}-${i}`}
+                      className="rounded border border-white/10 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium text-slate-200"
+                    >
+                      {trait}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        {Object.keys(attrs).length > 0 && (
+          <div className="space-y-2.5" data-testid="drawer-regen-attributes">
+            {["pace", "shooting", "passing", "dribbling", "defending", "physical"].map((k) =>
+              attrs[k] != null ? (
+                <TraitBar key={k} label={label(k)} value={Number(attrs[k])} max={99} />
+              ) : null,
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
   if (isLoading || !m) return <Loading label="Pulling the academy file" />;
   const id = m.identity || {};
   const a = m.attributes || {};
@@ -164,10 +290,12 @@ function RegenDossier({ playerId }: { playerId: string }) {
 
 export function PlayerDrawer({
   playerId,
+  player,
   onClose,
   extra,
 }: {
   playerId: string | null;
+  player?: any;
   onClose: () => void;
   extra?: React.ReactNode;
 }) {
@@ -241,7 +369,7 @@ export function PlayerDrawer({
           </button>
         </div>
         {isError ? (
-          <RegenDossier playerId={playerId} />
+          <RegenDossier playerId={playerId} fallbackPlayer={player} />
         ) : isLoading || !p ? (
           <Loading label="Pulling the dossier" />
         ) : (

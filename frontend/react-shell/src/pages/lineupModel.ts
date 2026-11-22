@@ -22,6 +22,10 @@ export type LineupPlayer = {
   age?: number;
   minutes?: number;
   acquired_via?: string;
+  morale?: number | null;
+  mood_state?: string;
+  performance_shift?: number | null;
+  effective_match_rating?: number | null;
 };
 
 export function lineupSheet(
@@ -83,6 +87,14 @@ export function normalizeLineupSquad(payload: unknown): LineupPlayer[] {
         ...(raw.acquired_via ? { acquired_via: String(raw.acquired_via) } : {}),
         ...(optionalNumber(raw.age) !== undefined ? { age: Number(raw.age) } : {}),
         ...(optionalNumber(raw.minutes) !== undefined ? { minutes: Number(raw.minutes) } : {}),
+        ...(optionalNumber(raw.morale) !== undefined ? { morale: Number(raw.morale) } : {}),
+        ...(raw.mood_state ? { mood_state: String(raw.mood_state) } : {}),
+        ...(optionalNumber(raw.performance_shift) !== undefined
+          ? { performance_shift: Number(raw.performance_shift) }
+          : {}),
+        ...(optionalNumber(raw.effective_match_rating) !== undefined
+          ? { effective_match_rating: Number(raw.effective_match_rating) }
+          : {}),
       } as LineupPlayer;
     })
     .filter((player: LineupPlayer | null): player is LineupPlayer => player !== null);

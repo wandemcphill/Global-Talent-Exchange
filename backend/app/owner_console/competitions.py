@@ -868,7 +868,8 @@ def _side(
         if raw_strength is None
         else round(float(raw_strength) + venue_bonus - (6 if lineup_mode == "rotate" else 0), 2)
     )
-    xi = [p for p in players if p["id"] in strength["xi"]]
+    xi_by_id = {str(p["id"]): p for p in players}
+    xi = [xi_by_id[str(pid)] for pid in strength["xi"] if str(pid) in xi_by_id]
     scorers = [p["name"] for p in xi if p["position"].startswith(("forw", "midf", "att"))] or [p["name"] for p in xi]
 
     from app.owner_console import autonomous_staff_engine
@@ -899,6 +900,7 @@ def _side(
         "philosophy": strength.get("philosophy") or "",
         "tactical_quality": strength.get("tactical_quality"),
         "scorers": scorers,
+        "xi_players": xi,
         "manager": state.manager_json if state else None,
         "state": state,
         "xi": strength["xi"],

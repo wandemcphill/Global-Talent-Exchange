@@ -205,6 +205,8 @@ CANONICAL_GSI_OVERRIDES: dict[str, tuple[int, int]] = {
     "finlay gorman": (74, 89),
     "florian wirtz": (88, 92),
     "flávio gonçalves": (75, 86),
+    "folarin mc'phill": (74, 90),
+    "folarin mcphill": (74, 90),
     "francesco camarda": (77, 91),
     "francesco totti": (92, 92),
     "franck ribéry": (92, 92),

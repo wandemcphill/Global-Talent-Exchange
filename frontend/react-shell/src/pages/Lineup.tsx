@@ -39,7 +39,7 @@ export default function Lineup() {
           items: (clubDetail.squad || []).map((player: any) => ({
             player_id: player.id,
             player_name: player.name,
-            position: player.position,
+            position: player.position_display || player.position,
             rating: player.rating,
             portrait_url: player.portrait_url,
             squad_status: player.squad_status,
@@ -47,6 +47,10 @@ export default function Lineup() {
             age: player.age,
             minutes: player.minutes,
             acquired_via: player.acquired_via,
+            morale: player.morale,
+            mood_state: player.mood_state,
+            performance_shift: player.performance_shift,
+            effective_match_rating: player.effective_match_rating,
           })),
         }),
         filedIds: (clubDetail.matchday_xi || []).map((player: any) => String(player.id)),
@@ -361,6 +365,11 @@ export default function Lineup() {
                         <option key={player.player_id} value={player.player_id}>
                           {player.player_name}
                           {player.position ? " · " + player.position : ""}
+                          {player.mood_state ? ` · ${player.mood_state}` : ""}
+                          {typeof player.performance_shift === "number" &&
+                          player.performance_shift !== 0
+                            ? ` (${player.performance_shift > 0 ? "+" : ""}${player.performance_shift} OVR)`
+                            : ""}
                         </option>
                       ))}
                     </select>

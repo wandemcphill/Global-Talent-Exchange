@@ -82,6 +82,8 @@ NAMED_POSITIONS: dict[str, tuple[str, tuple[str, ...]]] = {
     "luca james williams-barnett": ("LW", ("LM", "AM", "ST")),
     "eduardo conceicao": ("LW", ("LM", "ST", "RW", "AM")),
     "eduardo conceicao silva": ("LW", ("LM", "ST", "RW", "AM")),
+    "folarin mc'phill": ("ST", ("LW", "RW")),
+    "folarin mcphill": ("ST", ("LW", "RW")),
     "jose lucas gomes da silva": ("DM", ("CM",)),
     "ze lucas": ("DM", ("CM",)),
     "shabani nonda": ("ST", ()),

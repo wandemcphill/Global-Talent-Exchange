@@ -307,13 +307,45 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
     out = []
     for p in profiles:
         state = service.get_state(session, p.id)
+        squad_rows = service.squad(session, p.id) if state else []
+        facs = dict((state.facilities_json if state else None) or {})
+        exec_staff = {
+            role: service.engine.apply_staff_influence(dict(record), role)
+            for role, record in dict(facs.get("_executive_staff") or {}).items()
+            if isinstance(record, dict)
+        }
+        if "first_team_manager" not in exec_staff and state and isinstance(state.manager_json, dict):
+            mgr = dict(state.manager_json)
+            if mgr.get("name") and not mgr.get("is_default") and not mgr.get("is_vacant"):
+                exec_staff["first_team_manager"] = service.engine.apply_staff_influence(mgr, "first_team_manager")
+        academy_players = [
+            service.player_dict(pl, session)
+            for pl in squad_rows
+            if service.engine.squad_sheet(
+                squad_status=(pl.personality_json or {}).get("squad_status") if pl.is_regen else None,
+                is_regen=bool(pl.is_regen),
+                age=pl.age,
+                minutes=pl.minutes,
+                acquired_via=pl.acquired_via,
+            )
+            == "academy"
+        ]
         out.append(
             {
                 "club_id": p.id,
                 "club_name": p.club_name,
                 "stage": state.stage if state else "not_started",
-                "squad_size": len(service.squad(session, p.id)) if state else 0,
+                "squad_size": len(squad_rows),
                 "cash": str(ledger.balance(session, ledger.club_account(p.id), ledger.GTEX)) if state else "0",
+                "facilities": {k: {"level": int(facs.get(k, 1))} for k in service.engine.FACILITY_KINDS},
+                "onboarding_staff": {
+                    role: note
+                    for role, note in dict(facs.get("_onboarding_staff") or {}).items()
+                    if isinstance(note, dict)
+                },
+                "executive_staff": exec_staff,
+                "tactics": service.engine.manager_tactics(state.manager_json if state else None, facs),
+                "academy_players": academy_players,
             }
         )
     return {

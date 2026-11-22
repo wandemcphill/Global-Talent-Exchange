@@ -36,7 +36,7 @@ import { useAuth } from "@/lib/auth";
 import { fmt, useClub } from "@/lib/owner";
 import { Btn, Chip, Coin, Loading, Panel } from "@/components/gtex/ui";
 import { MarketTable, marketLane } from "@/components/gtex/MarketTable";
-import { posShort } from "@/components/gtex/PlayerCard";
+import { footMark, posShort } from "@/components/gtex/PlayerCard";
 import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import { ClubCoinTraderFundingPanel } from "@/components/gtex/CoinTraderDesk";
 
@@ -1104,11 +1104,14 @@ function namedAppointment(person: any) {
   return { ...person, name };
 }
 
-function appointedFor(club: any, role: string) {
+function appointedFor(club: any, role: string, fallbackClub?: any) {
   return (
     namedAppointment(club?.executive_staff?.[role]) ||
     namedAppointment(club?.staff?.[role]) ||
-    namedAppointment(club?.onboarding_staff?.[role])
+    namedAppointment(club?.onboarding_staff?.[role]) ||
+    namedAppointment(fallbackClub?.executive_staff?.[role]) ||
+    namedAppointment(fallbackClub?.staff?.[role]) ||
+    namedAppointment(fallbackClub?.onboarding_staff?.[role])
   );
 }
 
@@ -1424,7 +1427,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
   );
 }
 
-function ManagerStep({ clubId, onDone }: any) {
+function ManagerStep({ clubId, onboardingClub, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
   const { data: dna } = useQuery({
     queryKey: ["club-dna", clubId],
@@ -1433,6 +1436,43 @@ function ManagerStep({ clubId, onDone }: any) {
   });
   const money = useOnboardingMoney(clubId);
   const [choices, setChoices] = useState<Record<string, any>>({});
+  useEffect(() => {
+    const source = club || onboardingClub;
+    if (!source) return;
+    setChoices((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const role of STAFF_ROLES) {
+        if (next[role.key]) continue;
+        const appointed = appointedFor(club, role.key, onboardingClub);
+        const note =
+          club?.onboarding_staff?.[role.key] || onboardingClub?.onboarding_staff?.[role.key];
+        if (appointed) {
+          next[role.key] = {
+            ...appointed,
+            use_default: false,
+            role: role.key,
+            manager_id: appointed.manager_id,
+            profile_id: appointed.profile_id || appointed.id || appointed.staff_id,
+            contract_years: appointed.contract_years || note?.contract_years || 1,
+            salary: 0,
+            already_settled: true,
+          };
+          changed = true;
+        } else if (note?.use_default) {
+          next[role.key] = {
+            use_default: true,
+            role: role.key,
+            name: "Default",
+            salary: 0,
+            already_settled: true,
+          };
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [club, onboardingClub]);
   const [busy, setBusy] = useState(false);
   const salaryDue = STAFF_ROLES.reduce(
     (sum, role) => sum + Number(choices[role.key]?.salary || 0),
@@ -1536,30 +1576,41 @@ function filedLabel(value: unknown) {
   return text;
 }
 
-function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void }) {
+function AcademyStep({
+  clubId,
+  onboardingClub,
+  onDone,
+}: {
+  clubId: string;
+  onboardingClub?: any;
+  onDone: () => void;
+}) {
   const { data: club, refetch } = useClub(clubId);
   const [busyIntake, setBusyIntake] = useState(false);
   const [justScouted, setJustScouted] = useState<any[]>([]);
 
   const fromClub = (club?.squad || []).filter(isAcademyListPlayer);
-  const youth = [...justScouted.filter(isAcademyListPlayer), ...fromClub].filter(
+  const fromOnboarding = (onboardingClub?.academy_players || []).filter(isAcademyListPlayer);
+  const youth = [...justScouted.filter(isAcademyListPlayer), ...fromClub, ...fromOnboarding].filter(
     (player, index, all) => {
       const key = String(player.id || player.name);
       return all.findIndex((item) => String(item.id || item.name) === key) === index;
     },
   );
-  const appointed = appointedFor(club, "head_of_youth_development");
+  const appointed = appointedFor(club, "head_of_youth_development", onboardingClub);
   const hoydName = appointed?.name || "";
   const hoydRating = hoydName && appointed?.rating != null ? appointed.rating : null;
   const hoydInfluence = appointed ? staffDevelopment(appointed, "head_of_youth_development") : null;
   const hiredStaff = STAFF_ROLES.map((role) => {
-    const person = appointedFor(club, role.key);
+    const person = appointedFor(club, role.key, onboardingClub);
     return person
       ? { role, person, influence: staffDevelopment(person, role.key) }
       : { role, person: null, influence: null };
   });
-  const quote = academyIntakeQuote(club?.facilities?.academy?.level);
-  const cashRaw = club?.economy?.cash_gtex ?? club?.health?.cash;
+  const quote = academyIntakeQuote(
+    club?.facilities?.academy?.level ?? onboardingClub?.facilities?.academy?.level,
+  );
+  const cashRaw = club?.economy?.cash_gtex ?? club?.health?.cash ?? onboardingClub?.cash;
   const cash = cashRaw == null || cashRaw === "" ? null : Number(cashRaw);
   const shortOfIntake = cash != null && Number.isFinite(cash) && cash < quote.cost;
   const potentials = youth
@@ -1688,6 +1739,9 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
             {youth.map((player: any) => {
               const archetype = filedLabel(player.archetype);
               const mood = filedLabel(player.mood_state);
+              const foot = footMark(player.preferred_foot || player.dominant_foot);
+              const heightLabel = player.height_cm ? `${player.height_cm} cm` : "";
+              const posLabel = player.position_display || posShort(player.position);
               const gap =
                 player.potential == null || player.rating == null
                   ? null
@@ -1713,7 +1767,14 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                     <div className="min-w-0 flex-1">
                       <h4 className="truncate text-sm font-bold text-white">{player.name}</h4>
                       <p className="text-[11px] text-slate-400">
-                        Age {player.age ?? "—"} · {posShort(player.position)}
+                        {[
+                          `Age ${player.age ?? "—"}`,
+                          posLabel,
+                          foot,
+                          heightLabel,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
                       </p>
                     </div>
                     <div className="text-right">
@@ -1741,6 +1802,9 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
                     <p className="mt-1 text-[11px] text-slate-400">
                       {[archetype, mood].filter(Boolean).join(" · ")}
                     </p>
+                  ) : null}
+                  {player.playstyle ? (
+                    <p className="mt-1 text-[11px] text-cyan-300">{player.playstyle}</p>
                   ) : null}
                 </article>
               );
@@ -2821,8 +2885,10 @@ export default function Onboarding() {
         {index === 1 && (
           <SquadStep clubId={club.club_id} knownCash={club.cash} onDone={next} />
         )}
-        {index === 2 && <ManagerStep clubId={club.club_id} onDone={next} />}
-        {index === 3 && <AcademyStep clubId={club.club_id} onDone={openClub} />}
+        {index === 2 && <ManagerStep clubId={club.club_id} onboardingClub={club} onDone={next} />}
+        {index === 3 && (
+          <AcademyStep clubId={club.club_id} onboardingClub={club} onDone={openClub} />
+        )}
         <p className="mt-6 text-xs text-slate-600">
           Club treasury: {moneyText(footerTreasury)} · Squad {club.squad_size ?? 0}
         </p>

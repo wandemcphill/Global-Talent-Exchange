@@ -753,6 +753,139 @@ def squad_sheet(
     return "first_team"
 
 
+def player_mood_profile(
+    morale: Any,
+    *,
+    rating: Any = None,
+    potential: Any = None,
+    age: Any = None,
+    minutes: Any = 0,
+    loyalty: Any = None,
+    ambition: Any = None,
+    contract_tier: str | None = None,
+    promised_minutes: bool = False,
+    promoted: bool = False,
+) -> dict[str, Any]:
+    """Translate a player's morale into on-pitch performance and contract decisions."""
+    base_rating = int(rating) if isinstance(rating, (int, float)) else None
+    tier = str(contract_tier or "scholar").strip().lower()
+    assured = bool(promised_minutes or promoted or (isinstance(loyalty, (int, float)) and int(loyalty) >= 16))
+    if morale is None or isinstance(morale, bool):
+        return {
+            "mood_state": "Not filed",
+            "performance_shift": 0.0,
+            "effective_match_rating": base_rating,
+            "performance_summary": "Mood not filed",
+            "contract_stance": "signed_improved_youth" if tier == "improved_youth" else "open_to_terms",
+            "contract_willing": True,
+            "contract_cost_fan_coin": 1_000,
+            "contract_morale_boost": 12,
+            "contract_loyalty_boost": 2,
+            "contract_pressure_drop": 25,
+            "contract_summary": (
+                "Improved youth contract active."
+                if tier == "improved_youth"
+                else "Standard 1,000 FAN youth contract terms."
+            ),
+        }
+
+    m = int(clamp(int(round(float(morale))), 0, 100))
+    if m >= 75:
+        mood_state = "Thriving"
+    elif m >= 55:
+        mood_state = "Content"
+    elif m >= 40:
+        mood_state = "Restless"
+    else:
+        mood_state = "Unsettled"
+
+    performance_shift = round((m - 60) * 0.12, 1)
+    effective_match_rating = (
+        int(clamp(int(round(base_rating + performance_shift)), 40, 99)) if base_rating is not None else None
+    )
+    sign = "+" if performance_shift > 0 else ""
+    if mood_state == "Thriving":
+        performance_summary = f"Thriving ({m}/100) · {sign}{performance_shift} match rating"
+    elif mood_state == "Content":
+        performance_summary = f"Content ({m}/100) · {sign}{performance_shift} match rating"
+    elif mood_state == "Restless":
+        performance_summary = f"Restless ({m}/100) · {performance_shift} match focus"
+    else:
+        performance_summary = f"Unsettled ({m}/100) · {performance_shift} match form"
+
+    if tier == "improved_youth":
+        contract_stance = "signed_improved_youth"
+        contract_willing = True
+        contract_cost_fan_coin = 1_000
+        contract_morale_boost = 10
+        contract_loyalty_boost = 2
+        contract_pressure_drop = 20
+        contract_summary = "Improved youth contract active · committed to the club."
+    elif mood_state == "Thriving":
+        contract_stance = "ready_to_commit"
+        contract_willing = True
+        contract_cost_fan_coin = 1_000
+        contract_morale_boost = 12
+        contract_loyalty_boost = 3
+        contract_pressure_drop = 30
+        contract_summary = "Thriving — eager to commit on a 1,000 FAN contract (+3 loyalty, +12 morale)."
+    elif mood_state == "Content":
+        contract_stance = "open_to_terms"
+        contract_willing = True
+        contract_cost_fan_coin = 1_000
+        contract_morale_boost = 12
+        contract_loyalty_boost = 2
+        contract_pressure_drop = 25
+        contract_summary = "Content — accepts standard 1,000 FAN contract terms (+2 loyalty, +12 morale)."
+    elif mood_state == "Restless":
+        contract_stance = "demands_reassurance"
+        contract_willing = True
+        contract_cost_fan_coin = 1_000 if assured else 1_250
+        contract_morale_boost = 14
+        contract_loyalty_boost = 1
+        contract_pressure_drop = 20
+        contract_summary = (
+            "Restless — accepts 1,000 FAN because a first-team pathway is promised."
+            if assured
+            else "Restless — demands a 1,250 FAN reassurance package to commit (+14 morale)."
+        )
+    else:
+        if assured:
+            contract_stance = "conditional_retention"
+            contract_willing = True
+            contract_cost_fan_coin = 1_250
+            contract_morale_boost = 15
+            contract_loyalty_boost = 1
+            contract_pressure_drop = 20
+            contract_summary = (
+                "Unsettled — signs a 1,250 FAN retention deal only because pathway assurances are in place."
+            )
+        else:
+            contract_stance = "refuses_while_unsettled"
+            contract_willing = False
+            contract_cost_fan_coin = 1_500
+            contract_morale_boost = 0
+            contract_loyalty_boost = 0
+            contract_pressure_drop = 0
+            contract_summary = (
+                "Unsettled — refuses a new contract until morale lifts or first-team minutes are promised."
+            )
+
+    return {
+        "mood_state": mood_state,
+        "performance_shift": performance_shift,
+        "effective_match_rating": effective_match_rating,
+        "performance_summary": performance_summary,
+        "contract_stance": contract_stance,
+        "contract_willing": contract_willing,
+        "contract_cost_fan_coin": contract_cost_fan_coin,
+        "contract_morale_boost": contract_morale_boost,
+        "contract_loyalty_boost": contract_loyalty_boost,
+        "contract_pressure_drop": contract_pressure_drop,
+        "contract_summary": contract_summary,
+    }
+
+
 def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] | None = None) -> dict[str, Any]:
     """The shape and match bonus the appointed manager plays.
 
@@ -1129,7 +1262,7 @@ def club_strength(
         pid = str(p.get("id") or "")
         base = float(p["rating"]) if p.get("rating") is not None else 0.0
         fitness_adj = (float(p["fitness"]) - 80.0) * 0.15 if p.get("fitness") is not None else 0.0
-        morale_adj = (float(p["morale"]) - 70.0) * 0.08 if p.get("morale") is not None else 0.0
+        morale_adj = (float(p["morale"]) - 65.0) * 0.15 if p.get("morale") is not None else 0.0
         age = int(p["age"]) if p.get("age") is not None else None
         age_adj = 0.0
         if age is not None and youth_commit is not None and veteran_pref is not None:
@@ -1266,7 +1399,7 @@ def club_strength(
         elif manager.get("tactical_quality") is not None:
             strength += float(manager["tactical_quality"]) * 0.35
         if avg_morale is not None:
-            strength += (avg_morale - 60) * 0.08
+            strength += (avg_morale - 60) * 0.12
         if facilities.get("medical") is not None:
             strength += int(facilities["medical"]) * 0.4
         cohesion = (campus_effects or {}).get("tactical_cohesion_pct")
@@ -1579,20 +1712,56 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         roles = _roles_for_formation(formation)
 
         scorers = list(side_data.get("scorers") or [])
+        xi_players = [p for p in (side_data.get("xi_players") or []) if isinstance(p, dict)]
+        avg_side_morale = (
+            int(clamp(int(round(float(side_data["avg_morale"]))), 1, 100))
+            if side_data.get("avg_morale") is not None
+            else None
+        )
+
+        def _player_for_slot(idx: int, slot_role: Any) -> dict[str, Any] | None:
+            if idx < len(xi_players):
+                return xi_players[idx]
+            return None
 
         starters = []
 
         for i, role in enumerate(roles):
-
-            p_name = scorers[i % len(scorers)] if scorers else f"{side_data.get('name', 'Team')} Player {i+1}"
+            slot_player = _player_for_slot(i, role)
+            p_name = (
+                str(slot_player.get("name") or "")
+                if slot_player and slot_player.get("name")
+                else (scorers[i % len(scorers)] if scorers else f"{side_data.get('name', 'Team')} Player {i+1}")
+            )
+            p_id = str(slot_player.get("id") or f"{side_id}-player-{i+1}") if slot_player else f"{side_id}-player-{i+1}"
+            p_morale = (
+                int(clamp(int(round(float(slot_player["morale"]))), 1, 100))
+                if slot_player and slot_player.get("morale") is not None
+                else avg_side_morale
+            )
+            p_fitness = (
+                int(clamp(int(round(float(slot_player["fitness"]))), 1, 100))
+                if slot_player and slot_player.get("fitness") is not None
+                else None
+            )
+            raw_player_rating = (
+                int(slot_player["rating"])
+                if slot_player and isinstance(slot_player.get("rating"), (int, float))
+                else base_rating
+            )
+            mood_eval = player_mood_profile(p_morale, rating=raw_player_rating)
+            p_overall = int(clamp(int(mood_eval["effective_match_rating"] or base_rating), 40, 99))
 
             starters.append(
                 MatchPlayerInput(
-                    player_id=f"{side_id}-player-{i+1}",
+                    player_id=p_id,
                     player_name=p_name,
                     role=role,
-                    overall=base_rating,
-                    goalkeeping=base_rating if role == PlayerRole.GOALKEEPER else None,
+                    overall=p_overall,
+                    morale=p_morale,
+                    motivation=p_morale,
+                    fitness=p_fitness,
+                    goalkeeping=p_overall if role == PlayerRole.GOALKEEPER else None,
                 )
             )
 

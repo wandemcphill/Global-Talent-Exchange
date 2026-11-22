@@ -384,7 +384,7 @@ def _normalize_portrait_url(url: str) -> str:
 
 def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
     """Return the face already stored on an academy regen, if one was assigned."""
-    if player is None or not player.is_regen:
+    if player is None:
         return None
     personality = player.personality_json if isinstance(player.personality_json, dict) else {}
     stored = personality.get("portrait_url")
@@ -393,53 +393,9 @@ def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
     return None
 
 
-def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
+def _fallback_portrait_for_seed(seed_key: str, name: str) -> str:
     import urllib.parse
 
-    player = session.get(OwnerSquadPlayer, player_id) if session else None
-    stored = stored_regen_portrait_url(player)
-    if stored:
-        return stored
-    name = (player.name if player else player_name) or "Player"
-    seed_key = (player.player_ref if player and player.player_ref else player_id) or "player"
-
-    # 1. Delegate to RegenPortraitService when a canonical Player / player_ref exists
-    if session is not None and seed_key:
-        try:
-            from sqlalchemy import text
-
-            from app.ingestion.models import Player
-            from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
-
-            bind = session.get_bind()
-            players_ready = False
-            if bind is not None and bind.dialect.name == "sqlite":
-                players_ready = (
-                    session.execute(
-                        text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ingestion_players'")
-                    ).first()
-                    is not None
-                )
-            elif bind is not None:
-                from sqlalchemy import inspect
-
-                players_ready = inspect(bind).has_table("ingestion_players")
-            canonical_player = session.get(Player, seed_key) if players_ready else None
-            if canonical_player is not None:
-                try:
-                    portrait_result = RegenPortraitService(session).ensure_player_portrait(canonical_player)
-                    if portrait_result.portrait_url:
-                        return _normalize_portrait_url(portrait_result.portrait_url)
-                except RegenPortraitError:
-                    dna = canonical_player.dna_profile if isinstance(canonical_player.dna_profile, dict) else {}
-                    for key in ("portraitUrl", "portrait_url", "image_url"):
-                        val = dna.get(key)
-                        if isinstance(val, str) and val.strip():
-                            return _normalize_portrait_url(val)
-        except Exception as err:
-            logger.debug("RegenPortraitService lookup skipped for %s: %s", seed_key, err)
-
-    # 2. Check if face-bank manifest has a mapped static portrait ("assets" or "items" fallback)
     manifest = _load_face_manifest()
     items = manifest.get("assets") or manifest.get("items") or []
     if items:
@@ -461,10 +417,9 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
                 rel_clean = urllib.parse.quote(rel_norm, safe="/")
                 return f"/generated-media/{rel_clean}"
 
-    # 3. Deterministic high-quality vector portrait fallback
-    initials = "".join([part[0] for part in name.split()[:2]]).upper() or "P"
+    initials = "".join([part[0] for part in (name or "Player").split()[:2]]).upper() or "P"
     palette = ["#0F766E", "#1E3A8A", "#831843", "#14532D", "#7C2D12", "#4C1D95"]
-    h_idx = int(hashlib.md5(name.encode("utf-8")).hexdigest()[:4], 16) % len(palette)
+    h_idx = int(hashlib.md5((name or "Player").encode("utf-8")).hexdigest()[:4], 16) % len(palette)
     color = palette[h_idx]
     svg = (
         f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'>"
@@ -475,6 +430,122 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
         f"</svg>"
     )
     return f"data:image/svg+xml;utf8,{urllib.parse.quote(svg)}"
+
+
+def prefetch_squad_portrait_urls(session: Session | None, players: list[OwnerSquadPlayer]) -> dict[str, str]:
+    """Batch-resolve portrait URLs for a squad in a single query to avoid N+1 round-trips."""
+    if session is None or not players:
+        return {}
+    cache: dict[str, str] = session.info.setdefault("_portrait_url_cache", {})
+    missing_refs: list[str] = []
+    for p in players:
+        stored = stored_regen_portrait_url(p)
+        if stored:
+            cache[str(p.id)] = stored
+            if p.player_ref:
+                cache[str(p.player_ref)] = stored
+            continue
+        ref = str(p.player_ref or p.id or "")
+        if ref and ref not in cache:
+            missing_refs.append(ref)
+    if missing_refs:
+        try:
+            from app.ingestion.models import Player
+
+            rows = session.execute(
+                select(Player.id, Player.dna_profile).where(Player.id.in_(list(set(missing_refs))))
+            ).all()
+            for pid, dna in rows:
+                if isinstance(dna, dict):
+                    for key in ("portraitUrl", "portrait_url", "image_url"):
+                        val = dna.get(key)
+                        if isinstance(val, str) and val.strip():
+                            cache[str(pid)] = _normalize_portrait_url(val)
+                            break
+        except Exception as err:
+            logger.debug("Batch portrait prefetch skipped: %s", err)
+    for p in players:
+        pid = str(p.id)
+        ref = str(p.player_ref or p.id or "player")
+        if pid not in cache:
+            if ref in cache:
+                cache[pid] = cache[ref]
+            else:
+                fallback = _fallback_portrait_for_seed(ref, p.name or "Player")
+                cache[ref] = fallback
+                cache[pid] = fallback
+    return cache
+
+
+def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
+    import urllib.parse
+
+    cache: dict[str, str] = session.info.setdefault("_portrait_url_cache", {}) if session is not None else {}
+    if player_id in cache:
+        return cache[player_id]
+
+    player = session.get(OwnerSquadPlayer, player_id) if session else None
+    stored = stored_regen_portrait_url(player)
+    if stored:
+        cache[player_id] = stored
+        return stored
+    name = (player.name if player else player_name) or "Player"
+    seed_key = (player.player_ref if player and player.player_ref else player_id) or "player"
+    if seed_key in cache:
+        cache[player_id] = cache[seed_key]
+        return cache[seed_key]
+
+    # 1. Check canonical Player.dna_profile (and RegenPortraitService only when unseeded)
+    if session is not None and seed_key:
+        try:
+            from sqlalchemy import text
+
+            from app.ingestion.models import Player
+            from app.services.regen_portrait_service import RegenPortraitError, RegenPortraitService
+
+            if "_has_ingestion_players_table" not in session.info:
+                bind = session.get_bind()
+                players_ready = False
+                if bind is not None and bind.dialect.name == "sqlite":
+                    players_ready = (
+                        session.execute(
+                            text("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'ingestion_players'")
+                        ).first()
+                        is not None
+                    )
+                elif bind is not None:
+                    from sqlalchemy import inspect
+
+                    players_ready = inspect(bind).has_table("ingestion_players")
+                session.info["_has_ingestion_players_table"] = players_ready
+            players_ready = bool(session.info.get("_has_ingestion_players_table"))
+            canonical_player = session.get(Player, seed_key) if players_ready else None
+            if canonical_player is not None:
+                dna = canonical_player.dna_profile if isinstance(canonical_player.dna_profile, dict) else {}
+                for key in ("portraitUrl", "portrait_url", "image_url"):
+                    val = dna.get(key)
+                    if isinstance(val, str) and val.strip():
+                        resolved = _normalize_portrait_url(val)
+                        cache[seed_key] = resolved
+                        cache[player_id] = resolved
+                        return resolved
+                if canonical_player.is_real_player is False:
+                    try:
+                        portrait_result = RegenPortraitService(session).ensure_player_portrait(canonical_player)
+                        if portrait_result.portrait_url:
+                            resolved = _normalize_portrait_url(portrait_result.portrait_url)
+                            cache[seed_key] = resolved
+                            cache[player_id] = resolved
+                            return resolved
+                    except RegenPortraitError:
+                        pass
+        except Exception as err:
+            logger.debug("RegenPortraitService lookup skipped for %s: %s", seed_key, err)
+
+    resolved = _fallback_portrait_for_seed(str(seed_key), name)
+    cache[str(seed_key)] = resolved
+    cache[player_id] = resolved
+    return resolved
 
 
 def resolve_save_context_id(session: Session, club_id: str) -> str:

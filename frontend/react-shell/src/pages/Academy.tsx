@@ -601,12 +601,16 @@ function AcademyProspectCard({
   const archetype = p.archetype || t.archetype || "Archetype not filed";
   const moodState = p.mood_state || t.mood || "Mood not filed";
   const monologue = p.inner_monologue || t.inner_monologue || "No monologue is filed.";
-  const readiness = p.readiness_score ?? null;
-  const hoydVerdict = p.hoyd_verdict || "No youth-head verdict is filed.";
-  const managerApproved = p.manager_approved === true;
+  const readiness = p.readiness_score ?? p.readiness_assessment?.readiness_score ?? null;
+  const hoydVerdict =
+    p.hoyd_verdict || p.readiness_assessment?.hoyd_verdict || "No youth-head verdict is filed.";
+  const managerApproved = (p.manager_approved ?? p.readiness_assessment?.manager_approved) === true;
   const originBackstory = p.origin_backstory || t.origin_backstory;
   const superAgent = p.super_agent || t.super_agent;
   const dramaArc = p.drama_arc || t.drama_arc;
+  const contractCost = Number(p.contract_cost_fan_coin || 1000);
+  const contractSigned = (p.contract_tier || t.contract_tier) === "improved_youth";
+  const contractWilling = p.contract_willing !== false;
 
   const handleContract = async () => {
     setBusyAction("contract");
@@ -671,8 +675,12 @@ function AcademyProspectCard({
               name={p.name}
               rating={p.rating}
               potential={p.potential}
-              position={p.position}
+              position={p.position_display || p.position}
               age={p.age}
+              heightCm={p.height_cm || t.height_cm}
+              foot={p.preferred_foot || p.dominant_foot || t.preferred_foot || t.dominant_foot}
+              archetype={p.playstyle || t.playstyle}
+              traits={p.traits || t.traits}
               regen
               image={p.portrait_url}
               badge={
@@ -733,16 +741,30 @@ function AcademyProspectCard({
             )}
 
             {/* HOYD & Manager Assessment */}
-            <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-2.5 text-xs">
+            <div className="rounded-lg border border-purple-500/20 bg-purple-950/20 p-2.5 text-xs space-y-1">
               <div className="flex items-center justify-between">
                 <span className="font-bold text-purple-300">HOYD Verdict:</span>
                 <span
                   className={`text-[10px] font-bold uppercase ${managerApproved ? "text-emerald-400" : "text-amber-400"}`}
                 >
-                  {p.manager_approved == null ? "Approval not filed" : managerApproved ? "Manager Approved" : "Development Track"}
+                  {(p.manager_approved ?? p.readiness_assessment?.manager_approved) == null
+                    ? "Approval not filed"
+                    : managerApproved
+                      ? "Manager Approved"
+                      : "Development Track"}
                 </span>
               </div>
-              <p className="text-slate-300 mt-1">{hoydVerdict}</p>
+              <p className="text-slate-300">{hoydVerdict}</p>
+              {p.performance_summary && (
+                <p className="text-[11px] text-emerald-300">
+                  <b>Performance:</b> {p.performance_summary}
+                </p>
+              )}
+              {p.contract_summary && (
+                <p className="text-[11px] text-amber-200">
+                  <b>Contract stance:</b> {p.contract_summary}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -765,13 +787,19 @@ function AcademyProspectCard({
         <button
           type="button"
           onClick={handleContract}
-          disabled={busyAction === "contract"}
+          disabled={busyAction === "contract" || contractSigned || !contractWilling}
           className="gx-btn gx-btn-secondary text-xs flex-1 flex items-center justify-center gap-1.5"
           data-testid={`youth-contract-${p.id}`}
         >
           <FileText size={13} className="text-amber-300" />
           <span>
-            {busyAction === "contract" ? "Signing…" : "Offer Youth Contract (1,000 Fan Coin)"}
+            {busyAction === "contract"
+              ? "Signing…"
+              : contractSigned
+                ? "Improved Youth Contract Active"
+                : !contractWilling
+                  ? "Unsettled — Refuses New Contract"
+                  : `Offer Youth Contract (${fmt(contractCost)} Fan Coin)`}
           </span>
         </button>
 
@@ -1061,6 +1089,7 @@ export default function Academy() {
             ? String(selectedPlayer.player_ref || selectedPlayer.player_id || selectedPlayer.id)
             : null
         }
+        player={selectedPlayer}
         onClose={() => setSelectedPlayer(null)}
       />
     </div>

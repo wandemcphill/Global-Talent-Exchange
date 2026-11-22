@@ -4504,7 +4504,7 @@ def select_manager_matchday_lineup(
     def _manager_player_score(p: OwnerSquadPlayer) -> float:
         base = float(p.rating) if p.rating is not None else 0.0
         fitness_adj = (float(_player_fitness(p)) - 80.0) * 0.18 if "fitness" in dict(p.personality_json or {}) else 0.0
-        morale_adj = ((float(p.morale) - 70.0) * 0.08) if p.morale is not None else 0.0
+        morale_adj = ((float(p.morale) - 65.0) * 0.15) if p.morale is not None else 0.0
         age = int(p.age) if p.age is not None else None
         age_adj = 0.0
         if age is not None and youth_commit is not None and veteran_pref is not None:
