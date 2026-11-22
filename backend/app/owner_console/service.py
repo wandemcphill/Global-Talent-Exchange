@@ -334,8 +334,12 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
             if _is_goalkeeper(p.position):
                 keepers += 1
             pers = dict(p.personality_json or {}) if p.is_regen else {}
-            status_val = pers.get(
-                "squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team"
+            status_val = engine.squad_sheet(
+                squad_status=pers.get("squad_status"),
+                is_regen=bool(p.is_regen),
+                age=p.age,
+                minutes=p.minutes,
+                acquired_via=p.acquired_via,
             )
             if status_val in ("first_team", "senior"):
                 first_team_count += 1
@@ -401,7 +405,17 @@ def _sign_starter_squad(session: Session, state: OwnerClubState) -> None:
     current = squad(session, state.club_id)
     needed = max(0, MIN_SQUAD - len(current))
     if needed:
-        regens = engine.generate_regens(state.club_id, state.world_day, 1, 12, needed)
+        from app.models.club_profile import ClubProfile
+
+        starter_profile = session.get(ClubProfile, state.club_id)
+        regens = engine.generate_regens(
+            state.club_id,
+            state.world_day,
+            1,
+            12,
+            needed,
+            country_code=starter_profile.country_code if starter_profile is not None else None,
+        )
         existing_keepers = sum(1 for p in current if p.position.startswith("goal"))
         new_keepers = sum(1 for r in regens if r["position"].startswith("goal"))
         total_keepers = existing_keepers + new_keepers
@@ -438,13 +452,13 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     from app.owner_console import storytelling
 
     pers = dict(p.personality_json or {}) if p.is_regen else {}
-    stored_sheet = pers.get("squad_status")
-    if isinstance(stored_sheet, str) and stored_sheet.strip():
-        squad_status = stored_sheet.strip().lower()
-    elif p.acquired_via == "academy" and p.is_regen and int(p.age or 99) <= 18:
-        squad_status = "academy"
-    else:
-        squad_status = "first_team"
+    squad_status = engine.squad_sheet(
+        squad_status=pers.get("squad_status"),
+        is_regen=bool(p.is_regen),
+        age=p.age,
+        minutes=p.minutes,
+        acquired_via=p.acquired_via,
+    )
 
     def _trait(value: Any) -> int | None:
         return int(value) if isinstance(value, (int, float)) else None
@@ -1990,6 +2004,21 @@ def appoint_manager(
     mgr_personality = autonomous_staff_engine.derive_manager_personality(profile)
     profile["personality_profile"] = mgr_personality
     state.manager_json = profile
+    tactics = engine.manager_tactics(profile, state.facilities_json)
+    facs = dict(state.facilities_json or {})
+    facs["_tactical_setup"] = {
+        "formation": tactics["formation"],
+        "formations": tactics["formations"],
+        "mentality": tactics["mentality"],
+        "tactical_flexibility": tactics["tactical_flexibility"],
+        "tactical_match_bonus": tactics["tactical_match_bonus"],
+        "ratified_by_manager": True,
+        "ratified_manager_id": str(profile.get("manager_id") or profile.get("id") or ""),
+    }
+    state.facilities_json = facs
+    from sqlalchemy.orm.attributes import flag_modified
+
+    flag_modified(state, "facilities_json")
     try:
         from app.owner_console import comms_persistence
 
@@ -2350,6 +2379,9 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     hoyd_youth = int(hoyd.get("youth_development") or 10)
     youth = int(manager.get("youth_development") or 10)
     intake_count = 1 + level // 2 + int(campus_effects.get("academy_intake_bonus_count", 0))
+    from app.models.club_profile import ClubProfile
+
+    intake_profile = session.get(ClubProfile, club_id)
     generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
     cohort = engine.generate_regens(
         club_id,
@@ -2361,6 +2393,7 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
         hoyd_youth=hoyd_youth,
         campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
         campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
+        country_code=intake_profile.country_code if intake_profile is not None else None,
     )
     for regen in cohort:
         personality = dict(regen.get("personality") or {})
@@ -3487,6 +3520,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             for role, note in dict(facilities.get("_onboarding_staff") or {}).items()
             if isinstance(note, dict)
         },
+        "tactics": engine.manager_tactics(state.manager_json, facilities),
         "executive_staff": get_club_staff(session, user_id, club_id).get("appointed_staff"),
         "staff_effects": get_club_staff(session, user_id, club_id).get("staff_effects"),
         "delegation_policy": get_club_staff(session, user_id, club_id).get("delegation_policy"),

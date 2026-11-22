@@ -723,6 +723,93 @@ def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[
     return record
 
 
+def squad_sheet(
+    *,
+    squad_status: Any = None,
+    is_regen: bool = False,
+    age: Any = None,
+    minutes: Any = None,
+    acquired_via: Any = None,
+) -> str:
+    """The sheet a player is on. A missing sheet is the first team.
+
+    Academy is an explicit academy sheet, or a youth regen who arrived through
+    the academy. A bought regen with no minutes is not on the academy list.
+    """
+    raw = str(squad_status or "").strip().lower()
+    if raw == "reserve":
+        return "reserve"
+    if raw in {"academy", "u21"}:
+        return "academy"
+    if raw in {"first_team", "senior"}:
+        return "first_team"
+    if acquired_via == "academy" and is_regen:
+        try:
+            years = int(age)
+        except (TypeError, ValueError):
+            years = 99
+        if years <= 18:
+            return "academy"
+    return "first_team"
+
+
+def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] | None = None) -> dict[str, Any]:
+    """The shape and match bonus the appointed manager plays.
+
+    A tactical setup this manager has ratified wins. Otherwise their own
+    formations win. A manager with no filed shape still has one, taken from
+    their mentality, so the tactics screen and the match use the same plan.
+    """
+    record = apply_staff_influence(dict(manager or {}), "first_team_manager")
+    setup = dict((facilities or {}).get("_tactical_setup") or {})
+    named = str(record.get("name") or record.get("display_name") or "").strip()
+    if not named or record.get("is_default") or record.get("is_vacant") or named.lower() == "default":
+        return {
+            "manager_name": "",
+            "formation": str(setup.get("formation") or "4-3-3"),
+            "formations": ["4-3-3"],
+            "mentality": str(setup.get("mentality") or ""),
+            "tactical_flexibility": None,
+            "tactical_quality": None,
+            "tactical_match_bonus": 0,
+            "pressing": setup.get("pressing"),
+        }
+    profile = dict(record.get("personality_profile") or {})
+    formations = [
+        str(item) for item in (profile.get("preferred_formations") or record.get("preferred_formations") or []) if item
+    ]
+    if not formations and record.get("preferred_formation"):
+        formations = [str(record["preferred_formation"])]
+    mentality = str(
+        profile.get("preferred_tactical_philosophy")
+        or record.get("tactical_preference")
+        or record.get("mentality")
+        or ""
+    )
+    if not formations:
+        text = mentality.lower()
+        if any(word in text for word in ("defend", "low_block", "compact", "cautious")):
+            formations = ["5-4-1", "5-3-2", "4-4-2"]
+        elif any(word in text for word in ("attack", "press", "gegen", "wing")):
+            formations = ["4-3-3", "4-2-3-1", "3-4-3"]
+        else:
+            formations = ["4-2-3-1", "4-3-3", "4-4-2"]
+    manager_id = str(record.get("manager_id") or record.get("id") or "")
+    stored = str(setup.get("formation") or "")
+    ratified = bool(manager_id) and str(setup.get("ratified_manager_id") or "") == manager_id and bool(stored)
+    effects = calculate_staff_effects({"first_team_manager": record})
+    return {
+        "manager_name": str(record.get("name") or record.get("display_name") or ""),
+        "formation": stored if ratified else formations[0],
+        "formations": formations,
+        "mentality": mentality or str(setup.get("mentality") or ""),
+        "tactical_flexibility": record.get("tactical_flexibility"),
+        "tactical_quality": record.get("tactical_quality"),
+        "tactical_match_bonus": effects["tactical_match_bonus"],
+        "pressing": setup.get("pressing"),
+    }
+
+
 def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "")
@@ -823,7 +910,10 @@ def generate_regens(
     hoyd_youth: int = 10,
     campus_intake_quality_pct: int = 0,
     campus_ceiling_bonus: int = 0,
+    country_code: str | None = None,
 ) -> list[dict[str, Any]]:
+    from app.services.regen_culture_name_pools import coherent_person_name
+
     rng = seeded("intake", club_id, generation_key)
     out = []
     quality_rating_boost = int(round(max(0, int(campus_intake_quality_pct)) / 5.0))
@@ -842,7 +932,7 @@ def generate_regens(
             + rng.randint(-6, 10)
         )
         potential = int(clamp(base_pot, 55, max_pot_cap))
-        name = f"{rng.choice(FIRST_NAMES)} {rng.choice(LAST_NAMES)}"
+        name, culture = coherent_person_name(rng, country_code)
         position = rng.choice(POSITIONS[1:] if index else POSITIONS)
         age = rng.randint(16, 18)
         base_rating = rng.randint(44, 56) + quality_rating_boost
@@ -851,6 +941,7 @@ def generate_regens(
         personality["fitness"] = 96
         personality["campus_intake_quality_pct"] = int(campus_intake_quality_pct)
         personality["campus_ceiling_bonus"] = ceiling_boost
+        personality["naming_culture"] = culture
         out.append(
             {
                 "name": name,
@@ -1061,16 +1152,13 @@ def club_strength(
         healthy = [p for p in players if int(p.get("injured_days", 0) or 0) <= 0] or list(players)
 
     def _sheet(p: dict[str, Any]) -> str:
-        raw = str(p.get("squad_status") or "").lower()
-        if raw == "reserve":
-            return "reserve"
-        if raw in {"academy", "u21"}:
-            return "academy"
-        if raw in {"first_team", "senior"}:
-            return "first_team"
-        if p.get("is_regen") and p.get("age") is not None and int(p["age"]) <= 18 and int(p.get("minutes") or 0) == 0:
-            return "academy"
-        return "first_team"
+        return squad_sheet(
+            squad_status=p.get("squad_status"),
+            is_regen=bool(p.get("is_regen")),
+            age=p.get("age"),
+            minutes=p.get("minutes"),
+            acquired_via=p.get("acquired_via"),
+        )
 
     def _is_gk(p: dict[str, Any]) -> bool:
         pos = str(p.get("position") or "").lower()
@@ -1170,8 +1258,12 @@ def club_strength(
     avg_fitness = sum(fitnesses) / len(fitnesses) if fitnesses else None
     depth_penalty = (11 - len(fit)) * 2.5
     strength = avg_rating
+    tactics = manager_tactics(manager, facilities)
     if strength is not None:
-        if manager.get("tactical_quality") is not None:
+        bonus = tactics.get("tactical_match_bonus")
+        if bonus is not None:
+            strength += float(bonus)
+        elif manager.get("tactical_quality") is not None:
             strength += float(manager["tactical_quality"]) * 0.35
         if avg_morale is not None:
             strength += (avg_morale - 60) * 0.08
@@ -1189,21 +1281,7 @@ def club_strength(
         manager,
         facilities_json=facilities,
     )
-    preferred = [str(item) for item in (mgr_profile.get("preferred_formations") or []) if item]
-    if not preferred and manager.get("preferred_formation"):
-        preferred = [str(manager["preferred_formation"])]
-    setup = dict((facilities or {}).get("_tactical_setup") or {})
-    manager_id = str(manager.get("manager_id") or manager.get("id") or "")
-    stored_formation = str(setup.get("formation") or "")
-    ratified_for_this_manager = bool(manager_id) and str(setup.get("ratified_manager_id") or "") == manager_id
-    if preferred and not ratified_for_this_manager:
-        formation = preferred[0]
-    elif stored_formation:
-        formation = stored_formation
-    elif preferred:
-        formation = preferred[0]
-    else:
-        formation = None
+    formation = tactics.get("formation")
     pressing = int(mgr_profile["pressing_philosophy"]) if mgr_profile.get("pressing_philosophy") is not None else None
     attack = (
         int(mgr_profile["attacking_vs_defensive"]) if mgr_profile.get("attacking_vs_defensive") is not None else None
@@ -1232,6 +1310,8 @@ def club_strength(
         "defensive_line": attack,
         "philosophy": str(mgr_profile.get("preferred_tactical_philosophy") or manager.get("philosophy") or ""),
         "tactical_quality": tactical_quality,
+        "tactical_match_bonus": tactics.get("tactical_match_bonus"),
+        "tactics": tactics,
         "manager_mentality": mentality_authority["manager_preferred_mentality"],
         "mentality_authority": mentality_authority,
         "avg_rating": round(avg_rating, 1) if avg_rating is not None else None,

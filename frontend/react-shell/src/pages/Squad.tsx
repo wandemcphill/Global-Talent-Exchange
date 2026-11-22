@@ -74,7 +74,11 @@ function sheetOf(player: any): SquadSheet {
   if (raw === "reserve") return "reserve";
   if (raw === "academy" || raw === "u21") return "academy";
   if (raw === "first_team" || raw === "senior") return "first_team";
-  if (player?.is_regen && Number(player?.age) <= 18 && Number(player?.minutes || 0) === 0)
+  if (
+    player?.acquired_via === "academy" &&
+    player?.is_regen &&
+    Number(player?.age) <= 18
+  )
     return "academy";
   return "first_team";
 }

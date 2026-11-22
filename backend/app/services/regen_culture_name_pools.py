@@ -4006,6 +4006,22 @@ COUNTRY_CODE_REPAIRS: dict[str, tuple[str, str]] = {
 }
 
 
+def coherent_person_name(rng, country_code: str | None = None) -> tuple[str, str]:
+    """One given name and one surname from the same culture.
+
+    A club's country chooses the cultures. Nigeria can draw Yoruba, Igbo, or
+    Hausa, but a single player never mixes those pools.
+    """
+    code = (country_code or "NG").strip().upper()
+    repaired = COUNTRY_CODE_REPAIRS.get(code)
+    if repaired:
+        code = repaired[0]
+    profile = COUNTRY_PROFILES.get(code) or COUNTRY_PROFILES["NG"]
+    culture = rng.choice(profile[0])
+    given_names, surnames = C[culture]
+    return f"{rng.choice(given_names)} {rng.choice(surnames)}", culture
+
+
 def face_groups_for(country_code: str | None) -> tuple[str, ...] | None:
     profile = COUNTRY_PROFILES.get((country_code or "").strip().upper())
     return profile[1] if profile else None

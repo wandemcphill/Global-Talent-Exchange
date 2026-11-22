@@ -37,6 +37,14 @@ def _clamp(value: int | float, low: int = 0, high: int = 100) -> int:
     return max(low, min(high, int(round(value))))
 
 
+def _personality_score(key: str, value: int | float) -> int:
+    """Staff skills are 1-20. Personality attributes are 0-100."""
+    number = float(value)
+    if key in {"tactical_flexibility", "tactical_quality", "youth_development"} and number <= 20:
+        number *= 5
+    return _clamp(number)
+
+
 def _stable_hash_int(seed: str) -> int:
     return int(hashlib.sha256(seed.encode("utf-8")).hexdigest()[:12], 16)
 
@@ -529,7 +537,7 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
             "adaptability",
         ):
             if k in manager_data and isinstance(manager_data[k], (int, float)):
-                merged[k] = _clamp(manager_data[k])
+                merged[k] = _personality_score(k, manager_data[k])
         return merged
 
     explicit_archetype = str(manager_data.get("archetype_key") or "").strip()
@@ -554,7 +562,7 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
         "ability_to_handle_pressure",
     ):
         if numeric_key in manager_data and isinstance(manager_data[numeric_key], (int, float)):
-            profile[numeric_key] = _clamp(manager_data[numeric_key])
+            profile[numeric_key] = _personality_score(numeric_key, manager_data[numeric_key])
 
     for str_key in (
         "preferred_tactical_philosophy",
@@ -4477,9 +4485,18 @@ def select_manager_matchday_lineup(
 
     youth_commit = _optional_score(mgr_profile, "youth_development_commitment")
     veteran_pref = _optional_score(mgr_profile, "preference_for_experienced_players")
-    formations = list(mgr_profile.get("preferred_formations") or [])
+    from app.owner_console.engine import manager_tactics
+
+    tactics = manager_tactics(dict(state.manager_json or {}), fac)
     tactical_setup = {**dict(fac.get("_tactical_setup") or {}), **dict(fac.get("_tactical_config") or {})}
-    chosen_formation = str(tactical_setup.get("formation") or "") or (formations[0] if formations else None)
+    owner_formation = str(owner_pref.get("preferred_formation") or "")
+    flexibility = int(tactics.get("tactical_flexibility") or 0)
+    flexibility_pct = flexibility * 5 if flexibility <= 20 else flexibility
+    manager_shapes = {str(item) for item in (tactics.get("formations") or [])}
+    if owner_formation and (owner_formation in manager_shapes or flexibility_pct >= 70):
+        chosen_formation = owner_formation
+    else:
+        chosen_formation = str(tactics.get("formation") or tactical_setup.get("formation") or "") or None
 
     mentality_authority = resolve_manager_mentality_decision(state)
     chosen_mentality = str(mentality_authority["effective_mentality"])
@@ -4513,7 +4530,7 @@ def select_manager_matchday_lineup(
             return "academy"
         if raw in {"first_team", "senior"}:
             return "first_team"
-        if p.is_regen and int(p.age or 24) <= 18 and int(p.minutes or 0) == 0:
+        if p.acquired_via == "academy" and p.is_regen and int(p.age or 99) <= 18:
             return "academy"
         return "first_team"
 
@@ -4608,12 +4625,20 @@ def select_manager_matchday_lineup(
             f"{mgr['name']} selected the authoritative matchday XI ({chosen_formation}, {chosen_mentality}) "
             f"based on tactical philosophy, fitness, and readiness."
         )
+    if owner_formation and owner_formation != chosen_formation:
+        verdict_reason += (
+            f" {mgr['name']} kept {chosen_formation}; tactical flexibility "
+            f"{tactics.get('tactical_flexibility')} does not take {owner_formation}."
+        )
 
     selection_payload = {
         "selected_by_manager_id": mgr.get("id"),
         "selected_by_manager_name": mgr.get("name"),
         "manager_archetype": mgr_profile.get("archetype_label"),
         "formation": chosen_formation,
+        "tactical_flexibility": tactics.get("tactical_flexibility"),
+        "tactical_match_bonus": tactics.get("tactical_match_bonus"),
+        "owner_formation_accepted": not owner_formation or owner_formation == chosen_formation,
         "mentality": chosen_mentality,
         "mentality_authority": mentality_authority,
         "tactical_philosophy": mgr_profile.get("preferred_tactical_philosophy"),

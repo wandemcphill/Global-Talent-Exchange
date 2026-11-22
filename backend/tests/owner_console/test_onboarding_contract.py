@@ -32,6 +32,37 @@ def test_a_hired_rating_becomes_the_role_skill() -> None:
     assert general["commercial_acumen"] == 18
 
 
+def test_academy_names_stay_inside_one_culture() -> None:
+    import random
+
+    from app.services.regen_culture_name_pools import C, coherent_person_name
+
+    rng = random.Random(7)
+    for _ in range(40):
+        full, culture = coherent_person_name(rng, "NG")
+        given, surname = full.split(" ", 1)
+        given_names, surnames = C[culture]
+        assert given in given_names
+        assert surname in surnames
+        assert culture in {"yoruba", "igbo", "hausa"}
+
+
+def test_manager_tactics_use_the_same_bonus_as_the_match() -> None:
+    from app.owner_console.engine import manager_tactics
+
+    tactics = manager_tactics({"name": "Tunde Mc'Phill", "rating": 76, "manager_id": "tunde"})
+    assert tactics["formation"] == "4-2-3-1"
+    assert tactics["tactical_flexibility"] == 15
+    assert tactics["tactical_match_bonus"] == 6.0
+
+
+def test_a_staff_skill_is_scaled_onto_the_personality_range() -> None:
+    from app.owner_console.autonomous_staff_engine import derive_manager_personality
+
+    profile = derive_manager_personality({"name": "Tunde Mc'Phill", "tactical_flexibility": 15})
+    assert profile["tactical_flexibility"] == 75
+
+
 def test_a_default_seat_does_not_invent_influence() -> None:
     vacant = apply_staff_influence(
         {"name": "", "use_default": True, "is_vacant": True},

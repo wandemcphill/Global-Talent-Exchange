@@ -6,6 +6,7 @@ import {
   buildLineupPayload,
   lineupRoleLabels,
   lineupFormationRows,
+  lineupSheet,
   normalizeLineupPlan,
   normalizeLineupSquad,
 } from "./lineupModel";
@@ -53,5 +54,23 @@ describe("React club lineup model", () => {
     expect(payload.formation).toBe("4-4-2");
     expect(payload.starter_player_ids).toEqual(["gk", "def-1", "mid-1", "striker"]);
     expect(payload.bench_player_ids).toEqual(["bench-1"]);
+  });
+
+  test("keeps a bought youth on the first team and an academy intake on the academy sheet", () => {
+    expect(
+      lineupSheet({ squad_status: "", is_regen: true, age: 16, minutes: 0, acquired_via: "share" }),
+    ).toBe("first_team");
+    expect(
+      lineupSheet({
+        squad_status: "",
+        is_regen: true,
+        age: 17,
+        minutes: 0,
+        acquired_via: "academy",
+      }),
+    ).toBe("academy");
+    expect(lineupSheet({ squad_status: "first_team", is_regen: true, age: 17, minutes: 0 })).toBe(
+      "first_team",
+    );
   });
 });

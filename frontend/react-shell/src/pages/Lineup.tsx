@@ -46,11 +46,13 @@ export default function Lineup() {
             is_regen: player.is_regen,
             age: player.age,
             minutes: player.minutes,
+            acquired_via: player.acquired_via,
           })),
         }),
         filedIds: (clubDetail.matchday_xi || []).map((player: any) => String(player.id)),
         filedBench: (clubDetail.matchday_bench || []).map((player: any) => String(player.id)),
-        filedFormation: clubDetail.matchday_formation || "",
+        filedFormation: clubDetail.matchday_formation || clubDetail.tactics?.formation || "",
+        tactics: clubDetail.tactics || null,
       };
     },
     enabled: Boolean(clubId),
@@ -72,7 +74,7 @@ export default function Lineup() {
     if (!rosterQuery.data || initializedClubRef.current === clubId) return;
     initializedClubRef.current = clubId || null;
     const filedIds = rosterQuery.data.filedIds || [];
-    setFormation(rosterQuery.data.filedFormation || "4-3-3");
+    setFormation(rosterQuery.data.filedFormation || rosterQuery.data.tactics?.formation || "4-2-3-1");
     setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
     setBench(rosterQuery.data.filedBench || []);
   }, [clubId, rosterQuery.data]);
@@ -84,29 +86,23 @@ export default function Lineup() {
     if (playerId) setBench((current) => current.filter((id) => id !== playerId));
   };
 
-  const autoFillLineup = () => {
-    const isKeeper = (player: LineupPlayer) =>
-      /(^|[^a-z])(gk|goalkeeper|keeper)([^a-z]|$)/i.test(player.position || "");
-    const keepers = firstTeam
-      .filter(isKeeper)
-      .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
-    const goalkeeper = keepers[0];
-    const outfield = firstTeam
-      .filter((player) => !isKeeper(player))
-      .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
-    const next = [
-      goalkeeper?.player_id || "",
-      ...outfield.slice(0, 10).map((player) => player.player_id),
-    ];
-    setStarters([...next, ...Array(11).fill("")].slice(0, 11));
-    const selected = new Set(next.filter(Boolean));
-    setBench((current) => current.filter((id) => !selected.has(id)));
-    if (!goalkeeper) {
-      toast.warning(
-        "No goalkeeper was identified in this roster. Select the goalkeeper position manually.",
+  const autoFillLineup = async () => {
+    if (!clubId) return;
+    try {
+      const { data } = await api.get(
+        "/owner/clubs/" + encodeURIComponent(clubId) + "/matchday-selection",
       );
-    } else {
-      toast.success("Best available XI selected by rating, with a goalkeeper in goal.");
+      const ids = (data?.starting_xi_ids || []).map((id: any) => String(id));
+      const benchIds = (data?.bench_ids || []).map((id: any) => String(id));
+      if (data?.formation) setFormation(String(data.formation));
+      setStarters([...ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
+      setBench(benchIds);
+      toast.success(
+        data?.verdict_reason ||
+          `${data?.selected_by_manager_name || "The manager"} filed this eleven.`,
+      );
+    } catch (error) {
+      toast.error(errMsg(error));
     }
   };
 
@@ -379,7 +375,7 @@ export default function Lineup() {
                 disabled={players.length === 0}
                 data-testid="auto-fill-lineup-button"
               >
-                <Users className="mr-2 h-4 w-4" /> Auto-fill XI
+                <Users className="mr-2 h-4 w-4" /> Use the manager's XI
               </Btn>
               <Btn
                 onClick={saveLineup}
@@ -402,10 +398,24 @@ export default function Lineup() {
         testid="lineup-manager-panel"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="max-w-2xl text-sm leading-6 text-slate-400">
-            Choose a manager whose tactical style fits the selected formation. React's manager
-            hiring and management actions are available from the Squad room.
-          </p>
+          <div className="max-w-2xl text-sm leading-6 text-slate-300" data-testid="lineup-manager-tactics">
+            <p className="font-semibold text-white">
+              {rosterQuery.data?.tactics?.manager_name || "No manager appointed"}
+              {rosterQuery.data?.tactics?.formation
+                ? ` · ${rosterQuery.data.tactics.formation}`
+                : ""}
+            </p>
+            <p className="text-slate-400">
+              {rosterQuery.data?.tactics?.tactical_flexibility != null
+                ? `Tactical flexibility ${rosterQuery.data.tactics.tactical_flexibility}. `
+                : ""}
+              {rosterQuery.data?.tactics?.tactical_match_bonus != null
+                ? `That adds ${rosterQuery.data.tactics.tactical_match_bonus} to the match. `
+                : ""}
+              The match plays this manager's shape unless their flexibility covers another one.
+              Saving asks them to accept the eleven.
+            </p>
+          </div>
           <Link
             to="/app/squad"
             className="gx-btn gx-btn-secondary inline-flex shrink-0 items-center"

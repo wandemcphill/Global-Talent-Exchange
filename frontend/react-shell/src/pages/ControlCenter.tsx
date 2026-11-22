@@ -711,7 +711,7 @@ export function ControlCenter() {
         </div>
         <div className="lg:col-span-4">
           <TacticalPitch25D
-            formation={clubDetail?.matchday_formation || undefined}
+            formation={clubDetail?.tactics?.formation || clubDetail?.matchday_formation || undefined}
             players={firstTeamPitch}
             onSelectPlayer={() => navigate("/app/squad")}
           />
@@ -758,6 +758,17 @@ export function ControlCenter() {
             <p className="text-xs text-slate-400 line-clamp-2">
               <b className="text-slate-300">Agenda:</b> {exec.agenda}
             </p>
+            {exec.roleKey === "first_team_manager" && clubDetail?.tactics?.formation ? (
+              <p className="text-[11px] text-emerald-200" data-testid="dashboard-manager-tactics">
+                {clubDetail.tactics.formation}
+                {clubDetail.tactics.tactical_flexibility != null
+                  ? ` · flexibility ${clubDetail.tactics.tactical_flexibility}`
+                  : ""}
+                {clubDetail.tactics.tactical_match_bonus != null
+                  ? ` · match ${clubDetail.tactics.tactical_match_bonus > 0 ? "+" : ""}${clubDetail.tactics.tactical_match_bonus}`
+                  : ""}
+              </p>
+            ) : null}
           </Link>
         ))}
       </section>
