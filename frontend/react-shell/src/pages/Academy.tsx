@@ -657,6 +657,16 @@ function AcademyProspectCard({
                 {originBackstory.label}
               </span>
             )}
+            {(p.father_name || p.bloodline?.parent_name || p.lineage?.parent_name) && (
+              <span className="rounded-full bg-purple-500/20 text-purple-200 border border-purple-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
+                Son of {p.father_name || p.bloodline?.parent_name || p.lineage?.parent_name}
+              </span>
+            )}
+            {(p.nationality || t.nationality) && (
+              <span className="rounded-full bg-white/10 text-slate-200 border border-white/15 px-2 py-0.5 text-[9px] font-bold uppercase">
+                {p.nationality || t.nationality}
+              </span>
+            )}
             {p.promoted && (
               <span className="rounded-full bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
                 Senior Promoted
@@ -877,7 +887,20 @@ export default function Academy() {
   if (isLoading) return <Loading />;
   if (!club) return <Loading label="Opening your academy..." />;
 
-  const regens: any[] = club.squad.filter((p: any) => Boolean(p.is_regen));
+  const regens: any[] = club.squad.filter((p: any) => {
+    if (!p?.is_regen) return false;
+    const status = String(p.squad_status || "").toLowerCase();
+    if (
+      status === "academy" ||
+      status === "u21" ||
+      p.promoted ||
+      p.acquired_via === "academy" ||
+      p.father_name
+    ) {
+      return true;
+    }
+    return p.acquired_via !== "share";
+  });
   const facilitySource =
     typeof club.facilities?.academy === "object" && club.facilities?.academy !== null
       ? club.facilities?.academy?.level

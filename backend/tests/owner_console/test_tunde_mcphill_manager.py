@@ -7,15 +7,22 @@ def test_tunde_mcphill_is_a_locked_first_team_manager() -> None:
 
     assert coach["role"] == "first_team_manager"
     assert profile["name"] == "Tunde Mc'Phill"
+    assert profile["nation"] == "Nigeria"
+    assert profile["nationality"] == "Nigeria"
+    assert profile["country_code"] == "NG"
     assert profile["age"] == 37
     assert profile["gsi"] == 76
     assert profile["potential"] == 88
-    assert profile["tactical_preference"] == "balanced"
+    assert profile["style"] == "Gegenpressing Counter-Attack"
+    assert profile["tactical_preference"] == "pressing"
     assert profile["preferred_formation"] == "3-4-3"
-    assert profile["preferred_formations"] == ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"]
-    assert profile["tactics"] == ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"]
+    assert profile["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
+    assert profile["tactics"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "gegenpress", "counter_attack"]
     assert profile["youth_age_max"] == 26
     assert profile["uses_academy_players"] is True
     assert profile["transfer_preference"] == "youth-first"
-    assert profile["youth_development"] == 18
+    assert profile["youth_development"] == 16
+    assert profile["tactical_flexibility"] == 16
+    assert profile["influence"] == 16
+    assert profile["son_player_name"] == "Folarin Mc'Phill"
     assert "academy_promotion_bias" in profile["catalog_traits"]

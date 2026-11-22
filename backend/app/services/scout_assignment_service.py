@@ -140,19 +140,25 @@ class ScoutAssignmentService:
         floor_bps: int,
         index: int,
     ) -> ProspectBlueprint:
+        import random
+        from app.services.regen_culture_name_pools import coherent_person_name
+
         digest = sha256(f"{club_id}:{assignment_id}:{region.code}:{focus_area}:{index}".encode("utf-8")).digest()
-        first_name = _FIRST_NAMES[digest[0] % len(_FIRST_NAMES)]
-        last_name = _LAST_NAMES[digest[1] % len(_LAST_NAMES)]
+        nationality_code = region.territory_codes[digest[9] % len(region.territory_codes)]
+        display_name, _culture = coherent_person_name(
+            random.Random(int.from_bytes(digest[:8], "big")),
+            nationality_code,
+        )
         primary_position = _POSITIONS[digest[2] % len(_POSITIONS)]
         secondary_position = _SECONDARY[digest[3] % len(_SECONDARY)]
         rating_band = (
             YouthProspectRatingBand.ELITE
             if digest[4] >= 220
-            else YouthProspectRatingBand.HIGH_UPSIDE
-            if digest[4] >= 150
-            else YouthProspectRatingBand.DEVELOPMENT
-            if digest[4] >= 80
-            else YouthProspectRatingBand.FOUNDATION
+            else (
+                YouthProspectRatingBand.HIGH_UPSIDE
+                if digest[4] >= 150
+                else YouthProspectRatingBand.DEVELOPMENT if digest[4] >= 80 else YouthProspectRatingBand.FOUNDATION
+            )
         )
         confidence_bps = max(floor_bps, 6200 + (digest[5] % 2800))
         traits = (
@@ -164,9 +170,9 @@ class ScoutAssignmentService:
             focus_area.lower(),
         )
         return ProspectBlueprint(
-            display_name=f"{first_name} {last_name}",
+            display_name=display_name,
             age=14 + (digest[8] % 5),
-            nationality_code=region.territory_codes[digest[9] % len(region.territory_codes)],
+            nationality_code=nationality_code,
             region_label=region.name,
             primary_position=primary_position,
             secondary_position=secondary_position,

@@ -78,7 +78,7 @@ export default function Lineup() {
     if (!rosterQuery.data || initializedClubRef.current === clubId) return;
     initializedClubRef.current = clubId || null;
     const filedIds = rosterQuery.data.filedIds || [];
-    setFormation(rosterQuery.data.filedFormation || rosterQuery.data.tactics?.formation || "4-2-3-1");
+    setFormation(rosterQuery.data.filedFormation || rosterQuery.data.tactics?.formation || "4-3-3");
     setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
     setBench(rosterQuery.data.filedBench || []);
   }, [clubId, rosterQuery.data]);
@@ -92,11 +92,34 @@ export default function Lineup() {
 
   const autoFillLineup = async () => {
     if (!clubId) return;
+    const fallbackBestXi = () => {
+      const isKeeper = (player: LineupPlayer) =>
+        /(^|[^a-z])(gk|goalkeeper|keeper)([^a-z]|$)/i.test(player.position || "");
+      const keepers = firstTeam
+        .filter(isKeeper)
+        .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+      const goalkeeper = keepers[0];
+      const outfield = firstTeam
+        .filter((player) => !isKeeper(player))
+        .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
+      const next = [
+        goalkeeper?.player_id || "",
+        ...outfield.slice(0, 10).map((player) => player.player_id),
+      ];
+      setStarters([...next, ...Array(11).fill("")].slice(0, 11));
+      const selected = new Set(next.filter(Boolean));
+      setBench((current) => current.filter((id) => !selected.has(id)));
+      toast.success("Best available XI selected by rating, with a goalkeeper in goal.");
+    };
     try {
       const { data } = await api.get(
         "/owner/clubs/" + encodeURIComponent(clubId) + "/matchday-selection",
       );
-      const ids = (data?.starting_xi_ids || []).map((id: any) => String(id));
+      const ids = (data?.starting_xi_ids || []).map((id: any) => String(id)).filter(Boolean);
+      if (ids.length === 0) {
+        fallbackBestXi();
+        return;
+      }
       const benchIds = (data?.bench_ids || []).map((id: any) => String(id));
       if (data?.formation) setFormation(String(data.formation));
       setStarters([...ids.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
@@ -105,8 +128,8 @@ export default function Lineup() {
         data?.verdict_reason ||
           `${data?.selected_by_manager_name || "The manager"} filed this eleven.`,
       );
-    } catch (error) {
-      toast.error(errMsg(error));
+    } catch {
+      fallbackBestXi();
     }
   };
 
@@ -266,10 +289,32 @@ export default function Lineup() {
             >
               {LINEUP_FORMATIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option}
+                  {option === "4-1-2-1-2" ? "4-1-2-1-2 (Diamond 4-4-2)" : option}
                 </option>
               ))}
             </select>
+            {Array.isArray(rosterQuery.data?.tactics?.formations) &&
+            rosterQuery.data.tactics.formations.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-1.5" data-testid="manager-preferred-formations">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Manager shapes:
+                </span>
+                {rosterQuery.data.tactics.formations.map((shape: string) => (
+                  <button
+                    key={shape}
+                    type="button"
+                    onClick={() => setFormation(shape)}
+                    className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition ${
+                      formation === shape
+                        ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                        : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-emerald-400/50 hover:text-white"
+                    }`}
+                  >
+                    {shape === "4-1-2-1-2" ? "4-1-2-1-2 Diamond" : shape}
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div className="rounded-xl border border-gtex-emerald/30 bg-gradient-to-b from-gtex-slate to-gtex-midnight p-5 shadow-xl">
               <div className="mb-3 flex items-center justify-between gap-3">
                 <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">
@@ -413,13 +458,28 @@ export default function Lineup() {
               {rosterQuery.data?.tactics?.formation
                 ? ` · ${rosterQuery.data.tactics.formation}`
                 : ""}
+              {rosterQuery.data?.tactics?.style
+                ? ` · ${rosterQuery.data.tactics.style}`
+                : ""}
             </p>
+            {Array.isArray(rosterQuery.data?.tactics?.formations) &&
+            rosterQuery.data.tactics.formations.length > 1 ? (
+              <p className="text-xs text-emerald-300">
+                Tactics plan: {rosterQuery.data.tactics.formations.join(" · ")}
+                {rosterQuery.data?.tactics?.pressing
+                  ? ` · ${String(rosterQuery.data.tactics.pressing).replace(/_/g, " ")}`
+                  : ""}
+              </p>
+            ) : null}
             <p className="text-slate-400">
               {rosterQuery.data?.tactics?.tactical_flexibility != null
-                ? `Tactical flexibility ${rosterQuery.data.tactics.tactical_flexibility}. `
+                ? `Tactical flexibility & influence ${rosterQuery.data.tactics.tactical_flexibility}. `
+                : ""}
+              {rosterQuery.data?.tactics?.youth_development != null
+                ? `Youth rating ${rosterQuery.data.tactics.youth_development}. `
                 : ""}
               {rosterQuery.data?.tactics?.tactical_match_bonus != null
-                ? `That adds ${rosterQuery.data.tactics.tactical_match_bonus} to the match. `
+                ? `That adds +${rosterQuery.data.tactics.tactical_match_bonus} to the match. `
                 : ""}
               The match plays this manager's shape unless their flexibility covers another one.
               Saving asks them to accept the eleven.

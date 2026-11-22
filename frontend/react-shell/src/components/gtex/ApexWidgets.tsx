@@ -418,6 +418,122 @@ const PITCH_SLOTS = [
   { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
 ] as const;
 
+type PitchSlotDef = {
+  x: number;
+  y: number;
+  role: string;
+  bucket: "GK" | "DEF" | "MID" | "FWD";
+  shirt: number;
+};
+
+const FORMATION_PITCH_SLOTS: Record<string, readonly PitchSlotDef[]> = {
+  "4-3-3": PITCH_SLOTS,
+  "3-4-3": [
+    { x: 50, y: 16, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 22, y: 24, role: "LW", bucket: "FWD", shirt: 11 },
+    { x: 78, y: 24, role: "RW", bucket: "FWD", shirt: 7 },
+    { x: 16, y: 48, role: "LM", bucket: "MID", shirt: 3 },
+    { x: 38, y: 52, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 62, y: 52, role: "CM", bucket: "MID", shirt: 6 },
+    { x: 84, y: 48, role: "RM", bucket: "MID", shirt: 2 },
+    { x: 26, y: 75, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 50, y: 77, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 74, y: 75, role: "CB", bucket: "DEF", shirt: 15 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "3-4-1-2": [
+    { x: 36, y: 16, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 64, y: 16, role: "ST", bucket: "FWD", shirt: 11 },
+    { x: 50, y: 34, role: "AM", bucket: "MID", shirt: 10 },
+    { x: 16, y: 50, role: "LM", bucket: "MID", shirt: 3 },
+    { x: 38, y: 54, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 62, y: 54, role: "CM", bucket: "MID", shirt: 6 },
+    { x: 84, y: 50, role: "RM", bucket: "MID", shirt: 2 },
+    { x: 26, y: 75, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 50, y: 77, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 74, y: 75, role: "CB", bucket: "DEF", shirt: 15 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "3-4-2-1": [
+    { x: 50, y: 15, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 34, y: 31, role: "AM", bucket: "MID", shirt: 10 },
+    { x: 66, y: 31, role: "AM", bucket: "MID", shirt: 7 },
+    { x: 16, y: 50, role: "LM", bucket: "MID", shirt: 3 },
+    { x: 38, y: 54, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 62, y: 54, role: "CM", bucket: "MID", shirt: 6 },
+    { x: 84, y: 50, role: "RM", bucket: "MID", shirt: 2 },
+    { x: 26, y: 75, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 50, y: 77, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 74, y: 75, role: "CB", bucket: "DEF", shirt: 15 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "4-1-2-1-2": [
+    { x: 36, y: 16, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 64, y: 16, role: "ST", bucket: "FWD", shirt: 11 },
+    { x: 50, y: 32, role: "AM", bucket: "MID", shirt: 10 },
+    { x: 28, y: 47, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 72, y: 47, role: "CM", bucket: "MID", shirt: 7 },
+    { x: 50, y: 60, role: "DM", bucket: "MID", shirt: 6 },
+    { x: 16, y: 74, role: "LB", bucket: "DEF", shirt: 3 },
+    { x: 38, y: 76, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 62, y: 76, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 84, y: 74, role: "RB", bucket: "DEF", shirt: 2 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "4-2-3-1": [
+    { x: 50, y: 15, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 22, y: 32, role: "LW", bucket: "FWD", shirt: 11 },
+    { x: 50, y: 34, role: "CAM", bucket: "MID", shirt: 10 },
+    { x: 78, y: 32, role: "RW", bucket: "FWD", shirt: 7 },
+    { x: 36, y: 54, role: "DM", bucket: "MID", shirt: 8 },
+    { x: 64, y: 54, role: "DM", bucket: "MID", shirt: 6 },
+    { x: 16, y: 74, role: "LB", bucket: "DEF", shirt: 3 },
+    { x: 38, y: 76, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 62, y: 76, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 84, y: 74, role: "RB", bucket: "DEF", shirt: 2 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "4-4-2": [
+    { x: 36, y: 17, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 64, y: 17, role: "ST", bucket: "FWD", shirt: 10 },
+    { x: 16, y: 46, role: "LM", bucket: "MID", shirt: 11 },
+    { x: 38, y: 50, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 62, y: 50, role: "CM", bucket: "MID", shirt: 6 },
+    { x: 84, y: 46, role: "RM", bucket: "MID", shirt: 7 },
+    { x: 16, y: 74, role: "LB", bucket: "DEF", shirt: 3 },
+    { x: 38, y: 76, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 62, y: 76, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 84, y: 74, role: "RB", bucket: "DEF", shirt: 2 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "3-5-2": [
+    { x: 36, y: 17, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 64, y: 17, role: "ST", bucket: "FWD", shirt: 10 },
+    { x: 14, y: 46, role: "LM", bucket: "MID", shirt: 11 },
+    { x: 34, y: 50, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 50, y: 44, role: "CAM", bucket: "MID", shirt: 6 },
+    { x: 66, y: 50, role: "CM", bucket: "MID", shirt: 14 },
+    { x: 86, y: 46, role: "RM", bucket: "MID", shirt: 7 },
+    { x: 26, y: 75, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 50, y: 77, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 74, y: 75, role: "CB", bucket: "DEF", shirt: 3 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+  "5-3-2": [
+    { x: 36, y: 17, role: "ST", bucket: "FWD", shirt: 9 },
+    { x: 64, y: 17, role: "ST", bucket: "FWD", shirt: 10 },
+    { x: 28, y: 48, role: "CM", bucket: "MID", shirt: 8 },
+    { x: 50, y: 45, role: "CM", bucket: "MID", shirt: 6 },
+    { x: 72, y: 48, role: "CM", bucket: "MID", shirt: 7 },
+    { x: 12, y: 72, role: "LWB", bucket: "DEF", shirt: 3 },
+    { x: 31, y: 76, role: "CB", bucket: "DEF", shirt: 5 },
+    { x: 50, y: 78, role: "CB", bucket: "DEF", shirt: 4 },
+    { x: 69, y: 76, role: "CB", bucket: "DEF", shirt: 15 },
+    { x: 88, y: 72, role: "RWB", bucket: "DEF", shirt: 2 },
+    { x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 },
+  ],
+};
+
 function pitchBucket(position?: string): "GK" | "DEF" | "MID" | "FWD" {
   const raw = String(position || "").toUpperCase();
   if (/(GK|GOAL|KEEPER)/.test(raw)) return "GK";
@@ -426,8 +542,16 @@ function pitchBucket(position?: string): "GK" | "DEF" | "MID" | "FWD" {
   return "MID";
 }
 
-export function placeFirstTeamOnPitch(players: TacticalPitchPlayer[] = []) {
-  const slots = PITCH_SLOTS.map((slot) => ({ ...slot, player: undefined as TacticalPitchPlayer | undefined }));
+export function placeFirstTeamOnPitch(
+  players: TacticalPitchPlayer[] = [],
+  formation?: string,
+) {
+  const slotTemplate =
+    (formation && FORMATION_PITCH_SLOTS[formation]) || PITCH_SLOTS;
+  const slots = slotTemplate.map((slot) => ({
+    ...slot,
+    player: undefined as TacticalPitchPlayer | undefined,
+  }));
   const unplaced = [...players];
   for (const player of unplaced) {
     const bucket = pitchBucket(player.position);
@@ -471,7 +595,10 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
   onSelectPlayer,
 }) => {
   const formationLabel = tacticalFormationLabel(formation);
-  const nodes = useMemo(() => placeFirstTeamOnPitch(players), [players]);
+  const nodes = useMemo(
+    () => placeFirstTeamOnPitch(players, formationLabel || undefined),
+    [players, formationLabel],
+  );
 
   return (
     <div className="gx-panel overflow-hidden">

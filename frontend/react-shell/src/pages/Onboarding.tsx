@@ -1772,10 +1772,16 @@ function AcademyStep({
                           posLabel,
                           foot,
                           heightLabel,
+                          player.nationality,
                         ]
                           .filter(Boolean)
                           .join(" · ")}
                       </p>
+                      {(player.father_name || player.bloodline?.parent_name) && (
+                        <p className="text-[10px] font-semibold text-amber-300">
+                          Son of {player.father_name || player.bloodline?.parent_name}
+                        </p>
+                      )}
                     </div>
                     <div className="text-right">
                       <p className="gx-mono text-lg font-black leading-none text-white">

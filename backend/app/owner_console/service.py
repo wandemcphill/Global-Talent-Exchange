@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import flag_modified
 
 from app.models.club_profile import ClubProfile
 from app.models.user import PublicAccountType, User
@@ -588,6 +589,25 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "positions": pers.get("positions"),
         "secondary_positions": pers.get("secondary_positions"),
         "age": p.age,
+        "nationality": (
+            pers.get("nationality")
+            or pers.get("nation")
+            or (
+                "Nigeria"
+                if str(pers.get("naming_culture") or "").lower() in {"yoruba", "igbo", "hausa"}
+                or str(pers.get("country_code") or "").upper() == "NG"
+                else None
+            )
+        ),
+        "country_code": (
+            pers.get("country_code")
+            or ("NG" if str(pers.get("naming_culture") or "").lower() in {"yoruba", "igbo", "hausa"} else None)
+        ),
+        "father_name": pers.get("father_name"),
+        "father_manager_id": pers.get("father_manager_id"),
+        "father_role": pers.get("father_role"),
+        "bloodline": pers.get("bloodline"),
+        "lineage": pers.get("lineage"),
         "height_cm": pers.get("height_cm"),
         "preferred_foot": pers.get("preferred_foot") or pers.get("dominant_foot"),
         "dominant_foot": pers.get("dominant_foot") or pers.get("preferred_foot"),
@@ -622,13 +642,13 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "contract_willing": mood_profile["contract_willing"],
         "contract_cost_fan_coin": mood_profile["contract_cost_fan_coin"],
         "contract_summary": mood_profile["contract_summary"],
-        "inner_monologue": inner_monologue,
+        "inner_monologue": pers.get("inner_monologue") or inner_monologue,
         "decision_factors": decision_factors,
         "readiness_score": readiness_score,
         "hoyd_verdict": hoyd_verdict,
         "manager_approved": manager_approved,
         "readiness_assessment": readiness_assessment,
-        "origin_backstory": None,
+        "origin_backstory": pers.get("origin_backstory"),
         "super_agent": (
             {
                 "name": "Apex Power-Broker Representation" if ambition >= 15 else "Meridian Football Advisory",
@@ -3340,14 +3360,10 @@ def resolve_item(session: Session, user_id: str, item_id: str, action: str) -> O
                 promoted=bool(traits.get("promoted_to_first_team") or player.squad_status == "first_team"),
             )
             if not mood_info["contract_willing"]:
-                raise HTTPException(
-                    status_code=409,
-                    detail={
-                        "code": "player_unsettled_contract_refused",
-                        "message": mood_info["contract_summary"],
-                        "mood_state": mood_info["mood_state"],
-                        "morale": mood_info["morale"],
-                    },
+                raise OwnerError(
+                    "player_unsettled_contract_refused",
+                    409,
+                    mood_info["contract_summary"],
                 )
             contract_cost = int(mood_info["contract_cost_fan_coin"])
             club_fan_balance = ledger.balance(

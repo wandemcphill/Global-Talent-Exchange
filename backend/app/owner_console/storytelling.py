@@ -478,8 +478,6 @@ def prefetch_squad_portrait_urls(session: Session | None, players: list[OwnerSqu
 
 
 def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
-    import urllib.parse
-
     cache: dict[str, str] = session.info.setdefault("_portrait_url_cache", {}) if session is not None else {}
     if player_id in cache:
         return cache[player_id]

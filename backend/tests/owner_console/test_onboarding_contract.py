@@ -21,8 +21,11 @@ def test_a_hired_rating_becomes_the_role_skill() -> None:
         {"name": "Tunde Mc'Phill", "rating": 76, "is_appointed": True},
         "first_team_manager",
     )
-    assert manager["tactical_flexibility"] == 15
-    assert manager["youth_development"] == 13
+    assert manager["tactical_flexibility"] == 16
+    assert manager["youth_development"] == 16
+    assert manager["influence"] == 16
+    assert manager["preferred_formation"] == "3-4-3"
+    assert manager["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
 
     general = apply_staff_influence(
         {"name": "Mats Kofi Silva", "rating": 91, "is_appointed": True},
@@ -51,9 +54,14 @@ def test_manager_tactics_use_the_same_bonus_as_the_match() -> None:
     from app.owner_console.engine import manager_tactics
 
     tactics = manager_tactics({"name": "Tunde Mc'Phill", "rating": 76, "manager_id": "tunde"})
-    assert tactics["formation"] == "4-2-3-1"
-    assert tactics["tactical_flexibility"] == 15
-    assert tactics["tactical_match_bonus"] == 6.0
+    assert tactics["formation"] == "3-4-3"
+    assert tactics["formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
+    assert tactics["tactical_flexibility"] == 16
+    assert tactics["youth_development"] == 16
+    assert tactics["influence"] == 16
+    assert tactics["tactical_match_bonus"] == 6.4
+    assert tactics["style"] == "Gegenpressing Counter-Attack"
+    assert tactics["son_player_name"] == "Folarin Mc'Phill"
 
 
 def test_a_staff_skill_is_scaled_onto_the_personality_range() -> None:

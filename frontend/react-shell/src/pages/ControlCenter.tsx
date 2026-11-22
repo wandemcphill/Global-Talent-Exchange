@@ -446,7 +446,12 @@ export function ControlCenter() {
     const status = String(player.squad_status || "first_team").toLowerCase();
     return status === "first_team" || status === "senior";
   });
-  const pitchLead = placeFirstTeamOnPitch(firstTeamPitch).find((slot) => slot.player);
+  const activePitchPlayers = filedXi.length > 0 ? filedXi : firstTeamPitch;
+  const activeFormation =
+    clubDetail?.tactics?.formation || clubDetail?.matchday_formation || undefined;
+  const pitchLead = placeFirstTeamOnPitch(activePitchPlayers, activeFormation).find(
+    (slot) => slot.player,
+  );
   const seat = (person: any) => Boolean(person?.name);
   const executives = [
     {
@@ -711,8 +716,8 @@ export function ControlCenter() {
         </div>
         <div className="lg:col-span-4">
           <TacticalPitch25D
-            formation={clubDetail?.tactics?.formation || clubDetail?.matchday_formation || undefined}
-            players={firstTeamPitch}
+            formation={activeFormation}
+            players={activePitchPlayers}
             onSelectPlayer={() => navigate("/app/squad")}
           />
         </div>
@@ -761,8 +766,16 @@ export function ControlCenter() {
             {exec.roleKey === "first_team_manager" && clubDetail?.tactics?.formation ? (
               <p className="text-[11px] text-emerald-200" data-testid="dashboard-manager-tactics">
                 {clubDetail.tactics.formation}
+                {Array.isArray(clubDetail.tactics.formations) &&
+                clubDetail.tactics.formations.length > 1
+                  ? ` (${clubDetail.tactics.formations.join(" · ")})`
+                  : ""}
+                {clubDetail.tactics.style ? ` · ${clubDetail.tactics.style}` : ""}
                 {clubDetail.tactics.tactical_flexibility != null
                   ? ` · flexibility ${clubDetail.tactics.tactical_flexibility}`
+                  : ""}
+                {clubDetail.tactics.youth_development != null
+                  ? ` · youth ${clubDetail.tactics.youth_development}`
                   : ""}
                 {clubDetail.tactics.tactical_match_bonus != null
                   ? ` · match ${clubDetail.tactics.tactical_match_bonus > 0 ? "+" : ""}${clubDetail.tactics.tactical_match_bonus}`

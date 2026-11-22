@@ -29,8 +29,8 @@ from app.services.ads.schemas import MatchAdPlacementView
 
 def _validate_formation_string(formation: str, *, allowed_outfield_totals: tuple[int, ...] = (10,)) -> str:
     chunks = formation.split("-")
-    if len(chunks) not in {3, 4}:
-        raise ValueError("Formation must use 3 or 4 lines, for example '4-3-3' or '4-2-3-1'")
+    if len(chunks) not in {3, 4, 5}:
+        raise ValueError("Formation must use 3 to 5 lines, for example '4-3-3', '4-2-3-1', or '4-1-2-1-2'")
     try:
         numbers = tuple(int(chunk) for chunk in chunks)
     except ValueError as exc:

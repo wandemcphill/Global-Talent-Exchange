@@ -224,9 +224,9 @@ ELITE_ACTIVE_MANAGERS: list[dict[str, Any]] = [
     },
     {
         "name": "Tunde Mc'Phill",
-        "mentality": "balanced",
+        "mentality": "pressing",
         "keep_tactics": True,
-        "tactics": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
+        "tactics": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "gegenpress", "counter_attack"],
         "traits": [
             "develops_young_players",
             "academy_promotion_bias",
@@ -234,10 +234,11 @@ ELITE_ACTIVE_MANAGERS: list[dict[str, Any]] = [
             "balanced_substitution",
         ],
         "philosophy": (
-            "Tunde Mc'Phill, 37, coaches in the balanced USSR and Yugoslav school. "
-            "He rotates 3-4-3, 4-3-3, a 4-1-2-1-2 diamond, 3-5-2, and 3-6-1, all on a balanced mentality: "
-            "fluid interchange, a packed midfield, and wing-backs who join without leaving the block. "
-            "He selects players under 26 and builds the side from academy graduates. GSI 76, potential 88."
+            "Tunde Mc'Phill, 37, Nigerian tactician who coaches high-voltage gegenpressing and counter-attacking football. "
+            "He rotates 3-4-3, 3-4-1-2, 3-4-2-1, and a 4-1-2-1-2 diamond (4-4-2 diamond): "
+            "aggressive counter-pressing traps, rapid vertical transitions, and relentless front-three movement. "
+            "Father of academy striker Folarin Mc'Phill. He selects players under 26 and builds the side from academy graduates. "
+            "Youth rating & tactical influence 16. GSI 76, potential 88."
         ),
         "rarity": "popular",
         "club_associations": ["Nigeria"],

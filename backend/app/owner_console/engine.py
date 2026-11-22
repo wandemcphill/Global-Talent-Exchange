@@ -19,47 +19,47 @@ logger = logging.getLogger(__name__)
 
 
 FIRST_NAMES = [
-    "Chidi",
+    "Adewale",
+    "Babatunde",
+    "Damilola",
+    "Oluwaseun",
+    "Ayodeji",
     "Tunde",
-    "Emeka",
-    "Ayo",
-    "Ifeanyi",
+    "Kehinde",
+    "Taiwo",
+    "Olamide",
     "Segun",
-    "Kelechi",
-    "Musa",
-    "Bayo",
-    "Obinna",
     "Femi",
-    "Uche",
-    "Dayo",
-    "Sani",
-    "Kunle",
-    "Nnamdi",
+    "Gbenga",
     "Tobi",
-    "Yusuf",
-    "Ade",
-    "Ikenna",
+    "Dayo",
+    "Bayo",
+    "Ademola",
+    "Kayode",
+    "Wale",
+    "Opeyemi",
+    "Folarin",
 ]
 
 LAST_NAMES = [
-    "Okafor",
-    "Adeyemi",
-    "Balogun",
-    "Eze",
-    "Ibrahim",
-    "Okonkwo",
     "Adebayo",
-    "Nwosu",
-    "Lawal",
-    "Obi",
-    "Akinola",
-    "Uzor",
-    "Bello",
-    "Chukwu",
-    "Afolabi",
-    "Danjuma",
-    "Oyelaran",
     "Ogunleye",
+    "Adeyemi",
+    "Okunola",
+    "Afolabi",
+    "Balogun",
+    "Ogundipe",
+    "Adeniyi",
+    "Oyelaran",
+    "Akinola",
+    "Olawale",
+    "Ajayi",
+    "Oladipo",
+    "Adekunle",
+    "Ogunbiyi",
+    "Ojo",
+    "Alabi",
+    "Fashola",
 ]
 
 POSITIONS = ["goalkeeper", "defender", "defender", "midfielder", "midfielder", "forward"]
@@ -275,15 +275,20 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "role_label": "First-Team Manager",
         "name": "Tunde Mc'Phill",
         "nation": "Nigeria",
+        "nationality": "Nigeria",
+        "country_code": "NG",
         "age": 37,
         "gender": "male",
-        "style": "Collective Fluid Balance",
-        "mentality": "balanced",
+        "style": "Gegenpressing Counter-Attack",
+        "mentality": "pressing",
+        "pressing": "gegenpress",
         "temperament": "pragmatic",
         "ambition": 15,
         "loyalty": 16,
-        "youth_development": 18,
-        "tactical_flexibility": 17,
+        "youth_development": 16,
+        "tactical_flexibility": 16,
+        "tactical_quality": 16,
+        "influence": 16,
         "negotiation": 12,
         "commercial_acumen": 10,
         "scouting_accuracy": 14,
@@ -300,21 +305,26 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "rarity": "established",
         "profile_locked": True,
         "preferred_formation": "3-4-3",
-        "preferred_formations": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
-        "tactics": ["3-4-3", "4-3-3", "4-1-2-1-2", "3-5-2", "3-6-1"],
+        "preferred_formations": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"],
+        "tactics": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "gegenpress", "counter_attack"],
         "traits": ["develops_young_players", "academy_promotion_bias", "tactical_flexibility", "balanced_substitution"],
         "youth_age_max": 26,
         "uses_academy_players": True,
+        "son_player_id": "0ad4570a-0c6c-448b-ae08-3584be3d1ef0",
+        "son_player_name": "Folarin Mc'Phill",
+        "family_relationship": "Father of academy striker Folarin Mc'Phill (Nigeria)",
         "bio": (
-            "Tunde Mc'Phill, 37, coaches in the balanced USSR and Yugoslav school. "
-            "He rotates 3-4-3, 4-3-3, a 4-1-2-1-2 diamond, 3-5-2, and 3-6-1, all on a balanced mentality: "
-            "fluid interchange, a packed midfield, and wing-backs who join without leaving the block. "
-            "He selects players under 26 and builds the side from academy graduates. GSI 76, potential 88."
+            "Tunde Mc'Phill, 37, Nigerian tactician who coaches high-voltage gegenpressing and counter-attacking football. "
+            "He rotates 3-4-3, 3-4-1-2, 3-4-2-1, and a 4-1-2-1-2 diamond (4-4-2 diamond): "
+            "aggressive counter-pressing traps, rapid vertical transitions, and relentless front-three movement. "
+            "Father of academy striker Folarin Mc'Phill. He selects players under 26 and builds the side from academy graduates. "
+            "Youth rating & tactical influence 16. GSI 76, potential 88."
         ),
         "philosophy_summary": (
-            "Balanced collective shapes in the USSR and Yugoslav school. " "Players under 26, academy graduates first."
+            "Gegenpressing counter-attacking football across 3-4-3, 3-4-1-2, 3-4-2-1, and 4-1-2-1-2 diamond. "
+            "Father of academy striker Folarin Mc'Phill. Players under 26, academy graduates first."
         ),
-        "specialty": "Youth Collective Shape",
+        "specialty": "Gegenpressing Counter-Attack & Youth Pathway",
     },
     {
         "id": "mgr_marcelo_vance",
@@ -673,6 +683,23 @@ def _filled_skill(value: Any) -> int | None:
     return max(1, min(20, skill))
 
 
+def _locked_catalog_staff(record: dict[str, Any], role_key: str) -> dict[str, Any] | None:
+    rec_ids = {
+        str(record.get(k) or "").strip().lower()
+        for k in ("id", "staff_id", "manager_id")
+        if str(record.get(k) or "").strip()
+    }
+    rec_name = str(record.get("name") or record.get("display_name") or "").strip().lower()
+    for item in EXECUTIVE_STAFF_CATALOG:
+        if not item.get("profile_locked") or item.get("role") != role_key:
+            continue
+        item_id = str(item.get("id") or "").strip().lower()
+        item_name = str(item.get("name") or "").strip().lower()
+        if (item_id and item_id in rec_ids) or (rec_name and rec_name == item_name):
+            return item
+    return None
+
+
 def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[str, Any]:
     """Attach a hired person's strength to the skill that role actually changes.
 
@@ -687,6 +714,37 @@ def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[
     name = str(record.get("name") or record.get("display_name") or "").strip()
     if not name or name.lower() == "default":
         return record
+    locked = _locked_catalog_staff(record, role_key)
+    if locked:
+        for key in (
+            "preferred_formation",
+            "preferred_formations",
+            "tactics",
+            "traits",
+            "style",
+            "mentality",
+            "pressing",
+            "philosophy_summary",
+            "bio",
+            "specialty",
+            "nation",
+            "nationality",
+            "country_code",
+            "youth_development",
+            "tactical_flexibility",
+            "tactical_quality",
+            "influence",
+            "uses_academy_players",
+            "youth_age_max",
+            "son_player_id",
+            "son_player_name",
+            "family_relationship",
+            "profile_locked",
+        ):
+            if locked.get(key) is not None:
+                record[key] = list(locked[key]) if isinstance(locked[key], list) else locked[key]
+        if not record.get("manager_id") and locked.get("id"):
+            record["manager_id"] = locked["id"]
     rating_raw = record.get("rating")
     if rating_raw is None:
         rating_raw = record.get("gsi")
@@ -707,10 +765,12 @@ def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[
         tactical = (
             _filled_skill(record.get("tactical_flexibility"))
             or _filled_skill(record.get("tactical_quality"))
+            or _filled_skill(record.get("influence"))
             or derived
         )
         record["tactical_flexibility"] = tactical
         record["tactical_quality"] = _filled_skill(record.get("tactical_quality")) or tactical
+        record["influence"] = _filled_skill(record.get("influence")) or tactical
         traits = record.get("traits") or record.get("catalog_traits") or []
         trait_names = {str(item).strip().lower() for item in traits} if isinstance(traits, list) else set()
         record["youth_development"] = _filled_skill(record.get("youth_development")) or (
@@ -909,14 +969,14 @@ def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] |
         }
     profile = dict(record.get("personality_profile") or {})
     formations = [
-        str(item) for item in (profile.get("preferred_formations") or record.get("preferred_formations") or []) if item
+        str(item) for item in (record.get("preferred_formations") or profile.get("preferred_formations") or []) if item
     ]
     if not formations and record.get("preferred_formation"):
         formations = [str(record["preferred_formation"])]
     mentality = str(
-        profile.get("preferred_tactical_philosophy")
-        or record.get("tactical_preference")
+        record.get("tactical_preference")
         or record.get("mentality")
+        or profile.get("preferred_tactical_philosophy")
         or ""
     )
     if not formations:
@@ -924,7 +984,7 @@ def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] |
         if any(word in text for word in ("defend", "low_block", "compact", "cautious")):
             formations = ["5-4-1", "5-3-2", "4-4-2"]
         elif any(word in text for word in ("attack", "press", "gegen", "wing")):
-            formations = ["4-3-3", "4-2-3-1", "3-4-3"]
+            formations = ["3-4-3", "4-3-3", "4-2-3-1"]
         else:
             formations = ["4-2-3-1", "4-3-3", "4-4-2"]
     manager_id = str(record.get("manager_id") or record.get("id") or "")
@@ -936,15 +996,23 @@ def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] |
         "formation": stored if ratified else formations[0],
         "formations": formations,
         "mentality": mentality or str(setup.get("mentality") or ""),
+        "style": record.get("style"),
+        "philosophy_summary": record.get("philosophy_summary") or record.get("philosophy"),
         "tactical_flexibility": record.get("tactical_flexibility"),
         "tactical_quality": record.get("tactical_quality"),
+        "youth_development": record.get("youth_development"),
+        "influence": record.get("influence") or record.get("tactical_flexibility"),
         "tactical_match_bonus": effects["tactical_match_bonus"],
-        "pressing": setup.get("pressing"),
+        "pressing": setup.get("pressing") or record.get("pressing"),
+        "nation": record.get("nation") or record.get("nationality"),
+        "son_player_id": record.get("son_player_id"),
+        "son_player_name": record.get("son_player_name"),
+        "family_relationship": record.get("family_relationship"),
     }
 
 
 def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
-
+    snapshot = apply_staff_influence(dict(snapshot or {}), "first_team_manager")
     manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "")
     name = str(snapshot.get("display_name") or snapshot.get("name") or "").strip()
     profile: dict[str, Any] = {
@@ -977,6 +1045,8 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
         "transfer_preference",
         "tactical_quality",
         "tactical_flexibility",
+        "influence",
+        "pressing",
         "mood",
         "rating",
         "age",
@@ -985,7 +1055,12 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
         "preferred_formation",
         "youth_age_max",
         "nation",
+        "nationality",
+        "country_code",
         "style",
+        "son_player_id",
+        "son_player_name",
+        "family_relationship",
     ):
         if snapshot.get(key) is not None:
             profile[key] = snapshot[key]

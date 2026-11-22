@@ -130,10 +130,18 @@ function ManagerSheet({ club }: any) {
   const tactics = club.tactics || {};
   const tacticalVision =
     m.tactics_stat ?? tactics.tactical_flexibility ?? m.tactical_flexibility ?? m.tactical_quality;
-  const youthDev = m.youth_dev ?? m.youth_development;
+  const youthDev = m.youth_dev ?? tactics.youth_development ?? m.youth_development;
   const styleLabel =
-    m.tactical_preference || tactics.mentality || m.mentality || m.style || "Balanced";
-  const philosophyText = m.philosophy_summary || m.philosophy;
+    tactics.style || m.style || m.tactical_preference || tactics.mentality || m.mentality || "Balanced";
+  const philosophyText = tactics.philosophy_summary || m.philosophy_summary || m.philosophy;
+  const nationLabel = m.nationality || m.nation || tactics.nation;
+  const sonName = m.son_player_name || tactics.son_player_name;
+  const familyRel = m.family_relationship || tactics.family_relationship;
+  const formationPlan = Array.isArray(tactics.formations)
+    ? tactics.formations
+    : Array.isArray(m.preferred_formations)
+      ? m.preferred_formations
+      : [];
   const refresh = useRefreshOwner();
   const fire = async () => {
     if (
@@ -177,10 +185,15 @@ function ManagerSheet({ club }: any) {
       </div>
       <div className="mb-5 flex flex-wrap gap-2">
         {tactics.formation && <Chip tone="emerald">Shape: {tactics.formation}</Chip>}
+        {formationPlan.length > 1 && (
+          <Chip tone="emerald">Plan: {formationPlan.join(" · ")}</Chip>
+        )}
         {tactics.tactical_match_bonus != null && (
           <Chip tone="cyan">Match +{tactics.tactical_match_bonus}</Chip>
         )}
         {styleLabel && <Chip tone="cyan">{styleLabel}</Chip>}
+        {nationLabel && <Chip tone="gold">{nationLabel}</Chip>}
+        {sonName && <Chip tone="purple">Father of {sonName}</Chip>}
         {m.temperament && <Chip tone="gold">Temperament: {m.temperament}</Chip>}
         {m.rarity && <Chip tone="purple">{m.rarity}</Chip>}
       </div>
@@ -190,6 +203,9 @@ function ManagerSheet({ club }: any) {
         <TraitBar label="Youth Development" value={youthDev} />
         <TraitBar label="Player Loyalty" value={m.loyalty} />
       </div>
+      {familyRel ? (
+        <p className="mt-3 text-xs font-semibold text-amber-200">{familyRel}</p>
+      ) : null}
       {philosophyText ? (
         <p className="mt-4 text-xs italic text-slate-400">"{philosophyText}"</p>
       ) : null}
@@ -1322,7 +1338,14 @@ export default function Squad() {
     ...club,
     squad: players.filter((player: any) => sheetOf(player) === "first_team"),
   };
-  const pitchLead = placeFirstTeamOnPitch(firstTeamClub.squad).find((slot) => slot.player);
+  const activeFormation = club.tactics?.formation || club.matchday_formation || undefined;
+  const activePitchPlayers =
+    Array.isArray(club.matchday_xi) && club.matchday_xi.length > 0
+      ? club.matchday_xi
+      : firstTeamClub.squad;
+  const pitchLead = placeFirstTeamOnPitch(activePitchPlayers, activeFormation).find(
+    (slot) => slot.player,
+  );
   const placeOnSheet = async (player: any, target: SquadSheet) => {
     setMovingId(String(player.id));
     try {
@@ -1502,8 +1525,8 @@ export default function Squad() {
           <div className="grid gap-6 lg:grid-cols-12">
             <div className="lg:col-span-8">
               <TacticalPitch25D
-                formation={club.tactics?.formation || club.matchday_formation || undefined}
-                players={firstTeamClub.squad || []}
+                formation={activeFormation}
+                players={activePitchPlayers}
                 onSelectPlayer={setSelectedPlayer}
               />
             </div>

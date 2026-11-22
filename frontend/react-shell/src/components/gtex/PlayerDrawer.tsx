@@ -149,6 +149,19 @@ function RegenDossier({ playerId, fallbackPlayer }: { playerId: string; fallback
           {fallbackPlayer.mood_state && fallbackPlayer.mood_state !== "Not filed" && (
             <Chip tone="gold">Mood: {fallbackPlayer.mood_state}</Chip>
           )}
+          {(fallbackPlayer.nationality || pers.nationality) && (
+            <Chip tone="gold">{fallbackPlayer.nationality || pers.nationality}</Chip>
+          )}
+          {(fallbackPlayer.father_name ||
+            fallbackPlayer.bloodline?.parent_name ||
+            pers.father_name) && (
+            <Chip tone="purple">
+              Son of{" "}
+              {fallbackPlayer.father_name ||
+                fallbackPlayer.bloodline?.parent_name ||
+                pers.father_name}
+            </Chip>
+          )}
           {heightCm && <Chip>{heightCm} cm</Chip>}
         </div>
         <p className="text-sm font-semibold text-amber-200" data-testid="drawer-foot">

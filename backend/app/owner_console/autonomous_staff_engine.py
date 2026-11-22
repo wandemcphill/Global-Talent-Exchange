@@ -576,6 +576,17 @@ def derive_manager_personality(manager_data: dict[str, Any]) -> dict[str, Any]:
 
     if isinstance(manager_data.get("preferred_formations"), list) and manager_data["preferred_formations"]:
         profile["preferred_formations"] = list(manager_data["preferred_formations"])
+    if "youth_development" in manager_data and isinstance(manager_data["youth_development"], (int, float)):
+        yd_pct = _personality_score("youth_development", manager_data["youth_development"])
+        profile.setdefault("youth_development_commitment", yd_pct)
+        profile.setdefault("trust_in_young_players", yd_pct)
+        profile.setdefault("willingness_to_promote_academy", yd_pct)
+    if not profile.get("preferred_tactical_philosophy"):
+        style_text = str(manager_data.get("style") or manager_data.get("mentality") or "").strip().lower()
+        if "gegen" in style_text or "press" in style_text:
+            profile["preferred_tactical_philosophy"] = "gegenpressing_counter_attack"
+            profile.setdefault("pressing_philosophy", 90)
+            profile.setdefault("attacking_vs_defensive", 80)
 
     staff_id = manager_data.get("id") or manager_data.get("manager_id")
     if staff_id:
@@ -695,6 +706,12 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
         }
         mgr_profile = {}
     else:
+        from app.owner_console import engine as _engine
+
+        before_mgr = dict(manager)
+        manager = _engine.apply_staff_influence(manager, "first_team_manager")
+        if manager != before_mgr:
+            mutated = True
         if not manager.get("id") and not manager.get("manager_id"):
             manager["id"] = f"mgr_{_stable_hash_int(str(manager.get('name') or state.club_id)) % 900000 + 100000}"
             mutated = True
@@ -707,7 +724,7 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
         manager["is_vacant"] = False
         manager["is_appointed"] = True
         mgr_profile = derive_manager_personality(manager)
-        if manager.get("personality_profile") != mgr_profile:
+        if manager.get("personality_profile") != mgr_profile or mutated:
             manager["personality_profile"] = mgr_profile
             state.manager_json = manager
             flag_modified(state, "manager_json")
