@@ -20,18 +20,20 @@ def staff_dialogue_should_run() -> bool:
     raw = os.getenv("OPENAI_ENABLED", "").strip().lower()
     if raw in _FALSE:
         return False
-    if os.getenv("GTEX_ENABLE_LIVE_LLM_COMMS", "0").strip() == "1":
-        return True
-    if raw not in _TRUE:
+    comms_raw = os.getenv("GTEX_ENABLE_LIVE_LLM_COMMS", "").strip().lower()
+    if comms_raw in _FALSE:
         return False
+    if comms_raw in _TRUE:
+        return True
     try:
         from app.ai_gateway.repository import load_effective_config
 
-        feature = load_effective_config().feature("staff_dialogue")
+        cfg = load_effective_config()
+        feature = cfg.feature("staff_dialogue")
+        return bool(cfg.effective_enabled and feature and feature.enabled)
     except Exception:
         logger.warning("ai_gateway.staff_feature_lookup_failed")
-        return False
-    return bool(feature and feature.enabled)
+        return True
 
 
 def route_legacy_openai_text(

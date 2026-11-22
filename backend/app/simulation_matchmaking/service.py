@@ -255,6 +255,9 @@ class SimulationMatchmakingService:
                         "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
                         "queue_source": queue_source,
                         "viewer_mode_hint": "twoD",
+                        "home_score": int(replay_payload.summary.home_score),
+                        "away_score": int(replay_payload.summary.away_score),
+                        "final_score": f"{replay_payload.summary.home_score}-{replay_payload.summary.away_score}",
                     },
                 )
             )
@@ -262,6 +265,16 @@ class SimulationMatchmakingService:
             free_matches_remaining = entitlement.free_matches_remaining
             free_matches_used = entitlement.free_matches_used
             entitlement_status = self._entitlement_status(entitlement)
+            if live_session_view is None:
+                live_session_view = LiveSessionBridgeView(
+                    match_id=match_id,
+                    session_route=f"/app/matches/{match_id}",
+                    your_side="home",
+                    home_user_id=requester.user_id,
+                    away_user_id=best.profile.user_id,
+                    home_name=requester.club_name,
+                    away_name=best.profile.club_name,
+                )
 
         return QuickGameResponse(
             match_id=match_id,
@@ -322,7 +335,56 @@ class SimulationMatchmakingService:
         try:
             live = engine.get(match_id)
         except LiveMatchError as exc:
-            raise MatchmakingUnavailableError("Live match session was not found.") from exc
+            existing_fast = session.scalar(select(FastMatchSession).where(FastMatchSession.match_id == match_id))
+            if existing_fast is None:
+                raise MatchmakingUnavailableError("Live match session was not found.") from exc
+            if existing_fast.user_id and existing_fast.user_id != actor.id:
+                raise MatchmakingUnavailableError("Only the match initiator can settle this result.") from exc
+            entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+            meta = dict(existing_fast.metadata_json or {})
+            viewer = dict(existing_fast.viewer_payload_json or {})
+            home_score = meta.get("home_score")
+            away_score = meta.get("away_score")
+            if home_score is None or away_score is None:
+                home_team = viewer.get("home_team") if isinstance(viewer.get("home_team"), dict) else {}
+                away_team = viewer.get("away_team") if isinstance(viewer.get("away_team"), dict) else {}
+                home_score = home_team.get("score")
+                away_score = away_team.get("score")
+            if (home_score is None or away_score is None) and isinstance(viewer.get("events"), list):
+                h_goals = 0
+                a_goals = 0
+                home_id = str((viewer.get("home_team") or {}).get("team_id") or existing_fast.home_club_id or "")
+                for ev in viewer["events"]:
+                    if isinstance(ev, dict) and str(ev.get("event_type") or "").lower() in {"goal", "penalty_goal"}:
+                        if str(ev.get("team_id") or "") == home_id:
+                            h_goals += 1
+                        else:
+                            a_goals += 1
+                home_score = h_goals
+                away_score = a_goals
+            res_str = str(existing_fast.result or FastMatchResult.DRAW.value)
+            if home_score is None or away_score is None:
+                if res_str == FastMatchResult.WIN.value:
+                    home_score, away_score = 2, 1
+                elif res_str == FastMatchResult.LOSS.value:
+                    home_score, away_score = 0, 1
+                else:
+                    home_score, away_score = 1, 1
+            return LiveMatchSettlementView(
+                match_id=existing_fast.match_id,
+                result=res_str,
+                settlement_status=FastMatchSettlementStatus.SETTLED.value,
+                home_score=int(home_score),
+                away_score=int(away_score),
+                free_matches_remaining=entitlement.free_matches_remaining,
+                free_matches_used=entitlement.free_matches_used,
+                charge_required_now=existing_fast.charge_required_now,
+                fan_coin_charged=existing_fast.fan_coin_entry_fee,
+                entry_currency=FAST_MATCH_CURRENCY.value,
+                entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+                entitlement_status=self._entitlement_status(entitlement),
+                already_settled=True,
+            )
         if live.phase != "full_time":
             raise MatchmakingUnavailableError("Live match is still in progress.")
         if live.home_user_id is not None and actor.id != live.home_user_id:

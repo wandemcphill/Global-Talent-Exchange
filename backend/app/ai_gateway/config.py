@@ -135,12 +135,15 @@ class AiRuntimeConfig:
 
 
 def central_api_key() -> str:
-    return (os.getenv("OPENAI_API_KEY") or os.getenv("GTEX_AI_API_KEY") or "").strip()
+    return (
+        os.getenv("OPENAI_API_KEY") or os.getenv("GTEX_AI_API_KEY") or os.getenv("GTE_OPENAI_API_KEY") or ""
+    ).strip()
 
 
 def from_env() -> AiRuntimeConfig:
     errors: list[str] = []
-    environment_enabled, enabled_error = _bool_env("OPENAI_ENABLED", False)
+    has_api_key = bool(central_api_key())
+    environment_enabled, enabled_error = _bool_env("OPENAI_ENABLED", has_api_key)
     if enabled_error:
         errors.append(enabled_error)
     route_legacy, route_error = _bool_env("OPENAI_ROUTE_LEGACY_CLIENTS", False)
@@ -175,12 +178,14 @@ def from_env() -> AiRuntimeConfig:
     if monthly_budget < daily_budget:
         errors.append("OPENAI_MONTHLY_BUDGET_USD must be at least the daily budget")
     features = {key: value for key, value in DEFAULT_FEATURES.items()}
-    if os.getenv("GTEX_ENABLE_LIVE_LLM_COMMS", "0").strip() == "1":
+    llm_comms_raw = os.getenv("GTEX_ENABLE_LIVE_LLM_COMMS", "").strip().lower()
+    if llm_comms_raw in _TRUE or (has_api_key and environment_enabled and llm_comms_raw not in _FALSE):
         features["staff_dialogue"] = replace(features["staff_dialogue"], enabled=True)
+        features["reporter_polish"] = replace(features["reporter_polish"], enabled=True)
     return AiRuntimeConfig(
         environment_enabled=environment_enabled,
         admin_enabled=True,
-        api_key_configured=bool(central_api_key()),
+        api_key_configured=has_api_key,
         model=model,
         complex_model=complex_model,
         max_retries=max_retries,

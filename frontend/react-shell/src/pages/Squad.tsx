@@ -40,8 +40,19 @@ import {
 import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
 import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
+import { pitchPositionRank } from "./lineupModel";
 
 type SquadSheet = "first_team" | "reserve" | "academy";
+
+function sortSquadByPosition(list: any[]): any[] {
+  return [...(list || [])].sort((a, b) => {
+    const rankDiff =
+      pitchPositionRank(a?.position_display || a?.position) -
+      pitchPositionRank(b?.position_display || b?.position);
+    if (rankDiff !== 0) return rankDiff;
+    return Number(b?.rating || 0) - Number(a?.rating || 0);
+  });
+}
 
 function staffWageLabel(staff: any): string {
   let fan = 0;
@@ -92,8 +103,14 @@ function SheetMove({
   moving: boolean;
   onPlace?: (player: any, sheet: SquadSheet) => void;
 }) {
+  const { active } = useActiveClub();
+  const refresh = useRefreshOwner();
+  const [actionBusy, setActionBusy] = useState<string>("");
   if (!onPlace) return null;
+  const clubId = player?.club_id || active?.club_id;
   const here = sheetOf(player);
+  const isLoaned =
+    player?.loan_status === "loaned_out" || player?.personality?.loan_status === "loaned_out";
   const moves: SquadSheet[] = (["first_team", "reserve", "academy"] as SquadSheet[]).filter(
     (sheet) => {
       if (sheet === here) return false;
@@ -101,13 +118,83 @@ function SheetMove({
       return true;
     },
   );
+
+  const quickSell = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!clubId || !player?.id) return;
+    const estPrice = Math.max(50, Math.round(Number(player?.value_coin || 150)));
+    if (
+      !window.confirm(
+        `Sell ${player.name} now for ${fmt(estPrice)} GTX (80% net added to club cash)?`,
+      )
+    )
+      return;
+    setActionBusy("sell");
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${player.id}/sell`, {
+        mode: "instant",
+        asking_price_gtex: estPrice,
+      });
+      toast.success(
+        `Sold ${player.name} to ${data.buyer_club} for ${fmt(data.gross_gtex)} GTX (${fmt(data.net_gtex)} GTX net).`,
+      );
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setActionBusy("");
+    }
+  };
+
+  const quickLoan = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!clubId || !player?.id) return;
+    setActionBusy("loan");
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${player.id}/loan`, {
+        action: isLoaned ? "recall" : "loan_out",
+      });
+      if (isLoaned) {
+        toast.success(`Recalled ${player.name} from ${data.recalled_from}.`);
+      } else {
+        toast.success(
+          `Loaned ${player.name} to ${data.destination_club} (+${fmt(data.loan_fee_gtex)} GTX loan fee).`,
+        );
+      }
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setActionBusy("");
+    }
+  };
+
+  const quickRelease = async (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (!clubId || !player?.id) return;
+    if (!window.confirm(`Release ${player.name} from your club roster?`)) return;
+    setActionBusy("release");
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${player.id}/release`);
+      const refundNote =
+        Number(data?.refund_amount || 0) > 0 ? ` (+${fmt(data.refund_amount)} GTX refund)` : "";
+      toast.success(`Released ${player.name}${refundNote}.`);
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setActionBusy("");
+    }
+  };
+
+  const isBusy = moving || Boolean(actionBusy);
   return (
     <span className="mt-1 flex flex-wrap gap-1" data-testid={`sheet-moves-${player.id}`}>
       {moves.map((sheet) => (
         <button
           key={sheet}
           type="button"
-          disabled={moving}
+          disabled={isBusy}
           data-testid={`move-${player.id}-to-${sheet}`}
           onClick={(event) => {
             event.stopPropagation();
@@ -118,6 +205,37 @@ function SheetMove({
           {SHEET_LABEL[sheet]}
         </button>
       ))}
+      {clubId && (
+        <>
+          <button
+            type="button"
+            disabled={isBusy}
+            data-testid={`sell-${player.id}`}
+            onClick={(event) => void quickSell(event)}
+            className="rounded border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/30"
+          >
+            {actionBusy === "sell" ? "Selling…" : "Sell"}
+          </button>
+          <button
+            type="button"
+            disabled={isBusy}
+            data-testid={`loan-${player.id}`}
+            onClick={(event) => void quickLoan(event)}
+            className="rounded border border-cyan-400/40 bg-cyan-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/30"
+          >
+            {actionBusy === "loan" ? "…" : isLoaned ? "Recall" : "Loan"}
+          </button>
+          <button
+            type="button"
+            disabled={isBusy}
+            data-testid={`release-${player.id}`}
+            onClick={(event) => void quickRelease(event)}
+            className="rounded border border-rose-400/40 bg-rose-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-rose-200 hover:bg-rose-500/30"
+          >
+            {actionBusy === "release" ? "…" : "Release"}
+          </button>
+        </>
+      )}
     </span>
   );
 }
@@ -393,7 +511,67 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }:
         </div>
       ) : (
         <div className="gx-scroll max-h-[560px] overflow-auto">
-          <table className="gx-table w-full min-w-[620px]">
+          {/* Mobile-Optimized Player Cards with prominent Reserve / Academy sheet actions */}
+          <div className="space-y-2 md:hidden" data-testid="squad-mobile-list">
+            {club.squad.map((p: any) => {
+              const isTarget =
+                targetPlayerId && (p.id === targetPlayerId || p.player_id === targetPlayerId);
+              return (
+                <div
+                  key={p.id}
+                  onClick={() => onSelectPlayer && onSelectPlayer(p)}
+                  className={`rounded-xl border p-3 transition ${
+                    isTarget
+                      ? "border-emerald-400 bg-emerald-500/10"
+                      : "border-white/10 bg-slate-950/60"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {p.portrait_url ? (
+                        <img
+                          src={p.portrait_url}
+                          alt={p.name}
+                          className="h-9 w-9 shrink-0 rounded-full border border-emerald-400/60 bg-slate-900 object-cover"
+                        />
+                      ) : null}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-white">
+                          {p.name}{" "}
+                          {p.is_regen && (
+                            <span className="ml-1 rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
+                              Regen
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-400">
+                          <b className="text-emerald-300">{p.position_display || p.position}</b> ·
+                          Age {p.age} · Morale {p.morale ?? "—"}
+                          {p.mood_state && p.mood_state !== "Not filed" ? ` (${p.mood_state})` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <p className="gx-mono text-sm font-black text-white">
+                        {p.rating}
+                        <span className="text-xs text-slate-500">/{p.potential}</span>
+                      </p>
+                      <p className="gx-mono text-[11px] font-semibold text-emerald-300">
+                        {fmt(p.value_coin)}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-1 border-t border-white/10 pt-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Actions:
+                    </span>
+                    <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <table className="gx-table hidden w-full min-w-[620px] md:table">
             <thead>
               <tr>
                 <th>Player</th>
@@ -419,6 +597,12 @@ function SquadTable({ club, targetPlayerId, onSelectPlayer, onPlace, movingId }:
                     <td className="font-medium text-white">
                       {p.name} {p.is_regen && <Chip tone="emerald">Regen</Chip>}{" "}
                       {p.status === "listed" && <Chip tone="gold">Listed</Chip>}{" "}
+                      {(p.loan_status === "loaned_out" ||
+                        p.personality?.loan_status === "loaned_out") && (
+                        <Chip tone="cyan">
+                          On Loan · {p.loan_club || p.personality?.loan_club || "Partner Club"}
+                        </Chip>
+                      )}{" "}
                       {p.injured_days > 0 && <Chip tone="red">Injured</Chip>}
                       {isTarget && <Chip tone="cyan">Target Prospect</Chip>}
                       <SheetMove player={p} moving={movingId === p.id} onPlace={onPlace} />
@@ -1101,11 +1285,19 @@ function BoardroomSection({ club }: any) {
             >
               <div>
                 <div className="flex items-center justify-between">
-                  <span
-                    className={`flex size-8 items-center justify-center rounded-lg bg-white/5 ${roleDef.color}`}
-                  >
-                    <Icon size={16} />
-                  </span>
+                  {isAppointed && person?.portrait_url ? (
+                    <img
+                      src={person.portrait_url}
+                      alt={person.name || roleDef.label}
+                      className="size-8 rounded-lg bg-slate-800 object-cover"
+                    />
+                  ) : (
+                    <span
+                      className={`flex size-8 items-center justify-center rounded-lg bg-white/5 ${roleDef.color}`}
+                    >
+                      <Icon size={16} />
+                    </span>
+                  )}
                   <Chip tone={roleDef.badgeTone}>{isAppointed ? "Appointed" : "Vacant"}</Chip>
                 </div>
                 <p className="text-[10px] font-black uppercase text-slate-400 tracking-wider mt-2">
@@ -1339,7 +1531,7 @@ export default function Squad() {
     );
   }
 
-  const players = club.squad || [];
+  const players = useMemo(() => sortSquadByPosition(club.squad || []), [club.squad]);
   const counts: Record<SquadSheet, number> = {
     first_team: players.filter((player: any) => sheetOf(player) === "first_team").length,
     reserve: players.filter((player: any) => sheetOf(player) === "reserve").length,
@@ -1368,6 +1560,33 @@ export default function Squad() {
         await api.post(`/owner/clubs/${club.club_id}/squad/${player.id}/sheet`, { sheet: target });
         toast.success(`${player.name} is on the ${SHEET_LABEL[target].toLowerCase()} sheet.`);
       }
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setMovingId("");
+    }
+  };
+
+  const bulkMoveYouthToAcademy = async () => {
+    const xiIds = new Set((club.matchday_xi || []).map((p: any) => String(p.id)));
+    const youthOnFirstTeam = firstTeamClub.squad.filter(
+      (p: any) => Number(p.age || 99) <= 17 && !xiIds.has(String(p.id)),
+    );
+    if (youthOnFirstTeam.length === 0) {
+      toast.info("No U17 players outside the starting XI are on the first-team sheet.");
+      return;
+    }
+    setMovingId("bulk-youth");
+    try {
+      for (const youth of youthOnFirstTeam) {
+        await api.post(`/owner/clubs/${club.club_id}/squad/${youth.id}/sheet`, {
+          sheet: "academy",
+        });
+      }
+      toast.success(
+        `Moved ${youthOnFirstTeam.length} youth player(s) (aged ≤ 17) to the Academy sheet.`,
+      );
       await refresh();
     } catch (error) {
       toast.error(errMsg(error));
@@ -1500,6 +1719,17 @@ export default function Squad() {
             {SHEET_LABEL[key]} · {counts[key]}
           </button>
         ))}
+        {firstTeamClub.squad.some((p: any) => Number(p.age || 99) <= 17) && (
+          <button
+            type="button"
+            disabled={movingId === "bulk-youth"}
+            onClick={bulkMoveYouthToAcademy}
+            data-testid="squad-bulk-youth-to-academy"
+            className="rounded-full border border-amber-400/50 bg-amber-500/15 px-3 py-1.5 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/25"
+          >
+            {movingId === "bulk-youth" ? "Moving Youth…" : "Send U17 Players to Academy"}
+          </button>
+        )}
       </div>
 
       {/* 1. Competition Roster Registration */}
@@ -1590,6 +1820,26 @@ export default function Squad() {
         }
         player={selectedPlayer}
         onClose={() => setSelectedPlayer(null)}
+        extra={
+          selectedPlayer ? (
+            <div
+              className="rounded-sm border border-emerald-500/30 bg-emerald-950/20 p-4"
+              data-testid="drawer-sheet-move-card"
+            >
+              <p className="gx-eyebrow mb-1 text-emerald-300">Squad Sheet Assignment</p>
+              <p className="mb-2 text-xs text-slate-300">
+                Current sheet: <b className="text-white">{SHEET_LABEL[sheetOf(selectedPlayer)]}</b>
+              </p>
+              <SheetMove
+                player={selectedPlayer}
+                moving={movingId === String(selectedPlayer.id)}
+                onPlace={(p, target) => {
+                  void placeOnSheet(p, target);
+                }}
+              />
+            </div>
+          ) : null
+        }
       />
     </div>
   );

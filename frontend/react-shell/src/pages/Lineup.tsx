@@ -15,6 +15,8 @@ import {
   lineupFormationRows,
   lineupSheet,
   normalizeLineupSquad,
+  pitchPositionLine,
+  sortPlayersByPitchPosition,
   type LineupPlayer,
 } from "./lineupModel";
 
@@ -159,6 +161,12 @@ export default function Lineup() {
   const [bench, setBench] = useState<string[]>([]);
   const [benchCandidate, setBenchCandidate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [selectedSlot, setSelectedSlot] = useState<number | null>(null);
+  const [pickedPlayerId, setPickedPlayerId] = useState<string | null>(null);
+  const [dragSource, setDragSource] = useState<
+    { kind: "slot"; index: number } | { kind: "pool"; playerId: string } | null
+  >(null);
+  const [movingSheetId, setMovingSheetId] = useState<string>("");
   const initializedClubRef = useRef<string | null>(null);
   const rosterQuery = useQuery({
     queryKey: ["lineup-editor", clubId],
@@ -175,18 +183,62 @@ export default function Lineup() {
       (cachedClubQuery.data ? mapClubDetailToRoster(cachedClubQuery.data) : null),
     [rosterQuery.data, cachedClubQuery.data],
   );
-  const players: LineupPlayer[] = effectiveRoster?.squad || [];
-  const firstTeam = players.filter((player) => lineupSheet(player) === "first_team");
-  const reserve = players.filter((player) => lineupSheet(player) === "reserve");
-  const benchPool = reserve.length
-    ? reserve
-    : players.filter((player) => lineupSheet(player) === "first_team");
+  const players: LineupPlayer[] = useMemo(
+    () => sortPlayersByPitchPosition(effectiveRoster?.squad || []),
+    [effectiveRoster?.squad],
+  );
+  const firstTeam = useMemo(
+    () =>
+      sortPlayersByPitchPosition(players.filter((player) => lineupSheet(player) === "first_team")),
+    [players],
+  );
+  const reserve = useMemo(
+    () => sortPlayersByPitchPosition(players.filter((player) => lineupSheet(player) === "reserve")),
+    [players],
+  );
+  const academy = useMemo(
+    () => sortPlayersByPitchPosition(players.filter((player) => lineupSheet(player) === "academy")),
+    [players],
+  );
+  const benchPool = reserve.length ? reserve : firstTeam;
   const roles = useMemo(() => lineupRoleLabels(formation), [formation]);
   const selectedStarters = useMemo(() => new Set(starters.filter(Boolean)), [starters]);
   const selectedBench = useMemo(() => new Set(bench), [bench]);
-  const availableForBench = benchPool.filter(
-    (player) => !selectedStarters.has(player.player_id) && !selectedBench.has(player.player_id),
+  const availableForBench = useMemo(
+    () =>
+      sortPlayersByPitchPosition(
+        benchPool.filter(
+          (player) =>
+            !selectedStarters.has(player.player_id) && !selectedBench.has(player.player_id),
+        ),
+      ),
+    [benchPool, selectedStarters, selectedBench],
   );
+  const unpickedFirstTeam = useMemo(
+    () =>
+      sortPlayersByPitchPosition(
+        firstTeam.filter((player) => !selectedStarters.has(player.player_id)),
+      ),
+    [firstTeam, selectedStarters],
+  );
+  const unpickedGroups = useMemo(() => {
+    const groups: Array<{
+      key: "GK" | "DEF" | "MID" | "FWD";
+      label: string;
+      items: LineupPlayer[];
+    }> = [
+      { key: "GK", label: "Goalkeepers", items: [] },
+      { key: "DEF", label: "Defenders", items: [] },
+      { key: "MID", label: "Midfielders", items: [] },
+      { key: "FWD", label: "Attackers", items: [] },
+    ];
+    for (const player of unpickedFirstTeam) {
+      const line = pitchPositionLine(player.position);
+      const group = groups.find((g) => g.key === line) || groups[2];
+      group.items.push(player);
+    }
+    return groups;
+  }, [unpickedFirstTeam]);
 
   useEffect(() => {
     if (!effectiveRoster || initializedClubRef.current === clubId) return;
@@ -202,30 +254,129 @@ export default function Lineup() {
         ? managerFormations[0]
         : rawFormation;
     setFormation(resolvedFormation);
-    const slotOnePlayer = firstTeam.find((p) => p.player_id === filedIds[1]);
-    const needsPositionRepair =
-      filedIds.length < 11 ||
-      (slotOnePlayer && playerPositionLine(slotOnePlayer.position) === "FWD");
-    if (needsPositionRepair && firstTeam.length > 0) {
-      setStarters(slotPlayersForShape(resolvedFormation, firstTeam, filedIds));
-    } else {
-      setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
-    }
+    setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
     setBench(effectiveRoster.filedBench || []);
-  }, [clubId, effectiveRoster, firstTeam]);
+  }, [clubId, effectiveRoster]);
 
   const applyFormationChange = (nextShape: string) => {
     setFormation(nextShape);
-    if (firstTeam.length > 0) {
-      setStarters((current) => slotPlayersForShape(nextShape, firstTeam, current.filter(Boolean)));
-    }
   };
 
   const setStarter = (index: number, playerId: string) => {
     setStarters((current) =>
-      current.map((currentId, slot) => (slot === index ? playerId : currentId)),
+      current.map((currentId, slot) => {
+        if (slot === index) return playerId;
+        if (playerId && currentId === playerId) return current[index] || "";
+        return currentId;
+      }),
     );
     if (playerId) setBench((current) => current.filter((id) => id !== playerId));
+  };
+
+  const swapStarterSlots = (slotA: number, slotB: number) => {
+    if (slotA === slotB) return;
+    setStarters((current) => {
+      const next = [...current];
+      const temp = next[slotA] || "";
+      next[slotA] = next[slotB] || "";
+      next[slotB] = temp;
+      return next;
+    });
+  };
+
+  const handlePitchSlotTap = (slotIndex: number) => {
+    if (pickedPlayerId) {
+      setStarter(slotIndex, pickedPlayerId);
+      setPickedPlayerId(null);
+      setSelectedSlot(null);
+      return;
+    }
+    if (selectedSlot === null) {
+      setSelectedSlot(slotIndex);
+      return;
+    }
+    if (selectedSlot === slotIndex) {
+      setSelectedSlot(null);
+      return;
+    }
+    swapStarterSlots(selectedSlot, slotIndex);
+    setSelectedSlot(null);
+  };
+
+  const handlePoolPlayerTap = (playerId: string) => {
+    if (selectedSlot !== null) {
+      setStarter(selectedSlot, playerId);
+      setSelectedSlot(null);
+      setPickedPlayerId(null);
+      return;
+    }
+    if (pickedPlayerId === playerId) {
+      setPickedPlayerId(null);
+      return;
+    }
+    const emptyIndex = starters.findIndex((id) => !id);
+    if (emptyIndex >= 0) {
+      setStarter(emptyIndex, playerId);
+      setPickedPlayerId(null);
+      return;
+    }
+    setPickedPlayerId(playerId);
+  };
+
+  const movePlayerToSheet = async (
+    player: LineupPlayer,
+    targetSheet: "first_team" | "reserve" | "academy",
+  ) => {
+    if (!clubId) return;
+    setMovingSheetId(player.player_id);
+    try {
+      await api.post(
+        `/owner/clubs/${encodeURIComponent(clubId)}/squad/${encodeURIComponent(player.player_id)}/sheet`,
+        { sheet: targetSheet },
+      );
+      setStarters((current) => current.map((id) => (id === player.player_id ? "" : id)));
+      setBench((current) => current.filter((id) => id !== player.player_id));
+      toast.success(
+        `${player.player_name} moved to the ${targetSheet === "academy" ? "Academy" : targetSheet === "reserve" ? "Reserve" : "First-Team"} sheet.`,
+      );
+      await Promise.all([
+        rosterQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: ["owner", "club", clubId] }),
+      ]);
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setMovingSheetId("");
+    }
+  };
+
+  const autoMoveYouthToAcademy = async () => {
+    if (!clubId) return;
+    const youthCandidates = unpickedFirstTeam.filter((p) => Number(p.age || 99) <= 17);
+    if (youthCandidates.length === 0) {
+      toast.info("No unpicked U17 players found on the first-team sheet.");
+      return;
+    }
+    setMovingSheetId("bulk-youth");
+    try {
+      for (const youth of youthCandidates) {
+        await api.post(
+          `/owner/clubs/${encodeURIComponent(clubId)}/squad/${encodeURIComponent(youth.player_id)}/sheet`,
+          { sheet: "academy" },
+        );
+      }
+      toast.success(
+        `Moved ${youthCandidates.length} youth player(s) (aged ≤ 17) to the Academy sheet.`,
+      );
+      await Promise.all([
+        rosterQuery.refetch(),
+        queryClient.invalidateQueries({ queryKey: ["owner", "club", clubId] }),
+      ]);
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setMovingSheetId("");
+    }
   };
 
   const autoFillLineup = async () => {
@@ -456,39 +607,99 @@ export default function Lineup() {
                 ))}
               </div>
             ) : null}
-            <div className="rounded-xl border border-gtex-emerald/30 bg-gradient-to-b from-gtex-slate to-gtex-midnight p-5 shadow-xl">
-              <div className="mb-3 flex items-center justify-between gap-3">
-                <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">
-                  Tactical pitch
-                </span>
-                <Chip tone="emerald">{formation}</Chip>
+            <div className="rounded-xl border border-gtex-emerald/30 bg-gradient-to-b from-gtex-slate to-gtex-midnight p-3 sm:p-5 shadow-xl">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-emerald-200">
+                    Tactical pitch · Tap or drag players to move
+                  </span>
+                  {selectedSlot !== null && (
+                    <p className="text-[11px] font-semibold text-amber-300">
+                      Slot #{selectedSlot + 1} ({roles[selectedSlot]}) selected — tap another pitch
+                      position to swap, or tap an unpicked player below to assign.
+                    </p>
+                  )}
+                  {pickedPlayerId && (
+                    <p className="text-[11px] font-semibold text-cyan-300">
+                      Player picked — tap any position on the tactical board to place them.
+                    </p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {(selectedSlot !== null || pickedPlayerId) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSlot(null);
+                        setPickedPlayerId(null);
+                      }}
+                      className="rounded-full border border-amber-400/50 bg-amber-500/15 px-2.5 py-0.5 text-[10px] font-bold text-amber-200"
+                    >
+                      Clear selection
+                    </button>
+                  )}
+                  <Chip tone="emerald">{formation}</Chip>
+                </div>
               </div>
-              <div className="relative overflow-hidden rounded-xl border border-gtex-emerald/40 bg-emerald-950/60 px-4 py-5 shadow-inner">
+              <div
+                className="relative overflow-hidden rounded-xl border border-gtex-emerald/40 bg-emerald-950/60 px-2 py-4 sm:px-4 sm:py-5 shadow-inner"
+                data-testid="interactive-tactical-pitch"
+              >
                 <div className="pointer-events-none absolute inset-2 border border-white/15" />
                 <div className="pointer-events-none absolute left-1/2 top-2 bottom-2 w-px bg-white/15" />
                 <div className="pointer-events-none absolute left-1/2 top-1/2 h-16 w-16 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/15" />
                 <div className="relative flex flex-col items-center gap-2">
                   {lineupFormationRows(formation).map((row, lineIndex) => (
-                    <div key={lineIndex} className="flex w-full flex-wrap justify-center gap-2">
+                    <div
+                      key={lineIndex}
+                      className="flex w-full flex-nowrap items-stretch justify-center gap-1 sm:gap-2"
+                    >
                       {row.map((slotIndex) => {
                         const role = roles[slotIndex] || "Player";
                         const player = players.find(
                           (item) => item.player_id === starters[slotIndex],
                         );
+                        const isSelected = selectedSlot === slotIndex;
+                        const isDropTarget = Boolean(pickedPlayerId || dragSource);
                         return (
-                          <div
+                          <button
                             key={slotIndex}
-                            className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md"
+                            type="button"
+                            draggable={Boolean(player)}
+                            onDragStart={() => setDragSource({ kind: "slot", index: slotIndex })}
+                            onDragEnd={() => setDragSource(null)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              if (!dragSource) return;
+                              if (dragSource.kind === "slot") {
+                                swapStarterSlots(dragSource.index, slotIndex);
+                              } else if (dragSource.kind === "pool") {
+                                setStarter(slotIndex, dragSource.playerId);
+                              }
+                              setDragSource(null);
+                              setSelectedSlot(null);
+                              setPickedPlayerId(null);
+                            }}
+                            onClick={() => handlePitchSlotTap(slotIndex)}
+                            data-testid={`pitch-slot-${slotIndex}`}
+                            className={`flex min-w-0 max-w-[118px] flex-1 cursor-grab flex-col items-center rounded-xl border px-1.5 py-1.5 sm:px-2.5 sm:py-2 text-center shadow-md transition active:scale-95 ${
+                              isSelected
+                                ? "border-amber-300 bg-amber-500/20 ring-2 ring-amber-300/60"
+                                : isDropTarget
+                                  ? "border-emerald-400/70 bg-gtex-midnight/95 hover:border-amber-300"
+                                  : "border-white/20 bg-gtex-midnight/90 hover:border-emerald-400/70"
+                            }`}
                           >
                             <div className="relative mb-1 flex items-center justify-center">
                               {player?.portrait_url ? (
                                 <img
                                   src={player.portrait_url}
                                   alt={player.player_name}
-                                  className="h-10 w-10 rounded-full border-2 border-emerald-400/70 bg-slate-900 object-cover shadow-md"
+                                  className="h-8 w-8 sm:h-10 sm:w-10 rounded-full border-2 border-emerald-400/70 bg-slate-900 object-cover shadow-md"
                                 />
                               ) : (
-                                <KitBakedMark size={28} />
+                                <KitBakedMark size={26} />
                               )}
                               <span className="absolute -bottom-1 -right-2 rounded-full border border-emerald-400/60 bg-slate-950 px-1.5 py-0.2 text-[9px] font-black text-emerald-200 shadow">
                                 {player
@@ -498,24 +709,162 @@ export default function Lineup() {
                                   : slotIndex + 1}
                               </span>
                             </div>
-                            <span className="mt-0.5 w-full truncate text-[10px] font-semibold text-white">
+                            <span className="mt-0.5 w-full truncate text-[9px] sm:text-[10px] font-semibold text-white">
                               {player?.player_name || role}
                             </span>
-                            <span className="w-full truncate text-[9px] text-slate-400">
+                            <span className="w-full truncate text-[8px] sm:text-[9px] text-slate-400">
                               {player?.position
                                 ? `${role} · ${player.position.split("/")[0].trim()}`
                                 : role}
                             </span>
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
                   ))}
                 </div>
               </div>
-              <div className="mt-3 flex items-center justify-between text-xs text-slate-400">
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
                 <span>{starters.filter(Boolean).length} of 11 starting positions filled</span>
-                <span>{firstTeam.length} on the first-team sheet</span>
+                <span>
+                  {firstTeam.length} First Team · {reserve.length} Reserve · {academy.length}{" "}
+                  Academy
+                </span>
+              </div>
+              {/* Quick Mobile & Desktop Save / Manager XI Bar right under the Pitch */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
+                <Btn
+                  onClick={saveLineup}
+                  disabled={saving || players.length === 0}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving lineup…" : "Save lineup"}
+                </Btn>
+                <Btn
+                  variant="secondary"
+                  onClick={autoFillLineup}
+                  disabled={players.length === 0}
+                  className="flex-1 sm:flex-none"
+                >
+                  <Users className="mr-1.5 h-4 w-4" /> Use the manager's XI
+                </Btn>
+              </div>
+            </div>
+
+            {/* Position-Sorted Unpicked Players Pool (GK -> DEF -> MID -> FWD) with Drag/Tap & Reserve/Academy Move */}
+            <div
+              className="rounded-xl border border-white/10 bg-gtex-slate/70 p-4 space-y-3"
+              data-testid="unpicked-players-pool"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-wider text-emerald-300">
+                    Unpicked Players ({unpickedFirstTeam.length}) · Sorted GK → DEF → MID → FWD
+                  </p>
+                  <p className="text-[11px] text-slate-400">
+                    Tap or drag any player onto the tactical board, or move excess / youth players
+                    to Reserve or Academy.
+                  </p>
+                </div>
+                {unpickedFirstTeam.some((p) => Number(p.age || 99) <= 17) && (
+                  <button
+                    type="button"
+                    disabled={movingSheetId === "bulk-youth"}
+                    onClick={autoMoveYouthToAcademy}
+                    data-testid="auto-move-youth-academy-btn"
+                    className="rounded-lg border border-emerald-400/50 bg-emerald-500/15 px-2.5 py-1 text-[10px] font-black uppercase text-emerald-200 hover:bg-emerald-500/25"
+                  >
+                    {movingSheetId === "bulk-youth"
+                      ? "Moving Youth…"
+                      : "Send U17 Players to Academy"}
+                  </button>
+                )}
+              </div>
+
+              <div className="gx-scroll max-h-[340px] space-y-3 overflow-y-auto pr-1">
+                {unpickedGroups.map((group) =>
+                  group.items.length > 0 ? (
+                    <div key={group.key} className="space-y-1.5">
+                      <p className="text-[10px] font-black uppercase tracking-widest text-amber-300/90">
+                        {group.label} ({group.items.length})
+                      </p>
+                      <div className="grid gap-1.5 sm:grid-cols-2">
+                        {group.items.map((player) => {
+                          const isPicked = pickedPlayerId === player.player_id;
+                          const canMoveToAcademy = Number(player.age || 99) <= 21;
+                          return (
+                            <div
+                              key={player.player_id}
+                              draggable
+                              onDragStart={() =>
+                                setDragSource({ kind: "pool", playerId: player.player_id })
+                              }
+                              onDragEnd={() => setDragSource(null)}
+                              data-testid={`unpicked-player-${player.player_id}`}
+                              className={`flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-xs transition ${
+                                isPicked
+                                  ? "border-cyan-400 bg-cyan-500/20"
+                                  : "border-white/10 bg-slate-950/70 hover:border-emerald-400/50"
+                              }`}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => handlePoolPlayerTap(player.player_id)}
+                                className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                              >
+                                {player.portrait_url ? (
+                                  <img
+                                    src={player.portrait_url}
+                                    alt={player.player_name}
+                                    className="h-7 w-7 shrink-0 rounded-full border border-emerald-400/50 bg-slate-900 object-cover"
+                                  />
+                                ) : (
+                                  <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[10px] font-bold text-emerald-300">
+                                    {player.position?.split("/")[0]?.trim() || "P"}
+                                  </span>
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <p className="truncate font-semibold text-white">
+                                    {player.player_name}
+                                  </p>
+                                  <p className="truncate text-[10px] text-slate-400">
+                                    <span className="font-bold text-emerald-300">
+                                      {player.position?.split("/")[0]?.trim() || "POS"}
+                                    </span>
+                                    {player.rating ? ` · ${Math.round(player.rating)} OVR` : ""}
+                                    {player.age ? ` · Age ${player.age}` : ""}
+                                  </p>
+                                </div>
+                              </button>
+                              <div className="flex shrink-0 items-center gap-1">
+                                <button
+                                  type="button"
+                                  disabled={movingSheetId === player.player_id}
+                                  onClick={() => movePlayerToSheet(player, "reserve")}
+                                  title="Move to Reserve sheet"
+                                  className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 text-[9px] font-bold uppercase text-slate-300 hover:border-amber-400/50 hover:text-amber-200"
+                                >
+                                  Reserve
+                                </button>
+                                {canMoveToAcademy && (
+                                  <button
+                                    type="button"
+                                    disabled={movingSheetId === player.player_id}
+                                    onClick={() => movePlayerToSheet(player, "academy")}
+                                    title="Move to Youth Academy sheet (Age ≤ 21)"
+                                    className="rounded border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-bold uppercase text-emerald-200 hover:bg-emerald-500/25"
+                                  >
+                                    Academy
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ) : null,
+                )}
               </div>
             </div>
             <div className="flex items-start gap-2 rounded-xl border border-gtex-graphite bg-gtex-slate/80 p-4 text-xs leading-5 text-slate-300">

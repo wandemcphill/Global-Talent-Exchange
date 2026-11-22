@@ -413,10 +413,23 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       toast.error("Select an active club before entering matchmaking.");
       return;
     }
-    const prestige = activeClub.prestige ?? activeClub.health?.prestige;
-    const squadOvr = activeClub.squad_ovr ?? activeClub.health?.squad_ovr;
-    const depth = activeClub.squad_depth ?? activeClub.health?.squad_depth;
-    const region = activeClub.region || user?.region;
+    const prestige = activeClub.prestige ?? activeClub.health?.prestige ?? 45;
+    const squadOvr = activeClub.squad_ovr ?? activeClub.health?.squad_ovr ?? 75;
+    const rawDepth = activeClub.squad_depth ?? activeClub.health?.squad_depth;
+    const depth =
+      typeof rawDepth === "number"
+        ? rawDepth
+        : rawDepth === "deep"
+          ? 90
+          : rawDepth === "healthy"
+            ? 75
+            : 60;
+    const region =
+      activeClub.region ||
+      activeClub.country_code ||
+      activeClub.continent_code ||
+      user?.region ||
+      "AF-WEST";
     const filedProfile =
       prestige != null && squadOvr != null && typeof depth === "number" && Boolean(region);
     setBusy(true);
@@ -558,18 +571,20 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
               </p>
             )}
           </div>
-          <div className="flex gap-2">
-            {lastMatch.live_session?.session_route && (
+          <div className="flex flex-wrap gap-2">
+            {lastMatch.match_id && (
               <Btn
                 variant="secondary"
+                data-testid="play-quick-game-btn"
                 onClick={() => navigate(`/app/matches/${lastMatch.match_id}`)}
               >
-                Open 2D Pitch
+                <Flame size={13} /> Play & Watch Match
               </Btn>
             )}
             {!lastMatch.settlement && (
               <Btn
                 variant="gold"
+                data-testid="settle-quick-game-btn"
                 onClick={() => settleQuickGame(lastMatch.match_id)}
                 disabled={busy}
               >
@@ -709,7 +724,9 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
                   <td className="gx-mono font-bold text-amber-300">#{idx + 1}</td>
                   <td className="font-semibold text-white">{c.club_name}</td>
                   <td className="text-slate-300">{c.country || "Global"}</td>
-                  <td className="gx-mono text-emerald-300">{c.prestige == null ? "—" : c.prestige}</td>
+                  <td className="gx-mono text-emerald-300">
+                    {c.prestige == null ? "—" : c.prestige}
+                  </td>
                   <td className="gx-mono text-amber-300">{c.trophies ?? 0}</td>
                   <td>
                     {c.multi_club_group ? (

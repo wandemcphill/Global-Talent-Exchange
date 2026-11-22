@@ -4555,8 +4555,10 @@ def select_manager_matchday_lineup(
         pos = str(p.position or "")
         return pos.upper() in {"GK", "GOALKEEPER"} or pos.lower().startswith("goal")
 
-    def _player_line(p: OwnerSquadPlayer) -> str:
-        raw = str(p.position or "").strip().upper().split("/")[0].strip()
+    def _token_line(token: str) -> str | None:
+        raw = token.strip().upper()
+        if not raw:
+            return None
         if raw in {"GK", "GOALKEEPER"} or raw.startswith("GOAL"):
             return "GK"
         if raw in {"CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"} or raw.startswith("DEF") or "BACK" in raw:
@@ -4569,7 +4571,21 @@ def select_manager_matchday_lineup(
             or raw.startswith("STRIK")
         ):
             return "FWD"
-        return "MID"
+        return None
+
+    def _player_line(p: OwnerSquadPlayer) -> str:
+        first_token = str(p.position or "").strip().upper().split("/")[0].strip()
+        return _token_line(first_token) or "MID"
+
+    def _player_can_play_line(p: OwnerSquadPlayer, line: str) -> bool:
+        pers = dict(p.personality_json or {})
+        pos_str = f"{p.position or ''} / {pers.get('position_display') or ''}"
+        tokens = [tok.strip() for tok in pos_str.replace(",", "/").split("/") if tok.strip()]
+        matched = {_token_line(tok) for tok in tokens}
+        matched.discard(None)
+        if not matched:
+            return line == "MID"
+        return line in matched
 
     shape_parts = [int(x) for x in str(chosen_formation or "4-3-3").split("-") if x.isdigit()]
     if len(shape_parts) >= 3 and sum(shape_parts) == 10:
@@ -4589,67 +4605,101 @@ def select_manager_matchday_lineup(
         for p in eligible
         if (commitments.get(str(p.id)) or {}).get("matchday_role") == "starting_xi" and _sheet_name(p) != "first_team"
     ]
-    pref_first = [by_id[pid] for pid in pref_ids if pid in by_id and _sheet_name(by_id[pid]) == "first_team"]
+    committed_xi_ids = {str(p.id) for p in committed_xi}
+    pref_first: list[OwnerSquadPlayer] = []
+    pref_seen: set[str] = set()
+    for pid in pref_ids:
+        if pid in pref_seen or pid not in by_id:
+            continue
+        candidate = by_id[pid]
+        if _sheet_name(candidate) == "first_team" or pid in committed_xi_ids:
+            pref_first.append(candidate)
+            pref_seen.add(pid)
 
-    ranked_first = sorted(first_team, key=_manager_player_score, reverse=True)
-    ranked_non_academy = [
-        p for p in sorted(eligible, key=_manager_player_score, reverse=True) if _sheet_name(p) != "academy"
-    ]
-    candidate_pool: list[OwnerSquadPlayer] = []
-    pool_seen: set[str] = set()
-    for player in pref_first + committed_xi + ranked_first + ranked_non_academy:
-        pid = str(player.id)
-        if pid not in pool_seen:
-            candidate_pool.append(player)
-            pool_seen.add(pid)
+    # If the owner submitted a complete 11-player lineup and the manager accepts all 11
+    # (all 11 are eligible, on the first team or committed XI, not rejected, and include a GK),
+    # keep the owner's exact 11 players in their exact chosen slot order without reshuffling.
+    owner_full_xi_accepted = (
+        len(pref_ids) == 11
+        and len(pref_first) == 11
+        and all(str(p.id) not in rejections for p in pref_first)
+        and any(_is_gk(p) for p in pref_first)
+    )
 
-    used_ids: set[str] = set()
-
-    def _take_line(line: str, count: int) -> list[OwnerSquadPlayer]:
-        picked: list[OwnerSquadPlayer] = []
-        for player in candidate_pool:
-            if len(picked) >= count:
-                break
+    if owner_full_xi_accepted:
+        starters = list(pref_first[:11])
+    else:
+        ranked_first = sorted(first_team, key=_manager_player_score, reverse=True)
+        ranked_non_academy = [
+            p for p in sorted(eligible, key=_manager_player_score, reverse=True) if _sheet_name(p) != "academy"
+        ]
+        candidate_pool: list[OwnerSquadPlayer] = []
+        pool_seen: set[str] = set()
+        for player in pref_first + committed_xi + ranked_first + ranked_non_academy:
             pid = str(player.id)
-            if pid in used_ids:
-                continue
-            if _player_line(player) == line:
-                picked.append(player)
+            if pid not in pool_seen:
+                candidate_pool.append(player)
+                pool_seen.add(pid)
+
+        used_ids: set[str] = set()
+
+        def _take_line(line: str, count: int) -> list[OwnerSquadPlayer]:
+            picked: list[OwnerSquadPlayer] = []
+            # Pass 1: primary position matches line
+            for player in candidate_pool:
+                if len(picked) >= count:
+                    break
+                pid = str(player.id)
+                if pid in used_ids:
+                    continue
+                if _player_line(player) == line:
+                    picked.append(player)
+                    used_ids.add(pid)
+            # Pass 2: secondary position matches line
+            if len(picked) < count:
+                for player in candidate_pool:
+                    if len(picked) >= count:
+                        break
+                    pid = str(player.id)
+                    if pid in used_ids:
+                        continue
+                    if _player_can_play_line(player, line):
+                        picked.append(player)
+                        used_ids.add(pid)
+            return picked
+
+        gk_pick = _take_line("GK", 1)
+        def_picks = _take_line("DEF", def_target)
+        mid_picks = _take_line("MID", mid_target)
+        fwd_picks = _take_line("FWD", fwd_target)
+
+        def _top_up(bucket: list[OwnerSquadPlayer], target_count: int, *, allow_gk: bool = False) -> None:
+            for player in candidate_pool:
+                if len(bucket) >= target_count:
+                    break
+                pid = str(player.id)
+                if pid in used_ids:
+                    continue
+                if not allow_gk and _is_gk(player):
+                    continue
+                bucket.append(player)
                 used_ids.add(pid)
-        return picked
 
-    gk_pick = _take_line("GK", 1)
-    def_picks = _take_line("DEF", def_target)
-    mid_picks = _take_line("MID", mid_target)
-    fwd_picks = _take_line("FWD", fwd_target)
+        _top_up(gk_pick, 1, allow_gk=True)
+        _top_up(def_picks, def_target)
+        _top_up(mid_picks, mid_target)
+        _top_up(fwd_picks, fwd_target)
 
-    def _top_up(bucket: list[OwnerSquadPlayer], target_count: int, *, allow_gk: bool = False) -> None:
-        for player in candidate_pool:
-            if len(bucket) >= target_count:
-                break
-            pid = str(player.id)
-            if pid in used_ids:
-                continue
-            if not allow_gk and _is_gk(player):
-                continue
-            bucket.append(player)
-            used_ids.add(pid)
-
-    _top_up(gk_pick, 1, allow_gk=True)
-    _top_up(def_picks, def_target)
-    _top_up(mid_picks, mid_target)
-    _top_up(fwd_picks, fwd_target)
-
-    starters: list[OwnerSquadPlayer] = (gk_pick + def_picks + mid_picks + fwd_picks)[:11]
-    if len(starters) < 11:
-        for player in sorted(eligible, key=_manager_player_score, reverse=True):
-            if len(starters) >= 11:
-                break
-            if str(player.id) in used_ids or _sheet_name(player) == "academy":
-                continue
-            starters.append(player)
-            used_ids.add(str(player.id))
-    starters = starters[:11]
+        starters = (gk_pick + def_picks + mid_picks + fwd_picks)[:11]
+        if len(starters) < 11:
+            for player in sorted(eligible, key=_manager_player_score, reverse=True):
+                if len(starters) >= 11:
+                    break
+                if str(player.id) in used_ids or _sheet_name(player) == "academy":
+                    continue
+                starters.append(player)
+                used_ids.add(str(player.id))
+        starters = starters[:11]
 
     starter_ids = {p.id for p in starters}
     remaining = [p for p in sorted(eligible, key=_manager_player_score, reverse=True) if p.id not in starter_ids]

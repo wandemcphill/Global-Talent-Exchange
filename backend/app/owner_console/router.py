@@ -322,7 +322,7 @@ def onboarding(user=Depends(get_current_user), session: Session = Depends(get_se
             service.player_dict(pl, session)
             for pl in squad_rows
             if service.engine.squad_sheet(
-                squad_status=(pl.personality_json or {}).get("squad_status") if pl.is_regen else None,
+                squad_status=(pl.personality_json or {}).get("squad_status"),
                 is_regen=bool(pl.is_regen),
                 age=pl.age,
                 minutes=pl.minutes,
@@ -2097,6 +2097,17 @@ def promote_academy_player(
     return _run(session, service.academy_promote, session, user.id, club_id, player_id)
 
 
+class SellSquadPlayerRequest(BaseModel):
+    mode: Literal["instant", "list", "unlist"] = "instant"
+    asking_price_gtex: float | None = Field(default=None, ge=0)
+
+
+class LoanSquadPlayerRequest(BaseModel):
+    action: Literal["loan_out", "recall"] = "loan_out"
+    destination_club: str | None = Field(default=None, max_length=120)
+    loan_fee_gtex: float | None = Field(default=None, ge=0)
+
+
 @router.post("/clubs/{club_id}/squad/{player_id}/sheet")
 def place_squad_sheet(
     club_id: str,
@@ -2106,6 +2117,61 @@ def place_squad_sheet(
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
     return _run(session, service.place_on_squad_sheet, session, user.id, club_id, player_id, payload.sheet)
+
+
+@router.post("/clubs/{club_id}/squad/{player_id}/sell")
+def sell_squad_player_endpoint(
+    club_id: str,
+    player_id: str,
+    payload: SellSquadPlayerRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    body = payload or SellSquadPlayerRequest()
+    return _run(
+        session,
+        lambda: service.sell_squad_player(
+            session,
+            user.id,
+            club_id,
+            player_id,
+            mode=body.mode,
+            asking_price_gtex=body.asking_price_gtex,
+        ),
+    )
+
+
+@router.post("/clubs/{club_id}/squad/{player_id}/loan")
+def loan_squad_player_endpoint(
+    club_id: str,
+    player_id: str,
+    payload: LoanSquadPlayerRequest | None = None,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    body = payload or LoanSquadPlayerRequest()
+    return _run(
+        session,
+        lambda: service.loan_squad_player(
+            session,
+            user.id,
+            club_id,
+            player_id,
+            action=body.action,
+            destination_club=body.destination_club,
+            loan_fee_gtex=body.loan_fee_gtex,
+        ),
+    )
+
+
+@router.post("/clubs/{club_id}/squad/{player_id}/release")
+def release_squad_player_endpoint(
+    club_id: str,
+    player_id: str,
+    user=Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> dict[str, Any]:
+    return _run(session, service.release_squad_player, session, user.id, club_id, player_id)
 
 
 # ---------- Ecosystem Waterfall, Win Bonus & Press Conference ----------

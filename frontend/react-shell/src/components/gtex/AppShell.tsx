@@ -454,6 +454,27 @@ export default function AppShell() {
     })
     .filter((item): item is (typeof NAV)[number] => item !== null);
 
+  const mobileClubDayNav = [
+    { id: "home", label: "Today" },
+    { id: "squad", label: "Squad" },
+    { id: "lineup", label: "Lineup" },
+    { id: "staff-market", label: "Staff" },
+    { id: "academy", label: "Academy" },
+    { id: "competitions", label: "Competitions" },
+    { id: "transfers", label: "Transfers" },
+    { id: "inbox", label: "Inbox" },
+    { id: "market", label: "Market" },
+    { id: "finance", label: "Wallet" },
+    { id: "campus", label: "Campus" },
+    { id: "national", label: "National" },
+    { id: "newsroom", label: "Newsroom" },
+  ]
+    .map((item) => {
+      const found = NAV.find((entry) => entry.id === item.id);
+      return found ? { ...found, label: item.label, category: "CLUB DAY" } : null;
+    })
+    .filter((item): item is (typeof NAV)[number] => item !== null);
+
   const normalNav = hasActiveClub
     ? clubDayNav
     : isError
@@ -511,6 +532,9 @@ export default function AppShell() {
         )
       : normalNav;
 
+  const mobileNav = !isDedicatedAccount && hasActiveClub ? mobileClubDayNav : visibleNav;
+  const paletteNav = isDedicatedAccount ? visibleNav : NAV;
+
   const wallet = data?.economy?.wallet || {};
   const clubPrimary = active?.primary_color || "#00C991";
   const clubSecondary = active?.secondary_color || "#E5B63F";
@@ -524,7 +548,7 @@ export default function AppShell() {
       <CommandPaletteModal
         open={paletteOpen}
         onClose={() => setPaletteOpen(false)}
-        items={visibleNav}
+        items={paletteNav}
         onNavigate={(to) => navigate(to)}
       />
 
@@ -679,22 +703,23 @@ export default function AppShell() {
           <NavLink
             to="/app/settings/appearance"
             data-testid="topbar-appearance-studio-link"
-            className="hidden sm:inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-white"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-2.5 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-emerald-400/50 hover:text-white"
             title="Appearance Studio · Customise Skins & Views"
           >
             <Palette size={13} className="text-emerald-400" />
             <span className="hidden xl:inline">Appearance</span>
           </NavLink>
 
-          {/* Quick Jump Search Button (Ctrl+K) */}
+          {/* Quick Jump Search Button (Ctrl+K) — visible on mobile and desktop */}
           <button
             type="button"
             onClick={() => setPaletteOpen(true)}
-            className="hidden xl:inline-flex items-center gap-2 rounded-xl border border-[#25354B] bg-[#14243A]/80 px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-[#00C991]/50 hover:text-white"
+            aria-label="Quick Jump to any GTEX screen"
+            className="inline-flex items-center gap-2 rounded-xl border border-[#25354B] bg-[#14243A]/80 px-2.5 sm:px-3 py-1.5 text-xs font-semibold text-slate-300 transition hover:border-[#00C991]/50 hover:text-white"
           >
             <Search size={13} className="text-[#00C991]" />
-            <span>Quick Jump...</span>
-            <kbd className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">
+            <span className="hidden sm:inline">Quick Jump...</span>
+            <kbd className="hidden xl:inline rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-bold text-slate-300">
               Ctrl K
             </kbd>
           </button>
@@ -783,9 +808,33 @@ export default function AppShell() {
             </button>
           </div>
 
+          {/* Mobile Wallet & Club Cash Summary Strip (visible on phones where desktop pills are compact) */}
+          <div className="flex w-full flex-wrap items-center justify-between gap-2 border-t border-[#25354B]/70 pt-1.5 text-[11px] md:hidden">
+            <div className="flex flex-wrap items-center gap-2">
+              {hasActiveClub && (
+                <span className="gx-mono inline-flex items-center gap-1 rounded-lg border border-emerald-400/30 bg-[#080F1C] px-2 py-0.5 text-slate-200">
+                  <span className="text-slate-400">Club:</span>
+                  <b className="text-white">{fmt(data?.economy?.club_cash_total)}</b>
+                  <span className="text-emerald-300 font-bold">GTX</span>
+                </span>
+              )}
+              <span className="gx-mono inline-flex items-center gap-1 rounded-lg border border-[#E5B63F]/40 bg-[#080F1C] px-2 py-0.5 text-slate-200">
+                <b className="text-white">{fmt(wallet.fan_total)}</b>
+                <span className="text-[#E5B63F] font-bold">FAN</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPaletteOpen(true)}
+              className="inline-flex items-center gap-1 rounded-lg border border-[#00C991]/40 bg-[#00C991]/10 px-2 py-0.5 text-[10px] font-bold uppercase text-[#00E8A8]"
+            >
+              <Search size={11} /> All Screens
+            </button>
+          </div>
+
           {/* Responsive Mobile Navigation Rail */}
           <nav className="gx-scroll -mx-1 flex w-full gap-1.5 overflow-x-auto lg:hidden pt-2 border-t border-[#25354B]">
-            {visibleNav.map((n) => (
+            {mobileNav.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}

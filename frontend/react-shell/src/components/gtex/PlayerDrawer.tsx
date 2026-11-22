@@ -1,12 +1,208 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
-import { fmt, label } from "@/lib/owner";
+import { fmt, label, useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard, footMark, posShort, positionParts } from "@/components/gtex/PlayerCard";
+
+function ClubOwnerTransferDesk({ player, onClose }: { player: any; onClose: () => void }) {
+  const { active } = useActiveClub();
+  const refresh = useRefreshOwner();
+  const clubId = player?.club_id || active?.club_id;
+  const squadPlayerId = player?.id;
+  const defaultPrice = Math.max(
+    50,
+    Math.round(Number(player?.asking_price_gtex || player?.value_coin || 150)),
+  );
+  const [askingPrice, setAskingPrice] = useState<string>(String(defaultPrice));
+  const [loanClub, setLoanClub] = useState<string>(String(player?.loan_club || ""));
+  const [busyAction, setBusyAction] = useState<string>("");
+
+  useEffect(() => {
+    setAskingPrice(
+      String(
+        Math.max(50, Math.round(Number(player?.asking_price_gtex || player?.value_coin || 150))),
+      ),
+    );
+    setLoanClub(String(player?.loan_club || ""));
+  }, [player?.id, player?.asking_price_gtex, player?.value_coin, player?.loan_club]);
+
+  if (!clubId || !squadPlayerId) return null;
+
+  const isListed = player?.status === "listed";
+  const isLoaned =
+    player?.loan_status === "loaned_out" || player?.personality?.loan_status === "loaned_out";
+  const currentLoanClub = player?.loan_club || player?.personality?.loan_club;
+  const estLoanFee = Math.max(25, Math.round(Number(player?.value_coin || 100) * 0.15));
+
+  const handleSell = async (mode: "instant" | "list" | "unlist") => {
+    setBusyAction(mode);
+    try {
+      const priceNum = Number(askingPrice) || defaultPrice;
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${squadPlayerId}/sell`, {
+        mode,
+        asking_price_gtex: priceNum,
+      });
+      if (mode === "instant") {
+        toast.success(
+          `Sold ${player.name} to ${data.buyer_club} for ${fmt(data.gross_gtex)} GTX (${fmt(data.net_gtex)} GTX net added to club cash).`,
+        );
+        await refresh();
+        onClose();
+      } else if (mode === "list") {
+        toast.success(
+          `${player.name} transfer-listed at ${fmt(data.asking_price_gtex)} GTX · ${data.bidder} submitted an offer in your Inbox.`,
+        );
+        await refresh();
+      } else {
+        toast.success(`${player.name} removed from the transfer list.`);
+        await refresh();
+      }
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleLoan = async (action: "loan_out" | "recall") => {
+    setBusyAction(action);
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${squadPlayerId}/loan`, {
+        action,
+        destination_club: loanClub.trim() || undefined,
+      });
+      if (action === "loan_out") {
+        toast.success(
+          `Loaned ${player.name} to ${data.destination_club} (+${fmt(data.loan_fee_gtex)} GTX loan fee added to club cash).`,
+        );
+      } else {
+        toast.success(`Recalled ${player.name} from ${data.recalled_from}.`);
+      }
+      await refresh();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  const handleRelease = async () => {
+    if (
+      !window.confirm(
+        `Release ${player.name} from your squad? Market signings refund to treasury/wallet; academy and starter players enter free agency.`,
+      )
+    )
+      return;
+    setBusyAction("release");
+    try {
+      const { data } = await api.post(`/owner/clubs/${clubId}/squad/${squadPlayerId}/release`);
+      const refundNote =
+        Number(data?.refund_amount || 0) > 0
+          ? ` · Refunded ${fmt(data.refund_amount)} GTX`
+          : " · Entered free agency";
+      toast.success(`Released ${player.name}${refundNote}.`);
+      await refresh();
+      onClose();
+    } catch (error) {
+      toast.error(errMsg(error));
+    } finally {
+      setBusyAction("");
+    }
+  };
+
+  return (
+    <div
+      className="rounded-sm border border-amber-400/30 bg-amber-950/15 p-4 space-y-3"
+      data-testid="drawer-owner-transfer-desk"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="gx-eyebrow text-amber-300">Transfer & Contract Actions</p>
+        {isListed && <Chip tone="gold">Transfer Listed</Chip>}
+        {isLoaned && <Chip tone="cyan">On Loan · {currentLoanClub}</Chip>}
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            Asking / Sale Price (GTX)
+          </label>
+          <input
+            type="number"
+            min={25}
+            value={askingPrice}
+            onChange={(e) => setAskingPrice(e.target.value)}
+            data-testid="drawer-sell-price-input"
+            className="gx-input w-full py-1.5 text-xs"
+          />
+        </div>
+        <div>
+          <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">
+            Loan Destination (Optional)
+          </label>
+          <input
+            type="text"
+            placeholder="Auto-match partner club"
+            value={loanClub}
+            onChange={(e) => setLoanClub(e.target.value)}
+            data-testid="drawer-loan-club-input"
+            className="gx-input w-full py-1.5 text-xs"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          disabled={Boolean(busyAction)}
+          onClick={() => void handleSell("instant")}
+          data-testid="drawer-instant-sell-btn"
+          className="rounded border border-emerald-400/50 bg-emerald-500/20 px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-emerald-200 hover:bg-emerald-500/30 disabled:opacity-50"
+        >
+          {busyAction === "instant" ? "Selling…" : `Instant Sell (${fmt(askingPrice)} GTX)`}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busyAction)}
+          onClick={() => void handleSell(isListed ? "unlist" : "list")}
+          data-testid="drawer-transfer-list-btn"
+          className="rounded border border-amber-400/50 bg-amber-500/20 px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-amber-200 hover:bg-amber-500/30 disabled:opacity-50"
+        >
+          {busyAction === "list" || busyAction === "unlist"
+            ? "Updating…"
+            : isListed
+              ? "Remove Listing"
+              : "Transfer List"}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busyAction)}
+          onClick={() => void handleLoan(isLoaned ? "recall" : "loan_out")}
+          data-testid="drawer-loan-btn"
+          className="rounded border border-cyan-400/50 bg-cyan-500/20 px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-cyan-200 hover:bg-cyan-500/30 disabled:opacity-50"
+        >
+          {busyAction === "loan_out" || busyAction === "recall"
+            ? "Processing…"
+            : isLoaned
+              ? "Recall from Loan"
+              : `Loan Out (+${fmt(estLoanFee)} GTX)`}
+        </button>
+        <button
+          type="button"
+          disabled={Boolean(busyAction)}
+          onClick={() => void handleRelease()}
+          data-testid="drawer-release-btn"
+          className="rounded border border-rose-400/50 bg-rose-500/20 px-2.5 py-2 text-xs font-bold uppercase tracking-wide text-rose-200 hover:bg-rose-500/30 disabled:opacity-50"
+        >
+          {busyAction === "release" ? "Releasing…" : "Release Player"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function PlayerAcquisition({ playerId }: { playerId: string }) {
   const qc = useQueryClient();
@@ -80,7 +276,11 @@ function PlayerAcquisition({ playerId }: { playerId: string }) {
 }
 
 function RegenDossier({ playerId, fallbackPlayer }: { playerId: string; fallbackPlayer?: any }) {
-  const { data: m, isLoading, isError } = useQuery({
+  const {
+    data: m,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["market-player", playerId],
     queryFn: async () => (await api.get(`/market/players/${playerId}`)).data,
     retry: false,
@@ -227,11 +427,12 @@ function RegenDossier({ playerId, fallbackPlayer }: { playerId: string; fallback
   const id = m.identity || {};
   const a = m.attributes || {};
   const regenPlaystyle: string | undefined = id.playstyle || m.playstyle;
-  const regenTraits: string[] = Array.isArray(id.traits) && id.traits.length > 0
-    ? id.traits
-    : Array.isArray(id.skills) && id.skills.length > 0
-      ? id.skills
-      : [];
+  const regenTraits: string[] =
+    Array.isArray(id.traits) && id.traits.length > 0
+      ? id.traits
+      : Array.isArray(id.skills) && id.skills.length > 0
+        ? id.skills
+        : [];
   return (
     <div className="space-y-5" data-testid="drawer-regen-dossier">
       <div className="mx-auto max-w-[240px]">
@@ -382,7 +583,11 @@ export function PlayerDrawer({
           </button>
         </div>
         {isError ? (
-          <RegenDossier playerId={playerId} fallbackPlayer={player} />
+          <div className="space-y-5">
+            <RegenDossier playerId={playerId} fallbackPlayer={player} />
+            {player && <ClubOwnerTransferDesk player={player} onClose={onClose} />}
+            {extra}
+          </div>
         ) : isLoading || !p ? (
           <Loading label="Pulling the dossier" />
         ) : (
@@ -505,6 +710,7 @@ export function PlayerDrawer({
               )}
             </div>
             <PlayerAcquisition playerId={playerId} />
+            {player && <ClubOwnerTransferDesk player={player} onClose={onClose} />}
             {extra}
           </div>
         )}

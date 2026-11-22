@@ -40,11 +40,7 @@ export function lineupSheet(
   if (raw === "reserve") return "reserve";
   if (raw === "academy" || raw === "u21") return "academy";
   if (raw === "first_team" || raw === "senior") return "first_team";
-  if (
-    player.acquired_via === "academy" &&
-    player.is_regen &&
-    Number(player.age) <= 18
-  )
+  if (player.acquired_via === "academy" && player.is_regen && Number(player.age) <= 18)
     return "academy";
   return "first_team";
 }
@@ -66,10 +62,60 @@ function optionalNumber(value: unknown): number | null | undefined {
   return undefined;
 }
 
+export function pitchPositionLine(position?: string | null): "GK" | "DEF" | "MID" | "FWD" {
+  const raw = String(position || "")
+    .trim()
+    .toUpperCase()
+    .split("/")[0]
+    .trim();
+  if (raw === "GK" || raw === "GOALKEEPER" || raw.startsWith("GOAL")) return "GK";
+  if (
+    ["CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"].includes(raw) ||
+    raw.startsWith("DEF") ||
+    raw.includes("BACK")
+  ) {
+    return "DEF";
+  }
+  if (
+    ["DM", "CDM", "CM", "AM", "CAM", "LM", "RM", "MF", "MID"].includes(raw) ||
+    raw.startsWith("MID")
+  ) {
+    return "MID";
+  }
+  if (
+    ["ST", "CF", "LW", "RW", "SS", "FW", "FWD", "ATT"].includes(raw) ||
+    raw.startsWith("FORW") ||
+    raw.startsWith("STRIK")
+  ) {
+    return "FWD";
+  }
+  return "MID";
+}
+
+export function pitchPositionRank(position?: string | null): number {
+  const line = pitchPositionLine(position);
+  if (line === "GK") return 0;
+  if (line === "DEF") return 1;
+  if (line === "MID") return 2;
+  return 3;
+}
+
+export function sortPlayersByPitchPosition<
+  T extends Pick<LineupPlayer, "position" | "rating" | "player_name">,
+>(players: T[]): T[] {
+  return [...players].sort((a, b) => {
+    const rankDiff = pitchPositionRank(a.position) - pitchPositionRank(b.position);
+    if (rankDiff !== 0) return rankDiff;
+    const ratingDiff = Number(b.rating ?? 0) - Number(a.rating ?? 0);
+    if (ratingDiff !== 0) return ratingDiff;
+    return String(a.player_name || "").localeCompare(String(b.player_name || ""));
+  });
+}
+
 export function normalizeLineupSquad(payload: unknown): LineupPlayer[] {
   const root = payload && typeof payload === "object" ? (payload as any) : {};
   const items = Array.isArray(root.items) ? root.items : [];
-  return items
+  const normalized = items
     .map((raw: any) => {
       const playerId = raw?.player_id ?? raw?.playerId ?? raw?.id;
       if (playerId === undefined || playerId === null || String(playerId).trim() === "")
@@ -101,6 +147,7 @@ export function normalizeLineupSquad(payload: unknown): LineupPlayer[] {
       } as LineupPlayer;
     })
     .filter((player: LineupPlayer | null): player is LineupPlayer => player !== null);
+  return sortPlayersByPitchPosition(normalized);
 }
 
 export function normalizeLineupPlan(payload: unknown): LineupPlan {

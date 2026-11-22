@@ -334,7 +334,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
             distinct_ids.add(pid)
             if _is_goalkeeper(p.position):
                 keepers += 1
-            pers = dict(p.personality_json or {}) if p.is_regen else {}
+            pers = dict(p.personality_json or {})
             status_val = engine.squad_sheet(
                 squad_status=pers.get("squad_status"),
                 is_regen=bool(p.is_regen),
@@ -456,7 +456,7 @@ def squad(session: Session, club_id: str, include_inactive: bool = False) -> lis
 def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str, Any]:
     from app.owner_console import storytelling
 
-    pers = dict(p.personality_json or {}) if p.is_regen else {}
+    pers = dict(p.personality_json or {})
     squad_status = engine.squad_sheet(
         squad_status=pers.get("squad_status"),
         is_regen=bool(p.is_regen),
@@ -567,16 +567,9 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
             f"Unsettled ({p.morale}/100). I won't commit to a new contract until my role and morale improve."
         )
 
-    needs_portrait = (
-        session is not None
-        and p.is_regen
-        and (
-            not storytelling.stored_regen_portrait_url(p)
-            or "new_styles/" not in str(pers.get("portrait_storage_key") or pers.get("portrait_url") or "")
-        )
-    )
+    needs_portrait = session is not None and p.is_regen and not storytelling.stored_regen_portrait_url(p)
     if needs_portrait:
-        assign_academy_regen_portrait(session, p, replace_legacy=True)
+        assign_academy_regen_portrait(session, p)
     portrait_url = storytelling.stored_regen_portrait_url(p) or storytelling.resolve_player_portrait_url(
         session, p.id, p.name
     )
@@ -633,6 +626,10 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "growth_log": (p.growth_log_json or [])[-6:],
         "acquired_via": p.acquired_via,
         "squad_status": squad_status,
+        "loan_status": pers.get("loan_status"),
+        "loan_club": pers.get("loan_club"),
+        "loan_fee_gtex": pers.get("loan_fee_gtex"),
+        "asking_price_gtex": pers.get("asking_price_gtex"),
         "promoted": bool(pers.get("promoted_to_senior")),
         "contract_tier": pers.get("contract_tier"),
         "archetype": archetype,
@@ -806,9 +803,12 @@ def register_acquired_shares(session: Session, user_id: str, club_id: str | None
     list the owner can see and remove. Twenty-two is the match-eligibility minimum,
     not a cap, so a longer signing list is kept up to MAX_SQUAD.
     """
+    from app.common.enums.contract_status import ContractStatus
     from app.ingestion.models import Player
+    from app.models.player_contract import PlayerContract
     from app.models.player_token_market import PlayerShareHolding
     from app.models.real_player_profile import RealPlayerProfile
+    from app.models.regen import RegenProfile
 
     if club_id is None:
         state = session.scalar(
@@ -833,6 +833,79 @@ def register_acquired_shares(session: Session, user_id: str, club_id: str | None
         ).all()
     )
     added = 0
+    active_contracts = list(
+        session.scalars(
+            select(PlayerContract).where(
+                PlayerContract.club_id == club_id,
+                PlayerContract.status.in_(
+                    (ContractStatus.ACTIVE.value, ContractStatus.EXPIRING.value, ContractStatus.AGREED.value)
+                ),
+            )
+        ).all()
+    )
+    for contract in active_contracts:
+        if len(current) + added >= MAX_SQUAD:
+            break
+        player_id = contract.player_id
+        if not player_id or player_id in owned_refs:
+            continue
+        player = session.get(Player, player_id)
+        if player is None:
+            continue
+        regen = session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
+        dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+        age = 20
+        if player.date_of_birth:
+            from app.services.player_aging import age_years, aging_date_for_player
+
+            aged = age_years(player.date_of_birth, aging_date_for_player(player, session))
+            age = max(16, aged if aged is not None else 16)
+        raw_rating = (
+            (regen.current_gsi if regen is not None else None)
+            or player.governed_gsi
+            or dna.get("currentAbility")
+            or dna.get("current_rating")
+            or dna.get("overall")
+            or 62
+        )
+        rating = int(raw_rating)
+        pot_max = (
+            (regen.potential_range_json or {}).get("maximum")
+            if regen is not None and isinstance(regen.potential_range_json, dict)
+            else None
+        )
+        potential = int(pot_max or player.governed_potential_gsi or player.potential or max(rating, rating + 6))
+        is_regen = regen is not None or not bool(player.is_real_player)
+        portrait_url = None
+        for key in ("portraitUrl", "portrait_url", "image_url"):
+            val = dna.get(key)
+            if isinstance(val, str) and val.strip():
+                portrait_url = val.strip()
+                break
+        personality_meta: dict[str, Any] = {"squad_status": "first_team"}
+        if portrait_url:
+            personality_meta["portrait_url"] = portrait_url
+        if dna.get("portraitStorageKey"):
+            personality_meta["portrait_storage_key"] = str(dna["portraitStorageKey"])
+        if dna.get("portraitEthnicity"):
+            personality_meta["portrait_ethnicity"] = str(dna["portraitEthnicity"])
+        signed = OwnerSquadPlayer(
+            club_id=club_id,
+            player_ref=player_id,
+            name=(player.canonical_display_name or player.full_name)[:160],
+            position=player.position or player.normalized_position or "CM",
+            age=age,
+            rating=rating,
+            potential=max(rating, potential),
+            value_coin=Decimal("0"),
+            morale=72,
+            is_regen=is_regen,
+            acquired_via="starter_bundle" if is_regen else "contract",
+            personality_json=personality_meta,
+        )
+        session.add(signed)
+        owned_refs.add(player_id)
+        added += 1
     for holding in holdings:
         if len(current) + added >= MAX_SQUAD:
             break
@@ -1590,8 +1663,8 @@ def autopick_squad(
 
 
 def _advance_stage_after_squad(session: Session, state: OwnerClubState) -> None:
-    players = squad(session, state.club_id)
-    if state.stage == "squad" and len(players) >= MIN_SQUAD and any(_is_goalkeeper(p.position) for p in players):
+    status = get_club_formation_status(session, state.club_id)
+    if state.stage == "squad" and status["is_formed"]:
         has_custom_manager = bool(state.manager_json and not state.manager_json.get("is_default"))
         state.stage = "competition" if has_custom_manager else "manager"
 
@@ -1614,12 +1687,13 @@ def assign_academy_regen_portrait(
     """
     from sqlalchemy.orm.attributes import flag_modified
 
+    from app.owner_console import storytelling
     from app.services.regen_portrait_service import RegenPortraitService
 
     personality = dict(player.personality_json or {})
     existing = personality.get("portrait_url")
     existing_key = str(personality.get("portrait_storage_key") or "")
-    legacy = replace_legacy and "new_styles/" not in (existing_key or str(existing or ""))
+    legacy = replace_legacy and storytelling._is_legacy_adult_regen_portrait(str(existing or ""))
     if isinstance(existing, str) and existing.strip() and not legacy:
         if used_storage_keys is not None and existing_key:
             used_storage_keys.add(existing_key)
@@ -1638,9 +1712,6 @@ def assign_academy_regen_portrait(
         seed = f"{player.club_id}:{player.id}"
         chosen: dict[str, Any] | None = None
         fallback: dict[str, Any] | None = None
-        has_new_styles = any(
-            "new_styles/" in str(a.get("storage_key") or "") for a in portrait_service._face_bank_assets()
-        )
         for attempt in range(_PORTRAIT_PICK_ATTEMPTS):
             attempt_seed = seed if attempt == 0 else f"{seed}:retry:{attempt}"
             candidate = portrait_service._select_regen_face_bank_asset(seed=attempt_seed, recipe=recipe)
@@ -1650,11 +1721,8 @@ def assign_academy_regen_portrait(
                 fallback = candidate
             storage_key = str(candidate.get("storage_key") or "")
             if storage_key and storage_key not in reserved:
-                if fallback is None or str(fallback.get("storage_key") or "") in reserved:
-                    fallback = candidate
-                if not has_new_styles or "new_styles/" in storage_key:
-                    chosen = candidate
-                    break
+                chosen = candidate
+                break
         asset = chosen or fallback
         if asset is None:
             return None
@@ -2320,9 +2388,27 @@ def fire_manager(session: Session, user_id: str, club_id: str) -> dict[str, Any]
 
 
 def _morale_shift(session: Session, club_id: str, delta: int, player_id: str | None = None) -> None:
+    target_refs: list[str] = []
     for p in squad(session, club_id):
-        if player_id is None or p.id == player_id:
+        if player_id is None or p.id == player_id or p.player_ref == player_id:
             p.morale = int(engine.clamp(p.morale + delta, 0, 100))
+            if p.player_ref:
+                target_refs.append(str(p.player_ref))
+    if target_refs:
+        try:
+            from app.ingestion.models import Player
+            from app.models.player_agency_state import PlayerAgencyState
+
+            for c_player in session.scalars(select(Player).where(Player.id.in_(target_refs))).all():
+                base_m = 50.0 if c_player.morale is None else float(c_player.morale)
+                c_player.morale = max(0.0, min(100.0, base_m + float(delta)))
+            for agency in session.scalars(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(target_refs))
+            ).all():
+                base_a = 58.0 if agency.morale is None else float(agency.morale)
+                agency.morale = max(0.0, min(100.0, base_a + float(delta)))
+        except Exception:
+            pass
 
 
 def facility_cost(level: int) -> int:
@@ -3621,16 +3707,12 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     by_id = {str(player["id"]): player for player in players}
     selection_formation = str(selection.get("formation") or "") if isinstance(selection, dict) else ""
     valid_shapes = set(tactics_plan.get("formations") or [])
-    slot_one_pos = (
-        str((by_id.get(filed_ids[1]) or {}).get("position") or "").upper()
-        if len(filed_ids) > 1 and filed_ids[1] in by_id
-        else ""
-    )
+    owner_pref_ids = list((facilities.get("_owner_lineup_preference") or {}).get("preferred_player_ids") or [])
     needs_lineup_refresh = bool(
         len(players) >= 11
         and (
-            (selection_formation and valid_shapes and selection_formation not in valid_shapes)
-            or slot_one_pos in {"ST", "CF", "LW", "RW", "FW", "FWD"}
+            len(filed_ids) < 11
+            or (not owner_pref_ids and selection_formation and valid_shapes and selection_formation not in valid_shapes)
         )
     )
     if needs_lineup_refresh:
@@ -4503,25 +4585,45 @@ def _sheet_label(sheet: str) -> str:
     return {"first_team": "first team", "reserve": "reserve", "academy": "academy"}.get(sheet, sheet)
 
 
-def _drop_from_filed_selection(state: OwnerClubState, player_id: str) -> None:
+def _drop_from_filed_selection(state: OwnerClubState, *player_ids: str | None) -> None:
     from sqlalchemy.orm.attributes import flag_modified
 
-    facilities = dict(state.facilities_json or {})
-    selection = facilities.get("_last_manager_matchday_selection") or {}
-    if not isinstance(selection, dict):
+    drop_set = {str(pid).strip() for pid in player_ids if pid and str(pid).strip()}
+    if not drop_set:
         return
-    pid = str(player_id)
+    facilities = dict(state.facilities_json or {})
     changed = False
-    updated = dict(selection)
-    for key in ("starting_xi_ids", "bench_ids", "substitute_ids"):
-        ids = [str(item) for item in (selection.get(key) or [])]
-        kept = [item for item in ids if item != pid]
-        if kept != ids:
-            updated[key] = kept
+
+    selection = facilities.get("_last_manager_matchday_selection") or {}
+    if isinstance(selection, dict):
+        updated_sel = dict(selection)
+        sel_changed = False
+        for key in ("starting_xi_ids", "bench_ids", "substitute_ids"):
+            ids = [str(item) for item in (selection.get(key) or [])]
+            kept = [item for item in ids if item not in drop_set]
+            if kept != ids:
+                updated_sel[key] = kept
+                sel_changed = True
+        if sel_changed:
+            facilities["_last_manager_matchday_selection"] = updated_sel
             changed = True
+
+    pref = facilities.get("_owner_lineup_preference") or {}
+    if isinstance(pref, dict):
+        updated_pref = dict(pref)
+        pref_changed = False
+        for key in ("preferred_player_ids", "preferred_bench_ids"):
+            ids = [str(item) for item in (pref.get(key) or [])]
+            kept = [item for item in ids if item not in drop_set]
+            if kept != ids:
+                updated_pref[key] = kept
+                pref_changed = True
+        if pref_changed:
+            facilities["_owner_lineup_preference"] = updated_pref
+            changed = True
+
     if not changed:
         return
-    facilities["_last_manager_matchday_selection"] = updated
     state.facilities_json = facilities
     flag_modified(state, "facilities_json")
 
@@ -4663,18 +4765,321 @@ def _note_completed_sheet_move(
     session.add(item)
 
 
+def _find_squad_player(session: Session, club_id: str, player_id: str) -> OwnerSquadPlayer:
+    player = session.get(OwnerSquadPlayer, player_id)
+    if player is None or player.club_id != club_id or player.status not in ("active", "listed"):
+        player = next(
+            (
+                p
+                for p in squad(session, club_id)
+                if str(p.id) == str(player_id) or str(p.player_ref or "") == str(player_id)
+            ),
+            None,
+        )
+    if player is None or player.club_id != club_id:
+        raise OwnerError("player_not_found", 404, "Player not found in this club squad.")
+    return player
+
+
 def place_on_squad_sheet(session: Session, user_id: str, club_id: str, player_id: str, sheet: str) -> dict[str, Any]:
     """Move one owner-squad player between first team, reserve, and academy."""
     state = require_state(session, club_id, user_id)
-    player = session.get(OwnerSquadPlayer, player_id)
-    if not player or player.club_id != club_id:
-        raise OwnerError("player_not_found", 404, "Player not found in this club squad.")
+    player = _find_squad_player(session, club_id, player_id)
     target = str(sheet or "").strip().lower()
     if target == "first_team" and _owner_sheet(player) == "academy":
         return _file_academy_call_up(session, user_id, state, player)
     result = _apply_squad_sheet(session, user_id, state, player, target)
     _note_completed_sheet_move(session, user_id, state, player, target)
     return result
+
+
+def sell_squad_player(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    player_id: str,
+    *,
+    mode: str = "instant",
+    asking_price_gtex: float | None = None,
+) -> dict[str, Any]:
+    """Sell a squad player immediately to a buying club or list/unlist them on the transfer market."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    state = require_state(session, club_id, user_id)
+    target = _find_squad_player(session, club_id, player_id)
+    normalized_mode = str(mode or "instant").strip().lower()
+    pers = dict(target.personality_json or {})
+    base_value = max(50, int(Decimal(target.value_coin or 100)))
+    price = (
+        max(25, int(round(float(asking_price_gtex))))
+        if asking_price_gtex is not None and float(asking_price_gtex) > 0
+        else base_value
+    )
+    bidder = engine.AI_CLUBS[abs(hash(f"sell:{club_id}:{target.id}:{state.world_day}")) % len(engine.AI_CLUBS)]
+
+    if normalized_mode == "unlist":
+        target.status = "active"
+        pers.pop("transfer_listed", None)
+        pers.pop("asking_price_gtex", None)
+        target.personality_json = pers
+        flag_modified(target, "personality_json")
+        session.flush()
+        return {
+            "status": "active",
+            "mode": "unlist",
+            "player": player_dict(target, session),
+        }
+
+    if normalized_mode == "list":
+        target.status = "listed"
+        pers["transfer_listed"] = True
+        pers["asking_price_gtex"] = price
+        target.personality_json = pers
+        flag_modified(target, "personality_json")
+        if not _open_item_exists(session, club_id, "transfer_bid", target.id):
+            item, _ = _item(
+                user_id,
+                club_id,
+                "transfer_bid",
+                sender=f"{bidder} sporting director",
+                title=f"{bidder} bid {price:,} GTX for {target.name}",
+                what=f"{bidder} submit an official offer of {price:,} GTEX Coin for {target.name}.",
+                why=f"Responding to your transfer listing for {target.name} (OVR {target.rating}). Platform fee on sales: 20%.",
+                actions=[
+                    {"key": "accept", "label": "Accept bid", "style": "primary"},
+                    {"key": "reject", "label": "Reject", "style": "ghost"},
+                ],
+                payload={"subject": target.id, "player_id": target.id, "bid": price, "bidder": bidder},
+                priority="normal",
+            )
+            session.add(item)
+        session.flush()
+        return {
+            "status": "listed",
+            "mode": "list",
+            "asking_price_gtex": price,
+            "bidder": bidder,
+            "player": player_dict(target, session),
+        }
+
+    current = squad(session, club_id)
+    if len(current) <= 11:
+        raise OwnerError(
+            "minimum_eleven_required",
+            400,
+            "You must keep at least 11 players on your roster to field a matchday lineup.",
+        )
+    if _is_goalkeeper(target.position) and sum(1 for p in current if _is_goalkeeper(p.position)) <= 1:
+        raise OwnerError("last_goalkeeper", 400, "You cannot sell your only goalkeeper.")
+
+    sale_price = min(price, int(base_value * 1.5))
+    ev = ledger.record(
+        session,
+        event_type="transfer_sale",
+        source=ledger.WORLD_CLUBS,
+        destination=ledger.club_account(club_id),
+        currency=ledger.GTEX,
+        gross=sale_price,
+        fee_bps=PLATFORM_SALE_FEE_BPS,
+        club_id=club_id,
+        user_id=user_id,
+        related_type="player",
+        related_id=target.id,
+        memo=f"Sold {target.name} to {bidder}",
+    )
+    target.status = "sold"
+    _drop_from_filed_selection(state, str(target.id), target.player_ref)
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_transfer_movement(
+            session,
+            state,
+            direction="departure",
+            transfer_type="transfer_bid_sale",
+            player_id=str(target.player_ref or target.id),
+            player_name=target.name,
+            position=target.position,
+            age=int(target.age),
+            overall_rating=int(target.rating),
+            fee_gtex=sale_price,
+            counterparty_club_name=bidder,
+            idempotency_key=f"transfer:direct_sale:{club_id}:{target.id}:d{state.world_day}",
+        )
+    except Exception as sale_err:
+        logger.warning("sell_squad_player institutional hook failed: %s", sale_err)
+
+    session.flush()
+    remaining = squad(session, club_id)
+    return {
+        "status": "sold",
+        "mode": "instant",
+        "player_id": target.id,
+        "player_name": target.name,
+        "buyer_club": bidder,
+        "gross_gtex": sale_price,
+        "net_gtex": float(ev.net_amount),
+        "squad_size": len(remaining),
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
+
+def loan_squad_player(
+    session: Session,
+    user_id: str,
+    club_id: str,
+    player_id: str,
+    *,
+    action: str = "loan_out",
+    destination_club: str | None = None,
+    loan_fee_gtex: float | None = None,
+) -> dict[str, Any]:
+    """Loan a squad player out to a partner club or recall them back to the squad."""
+    from sqlalchemy.orm.attributes import flag_modified
+
+    state = require_state(session, club_id, user_id)
+    target = _find_squad_player(session, club_id, player_id)
+    pers = dict(target.personality_json or {})
+    normalized_action = str(action or "loan_out").strip().lower()
+
+    if normalized_action == "recall":
+        old_club = pers.pop("loan_club", None) or "Loan Club"
+        pers.pop("loan_status", None)
+        pers.pop("loan_fee_gtex", None)
+        target.personality_json = pers
+        flag_modified(target, "personality_json")
+        session.flush()
+        return {
+            "status": "recalled",
+            "recalled_from": old_club,
+            "player": player_dict(target, session),
+            "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+        }
+
+    dest = (
+        str(destination_club).strip()
+        if destination_club and str(destination_club).strip()
+        else engine.AI_CLUBS[abs(hash(f"loan:{club_id}:{target.id}")) % len(engine.AI_CLUBS)]
+    )
+    default_fee = max(25, int(round(float(target.value_coin or 100) * 0.15)))
+    fee = (
+        max(0, int(round(float(loan_fee_gtex))))
+        if loan_fee_gtex is not None and float(loan_fee_gtex) >= 0
+        else default_fee
+    )
+    if fee > 0 and pers.get("loan_status") != "loaned_out":
+        ledger.record(
+            session,
+            event_type="transfer_sale",
+            source=ledger.WORLD_CLUBS,
+            destination=ledger.club_account(club_id),
+            currency=ledger.GTEX,
+            gross=fee,
+            fee_bps=0,
+            club_id=club_id,
+            user_id=user_id,
+            related_type="player",
+            related_id=target.id,
+            memo=f"Season loan fee for {target.name} to {dest}",
+        )
+
+    pers["loan_status"] = "loaned_out"
+    pers["loan_club"] = dest
+    pers["loan_fee_gtex"] = fee
+    pers["squad_status"] = "reserve"
+    target.personality_json = pers
+    flag_modified(target, "personality_json")
+    target.morale = min(100, int(target.morale or 70) + 8)
+    target.minutes = int(target.minutes or 0) + 90
+    _drop_from_filed_selection(state, str(target.id), target.player_ref)
+    _mirror_sheet_membership(session, target, "reserve", user_id)
+
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_transfer_movement(
+            session,
+            state,
+            direction="departure",
+            transfer_type="loan_out",
+            player_id=str(target.player_ref or target.id),
+            player_name=target.name,
+            position=target.position,
+            age=int(target.age),
+            overall_rating=int(target.rating),
+            fee_gtex=fee,
+            counterparty_club_name=dest,
+            idempotency_key=f"transfer:loan:{club_id}:{target.id}:d{state.world_day}",
+        )
+    except Exception as loan_err:
+        logger.warning("loan_squad_player institutional hook failed: %s", loan_err)
+
+    session.flush()
+    return {
+        "status": "loaned_out",
+        "destination_club": dest,
+        "loan_fee_gtex": fee,
+        "player": player_dict(target, session),
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
+
+
+def release_squad_player(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
+    """Release any player from the club squad (refunding market signings or releasing starters/regens)."""
+    state = require_state(session, club_id, user_id)
+    target = _find_squad_player(session, club_id, player_id)
+    current = squad(session, club_id)
+    if len(current) <= 11:
+        raise OwnerError(
+            "minimum_eleven_required",
+            400,
+            "You must keep at least 11 players on your roster to field a matchday lineup.",
+        )
+    if _is_goalkeeper(target.position) and sum(1 for p in current if _is_goalkeeper(p.position)) <= 1:
+        raise OwnerError("last_goalkeeper", 400, "You cannot release your only goalkeeper.")
+
+    _drop_from_filed_selection(state, str(target.id), target.player_ref)
+    if target.acquired_via in ("market", "share"):
+        res = unsign_market_player(session, user_id, club_id, target.id)
+        res["status"] = "released"
+        res["player_name"] = target.name
+        return res
+
+    player_name = target.name
+    try:
+        from app.owner_console import living_institution
+
+        living_institution.record_transfer_movement(
+            session,
+            state,
+            direction="departure",
+            transfer_type="contract_release",
+            player_id=str(target.player_ref or target.id),
+            player_name=target.name,
+            position=target.position,
+            age=int(target.age),
+            overall_rating=int(target.rating),
+            fee_gtex=0,
+            counterparty_club_name="Free Agency",
+            idempotency_key=f"transfer:release:{club_id}:{target.id}:d{state.world_day}",
+        )
+    except Exception as rel_err:
+        logger.warning("release_squad_player institutional hook failed: %s", rel_err)
+
+    session.delete(target)
+    session.flush()
+    remaining = squad(session, club_id)
+    return {
+        "status": "released",
+        "released_player_id": player_id,
+        "player_name": player_name,
+        "refunded": 0,
+        "refund_amount": 0,
+        "refund_destination": "none",
+        "squad_size": len(remaining),
+        "stage": state.stage,
+        "cash": str(ledger.balance(session, ledger.club_account(club_id), ledger.GTEX)),
+    }
 
 
 def academy_promote(session: Session, user_id: str, club_id: str, player_id: str) -> dict[str, Any]:
@@ -4773,6 +5178,32 @@ def conduct_press_conference(
         sync_club_prestige_to_reputation(session, club_id, state.prestige)
     if fans_delta:
         state.fans = max(100, state.fans + fans_delta)
+
+    try:
+        from sqlalchemy.orm.attributes import flag_modified
+        from app.owner_console import living_politics_engine
+
+        board_delta = {
+            "praise_squad": 3,
+            "demand_more": 4,
+            "defend_coach": 2,
+            "flex_ambition": 5,
+        }.get(tone, 2)
+        facs = dict(state.facilities_json or {})
+        politics = dict(facs.get("_club_politics") or {})
+        living_politics_engine._nudge(politics, "board_confidence", board_delta)
+        living_politics_engine._nudge(politics, "investor_sentiment", max(1, board_delta - 1))
+        conf_val = int(politics.get("board_confidence") or 65)
+        politics["board_mood"] = (
+            "Backing the Project"
+            if conf_val >= 70
+            else "Cautious Scrutiny" if conf_val >= 45 else "Emergency Session Risk"
+        )
+        facs["_club_politics"] = politics
+        state.facilities_json = facs
+        flag_modified(state, "facilities_json")
+    except Exception:
+        pass
 
     from app.owner_console import living_institution, storytelling
 
