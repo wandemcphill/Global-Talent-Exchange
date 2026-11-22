@@ -39,6 +39,12 @@ export default function StaffMarket() {
   const [temperament, setTemperament] = useState("");
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
+  const [sort, setSort] = useState("rating");
+  const { data: dna } = useQuery({
+    queryKey: ["club-dna", clubId],
+    queryFn: async () => (await api.get(`/clubs/${clubId}/dna`)).data,
+    enabled: Boolean(clubId),
+  });
   const [offerFor, setOfferFor] = useState<string | null>(null);
   const [salary, setSalary] = useState("");
   const [years, setYears] = useState("3");
@@ -49,7 +55,7 @@ export default function StaffMarket() {
   }, [search]);
 
   const query = useQuery({
-    queryKey: ["staff-market", clubId, role, wageMax, style, temperament, appliedSearch],
+    queryKey: ["staff-market", clubId, role, wageMax, style, temperament, appliedSearch, sort, dna?.primary_philosophy],
     enabled: Boolean(clubId),
     queryFn: async () => {
       const { data } = await api.get(
@@ -58,6 +64,8 @@ export default function StaffMarket() {
           style,
           temperament,
           search: appliedSearch.length >= 2 ? appliedSearch : "",
+          sort,
+          philosophy: dna?.primary_philosophy,
         }),
       );
       return data;
@@ -103,7 +111,7 @@ export default function StaffMarket() {
       <PageHeader
         eyebrow="Club staff"
         title="Staff market"
-        sub="Search the whole market by name or country. A surname is enough, and accents are optional."
+        sub="You do not need to know a name. The list is ordered by rating, and recommended people fit the club philosophy. A surname still works."
       />
       <label className="block">
         <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-400">
@@ -118,7 +126,16 @@ export default function StaffMarket() {
           autoComplete="off"
         />
       </label>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid gap-3 md:grid-cols-5">
+        <select
+          className="gx-input"
+          value={sort}
+          onChange={(event) => setSort(event.target.value)}
+          data-testid="staff-sort"
+        >
+          <option value="rating">Rating</option>
+          <option value="recommended">Recommended for this philosophy</option>
+        </select>
         <select
           className="gx-input"
           value={role}
@@ -188,7 +205,13 @@ export default function StaffMarket() {
                   />
                 ) : null}
                 <div>
-                  <h2 className="text-lg font-black text-white">{candidate.name}</h2>
+                  <h2 className="text-lg font-black text-white">
+                    <span className="mr-2 text-amber-200">{candidate.rating}</span>
+                    {candidate.name}
+                  </h2>
+                  {candidate.philosophy_fit ? (
+                    <p className="text-[11px] font-semibold text-cyan-300">{candidate.philosophy_fit}</p>
+                  ) : null}
                   <p className="text-xs text-slate-400">
                     {candidate.role_label}
                     {candidate.nation ? ` · ${candidate.nation}` : ""}

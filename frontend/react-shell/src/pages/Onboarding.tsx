@@ -6,7 +6,6 @@ import {
   AlertTriangle,
   ArrowRight,
   Check,
-  Dna,
   ShoppingCart,
   Sparkles,
   Sprout,
@@ -1082,24 +1081,51 @@ const STAFF_ROLES = [
   },
 ];
 
-function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
+const PHILOSOPHY_CUES: Record<string, string[]> = {
+  youth_development: ["youth", "develop", "academy", "technical"],
+  academy_first: ["youth", "academy", "develop"],
+  selling_club: ["pragmatic", "develop", "balanced"],
+  superstar: ["attacking", "elite", "star", "physical"],
+  big_spending: ["attacking", "elite", "star"],
+  sustainable: ["pragmatic", "balanced", "control"],
+  balanced: ["balanced", "control"],
+};
+
+function staffFitsPhilosophy(philosophy: string | undefined, blob: string) {
+  const cues = PHILOSOPHY_CUES[(philosophy || "").toLowerCase()] || [];
+  const hay = blob.toLowerCase();
+  return cues.some((cue) => hay.includes(cue));
+}
+
+function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
-  const { data, isLoading } = useQuery({
-    queryKey: ["onboarding-staff", clubId, role.key, query],
+  const [sort, setSort] = useState<"rating" | "recommended">("recommended");
+  useEffect(() => {
+    const handle = window.setTimeout(() => setQuery(search.trim()), 280);
+    return () => window.clearTimeout(handle);
+  }, [search]);
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["onboarding-staff", clubId, role.key, query, sort, philosophy],
     queryFn: async () => {
       const people: any[] = [];
       if (role.key === "first_team_manager") {
         try {
           const { data: catalog } = await api.get("/managers/catalog", {
-            params: { search: query || undefined, limit: 12 },
+            params: { search: query || undefined, limit: 24, sort: "rating" },
           });
           for (const manager of catalog.items || []) {
+            const mentality = String(manager.mentality || "").replace(/_/g, " ");
+            const blurb = manager.philosophy_summary || "";
             people.push({
               key: `manager:${manager.manager_id}`,
               name: manager.display_name,
-              detail: `${manager.rarity || "coach"} · ${(manager.mentality || "").replace(/_/g, " ")}`,
-              blurb: manager.philosophy_summary,
+              detail: `${manager.rarity || "coach"} · ${mentality}`,
+              blurb,
+              rating: Number(manager.manager_impact || 0),
+              fit:
+                manager.philosophy_fit ||
+                staffFitsPhilosophy(philosophy, `${mentality} ${blurb} ${(manager.traits || []).join(" ")}`),
               salary: seasonSalaryFan(
                 manager.annual_wage_fancoin || manager.recruit_price_fancoin || 3500,
               ),
@@ -1118,20 +1144,29 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
             params: {
               role: role.key,
               search: query || undefined,
-              limit: 12,
+              limit: 24,
               employment_status: "all",
+              sort,
+              philosophy: philosophy || undefined,
             },
           },
         );
         for (const candidate of market.candidates || []) {
           fromMarket += 1;
+          const detail = `${candidate.role_label || role.label} · ${candidate.style || candidate.nation || "Staff"}`;
           people.push({
             key: `profile:${candidate.profile_id}`,
             name: candidate.name,
-            detail: `${candidate.role_label || role.label} · ${candidate.style || candidate.nation || "Staff"}`,
-            blurb: candidate.nation
-              ? `${candidate.nation} · rating ${candidate.rating}`
-              : `Rating ${candidate.rating}`,
+            detail,
+            blurb: candidate.philosophy_fit || candidate.philosophy_summary || candidate.nation || "",
+            rating: Number(candidate.rating || 0),
+            fit: Boolean(
+              candidate.philosophy_fit ||
+                staffFitsPhilosophy(
+                  philosophy,
+                  `${detail} ${candidate.mentality || ""} ${candidate.philosophy_summary || ""} ${candidate.style || ""}`,
+                ),
+            ),
             salary:
               candidate.expected_salary_fan_coin || candidate.expected_salary_gtex
                 ? seasonSalaryFan(
@@ -1157,6 +1192,11 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
               name,
               detail: candidate.specialty || candidate.style || role.label,
               blurb: candidate.bio,
+              rating: Number(candidate.rating || 0),
+              fit: staffFitsPhilosophy(
+                philosophy,
+                `${candidate.specialty || ""} ${candidate.style || ""} ${candidate.bio || ""}`,
+              ),
               salary:
                 candidate.salary_gtx || candidate.salary
                   ? seasonSalaryFan(candidate.salary_fan_coin || candidate.salary_gtx || candidate.salary)
@@ -1168,7 +1208,20 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
           /* Default caretaker remains available. */
         }
       }
-      return people.slice(0, 12);
+      people.sort((left: any, right: any) => {
+        if (sort === "recommended" && Boolean(left.fit) !== Boolean(right.fit)) {
+          return left.fit ? -1 : 1;
+        }
+        return (right.rating || 0) - (left.rating || 0);
+      });
+      const seen = new Set<string>();
+      const unique = people.filter((person) => {
+        const name = String(person.name || "").trim().toLowerCase();
+        if (!name || seen.has(name)) return false;
+        seen.add(name);
+        return true;
+      });
+      return unique.slice(0, 12);
     },
   });
   return (
@@ -1180,6 +1233,10 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
         <div>
           <p className="text-sm font-semibold text-white">{role.label}</p>
           <p className="text-xs text-slate-400">{role.hint}</p>
+          <p className="mt-1 text-[11px] text-slate-500">
+            You do not need to know a name. Highest rated people are listed first
+            {philosophy ? `, and recommended ones fit ${String(philosophy).replace(/_/g, " ")}` : ""}.
+          </p>
         </div>
         {chosen ? (
           <Chip tone="emerald">{chosen.use_default ? "Default" : chosen.name}</Chip>
@@ -1204,6 +1261,15 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
         <Btn type="submit" variant="secondary">
           Search
         </Btn>
+        <select
+          className="gx-input max-w-[180px]"
+          value={sort}
+          onChange={(event) => setSort(event.target.value as "rating" | "recommended")}
+          data-testid={`staff-sort-${role.key}`}
+        >
+          <option value="recommended">Recommended</option>
+          <option value="rating">Rating</option>
+        </select>
       </form>
       <div className="mt-3 space-y-2">
         {isLoading ? <p className="text-xs text-slate-500">Searching the staff market…</p> : null}
@@ -1213,8 +1279,16 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
             className="flex items-start justify-between gap-3 rounded border border-white/10 px-3 py-2"
           >
             <div>
-              <p className="text-sm font-semibold text-white">{person.name}</p>
+              <p className="text-sm font-semibold text-white">
+                {person.rating ? <span className="mr-2 font-black text-amber-200">{person.rating}</span> : null}
+                {person.name}
+              </p>
               <p className="text-[11px] text-slate-400">{person.detail}</p>
+              {person.fit ? (
+                <p className="text-[11px] font-semibold text-cyan-300">
+                  Recommended · fits {String(philosophy || "this club").replace(/_/g, " ")}
+                </p>
+              ) : null}
               <p className="text-[11px] text-emerald-300">
                 {person.salary == null ? "Wage not filed" : `Season salary ${fmt(person.salary)} FAN`}
               </p>
@@ -1228,9 +1302,14 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
             </Btn>
           </div>
         ))}
-        {!isLoading && (data || []).length === 0 ? (
+        {!isLoading && isError ? (
+          <p className="text-xs text-rose-300">The staff list did not load. Try the search again.</p>
+        ) : null}
+        {!isLoading && !isError && (data || []).length === 0 ? (
           <p className="text-xs text-slate-500">
-            No staff match that search. Try another name, or use the default.
+            {query
+              ? "No staff match that search. Clear it to see the highest rated people, or use the default."
+              : "No staff are filed for this role yet. Use the default."}
           </p>
         ) : null}
       </div>
@@ -1248,6 +1327,11 @@ function StaffRolePicker({ clubId, role, chosen, onChoose }: any) {
 
 function ManagerStep({ clubId, onDone }: any) {
   const { data: club, refetch } = useClub(clubId);
+  const { data: dna } = useQuery({
+    queryKey: ["club-dna", clubId],
+    queryFn: async () => (await api.get(`/clubs/${clubId}/dna`)).data,
+    enabled: !!clubId,
+  });
   const money = useOnboardingMoney(clubId);
   const [choices, setChoices] = useState<Record<string, any>>({});
   const [busy, setBusy] = useState(false);
@@ -1303,6 +1387,7 @@ function ManagerStep({ clubId, onDone }: any) {
             clubId={clubId}
             role={role}
             chosen={choices[role.key]}
+            philosophy={dna?.primary_philosophy}
             onChoose={(choice: any) =>
               setChoices((current) => ({ ...current, [role.key]: choice }))
             }
@@ -1328,19 +1413,63 @@ function ManagerStep({ clubId, onDone }: any) {
   );
 }
 
+export function academyIntakeQuote(level: number) {
+  const facilityLevel = Math.max(1, Math.floor(Number(level) || 1));
+  return {
+    level: facilityLevel,
+    cost: 1500 * facilityLevel,
+    minimumArrivals: 1 + Math.floor(facilityLevel / 2),
+  };
+}
+
+export function isAcademyListPlayer(player: any) {
+  if (!player || player.promoted) return false;
+  const status = String(player.squad_status || "").toLowerCase();
+  if (status === "first_team" || status === "senior") return false;
+  return status === "academy" || player.acquired_via === "academy";
+}
+
+function filedLabel(value: unknown) {
+  const text = String(value || "").trim();
+  if (!text || text.toLowerCase() === "not filed") return "";
+  return text;
+}
+
 function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void }) {
   const { data: club, refetch } = useClub(clubId);
   const [busyIntake, setBusyIntake] = useState(false);
 
-  const regens = (club?.squad || []).filter(
-    (p: any) => p.is_regen || p.squad_status === "academy" || p.acquired_via === "academy",
-  );
+  const youth = (club?.squad || []).filter(isAcademyListPlayer);
+  const appointed =
+    club?.executive_staff?.head_of_youth_development || club?.staff?.head_of_youth_development;
+  const hoydName =
+    appointed &&
+    !appointed.use_default &&
+    !appointed.is_default &&
+    !appointed.is_vacant &&
+    String(appointed.name || "").trim() &&
+    String(appointed.name).toLowerCase() !== "default"
+      ? String(appointed.name)
+      : "";
+  const hoydRating = hoydName && appointed?.rating != null ? appointed.rating : null;
+  const quote = academyIntakeQuote(club?.facilities?.academy?.level);
+  const cashRaw = club?.economy?.cash_gtex ?? club?.health?.cash;
+  const cash = cashRaw == null || cashRaw === "" ? null : Number(cashRaw);
+  const shortOfIntake = cash != null && Number.isFinite(cash) && cash < quote.cost;
+  const potentials = youth
+    .map((player: any) => Number(player.potential))
+    .filter((value: number) => Number.isFinite(value) && value > 0);
 
   const handleManualIntake = async () => {
     setBusyIntake(true);
     try {
-      await api.post(`/owner/clubs/${clubId}/academy/intake`);
-      toast.success("Academy intake filed. The youth players are on the list below.");
+      const { data } = await api.post(`/owner/clubs/${clubId}/academy/intake`);
+      const added = Array.isArray(data?.regens) ? data.regens.length : 0;
+      toast.success(
+        added
+          ? `${added} youth player${added === 1 ? "" : "s"} added to the academy list.`
+          : "Youth intake filed.",
+      );
       refetch();
     } catch (e) {
       toast.error(errMsg(e));
@@ -1349,223 +1478,163 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
     }
   };
 
-  const hoyd = club?.staff?.head_of_youth_development;
-  const hoydName = hoyd?.use_default || hoyd?.is_vacant ? "" : hoyd?.name || "";
-  const hoydRating = hoydName ? hoyd?.rating : null;
-  const potentials = regens
-    .map((player: any) => Number(player.potential))
-    .filter((value: number) => Number.isFinite(value) && value > 0);
-  const ceilingLabel = potentials.length
-    ? `${Math.min(...potentials)}–${Math.max(...potentials)} POT`
-    : "Not filed yet";
-
   return (
     <Panel
-      eyebrow="Step 4 · Youth Academy & Genesis Wonderkids"
-      title="Inaugural Academy Intake"
+      eyebrow="Step 4 · Youth academy"
+      title="Academy list"
       testid="onboarding-academy-step"
-      action={
-        <Btn
-          onClick={onDone}
-          className="flex items-center gap-2"
-          data-testid="onboarding-proceed-competition"
-        >
-          <span>Open my club</span>
-          <ArrowRight size={14} />
-        </Btn>
-      }
     >
-      <div className="mb-6">
-        <GtexSceneViewport
-          sceneId="academy_upgrade"
-          compact
-          title={`3D Youth Academy Campus · Genesis Intake`}
-          subtitle={`${club?.club_name || "GTEX Club"} · Inaugural Class of Homegrown Wonderkids`}
-          badgeText="3D GENESIS INTAKE"
-          clubName={club?.club_name}
-          facilityLevel={1}
-          stats={[
-            { label: "Youth on the list", value: `${regens.length}`, accent: "#00E676" },
-            { label: "Campus", value: "Level 1 Academy", accent: "#38BDF8" },
-            { label: "Potentials filed", value: ceilingLabel, accent: "#F5B83D" },
-          ]}
-        />
+      <p className="mb-4 text-sm text-slate-300">
+        These are the players filed on the academy list. A card shows the age, main position,
+        rating and potential stored for that player. Opening the club does not charge for an intake.
+      </p>
+
+      <div className="mb-4 grid gap-2 sm:grid-cols-3" data-testid="academy-facts">
+        <div className="rounded border border-white/10 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Academy level</p>
+          <p className="text-sm font-semibold text-white">{quote.level}</p>
+        </div>
+        <div className="rounded border border-white/10 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">On the academy list</p>
+          <p className="text-sm font-semibold text-white">{youth.length}</p>
+        </div>
+        <div className="rounded border border-white/10 px-3 py-2">
+          <p className="text-[10px] uppercase tracking-wide text-slate-500">Potential range</p>
+          <p className="text-sm font-semibold text-white">
+            {potentials.length
+              ? `${Math.min(...potentials)}–${Math.max(...potentials)}`
+              : "Not filed"}
+          </p>
+        </div>
       </div>
 
-      {/* Head of Youth Development Briefing */}
-      <div className="mb-6 rounded-sm border border-purple-500/20 bg-purple-950/20 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-purple-500/20 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-purple-500/20 text-purple-300 border border-purple-500/30">
-              <Sprout size={18} />
-            </div>
-            <div>
-              <p className="text-xs font-bold text-white uppercase tracking-wider">
-                {hoydName || "Head of youth"}{" "}
-                <span className="text-[11px] font-normal text-purple-300">
-                  · Head of Youth Development{hoydRating ? ` (Rating: ${hoydRating})` : ""}
-                </span>
-              </p>
-              <p className="text-[11px] text-slate-400">Youth Scouting & Development Briefing</p>
-            </div>
-          </div>
-          <Chip tone="cyan">{hoydName ? `Head of youth · ${hoydName}` : "Default youth lead"}</Chip>
+      <div className="mb-4 flex items-start gap-3 rounded border border-white/10 bg-slate-950/40 p-3">
+        <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-300" />
+        <div>
+          <p className="text-sm font-semibold text-white">
+            {hoydName || "Default youth lead"}
+            {hoydRating != null ? ` · rating ${hoydRating}` : ""}
+          </p>
+          <p className="text-xs text-slate-400">
+            {hoydName
+              ? `${hoydName} is the appointed head of youth. Their development rating is one of the inputs when an intake is generated.`
+              : "No named head of youth is appointed. The default lead's development rating is used when an intake is generated."}
+          </p>
         </div>
-        <p className="mt-3 text-xs leading-relaxed text-slate-300">
-          {regens.length
-            ? `${regens.length} youth player${regens.length === 1 ? " is" : "s are"} on this club's academy list. Ratings, potentials and positions below are the ones filed for them. ${hoydName ? `${hoydName} is the head of youth.` : "No named head of youth is appointed, so the default lead is in the role."}`
-            : "No academy intake is filed yet. Scout the inaugural class to add youth players to this club. Their ages, positions, ratings and potentials appear on the cards after that. You can also open the club and scout later."}
+      </div>
+
+      <div className="mb-4 space-y-3">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs text-slate-400">
+            {youth.length
+              ? `${youth.length} on the academy list`
+              : "Nobody is on the academy list yet."}
+          </p>
+          <Btn
+            variant="secondary"
+            disabled={busyIntake || shortOfIntake}
+            onClick={handleManualIntake}
+            data-testid="onboarding-scout-genesis-intake"
+          >
+            {busyIntake ? "Scouting…" : "Scout a youth intake"}
+          </Btn>
+        </div>
+        <p className="text-xs text-slate-400" data-testid="academy-intake-cost">
+          This charges <b className="text-white">{fmt(quote.cost)} GTX</b> from club cash
+          {cash != null && Number.isFinite(cash) ? ` (${fmt(cash)} GTX on hand)` : ""}. Academy level{" "}
+          {quote.level} brings at least {quote.minimumArrivals} player
+          {quote.minimumArrivals === 1 ? "" : "s"}. A higher level, campus bonus, or head-of-youth
+          rating can add players and raise the potential band. They arrive aged 16–18 with a current
+          rating below that potential.
+          {shortOfIntake ? " Club cash does not cover this intake." : ""}
         </p>
-      </div>
 
-      {/* Genesis Wonderkids Grid */}
-      <div className="mb-6 space-y-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="gx-eyebrow text-emerald-400">Inaugural Academy Class</p>
-            <p className="text-xs text-slate-400">
-              High-potential homegrown talents signed directly to your youth roster
-            </p>
-          </div>
-          {regens.length > 0 && (
-            <span className="text-xs text-slate-400">{regens.length} on the youth list</span>
-          )}
-        </div>
-
-        {regens.length === 0 ? (
-          <div className="rounded border border-dashed border-white/10 p-6 text-center text-xs text-slate-400">
-            <p>No youth players are on the academy list.</p>
-            <Btn
-              className="mt-3"
-              disabled={busyIntake}
-              onClick={handleManualIntake}
-              data-testid="onboarding-scout-genesis-intake"
-            >
-              {busyIntake ? "Scouting intake…" : "Scout inaugural intake"}
-            </Btn>
+        {youth.length === 0 ? (
+          <div className="rounded border border-dashed border-white/10 p-4 text-xs text-slate-400">
+            No academy players are filed. Scout an intake, or open the club and do it later.
           </div>
         ) : (
           <div
-            className="grid grid-cols-1 gap-4 md:grid-cols-3"
+            className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
             data-testid="onboarding-genesis-regens"
           >
-            {regens.map((p: any) => {
-              const pers = p.personality || p.personality_json || {};
-              const archetype = p.archetype || pers.archetype || "Archetype not filed";
-              const mood = p.mood_state || pers.mood || "Mood not filed";
-              const monologue =
-                p.inner_monologue || pers.inner_monologue || "No monologue is filed.";
-              const ceiling =
-                p.potential == null || p.rating == null ? null : Math.max(0, p.potential - p.rating);
-
+            {youth.map((player: any) => {
+              const archetype = filedLabel(player.archetype);
+              const mood = filedLabel(player.mood_state);
+              const gap =
+                player.potential == null || player.rating == null
+                  ? null
+                  : Math.max(0, Number(player.potential) - Number(player.rating));
+              const fill =
+                player.rating == null || player.potential == null
+                  ? 0
+                  : Math.min(100, (Number(player.rating) / Math.max(1, Number(player.potential))) * 100);
               return (
-                <div
-                  key={p.id || p.name}
-                  className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-900/60 p-4 shadow-lg hover:border-emerald-500/30 transition-colors"
-                  data-testid={`genesis-regen-${p.id}`}
+                <article
+                  key={player.id || player.name}
+                  className="rounded-lg border border-white/10 bg-slate-950/50 p-3"
+                  data-testid={`genesis-regen-${player.id}`}
                 >
-                  <div>
-                    <div className="flex items-start justify-between gap-2 border-b border-white/10 pb-3">
-                      <div>
-                        <span className="rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-0.5 text-[9px] font-black uppercase">
-                          {archetype}
-                        </span>
-                        <h4 className="mt-1 text-sm font-bold text-white">{p.name}</h4>
-                        <p className="text-[11px] text-slate-400">
-                          Age {p.age ?? "—"} · {posShort(p.position)}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <span className="gx-mono text-lg font-black text-white">{p.rating ?? "—"}</span>
-                        <span className="text-[10px] text-slate-500"> OVR</span>
-                        <p className="gx-mono text-[11px] font-bold text-amber-300">
-                          POT {p.potential ?? "—"}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 space-y-2">
-                      <div className="flex items-center justify-between text-[11px] text-slate-400">
-                        <span>Ceiling</span>
-                        <span className="gx-mono text-emerald-300 font-bold">
-                          {ceiling == null ? "—" : `+${ceiling} Growth`}
-                        </span>
-                      </div>
-                      <div className="h-1.5 rounded-sm bg-white/5">
-                        <div
-                          className="h-1.5 rounded-sm bg-gradient-to-r from-emerald-500 to-amber-400"
-                          style={{
-                            width: `${p.rating == null || p.potential == null ? 0 : Math.min(100, (p.rating / Math.max(1, p.potential)) * 100)}%`,
-                          }}
-                        />
-                      </div>
+                  <div className="flex items-start gap-3">
+                    {player.portrait_url ? (
+                      <img
+                        src={player.portrait_url}
+                        alt=""
+                        className="h-12 w-12 shrink-0 rounded-full object-cover bg-slate-800"
+                      />
+                    ) : null}
+                    <div className="min-w-0 flex-1">
+                      <h4 className="truncate text-sm font-bold text-white">{player.name}</h4>
                       <p className="text-[11px] text-slate-400">
-                        Mood: <b className="text-slate-200">{mood}</b>
+                        Age {player.age ?? "—"} · {posShort(player.position)}
                       </p>
-                      <div className="rounded border border-white/5 bg-black/40 p-2 text-[11px] italic text-slate-300">
-                        "{monologue}"
-                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="gx-mono text-lg font-black leading-none text-white">
+                        {player.rating ?? "—"}
+                      </p>
+                      <p className="gx-mono text-[11px] font-bold text-amber-300">
+                        POT {player.potential ?? "—"}
+                      </p>
                     </div>
                   </div>
-
-                  <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="text-purple-300">
-                      {hoydName ? `Filed under ${hoydName}` : "Youth roster"}
-                    </span>
+                  <div className="mt-3 h-1.5 rounded-sm bg-white/5" title="Current rating against potential">
+                    <div
+                      className="h-1.5 rounded-sm bg-emerald-400"
+                      style={{ width: `${fill}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-400">
+                    <span>{gap == null ? "Gap not filed" : `${gap} below potential`}</span>
                     <span className="gx-mono text-emerald-300">
-                      {p.value_coin == null ? "—" : `${fmt(p.value_coin)} GTX`}
+                      {player.value_coin == null ? "Value not filed" : `${fmt(player.value_coin)} GTX`}
                     </span>
                   </div>
-                </div>
+                  {archetype || mood ? (
+                    <p className="mt-1 text-[11px] text-slate-400">
+                      {[archetype, mood].filter(Boolean).join(" · ")}
+                    </p>
+                  ) : null}
+                </article>
               );
             })}
           </div>
         )}
       </div>
 
-      {/* Build-A-Son Legacy Program Educational Banner */}
-      <div
-        className="mb-6 rounded-xl border border-amber-500/30 bg-gradient-to-r from-amber-500/10 via-amber-950/20 to-black p-4"
-        data-testid="onboarding-build-a-son-banner"
-      >
-        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-          <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-500/20 text-amber-300 border border-amber-500/40">
-              <Dna size={22} />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <p className="text-xs font-black uppercase tracking-wider text-amber-300">
-                  Build-A-Son Legacy Program
-                </p>
-                <Chip tone="gold">Dynasty Feature</Chip>
-              </div>
-              <p className="mt-1 text-xs text-slate-300 leading-relaxed max-w-2xl">
-                After you open the club, Academy has Build a Son. You name an heir from a senior
-                player's bloodline and pay the induction in GTX. A lifetime club has a fixed number
-                of sons. This page does not induct one.
-              </p>
-            </div>
-          </div>
-          <div className="shrink-0">
-            <div className="text-right">
-              <p className="text-[10px] text-slate-500 uppercase">Where it lives</p>
-              <p className="text-xs font-bold text-amber-300">Academy, after the club opens</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      <p className="mb-4 text-xs text-slate-400" data-testid="onboarding-build-a-son-banner">
+        Build a Son stays on the Academy page after the club opens. It inducts an heir from a senior
+        player's bloodline and charges GTX. This step does not induct one.
+      </p>
 
-      {/* Primary Proceed Action */}
-      <div className="flex items-center justify-between border-t border-white/10 pt-4">
+      <div className="flex items-center justify-between gap-3 border-t border-white/10 pt-4">
         <p className="text-xs text-slate-400">
-          Your wonderkids will continue developing as competitive matchdays and training cycles
-          progress.
+          Academy players stay there until they are promoted. Rating moves through training and minutes.
         </p>
         <Btn
           onClick={onDone}
           className="flex items-center gap-2"
-          data-testid="onboarding-proceed-competition-bottom"
+          data-testid="onboarding-proceed-competition"
         >
           <span>Open my club</span>
           <ArrowRight size={14} />

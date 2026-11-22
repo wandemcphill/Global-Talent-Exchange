@@ -6,7 +6,7 @@ import { X } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { fmt, label } from "@/lib/owner";
 import { Btn, Chip, Loading, TraitBar } from "@/components/gtex/ui";
-import { PlayerCard } from "@/components/gtex/PlayerCard";
+import { PlayerCard, footMark, posShort, positionParts } from "@/components/gtex/PlayerCard";
 
 function PlayerAcquisition({ playerId }: { playerId: string }) {
   const qc = useQueryClient();
@@ -280,23 +280,21 @@ export function PlayerDrawer({
                 ]}
               />
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Chip tone="cyan">{p.primary_position || p.position}</Chip>
+            <div className="flex flex-wrap gap-2" data-testid="drawer-positions">
+              {positionParts(p.position).map((part) => (
+                <Chip key={part} tone="cyan">
+                  {posShort(part)}
+                </Chip>
+              ))}
               {playstyle && <Chip tone="gold">{playstyle}</Chip>}
               {p.current_league_name && <Chip>{p.current_league_name}</Chip>}
               {p.real_player_tier && <Chip tone="gold">{label(p.real_player_tier)}</Chip>}
               {p.lifecycle_status_label && <Chip tone="emerald">{p.lifecycle_status_label}</Chip>}
               {p.height_cm && <Chip>{p.height_cm} cm</Chip>}
-              {(p.dominant_foot || p.preferred_foot) && (
-                <Chip>
-                  {String(p.dominant_foot || p.preferred_foot)
-                    .replace(/foot/i, "")
-                    .trim()
-                    .replace(/^\w/, (letter) => letter.toUpperCase())}{" "}
-                  foot
-                </Chip>
-              )}
             </div>
+            <p className="text-sm font-semibold text-amber-200" data-testid="drawer-foot">
+              Favoured foot: {footMark(p.dominant_foot || p.preferred_foot) || "Not filed"}
+            </p>
             {(playstyle || playerTraits.length > 0) && (
               <div
                 className="rounded-sm border border-cyan-500/20 bg-cyan-500/[0.04] p-3.5 text-xs space-y-2.5"

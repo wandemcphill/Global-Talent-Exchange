@@ -91,6 +91,7 @@ export function MarketTableView({
                     }`}
                   >
                     {posShort(p.position)}
+                    {(p.dominant_foot || p.preferred_foot) ? ` · ${String(p.dominant_foot || p.preferred_foot).replace(/foot/i, "").trim()}` : ""}
                   </span>
                 </td>
 

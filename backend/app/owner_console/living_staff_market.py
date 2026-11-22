@@ -152,6 +152,31 @@ def staff_search_matches(blob: str, query: str | None) -> bool:
     return all(token in blob for token in tokens)
 
 
+_PHILOSOPHY_CUES: dict[str, tuple[str, ...]] = {
+    "youth_development": ("youth", "develop", "academy", "technical"),
+    "academy_first": ("youth", "academy", "develop"),
+    "selling_club": ("pragmatic", "develop", "balanced"),
+    "superstar": ("attacking", "elite", "star", "physical"),
+    "big_spending": ("attacking", "elite", "star"),
+    "sustainable": ("pragmatic", "balanced", "control"),
+    "balanced": ("balanced", "control"),
+    "nationality_focused": ("balanced",),
+    "regional": ("balanced",),
+}
+
+
+def philosophy_fit(philosophy: str | None, *parts: Any) -> str | None:
+    """A short reason when this person suits the club's filed philosophy."""
+    cues = _PHILOSOPHY_CUES.get(fold_staff_text(philosophy).replace(" ", "_"), ())
+    if not cues:
+        return None
+    blob = fold_staff_text(" ".join(str(part) for part in parts if part))
+    if not any(cue in blob for cue in cues):
+        return None
+    label = fold_staff_text(philosophy).replace("_", " ")
+    return f"Fits {label}"
+
+
 ROLE_DISPLAY_LABELS: dict[str, str] = {
     ROLE_FIRST_TEAM_MANAGER: "First-Team Manager",
     ROLE_GENERAL_MANAGER: "General Manager",
@@ -433,6 +458,8 @@ def list_staff_market_candidates(
     style: str | None = None,
     temperament: str | None = None,
     search: str | None = None,
+    sort: str | None = "rating",
+    philosophy: str | None = None,
 ) -> dict[str, Any]:
     """
     Queries the global professional staff employment market.
@@ -441,7 +468,8 @@ def list_staff_market_candidates(
     from app.owner_console import service
 
     state = service.require_state(session, club_id, user_id)
-    ensure_staff_market_profiles(session)
+    if session.scalar(select(ClubStaffProfile.id).limit(1)) is None:
+        ensure_staff_market_profiles(session)
 
     stmt = select(ClubStaffProfile).where(ClubStaffProfile.active.is_(True))
 
@@ -454,10 +482,18 @@ def list_staff_market_candidates(
             )
         )
 
-    profiles = session.scalars(stmt.order_by(ClubStaffProfile.rating.desc())).all()
     style_query = (style or "").strip().lower()
     temperament_query = (temperament or "").strip().lower()
     search_query = (search or "").strip().lower()
+    role_stmt = stmt
+    if search_query:
+        stmt = stmt.where(ClubStaffProfile.display_name.ilike(f"%{search_query}%"))
+    stmt = stmt.order_by(ClubStaffProfile.rating.desc())
+    if not search_query:
+        stmt = stmt.limit(250)
+    profiles = session.scalars(stmt).all()
+    if search_query and not profiles:
+        profiles = session.scalars(role_stmt.order_by(ClubStaffProfile.rating.desc()).limit(400)).all()
 
     candidates = []
     for p in profiles:
@@ -491,6 +527,16 @@ def list_staff_market_candidates(
             continue
         name_blob = fold_staff_text(p.display_name)
         name_hit = bool(search_query) and staff_search_matches(name_blob, search_query)
+        fit = philosophy_fit(
+            philosophy,
+            candidate_style,
+            candidate_temperament,
+            meta.get("mentality"),
+            meta.get("philosophy_summary"),
+            meta.get("traits"),
+            meta.get("tactics"),
+            p.skills_json,
+        )
 
         min_p = _safe_int(meta.get("min_prestige"), 15)
         can_attract = state.prestige >= min_p
@@ -537,14 +583,30 @@ def list_staff_market_candidates(
                 "age": meta.get("age"),
                 "nation": meta.get("nation"),
                 "preferred_formation": meta.get("preferred_formation"),
+                "mentality": meta.get("mentality"),
+                "philosophy_summary": meta.get("philosophy_summary"),
+                "philosophy_fit": fit,
                 "_name_hit": name_hit,
+                "_fit": bool(fit),
             }
         )
 
+    recommend = (sort or "").strip().lower() == "recommended"
     if search_query:
-        candidates.sort(key=lambda item: (0 if item.get("_name_hit") else 1, -(item.get("rating") or 0)))
+        candidates.sort(
+            key=lambda item: (
+                0 if item.get("_name_hit") else 1,
+                0 if recommend and item.get("_fit") else 1,
+                -(item.get("rating") or 0),
+            )
+        )
+    elif recommend:
+        candidates.sort(key=lambda item: (0 if item.get("_fit") else 1, -(item.get("rating") or 0)))
+    else:
+        candidates.sort(key=lambda item: -(item.get("rating") or 0))
     for item in candidates:
         item.pop("_name_hit", None)
+        item.pop("_fit", None)
 
     start = max(0, int(offset or 0))
     page_size = max(1, min(100, int(limit or 50)))

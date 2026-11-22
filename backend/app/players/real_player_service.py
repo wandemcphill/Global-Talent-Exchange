@@ -646,22 +646,22 @@ class RealPlayerUniverseQueryService:
         def matches_codes(column):
             return or_(*(self._position_code_match(column, code) for code in codes)) if codes else literal(False)
 
-        profile_match = exists(
-            select(RealPlayerProfile.id)
-            .where(
-                RealPlayerProfile.gtex_player_id == Player.id,
-                or_(
-                    matches(RealPlayerProfile.canonical_name),
-                    matches(cast(RealPlayerProfile.known_aliases_json, String)),
-                    matches(RealPlayerProfile.nationality),
-                    matches(RealPlayerProfile.current_club_name),
-                    matches(RealPlayerProfile.primary_position),
-                    matches_codes(RealPlayerProfile.primary_position),
-                    matches(cast(RealPlayerProfile.secondary_positions_json, String)),
-                    matches_codes(cast(RealPlayerProfile.secondary_positions_json, String)),
-                ),
+        # Name, club, and nation stay on the player row. Profile JSON is only
+        # consulted for a position word, so a surname does not scan every alias.
+        profile_match = (
+            exists(
+                select(RealPlayerProfile.id)
+                .where(
+                    RealPlayerProfile.gtex_player_id == Player.id,
+                    or_(
+                        matches_codes(RealPlayerProfile.primary_position),
+                        matches_codes(cast(RealPlayerProfile.secondary_positions_json, String)),
+                    ),
+                )
+                .correlate(Player)
             )
-            .correlate(Player)
+            if codes
+            else literal(False)
         )
         country_match = exists(
             select(Country.id)

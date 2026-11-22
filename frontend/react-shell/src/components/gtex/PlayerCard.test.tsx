@@ -17,6 +17,7 @@ describe("PlayerCard & RegenCard Logic and Element Rendering Suite", () => {
     expect(posShort("attacking midfielder")).toBe("AM");
     expect(posShort(undefined)).toBe("-");
     expect(posShort("")).toBe("-");
+    expect(posShort("LW / LM / AM / ST")).toBe("LW");
   });
 
   test("tierOf categorizes ratings into Standard, Elite, Legendary and Regen", () => {

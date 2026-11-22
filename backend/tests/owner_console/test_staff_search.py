@@ -1,4 +1,9 @@
-from app.owner_console.living_staff_market import fold_staff_text, staff_search_blob, staff_search_matches
+from app.owner_console.living_staff_market import (
+    fold_staff_text,
+    philosophy_fit,
+    staff_search_blob,
+    staff_search_matches,
+)
 
 
 def test_staff_search_matches_surname_accents_and_apostrophes() -> None:
@@ -14,3 +19,11 @@ def test_staff_search_matches_surname_accents_and_apostrophes() -> None:
     assert staff_search_matches(mcphill, "mc phill")
     assert not staff_search_matches(ferguson, "arteta")
     assert fold_staff_text("Jürgen Klopp") == "jurgen klopp"
+
+
+def test_philosophy_fit_matches_a_youth_coach_and_skips_a_defensive_one() -> None:
+    assert (
+        philosophy_fit("youth_development", "Technical Possession", "develops young players")
+        == "Fits youth development"
+    )
+    assert philosophy_fit("superstar", "Compact Block", "defensive") is None

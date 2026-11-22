@@ -877,7 +877,15 @@ export const clubStaffMarketCandidatesEndpoint = (
   role?: string,
   employmentStatus: string = "unemployed",
   limit: number = 50,
-  filters?: { wageMax?: string; style?: string; temperament?: string; search?: string; offset?: number }
+  filters?: {
+    wageMax?: string;
+    style?: string;
+    temperament?: string;
+    search?: string;
+    offset?: number;
+    sort?: string;
+    philosophy?: string;
+  }
 ) => {
   const params = new URLSearchParams();
   if (role && role !== "all") params.set("role", role);
@@ -888,6 +896,8 @@ export const clubStaffMarketCandidatesEndpoint = (
   if (filters?.style) params.set("style", filters.style);
   if (filters?.temperament) params.set("temperament", filters.temperament);
   if (filters?.search) params.set("search", filters.search);
+  if (filters?.sort) params.set("sort", filters.sort);
+  if (filters?.philosophy) params.set("philosophy", filters.philosophy);
   return `/owner/clubs/${encodeURIComponent(clubId)}/living-world/staff-market/candidates?${params.toString()}`;
 };
 

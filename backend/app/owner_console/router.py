@@ -2917,6 +2917,8 @@ def get_living_world_staff_market_candidates(
     style: str | None = None,
     temperament: str | None = None,
     search: str | None = None,
+    sort: str | None = None,
+    philosophy: str | None = None,
     user=Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> dict[str, Any]:
@@ -2935,6 +2937,8 @@ def get_living_world_staff_market_candidates(
             style=style,
             temperament=temperament,
             search=search,
+            sort=sort,
+            philosophy=philosophy,
         )
 
     return _run(session, _op)

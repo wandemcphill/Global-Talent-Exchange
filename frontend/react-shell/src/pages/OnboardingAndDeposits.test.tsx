@@ -9,7 +9,7 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PaymentCallback from "./PaymentCallback";
-import Onboarding from "./Onboarding";
+import Onboarding, { academyIntakeQuote, isAcademyListPlayer } from "./Onboarding";
 
 let mockSearchParams = new URLSearchParams();
 let mockUser: any = {
@@ -264,5 +264,20 @@ describe("PaymentCallback and Onboarding grant/funding flows", () => {
     await flush();
     expect(container.querySelector('[data-testid="onboarding-identity-step"]')?.textContent).toContain("3,500 GTX");
     expect(container.querySelector('[data-testid="onboarding-identity-step"]')?.textContent).toContain("first 500 eligible club owners");
+  });
+});
+
+describe("academy list facts", () => {
+  it("prices the intake from the academy facility level", () => {
+    expect(academyIntakeQuote(1)).toEqual({ level: 1, cost: 1500, minimumArrivals: 1 });
+    expect(academyIntakeQuote(3)).toEqual({ level: 3, cost: 4500, minimumArrivals: 2 });
+  });
+
+  it("lists academy players and leaves the senior squad off that list", () => {
+    expect(isAcademyListPlayer({ squad_status: "academy", name: "Youth" })).toBe(true);
+    expect(isAcademyListPlayer({ acquired_via: "academy", squad_status: "" })).toBe(true);
+    expect(isAcademyListPlayer({ acquired_via: "academy", squad_status: "first_team" })).toBe(false);
+    expect(isAcademyListPlayer({ is_regen: true, acquired_via: "share", squad_status: "first_team" })).toBe(false);
+    expect(isAcademyListPlayer({ squad_status: "academy", promoted: true })).toBe(false);
   });
 });

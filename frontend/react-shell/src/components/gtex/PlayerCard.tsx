@@ -23,11 +23,31 @@ export const POS: Record<string, string> = {
   "centre-forward": "CF",
 };
 
+export function positionParts(p?: string): string[] {
+  if (!p) return [];
+  return p
+    .split(/[/|,]/)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
 export const posShort = (p?: string): string => {
-  if (!p) return "-";
-  if (p.includes("/")) return p.toUpperCase();
-  return POS[p.toLowerCase()] || (p.length <= 4 ? p.toUpperCase() : p.slice(0, 3).toUpperCase());
+  const first = positionParts(p)[0] || "";
+  if (!first) return "-";
+  return POS[first.toLowerCase()] || (first.length <= 4 ? first.toUpperCase() : first.slice(0, 3).toUpperCase());
 };
+
+export function footMark(foot?: string | null): string | null {
+  if (foot == null) return null;
+  const value = String(foot).trim().toLowerCase();
+  if (!value) return null;
+  if (value.startsWith("l")) return "Left";
+  if (value.startsWith("r")) return "Right";
+  if (value.startsWith("b") || value.startsWith("e")) return "Both";
+  const cleaned = value.replace(/foot/gi, "").trim();
+  if (!cleaned) return null;
+  return cleaned.replace(/^\w/, (letter) => letter.toUpperCase());
+}
 
 export type TierType = "standard" | "elite" | "legendary" | "regen";
 
@@ -200,10 +220,16 @@ export function PlayerCard(props: PlayerCardProps) {
   } = props;
 
   const numRating = Number(rating || 0);
-  const footLabel = foot
-    ? `${String(foot).replace(/foot/i, "").trim().replace(/^\w/, (letter) => letter.toUpperCase())} foot`
-    : null;
-  const bodyLine = [heightCm ? `${heightCm} cm` : null, footLabel].filter(Boolean).join(" · ");
+  const favouredFoot = footMark(foot);
+  const bodyLine = heightCm ? `${heightCm} cm` : null;
+  const footBadge = favouredFoot ? (
+    <span
+      data-testid={`${testid}-foot`}
+      className="mt-1 inline-flex w-fit items-center rounded border border-amber-300/50 bg-amber-400/15 px-1.5 py-0.5 text-[10px] font-black uppercase tracking-wide text-amber-200"
+    >
+      {favouredFoot} foot
+    </span>
+  ) : null;
   const tier = props.tier ? TIERS[props.tier] || tierOf(numRating) : tierOf(numRating);
   const [imgError, setImgError] = useState(false);
   const cardRef = useRef<HTMLElement | null>(null);
@@ -273,7 +299,9 @@ export function PlayerCard(props: PlayerCardProps) {
             <span className="truncate text-xs font-bold text-white">{name}</span>
           </div>
           <span className="gx-mono text-[9px] text-slate-400">
-            {posShort(position)} {club ? `· ${club}` : ""}
+            {posShort(position)}
+            {favouredFoot ? ` · ${favouredFoot}` : ""}
+            {club ? ` · ${club}` : ""}
           </span>
         </div>
       </div>
@@ -326,6 +354,7 @@ export function PlayerCard(props: PlayerCardProps) {
             <span className="gx-mono mt-1 text-xs font-extrabold tracking-wider text-slate-200">
               {posShort(position)}
             </span>
+            {footBadge}
             {potential != null && (
               <span className="gx-mono mt-1 inline-block rounded bg-[#00C991]/20 border border-[#00C991]/40 px-1.5 py-0.5 text-[10px] text-[#00E8A8] font-extrabold">
                 POT {potential}
@@ -465,6 +494,7 @@ export function PlayerCard(props: PlayerCardProps) {
             <span className="gx-mono mt-0.5 text-xs font-black tracking-wider text-slate-200">
               {posShort(position)}
             </span>
+            {footBadge}
           </div>
           <div className="h-7 w-[1px] bg-white/15" />
           <div className="flex flex-col text-left leading-none">

@@ -55,11 +55,20 @@ def list_catalog(
     mentality: str | None = Query(default=None),
     rarity: str | None = Query(default=None),
     limit: int = Query(default=250, ge=1, le=1000),
+    sort: str | None = Query(default=None),
     service: ManagerMarketService = Depends(get_service),
     session: Session = Depends(get_session),
 ) -> ManagerCatalogPage:
     return service.list_catalog(
-        request.app, session, search=search, tactic=tactic, trait=trait, mentality=mentality, rarity=rarity, limit=limit
+        request.app,
+        session,
+        search=search,
+        tactic=tactic,
+        trait=trait,
+        mentality=mentality,
+        rarity=rarity,
+        limit=limit,
+        sort=sort,
     )
 
 

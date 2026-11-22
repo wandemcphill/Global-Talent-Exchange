@@ -9,7 +9,7 @@ from threading import Lock
 from typing import Any
 
 from fastapi import FastAPI
-from sqlalchemy import func, or_, select
+from sqlalchemy import case, func, or_, select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
@@ -120,11 +120,19 @@ class ManagerMarketService:
         mentality: str | None = None,
         rarity: str | None = None,
         limit: int = 250,
+        sort: str | None = None,
     ) -> ManagerCatalogPage:
         self._bootstrap_db(app, session)
         stmt = select(ManagerCatalogEntry)
         if search:
-            stmt = stmt.where(ManagerCatalogEntry.display_name.ilike(f"%{search.strip()}%"))
+            term = f"%{search.strip()}%"
+            stmt = stmt.where(
+                or_(
+                    ManagerCatalogEntry.display_name.ilike(term),
+                    ManagerCatalogEntry.philosophy_summary.ilike(term),
+                    ManagerCatalogEntry.mentality.ilike(term),
+                )
+            )
         if tactic:
             stmt = stmt.where(ManagerCatalogEntry.tactics.contains([tactic]))
         if trait:
@@ -133,7 +141,17 @@ class ManagerMarketService:
             stmt = stmt.where(ManagerCatalogEntry.mentality == mentality)
         if rarity:
             stmt = stmt.where(ManagerCatalogEntry.rarity == rarity)
-        items = session.scalars(stmt.order_by(ManagerCatalogEntry.display_name.asc()).limit(limit)).all()
+        if (sort or "").strip().lower() == "rating":
+            rarity_rank = case(
+                (ManagerCatalogEntry.rarity == "legendary", 0),
+                (ManagerCatalogEntry.rarity == "elite_active", 1),
+                (ManagerCatalogEntry.rarity == "rare", 2),
+                else_=3,
+            )
+            ordering = (rarity_rank.asc(), ManagerCatalogEntry.display_name.asc())
+        else:
+            ordering = (ManagerCatalogEntry.display_name.asc(),)
+        items = session.scalars(stmt.order_by(*ordering).limit(limit)).all()
         total = session.scalar(select(func.count()).select_from(stmt.subquery())) or 0
         return ManagerCatalogPage(items=[self._catalog_item(session, row) for row in items], total=int(total))
 
