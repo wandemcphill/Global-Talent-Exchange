@@ -73,12 +73,14 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
     facs = dict(state.facilities_json or {})
     exec_staff = dict(facs.get("_executive_staff") or {})
     stored_manager = dict(state.manager_json or {})
+    if not stored_manager.get("name") and isinstance(exec_staff.get("first_team_manager"), dict):
+        stored_manager = dict(exec_staff["first_team_manager"])
     caretaker = (
         not stored_manager.get("name")
         or stored_manager.get("is_default")
         or stored_manager.get("manager_id") == "gtex-staff-coach"
     )
-    mgr = {} if caretaker else stored_manager
+    mgr = {} if caretaker else engine.apply_staff_influence(stored_manager, "first_team_manager")
 
     # General Manager
     gm_raw = exec_staff.get("general_manager")
@@ -90,7 +92,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         and "vacant" not in str(gm_raw.get("name") or "").lower()
     )
     if gm_appointed:
-        gm = dict(gm_raw)
+        gm = engine.apply_staff_influence(dict(gm_raw), "general_manager")
         gm_name = str(gm.get("name") or "General Manager")
         gm_label = "General Manager"
         gm_status = "appointed"
@@ -124,7 +126,7 @@ def _resolve_staff_directory(state: OwnerClubState) -> dict[str, dict[str, Any]]
         and "vacant" not in str(hoyd_raw.get("name") or "").lower()
     )
     if hoyd_appointed:
-        hoyd = dict(hoyd_raw)
+        hoyd = engine.apply_staff_influence(dict(hoyd_raw), "head_of_youth_development")
         hoyd_name = str(hoyd.get("name") or "Head of Youth Development")
         hoyd_label = "Head of Youth Development"
         hoyd_status = "appointed"
@@ -397,9 +399,41 @@ def _build_or_sync_daily_operational_decisions(
     world_day = int(state.world_day or 1)
     club_id = state.club_id
 
+    def _is_academy_prospect(p: OwnerSquadPlayer) -> bool:
+        pers = dict(p.personality_json or {})
+        return (
+            engine.squad_sheet(
+                squad_status=pers.get("squad_status"),
+                is_regen=p.is_regen,
+                age=p.age,
+                minutes=p.minutes,
+                acquired_via=p.acquired_via,
+            )
+            == "academy"
+        )
+
+    academy_ids = {str(p.id) for p in squad_players if _is_academy_prospect(p)}
+    expected_staff_names = {
+        "first_team_manager": staff["first_team_manager"]["name"],
+        "general_manager": staff["general_manager"]["name"],
+        "head_of_youth_development": staff["head_of_youth_development"]["name"],
+    }
     existing_store = dict(facs.get("_daily_operational_decisions") or {})
-    if existing_store.get("world_day") == world_day and isinstance(existing_store.get("items"), list):
-        return list(existing_store["items"])
+    existing_items = existing_store.get("items") if isinstance(existing_store.get("items"), list) else None
+    cache_valid = bool(existing_store.get("world_day") == world_day and existing_items)
+    if cache_valid and existing_items is not None:
+        for item in existing_items:
+            role = str(item.get("proposer_role") or "")
+            if role in expected_staff_names and item.get("proposer_name") != expected_staff_names[role]:
+                cache_valid = False
+                break
+            if item.get("operation_key") == "academy_contract":
+                pid = str((item.get("payload") or {}).get("player_id") or "")
+                if pid and pid not in academy_ids:
+                    cache_valid = False
+                    break
+    if cache_valid and existing_items is not None:
+        return list(existing_items)
 
     now_iso = datetime.now(timezone.utc).isoformat()
     decisions: list[dict[str, Any]] = []
@@ -554,7 +588,7 @@ def _build_or_sync_daily_operational_decisions(
 
     # 3. Academy Department Recommendation: Youth Intake or Improved Academy Contract
     hoyd = staff["head_of_youth_development"]
-    regens = [p for p in squad_players if p.is_regen]
+    regens = [p for p in squad_players if _is_academy_prospect(p)]
     acad_lvl = _safe_int(facs.get("academy", 1), 1)
     intake_cost = 1500 * acad_lvl
     uncontracted_regen = next(
@@ -765,11 +799,18 @@ def build_authoritative_daily_briefing(
     world_day = int(state.world_day or 1)
     facs = dict(state.facilities_json or {})
 
+    staff = _resolve_staff_directory(state)
     cached = facs.get("_daily_briefing")
+    cached_staff = (cached or {}).get("staff_directory") or {}
+    cached_staff_matches = all(
+        (cached_staff.get(role) or {}).get("name") == staff[role]["name"]
+        for role in ("first_team_manager", "general_manager", "head_of_youth_development")
+    )
     if (
         cached
         and not force_refresh
         and cached.get("world_day") == world_day
+        and cached_staff_matches
         and "executive_briefing" in cached
         and "medical_directors_report" in cached
         and "financial_commercial_report" in cached
@@ -844,7 +885,18 @@ def build_authoritative_daily_briefing(
     ]
     injured_ids = {p.id for p in injured_players_rows}
     available_players_rows = [p for p in squad_players if p.id not in injured_ids]
-    regens = [p for p in squad_players if p.is_regen]
+    regens = [
+        p
+        for p in squad_players
+        if engine.squad_sheet(
+            squad_status=(p.personality_json or {}).get("squad_status"),
+            is_regen=p.is_regen,
+            age=p.age,
+            minutes=p.minutes,
+            acquired_via=p.acquired_via,
+        )
+        == "academy"
+    ]
     ready_prospects = [p for p in regens if p.rating >= 58 and p.id not in injured_ids]
 
     # Medical recovery parameters (exact same formula as service.tick_club)

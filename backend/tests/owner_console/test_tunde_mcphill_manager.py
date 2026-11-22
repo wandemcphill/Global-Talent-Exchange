@@ -16,8 +16,9 @@ def test_tunde_mcphill_is_a_locked_first_team_manager() -> None:
     assert profile["style"] == "Gegenpressing Counter-Attack"
     assert profile["tactical_preference"] == "pressing"
     assert profile["preferred_formation"] == "3-4-3"
-    assert profile["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
-    assert profile["tactics"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "gegenpress", "counter_attack"]
+    assert profile["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2"]
+    assert profile["fallback_formation"] == "4-4-2"
+    assert profile["tactics"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2", "gegenpress", "counter_attack"]
     assert profile["youth_age_max"] == 26
     assert profile["uses_academy_players"] is True
     assert profile["transfer_preference"] == "youth-first"

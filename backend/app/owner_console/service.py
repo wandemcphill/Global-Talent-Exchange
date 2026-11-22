@@ -398,7 +398,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
         "first_team_count": first_team_count,
         "reserve_count": reserve_count,
         "academy_count": academy_count,
-        "progress_label": f"{total_registered} registered · {MIN_SQUAD} to play",
+        "progress_label": f"{total_registered} registered Â· {MIN_SQUAD} to play",
     }
 
 
@@ -535,12 +535,12 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         elif manager_approved:
             hoyd_verdict = (
                 f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
-                f"Cleared for a first-team call-up · {mood_profile['contract_summary']}"
+                f"Cleared for a first-team call-up Â· {mood_profile['contract_summary']}"
             )
         else:
             hoyd_verdict = (
                 f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
-                f"Keep developing on the academy sheet · {mood_profile['contract_summary']}"
+                f"Keep developing on the academy sheet Â· {mood_profile['contract_summary']}"
             )
     readiness_assessment = {
         "readiness_score": readiness_score,
@@ -570,11 +570,13 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     needs_portrait = (
         session is not None
         and p.is_regen
-        and p.acquired_via == "academy"
-        and not storytelling.stored_regen_portrait_url(p)
+        and (
+            not storytelling.stored_regen_portrait_url(p)
+            or "new_styles/" not in str(pers.get("portrait_storage_key") or pers.get("portrait_url") or "")
+        )
     )
     if needs_portrait:
-        assign_academy_regen_portrait(session, p)
+        assign_academy_regen_portrait(session, p, replace_legacy=True)
     portrait_url = storytelling.stored_regen_portrait_url(p) or storytelling.resolve_player_portrait_url(
         session, p.id, p.name
     )
@@ -674,7 +676,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
                 "owner_hook": (
                     "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
                     if p.morale < 55
-                    else "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
+                    else "High morale â€” prime candidate for Senior Promotion or Sponsor Endorsement."
                 ),
             }
             if p.morale is not None
@@ -1278,7 +1280,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
                     user_id=user_id,
                     related_type="player",
                     related_id=related_id,
-                    memo=f"Released {target.name} (refund · {cls})",
+                    memo=f"Released {target.name} (refund Â· {cls})",
                 )
             if fee_share > 0:
                 ledger.record(
@@ -1293,7 +1295,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
                     user_id=user_id,
                     related_type="player",
                     related_id=related_id,
-                    memo=f"Released {target.name} (platform fee returned · {cls})",
+                    memo=f"Released {target.name} (platform fee returned Â· {cls})",
                 )
             remaining_refund -= portion
         if remaining_refund > 0 and not purchase_events:
@@ -1603,10 +1605,12 @@ def assign_academy_regen_portrait(
     player: OwnerSquadPlayer,
     *,
     used_storage_keys: set[str] | None = None,
+    replace_legacy: bool = False,
 ) -> str | None:
     """Store one nationality-matched face-bank portrait on an academy regen.
 
     A missing face bank leaves the portrait empty so intake can still finish.
+    With ``replace_legacy`` an older non-youth face is swapped for a new_styles face.
     """
     from sqlalchemy.orm.attributes import flag_modified
 
@@ -1615,7 +1619,8 @@ def assign_academy_regen_portrait(
     personality = dict(player.personality_json or {})
     existing = personality.get("portrait_url")
     existing_key = str(personality.get("portrait_storage_key") or "")
-    if isinstance(existing, str) and existing.strip():
+    legacy = replace_legacy and "new_styles/" not in (existing_key or str(existing or ""))
+    if isinstance(existing, str) and existing.strip() and not legacy:
         if used_storage_keys is not None and existing_key:
             used_storage_keys.add(existing_key)
         return existing.strip()
@@ -3582,6 +3587,22 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
     }
 
 
+def _pitch_card(player: dict[str, Any]) -> dict[str, Any]:
+    """The face, role and rating the tactical board shows for a filed player."""
+    return {
+        "id": player["id"],
+        "name": player["name"],
+        "position": player.get("position"),
+        "position_display": player.get("position_display"),
+        "rating": player.get("rating"),
+        "age": player.get("age"),
+        "portrait_url": player.get("portrait_url"),
+        "squad_status": player.get("squad_status"),
+        "mood_state": player.get("mood_state"),
+        "performance_shift": player.get("performance_shift"),
+    }
+
+
 def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     from app.owner_console import living_institution, storytelling
 
@@ -3594,24 +3615,49 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     media_overview = living_institution.get_media_ecosystem_overview(session, state, limit=12)
     institutional_pulse = living_institution.get_unified_club_pulse(session, state)
     players = [player_dict(p, session) for p in squad(session, club_id)]
+    tactics_plan = engine.manager_tactics(state.manager_json, facilities)
     selection = facilities.get("_last_manager_matchday_selection") or {}
     filed_ids = [str(pid) for pid in (selection.get("starting_xi_ids") or [])] if isinstance(selection, dict) else []
     by_id = {str(player["id"]): player for player in players}
+    selection_formation = str(selection.get("formation") or "") if isinstance(selection, dict) else ""
+    valid_shapes = set(tactics_plan.get("formations") or [])
+    slot_one_pos = (
+        str((by_id.get(filed_ids[1]) or {}).get("position") or "").upper()
+        if len(filed_ids) > 1 and filed_ids[1] in by_id
+        else ""
+    )
+    needs_lineup_refresh = bool(
+        len(players) >= 11
+        and (
+            (selection_formation and valid_shapes and selection_formation not in valid_shapes)
+            or slot_one_pos in {"ST", "CF", "LW", "RW", "FW", "FWD"}
+        )
+    )
+    if needs_lineup_refresh:
+        try:
+            from app.owner_console import autonomous_staff_engine
+
+            autonomous_staff_engine.select_manager_matchday_lineup(session, state, user_id)
+            facilities = state.facilities_json or {}
+            selection = facilities.get("_last_manager_matchday_selection") or {}
+            filed_ids = (
+                [str(pid) for pid in (selection.get("starting_xi_ids") or [])] if isinstance(selection, dict) else []
+            )
+        except Exception:
+            pass
     bench_ids = [str(pid) for pid in (selection.get("bench_ids") or [])] if isinstance(selection, dict) else []
-    matchday_xi = [
-        {"id": pid, "name": by_id[pid]["name"], "position": by_id[pid].get("position")}
-        for pid in filed_ids
-        if pid in by_id
-    ]
-    matchday_bench = [
-        {"id": pid, "name": by_id[pid]["name"], "position": by_id[pid].get("position")}
-        for pid in bench_ids
-        if pid in by_id
-    ]
-    matchday_formation = selection.get("formation") if isinstance(selection, dict) else None
+    matchday_xi = [{**_pitch_card(by_id[pid])} for pid in filed_ids if pid in by_id]
+    matchday_bench = [{**_pitch_card(by_id[pid])} for pid in bench_ids if pid in by_id]
+    matchday_formation = (selection.get("formation") if isinstance(selection, dict) else None) or tactics_plan.get(
+        "formation"
+    )
     return {
         **club_card(session, state),
-        "manager_profile": state.manager_json,
+        "manager_profile": (
+            engine.apply_staff_influence(dict(state.manager_json), "first_team_manager")
+            if state.manager_json
+            else state.manager_json
+        ),
         "supporters_summary": supporters_overview.get("profile"),
         "matchday_atmosphere": supporters_overview.get("matchday_atmosphere"),
         "media_standing": media_overview.get("media_standing"),
@@ -4790,7 +4836,7 @@ def conduct_press_conference(
                 if statement
                 else f"Owner Speaks Publicly at {state.club_name}"
             ),
-            subheadline=f"Verified press briefing · Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
+            subheadline=f"Verified press briefing Â· Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
             body=(
                 f"During a formal press briefing on World Day {world_day}, the {state.club_name} owner adopted a "
                 f"{tone.replace('_', ' ')} tone" + (f': "{statement}"' if statement else ".")

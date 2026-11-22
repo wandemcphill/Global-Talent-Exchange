@@ -94,7 +94,7 @@ class SquadRegistrationView(BaseModel):
 
 class SquadRegistrationUpsertRequest(BaseModel):
     season_label: str = Field(default="launch", min_length=1, max_length=32)
-    player_ids: list[str] = Field(default_factory=list, max_length=40)
+    player_ids: list[str] = Field(default_factory=list, max_length=150)
 
 
 class ClubOperatingDashboardView(BaseModel):

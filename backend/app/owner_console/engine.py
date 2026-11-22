@@ -304,9 +304,11 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "potential": 88,
         "rarity": "established",
         "profile_locked": True,
+        "portrait_url": "/staff-portraits/mature_m_west_african_41.jpg",
         "preferred_formation": "3-4-3",
-        "preferred_formations": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"],
-        "tactics": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "gegenpress", "counter_attack"],
+        "preferred_formations": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2"],
+        "fallback_formation": "4-4-2",
+        "tactics": ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2", "gegenpress", "counter_attack"],
         "traits": ["develops_young_players", "academy_promotion_bias", "tactical_flexibility", "balanced_substitution"],
         "youth_age_max": 26,
         "uses_academy_players": True,
@@ -315,14 +317,18 @@ EXECUTIVE_STAFF_CATALOG: list[dict[str, Any]] = [
         "family_relationship": "Father of academy striker Folarin Mc'Phill (Nigeria)",
         "bio": (
             "Tunde Mc'Phill, 37, Nigerian tactician who coaches high-voltage gegenpressing and counter-attacking football. "
-            "He rotates 3-4-3, 3-4-1-2, 3-4-2-1, and a 4-1-2-1-2 diamond (4-4-2 diamond): "
+            "He rotates 3-4-3, 3-4-1-2, 3-4-2-1, and a 4-1-2-1-2 diamond (4-4-2 diamond), with 4-4-2 as his fallback: "
             "aggressive counter-pressing traps, rapid vertical transitions, and relentless front-three movement. "
             "Father of academy striker Folarin Mc'Phill. He selects players under 26 and builds the side from academy graduates. "
             "Youth rating & tactical influence 16. GSI 76, potential 88."
         ),
         "philosophy_summary": (
-            "Gegenpressing counter-attacking football across 3-4-3, 3-4-1-2, 3-4-2-1, and 4-1-2-1-2 diamond. "
+            "Gegenpressing counter-attacking football across 3-4-3, 3-4-1-2, 3-4-2-1, and 4-1-2-1-2 diamond (4-4-2 fallback). "
             "Father of academy striker Folarin Mc'Phill. Players under 26, academy graduates first."
+        ),
+        "personal_agenda": (
+            "Gegenpressing counter-attacking football across 3-4-3, 3-4-1-2, 3-4-2-1, and 4-1-2-1-2 diamond (4-4-2 fallback). "
+            "Promote academy graduates and players under 26."
         ),
         "specialty": "Gegenpressing Counter-Attack & Youth Pathway",
     },
@@ -740,11 +746,30 @@ def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[
             "son_player_name",
             "family_relationship",
             "profile_locked",
+            "fallback_formation",
+            "personal_agenda",
+            "portrait_url",
         ):
             if locked.get(key) is not None:
                 record[key] = list(locked[key]) if isinstance(locked[key], list) else locked[key]
         if not record.get("manager_id") and locked.get("id"):
             record["manager_id"] = locked["id"]
+    if not record.get("personal_agenda"):
+        agenda = (
+            record.get("philosophy_summary")
+            or record.get("philosophy")
+            or record.get("specialty")
+            or record.get("style")
+            or record.get("bio")
+        )
+        if agenda:
+            record["personal_agenda"] = str(agenda)
+    if not record.get("portrait_url"):
+        nation_lower = str(record.get("nation") or record.get("nationality") or "").lower()
+        if any(k in nation_lower for k in ("nigeria", "ghana", "senegal", "cameroon", "ivory", "mali", "kenya")):
+            record["portrait_url"] = "/staff-portraits/mature_m_west_african_41.jpg"
+        else:
+            record["portrait_url"] = "/staff-portraits/mature_m_north_european_54.jpg"
     rating_raw = record.get("rating")
     if rating_raw is None:
         rating_raw = record.get("gsi")
@@ -989,12 +1014,18 @@ def manager_tactics(manager: dict[str, Any] | None, facilities: dict[str, Any] |
             formations = ["4-2-3-1", "4-3-3", "4-4-2"]
     manager_id = str(record.get("manager_id") or record.get("id") or "")
     stored = str(setup.get("formation") or "")
-    ratified = bool(manager_id) and str(setup.get("ratified_manager_id") or "") == manager_id and bool(stored)
+    ratified = (
+        bool(manager_id)
+        and str(setup.get("ratified_manager_id") or "") == manager_id
+        and bool(stored)
+        and (stored in formations or bool(setup.get("owner_override")))
+    )
     effects = calculate_staff_effects({"first_team_manager": record})
     return {
         "manager_name": str(record.get("name") or record.get("display_name") or ""),
         "formation": stored if ratified else formations[0],
         "formations": formations,
+        "fallback_formation": record.get("fallback_formation") or (formations[-1] if len(formations) > 1 else None),
         "mentality": mentality or str(setup.get("mentality") or ""),
         "style": record.get("style"),
         "philosophy_summary": record.get("philosophy_summary") or record.get("philosophy"),
@@ -1053,6 +1084,8 @@ def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
         "gsi",
         "potential",
         "preferred_formation",
+        "fallback_formation",
+        "personal_agenda",
         "youth_age_max",
         "nation",
         "nationality",

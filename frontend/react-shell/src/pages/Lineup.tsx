@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, ArrowRight, CircleHelp, Save, ShieldCheck, Users } from "lucide-react";
 import { toast } from "sonner";
 import { api, errMsg } from "@/lib/api";
-import { useActiveClub } from "@/lib/owner";
+import { useActiveClub, useClub } from "@/lib/owner";
 import { Btn, Chip, Empty, Loading, PageHeader, Panel } from "@/components/gtex/ui";
 import { MatchdayLineupBroadcast } from "@/components/gtex/MatchdayLineupBroadcast";
 import { KitBakedMark } from "@/components/gtex/KitBakedMark";
@@ -18,13 +18,143 @@ import {
   type LineupPlayer,
 } from "./lineupModel";
 
+function playerPositionLine(position?: string | null): "GK" | "DEF" | "MID" | "FWD" {
+  const raw = String(position || "")
+    .trim()
+    .toUpperCase()
+    .split("/")[0]
+    .trim();
+  if (raw === "GK" || raw === "GOALKEEPER" || raw.startsWith("GOAL")) return "GK";
+  if (
+    ["CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"].includes(raw) ||
+    raw.startsWith("DEF") ||
+    raw.includes("BACK")
+  ) {
+    return "DEF";
+  }
+  if (
+    ["DM", "CDM", "CM", "AM", "CAM", "LM", "RM", "MF", "MID"].includes(raw) ||
+    raw.startsWith("MID")
+  ) {
+    return "MID";
+  }
+  if (
+    ["ST", "CF", "LW", "RW", "SS", "FW", "FWD", "ATT"].includes(raw) ||
+    raw.startsWith("FORW") ||
+    raw.startsWith("STRIK")
+  ) {
+    return "FWD";
+  }
+  return "MID";
+}
+
+function formationLineTargets(shape: string): { def: number; mid: number; fwd: number } {
+  const parts = String(shape || "4-3-3")
+    .split("-")
+    .map((p) => Number(p))
+    .filter((n) => Number.isFinite(n) && n > 0);
+  if (parts.length >= 3 && parts.reduce((acc, n) => acc + n, 0) === 10) {
+    return {
+      def: parts[0],
+      fwd: parts[parts.length - 1],
+      mid: parts.slice(1, -1).reduce((acc, n) => acc + n, 0),
+    };
+  }
+  return { def: 4, mid: 3, fwd: 3 };
+}
+
+function slotPlayersForShape(
+  shape: string,
+  firstTeamPool: LineupPlayer[],
+  preferredIds: string[] = [],
+): string[] {
+  const byId = new Map(firstTeamPool.map((p) => [p.player_id, p]));
+  const preferred = preferredIds
+    .map((id) => byId.get(id))
+    .filter((p): p is LineupPlayer => Boolean(p));
+  const ranked = [...firstTeamPool].sort(
+    (a, b) =>
+      Number(b.effective_match_rating ?? b.rating ?? 0) -
+      Number(a.effective_match_rating ?? a.rating ?? 0),
+  );
+  const candidates: LineupPlayer[] = [];
+  const seen = new Set<string>();
+  for (const p of [...preferred, ...ranked]) {
+    if (!seen.has(p.player_id)) {
+      candidates.push(p);
+      seen.add(p.player_id);
+    }
+  }
+  const used = new Set<string>();
+  const takeLine = (line: "GK" | "DEF" | "MID" | "FWD", count: number) => {
+    const out: LineupPlayer[] = [];
+    for (const p of candidates) {
+      if (out.length >= count) break;
+      if (used.has(p.player_id)) continue;
+      if (playerPositionLine(p.position) === line) {
+        out.push(p);
+        used.add(p.player_id);
+      }
+    }
+    return out;
+  };
+  const targets = formationLineTargets(shape);
+  const gk = takeLine("GK", 1);
+  const defs = takeLine("DEF", targets.def);
+  const mids = takeLine("MID", targets.mid);
+  const fwds = takeLine("FWD", targets.fwd);
+  const topUp = (bucket: LineupPlayer[], count: number, allowGk = false) => {
+    for (const p of candidates) {
+      if (bucket.length >= count) break;
+      if (used.has(p.player_id)) continue;
+      if (!allowGk && playerPositionLine(p.position) === "GK") continue;
+      bucket.push(p);
+      used.add(p.player_id);
+    }
+  };
+  topUp(gk, 1, true);
+  topUp(defs, targets.def);
+  topUp(mids, targets.mid);
+  topUp(fwds, targets.fwd);
+  const ordered = [...gk, ...defs, ...mids, ...fwds].slice(0, 11).map((p) => p.player_id);
+  return [...ordered, ...Array(11).fill("")].slice(0, 11);
+}
+
+function mapClubDetailToRoster(clubDetail: any) {
+  return {
+    squad: normalizeLineupSquad({
+      items: (clubDetail?.squad || []).map((player: any) => ({
+        player_id: player.id,
+        player_name: player.name,
+        position: player.position_display || player.position,
+        rating: player.rating,
+        portrait_url: player.portrait_url,
+        squad_status: player.squad_status,
+        is_regen: player.is_regen,
+        age: player.age,
+        minutes: player.minutes,
+        acquired_via: player.acquired_via,
+        morale: player.morale,
+        mood_state: player.mood_state,
+        performance_shift: player.performance_shift,
+        effective_match_rating: player.effective_match_rating,
+      })),
+    }),
+    filedIds: (clubDetail?.matchday_xi || []).map((player: any) => String(player.id)),
+    filedBench: (clubDetail?.matchday_bench || []).map((player: any) => String(player.id)),
+    filedFormation: clubDetail?.matchday_formation || clubDetail?.tactics?.formation || "",
+    tactics: clubDetail?.tactics || null,
+  };
+}
+
 export default function Lineup() {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { clubs, active } = useActiveClub();
   const clubId = searchParams.get("club_id") || active?.club_id || undefined;
   const club = clubs.find((item: any) => item.club_id === clubId) || active;
-  const [formation, setFormation] = useState("4-3-3");
+  const cachedClubQuery = useClub(clubId);
+  const [formation, setFormation] = useState("3-4-3");
   const [starters, setStarters] = useState<string[]>(Array(11).fill(""));
   const [bench, setBench] = useState<string[]>([]);
   const [benchCandidate, setBenchCandidate] = useState("");
@@ -34,34 +164,18 @@ export default function Lineup() {
     queryKey: ["lineup-editor", clubId],
     queryFn: async () => {
       const clubDetail = (await api.get("/owner/clubs/" + encodeURIComponent(String(clubId)))).data;
-      return {
-        squad: normalizeLineupSquad({
-          items: (clubDetail.squad || []).map((player: any) => ({
-            player_id: player.id,
-            player_name: player.name,
-            position: player.position_display || player.position,
-            rating: player.rating,
-            portrait_url: player.portrait_url,
-            squad_status: player.squad_status,
-            is_regen: player.is_regen,
-            age: player.age,
-            minutes: player.minutes,
-            acquired_via: player.acquired_via,
-            morale: player.morale,
-            mood_state: player.mood_state,
-            performance_shift: player.performance_shift,
-            effective_match_rating: player.effective_match_rating,
-          })),
-        }),
-        filedIds: (clubDetail.matchday_xi || []).map((player: any) => String(player.id)),
-        filedBench: (clubDetail.matchday_bench || []).map((player: any) => String(player.id)),
-        filedFormation: clubDetail.matchday_formation || clubDetail.tactics?.formation || "",
-        tactics: clubDetail.tactics || null,
-      };
+      return mapClubDetailToRoster(clubDetail);
     },
     enabled: Boolean(clubId),
+    retry: 2,
   });
-  const players: LineupPlayer[] = rosterQuery.data?.squad || [];
+  const effectiveRoster = useMemo(
+    () =>
+      rosterQuery.data ||
+      (cachedClubQuery.data ? mapClubDetailToRoster(cachedClubQuery.data) : null),
+    [rosterQuery.data, cachedClubQuery.data],
+  );
+  const players: LineupPlayer[] = effectiveRoster?.squad || [];
   const firstTeam = players.filter((player) => lineupSheet(player) === "first_team");
   const reserve = players.filter((player) => lineupSheet(player) === "reserve");
   const benchPool = reserve.length
@@ -75,13 +189,37 @@ export default function Lineup() {
   );
 
   useEffect(() => {
-    if (!rosterQuery.data || initializedClubRef.current === clubId) return;
+    if (!effectiveRoster || initializedClubRef.current === clubId) return;
     initializedClubRef.current = clubId || null;
-    const filedIds = rosterQuery.data.filedIds || [];
-    setFormation(rosterQuery.data.filedFormation || rosterQuery.data.tactics?.formation || "4-3-3");
-    setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
-    setBench(rosterQuery.data.filedBench || []);
-  }, [clubId, rosterQuery.data]);
+    const filedIds = effectiveRoster.filedIds || [];
+    const managerFormations: string[] = Array.isArray(effectiveRoster.tactics?.formations)
+      ? effectiveRoster.tactics.formations
+      : [];
+    const rawFormation =
+      effectiveRoster.filedFormation || effectiveRoster.tactics?.formation || "3-4-3";
+    const resolvedFormation =
+      managerFormations.length > 0 && !managerFormations.includes(rawFormation)
+        ? managerFormations[0]
+        : rawFormation;
+    setFormation(resolvedFormation);
+    const slotOnePlayer = firstTeam.find((p) => p.player_id === filedIds[1]);
+    const needsPositionRepair =
+      filedIds.length < 11 ||
+      (slotOnePlayer && playerPositionLine(slotOnePlayer.position) === "FWD");
+    if (needsPositionRepair && firstTeam.length > 0) {
+      setStarters(slotPlayersForShape(resolvedFormation, firstTeam, filedIds));
+    } else {
+      setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
+    }
+    setBench(effectiveRoster.filedBench || []);
+  }, [clubId, effectiveRoster, firstTeam]);
+
+  const applyFormationChange = (nextShape: string) => {
+    setFormation(nextShape);
+    if (firstTeam.length > 0) {
+      setStarters((current) => slotPlayersForShape(nextShape, firstTeam, current.filter(Boolean)));
+    }
+  };
 
   const setStarter = (index: number, playerId: string) => {
     setStarters((current) =>
@@ -93,23 +231,11 @@ export default function Lineup() {
   const autoFillLineup = async () => {
     if (!clubId) return;
     const fallbackBestXi = () => {
-      const isKeeper = (player: LineupPlayer) =>
-        /(^|[^a-z])(gk|goalkeeper|keeper)([^a-z]|$)/i.test(player.position || "");
-      const keepers = firstTeam
-        .filter(isKeeper)
-        .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
-      const goalkeeper = keepers[0];
-      const outfield = firstTeam
-        .filter((player) => !isKeeper(player))
-        .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0));
-      const next = [
-        goalkeeper?.player_id || "",
-        ...outfield.slice(0, 10).map((player) => player.player_id),
-      ];
-      setStarters([...next, ...Array(11).fill("")].slice(0, 11));
+      const next = slotPlayersForShape(formation, firstTeam);
+      setStarters(next);
       const selected = new Set(next.filter(Boolean));
       setBench((current) => current.filter((id) => !selected.has(id)));
-      toast.success("Best available XI selected by rating, with a goalkeeper in goal.");
+      toast.success("Best available XI selected by position and rating.");
     };
     try {
       const { data } = await api.get(
@@ -202,10 +328,13 @@ export default function Lineup() {
     );
   }
 
-  if (rosterQuery.isLoading) return <Loading label="Loading lineup and squad" />;
+  if (rosterQuery.isLoading && !effectiveRoster)
+    return <Loading label="Loading lineup and squad" />;
 
-  if (rosterQuery.isError && !rosterQuery.data) {
-    const message = rosterQuery.error ? errMsg(rosterQuery.error) : "The filed eleven could not be loaded.";
+  if (rosterQuery.isError && !effectiveRoster) {
+    const message = rosterQuery.error
+      ? errMsg(rosterQuery.error)
+      : "The filed eleven could not be loaded.";
     return (
       <div className="space-y-6">
         <PageHeader
@@ -285,32 +414,44 @@ export default function Lineup() {
               data-testid="lineup-formation-select"
               className="gx-input w-full"
               value={formation}
-              onChange={(event) => setFormation(event.target.value)}
+              onChange={(event) => applyFormationChange(event.target.value)}
             >
               {LINEUP_FORMATIONS.map((option) => (
                 <option key={option} value={option}>
-                  {option === "4-1-2-1-2" ? "4-1-2-1-2 (Diamond 4-4-2)" : option}
+                  {option === "4-1-2-1-2"
+                    ? "4-1-2-1-2 (Diamond 4-4-2)"
+                    : option === "4-4-2" && effectiveRoster?.tactics?.fallback_formation === "4-4-2"
+                      ? "4-4-2 (Fallback)"
+                      : option}
                 </option>
               ))}
             </select>
-            {Array.isArray(rosterQuery.data?.tactics?.formations) &&
-            rosterQuery.data.tactics.formations.length > 0 ? (
-              <div className="flex flex-wrap items-center gap-1.5" data-testid="manager-preferred-formations">
+            {Array.isArray(effectiveRoster?.tactics?.formations) &&
+            effectiveRoster.tactics.formations.length > 0 ? (
+              <div
+                className="flex flex-wrap items-center gap-1.5"
+                data-testid="manager-preferred-formations"
+              >
                 <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
                   Manager shapes:
                 </span>
-                {rosterQuery.data.tactics.formations.map((shape: string) => (
+                {effectiveRoster.tactics.formations.map((shape: string) => (
                   <button
                     key={shape}
                     type="button"
-                    onClick={() => setFormation(shape)}
+                    onClick={() => applyFormationChange(shape)}
                     className={`rounded-full border px-2.5 py-0.5 text-[10px] font-bold transition ${
                       formation === shape
                         ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
                         : "border-white/10 bg-slate-900/60 text-slate-300 hover:border-emerald-400/50 hover:text-white"
                     }`}
                   >
-                    {shape === "4-1-2-1-2" ? "4-1-2-1-2 Diamond" : shape}
+                    {shape === "4-1-2-1-2"
+                      ? "4-1-2-1-2 Diamond"
+                      : shape === "4-4-2" &&
+                          effectiveRoster?.tactics?.fallback_formation === "4-4-2"
+                        ? "4-4-2 (Fallback)"
+                        : shape}
                   </button>
                 ))}
               </div>
@@ -339,19 +480,31 @@ export default function Lineup() {
                             key={slotIndex}
                             className="flex min-w-0 max-w-[31%] flex-1 flex-col items-center rounded-xl border border-white/20 bg-gtex-midnight/90 px-2.5 py-2 text-center shadow-md"
                           >
-                            <KitBakedMark size={28} />
-                            <span className="mb-1 text-[10px] font-bold text-emerald-100">
-                              {player
-                                ? player.rating
-                                  ? Math.round(player.rating)
-                                  : "XI"
-                                : slotIndex + 1}
-                            </span>
-                            <span className="w-full truncate text-[10px] font-semibold text-white">
+                            <div className="relative mb-1 flex items-center justify-center">
+                              {player?.portrait_url ? (
+                                <img
+                                  src={player.portrait_url}
+                                  alt={player.player_name}
+                                  className="h-10 w-10 rounded-full border-2 border-emerald-400/70 bg-slate-900 object-cover shadow-md"
+                                />
+                              ) : (
+                                <KitBakedMark size={28} />
+                              )}
+                              <span className="absolute -bottom-1 -right-2 rounded-full border border-emerald-400/60 bg-slate-950 px-1.5 py-0.2 text-[9px] font-black text-emerald-200 shadow">
+                                {player
+                                  ? player.rating
+                                    ? Math.round(player.rating)
+                                    : "XI"
+                                  : slotIndex + 1}
+                              </span>
+                            </div>
+                            <span className="mt-0.5 w-full truncate text-[10px] font-semibold text-white">
                               {player?.player_name || role}
                             </span>
                             <span className="w-full truncate text-[9px] text-slate-400">
-                              {role}
+                              {player?.position
+                                ? `${role} · ${player.position.split("/")[0].trim()}`
+                                : role}
                             </span>
                           </div>
                         );
@@ -452,15 +605,16 @@ export default function Lineup() {
         testid="lineup-manager-panel"
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="max-w-2xl text-sm leading-6 text-slate-300" data-testid="lineup-manager-tactics">
+          <div
+            className="max-w-2xl text-sm leading-6 text-slate-300"
+            data-testid="lineup-manager-tactics"
+          >
             <p className="font-semibold text-white">
               {rosterQuery.data?.tactics?.manager_name || "No manager appointed"}
               {rosterQuery.data?.tactics?.formation
                 ? ` · ${rosterQuery.data.tactics.formation}`
                 : ""}
-              {rosterQuery.data?.tactics?.style
-                ? ` · ${rosterQuery.data.tactics.style}`
-                : ""}
+              {rosterQuery.data?.tactics?.style ? ` · ${rosterQuery.data.tactics.style}` : ""}
             </p>
             {Array.isArray(rosterQuery.data?.tactics?.formations) &&
             rosterQuery.data.tactics.formations.length > 1 ? (

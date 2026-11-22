@@ -31,8 +31,12 @@ import { coinWithNaira } from "@/lib/money";
 import { Btn, Chip, Coin, Loading, PageHeader, Panel, TraitBar } from "@/components/gtex/ui";
 import { PlayerCard } from "@/components/gtex/PlayerCard";
 import { PlayerDrawer } from "@/components/gtex/PlayerDrawer";
-import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
-import { HolographicPlayerCard, placeFirstTeamOnPitch, TacticalPitch25D } from "@/components/gtex/ApexWidgets";
+import { VogueStaffStill } from "@/components/gtex/StaticPresentation";
+import {
+  HolographicPlayerCard,
+  placeFirstTeamOnPitch,
+  TacticalPitch25D,
+} from "@/components/gtex/ApexWidgets";
 import { SquadCardGridView } from "@/components/gtex/SquadCardGridView";
 import { useSkin } from "@/lib/skin-engine";
 import { journeyLinks, readJourneyParams, SQUAD_SEASON_LABEL } from "@/lib/playerJourney";
@@ -74,11 +78,7 @@ function sheetOf(player: any): SquadSheet {
   if (raw === "reserve") return "reserve";
   if (raw === "academy" || raw === "u21") return "academy";
   if (raw === "first_team" || raw === "senior") return "first_team";
-  if (
-    player?.acquired_via === "academy" &&
-    player?.is_regen &&
-    Number(player?.age) <= 18
-  )
+  if (player?.acquired_via === "academy" && player?.is_regen && Number(player?.age) <= 18)
     return "academy";
   return "first_team";
 }
@@ -132,7 +132,12 @@ function ManagerSheet({ club }: any) {
     m.tactics_stat ?? tactics.tactical_flexibility ?? m.tactical_flexibility ?? m.tactical_quality;
   const youthDev = m.youth_dev ?? tactics.youth_development ?? m.youth_development;
   const styleLabel =
-    tactics.style || m.style || m.tactical_preference || tactics.mentality || m.mentality || "Balanced";
+    tactics.style ||
+    m.style ||
+    m.tactical_preference ||
+    tactics.mentality ||
+    m.mentality ||
+    "Balanced";
   const philosophyText = tactics.philosophy_summary || m.philosophy_summary || m.philosophy;
   const nationLabel = m.nationality || m.nation || tactics.nation;
   const sonName = m.son_player_name || tactics.son_player_name;
@@ -171,23 +176,26 @@ function ManagerSheet({ club }: any) {
       }
     >
       <div className="mb-4">
-        <GtexSceneViewport
-          sceneId="manager_arrival"
-          compact
-          title={`3D First-Day Training Ground & Press Suite · ${m.name || tactics.manager_name || "Head Coach"}`}
-          subtitle={`${club.club_name} · ${styleLabel} · Temperament: ${m.temperament || "Composed"}`}
-          badgeText="3D MANAGER DAY 1"
-          clubName={club.club_name}
-          subjectName={m.name || tactics.manager_name || "First-Team Manager"}
-          subjectRole={`${styleLabel} · ${m.rarity || "Appointed"}`}
-          quote={philosophyText}
+        <VogueStaffStill
+          scene="manager_arrival"
+          kicker="First-Team Manager"
+          clubName={club.club_name || "Your club"}
+          person={{
+            name: m.name || tactics.manager_name || "First-Team Manager",
+            role: `${styleLabel} · ${tactics.formation || m.preferred_formation || "3-4-3"}`,
+            detail:
+              philosophyText ||
+              `${club.club_name} · ${styleLabel} · Temperament: ${m.temperament || "Composed"}`,
+            portraitUrl: m.portrait_url || m.photo_url || null,
+            rating: m.rating ?? m.gsi ?? tacticalVision ?? null,
+          }}
+          quote={familyRel || philosophyText}
+          ratingLabel="OVR"
         />
       </div>
       <div className="mb-5 flex flex-wrap gap-2">
         {tactics.formation && <Chip tone="emerald">Shape: {tactics.formation}</Chip>}
-        {formationPlan.length > 1 && (
-          <Chip tone="emerald">Plan: {formationPlan.join(" · ")}</Chip>
-        )}
+        {formationPlan.length > 1 && <Chip tone="emerald">Plan: {formationPlan.join(" · ")}</Chip>}
         {tactics.tactical_match_bonus != null && (
           <Chip tone="cyan">Match +{tactics.tactical_match_bonus}</Chip>
         )}
@@ -203,9 +211,7 @@ function ManagerSheet({ club }: any) {
         <TraitBar label="Youth Development" value={youthDev} />
         <TraitBar label="Player Loyalty" value={m.loyalty} />
       </div>
-      {familyRel ? (
-        <p className="mt-3 text-xs font-semibold text-amber-200">{familyRel}</p>
-      ) : null}
+      {familyRel ? <p className="mt-3 text-xs font-semibold text-amber-200">{familyRel}</p> : null}
       {philosophyText ? (
         <p className="mt-4 text-xs italic text-slate-400">"{philosophyText}"</p>
       ) : null}
@@ -1021,7 +1027,11 @@ function BoardroomSection({ club }: any) {
                 {clubPrestige == null ? "Not filed" : `${clubPrestige}/100`}
               </p>
               <span className="text-[10px] font-bold uppercase text-emerald-400">
-                {prestigeTier == null ? "Tier not filed" : `Tier ${prestigeTier} Standing`}
+                {prestigeTier == null
+                  ? "Tier not filed"
+                  : /^tier\b/i.test(String(prestigeTier).trim())
+                    ? `${prestigeTier} Standing`
+                    : `Tier ${prestigeTier} Standing`}
               </span>
             </div>
           </div>
@@ -1080,7 +1090,9 @@ function BoardroomSection({ club }: any) {
           const person = appointed[roleDef.key];
           const Icon = roleDef.icon;
           const isAppointed =
-            Boolean(person?.name) && !person?.is_default && person?.manager_id !== "gtex-staff-coach";
+            Boolean(person?.name) &&
+            !person?.is_default &&
+            person?.manager_id !== "gtex-staff-coach";
 
           return (
             <div
@@ -1212,11 +1224,7 @@ function BoardroomSection({ club }: any) {
         </div>
       </Panel>
 
-      <Panel
-        eyebrow="Talent Acquisition"
-        title="Staff market"
-        testid="staff-candidates-panel"
-      >
+      <Panel eyebrow="Talent Acquisition" title="Staff market" testid="staff-candidates-panel">
         <p className="text-sm text-slate-300">
           Later contracts are signed on the staff market. This boardroom shows who holds each seat.
         </p>
@@ -1253,7 +1261,11 @@ export default function Squad() {
     requestedSheet === "reserve" || requestedSheet === "academy" ? requestedSheet : "first_team",
   );
   useEffect(() => {
-    if (requestedSheet === "reserve" || requestedSheet === "academy" || requestedSheet === "first_team") {
+    if (
+      requestedSheet === "reserve" ||
+      requestedSheet === "academy" ||
+      requestedSheet === "first_team"
+    ) {
       setSheet(requestedSheet);
     }
   }, [requestedSheet]);
@@ -1539,6 +1551,9 @@ export default function Squad() {
                 clubName={club.club_name}
                 priceGtx={Number(pitchLead?.player?.value_coin || 0)}
                 jerseyNumber={pitchLead?.shirt}
+                portraitUrl={
+                  pitchLead?.player?.portrait_url || (pitchLead?.player as any)?.portraitUrl || null
+                }
                 badgeLabel="FIRST TEAM"
                 actionLabel="Open Dossier →"
                 onAction={() => pitchLead?.player && setSelectedPlayer(pitchLead.player)}

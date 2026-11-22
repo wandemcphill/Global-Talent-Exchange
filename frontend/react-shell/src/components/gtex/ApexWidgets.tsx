@@ -14,11 +14,68 @@ export interface HolographicPlayerCardProps {
   priceGtx?: number;
   jerseyNumber?: number | string;
   badgeLabel?: string;
+  portraitUrl?: string | null;
   tier?: "diamond" | "gold" | "emerald" | "obsidian";
   stats6?: [number, number, number, number, number, number]; // PAC, SHO, PAS, DRI, DEF, PHY (0..99)
   actionLabel?: string;
   onAction?: () => void;
   testid?: string;
+}
+
+function deriveAttributesFromOverall(
+  overall: number,
+  position?: string,
+): [number, number, number, number, number, number] {
+  const base = Math.max(55, Math.min(98, Math.round(Number(overall) || 78)));
+  const pos = String(position || "MID").toUpperCase();
+  const isGk = pos.includes("GK") || pos.includes("GOAL");
+  const isDef =
+    pos.includes("CB") || pos.includes("LB") || pos.includes("RB") || pos.includes("DEF");
+  const isFwd =
+    pos.includes("ST") ||
+    pos.includes("CF") ||
+    pos.includes("LW") ||
+    pos.includes("RW") ||
+    pos.includes("FW");
+  const clampAttr = (v: number) => Math.max(45, Math.min(99, Math.round(v)));
+  if (isGk) {
+    return [
+      clampAttr(base - 6),
+      clampAttr(base - 12),
+      clampAttr(base - 2),
+      clampAttr(base - 4),
+      clampAttr(base + 3),
+      clampAttr(base + 1),
+    ];
+  }
+  if (isDef) {
+    return [
+      clampAttr(base - 2),
+      clampAttr(base - 14),
+      clampAttr(base - 3),
+      clampAttr(base - 4),
+      clampAttr(base + 3),
+      clampAttr(base + 2),
+    ];
+  }
+  if (isFwd) {
+    return [
+      clampAttr(base + 1),
+      clampAttr(base + 2),
+      clampAttr(base - 2),
+      clampAttr(base + 2),
+      clampAttr(base - 18),
+      clampAttr(base - 2),
+    ];
+  }
+  return [
+    clampAttr(base - 1),
+    clampAttr(base - 2),
+    clampAttr(base + 2),
+    clampAttr(base + 1),
+    clampAttr(base - 4),
+    clampAttr(base - 1),
+  ];
 }
 
 export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
@@ -30,6 +87,7 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
   priceGtx,
   jerseyNumber,
   badgeLabel,
+  portraitUrl,
   tier,
   stats6,
   actionLabel = "3D Walkout →",
@@ -37,7 +95,13 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
   testid,
 }) => {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [tilt, setTilt] = useState<{ rx: number; ry: number; gx: number; gy: number; active: boolean }>({
+  const [tilt, setTilt] = useState<{
+    rx: number;
+    ry: number;
+    gx: number;
+    gy: number;
+    active: boolean;
+  }>({
     rx: 0,
     ry: 0,
     gx: 50,
@@ -50,27 +114,30 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
     ((potential && potential >= 94) || overall >= 91
       ? "diamond"
       : overall >= 85
-      ? "gold"
-      : "emerald");
+        ? "gold"
+        : "emerald");
 
   const borderStyle =
     resolvedTier === "diamond"
       ? "border-amber-300/90 shadow-[0_18px_42px_-8px_rgba(251,191,36,0.38)]"
       : resolvedTier === "gold"
-      ? "border-amber-400/75 shadow-[0_18px_40px_-8px_rgba(245,158,11,0.28)]"
-      : resolvedTier === "emerald"
-      ? "border-emerald-400/75 shadow-[0_18px_40px_-8px_rgba(16,185,129,0.28)]"
-      : "border-white/20 shadow-xl";
+        ? "border-amber-400/75 shadow-[0_18px_40px_-8px_rgba(245,158,11,0.28)]"
+        : resolvedTier === "emerald"
+          ? "border-emerald-400/75 shadow-[0_18px_40px_-8px_rgba(16,185,129,0.28)]"
+          : "border-white/20 shadow-xl";
 
   const bgGradient =
     resolvedTier === "diamond"
       ? "linear-gradient(145deg, #1e1b4b 0%, #090d16 54%, #422006 100%)"
       : resolvedTier === "gold"
-      ? "linear-gradient(145deg, #271a0c 0%, #090d16 58%, #062c22 100%)"
-      : "linear-gradient(145deg, #062e22 0%, #090d16 58%, #0c192e 100%)";
+        ? "linear-gradient(145deg, #271a0c 0%, #090d16 58%, #062c22 100%)"
+        : "linear-gradient(145deg, #062e22 0%, #090d16 58%, #0c192e 100%)";
 
   // Compute 6-axis radar points (PAC, SHO, PAS, DRI, DEF, PHY)
-  const radarValues = stats6;
+  const radarValues = useMemo(
+    () => stats6 || deriveAttributesFromOverall(overall, position),
+    [stats6, overall, position],
+  );
 
   const radarPolygonPoints = useMemo(() => {
     const cx = 50;
@@ -142,6 +209,13 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
               <span className="gx-display text-2xl font-black leading-none">{overall}</span>
               <span className="text-[10px] font-black uppercase leading-tight">{position}</span>
             </div>
+            {portraitUrl ? (
+              <img
+                src={portraitUrl}
+                alt={name}
+                className="h-10 w-10 shrink-0 rounded-full border-2 border-amber-300/75 bg-slate-900 object-cover shadow-md"
+              />
+            ) : null}
             <div>
               <span className="gx-mono text-[10px] font-bold uppercase text-amber-300/90 block">
                 {jerseyNumber != null && jerseyNumber !== "" ? `#${jerseyNumber} · ` : ""}
@@ -159,59 +233,59 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
         </div>
 
         {radarValues ? (
-        <div
-          className="relative z-10 my-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-2.5"
-          style={{ transform: "translateZ(24px)" }}
-        >
-          <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-bold">
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">PAC</span>
-              <span className="gx-mono text-emerald-300">{radarValues[0]}</span>
+          <div
+            className="relative z-10 my-3 flex items-center justify-between gap-2 rounded-xl border border-white/10 bg-black/40 p-2.5"
+            style={{ transform: "translateZ(24px)" }}
+          >
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-bold">
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">PAC</span>
+                <span className="gx-mono text-emerald-300">{radarValues[0]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">DRI</span>
+                <span className="gx-mono text-emerald-300">{radarValues[3]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">SHO</span>
+                <span className="gx-mono text-amber-300">{radarValues[1]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">DEF</span>
+                <span className="gx-mono text-sky-300">{radarValues[4]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">PAS</span>
+                <span className="gx-mono text-white">{radarValues[2]}</span>
+              </div>
+              <div className="flex items-center justify-between gap-1.5">
+                <span className="text-slate-400">PHY</span>
+                <span className="gx-mono text-white">{radarValues[5]}</span>
+              </div>
             </div>
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">DRI</span>
-              <span className="gx-mono text-emerald-300">{radarValues[3]}</span>
-            </div>
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">SHO</span>
-              <span className="gx-mono text-amber-300">{radarValues[1]}</span>
-            </div>
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">DEF</span>
-              <span className="gx-mono text-sky-300">{radarValues[4]}</span>
-            </div>
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">PAS</span>
-              <span className="gx-mono text-white">{radarValues[2]}</span>
-            </div>
-            <div className="flex items-center justify-between gap-1.5">
-              <span className="text-slate-400">PHY</span>
-              <span className="gx-mono text-white">{radarValues[5]}</span>
-            </div>
-          </div>
 
-          {/* 6-Axis Radar Polygon */}
-          <svg viewBox="0 0 100 100" className="h-16 w-16 shrink-0 overflow-visible">
-            <polygon
-              points="50,10 85,30 85,70 50,90 15,70 15,30"
-              fill="rgba(255,255,255,0.04)"
-              stroke="rgba(255,255,255,0.22)"
-              strokeWidth="1"
-            />
-            <polygon
-              points="50,25 72,37 72,63 50,75 28,63 28,37"
-              fill="none"
-              stroke="rgba(255,255,255,0.12)"
-              strokeWidth="1"
-            />
-            <polygon
-              points={radarPolygonPoints}
-              fill="rgba(16,185,129,0.34)"
-              stroke="#10b981"
-              strokeWidth="2"
-            />
-          </svg>
-        </div>
+            {/* 6-Axis Radar Polygon */}
+            <svg viewBox="0 0 100 100" className="h-16 w-16 shrink-0 overflow-visible">
+              <polygon
+                points="50,10 85,30 85,70 50,90 15,70 15,30"
+                fill="rgba(255,255,255,0.04)"
+                stroke="rgba(255,255,255,0.22)"
+                strokeWidth="1"
+              />
+              <polygon
+                points="50,25 72,37 72,63 50,75 28,63 28,37"
+                fill="none"
+                stroke="rgba(255,255,255,0.12)"
+                strokeWidth="1"
+              />
+              <polygon
+                points={radarPolygonPoints}
+                fill="rgba(16,185,129,0.34)"
+                stroke="#10b981"
+                strokeWidth="2"
+              />
+            </svg>
+          </div>
         ) : (
           <p className="relative z-10 my-3 text-[11px] text-slate-400">
             Pace, shooting, and the other attributes are not on this card.
@@ -299,7 +373,9 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
       const y = h - 10 - ((v - min) / (max - min)) * (h - 22);
       return { x, y };
     });
-    const dLine = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+    const dLine = pts
+      .map((p, i) => `${i === 0 ? "M" : "L"}${p.x.toFixed(1)},${p.y.toFixed(1)}`)
+      .join(" ");
     const last = pts[pts.length - 1] || { x: w - 6, y: 14 };
     const dArea = `${dLine} L${last.x.toFixed(1)},${h} L6,${h} Z`;
     return { linePath: dLine, areaPath: dArea, lastPoint: last };
@@ -331,54 +407,52 @@ export const TelemetrySparklineCard: React.FC<TelemetrySparklineCardProps> = ({
       </div>
 
       {hasSeries ? (
-      <div className="my-3 h-20 w-full">
-        <svg viewBox="0 0 280 76" className="h-full w-full overflow-visible">
-          <defs>
-            <linearGradient id="gtexSparkArea" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#10b981" stopOpacity="0.42" />
-              <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-          <path d={areaPath} fill="url(#gtexSparkArea)" />
-          <path
-            d={linePath}
-            fill="none"
-            stroke="#10b981"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <circle
-            cx={lastPoint.x}
-            cy={lastPoint.y}
-            r="5"
-            fill="#fde047"
-            className="gx-live-dot"
-          />
-        </svg>
-      </div>
+        <div className="my-3 h-20 w-full">
+          <svg viewBox="0 0 280 76" className="h-full w-full overflow-visible">
+            <defs>
+              <linearGradient id="gtexSparkArea" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#10b981" stopOpacity="0.42" />
+                <stop offset="100%" stopColor="#10b981" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path d={areaPath} fill="url(#gtexSparkArea)" />
+            <path d={linePath} fill="none" stroke="#10b981" strokeWidth="3" strokeLinecap="round" />
+            <circle
+              cx={lastPoint.x}
+              cy={lastPoint.y}
+              r="5"
+              fill="#fde047"
+              className="gx-live-dot"
+            />
+          </svg>
+        </div>
       ) : null}
 
       {(trustScore != null || hypeScore != null) && (
-      <div className="grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3">
-        <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-slate-950/60 p-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-emerald-400 text-xs font-black text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]">
-            {trustScore}%
+        <div className="grid grid-cols-2 gap-2.5 border-t border-white/10 pt-3">
+          <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-slate-950/60 p-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-emerald-400 text-xs font-black text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]">
+              {trustScore}%
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-white truncate">Board Confidence</div>
+              <div className="text-[11px] text-emerald-400 font-semibold truncate">
+                Dynasty Secure
+              </div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="text-xs font-bold text-white truncate">Board Confidence</div>
-            <div className="text-[11px] text-emerald-400 font-semibold truncate">Dynasty Secure</div>
+          <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-slate-950/60 p-2.5">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-amber-400 text-xs font-black text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]">
+              {hypeScore}%
+            </div>
+            <div className="min-w-0">
+              <div className="text-xs font-bold text-white truncate">Global Fan Hype</div>
+              <div className="text-[11px] text-amber-300 font-semibold truncate">
+                Box-Office Surge
+              </div>
+            </div>
           </div>
         </div>
-        <div className="flex items-center gap-2.5 rounded-xl border border-white/10 bg-slate-950/60 p-2.5">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 border-amber-400 text-xs font-black text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]">
-            {hypeScore}%
-          </div>
-          <div className="min-w-0">
-            <div className="text-xs font-bold text-white truncate">Global Fan Hype</div>
-            <div className="text-[11px] text-amber-300 font-semibold truncate">Box-Office Surge</div>
-          </div>
-        </div>
-      </div>
       )}
     </div>
   );
@@ -396,6 +470,8 @@ export interface TacticalPitchPlayer {
   potential?: number | null;
   value_coin?: number | null;
   shirtNumber?: number;
+  portrait_url?: string | null;
+  portraitUrl?: string | null;
 }
 
 export interface TacticalPitch25DProps {
@@ -542,12 +618,8 @@ function pitchBucket(position?: string): "GK" | "DEF" | "MID" | "FWD" {
   return "MID";
 }
 
-export function placeFirstTeamOnPitch(
-  players: TacticalPitchPlayer[] = [],
-  formation?: string,
-) {
-  const slotTemplate =
-    (formation && FORMATION_PITCH_SLOTS[formation]) || PITCH_SLOTS;
+export function placeFirstTeamOnPitch(players: TacticalPitchPlayer[] = [], formation?: string) {
+  const slotTemplate = (formation && FORMATION_PITCH_SLOTS[formation]) || PITCH_SLOTS;
   const slots = slotTemplate.map((slot) => ({
     ...slot,
     player: undefined as TacticalPitchPlayer | undefined,
@@ -556,7 +628,9 @@ export function placeFirstTeamOnPitch(
   for (const player of unplaced) {
     const bucket = pitchBucket(player.position);
     const raw = String(player.position || "").toUpperCase();
-    const exact = slots.find((slot) => !slot.player && slot.bucket === bucket && raw.includes(slot.role));
+    const exact = slots.find(
+      (slot) => !slot.player && slot.bucket === bucket && raw.includes(slot.role),
+    );
     if (exact) exact.player = player;
   }
   for (const player of unplaced) {
@@ -565,6 +639,11 @@ export function placeFirstTeamOnPitch(
     const open = slots.find((slot) => !slot.player && slot.bucket === bucket);
     if (open) open.player = player;
   }
+  for (const player of unplaced) {
+    if (slots.some((slot) => slot.player === player)) continue;
+    const anyOpen = slots.find((slot) => !slot.player);
+    if (anyOpen) anyOpen.player = player;
+  }
   return slots.map((slot) => {
     const rating = Number(slot.player?.overall ?? slot.player?.rating ?? 0);
     return {
@@ -572,6 +651,7 @@ export function placeFirstTeamOnPitch(
       label: slot.player?.name ? String(slot.player.name).split(" ").slice(-1)[0] : "",
       ovr: slot.player && rating > 0 ? rating : null,
       shirt: slot.player?.shirtNumber || slot.shirt,
+      portrait: slot.player?.portrait_url || slot.player?.portraitUrl || null,
     };
   });
 }
@@ -611,7 +691,10 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
         </div>
       </div>
 
-      <div className="relative flex items-center justify-center py-2" style={{ perspective: "750px" }}>
+      <div
+        className="relative flex items-center justify-center py-2"
+        style={{ perspective: "750px" }}
+      >
         <div
           className="relative h-[230px] w-full rounded-2xl border-2 border-emerald-400/65 overflow-hidden shadow-2xl"
           style={{
@@ -622,12 +705,54 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
           }}
         >
           {/* Pitch Markings & Glowing Chemistry Links SVG */}
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full">
-            <rect x="4" y="4" width="92" height="92" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-            <line x1="4" y1="50" x2="96" y2="50" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-            <circle cx="50" cy="50" r="12" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="0.8" />
-            <rect x="28" y="4" width="44" height="14" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.7" />
-            <rect x="28" y="82" width="44" height="14" fill="none" stroke="rgba(255,255,255,0.3)" strokeWidth="0.7" />
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full"
+          >
+            <rect
+              x="4"
+              y="4"
+              width="92"
+              height="92"
+              fill="none"
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth="0.8"
+            />
+            <line
+              x1="4"
+              y1="50"
+              x2="96"
+              y2="50"
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth="0.8"
+            />
+            <circle
+              cx="50"
+              cy="50"
+              r="12"
+              fill="none"
+              stroke="rgba(255,255,255,0.35)"
+              strokeWidth="0.8"
+            />
+            <rect
+              x="28"
+              y="4"
+              width="44"
+              height="14"
+              fill="none"
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth="0.7"
+            />
+            <rect
+              x="28"
+              y="82"
+              width="44"
+              height="14"
+              fill="none"
+              stroke="rgba(255,255,255,0.3)"
+              strokeWidth="0.7"
+            />
 
             {/* Chemistry Links */}
             <line x1="50" y1="16" x2="22" y2="26" stroke="#fde047" strokeWidth="1.2" />
@@ -654,8 +779,15 @@ export const TacticalPitch25D: React.FC<TacticalPitch25DProps> = ({
                 type="button"
                 onClick={() => onSelectPlayer?.(n.player)}
                 style={{ left: `${n.x}%`, top: `${n.y}%` }}
-                className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full border border-amber-300/80 bg-slate-950/90 px-2 py-0.5 text-[10px] font-black text-white shadow-lg transition transform hover:scale-110 hover:border-emerald-400"
+                className="absolute -translate-x-1/2 -translate-y-1/2 flex items-center gap-1 rounded-full border border-amber-300/80 bg-slate-950/90 pl-1 pr-2 py-0.5 text-[10px] font-black text-white shadow-lg transition transform hover:scale-110 hover:border-emerald-400"
               >
+                {n.portrait ? (
+                  <img
+                    src={n.portrait}
+                    alt={n.player.name}
+                    className="h-5 w-5 shrink-0 rounded-full border border-emerald-300/80 bg-slate-900 object-cover"
+                  />
+                ) : null}
                 <span className="text-amber-300">#{n.shirt}</span>
                 {n.ovr != null && <span className="text-emerald-300">{n.ovr}</span>}
                 <span className="truncate max-w-[64px] uppercase">{n.label}</span>
@@ -701,7 +833,7 @@ export const CommandPaletteModal: React.FC<CommandPaletteModalProps> = ({
   if (!open) return null;
 
   const filtered = items.filter((i) =>
-    `${i.label} ${i.category || ""}`.toLowerCase().includes(query.toLowerCase())
+    `${i.label} ${i.category || ""}`.toLowerCase().includes(query.toLowerCase()),
   );
 
   return (

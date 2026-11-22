@@ -196,10 +196,25 @@ class ClubLifecycleService:
             raise ClubLifecycleError("squad_registration_locked")
         player_ids = self._normalize_player_ids(payload.player_ids)
         if not player_ids:
-            player_ids = [player.id for player in self._squad_players(club_id)]
-        players = self._players_for_registration(club_id, player_ids)
-        if len(players) != len(player_ids):
-            raise ClubLifecycleError("squad_player_not_found_or_not_owned_by_club")
+            players = self._squad_players(club_id)
+            player_ids = [player.id for player in players]
+        else:
+            from app.owner_console.models import OwnerSquadPlayer
+
+            owner_only_ids = {
+                str(row.id)
+                for row in self.session.scalars(
+                    select(OwnerSquadPlayer).where(
+                        OwnerSquadPlayer.club_id == club_id,
+                        OwnerSquadPlayer.player_ref.is_(None),
+                    )
+                ).all()
+            }
+            registrable_ids = [pid for pid in player_ids if pid not in owner_only_ids]
+            players = self._players_for_registration(club_id, registrable_ids)
+            if not players or len(players) != len(registrable_ids):
+                raise ClubLifecycleError("squad_player_not_found_or_not_owned_by_club")
+            player_ids = [player.id for player in players]
         if registration is None:
             registration = ClubSquadRegistration(club_id=club_id, season_label=payload.season_label)
             self.session.add(registration)
@@ -354,24 +369,67 @@ class ClubLifecycleService:
         return registration
 
     def _squad_players(self, club_id: str) -> list[Player]:
-        return list(
+        from app.owner_console.models import OwnerSquadPlayer
+
+        direct_players = list(
             self.session.scalars(
                 select(Player)
                 .where(Player.current_club_profile_id == club_id)
                 .order_by(Player.normalized_position.asc(), Player.full_name.asc())
             ).all()
         )
+        owner_refs = [
+            str(ref)
+            for ref in self.session.scalars(
+                select(OwnerSquadPlayer.player_ref).where(
+                    OwnerSquadPlayer.club_id == club_id,
+                    OwnerSquadPlayer.player_ref.is_not(None),
+                )
+            ).all()
+            if ref
+        ]
+        ref_players = (
+            list(
+                self.session.scalars(
+                    select(Player)
+                    .where(Player.id.in_(owner_refs))
+                    .order_by(Player.normalized_position.asc(), Player.full_name.asc())
+                ).all()
+            )
+            if owner_refs
+            else []
+        )
+        seen: set[str] = set()
+        combined: list[Player] = []
+        for player in direct_players + ref_players:
+            if player.id not in seen:
+                combined.append(player)
+                seen.add(player.id)
+        return combined
 
     def _players_for_registration(self, club_id: str, player_ids: list[str]) -> list[Player]:
         if not player_ids:
             return []
-        players = list(
-            self.session.scalars(
-                select(Player).where(Player.id.in_(player_ids), Player.current_club_profile_id == club_id)
-            ).all()
+        from app.owner_console.models import OwnerSquadPlayer
+
+        owner_rows = list(
+            self.session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == club_id)).all()
         )
-        by_id = {player.id: player for player in players}
-        return [by_id[player_id] for player_id in player_ids if player_id in by_id]
+        owner_id_to_ref = {str(row.id): str(row.player_ref) for row in owner_rows if row.player_ref}
+        allowed_refs = set(owner_id_to_ref.values())
+        resolved_ids: list[str] = []
+        for pid in player_ids:
+            canonical = owner_id_to_ref.get(pid, pid)
+            if canonical and canonical not in resolved_ids:
+                resolved_ids.append(canonical)
+
+        players = list(self.session.scalars(select(Player).where(Player.id.in_(resolved_ids))).all())
+        by_id = {
+            player.id: player
+            for player in players
+            if player.current_club_profile_id == club_id or player.id in allowed_refs
+        }
+        return [by_id[player_id] for player_id in resolved_ids if player_id in by_id]
 
     def _replace_slots(self, registration: ClubSquadRegistration, players: list[Player], *, slot_status: str) -> None:
         self.session.execute(

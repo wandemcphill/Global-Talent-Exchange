@@ -382,6 +382,11 @@ def _normalize_portrait_url(url: str) -> str:
     return cleaned
 
 
+def _is_legacy_adult_regen_portrait(url: str) -> bool:
+    lower = str(url or "").lower()
+    return "script_skin_hair" in lower or "/img/players/" in lower or "/staff-portraits/" in lower
+
+
 def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
     """Return the face already stored on an academy regen, if one was assigned."""
     if player is None:
@@ -389,6 +394,8 @@ def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
     personality = player.personality_json if isinstance(player.personality_json, dict) else {}
     stored = personality.get("portrait_url")
     if isinstance(stored, str) and stored.strip():
+        if player.is_regen and _is_legacy_adult_regen_portrait(stored):
+            return None
         return _normalize_portrait_url(stored)
     return None
 
@@ -398,6 +405,15 @@ def _fallback_portrait_for_seed(seed_key: str, name: str) -> str:
 
     manifest = _load_face_manifest()
     items = manifest.get("assets") or manifest.get("items") or []
+    # Generated players use the current youth face bank (new_styles) only, never the
+    # older adult regen faces or staff portraits, so every screen shows the same kind of face.
+    youth_items = [
+        item
+        for item in items
+        if isinstance(item, dict) and "new_styles/" in str(item.get("storage_key") or item.get("source_path") or "")
+    ]
+    if youth_items:
+        items = youth_items
     if items:
         h = int(hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()[:8], 16)
         chosen = items[h % len(items)]
@@ -453,13 +469,17 @@ def prefetch_squad_portrait_urls(session: Session | None, players: list[OwnerSqu
             from app.ingestion.models import Player
 
             rows = session.execute(
-                select(Player.id, Player.dna_profile).where(Player.id.in_(list(set(missing_refs))))
+                select(Player.id, Player.dna_profile, Player.is_real_player).where(
+                    Player.id.in_(list(set(missing_refs)))
+                )
             ).all()
-            for pid, dna in rows:
+            for pid, dna, is_real in rows:
                 if isinstance(dna, dict):
                     for key in ("portraitUrl", "portrait_url", "image_url"):
                         val = dna.get(key)
                         if isinstance(val, str) and val.strip():
+                            if not is_real and _is_legacy_adult_regen_portrait(val):
+                                continue
                             cache[str(pid)] = _normalize_portrait_url(val)
                             break
         except Exception as err:
@@ -479,17 +499,16 @@ def prefetch_squad_portrait_urls(session: Session | None, players: list[OwnerSqu
 
 def resolve_player_portrait_url(session: Session | None, player_id: str, player_name: str | None = None) -> str:
     cache: dict[str, str] = session.info.setdefault("_portrait_url_cache", {}) if session is not None else {}
-    if player_id in cache:
-        return cache[player_id]
-
     player = session.get(OwnerSquadPlayer, player_id) if session else None
     stored = stored_regen_portrait_url(player)
     if stored:
         cache[player_id] = stored
         return stored
+    if player_id in cache and not (player and player.is_regen and _is_legacy_adult_regen_portrait(cache[player_id])):
+        return cache[player_id]
     name = (player.name if player else player_name) or "Player"
     seed_key = (player.player_ref if player and player.player_ref else player_id) or "player"
-    if seed_key in cache:
+    if seed_key in cache and not (player and player.is_regen and _is_legacy_adult_regen_portrait(cache[seed_key])):
         cache[player_id] = cache[seed_key]
         return cache[seed_key]
 
@@ -523,6 +542,8 @@ def resolve_player_portrait_url(session: Session | None, player_id: str, player_
                 for key in ("portraitUrl", "portrait_url", "image_url"):
                     val = dna.get(key)
                     if isinstance(val, str) and val.strip():
+                        if canonical_player.is_real_player is False and _is_legacy_adult_regen_portrait(val):
+                            continue
                         resolved = _normalize_portrait_url(val)
                         cache[seed_key] = resolved
                         cache[player_id] = resolved

@@ -616,9 +616,7 @@ function AcademyProspectCard({
     setBusyAction("contract");
     try {
       await api.post(`/owner/clubs/${clubId}/academy/${p.id}/contract`);
-      toast.success(
-        `Youth contract signed for ${p.name}.`,
-      );
+      toast.success(`Youth contract signed for ${p.name}.`);
       onRefresh();
     } catch (e) {
       toast.error(errMsg(e));
@@ -867,8 +865,12 @@ export default function Academy() {
 
   useEffect(() => {
     if (!club) return;
-    const seen = new Set(readSeen(club.club_id));
-    setPack(club.squad.filter((p: any) => p.is_regen && !seen.has(p.id)));
+    const allRegenIds = (club.squad || []).filter((p: any) => p?.is_regen).map((p: any) => p.id);
+    const existingSeen = readSeen(club.club_id);
+    if (allRegenIds.length > 0 && existingSeen.length < allRegenIds.length) {
+      const merged = Array.from(new Set([...existingSeen, ...allRegenIds]));
+      localStorage.setItem(seenKey(club.club_id), JSON.stringify(merged));
+    }
   }, [club]);
 
   if (!active?.club_id) {
@@ -898,6 +900,9 @@ export default function Academy() {
       p.father_name
     ) {
       return true;
+    }
+    if (status === "first_team" || status === "senior" || status === "reserve") {
+      return false;
     }
     return p.acquired_via !== "share";
   });
@@ -930,18 +935,22 @@ export default function Academy() {
     club.onboarding_staff?.head_of_youth_development;
   const youthHeadNamed = Boolean(
     youthHead?.name &&
-      !youthHead?.use_default &&
-      !youthHead?.is_default &&
-      !youthHead?.is_vacant &&
-      youthHead?.manager_id !== "gtex-staff-coach",
+    !youthHead?.use_default &&
+    !youthHead?.is_default &&
+    !youthHead?.is_vacant &&
+    youthHead?.manager_id !== "gtex-staff-coach",
   );
   const youthSkill = (() => {
     if (!youthHeadNamed) return null;
     const rating = Number(youthHead?.rating);
     const derived =
-      Number.isFinite(rating) && rating > 0 ? Math.max(8, Math.min(20, Math.round(rating / 5))) : 10;
+      Number.isFinite(rating) && rating > 0
+        ? Math.max(8, Math.min(20, Math.round(rating / 5)))
+        : 10;
     const filed = Number(youthHead?.youth_development);
-    return Number.isFinite(filed) && filed > 0 ? Math.max(1, Math.min(20, Math.round(filed))) : derived;
+    return Number.isFinite(filed) && filed > 0
+      ? Math.max(1, Math.min(20, Math.round(filed)))
+      : derived;
   })();
   const hoydRating =
     youthHeadNamed && youthHead?.rating != null && youthHead?.rating !== ""
@@ -1009,7 +1018,9 @@ export default function Academy() {
             {facilityLevel == null ? null : <span className="text-sm text-slate-500">/5</span>}
           </p>
           <p className="text-[11px] text-emerald-300 mt-1">
-            {facilityLevel == null ? "Growth speed is not filed" : `+${facilityLevel * 4}% Regen Growth Speed`}
+            {facilityLevel == null
+              ? "Growth speed is not filed"
+              : `+${facilityLevel * 4}% Regen Growth Speed`}
           </p>
         </div>
 

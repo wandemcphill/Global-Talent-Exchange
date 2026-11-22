@@ -25,7 +25,8 @@ def test_a_hired_rating_becomes_the_role_skill() -> None:
     assert manager["youth_development"] == 16
     assert manager["influence"] == 16
     assert manager["preferred_formation"] == "3-4-3"
-    assert manager["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
+    assert manager["preferred_formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2"]
+    assert manager["fallback_formation"] == "4-4-2"
 
     general = apply_staff_influence(
         {"name": "Mats Kofi Silva", "rating": 91, "is_appointed": True},
@@ -53,9 +54,13 @@ def test_academy_names_stay_inside_one_culture() -> None:
 def test_manager_tactics_use_the_same_bonus_as_the_match() -> None:
     from app.owner_console.engine import manager_tactics
 
-    tactics = manager_tactics({"name": "Tunde Mc'Phill", "rating": 76, "manager_id": "tunde"})
+    tactics = manager_tactics(
+        {"name": "Tunde Mc'Phill", "rating": 76, "manager_id": "mgr_tunde_mcphill"},
+        {"_tactical_setup": {"formation": "4-2-3-1", "ratified_manager_id": "mgr_tunde_mcphill"}},
+    )
     assert tactics["formation"] == "3-4-3"
-    assert tactics["formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2"]
+    assert tactics["formations"] == ["3-4-3", "3-4-1-2", "3-4-2-1", "4-1-2-1-2", "4-4-2"]
+    assert tactics["fallback_formation"] == "4-4-2"
     assert tactics["tactical_flexibility"] == 16
     assert tactics["youth_development"] == 16
     assert tactics["influence"] == 16

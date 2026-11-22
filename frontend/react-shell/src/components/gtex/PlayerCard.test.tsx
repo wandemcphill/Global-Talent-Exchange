@@ -3,7 +3,14 @@ declare const test: any;
 declare const expect: any;
 
 import React from "react";
-import { PlayerCard, tierOf, posShort, TIERS, resolvePlayerFallback, buildSilhouetteDataUri } from "./PlayerCard";
+import {
+  PlayerCard,
+  tierOf,
+  posShort,
+  TIERS,
+  resolvePlayerFallback,
+  buildSilhouetteDataUri,
+} from "./PlayerCard";
 import { RegenCard, RegenPotentialBar, resolveRegenFallback, formatGtexCoin } from "./RegenCard";
 
 describe("PlayerCard & RegenCard Logic and Element Rendering Suite", () => {
@@ -44,10 +51,18 @@ describe("PlayerCard & RegenCard Logic and Element Rendering Suite", () => {
     expect(resolvePlayerFallback("MID")).toBe(buildSilhouetteDataUri("MID"));
     expect(resolvePlayerFallback("ST")).toBe(buildSilhouetteDataUri("ST"));
 
-    expect(resolveRegenFallback("GK")).toBe("/img/players/keeper.png");
-    expect(resolveRegenFallback("DEF")).toBe("/img/players/defender.png");
-    expect(resolveRegenFallback("MID")).toBe("/img/players/midfielder.png");
-    expect(resolveRegenFallback("FWD")).toBe("/img/players/striker.png");
+    expect(resolveRegenFallback("GK")).toBe(
+      "https://gtex-api-2gtu.onrender.com/generated-media/regen_newgen_faces/new_styles/African/001.png",
+    );
+    expect(resolveRegenFallback("DEF")).toBe(
+      "https://gtex-api-2gtu.onrender.com/generated-media/regen_newgen_faces/new_styles/African/002.png",
+    );
+    expect(resolveRegenFallback("MID")).toBe(
+      "https://gtex-api-2gtu.onrender.com/generated-media/regen_newgen_faces/new_styles/African/003.png",
+    );
+    expect(resolveRegenFallback("FWD")).toBe(
+      "https://gtex-api-2gtu.onrender.com/generated-media/regen_newgen_faces/new_styles/African/004.png",
+    );
   });
 
   test("PlayerCard element creation succeeds for all variants", () => {

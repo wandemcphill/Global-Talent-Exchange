@@ -440,7 +440,10 @@ export function ControlCenter() {
   const filedXi = clubDetail?.matchday_xi || [];
   const academyReady = (clubDetail?.squad || []).filter((player: any) => {
     const status = String(player.squad_status || "").toLowerCase();
-    return (status === "academy" || status === "u21") && Number(player.readiness_assessment?.readiness_score || 0) >= 60;
+    return (
+      (status === "academy" || status === "u21") &&
+      Number(player.readiness_assessment?.readiness_score || 0) >= 60
+    );
   }).length;
   const firstTeamPitch = (clubDetail?.squad || []).filter((player: any) => {
     const status = String(player.squad_status || "first_team").toLowerCase();
@@ -459,7 +462,7 @@ export function ControlCenter() {
       roleLabel: "First-Team Manager",
       name: staffMap.first_team_manager?.name || "Seat empty",
       portrait: staffMap.first_team_manager?.portrait_url,
-      mood: seat(staffMap.first_team_manager) ? staffMap.first_team_manager?.mood ?? null : null,
+      mood: seat(staffMap.first_team_manager) ? (staffMap.first_team_manager?.mood ?? null) : null,
       agenda: seat(staffMap.first_team_manager)
         ? staffMap.first_team_manager?.personal_agenda || "No agenda filed."
         : "This seat is empty.",
@@ -473,7 +476,7 @@ export function ControlCenter() {
       roleLabel: "General Manager (GM)",
       name: staffMap.general_manager?.name || "Seat empty",
       portrait: staffMap.general_manager?.portrait_url,
-      mood: seat(staffMap.general_manager) ? staffMap.general_manager?.mood ?? null : null,
+      mood: seat(staffMap.general_manager) ? (staffMap.general_manager?.mood ?? null) : null,
       agenda: seat(staffMap.general_manager)
         ? staffMap.general_manager?.personal_agenda || "No agenda filed."
         : "This seat is empty.",
@@ -487,7 +490,9 @@ export function ControlCenter() {
       roleLabel: "Head of Youth Dev (HOYD)",
       name: staffMap.head_of_youth_development?.name || "Seat empty",
       portrait: staffMap.head_of_youth_development?.portrait_url,
-      mood: seat(staffMap.head_of_youth_development) ? staffMap.head_of_youth_development?.mood ?? null : null,
+      mood: seat(staffMap.head_of_youth_development)
+        ? (staffMap.head_of_youth_development?.mood ?? null)
+        : null,
       agenda: seat(staffMap.head_of_youth_development)
         ? staffMap.head_of_youth_development?.personal_agenda || "No agenda filed."
         : "This seat is empty.",
@@ -699,6 +704,9 @@ export function ControlCenter() {
             clubName={activeClubProfile.club_name || "GTEX FC"}
             priceGtx={Number(pitchLead?.player?.value_coin || 0)}
             jerseyNumber={pitchLead?.shirt}
+            portraitUrl={
+              pitchLead?.player?.portrait_url || (pitchLead?.player as any)?.portraitUrl || null
+            }
             badgeLabel="★ CLUB TALISMAN FOIL"
             actionLabel="Inspect Squad →"
             onAction={() => navigate("/app/squad")}
@@ -744,7 +752,9 @@ export function ControlCenter() {
                     Mood {exec.mood}
                   </Chip>
                 )}
-                {exec.poachingRisk === "high" && exec.name !== "Seat empty" && <Chip tone="red">Poach Risk</Chip>}
+                {exec.poachingRisk === "high" && exec.name !== "Seat empty" && (
+                  <Chip tone="red">Poach Risk</Chip>
+                )}
               </div>
             </div>
             <div className="flex items-center justify-between gap-3">
@@ -986,7 +996,7 @@ export function ControlCenter() {
       </section>
 
       {/* 2b. AUTHORITATIVE WORLD TIME + PERSISTED-EVENT DAILY BRIEFING */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-2">
         <WorldClockCard />
         <OwnerBriefingPanel
           clubId={activeClubProfile.club_id}
@@ -1151,8 +1161,12 @@ export function ControlCenter() {
               ) : (
                 <p className="text-[11px] text-slate-500">No eleven filed yet.</p>
               )}
-              <Link to="/app/squad?sheet=academy" className="text-[11px] font-bold text-emerald-300">
-                {academyReady} academy {academyReady === 1 ? "player is" : "players are"} ready to move
+              <Link
+                to="/app/squad?sheet=academy"
+                className="text-[11px] font-bold text-emerald-300"
+              >
+                {academyReady} academy {academyReady === 1 ? "player is" : "players are"} ready to
+                move
               </Link>
               <Link
                 to={

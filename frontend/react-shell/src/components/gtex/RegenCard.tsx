@@ -54,13 +54,37 @@ export interface RegenCardProps {
   footer?: React.ReactNode;
 }
 
-export function resolveRegenFallback(position?: string): string {
+const YOUTH_FACEBANK_BASE =
+  "https://gtex-api-2gtu.onrender.com/generated-media/regen_newgen_faces/new_styles/African";
+
+export function isLegacyAdultRegenPortrait(url?: string | null): boolean {
+  if (!url) return false;
+  const lower = String(url).toLowerCase();
+  return (
+    lower.includes("script_skin_hair") ||
+    lower.includes("/img/players/") ||
+    lower.includes("/staff-portraits/")
+  );
+}
+
+export function resolveRegenFallback(position?: string, seed?: string): string {
+  if (seed) {
+    let hash = 0;
+    for (let i = 0; i < seed.length; i++) {
+      hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+    }
+    const idx = String((hash % 5) + 1).padStart(3, "0");
+    return `${YOUTH_FACEBANK_BASE}/${idx}.png`;
+  }
   const p = (position || "").toLowerCase();
-  if (p.includes("gk") || p.includes("keeper")) return "/img/players/keeper.png";
-  if (p.includes("def") || p.includes("cb") || p.includes("back")) return "/img/players/defender.png";
-  if (p.includes("mid") || p.includes("cm") || p.includes("dm") || p.includes("am")) return "/img/players/midfielder.png";
-  if (p.includes("fwd") || p.includes("st") || p.includes("wing") || p.includes("att")) return "/img/players/striker.png";
-  return "/img/players/regen.png";
+  if (p.includes("gk") || p.includes("keeper")) return `${YOUTH_FACEBANK_BASE}/001.png`;
+  if (p.includes("def") || p.includes("cb") || p.includes("back"))
+    return `${YOUTH_FACEBANK_BASE}/002.png`;
+  if (p.includes("mid") || p.includes("cm") || p.includes("dm") || p.includes("am"))
+    return `${YOUTH_FACEBANK_BASE}/003.png`;
+  if (p.includes("fwd") || p.includes("st") || p.includes("wing") || p.includes("att"))
+    return `${YOUTH_FACEBANK_BASE}/004.png`;
+  return `${YOUTH_FACEBANK_BASE}/005.png`;
 }
 
 export function formatGtexCoin(val?: number | string): string {
@@ -72,9 +96,19 @@ export function formatGtexCoin(val?: number | string): string {
   return num.toLocaleString();
 }
 
-export function RegenPotentialBar({ current, low, high }: { current: number | null; low: number | null; high: number | null }) {
+export function RegenPotentialBar({
+  current,
+  low,
+  high,
+}: {
+  current: number | null;
+  low: number | null;
+  high: number | null;
+}) {
   if (current == null && low == null && high == null) {
-    return <div className="mt-3 text-[10px] text-emerald-300/80">Rating and ceiling are not filed.</div>;
+    return (
+      <div className="mt-3 text-[10px] text-emerald-300/80">Rating and ceiling are not filed.</div>
+    );
   }
   const min = 40;
   const span = Math.max(1, 99 - min);
@@ -85,13 +119,23 @@ export function RegenPotentialBar({ current, low, high }: { current: number | nu
   const highPct = pct(high);
 
   return (
-    <div className="relative mt-3 flex flex-col gap-1 w-full" aria-label={`Current: ${current}, Potential Ceiling: ${low}-${high}`}>
+    <div
+      className="relative mt-3 flex flex-col gap-1 w-full"
+      aria-label={`Current: ${current}, Potential Ceiling: ${low}-${high}`}
+    >
       <div className="flex items-baseline justify-between text-[10px] font-semibold tracking-wider text-emerald-300/80">
         <span className="flex items-center gap-1">
           CURRENT <span className="gx-mono text-sm font-black text-white">{current ?? "—"}</span>
         </span>
         <span className="flex items-center gap-1">
-          CEILING <span className="gx-mono text-sm font-black text-amber-300">{low == null && high == null ? "—" : low === high ? high : `${low ?? "—"}–${high ?? "—"}`}</span>
+          CEILING{" "}
+          <span className="gx-mono text-sm font-black text-amber-300">
+            {low == null && high == null
+              ? "—"
+              : low === high
+                ? high
+                : `${low ?? "—"}–${high ?? "—"}`}
+          </span>
         </span>
       </div>
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-slate-900/80 border border-emerald-500/20">
@@ -113,7 +157,8 @@ export function RegenPotentialBar({ current, low, high }: { current: number | nu
 }
 
 export function RegenCard(props: RegenCardProps) {
-  const r: Partial<RegenData> = (typeof props.regen === "object" && props.regen !== null) ? props.regen : {};
+  const r: Partial<RegenData> =
+    typeof props.regen === "object" && props.regen !== null ? props.regen : {};
   const name = props.name || r.name || "Unnamed player";
   const rawRating = props.rating ?? r.rating ?? r.currentRating;
   const rating = rawRating == null || rawRating === "" ? null : Number(rawRating);
@@ -129,12 +174,18 @@ export function RegenCard(props: RegenCardProps) {
   const archetype = props.archetype || r.archetype || "—";
   const serial = props.serial || r.serial || "—";
   const price = props.price ?? r.price;
-  const rawImage = props.image ?? r.image;
+  const rawCandidate =
+    props.image ??
+    (props as any).portrait_url ??
+    (props as any).portraitUrl ??
+    r.image ??
+    (r as any).portrait_url;
+  const rawImage = isLegacyAdultRegenPortrait(rawCandidate) ? null : rawCandidate;
   const variant = props.variant || "full";
   const testid = props.testid || "regen-card";
 
   const [imgError, setImgError] = useState(false);
-  const fallbackSrc = resolveRegenFallback(position);
+  const fallbackSrc = resolveRegenFallback(position, name !== "Unnamed player" ? name : undefined);
   const imageSrc = !imgError && rawImage ? rawImage : fallbackSrc;
 
   // Thumbnail variant (dense table/avatar view)
@@ -161,7 +212,9 @@ export function RegenCard(props: RegenCardProps) {
             <span className="gx-mono text-xs font-black text-emerald-300">{rating}</span>
             <span className="truncate text-xs font-bold text-white">{name}</span>
           </div>
-          <span className="gx-mono text-[9px] text-emerald-400/80">{posShort(position)} · Gen {generation}</span>
+          <span className="gx-mono text-[9px] text-emerald-400/80">
+            {posShort(position)} · Gen {generation}
+          </span>
         </div>
       </div>
     );
@@ -182,7 +235,9 @@ export function RegenCard(props: RegenCardProps) {
           }
         }}
         className={`group relative flex flex-col overflow-hidden rounded-xl border border-emerald-500/35 bg-[#051310] p-3 shadow-lg shadow-black/40 transition-all duration-300 ${
-          props.onClick ? "cursor-pointer hover:-translate-y-1 hover:border-emerald-400 hover:shadow-emerald-950/50" : ""
+          props.onClick
+            ? "cursor-pointer hover:-translate-y-1 hover:border-emerald-400 hover:shadow-emerald-950/50"
+            : ""
         } ${props.className || ""}`}
       >
         {/* Chalk border dashed overlay */}
@@ -207,11 +262,17 @@ export function RegenCard(props: RegenCardProps) {
           </div>
           <div className="min-w-0 flex-1">
             <div className="flex items-baseline gap-1.5">
-              <span className="gx-display text-2xl font-black leading-none text-emerald-400">{rating}</span>
+              <span className="gx-display text-2xl font-black leading-none text-emerald-400">
+                {rating}
+              </span>
               <span className="gx-mono text-xs font-bold text-slate-300">{posShort(position)}</span>
             </div>
-            <p className="gx-display truncate text-sm font-black uppercase text-white tracking-wide">{name}</p>
-            <p className="truncate text-[10px] text-emerald-200/60">{archetype} · {age}y</p>
+            <p className="gx-display truncate text-sm font-black uppercase text-white tracking-wide">
+              {name}
+            </p>
+            <p className="truncate text-[10px] text-emerald-200/60">
+              {archetype} · {age}y
+            </p>
           </div>
         </div>
 
@@ -220,7 +281,9 @@ export function RegenCard(props: RegenCardProps) {
         {price != null && (
           <div className="relative mt-2 pt-2 border-t border-emerald-500/20 flex items-center justify-between text-xs">
             <span className="text-[10px] uppercase font-bold text-slate-400">Value</span>
-            <span className="gx-mono font-bold text-amber-300">{formatGtexCoin(price)} <span className="text-[10px] text-amber-400/70">GTX</span></span>
+            <span className="gx-mono font-bold text-amber-300">
+              {formatGtexCoin(price)} <span className="text-[10px] text-amber-400/70">GTX</span>
+            </span>
           </div>
         )}
         {props.footer && <div className="mt-2">{props.footer}</div>}
@@ -242,7 +305,9 @@ export function RegenCard(props: RegenCardProps) {
         }
       }}
       className={`group relative isolate flex aspect-[5/7.2] w-full max-w-[310px] flex-col overflow-hidden rounded-2xl border-2 border-emerald-500/40 bg-[#04120e] p-4 text-white shadow-2xl shadow-black/60 transition-all duration-300 ${
-        props.onClick ? "cursor-pointer hover:-translate-y-1.5 hover:border-emerald-400 hover:shadow-[0_20px_50px_rgba(5,150,105,0.25)]" : ""
+        props.onClick
+          ? "cursor-pointer hover:-translate-y-1.5 hover:border-emerald-400 hover:shadow-[0_20px_50px_rgba(5,150,105,0.25)]"
+          : ""
       } ${props.className || ""}`}
     >
       {/* Tactical pitch markings background */}
@@ -255,7 +320,15 @@ export function RegenCard(props: RegenCardProps) {
         viewBox="0 0 100 100"
         className="pointer-events-none absolute left-1/2 top-28 -translate-x-1/2 size-48 text-emerald-500/15"
       >
-        <circle cx="50" cy="50" r="46" fill="none" stroke="currentColor" strokeWidth="0.75" strokeDasharray="3 3" />
+        <circle
+          cx="50"
+          cy="50"
+          r="46"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="0.75"
+          strokeDasharray="3 3"
+        />
         <circle cx="50" cy="50" r="2" fill="currentColor" />
       </svg>
 
@@ -290,7 +363,10 @@ export function RegenCard(props: RegenCardProps) {
 
       {/* Player identity block */}
       <div className="relative z-10 mt-3 flex flex-col items-center text-center">
-        <h3 className="gx-display truncate max-w-full text-2xl font-black uppercase tracking-tight text-white drop-shadow-sm" title={name}>
+        <h3
+          className="gx-display truncate max-w-full text-2xl font-black uppercase tracking-tight text-white drop-shadow-sm"
+          title={name}
+        >
           {name}
         </h3>
         <p className="mt-0.5 text-[11px] font-medium text-emerald-200/70">
@@ -307,15 +383,21 @@ export function RegenCard(props: RegenCardProps) {
       {/* Lineage & DNA traits */}
       <div className="relative z-10 mt-2.5 flex-1 flex flex-col justify-center border-l-2 border-dashed border-emerald-500/30 pl-2.5 py-1 text-left space-y-1">
         <div className="flex items-baseline gap-2 text-[11px]">
-          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">Class</span>
+          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            Class
+          </span>
           <span className="truncate text-emerald-100 font-medium">{archetype}</span>
         </div>
         <div className="flex items-baseline gap-2 text-[11px]">
-          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">Lineage</span>
+          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            Lineage
+          </span>
           <span className="truncate text-emerald-100 font-medium">{nationality}</span>
         </div>
         <div className="flex items-baseline gap-2 text-[11px]">
-          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">Status</span>
+          <span className="w-14 shrink-0 text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            Status
+          </span>
           <span className="truncate text-amber-300 font-semibold flex items-center gap-1">
             <ShieldCheck size={11} /> Verified Unique Asset
           </span>
@@ -325,14 +407,21 @@ export function RegenCard(props: RegenCardProps) {
       {/* Footer: Serial & Valuation */}
       <footer className="relative z-10 mt-auto pt-2 border-t border-emerald-500/25 flex items-end justify-between">
         <div className="flex flex-col">
-          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Asset Serial</span>
-          <span className="gx-mono text-[10px] tracking-wider text-emerald-300/80 font-bold">{serial}</span>
+          <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+            Asset Serial
+          </span>
+          <span className="gx-mono text-[10px] tracking-wider text-emerald-300/80 font-bold">
+            {serial}
+          </span>
         </div>
         {price != null && (
           <div className="flex flex-col items-end">
-            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Valuation</span>
+            <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">
+              Valuation
+            </span>
             <span className="gx-display text-xl font-black leading-none text-amber-300">
-              {formatGtexCoin(price)} <span className="gx-mono text-xs font-bold text-amber-400/80">GTX</span>
+              {formatGtexCoin(price)}{" "}
+              <span className="gx-mono text-xs font-bold text-amber-400/80">GTX</span>
             </span>
           </div>
         )}

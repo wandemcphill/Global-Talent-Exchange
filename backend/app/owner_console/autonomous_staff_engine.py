@@ -4555,6 +4555,30 @@ def select_manager_matchday_lineup(
         pos = str(p.position or "")
         return pos.upper() in {"GK", "GOALKEEPER"} or pos.lower().startswith("goal")
 
+    def _player_line(p: OwnerSquadPlayer) -> str:
+        raw = str(p.position or "").strip().upper().split("/")[0].strip()
+        if raw in {"GK", "GOALKEEPER"} or raw.startswith("GOAL"):
+            return "GK"
+        if raw in {"CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"} or raw.startswith("DEF") or "BACK" in raw:
+            return "DEF"
+        if raw in {"DM", "CDM", "CM", "AM", "CAM", "LM", "RM", "MF", "MID"} or raw.startswith("MID"):
+            return "MID"
+        if (
+            raw in {"ST", "CF", "LW", "RW", "SS", "FW", "FWD", "ATT"}
+            or raw.startswith("FORW")
+            or raw.startswith("STRIK")
+        ):
+            return "FWD"
+        return "MID"
+
+    shape_parts = [int(x) for x in str(chosen_formation or "4-3-3").split("-") if x.isdigit()]
+    if len(shape_parts) >= 3 and sum(shape_parts) == 10:
+        def_target = shape_parts[0]
+        fwd_target = shape_parts[-1]
+        mid_target = sum(shape_parts[1:-1])
+    else:
+        def_target, mid_target, fwd_target = 4, 3, 3
+
     pref_ids = [
         str(pid) for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
     ]
@@ -4567,33 +4591,64 @@ def select_manager_matchday_lineup(
     ]
     pref_first = [by_id[pid] for pid in pref_ids if pid in by_id and _sheet_name(by_id[pid]) == "first_team"]
 
-    starters: list[OwnerSquadPlayer] = []
-    seen: set[str] = set()
-    for player in pref_first + committed_xi:
-        if str(player.id) in seen:
-            continue
-        starters.append(player)
-        seen.add(str(player.id))
     ranked_first = sorted(first_team, key=_manager_player_score, reverse=True)
-    keepers = [p for p in ranked_first if _is_gk(p)]
-    if keepers and all(not _is_gk(p) for p in starters):
-        starters.insert(0, keepers[0])
-        seen.add(str(keepers[0].id))
-    for player in ranked_first:
-        if len(starters) >= 11:
-            break
-        if str(player.id) in seen:
-            continue
-        starters.append(player)
-        seen.add(str(player.id))
+    ranked_non_academy = [
+        p for p in sorted(eligible, key=_manager_player_score, reverse=True) if _sheet_name(p) != "academy"
+    ]
+    candidate_pool: list[OwnerSquadPlayer] = []
+    pool_seen: set[str] = set()
+    for player in pref_first + committed_xi + ranked_first + ranked_non_academy:
+        pid = str(player.id)
+        if pid not in pool_seen:
+            candidate_pool.append(player)
+            pool_seen.add(pid)
+
+    used_ids: set[str] = set()
+
+    def _take_line(line: str, count: int) -> list[OwnerSquadPlayer]:
+        picked: list[OwnerSquadPlayer] = []
+        for player in candidate_pool:
+            if len(picked) >= count:
+                break
+            pid = str(player.id)
+            if pid in used_ids:
+                continue
+            if _player_line(player) == line:
+                picked.append(player)
+                used_ids.add(pid)
+        return picked
+
+    gk_pick = _take_line("GK", 1)
+    def_picks = _take_line("DEF", def_target)
+    mid_picks = _take_line("MID", mid_target)
+    fwd_picks = _take_line("FWD", fwd_target)
+
+    def _top_up(bucket: list[OwnerSquadPlayer], target_count: int, *, allow_gk: bool = False) -> None:
+        for player in candidate_pool:
+            if len(bucket) >= target_count:
+                break
+            pid = str(player.id)
+            if pid in used_ids:
+                continue
+            if not allow_gk and _is_gk(player):
+                continue
+            bucket.append(player)
+            used_ids.add(pid)
+
+    _top_up(gk_pick, 1, allow_gk=True)
+    _top_up(def_picks, def_target)
+    _top_up(mid_picks, mid_target)
+    _top_up(fwd_picks, fwd_target)
+
+    starters: list[OwnerSquadPlayer] = (gk_pick + def_picks + mid_picks + fwd_picks)[:11]
     if len(starters) < 11:
         for player in sorted(eligible, key=_manager_player_score, reverse=True):
             if len(starters) >= 11:
                 break
-            if str(player.id) in seen or _sheet_name(player) == "academy":
+            if str(player.id) in used_ids or _sheet_name(player) == "academy":
                 continue
             starters.append(player)
-            seen.add(str(player.id))
+            used_ids.add(str(player.id))
     starters = starters[:11]
 
     starter_ids = {p.id for p in starters}
