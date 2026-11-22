@@ -50,7 +50,8 @@ export function SquadCardGridView({ squad, onSelectPlayer, targetPlayerId }: Squ
               age={p.age}
               nationality={p.nationality}
               club={p.current_club_name || p.club_name}
-              image={p.image_url}
+              image={p.portrait_url || p.image_url}
+              regen={Boolean(p.is_regen)}
               tier={tier}
               badge={p.archetype || (p.is_regen ? "ACADEMY REGEN" : undefined)}
               onClick={() => onSelectPlayer(p)}

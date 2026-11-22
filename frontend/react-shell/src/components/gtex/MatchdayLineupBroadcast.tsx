@@ -28,6 +28,9 @@ export interface MatchdaySquadMember {
   is_signed?: boolean;
   is_regen?: boolean;
   stamina_pct?: number | null;
+  morale?: number | null;
+  mood_state?: string | null;
+  performance_shift?: number | null;
 }
 
 export interface MatchdayTeamSheet {
@@ -220,8 +223,12 @@ function buildTeamSheetFromRoster(opts: {
       shirt_number: numBase,
       position: posShort(p.position),
       rating: p.rating == null ? 0 : Math.round(Number(p.rating)),
-      portrait_url: sanitizeRealPlayerImage(p.portrait_url, false),
+      portrait_url: sanitizeRealPlayerImage(p.portrait_url, Boolean(p.is_regen)),
       is_signed: true,
+      is_regen: Boolean(p.is_regen),
+      morale: p.morale ?? null,
+      mood_state: p.mood_state ?? null,
+      performance_shift: p.performance_shift ?? null,
     };
   });
 
@@ -328,8 +335,12 @@ function buildTeamSheetFromRoster(opts: {
       shirt_number: shirt,
       position: posShort(p.position),
       rating: p.rating == null ? 0 : Math.round(Number(p.rating)),
-      portrait_url: sanitizeRealPlayerImage(p.portrait_url, false),
+      portrait_url: sanitizeRealPlayerImage(p.portrait_url, Boolean(p.is_regen)),
       is_signed: true,
+      is_regen: Boolean(p.is_regen),
+      morale: p.morale ?? null,
+      mood_state: p.mood_state ?? null,
+      performance_shift: p.performance_shift ?? null,
     });
   });
 
@@ -402,6 +413,10 @@ export function useClubMatchdaySheet(opts: {
                 is_regen: player.is_regen,
                 age: player.age,
                 minutes: player.minutes,
+                morale: player.morale,
+                mood_state: player.mood_state,
+                performance_shift: player.performance_shift,
+                effective_match_rating: player.effective_match_rating,
               })),
             }),
             filedIds: (clubDetail.matchday_xi || []).map((player: any) => String(player.id)),

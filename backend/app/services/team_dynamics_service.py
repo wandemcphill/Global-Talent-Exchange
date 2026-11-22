@@ -80,11 +80,41 @@ class TeamDynamicsService:
             values.append(float(player.morale))
         if agency_state is not None and agency_state.morale is not None:
             values.append(float(agency_state.morale))
+        try:
+            from sqlalchemy import or_
+            from app.owner_console.models import OwnerSquadPlayer
+
+            owner_row = self.session.scalar(
+                select(OwnerSquadPlayer).where(
+                    or_(OwnerSquadPlayer.player_ref == player_id, OwnerSquadPlayer.id == player_id),
+                    OwnerSquadPlayer.status == "active",
+                )
+            )
+            if owner_row is not None and owner_row.morale is not None:
+                values.append(float(owner_row.morale))
+        except Exception:
+            pass
         if not values and fallback is not None:
             values.append(float(fallback))
         if not values:
             return None
-        return max(0.0, min(100.0, mean(values)))
+        base_morale = mean(values)
+        try:
+            regen_profile = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player_id))
+            if regen_profile is not None:
+                effects = list(
+                    self.session.scalars(
+                        select(RegenTeamDynamicsEffect).where(
+                            RegenTeamDynamicsEffect.regen_id == regen_profile.id,
+                            RegenTeamDynamicsEffect.active.is_(True),
+                        )
+                    ).all()
+                )
+                if effects:
+                    base_morale -= sum(float(item.morale_penalty or 0.0) for item in effects)
+        except Exception:
+            pass
+        return max(0.0, min(100.0, base_morale))
 
     def apply_match_outcome(
         self,
@@ -97,18 +127,37 @@ class TeamDynamicsService:
         players = {
             player.id: player for player in self.session.scalars(select(Player).where(Player.id.in_(player_ids))).all()
         }
+        owner_rows_by_key: dict[str, Any] = {}
+        try:
+            from sqlalchemy import or_
+            from app.owner_console.models import OwnerSquadPlayer
+
+            for row in self.session.scalars(
+                select(OwnerSquadPlayer).where(
+                    or_(OwnerSquadPlayer.player_ref.in_(player_ids), OwnerSquadPlayer.id.in_(player_ids))
+                )
+            ).all():
+                owner_rows_by_key[str(row.id)] = row
+                if row.player_ref:
+                    owner_rows_by_key[str(row.player_ref)] = row
+        except Exception:
+            owner_rows_by_key = {}
         for stat in replay_payload.summary.player_stats:
-            player = players.get(stat.player_id)
-            if player is None:
-                continue
             delta = self._morale_delta_for_stat(stat=stat, replay_payload=replay_payload)
-            player.morale = max(0.0, min(100.0, float(player.morale) + delta))
-            agency_state = self.session.scalar(
-                select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
-            )
-            if agency_state is not None:
-                agency_state.morale = max(0.0, min(100.0, float(agency_state.morale) + delta))
-                agency_state.happiness = max(0.0, min(100.0, float(agency_state.happiness) + (delta * 0.6)))
+            player = players.get(stat.player_id)
+            if player is not None:
+                base_player_morale = 50.0 if player.morale is None else float(player.morale)
+                player.morale = max(0.0, min(100.0, base_player_morale + delta))
+                agency_state = self.session.scalar(
+                    select(PlayerAgencyState).where(PlayerAgencyState.player_id == player.id)
+                )
+                if agency_state is not None:
+                    agency_state.morale = max(0.0, min(100.0, float(agency_state.morale) + delta))
+                    agency_state.happiness = max(0.0, min(100.0, float(agency_state.happiness) + (delta * 0.6)))
+            owner_row = owner_rows_by_key.get(str(stat.player_id))
+            if owner_row is not None:
+                base_owner_morale = 70 if owner_row.morale is None else int(owner_row.morale)
+                owner_row.morale = int(max(0, min(100, round(base_owner_morale + delta))))
         by_team: dict[str, list[str]] = {}
         for stat in replay_payload.summary.player_stats:
             if stat.minutes_played <= 0:

@@ -765,11 +765,23 @@ def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[
         if agenda:
             record["personal_agenda"] = str(agenda)
     if not record.get("portrait_url"):
-        nation_lower = str(record.get("nation") or record.get("nationality") or "").lower()
-        if any(k in nation_lower for k in ("nigeria", "ghana", "senegal", "cameroon", "ivory", "mali", "kenya")):
-            record["portrait_url"] = "/staff-portraits/mature_m_west_african_41.jpg"
+        import zlib
+        from app.owner_console.regen_staff_catalog import PORTRAIT_PUBLIC_PREFIX, portrait_filename
+        from app.owner_console.staff_supply import _FEMALE_GIVEN_NAMES, _face_group_for_nation
+
+        staff_name = str(record.get("name") or record.get("display_name") or "").strip()
+        first_name = staff_name.split(" ", 1)[0] if staff_name else ""
+        raw_gender = str(record.get("gender") or "").strip().lower()
+        if raw_gender in {"female", "male"}:
+            gender = raw_gender
+        elif first_name in _FEMALE_GIVEN_NAMES or staff_name.lower().startswith("dr. amaka"):
+            gender = "female"
         else:
-            record["portrait_url"] = "/staff-portraits/mature_m_north_european_54.jpg"
+            gender = "male"
+        nation_str = str(record.get("nation") or record.get("nationality") or "")
+        seed_idx = zlib.crc32(f"{staff_name}:{nation_str}:{gender}".encode("utf-8")) & 0xFFFFFFFF
+        face_group = str(record.get("face_group") or "") or _face_group_for_nation(nation_str, seed_idx)
+        record["portrait_url"] = f"{PORTRAIT_PUBLIC_PREFIX}/{portrait_filename(face_group, gender, seed_idx)}"
     rating_raw = record.get("rating")
     if rating_raw is None:
         rating_raw = record.get("gsi")

@@ -60,11 +60,7 @@ const YOUTH_FACEBANK_BASE =
 export function isLegacyAdultRegenPortrait(url?: string | null): boolean {
   if (!url) return false;
   const lower = String(url).toLowerCase();
-  return (
-    lower.includes("script_skin_hair") ||
-    lower.includes("/img/players/") ||
-    lower.includes("/staff-portraits/")
-  );
+  return lower.includes("/img/players/") || lower.includes("/staff-portraits/");
 }
 
 export function resolveRegenFallback(position?: string, seed?: string): string {

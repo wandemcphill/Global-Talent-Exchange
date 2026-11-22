@@ -39,6 +39,7 @@ class ClubV2SquadPlayerView(CommonSchema):
     player_id: str
     name: str
     short_name: str | None = None
+    portrait_url: str | None = None
     position: str | None = None
     position_group: str
     nationality: str | None = None

@@ -140,6 +140,19 @@ class ClubCreationApi {
       '/api/clubs',
       body: request.toJson(),
     );
-    return GteCreatedClubProfile.fromJson(response);
+    final GteCreatedClubProfile created = GteCreatedClubProfile.fromJson(
+      response,
+    );
+    if (created.id.trim().isNotEmpty) {
+      try {
+        await client.post(
+          '/api/owner/clubs/${created.id}/activate',
+          body: const <String, Object?>{},
+        );
+      } catch (_) {
+        // Activation is best-effort when running against mock or partial transports.
+      }
+    }
+    return created;
   }
 }

@@ -164,6 +164,97 @@ def apply_canonical_injury_days(
     return updated
 
 
+def _apply_post_match_morale_and_board_politics(
+    session: Session,
+    *,
+    state: OwnerClubState,
+    appearances: list[dict[str, Any]],
+    gf: int,
+    ga: int,
+    is_home: bool,
+) -> None:
+    """Update squad morale, board confidence, and matchday consequence bridge after a canonical match."""
+    from app.owner_console import living_politics_engine
+
+    outcome = "win" if gf > ga else "draw" if gf == ga else "loss"
+    base_morale_delta = 4 if outcome == "win" else 1 if outcome == "draw" else -3
+    app_by_key: dict[str, dict[str, Any]] = {}
+    for item in appearances:
+        pid = str(item.get("player_id") or "")
+        if pid:
+            app_by_key[pid] = item
+
+    rows = list(session.scalars(select(OwnerSquadPlayer).where(OwnerSquadPlayer.club_id == state.club_id)).all())
+    canonical_deltas: dict[str, float] = {}
+    wonderkid_scorer_id: str | None = None
+    for row in rows:
+        app = app_by_key.get(str(row.id)) or (app_by_key.get(str(row.player_ref)) if row.player_ref else None)
+        if app is not None:
+            goals = int(app.get("goals") or 0)
+            assists = int(app.get("assists") or 0)
+            p_delta = base_morale_delta + min(4, goals * 2 + assists)
+            if bool(app.get("red_card")):
+                p_delta -= 5
+            if goals > 0 and row.is_regen and int(row.age or 20) <= 20:
+                wonderkid_scorer_id = str(row.id)
+        else:
+            p_delta = 1 if outcome == "win" else -1 if outcome == "loss" else 0
+        base_m = 70 if row.morale is None else int(row.morale)
+        row.morale = max(0, min(100, base_m + p_delta))
+        if row.player_ref:
+            canonical_deltas[str(row.player_ref)] = float(p_delta)
+
+    if canonical_deltas:
+        try:
+            from app.ingestion.models import Player
+            from app.models.player_agency_state import PlayerAgencyState
+
+            target_ids = list(canonical_deltas.keys())
+            for c_player in session.scalars(select(Player).where(Player.id.in_(target_ids))).all():
+                delta_f = canonical_deltas.get(str(c_player.id), 0.0)
+                base_cm = 50.0 if c_player.morale is None else float(c_player.morale)
+                c_player.morale = max(0.0, min(100.0, base_cm + delta_f))
+            for agency in session.scalars(
+                select(PlayerAgencyState).where(PlayerAgencyState.player_id.in_(target_ids))
+            ).all():
+                delta_f = canonical_deltas.get(str(agency.player_id), 0.0)
+                base_am = 58.0 if agency.morale is None else float(agency.morale)
+                agency.morale = max(0.0, min(100.0, base_am + delta_f))
+        except Exception:
+            pass
+
+    try:
+        facs = dict(state.facilities_json or {})
+        politics = dict(facs.get("_club_politics") or {})
+        board_delta = 4 if outcome == "win" else 0 if outcome == "draw" else -5
+        if abs(gf - ga) >= 3:
+            board_delta += 2 if outcome == "win" else -2
+        living_politics_engine._nudge(politics, "board_confidence", board_delta)
+        living_politics_engine._nudge(politics, "investor_sentiment", board_delta)
+        conf_val = int(politics.get("board_confidence") or 65)
+        politics["board_mood"] = (
+            "Backing the Project"
+            if conf_val >= 70
+            else "Cautious Scrutiny"
+            if conf_val >= 45
+            else "Emergency Session Risk"
+        )
+        facs["_club_politics"] = politics
+        state.facilities_json = facs
+        flag_modified(state, "facilities_json")
+        if state.owner_user_id:
+            living_politics_engine.process_matchday_consequence_bridge(
+                session,
+                state.owner_user_id,
+                state.club_id,
+                match_outcome=outcome,
+                wonderkid_goal_player_id=wonderkid_scorer_id,
+                is_away_fixture=not is_home,
+            )
+    except Exception:
+        pass
+
+
 def record_selection_disagreement(
     session: Session,
     *,
@@ -400,6 +491,14 @@ def _project_one_club(
             )
             impact = living_institution.record_match_institutional_impact(
                 session, match_view, competition_view, side, {"state": None}, is_home, gf, ga
+            )
+            _apply_post_match_morale_and_board_politics(
+                session,
+                state=state,
+                appearances=appearances,
+                gf=gf,
+                ga=ga,
+                is_home=is_home,
             )
             # Private HOYD intelligence is persisted as a staff-only club event.
             # It is separate from public academy debut coverage and does not expose

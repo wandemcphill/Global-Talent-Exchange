@@ -384,7 +384,7 @@ def _normalize_portrait_url(url: str) -> str:
 
 def _is_legacy_adult_regen_portrait(url: str) -> bool:
     lower = str(url or "").lower()
-    return "script_skin_hair" in lower or "/img/players/" in lower or "/staff-portraits/" in lower
+    return "/img/players/" in lower or "/staff-portraits/" in lower
 
 
 def stored_regen_portrait_url(player: OwnerSquadPlayer | None) -> str | None:
@@ -404,16 +404,11 @@ def _fallback_portrait_for_seed(seed_key: str, name: str) -> str:
     import urllib.parse
 
     manifest = _load_face_manifest()
-    items = manifest.get("assets") or manifest.get("items") or []
-    # Generated players use the current youth face bank (new_styles) only, never the
-    # older adult regen faces or staff portraits, so every screen shows the same kind of face.
-    youth_items = [
+    items = [
         item
-        for item in items
-        if isinstance(item, dict) and "new_styles/" in str(item.get("storage_key") or item.get("source_path") or "")
+        for item in (manifest.get("assets") or manifest.get("items") or [])
+        if isinstance(item, dict)
     ]
-    if youth_items:
-        items = youth_items
     if items:
         h = int(hashlib.md5(str(seed_key).encode("utf-8")).hexdigest()[:8], 16)
         chosen = items[h % len(items)]

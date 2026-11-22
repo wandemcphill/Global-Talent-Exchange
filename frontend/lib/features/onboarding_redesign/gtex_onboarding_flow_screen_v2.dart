@@ -112,6 +112,8 @@ class _GtexOnboardingFlowScreenV2State
                         _NewUserDashboard(
                           steps: state.steps,
                           onOpenMarket: widget.onOpenMarket,
+                          onCreateClub: widget.onCreateClub,
+                          onJoinClub: widget.onJoinClub,
                           onStartKyc: widget.onStartKyc,
                           onOpenCompetitions: widget.onOpenCompetitions,
                         ),
@@ -321,11 +323,15 @@ class _NewUserDashboard extends StatelessWidget {
   const _NewUserDashboard({
     required this.steps,
     this.onOpenMarket,
+    this.onCreateClub,
+    this.onJoinClub,
     this.onStartKyc,
     this.onOpenCompetitions,
   });
   final List<GtexOnboardingStep> steps;
   final VoidCallback? onOpenMarket;
+  final VoidCallback? onCreateClub;
+  final VoidCallback? onJoinClub;
   final VoidCallback? onStartKyc;
   final VoidCallback? onOpenCompetitions;
 
@@ -340,6 +346,7 @@ class _NewUserDashboard extends StatelessWidget {
           ...steps.map((step) {
             final callback = switch (step.id) {
               'verify_profile' => onStartKyc,
+              'create_club' => onCreateClub ?? onJoinClub,
               'shortlist_players' => onOpenMarket,
               'join_competition' => onOpenCompetitions,
               _ => null,

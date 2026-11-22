@@ -734,7 +734,10 @@ class GteTraderSignupRequest {
     'preferred_currency': preferredCurrency,
     'trading_experience': tradingExperience,
     'wallet_label': walletLabel,
-    'interests': const <String>['GTEX Coin', 'Fan Coins', 'P2P', 'Escrow'],
+    'interests':
+        interests.isNotEmpty
+            ? interests
+            : const <String>['GTEX Coin', 'Fan Coins', 'P2P', 'Escrow'],
     if (totpSecret != null && totpSecret!.trim().isNotEmpty) 'totp_secret': totpSecret,
     if (totpCode != null && totpCode!.trim().isNotEmpty) 'totp_code': totpCode,
     if (recoveryPhraseHash != null) 'recovery_phrase_hash': recoveryPhraseHash,

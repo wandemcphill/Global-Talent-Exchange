@@ -139,8 +139,12 @@ def _clamp(v: int, lo: int = 0, hi: int = 100) -> int:
 
 def _nudge(politics: dict[str, Any], key: str, delta: int, *, low: int = 0, high: int = 100) -> None:
     if politics.get(key) is None:
-        return
-    politics[key] = min(high, max(low, int(politics[key]) + delta))
+        if delta == 0:
+            return
+        base = 65
+    else:
+        base = int(politics[key])
+    politics[key] = min(high, max(low, base + delta))
 
 
 # ==============================================================================

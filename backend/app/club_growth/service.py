@@ -1041,7 +1041,7 @@ class ClubGrowthService:
             self.session.add(image)
         image.source_provider = NEWGEN_FACE_BANK_PROVIDER
         image.provider_external_id = f"{NEWGEN_FACE_BANK_PROVIDER}:{player.id}"
-        image.source_url = service._generated_media_url(prospect.portrait_asset_ref)
+        image.source_url = service._face_bank_asset_url(asset)
         image.storage_key = prospect.portrait_asset_ref
         image.width = RegenPortraitService._optional_int(asset.get("width")) or 512
         image.height = RegenPortraitService._optional_int(asset.get("height")) or 512
@@ -1156,12 +1156,26 @@ class ClubGrowthService:
             or role_keys[item.id] == ROLE_GENERAL_MANAGER
             or (role_keys[item.id] == "club" and item.staff_profile.staff_type == "negotiation_specialist")
         )
+        medical_quality = sum(
+            item.staff_profile.rating
+            for item in active
+            if role_keys[item.id] in {"medical", "medical_director", "physio", "doctor", "sports_scientist"}
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"medical", "medical_director", "physio", "doctor"})
+        )
+        tactical_analysis_bonus = sum(
+            item.staff_profile.rating
+            for item in active
+            if role_keys[item.id] in {"performance_analyst", "tactical_coach", ROLE_FIRST_TEAM_MANAGER}
+            or (role_keys[item.id] == "club" and item.staff_profile.staff_type in {"performance_analyst", "tactical_coach"})
+        )
         return {
             "scout_quality": min(100, scout_quality),
             "training_bonus": min(100, training_bonus),
             "negotiation_bonus": min(100, negotiation_bonus),
             "general_manager_quality": min(100, general_manager_quality),
             "head_of_youth_development_quality": min(100, head_of_youth_development_quality),
+            "medical_quality": min(100, medical_quality),
+            "tactical_analysis_bonus": min(100, tactical_analysis_bonus),
         }
 
     def _sponsorship_summary(self, *, club_id: str) -> SponsorshipClubSummaryView:
@@ -1244,17 +1258,38 @@ class ClubGrowthService:
         )
 
     def _staff_profile_view(self, profile: ClubStaffProfile) -> StaffProfileView:
+        import zlib
+        from app.owner_console.regen_staff_catalog import FACE_GROUPS, PORTRAIT_PUBLIC_PREFIX, portrait_filename
+        from app.owner_console.staff_supply import _FEMALE_GIVEN_NAMES, _face_group_for_nation
+
+        meta = dict(profile.metadata_json or {})
+        portrait_url = meta.get("portrait_url")
+        if not isinstance(portrait_url, str) or not portrait_url.strip():
+            first_name = (profile.display_name or "").split(" ", 1)[0]
+            gender = str(meta.get("gender") or ("female" if first_name in _FEMALE_GIVEN_NAMES else "male")).lower()
+            if gender not in {"female", "male"}:
+                gender = "male"
+            nation = str(meta.get("nation") or "")
+            seed_idx = zlib.crc32(f"{profile.id}:{profile.display_name}".encode("utf-8")) & 0xFFFFFFFF
+            group = str(meta.get("face_group") or "") or (
+                _face_group_for_nation(nation, seed_idx)
+                if nation
+                else FACE_GROUPS[seed_idx % len(FACE_GROUPS)]
+            )
+            portrait_url = f"{PORTRAIT_PUBLIC_PREFIX}/{portrait_filename(group, gender, seed_idx)}"
+            meta["portrait_url"] = portrait_url
         return StaffProfileView(
             id=profile.id,
             display_name=profile.display_name,
             staff_type=profile.staff_type,
             rarity=profile.rarity,
+            portrait_url=portrait_url,
             skills=list(profile.skills_json or []),
             salary_minor=profile.salary_minor,
             commission_bps=profile.commission_bps,
             rating=profile.rating,
             active=profile.active,
-            metadata=dict(profile.metadata_json or {}),
+            metadata=meta,
         )
 
     def _staff_contract_snapshot(self, contract: ClubStaffContract) -> dict[str, Any]:

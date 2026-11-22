@@ -122,11 +122,34 @@ class ClubV2SnapshotService:
             value_credits, value_source = self._player_value_credits(player, market_snapshots.get(player.id))
             squad_value += value_credits
             country = countries.get(player.country_id or "")
+            dna = player.dna_profile if isinstance(player.dna_profile, dict) else {}
+            portrait_url = None
+            for key in ("portraitUrl", "portrait_url", "image_url"):
+                candidate_url = dna.get(key)
+                if isinstance(candidate_url, str) and candidate_url.strip():
+                    portrait_url = candidate_url.strip()
+                    break
+            raw_rating = (
+                dna.get("currentAbility")
+                or dna.get("current_gsi")
+                or dna.get("rating")
+                or (dna.get("faceRecipe", {}) if isinstance(dna.get("faceRecipe"), dict) else {}).get("rating")
+            )
+            if raw_rating is not None:
+                try:
+                    resolved_rating: float | None = float(raw_rating)
+                except (TypeError, ValueError):
+                    resolved_rating = None
+            elif player.profile_completeness_score is not None:
+                resolved_rating = float(player.profile_completeness_score)
+            else:
+                resolved_rating = None
             mapped_players.append(
                 ClubV2SquadPlayerView(
                     player_id=player.id,
                     name=player.canonical_display_name or player.full_name,
                     short_name=player.short_name,
+                    portrait_url=portrait_url,
                     position=player.normalized_position or player.position,
                     position_group=self._position_group(player.normalized_position or player.position),
                     nationality=self._country_label(country),
@@ -135,11 +158,7 @@ class ClubV2SnapshotService:
                     market_value_credits=value_credits,
                     market_value_source=value_source,
                     market_value_eur=float(player.market_value_eur) if player.market_value_eur is not None else None,
-                    rating=(
-                        float(player.profile_completeness_score)
-                        if player.profile_completeness_score is not None
-                        else None
-                    ),
+                    rating=resolved_rating,
                     is_regen=not bool(player.is_real_player),
                     is_tradable=bool(player.is_tradable),
                     updated_at=player.updated_at,

@@ -345,9 +345,17 @@ function OrganisationalStructurePanel({ club }: any) {
                     </div>
 
                     <div className="mt-3 flex items-center gap-3">
-                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-800 font-bold text-white text-base">
-                        {isAppointed ? name.slice(0, 1) : "?"}
-                      </div>
+                      {isAppointed && staff.portrait_url ? (
+                        <img
+                          src={staff.portrait_url}
+                          alt={name}
+                          className="h-11 w-11 shrink-0 rounded-xl bg-slate-800 object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-slate-800 font-bold text-white text-base">
+                          {isAppointed ? name.slice(0, 1) : "?"}
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <h5 className="truncate text-sm font-extrabold text-white">{name}</h5>
                         {rating && (

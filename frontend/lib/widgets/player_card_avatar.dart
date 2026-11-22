@@ -171,9 +171,11 @@ class _PortraitImage extends StatelessWidget {
         !lowerPath.contains('/regen_portrait_overrides/')) {
       return false;
     }
-    final bool approvedBank = lowerPath.contains(
-      '/generated-media/regen_newgen_faces/script_skin_hair/',
-    );
+    final bool approvedBank =
+        lowerPath.contains('/generated-media/regen_newgen_faces/script_skin_hair/') ||
+        lowerPath.contains('/generated-media/regen_newgen_faces/new_styles/') ||
+        lowerPath.contains('/regen_newgen_faces/script_skin_hair/') ||
+        lowerPath.contains('/regen_newgen_faces/new_styles/');
     final bool raster =
         lowerPath.endsWith('.png') ||
         lowerPath.endsWith('.jpg') ||

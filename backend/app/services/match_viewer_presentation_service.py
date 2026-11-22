@@ -478,13 +478,27 @@ class MatchViewerPresentationService:
         nested_manager = self._nested_string(metadata, f"{side}_manager", "name")
         if nested_manager is not None:
             return nested_manager
-        return self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "name")
+        inst_manager = (
+            self._nested_string(metadata, "institutional_match_context", side, "manager", "manager_name")
+            or self._nested_string(metadata, "institutional_match_context", side, "manager", "display_name")
+            or self._nested_string(metadata, "institutional_match_context", side, "manager", "name")
+        )
+        if inst_manager is not None:
+            return inst_manager
+        return (
+            self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "name")
+            or self._nested_string(metadata, "replay_request", f"{side}_team", "manager_profile", "display_name")
+        )
 
     def _team_mentality(self, metadata: dict[str, object], *, side: str) -> str | None:
         return (
             self._nested_string(metadata, "replay_request", f"{side}_team", "tactics", "mentality")
             or self._nested_string(metadata, "replay_request", f"{side}_team", "tactics", "style")
             or self._nested_string(metadata, f"{side}_tactics", "mentality")
+            or self._nested_string(metadata, f"{side}_tactics", "style")
+            or self._nested_string(metadata, "tactics", side, "mentality")
+            or self._nested_string(metadata, "tactics", side, "style")
+            or self._nested_string(metadata, "institutional_match_context", side, "manager", "style")
         )
 
     def _instruction_summary(self, metadata: dict[str, object], *, side: str) -> list[str]:
@@ -493,11 +507,15 @@ class MatchViewerPresentationService:
         if not tactics:
             tactics = self._nested_dict(metadata, f"{side}_tactics")
         if not tactics:
+            tactics = self._nested_dict(metadata, "tactics", side)
+        if not tactics:
             return instructions
         for key in ("pressing", "tempo", "width", "defensive_line", "set_piece_emphasis"):
             value = tactics.get(key)
             if isinstance(value, (int, float)):
                 instructions.append(f"{key.replace('_', ' ').title()} {round(float(value))}")
+            elif isinstance(value, str) and value.strip():
+                instructions.append(f"{key.replace('_', ' ').title()}: {value.strip().title()}")
         return instructions[:4]
 
     def _rating_lookup(self, replay_payload: MatchReplayPayloadView | None) -> dict[str, float]:

@@ -19,10 +19,55 @@ from sqlalchemy.orm import Session
 
 from app.club_growth.staff_role_policy import ROLE_GENERAL_MANAGER
 from app.models.club_growth import ClubStaffProfile
+from app.owner_console.regen_staff_catalog import PORTRAIT_PUBLIC_PREFIX, portrait_filename
 
 GENERAL_MANAGER_FREE_AGENT_FLOOR = 160
 BENCH_ORIGIN = "staff_bench"
 _BENCH_KEY_PREFIX = "staff:bench-gm-"
+
+_FEMALE_GIVEN_NAMES = frozenset(
+    {
+        "Adaeze",
+        "Ifeoma",
+        "Ngozi",
+        "Yewande",
+        "Amara",
+        "Abena",
+        "Lerato",
+        "Amina",
+        "Lucia",
+        "Camila",
+        "Ines",
+        "Anika",
+        "Mei",
+        "Priya",
+        "Leila",
+        "Noor",
+        "Elena",
+        "Helena",
+        "Clara",
+        "Sofia",
+    }
+)
+
+
+def _face_group_for_nation(nation: str, index: int) -> str:
+    lower = (nation or "").lower()
+    if any(k in lower for k in ("nigeria", "ghana", "senegal", "south africa", "kenya", "cameroon", "ivory", "mali")):
+        return "west_african"
+    if any(k in lower for k in ("morocco", "egypt", "turkey", "saudi")):
+        return "middle_eastern"
+    if any(k in lower for k in ("brazil", "argentina", "colombia", "mexico")):
+        return "latino"
+    if any(k in lower for k in ("portugal", "spain", "italy", "greece")):
+        return "south_european"
+    if any(k in lower for k in ("japan", "south korea", "korea", "china", "india")):
+        return "east_asian"
+    if any(k in lower for k in ("sweden", "norway", "denmark", "finland")):
+        return "blonde"
+    if "france" in lower and index % 2 == 1:
+        return "mixed_braids"
+    return "north_european"
 
 _GIVEN_NAMES = (
     "Adaeze",
@@ -194,6 +239,10 @@ def _build_general_manager(index: int) -> ClubStaffProfile:
     style = _STYLES[index % len(_STYLES)]
     temperament = _TEMPERAMENTS[index % len(_TEMPERAMENTS)]
     name = f"{given} {family}"
+    gender = "female" if given in _FEMALE_GIVEN_NAMES else "male"
+    face_group = _face_group_for_nation(nation, index)
+    portrait_url = f"{PORTRAIT_PUBLIC_PREFIX}/{portrait_filename(face_group, gender, index)}"
+    age = 35 + ((index * 3) % 21)
     staff_id = f"bench-gm-{index:04d}"
     meta = {
         "staff_id": staff_id,
@@ -211,6 +260,10 @@ def _build_general_manager(index: int) -> ClubStaffProfile:
         "preferred_roles": [ROLE_GENERAL_MANAGER],
         "reputation": min(92, max(40, rating - 4)),
         "nation": nation,
+        "gender": gender,
+        "age": age,
+        "face_group": face_group,
+        "portrait_url": portrait_url,
         "negotiation": _mix(index + 1, 10, 19),
         "commercial_acumen": _mix(index + 4, 9, 18),
     }

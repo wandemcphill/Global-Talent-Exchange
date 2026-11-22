@@ -1187,6 +1187,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
             people.push({
               key: `manager:${manager.manager_id}`,
               name: manager.display_name,
+              portrait_url: manager.portrait_url || manager.image_url,
               detail: `${manager.rarity || "coach"} · ${mentality}`,
               blurb,
               rating: Number(manager.manager_impact || 0),
@@ -1224,6 +1225,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
           people.push({
             key: `profile:${candidate.profile_id}`,
             name: candidate.name,
+            portrait_url: candidate.portrait_url,
             detail,
             blurb: candidate.philosophy_fit || candidate.philosophy_summary || candidate.nation || "",
             rating: Number(candidate.rating || 0),
@@ -1257,6 +1259,7 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
             people.push({
               key: `catalog:${candidate.id || candidate.staff_id}`,
               name,
+              portrait_url: candidate.portrait_url,
               detail: candidate.specialty || candidate.style || role.label,
               blurb: candidate.bio,
               rating: Number(candidate.rating || 0),
@@ -1368,22 +1371,31 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
             key={person.key}
             className="flex items-start justify-between gap-3 rounded border border-white/10 px-3 py-2"
           >
-            <div>
-              <p className="text-sm font-semibold text-white">
-                {person.rating ? <span className="mr-2 font-black text-amber-200">{person.rating}</span> : null}
-                {person.name}
-              </p>
-              <p className="text-[11px] text-slate-400">{person.detail}</p>
-              {person.fit ? (
-                <p className="text-[11px] font-semibold text-cyan-300">
-                  Recommended · fits {String(philosophy || "this club").replace(/_/g, " ")}
-                </p>
+            <div className="flex items-start gap-2.5">
+              {person.portrait_url ? (
+                <img
+                  src={person.portrait_url}
+                  alt=""
+                  className="h-9 w-9 shrink-0 rounded-full bg-slate-800 object-cover"
+                />
               ) : null}
-              <p className="text-[11px] text-emerald-300">
-                {person.salary == null
-                  ? "Wage not filed"
-                  : `${years} ${years === 1 ? "year" : "years"} · ${fmt(contractCharge(person.salary, years).total)} FAN, paid once`}
-              </p>
+              <div>
+                <p className="text-sm font-semibold text-white">
+                  {person.rating ? <span className="mr-2 font-black text-amber-200">{person.rating}</span> : null}
+                  {person.name}
+                </p>
+                <p className="text-[11px] text-slate-400">{person.detail}</p>
+                {person.fit ? (
+                  <p className="text-[11px] font-semibold text-cyan-300">
+                    Recommended · fits {String(philosophy || "this club").replace(/_/g, " ")}
+                  </p>
+                ) : null}
+                <p className="text-[11px] text-emerald-300">
+                  {person.salary == null
+                    ? "Wage not filed"
+                    : `${years} ${years === 1 ? "year" : "years"} · ${fmt(contractCharge(person.salary, years).total)} FAN, paid once`}
+                </p>
+              </div>
             </div>
             <Btn
               variant="secondary"

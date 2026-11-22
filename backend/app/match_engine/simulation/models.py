@@ -180,9 +180,8 @@ class InternalPlayer:
     def goalkeeping_value(self) -> float:
         return max(
             5.0,
-            (self.goalkeeping * 0.58)
-            + (self.composure * 0.10)
-            + (self.decision_making * 0.08)
+            ((self.goalkeeping * 0.58) + (self.composure * 0.10) + (self.decision_making * 0.08))
+            * self.performance_modifier()
             + (self.aerial_ability * 0.08)
             + (self.technique * 0.06)
             + (self.positioning * 0.05)
@@ -198,10 +197,9 @@ class InternalPlayer:
         }[self.role]
         return max(
             5.0,
-            (self.finishing * 0.28)
-            + (self.composure * 0.22)
+            ((self.finishing * 0.28) + (self.composure * 0.22) + (self.clutch_factor * 0.14))
+            * self.performance_modifier()
             + (self.technique * 0.14)
-            + (self.clutch_factor * 0.14)
             + (self.big_match_temperament * 0.10)
             + (self.discipline * 0.06)
             + (self.overall * 0.06)
@@ -211,9 +209,8 @@ class InternalPlayer:
     def pressing_value(self) -> float:
         return max(
             5.0,
-            (self.fitness * 0.28)
-            + (self.pace * 0.19)
-            + (self.decision_making * 0.14)
+            ((self.fitness * 0.28) + (self.pace * 0.19) + (self.decision_making * 0.14))
+            * self.performance_modifier()
             + (self.consistency * 0.12)
             + (self.motivation * 0.10)
             + (self.defending * 0.09)
@@ -223,9 +220,8 @@ class InternalPlayer:
     def duel_value(self) -> float:
         return max(
             5.0,
-            (self.overall * 0.16)
-            + (self.aerial_ability * 0.20)
-            + (self.positioning * 0.16)
+            ((self.overall * 0.16) + (self.aerial_ability * 0.20) + (self.positioning * 0.16))
+            * self.performance_modifier()
             + (self.composure * 0.12)
             + (self.pace * 0.10)
             + (self.strength_proxy() * 0.18)

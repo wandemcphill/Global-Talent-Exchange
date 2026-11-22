@@ -224,6 +224,16 @@ def _mount_generated_media(app: FastAPI) -> None:
         app.mount(
             "/api/media/regen-faces", StaticFiles(directory=str(faces_dir), check_dir=False), name="regen_faces_media"
         )
+    repo_root = Path(__file__).resolve().parents[2]
+    staff_portraits_dir = repo_root / "frontend" / "react-shell" / "public" / "staff-portraits"
+    if not staff_portraits_dir.exists():
+        staff_portraits_dir = repo_root / "staff_portraits"
+    if staff_portraits_dir.exists():
+        app.mount(
+            "/staff-portraits",
+            StaticFiles(directory=str(staff_portraits_dir), check_dir=False),
+            name="staff_portraits_media",
+        )
 
 
 async def _startup_app(app: FastAPI) -> None:

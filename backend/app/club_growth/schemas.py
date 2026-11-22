@@ -37,6 +37,7 @@ class StaffProfileView(BaseModel):
     display_name: str
     staff_type: str
     rarity: str
+    portrait_url: str | None = None
     skills: list[str] = Field(default_factory=list)
     salary_minor: int
     commission_bps: int

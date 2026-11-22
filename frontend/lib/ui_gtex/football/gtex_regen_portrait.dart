@@ -41,12 +41,13 @@ class GtexRegenPortrait extends StatelessWidget {
     // GTE_GENERATED_MEDIA_BASE_URL intentionally turns the generated-media
     // storage key into a Cloudinary delivery URL, so both forms are
     // authoritative portrait URLs and must be rendered by the same widget.
-    final bool isGeneratedMediaPath = lowerPath.contains(
-      '/generated-media/regen_newgen_faces/script_skin_hair/',
-    );
+    final bool isGeneratedMediaPath =
+        lowerPath.contains('/generated-media/regen_newgen_faces/script_skin_hair/') ||
+        lowerPath.contains('/generated-media/regen_newgen_faces/new_styles/');
     final bool isCloudinaryFaceBankPath =
         parsed?.host.toLowerCase() == 'res.cloudinary.com' &&
-        lowerPath.contains('/regen_newgen_faces/script_skin_hair/');
+        (lowerPath.contains('/regen_newgen_faces/script_skin_hair/') ||
+            lowerPath.contains('/regen_newgen_faces/new_styles/'));
     return isGeneratedMediaPath || isCloudinaryFaceBankPath;
   }
 

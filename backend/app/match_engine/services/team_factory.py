@@ -250,6 +250,8 @@ class SyntheticSquadFactory:
                 resolved_overall,
                 manager_profile=manager_profile,
                 dynamics_snapshot=dynamics_snapshot,
+                session=lifecycle_service.session,
+                team_id=team_id,
             ),
             identity=self._resolve_team_identity(lifecycle_service.session, team_id=team_id, team_name=team_name),
             starters=[
@@ -259,6 +261,8 @@ class SyntheticSquadFactory:
                     base_overall=resolved_overall,
                     dynamics_snapshot=dynamics_snapshot,
                     personality=personality_by_player_id.get(player.id),
+                    manager_profile=manager_profile,
+                    session=lifecycle_service.session,
                 )
                 for player, role in starters
             ],
@@ -269,6 +273,8 @@ class SyntheticSquadFactory:
                     base_overall=max(45, resolved_overall - 3),
                     dynamics_snapshot=dynamics_snapshot,
                     personality=personality_by_player_id.get(player.id),
+                    manager_profile=manager_profile,
+                    session=lifecycle_service.session,
                 )
                 for player, role in bench
             ],
@@ -805,31 +811,108 @@ class SyntheticSquadFactory:
         assignment = session.scalar(
             select(ManagerTeamAssignment).where(ManagerTeamAssignment.user_id == assignment_user_id)
         )
-        if assignment is None or not assignment.main_manager_asset_id:
-            return None
-        holding = session.scalar(
-            select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id)
-        )
-        if holding is None:
-            return None
-        manager = session.scalar(
-            select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id)
-        )
-        if manager is None:
-            return None
-        from app.manager_market.service import ManagerMarketService
+        if assignment is not None and assignment.main_manager_asset_id:
+            holding = session.scalar(
+                select(ManagerHolding).where(ManagerHolding.asset_id == assignment.main_manager_asset_id)
+            )
+            if holding is not None:
+                manager = session.scalar(
+                    select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == holding.manager_id)
+                )
+                if manager is not None:
+                    from app.manager_market.service import ManagerMarketService
 
-        impact = ManagerMarketService._manager_impact_score(manager)
-        return {
-            "display_name": manager.display_name,
-            "mentality": manager.mentality,
-            "tactics": list(manager.tactics or []),
-            "traits": list(manager.traits or []),
-            "rarity": manager.rarity,
-            "philosophy_summary": manager.philosophy_summary,
-            "substitution_tendency": manager.substitution_tendency,
-            "manager_impact": impact,
-        }
+                    impact = ManagerMarketService._manager_impact_score(manager)
+                    return {
+                        "display_name": manager.display_name,
+                        "mentality": manager.mentality,
+                        "tactics": list(manager.tactics or []),
+                        "traits": list(manager.traits or []),
+                        "rarity": manager.rarity,
+                        "philosophy_summary": manager.philosophy_summary,
+                        "substitution_tendency": manager.substitution_tendency,
+                        "manager_impact": impact,
+                    }
+
+        try:
+            from app.owner_console.models import OwnerClubState
+
+            state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == team_id))
+            if state is not None:
+                facs = dict(state.facilities_json or {})
+                exec_staff = dict(facs.get("_executive_staff") or {})
+                mgr = dict(exec_staff.get("first_team_manager") or state.manager_json or {})
+                coaching_staff = dict(facs.get("_coaching_staff") or {})
+                med_director = dict(exec_staff.get("medical_director") or {})
+                has_named_manager = bool(
+                    mgr.get("name")
+                    and not mgr.get("is_default")
+                    and not mgr.get("is_vacant")
+                    and str(mgr.get("name") or "").strip().lower() != "default"
+                )
+                has_coaches = any(isinstance(v, dict) and v.get("name") for v in coaching_staff.values())
+                has_medical = bool(med_director.get("name") and not med_director.get("is_default"))
+                if has_named_manager or has_coaches or has_medical:
+                    raw_rating = mgr.get("rating") or mgr.get("gsi") or (72 if has_named_manager else 65)
+                    try:
+                        rating = int(float(raw_rating))
+                    except (TypeError, ValueError):
+                        rating = 70
+                    style_raw = str(mgr.get("style") or mgr.get("mentality") or "balanced").lower()
+                    if any(k in style_raw for k in ("press", "attack", "wing", "direct")):
+                        mentality = "attacking"
+                    elif any(k in style_raw for k in ("low block", "defen", "counter", "pragmatic")):
+                        mentality = "defensive"
+                    elif any(k in style_raw for k in ("possess", "tiki", "patient", "technical")):
+                        mentality = "technical"
+                    else:
+                        mentality = "balanced"
+                    traits = list(mgr.get("traits") or [])
+                    flex_skill = int(mgr.get("tactical_flexibility") or max(10, round(rating / 5)))
+                    youth_skill = int(mgr.get("youth_development") or max(10, round(rating / 5)))
+                    if flex_skill >= 15 and "tactical_flexibility" not in traits:
+                        traits.append("tactical_flexibility")
+                    if youth_skill >= 15 and "develops_youth" not in traits:
+                        traits.append("develops_youth")
+                    rarity = str(
+                        mgr.get("rarity")
+                        or ("legendary" if rating >= 86 else "epic" if rating >= 80 else "rare" if rating >= 74 else "common")
+                    )
+                    coach_tactical_bonus = 0
+                    coach_fitness_bonus = 0
+                    for role_key, coach in coaching_staff.items():
+                        if not isinstance(coach, dict):
+                            continue
+                        c_rating = int(coach.get("rating") or 65)
+                        if role_key in {"tactical_analysis", "attacking_development", "defensive_organisation"}:
+                            coach_tactical_bonus += max(0, (c_rating - 60) // 6)
+                        elif role_key == "fitness":
+                            coach_fitness_bonus += max(0, (c_rating - 60) // 5)
+                    med_exp = int(med_director.get("medical_expertise") or (int(med_director.get("rating") or 60) // 5) or 0)
+                    tactical_quality = self._clamp(rating + coach_tactical_bonus)
+                    adaptability = self._clamp(50 + flex_skill * 2 + coach_tactical_bonus)
+                    game_management = self._clamp(rating + (2 if med_exp >= 15 else 0))
+                    return {
+                        "display_name": str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager"),
+                        "name": str(mgr.get("name") or mgr.get("display_name") or "First-Team Manager"),
+                        "mentality": mentality,
+                        "tactics": [style_raw] if style_raw else [],
+                        "traits": traits,
+                        "rarity": rarity,
+                        "philosophy_summary": mgr.get("personal_agenda") or mgr.get("bio") or mgr.get("style"),
+                        "substitution_tendency": "proactive" if flex_skill >= 15 else "balanced",
+                        "manager_impact": rating,
+                        "tactical_quality": tactical_quality,
+                        "adaptability": adaptability,
+                        "game_management": game_management,
+                        "coach_fitness_bonus": coach_fitness_bonus,
+                        "medical_expertise": med_exp,
+                        "preferred_formation": mgr.get("preferred_formation"),
+                        "preferred_formations": mgr.get("preferred_formations"),
+                    }
+        except Exception:
+            pass
+        return None
 
     @staticmethod
     def _competition_type(job: MatchSimulationJob) -> MatchCompetitionType:
@@ -1007,6 +1090,8 @@ class SyntheticSquadFactory:
         base_overall: int,
         dynamics_snapshot: TeamDynamicsSnapshot | None = None,
         personality: PlayerPersonality | None = None,
+        manager_profile: dict[str, object] | None = None,
+        session: Session | None = None,
     ) -> MatchPlayerInput:
         personality_confidence = self._personality_score(personality, "confidence")
         personality_clutch = self._personality_score(personality, "clutch_factor")
@@ -1020,11 +1105,38 @@ class SyntheticSquadFactory:
             if personality_aggression is None
             else self._clamp(overall - max(0, min(8, (personality_aggression - 55) // 5)))
         )
+        coach_fitness_bonus = int((manager_profile or {}).get("coach_fitness_bonus") or 0)
+        medical_expertise = int((manager_profile or {}).get("medical_expertise") or 0)
         fitness = (
-            overall
+            self._clamp(overall + coach_fitness_bonus)
             if personality_consistency is None
-            else self._clamp(overall + max(0, min(5, (personality_consistency - 50) // 8)))
+            else self._clamp(overall + coach_fitness_bonus + max(0, min(5, (personality_consistency - 50) // 8)))
         )
+        fatigue_load: int | None = None
+        injury_risk: int | None = None
+        if session is not None:
+            try:
+                from sqlalchemy import or_
+                from app.owner_console.models import OwnerSquadPlayer
+
+                owner_row = session.scalar(
+                    select(OwnerSquadPlayer).where(
+                        or_(OwnerSquadPlayer.player_ref == player.id, OwnerSquadPlayer.id == player.id),
+                        OwnerSquadPlayer.status == "active",
+                    )
+                )
+                if owner_row is not None and isinstance(owner_row.personality_json, dict):
+                    pers_meta = owner_row.personality_json
+                    if pers_meta.get("fitness") is not None:
+                        stored_fit = int(float(pers_meta["fitness"]))
+                        fitness = self._clamp(stored_fit + coach_fitness_bonus)
+                        fatigue_load = max(0, min(100, 100 - fitness))
+                    if pers_meta.get("last_injury_risk") is not None:
+                        raw_risk = int(float(pers_meta["last_injury_risk"]))
+                        med_reduction = max(0, (medical_expertise - 10) * 2) if medical_expertise > 10 else 0
+                        injury_risk = max(0, min(100, raw_risk - med_reduction))
+            except Exception:
+                pass
         recent_form = self._managed_recent_form(player)
         stored_morale = None
         if dynamics_snapshot is not None and player.id in dynamics_snapshot.morale_by_player:
@@ -1087,8 +1199,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=None,
-                injury_risk=None,
+                fatigue_load=fatigue_load,
+                injury_risk=injury_risk,
                 leadership=self._clamp(overall + 4),
             )
         if assigned_role is PlayerRole.DEFENDER:
@@ -1123,8 +1235,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=None,
-                injury_risk=None,
+                fatigue_load=fatigue_load,
+                injury_risk=injury_risk,
                 leadership=self._clamp(overall + 3),
             )
         if assigned_role is PlayerRole.MIDFIELDER:
@@ -1157,8 +1269,8 @@ class SyntheticSquadFactory:
                 recent_form=recent_form,
                 morale=morale,
                 motivation=motivation,
-                fatigue_load=None,
-                injury_risk=None,
+                fatigue_load=fatigue_load,
+                injury_risk=injury_risk,
                 leadership=self._clamp(overall + 4),
             )
         recent_form = self._managed_recent_form(player)
@@ -1190,8 +1302,8 @@ class SyntheticSquadFactory:
             recent_form=recent_form,
             morale=morale,
             motivation=motivation,
-            fatigue_load=None,
-            injury_risk=None,
+            fatigue_load=fatigue_load,
+            injury_risk=injury_risk,
             leadership=self._clamp(overall + 2),
         )
 
@@ -1287,6 +1399,8 @@ class SyntheticSquadFactory:
         *,
         manager_profile: dict[str, object] | None = None,
         dynamics_snapshot: TeamDynamicsSnapshot | None = None,
+        session: Session | None = None,
+        team_id: str | None = None,
     ) -> MatchClubContextInput:
         del resolved_overall, manager_profile
         updates: dict[str, int] = {}
@@ -1301,6 +1415,48 @@ class SyntheticSquadFactory:
             morale = self._clamp(int(round(dynamics_snapshot.average_morale)))
             updates["morale"] = morale
             updates["motivation"] = morale
+        if session is not None and team_id:
+            try:
+                from app.owner_console.institutional_models import OwnerClubRivalry, OwnerSupporterProfile
+                from app.owner_console.models import OwnerClubState
+
+                state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == team_id))
+                if state is not None:
+                    facs = dict(state.facilities_json or {})
+                    politics = dict(facs.get("_club_politics") or {})
+                    culture = dict(facs.get("_club_culture") or {})
+                    if state.prestige is not None:
+                        updates["brand_strength"] = self._clamp(int(state.prestige))
+                    if culture.get("cohesion_score") is not None:
+                        updates["culture_score"] = self._clamp(int(float(culture["cohesion_score"])))
+                    if politics.get("board_confidence") is not None:
+                        board_conf = int(float(politics["board_confidence"]))
+                        updates["expectation_level"] = self._clamp(100 - board_conf + 35)
+                sup_profile = session.scalar(
+                    select(OwnerSupporterProfile).where(OwnerSupporterProfile.club_id == team_id)
+                )
+                if sup_profile is not None:
+                    if sup_profile.overall_sentiment is not None:
+                        sentiment = int(sup_profile.overall_sentiment)
+                        protest_penalty = {
+                            "none": 0,
+                            "murmurs": 6,
+                            "banners": 12,
+                            "walkout_threat": 18,
+                            "boycott": 25,
+                        }.get(str(sup_profile.active_protest_stage or "none").lower(), 0)
+                        updates["fan_pressure"] = self._clamp((100 - sentiment) + protest_penalty)
+                    if sup_profile.accumulated_frustration is not None:
+                        updates["media_pressure"] = self._clamp(45 + int(sup_profile.accumulated_frustration) // 2)
+                rivalries = list(
+                    session.scalars(select(OwnerClubRivalry).where(OwnerClubRivalry.club_id == team_id)).all()
+                )
+                if rivalries:
+                    updates["rivalry_intensity"] = self._clamp(
+                        max(int(r.intensity_score or 0) for r in rivalries)
+                    )
+            except Exception:
+                pass
         return MatchClubContextInput(**updates)
 
     def _resolve_team_identity(

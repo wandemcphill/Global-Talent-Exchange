@@ -725,6 +725,9 @@ class ClubApi {
       valueCredits: _intValue(player['market_value_credits']),
       rating: _doubleValue(player['rating']),
       isRegen: _boolValue(player['is_regen']),
+      imageUrl: _stringValue(
+        player['portrait_url'] ?? player['portraitUrl'] ?? player['image_url'],
+      ),
     );
   }
 
