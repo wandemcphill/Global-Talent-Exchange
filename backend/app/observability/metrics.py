@@ -80,7 +80,7 @@ try:
     import psutil
 except Exception:  # pragma: no cover - optional dependency
     psutil = None
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.events import DomainEvent
@@ -391,9 +391,16 @@ class GTexMetrics:
                 LedgerAccount.code,
                 LedgerAccount.unit,
                 LedgerBalanceProjection.balance,
-            ).join(
+            )
+            .join(
                 LedgerBalanceProjection,
                 LedgerBalanceProjection.account_id == LedgerAccount.id,
+            )
+            .where(
+                or_(
+                    LedgerAccount.code.like("user:%"),
+                    LedgerAccount.code.like("%:treasury"),
+                )
             )
         ).all()
         with self._lock:
@@ -514,7 +521,7 @@ class GTexMetrics:
     def _handle_balance_update(self, payload: Mapping[str, Any]) -> None:
         account_code = str(payload.get("account_code") or "").strip()
         unit = str(payload.get("unit") or "").strip() or "coin"
-        if not account_code:
+        if not account_code or not (account_code.startswith("user:") or account_code.endswith(":treasury")):
             return
         balance = _parse_decimal(payload.get("balance"))
         with self._lock:

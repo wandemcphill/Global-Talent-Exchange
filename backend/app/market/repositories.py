@@ -6,7 +6,7 @@ import json
 import os
 import time
 from threading import RLock
-from typing import Protocol
+from typing import Any, Protocol
 from weakref import WeakKeyDictionary
 
 from redis import Redis
@@ -14,6 +14,7 @@ from redis.exceptions import RedisError
 from sqlalchemy import select
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, selectinload
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.ingestion.models import Club, Competition, Player
 from app.market.models import (
@@ -85,6 +86,71 @@ def clear_market_records_cache() -> None:
         _RECORDS_CACHE.clear()
     with _CANDIDATES_CACHE_LOCK:
         _CANDIDATES_CACHE.clear()
+
+
+_CANDIDATES_DNA_KEYS = frozenset(
+    {
+        "game_age",
+        "gtex_age",
+        "peak_age",
+        "retired",
+        "status",
+        "is_preseeded_national_regen",
+        "source_type",
+        "source_bucket",
+        "national_pool_only",
+        "seed_type",
+        "admin_trade_enabled",
+        "admin_mint_enabled",
+        "trade_enabled_by_admin",
+        "share_market_eligible",
+        "market_eligible",
+        "transfer_market_eligible",
+        "transferable",
+        "tradable",
+        "is_tradable",
+        "card_mint_eligible",
+        "buy_cta_allowed",
+        "buyable",
+    }
+)
+_CANDIDATES_SUMMARY_KEYS = frozenset(
+    {
+        "national_team",
+        "published_card_value_credits",
+        "football_truth_value_credits",
+        "market_signal_value_credits",
+        "global_scouting_index",
+        "previous_global_scouting_index",
+        "global_scouting_index_movement_pct",
+        "drivers",
+        "supply_tier",
+        "liquidity_band",
+        "avatar_seed_token",
+        "avatar_dna_seed",
+    }
+)
+_EMPTY_DICT: dict[str, Any] = {}
+
+
+def _compact_candidate_dna(dna: object) -> dict[str, Any]:
+    if not isinstance(dna, dict) or not dna:
+        return _EMPTY_DICT
+    compacted = {k: v for k, v in dna.items() if k in _CANDIDATES_DNA_KEYS and v is not None}
+    return compacted if compacted else _EMPTY_DICT
+
+
+def _compact_candidate_summary_json(payload: object) -> dict[str, Any]:
+    if not isinstance(payload, dict) or not payload:
+        return _EMPTY_DICT
+    compacted = {k: v for k, v in payload.items() if k in _CANDIDATES_SUMMARY_KEYS and v is not None}
+    if "national_team" not in compacted:
+        rpp = payload.get("real_player_profile")
+        if isinstance(rpp, dict):
+            nt = rpp.get("national_team")
+            if isinstance(nt, dict) and nt:
+                compacted["national_team"] = nt
+    return compacted if compacted else _EMPTY_DICT
 
 
 def _release_unreferenced_player_graph() -> None:
@@ -513,6 +579,8 @@ class SqlAlchemyMarketPlayerRepository:
                 del cached
                 _release_unreferenced_player_graph()
             records = loader()
+            if not self.session.new and not self.session.dirty and not self.session.deleted:
+                self.session.expunge_all()
             cache[bind] = (time.monotonic(), records)
             return records
 
@@ -531,7 +599,7 @@ class SqlAlchemyMarketPlayerRepository:
                 .order_by(Player.full_name.asc(), Player.id.asc())
             )
         )
-        return self._build_records(players)
+        return self._build_records(players, compact=True)
 
     def get_player_records_by_ids(self, player_ids: list[str]) -> list[MarketPlayerRecord]:
         """Full-fidelity hydration for a known, small set of player ids --
@@ -554,6 +622,7 @@ class SqlAlchemyMarketPlayerRepository:
                     selectinload(Player.image_metadata),
                 )
                 .where(Player.id.in_(player_ids), Player.is_tradable.is_(True))
+                .execution_options(populate_existing=True)
             )
         )
         return self._build_records(players)
@@ -575,6 +644,7 @@ class SqlAlchemyMarketPlayerRepository:
                 Player.id == player_id,
                 Player.is_tradable.is_(True),
             )
+            .execution_options(populate_existing=True)
         )
         if player is None:
             return None
@@ -600,13 +670,32 @@ class SqlAlchemyMarketPlayerRepository:
         )
         return tuple(self.session.scalars(statement))
 
-    def _build_records(self, players: list[Player]) -> list[MarketPlayerRecord]:
+    def _build_records(self, players: list[Player], *, compact: bool = False) -> list[MarketPlayerRecord]:
         if not players:
             return []
 
+        if compact:
+            for player in players:
+                set_committed_value(player, "dna_profile", _compact_candidate_dna(player.dna_profile))
+
         player_ids = [player.id for player in players]
-        summary_statement = select(PlayerSummaryReadModel).where(PlayerSummaryReadModel.player_id.in_(player_ids))
-        summaries = {summary.player_id: summary for summary in self.session.scalars(summary_statement)}
+        if len(player_ids) > 1000:
+            summary_statement = (
+                select(PlayerSummaryReadModel)
+                .join(Player, Player.id == PlayerSummaryReadModel.player_id)
+                .where(Player.is_tradable.is_(True))
+            )
+        else:
+            summary_statement = (
+                select(PlayerSummaryReadModel)
+                .where(PlayerSummaryReadModel.player_id.in_(player_ids))
+                .execution_options(populate_existing=not compact)
+            )
+        summaries: dict[str, PlayerSummaryReadModel] = {}
+        for summary in self.session.scalars(summary_statement):
+            if compact:
+                set_committed_value(summary, "summary_json", _compact_candidate_summary_json(summary.summary_json))
+            summaries[summary.player_id] = summary
 
         # For targeted lookups (detail calls, paginated pages with <= 100 players),
         # always load snapshots so breakdown_json (holder_count, trade_trust_score, etc.)
@@ -621,33 +710,36 @@ class SqlAlchemyMarketPlayerRepository:
         if snapshot_target_ids:
             bind = self.session.get_bind()
             dialect_name = getattr(getattr(bind, "dialect", None), "name", "")
-            if dialect_name == "postgresql":
-                snapshot_statement = (
-                    select(PlayerValueSnapshotRecord)
-                    .distinct(PlayerValueSnapshotRecord.player_id)
-                    .where(PlayerValueSnapshotRecord.player_id.in_(snapshot_target_ids))
-                    .order_by(
-                        PlayerValueSnapshotRecord.player_id.asc(),
-                        PlayerValueSnapshotRecord.as_of.desc(),
-                        PlayerValueSnapshotRecord.created_at.desc(),
-                        PlayerValueSnapshotRecord.id.desc(),
+            chunk_size = 5000
+            for start in range(0, len(snapshot_target_ids), chunk_size):
+                chunk_ids = snapshot_target_ids[start : start + chunk_size]
+                if dialect_name == "postgresql":
+                    snapshot_statement = (
+                        select(PlayerValueSnapshotRecord)
+                        .distinct(PlayerValueSnapshotRecord.player_id)
+                        .where(PlayerValueSnapshotRecord.player_id.in_(chunk_ids))
+                        .order_by(
+                            PlayerValueSnapshotRecord.player_id.asc(),
+                            PlayerValueSnapshotRecord.as_of.desc(),
+                            PlayerValueSnapshotRecord.created_at.desc(),
+                            PlayerValueSnapshotRecord.id.desc(),
+                        )
                     )
-                )
-                for snapshot in self.session.scalars(snapshot_statement):
-                    latest_snapshots[snapshot.player_id] = snapshot
-            else:
-                snapshot_statement = (
-                    select(PlayerValueSnapshotRecord)
-                    .where(PlayerValueSnapshotRecord.player_id.in_(snapshot_target_ids))
-                    .order_by(
-                        PlayerValueSnapshotRecord.player_id.asc(),
-                        PlayerValueSnapshotRecord.as_of.desc(),
-                        PlayerValueSnapshotRecord.created_at.desc(),
-                        PlayerValueSnapshotRecord.id.desc(),
+                    for snapshot in self.session.scalars(snapshot_statement):
+                        latest_snapshots[snapshot.player_id] = snapshot
+                else:
+                    snapshot_statement = (
+                        select(PlayerValueSnapshotRecord)
+                        .where(PlayerValueSnapshotRecord.player_id.in_(chunk_ids))
+                        .order_by(
+                            PlayerValueSnapshotRecord.player_id.asc(),
+                            PlayerValueSnapshotRecord.as_of.desc(),
+                            PlayerValueSnapshotRecord.created_at.desc(),
+                            PlayerValueSnapshotRecord.id.desc(),
+                        )
                     )
-                )
-                for snapshot in self.session.scalars(snapshot_statement):
-                    latest_snapshots.setdefault(snapshot.player_id, snapshot)
+                    for snapshot in self.session.scalars(snapshot_statement):
+                        latest_snapshots.setdefault(snapshot.player_id, snapshot)
 
         return [
             MarketPlayerRecord(

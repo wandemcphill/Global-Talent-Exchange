@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import copy
 from dataclasses import dataclass, field
 from importlib import import_module
 import logging
@@ -8,7 +9,9 @@ from time import perf_counter
 from typing import Any, Callable
 
 from fastapi import APIRouter, FastAPI
-from fastapi.routing import APIRoute, APIWebSocketRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response
+from fastapi.utils import get_value_or_default
+from starlette.routing import websocket_session
 
 from app.core.api_contract import register_versioned_route_aliases
 from app.core.container import ApplicationContext
@@ -135,7 +138,7 @@ def register_domain_modules(app: FastAPI, modules: Iterable[DomainModule]) -> No
             _drop_colliding_routes(router, set(registered.keys()))
             module_routes = _route_fingerprints(router.routes)
 
-        app.include_router(router)
+        _mount_router_fast(app, router)
         register_versioned_route_aliases(app, router.routes)
 
         # Tag every newly registered fingerprint as canonical or alias.
@@ -276,6 +279,55 @@ def _record_hook_profile(
             "status": status,
         }
     )
+
+
+def _mount_router_fast(app: FastAPI, router: APIRouter) -> None:
+    """Mount an APIRouter's pre-compiled routes onto app without recompiling Pydantic TypeAdapters."""
+    if router.prefix or router.dependencies or router.tags or router.responses or router.callbacks or router.deprecated:
+        # Fallback if router has unapplied top-level metadata not already baked into its routes.
+        # Note: @router.get(...) already bakes router attributes into each APIRoute at decoration time,
+        # so only fall back if a route path doesn't already start with router.prefix.
+        if router.prefix and any(
+            not getattr(r, "path", "").startswith(router.prefix) for r in router.routes if hasattr(r, "path")
+        ):
+            app.include_router(router)
+            return
+
+    overrides_provider = app.router.dependency_overrides_provider or app
+    mounted_routes: list[object] = []
+    for route in router.routes:
+        if isinstance(route, APIRoute):
+            cloned = copy.copy(route)
+            cloned.response_class = get_value_or_default(
+                route.response_class,
+                router.default_response_class,
+                app.router.default_response_class,
+            )
+            cloned.dependency_overrides_provider = overrides_provider
+            cloned.app = request_response(cloned.get_route_handler())
+            app.router.routes.append(cloned)
+            mounted_routes.append(cloned)
+        elif isinstance(route, APIWebSocketRoute):
+            cloned = copy.copy(route)
+            cloned.dependency_overrides_provider = overrides_provider
+            cloned.app = websocket_session(
+                get_websocket_app(
+                    dependant=cloned.dependant,
+                    dependency_overrides_provider=overrides_provider,
+                    embed_body_fields=cloned._embed_body_fields,
+                )
+            )
+            app.router.routes.append(cloned)
+            mounted_routes.append(cloned)
+        else:
+            cloned = copy.copy(route)
+            app.router.routes.append(cloned)
+            mounted_routes.append(cloned)
+    router.routes[:] = mounted_routes
+    for handler in router.on_startup:
+        app.router.add_event_handler("startup", handler)
+    for handler in router.on_shutdown:
+        app.router.add_event_handler("shutdown", handler)
 
 
 def _is_alias_path(path: str) -> bool:

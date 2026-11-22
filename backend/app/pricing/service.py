@@ -149,18 +149,20 @@ class MarketPricingService:
         trade_intents: tuple[TradeIntent, ...] = (),
         reference_price: float | None = None,
         symbol: str | None = None,
+        skip_reference_lookup: bool = False,
     ) -> PlayerPricingSnapshot:
         with self._lock:
             cached_snapshot = self._snapshots.get(player_id)
         if cached_snapshot is not None:
             return cached_snapshot
-        cached_snapshot_payload = self._hot_cache.get_player_snapshot(player_id)
-        if isinstance(cached_snapshot_payload, dict):
-            snapshot = self._snapshot_from_payload(cached_snapshot_payload)
-            if snapshot is not None:
-                with self._lock:
-                    self._snapshots[player_id] = snapshot
-                return snapshot
+        if not skip_reference_lookup:
+            cached_snapshot_payload = self._hot_cache.get_player_snapshot(player_id)
+            if isinstance(cached_snapshot_payload, dict):
+                snapshot = self._snapshot_from_payload(cached_snapshot_payload)
+                if snapshot is not None:
+                    with self._lock:
+                        self._snapshots[player_id] = snapshot
+                    return snapshot
         return self._build_snapshot(
             player_id=player_id,
             listings=listings,
@@ -168,6 +170,7 @@ class MarketPricingService:
             trade_intents=trade_intents,
             reference_price=reference_price,
             symbol=symbol,
+            skip_reference_lookup=skip_reference_lookup,
         )
 
     def get_candles(
@@ -236,11 +239,12 @@ class MarketPricingService:
         occurred_at: datetime | None = None,
         reference_price: float | None = None,
         symbol: str | None = None,
+        skip_reference_lookup: bool = False,
     ) -> PlayerPricingSnapshot:
         timestamp = self._normalize_timestamp(occurred_at)
         reference = self._round_price(reference_price)
         resolved_symbol = symbol
-        if reference is None or resolved_symbol is None:
+        if not skip_reference_lookup and (reference is None or resolved_symbol is None):
             lookup_reference, lookup_symbol = self._load_reference_context(player_id)
             reference = reference if reference is not None else lookup_reference
             resolved_symbol = resolved_symbol if resolved_symbol is not None else lookup_symbol

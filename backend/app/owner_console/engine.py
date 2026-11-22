@@ -631,6 +631,7 @@ for _regen in build_regen_staff_catalog():
     if _regen.get("id") and _regen["id"] not in _seen_ids:
         EXECUTIVE_STAFF_CATALOG.append(_regen)
         _seen_ids.add(_regen["id"])
+build_regen_staff_catalog.cache_clear()
 
 
 MANAGER_CATALOG: list[dict[str, Any]] = [

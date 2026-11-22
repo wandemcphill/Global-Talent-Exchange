@@ -4,7 +4,7 @@ import inspect
 import json
 import logging
 import re
-from copy import deepcopy
+from copy import copy, deepcopy
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Iterable
@@ -13,8 +13,10 @@ from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.datastructures import DefaultPlaceholder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from fastapi.routing import APIRoute, APIWebSocketRoute
+from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response
+from fastapi.utils import generate_unique_id, get_value_or_default
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.routing import compile_path, websocket_session
 
 from app.core.errors import (
     ApiError,
@@ -88,6 +90,18 @@ def register_versioned_route_aliases(app: FastAPI, routes: Iterable[object]) -> 
         path = getattr(route, "path", None)
         if not isinstance(path, str):
             continue
+        if path == API_VERSION_PREFIX or path.startswith(f"{API_VERSION_PREFIX}/"):
+            if isinstance(route, APIRoute):
+                fp = (path, tuple(sorted(route.methods or ())))
+                _promote_over_shadowing_routes(app, route)
+            elif isinstance(route, APIWebSocketRoute):
+                fp = (path, ("WEBSOCKET",))
+            else:
+                continue
+            if fp not in alias_priorities:
+                alias_routes[fp] = route
+                alias_priorities[fp] = 0
+            continue
         versioned_path = build_versioned_path(path)
         if versioned_path is None:
             continue
@@ -142,45 +156,45 @@ def build_versioned_path(path: str) -> str | None:
 
 
 def _clone_api_route(app: FastAPI, *, route: APIRoute, versioned_path: str) -> APIRoute:
-    route_kwargs: dict[str, Any] = {
-        "response_model": route.response_model,
-        "status_code": route.status_code,
-        "tags": list(route.tags or ()),
-        "dependencies": list(route.dependencies or ()),
-        "summary": route.summary,
-        "description": route.description,
-        "response_description": route.response_description,
-        "responses": deepcopy(route.responses),
-        "deprecated": route.deprecated,
-        "methods": route.methods,
-        "operation_id": _versioned_operation_id(route),
-        "response_model_include": route.response_model_include,
-        "response_model_exclude": route.response_model_exclude,
-        "response_model_by_alias": route.response_model_by_alias,
-        "response_model_exclude_unset": route.response_model_exclude_unset,
-        "response_model_exclude_defaults": route.response_model_exclude_defaults,
-        "response_model_exclude_none": route.response_model_exclude_none,
-        "include_in_schema": route.include_in_schema,
-        "name": f"v1_{route.name}",
-        "openapi_extra": deepcopy(route.openapi_extra),
-    }
-    if "callbacks" in _FASTAPI_ADD_API_ROUTE_PARAMS:
-        route_kwargs["callbacks"] = list(route.callbacks or ())
-    if not isinstance(route.response_class, DefaultPlaceholder):
-        route_kwargs["response_class"] = route.response_class
-
-    app.add_api_route(versioned_path, route.endpoint, **route_kwargs)
-    return app.router.routes[-1]
+    cloned = copy(route)
+    cloned.path = versioned_path
+    path_regex, path_format, param_convertors = compile_path(versioned_path)
+    cloned.path_regex = path_regex
+    cloned.path_format = path_format
+    cloned.param_convertors = param_convertors
+    cloned.name = f"v1_{route.name}"
+    cloned.operation_id = _versioned_operation_id(route)
+    cloned.unique_id = cloned.operation_id or generate_unique_id(cloned)
+    cloned.response_class = get_value_or_default(
+        route.response_class,
+        app.router.default_response_class,
+    )
+    overrides_provider = app.router.dependency_overrides_provider or app
+    cloned.dependency_overrides_provider = overrides_provider
+    cloned.app = request_response(cloned.get_route_handler())
+    app.router.routes.append(cloned)
+    return cloned
 
 
 def _clone_websocket_route(app: FastAPI, *, route: APIWebSocketRoute, versioned_path: str) -> APIWebSocketRoute:
-    app.add_api_websocket_route(
-        versioned_path,
-        route.endpoint,
-        name=f"v1_{route.name}",
-        dependencies=list(route.dependencies or ()),
+    cloned = copy(route)
+    cloned.path = versioned_path
+    path_regex, path_format, param_convertors = compile_path(versioned_path)
+    cloned.path_regex = path_regex
+    cloned.path_format = path_format
+    cloned.param_convertors = param_convertors
+    cloned.name = f"v1_{route.name}"
+    overrides_provider = app.router.dependency_overrides_provider or app
+    cloned.dependency_overrides_provider = overrides_provider
+    cloned.app = websocket_session(
+        get_websocket_app(
+            dependant=cloned.dependant,
+            dependency_overrides_provider=overrides_provider,
+            embed_body_fields=cloned._embed_body_fields,
+        )
     )
-    return app.router.routes[-1]
+    app.router.routes.append(cloned)
+    return cloned
 
 
 def _promote_over_shadowing_routes(app: FastAPI, alias_route: APIRoute) -> None:

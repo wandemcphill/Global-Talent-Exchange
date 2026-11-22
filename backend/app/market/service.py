@@ -69,6 +69,18 @@ class MarketValidationError(MarketError):
 
 
 PLAYER_DISCOVERY_SORTS = frozenset({"current_value", "trend_score", "age", "name"})
+_EMPTY_REAL_WORLD_IMPACT = PlayerRealWorldImpact(
+    player_id="",
+    active_flags=(),
+    active_form_modifiers=(),
+    active_demand_signals=(),
+    active_flag_codes=(),
+    affected_card_ids=(),
+    recommendation_priority_delta=0.0,
+    market_buzz_score=0.0,
+    gameplay_effect_total=0.0,
+    market_effect_total=0.0,
+)
 
 
 class MarketEngine:
@@ -1005,6 +1017,7 @@ class MarketPlayerQueryService:
     avatar_service: AvatarService | None = None
     runtime_controls: RuntimeControlService | None = None
     _real_world_impact_cache: dict[str, PlayerRealWorldImpact] = field(init=False, default_factory=dict, repr=False)
+    _real_world_impacts_preloaded: bool = field(init=False, default=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.repository is None:
@@ -1341,15 +1354,31 @@ class MarketPlayerQueryService:
         if limit < 1:
             raise MarketValidationError("limit must be at least 1")
 
+        self._preload_active_real_world_impacts()
+        listings_by_asset: dict[str, list[Listing]] = {}
+        for listing in self.market_engine.repository.iter_listings():
+            listings_by_asset.setdefault(listing.asset_id, []).append(listing)
+        offers_by_asset: dict[str, list[Offer]] = {}
+        for offer in self.market_engine.repository.iter_offers():
+            offers_by_asset.setdefault(offer.asset_id, []).append(offer)
+        intents_by_asset: dict[str, list[TradeIntent]] = {}
+        for intent in self.market_engine.repository.iter_trade_intents():
+            intents_by_asset.setdefault(intent.asset_id, []).append(intent)
+
         mover_items: list[MarketMoverItem] = []
-        for record in self.repository.list_player_records():
+        for record in self.repository.list_player_candidates():
             reference_price = self._reference_price(record)
             if reference_price is None and record.player.is_real_player:
                 continue
-            snapshot = self.market_engine.get_player_pricing_snapshot(
-                asset_id=record.player.id,
+            pid = record.player.id
+            snapshot = self.market_engine.pricing_service.get_snapshot(
+                player_id=pid,
+                listings=tuple(listings_by_asset.get(pid, ())),
+                offers=tuple(offers_by_asset.get(pid, ())),
+                trade_intents=tuple(intents_by_asset.get(pid, ())),
                 reference_price=reference_price,
                 symbol=self._pricing_symbol(record),
+                skip_reference_lookup=True,
             )
             mover_items.append(
                 MarketMoverItem(
@@ -1405,7 +1434,7 @@ class MarketPlayerQueryService:
 
     def list_leagues(self) -> list[dict[str, Any]]:
         grouped: dict[str, dict[str, Any]] = {}
-        for record in self.repository.list_player_records():
+        for record in self.repository.list_player_candidates():
             league_id = record.player.current_competition_id or record.player.internal_league_id
             if not league_id:
                 continue
@@ -1447,7 +1476,7 @@ class MarketPlayerQueryService:
 
     def list_league_clubs(self, league_id: str) -> list[dict[str, Any]]:
         grouped: dict[str, dict[str, Any]] = {}
-        for record in self.repository.list_player_records():
+        for record in self.repository.list_player_candidates():
             player_league_id = record.player.current_competition_id or record.player.internal_league_id
             if player_league_id != league_id or record.player.current_club is None:
                 continue
@@ -1470,9 +1499,9 @@ class MarketPlayerQueryService:
 
     def list_club_players(self, club_id: str, *, limit: int = 100) -> MarketPlayerListResult:
         records = [
-            record for record in self.repository.list_player_records() if record.player.current_club_id == club_id
+            record for record in self.repository.list_player_candidates() if record.player.current_club_id == club_id
         ]
-        sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        sorted_records = self._hydrate_page_records(self._sort_player_records(records, sort="current_value")[:limit])
         share_prices_by_player_id = self._share_prices_by_player_id(sorted_records)
         return MarketPlayerListResult(
             items=tuple(
@@ -1491,7 +1520,7 @@ class MarketPlayerQueryService:
 
     def list_nationalities(self) -> list[dict[str, Any]]:
         grouped: dict[str, dict[str, Any]] = {}
-        for record in self.repository.list_player_records():
+        for record in self.repository.list_player_candidates():
             country = record.player.country
             code = self._country_code(country) or self._nationality_code(record)
             if not code:
@@ -1514,11 +1543,11 @@ class MarketPlayerQueryService:
         normalized_code = self._normalize_text(country_code)
         records = [
             record
-            for record in self.repository.list_player_records()
+            for record in self.repository.list_player_candidates()
             if self._normalize_text(self._nationality_code(record)) == normalized_code
             or self._normalize_text(record.player.country.name if record.player.country else None) == normalized_code
         ]
-        sorted_records = self._sort_player_records(records, sort="current_value")[:limit]
+        sorted_records = self._hydrate_page_records(self._sort_player_records(records, sort="current_value")[:limit])
         share_prices_by_player_id = self._share_prices_by_player_id(sorted_records)
         return MarketPlayerListResult(
             items=tuple(
@@ -1750,6 +1779,18 @@ class MarketPlayerQueryService:
         player_ids = [record.player.id for record in records if record.player.id]
         if not player_ids:
             return {}
+        if len(player_ids) > 500:
+            player_id_set = set(player_ids)
+            listings = self.session.scalars(
+                select(TransferListing)
+                .where(TransferListing.status.in_(("open", "countered", "negotiated")))
+                .order_by(TransferListing.created_at.desc())
+            ).all()
+            by_player_id: dict[str, TransferListing] = {}
+            for listing in listings:
+                if listing.player_id in player_id_set:
+                    by_player_id.setdefault(listing.player_id, listing)
+            return by_player_id
         listings = self.session.scalars(
             select(TransferListing)
             .where(
@@ -1758,7 +1799,7 @@ class MarketPlayerQueryService:
             )
             .order_by(TransferListing.created_at.desc())
         ).all()
-        by_player_id: dict[str, TransferListing] = {}
+        by_player_id = {}
         for listing in listings:
             by_player_id.setdefault(listing.player_id, listing)
         return by_player_id
@@ -2431,10 +2472,83 @@ class MarketPlayerQueryService:
             4,
         )
 
+    def _preload_active_real_world_impacts(self) -> None:
+        if self._real_world_impacts_preloaded:
+            return
+        from sqlalchemy import or_
+        from app.models.real_world_football import (
+            EffectRecordStatus,
+            PlayerDemandSignal,
+            PlayerFormModifier,
+            TrendingPlayerFlag,
+        )
+
+        current = utcnow()
+        flags_by_player: dict[str, list[TrendingPlayerFlag]] = {}
+        for flag in self.session.scalars(
+            select(TrendingPlayerFlag)
+            .where(
+                TrendingPlayerFlag.status == EffectRecordStatus.ACTIVE.value,
+                or_(TrendingPlayerFlag.expires_at.is_(None), TrendingPlayerFlag.expires_at > current),
+            )
+            .order_by(TrendingPlayerFlag.priority.desc(), TrendingPlayerFlag.started_at.desc())
+        ):
+            flags_by_player.setdefault(flag.player_id, []).append(flag)
+
+        modifiers_by_player: dict[str, list[PlayerFormModifier]] = {}
+        for modifier in self.session.scalars(
+            select(PlayerFormModifier)
+            .where(
+                PlayerFormModifier.status == EffectRecordStatus.ACTIVE.value,
+                or_(PlayerFormModifier.expires_at.is_(None), PlayerFormModifier.expires_at > current),
+            )
+            .order_by(PlayerFormModifier.started_at.desc(), PlayerFormModifier.created_at.desc())
+        ):
+            modifiers_by_player.setdefault(modifier.player_id, []).append(modifier)
+
+        signals_by_player: dict[str, list[PlayerDemandSignal]] = {}
+        for signal in self.session.scalars(
+            select(PlayerDemandSignal)
+            .where(
+                PlayerDemandSignal.status == EffectRecordStatus.ACTIVE.value,
+                or_(PlayerDemandSignal.expires_at.is_(None), PlayerDemandSignal.expires_at > current),
+            )
+            .order_by(PlayerDemandSignal.started_at.desc(), PlayerDemandSignal.created_at.desc())
+        ):
+            signals_by_player.setdefault(signal.player_id, []).append(signal)
+
+        affected_player_ids = set(flags_by_player) | set(modifiers_by_player) | set(signals_by_player)
+        for pid in affected_player_ids:
+            active_flags = tuple(flags_by_player.get(pid, ()))
+            active_form_modifiers = tuple(modifiers_by_player.get(pid, ()))
+            active_demand_signals = tuple(signals_by_player.get(pid, ()))
+            active_flag_codes = tuple(dict.fromkeys(flag.flag_type for flag in active_flags))
+            self._real_world_impact_cache[pid] = PlayerRealWorldImpact(
+                player_id=pid,
+                active_flags=active_flags,
+                active_form_modifiers=active_form_modifiers,
+                active_demand_signals=active_demand_signals,
+                active_flag_codes=active_flag_codes,
+                affected_card_ids=(),
+                recommendation_priority_delta=round(
+                    sum(signal.recommendation_priority_delta for signal in active_demand_signals)
+                    + sum(modifier.recommendation_effect_value for modifier in active_form_modifiers),
+                    4,
+                ),
+                market_buzz_score=round(sum(signal.market_buzz_score for signal in active_demand_signals), 4),
+                gameplay_effect_total=round(
+                    sum(modifier.gameplay_effect_value for modifier in active_form_modifiers), 4
+                ),
+                market_effect_total=round(sum(modifier.market_effect_value for modifier in active_form_modifiers), 4),
+            )
+        self._real_world_impacts_preloaded = True
+
     def _real_world_impact(self, player_id: str) -> PlayerRealWorldImpact:
         cached = self._real_world_impact_cache.get(player_id)
         if cached is not None:
             return cached
+        if self._real_world_impacts_preloaded:
+            return _EMPTY_REAL_WORLD_IMPACT
         impact = RealWorldFootballEventService(self.session).get_player_impact(player_id)
         self._real_world_impact_cache[player_id] = impact
         return impact

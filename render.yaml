@@ -128,6 +128,18 @@ services:
       # National rental lifecycle is owned by the dedicated gtex-national-team-worker.
       - key: GTE_NATIONAL_TEAM_WORKER_ENABLED
         value: "false"
+      - key: GTE_HISTORY_ENGAGEMENT_WORKER_ENABLED
+        value: "false"
+      - key: GTE_AI_REPORTER_WORKER_ENABLED
+        value: "false"
+      - key: GTE_NEWS_WORKER_ENABLED
+        value: "false"
+      - key: GTE_REAL_WORLD_SYNC_ENABLED
+        value: "false"
+      - key: GTE_FEDERATION_WORKER_ENABLED
+        value: "false"
+      - key: GTE_COMPETITIVE_INTEGRITY_WORKER_ENABLED
+        value: "false"
       - key: GTE_KAFKA_BROKERS
         value: ""
       - key: GTE_WORLD_CLOCK_PROGRESSION_RATE

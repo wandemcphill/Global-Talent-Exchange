@@ -328,7 +328,6 @@ class HistoryEngagementService:
     def rebuild_history(self) -> dict[str, int]:
         clubs = {item.id: item for item in self.session.scalars(select(ClubProfile)).all()}
         users = {item.id: item for item in self.session.scalars(select(User)).all()}
-        players = {item.id: item for item in self.session.scalars(select(Player)).all()}
         completed_matches = self._completed_matches()
         trophies = list(self.session.scalars(select(ClubTrophy).order_by(ClubTrophy.awarded_at.asc())).all())
         completed_transfers = list(
@@ -343,6 +342,23 @@ class HistoryEngagementService:
                 select(RegenAward).order_by(RegenAward.awarded_at.asc(), RegenAward.created_at.asc())
             ).all()
         )
+        regen_profiles = {item.id: item for item in self.session.scalars(select(RegenProfile)).all()}
+        legacy_player_ids = set(self.session.scalars(select(RegenLegacyRecord.player_id)).all())
+        needed_player_ids = (
+            {t.player_id for t in completed_transfers if t.player_id}
+            | {rp.player_id for rp in regen_profiles.values() if rp.player_id}
+            | {pid for pid in legacy_player_ids if pid}
+        )
+        players: dict[str, Player] = {}
+        if needed_player_ids:
+            needed_list = list(needed_player_ids)
+            for start in range(0, len(needed_list), 5000):
+                chunk = needed_list[start : start + 5000]
+                for item in self.session.scalars(select(Player).where(Player.id.in_(chunk))).all():
+                    players[item.id] = item
+        if len(players) < 50:
+            for item in self.session.scalars(select(Player).order_by(Player.full_name.asc()).limit(50)).all():
+                players.setdefault(item.id, item)
         completed_federation_competitions = list(
             self.session.scalars(
                 select(NationalTeamCompetition)
@@ -377,7 +393,6 @@ class HistoryEngagementService:
                 )
             )
 
-        regen_profiles = {item.id: item for item in self.session.scalars(select(RegenProfile)).all()}
         for trophy in trophies:
             club = clubs.get(trophy.club_id)
             if club is None:
@@ -1469,15 +1484,26 @@ class HistoryEngagementService:
                     },
                 }
             )
-        players = {item.id: item for item in self.session.scalars(select(Player)).all()}
-        for transfer in self.session.scalars(
-            select(TransferNegotiation)
-            .where(
-                TransferNegotiation.status == "completed",
-                (TransferNegotiation.selling_club_id == club_id) | (TransferNegotiation.bidder_club_id == club_id),
-            )
-            .order_by(TransferNegotiation.resolved_at.asc(), TransferNegotiation.updated_at.asc())
-        ).all():
+        completed_transfers = list(
+            self.session.scalars(
+                select(TransferNegotiation)
+                .where(
+                    TransferNegotiation.status == "completed",
+                    (TransferNegotiation.selling_club_id == club_id) | (TransferNegotiation.bidder_club_id == club_id),
+                )
+                .order_by(TransferNegotiation.resolved_at.asc(), TransferNegotiation.updated_at.asc())
+            ).all()
+        )
+        transfer_player_ids = {t.player_id for t in completed_transfers if t.player_id}
+        players = (
+            {
+                item.id: item
+                for item in self.session.scalars(select(Player).where(Player.id.in_(transfer_player_ids))).all()
+            }
+            if transfer_player_ids
+            else {}
+        )
+        for transfer in completed_transfers:
             player = players.get(transfer.player_id)
             if player is None:
                 continue
@@ -1657,15 +1683,26 @@ class HistoryEngagementService:
         limit: int,
     ) -> list[dict[str, Any]]:
         clubs = {item.id: item for item in self.session.scalars(select(ClubProfile)).all()}
-        players = {item.id: item for item in self.session.scalars(select(Player)).all()}
+        recent_transfers = list(
+            self.session.scalars(
+                select(TransferNegotiation)
+                .where(TransferNegotiation.status == "completed")
+                .order_by(TransferNegotiation.resolved_at.desc(), TransferNegotiation.updated_at.desc())
+                .limit(limit)
+            ).all()
+        )
+        transfer_player_ids = {t.player_id for t in recent_transfers if t.player_id}
+        players = (
+            {
+                item.id: item
+                for item in self.session.scalars(select(Player).where(Player.id.in_(transfer_player_ids))).all()
+            }
+            if transfer_player_ids
+            else {}
+        )
         items: list[dict[str, Any]] = []
 
-        for transfer in self.session.scalars(
-            select(TransferNegotiation)
-            .where(TransferNegotiation.status == "completed")
-            .order_by(TransferNegotiation.resolved_at.desc(), TransferNegotiation.updated_at.desc())
-            .limit(limit)
-        ).all():
+        for transfer in recent_transfers:
             if (
                 followed_club_ids
                 and transfer.selling_club_id not in followed_club_ids

@@ -301,7 +301,6 @@ class ClubGrowthService:
 
     def get_dashboard(self, *, club_id: str) -> ClubGrowthDashboardView:
         self._ensure_club(club_id)
-        self.seed_staff_defaults()
         academy = self.ensure_academy_profile(club_id=club_id)
         staff_market = self.list_staff_market()
         contracts = self.list_staff_contracts(club_id=club_id)
@@ -321,7 +320,13 @@ class ClubGrowthService:
         )
 
     def seed_staff_defaults(self) -> None:
-        existing = {item[0] for item in self.session.execute(select(ClubStaffProfile.market_key)).all()}
+        default_keys = tuple(str(payload["market_key"]) for payload in DEFAULT_STAFF_MARKET)
+        existing = {
+            item[0]
+            for item in self.session.execute(
+                select(ClubStaffProfile.market_key).where(ClubStaffProfile.market_key.in_(default_keys))
+            ).all()
+        }
         for payload in DEFAULT_STAFF_MARKET:
             market_key = str(payload["market_key"])
             if market_key in existing:
@@ -342,12 +347,13 @@ class ClubGrowthService:
             )
         self.session.flush()
 
-    def list_staff_market(self) -> list[ClubStaffProfile]:
+    def list_staff_market(self, *, limit: int = 100) -> list[ClubStaffProfile]:
         self.seed_staff_defaults()
         statement = (
             select(ClubStaffProfile)
             .where(ClubStaffProfile.active.is_(True))
             .order_by(ClubStaffProfile.rating.desc(), ClubStaffProfile.display_name.asc())
+            .limit(max(1, int(limit)))
         )
         return list(self.session.scalars(statement).all())
 

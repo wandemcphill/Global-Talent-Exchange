@@ -7,6 +7,7 @@ from time import perf_counter
 
 from fastapi import APIRouter, FastAPI
 from fastapi.routing import APIRoute, APIWebSocketRoute
+from fastapi.utils import generate_unique_id
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.routing import Route, WebSocketRoute, compile_path
@@ -114,6 +115,8 @@ def _build_prefixed_router(source: APIRouter, prefix: str) -> APIRouter:
             cloned.path_regex = path_regex
             cloned.path_format = path_format
             cloned.param_convertors = param_convertors
+            if isinstance(cloned, APIRoute) and not cloned.operation_id:
+                cloned.unique_id = generate_unique_id(cloned)
             new_router.routes.append(cloned)
         else:
             new_router.routes.append(route)
@@ -122,16 +125,16 @@ def _build_prefixed_router(source: APIRouter, prefix: str) -> APIRouter:
 
 def _with_api_alias(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
-    wrapped_router.include_router(_build_prefixed_router(router, ""))
-    wrapped_router.include_router(_build_prefixed_router(router, "/api"))
-    wrapped_router.include_router(_build_prefixed_router(router, "/api/v2"))
+    wrapped_router.routes.extend(_build_prefixed_router(router, "").routes)
+    wrapped_router.routes.extend(_build_prefixed_router(router, "/api").routes)
+    wrapped_router.routes.extend(_build_prefixed_router(router, "/api/v2").routes)
     return wrapped_router
 
 
 def _with_api_only(router: APIRouter) -> APIRouter:
     wrapped_router = APIRouter()
-    wrapped_router.include_router(_build_prefixed_router(router, "/api"))
-    wrapped_router.include_router(_build_prefixed_router(router, "/api/v2"))
+    wrapped_router.routes.extend(_build_prefixed_router(router, "/api").routes)
+    wrapped_router.routes.extend(_build_prefixed_router(router, "/api/v2").routes)
     return wrapped_router
 
 
