@@ -154,7 +154,7 @@ export default function Lineup() {
   const clubId = searchParams.get("club_id") || active?.club_id || undefined;
   const club = clubs.find((item: any) => item.club_id === clubId) || active;
   const cachedClubQuery = useClub(clubId);
-  const [formation, setFormation] = useState("3-4-3");
+  const [formation, setFormation] = useState("4-3-3");
   const [starters, setStarters] = useState<string[]>(Array(11).fill(""));
   const [bench, setBench] = useState<string[]>([]);
   const [benchCandidate, setBenchCandidate] = useState("");
@@ -196,7 +196,7 @@ export default function Lineup() {
       ? effectiveRoster.tactics.formations
       : [];
     const rawFormation =
-      effectiveRoster.filedFormation || effectiveRoster.tactics?.formation || "3-4-3";
+      effectiveRoster.filedFormation || effectiveRoster.tactics?.formation || "4-3-3";
     const resolvedFormation =
       managerFormations.length > 0 && !managerFormations.includes(rawFormation)
         ? managerFormations[0]

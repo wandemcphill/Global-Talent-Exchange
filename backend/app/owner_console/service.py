@@ -3637,7 +3637,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         try:
             from app.owner_console import autonomous_staff_engine
 
-            autonomous_staff_engine.select_manager_matchday_lineup(session, state, user_id)
+            autonomous_staff_engine.select_manager_matchday_lineup(session, state)
             facilities = state.facilities_json or {}
             selection = facilities.get("_last_manager_matchday_selection") or {}
             filed_ids = (

@@ -32,6 +32,7 @@ jest.mock("@/lib/owner", () => ({
     clubs: [{ club_id: "club-1", club_name: "Test Athletic" }],
     active: { club_id: "club-1", club_name: "Test Athletic" },
   }),
+  useClub: () => ({ data: undefined, isLoading: false, isError: false }),
   fmt: (value: unknown) => String(value ?? 0),
 }));
 
@@ -95,14 +96,12 @@ describe("React lineup page", () => {
       .spyOn(api, "put")
       .mockImplementation(((_url: string, payload: any) =>
         Promise.resolve({ data: { club_id: "club-1", ...payload } })) as any);
-    jest
-      .spyOn(api, "post")
-      .mockImplementation((() =>
-        Promise.resolve({
-          data: {
-            manager_selection: { verdict_reason: "The first-team manager filed this eleven." },
-          },
-        })) as any);
+    jest.spyOn(api, "post").mockImplementation((() =>
+      Promise.resolve({
+        data: {
+          manager_selection: { verdict_reason: "The first-team manager filed this eleven." },
+        },
+      })) as any);
   });
 
   afterEach(async () => {
