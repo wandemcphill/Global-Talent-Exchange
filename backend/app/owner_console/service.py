@@ -438,9 +438,13 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     from app.owner_console import storytelling
 
     pers = dict(p.personality_json or {}) if p.is_regen else {}
-    squad_status = pers.get(
-        "squad_status", "academy" if (p.is_regen and p.age <= 18 and p.minutes == 0) else "first_team"
-    )
+    stored_sheet = pers.get("squad_status")
+    if isinstance(stored_sheet, str) and stored_sheet.strip():
+        squad_status = stored_sheet.strip().lower()
+    elif p.acquired_via == "academy" and p.is_regen and int(p.age or 99) <= 18:
+        squad_status = "academy"
+    else:
+        squad_status = "first_team"
 
     def _trait(value: Any) -> int | None:
         return int(value) if isinstance(value, (int, float)) else None
@@ -1656,6 +1660,23 @@ def _add_regen(
     return player
 
 
+def onboarding_contract_years(raw: int | float | str | None) -> int:
+    try:
+        years = int(raw or 1)
+    except (TypeError, ValueError):
+        years = 1
+    return max(1, min(years, 5))
+
+
+def onboarding_contract_charge_fan(raw_annual: int | float | str | None, years: int | float | str | None) -> int:
+    """Fan Coin taken once when a named contract is agreed.
+
+    The season salary is 35 percent of the annual wage. The owner chooses
+    1 to 5 years, and that season salary is multiplied by the chosen years.
+    """
+    return onboarding_season_salary_fan(raw_annual) * onboarding_contract_years(years)
+
+
 def onboarding_season_salary_fan(raw: int | float | str | None) -> int:
     """One season of a named staff contract, in Fan Coin.
 
@@ -1697,7 +1718,7 @@ def _charge_onboarding_salary(
             "insufficient_fan_coin",
             402,
             (
-                f"This season contract is {salary} Fan Coin. Available Fan Coin is {available}. "
+                f"This contract is {salary} Fan Coin, paid once. Available Fan Coin is {available}. "
                 "The 1,000 Fan Coin grant is a start and may not cover every named role. "
                 "Convert deposited or earned GTEX Coin, or buy Fan Coin. Default staff stay free."
             ),
@@ -1754,11 +1775,13 @@ def appoint_onboarding_staff(
     use_default: bool = False,
     profile_id: str | None = None,
     manager_id: str | None = None,
+    contract_years: int = 1,
 ) -> dict[str, Any]:
     """Agree one founding contract: first-team manager, general manager, or youth head.
 
-    A named contract is paid in Fan Coin for one season. The default caretaker
-    for each role is free. The squad grant is not touched.
+    A named contract is paid once, in Fan Coin, for the 1 to 5 years the owner
+    chooses. The charge is the season salary times those years. The default
+    caretaker for each role is free. The squad grant is not touched.
     The club leaves the staff step only after all three roles have a decision.
     """
     from app.models.club_growth import ClubStaffProfile
@@ -1797,6 +1820,7 @@ def appoint_onboarding_staff(
 
     salary = 0
     display_name = ""
+    years = onboarding_contract_years(contract_years)
     written_exec: dict[str, Any] | None = None
     if role_key == "first_team_manager" and manager_id:
         row = session.scalar(select(ManagerCatalogEntry).where(ManagerCatalogEntry.manager_id == manager_id))
@@ -1805,7 +1829,7 @@ def appoint_onboarding_staff(
         wage = {"legendary": 50000, "elite_active": 22000, "rare": 9000, "popular": 3500}.get(
             str(row.rarity or "").strip().lower(), 3500
         )
-        salary = onboarding_season_salary_fan(wage)
+        salary = onboarding_contract_charge_fan(wage, years)
         display_name = row.display_name
         record = {
             "id": row.manager_id,
@@ -1825,14 +1849,16 @@ def appoint_onboarding_staff(
             "salary_gtx": 0,
             "is_default": False,
             "is_appointed": True,
+            "contract_years": years,
         }
+        record = engine.apply_staff_influence(record, role_key)
         _charge_onboarding_salary(
             session,
             user_id,
             club_id,
             salary,
             related_id=row.manager_id,
-            memo=f"Season Fan Coin salary for first-team manager {display_name}",
+            memo=f"{years}-year Fan Coin salary for first-team manager {display_name}",
         )
         appoint_manager(session, user_id, club_id, record, advance_stage=False)
         written_exec = {role_key: record}
@@ -1873,19 +1899,28 @@ def appoint_onboarding_staff(
                 "staff_id": meta.get("staff_id") or profile.id,
                 "profile_id": profile.id,
                 "name": profile.display_name,
-                "rating": profile.rating,
+                "rating": profile.rating if profile.rating is not None else meta.get("rating"),
                 "style": meta.get("style"),
                 "temperament": meta.get("temperament"),
                 "portrait_url": meta.get("portrait_url"),
+                "youth_development": meta.get("youth_development"),
+                "negotiation": meta.get("negotiation"),
+                "commercial_acumen": meta.get("commercial_acumen"),
+                "tactical_flexibility": meta.get("tactical_flexibility"),
+                "tactical_quality": meta.get("tactical_quality"),
+                "scouting_accuracy": meta.get("scouting_accuracy"),
+                "medical_expertise": meta.get("medical_expertise"),
+                "traits": meta.get("traits") or [],
             }
-        salary = onboarding_season_salary_fan(raw_wage)
+        salary = onboarding_contract_charge_fan(raw_wage, years)
+        record = engine.apply_staff_influence(record, role_key)
         _charge_onboarding_salary(
             session,
             user_id,
             club_id,
             salary,
             related_id=related,
-            memo=f"Season Fan Coin salary for {display_name}",
+            memo=f"{years}-year Fan Coin salary for {display_name}",
         )
         record.update(
             {
@@ -1895,10 +1930,12 @@ def appoint_onboarding_staff(
                 "salary": salary,
                 "salary_fan_coin": salary,
                 "salary_gtx": 0,
+                "contract_years": years,
                 "is_default": False,
                 "is_appointed": True,
             }
         )
+        record = engine.apply_staff_influence(record, role_key)
         exec_staff = dict((state.facilities_json or {}).get("_executive_staff") or {})
         exec_staff[role_key] = record
         facs = dict(state.facilities_json or {})
@@ -1917,6 +1954,7 @@ def appoint_onboarding_staff(
             "use_default": False,
             "salary_fan_coin": salary,
             "salary_gtx": 0,
+            "contract_years": years,
             "name": display_name,
         },
         preserved_book=book,
@@ -2260,7 +2298,7 @@ def upgrade_facility(session: Session, user_id: str, club_id: str, kind: str) ->
 def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSquadPlayer]:
     state = require_state(session, club_id, user_id)
     level = int((state.facilities_json or {}).get("academy", 1))
-    cost = 1_500 * level
+    cost = 200 * max(1, level)
 
     # Intake is an owner decision within the shared world; it must not advance
     # this club's private simulation day. Claim a distinct persisted sequence so
@@ -2304,9 +2342,13 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
     facs = dict(state.facilities_json or {})
     level = int(facs.get("academy", level) or level)
     exec_staff = dict(facs.get("_executive_staff") or {})
-    hoyd = exec_staff.get("head_of_youth_development") or {}
-    hoyd_youth = int(hoyd.get("youth_development", 10))
-    youth = int((state.manager_json or {}).get("youth_development", 10))
+    hoyd = engine.apply_staff_influence(
+        dict(exec_staff.get("head_of_youth_development") or {}),
+        "head_of_youth_development",
+    )
+    manager = engine.apply_staff_influence(dict(state.manager_json or {}), "first_team_manager")
+    hoyd_youth = int(hoyd.get("youth_development") or 10)
+    youth = int(manager.get("youth_development") or 10)
     intake_count = 1 + level // 2 + int(campus_effects.get("academy_intake_bonus_count", 0))
     generation_key = f"world-day:{state.world_day}:intake:{state.academy_intake_sequence}"
     cohort = engine.generate_regens(
@@ -2320,6 +2362,10 @@ def academy_intake(session: Session, user_id: str, club_id: str) -> list[OwnerSq
         campus_intake_quality_pct=int(campus_effects.get("regen_intake_quality_pct", 0)),
         campus_ceiling_bonus=int(campus_effects.get("academy_ceiling_bonus", 0)),
     )
+    for regen in cohort:
+        personality = dict(regen.get("personality") or {})
+        personality["squad_status"] = "academy"
+        regen["personality"] = personality
     used_portrait_keys: set[str] = set()
     return [_add_regen(session, club_id, regen, used_portrait_keys=used_portrait_keys) for regen in cohort]
 
@@ -3436,6 +3482,11 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         "disclosures": disclosures(session, club_id),
         "ownership_group": group_label(session, user_id),
         "showroom": storytelling.get_club_showroom(session, user_id, club_id),
+        "onboarding_staff": {
+            role: note
+            for role, note in dict(facilities.get("_onboarding_staff") or {}).items()
+            if isinstance(note, dict)
+        },
         "executive_staff": get_club_staff(session, user_id, club_id).get("appointed_staff"),
         "staff_effects": get_club_staff(session, user_id, club_id).get("staff_effects"),
         "delegation_policy": get_club_staff(session, user_id, club_id).get("delegation_policy"),
@@ -3677,6 +3728,10 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
             appointed[r] = None if caretaker else manager
         else:
             appointed[r] = None
+
+    for r_key, st_val in list(appointed.items()):
+        if isinstance(st_val, dict):
+            appointed[r_key] = engine.apply_staff_influence(dict(st_val), r_key)
 
     staff_effects = engine.calculate_staff_effects(appointed)
     agenda_by_role = {

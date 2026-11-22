@@ -451,6 +451,7 @@ class OnboardingStaffRequest(BaseModel):
     use_default: bool = False
     profile_id: str | None = None
     manager_id: str | None = None
+    contract_years: int = 1
 
 
 @router.post("/clubs/{club_id}/onboarding/staff")
@@ -470,6 +471,7 @@ def appoint_onboarding_staff(
         body.use_default,
         body.profile_id,
         body.manager_id,
+        body.contract_years,
     )
 
 

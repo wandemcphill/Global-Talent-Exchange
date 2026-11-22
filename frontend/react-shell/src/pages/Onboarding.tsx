@@ -1063,6 +1063,55 @@ function seasonSalaryFan(raw: number) {
   return Math.max(1, Math.floor((amount * 35) / 100));
 }
 
+export function contractCharge(seasonSalary: number | null, years: number) {
+  const span = Math.max(1, Math.min(5, Math.floor(Number(years) || 1)));
+  const season = Math.max(0, Math.round(Number(seasonSalary) || 0));
+  return { years: span, total: season * span };
+}
+
+export function staffDevelopment(person: any, role: string) {
+  const rating = Number(person?.rating);
+  const derived =
+    Number.isFinite(rating) && rating > 0 ? Math.max(8, Math.min(20, Math.round(rating / 5))) : 10;
+  const filed = (key: string) => {
+    const value = Number(person?.[key]);
+    return Number.isFinite(value) && value > 0 ? Math.max(1, Math.min(20, Math.round(value))) : null;
+  };
+  if (role === "head_of_youth_development") {
+    const skill = filed("youth_development") ?? derived;
+    return {
+      skill,
+      label: "Youth development",
+      intakeBonus: Math.floor(skill / 4),
+      potentialBonus: Math.floor(skill / 3),
+    };
+  }
+  if (role === "general_manager") {
+    return {
+      skill: filed("negotiation") ?? derived,
+      label: "Negotiation",
+      commercial: filed("commercial_acumen") ?? derived,
+    };
+  }
+  const skill = filed("tactical_flexibility") ?? filed("tactical_quality") ?? derived;
+  return { skill, label: "Tactical flexibility" };
+}
+
+function namedAppointment(person: any) {
+  if (!person || person.use_default || person.is_default || person.is_vacant) return null;
+  const name = String(person.name || person.display_name || "").trim();
+  if (!name || name.toLowerCase() === "default") return null;
+  return { ...person, name };
+}
+
+function appointedFor(club: any, role: string) {
+  return (
+    namedAppointment(club?.executive_staff?.[role]) ||
+    namedAppointment(club?.staff?.[role]) ||
+    namedAppointment(club?.onboarding_staff?.[role])
+  );
+}
+
 const STAFF_ROLES = [
   {
     key: "first_team_manager",
@@ -1101,6 +1150,21 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<"rating" | "recommended">("recommended");
+  const [years, setYears] = useState(chosen?.contract_years || 1);
+  const chooseYears = (next: number) => {
+    const span = Math.max(1, Math.min(5, Math.floor(next) || 1));
+    setYears(span);
+    if (chosen && !chosen.use_default) {
+      const season = Number(chosen.season_salary ?? 0);
+      const priced = contractCharge(season, span);
+      onChoose({
+        ...chosen,
+        contract_years: priced.years,
+        salary: priced.total,
+        season_salary: season,
+      });
+    }
+  };
   useEffect(() => {
     const handle = window.setTimeout(() => setQuery(search.trim()), 280);
     return () => window.clearTimeout(handle);
@@ -1236,13 +1300,36 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
           <p className="mt-1 text-[11px] text-slate-500">
             You do not need to know a name. Highest rated people are listed first
             {philosophy ? `, and recommended ones fit ${String(philosophy).replace(/_/g, " ")}` : ""}.
+            Choose 1 to 5 years. The season salary is multiplied by those years and taken once, when
+            you agree the contract.
           </p>
         </div>
-        {chosen ? (
-          <Chip tone="emerald">{chosen.use_default ? "Default" : chosen.name}</Chip>
-        ) : (
-          <Chip>Not chosen</Chip>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          {chosen ? (
+            <Chip tone="emerald">
+              {chosen.use_default
+                ? "Default"
+                : `${chosen.name} · ${chosen.contract_years || years}y`}
+            </Chip>
+          ) : (
+            <Chip>Not chosen</Chip>
+          )}
+          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+            Years
+            <select
+              className="gx-input"
+              value={years}
+              onChange={(event) => chooseYears(Number(event.target.value))}
+              data-testid={`staff-years-${role.key}`}
+            >
+              {[1, 2, 3, 4, 5].map((span) => (
+                <option key={span} value={span}>
+                  {span} {span === 1 ? "year" : "years"}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
       <form
         className="mt-3 flex gap-2"
@@ -1290,12 +1377,24 @@ function StaffRolePicker({ clubId, role, chosen, onChoose, philosophy }: any) {
                 </p>
               ) : null}
               <p className="text-[11px] text-emerald-300">
-                {person.salary == null ? "Wage not filed" : `Season salary ${fmt(person.salary)} FAN`}
+                {person.salary == null
+                  ? "Wage not filed"
+                  : `${years} ${years === 1 ? "year" : "years"} · ${fmt(contractCharge(person.salary, years).total)} FAN, paid once`}
               </p>
             </div>
             <Btn
               variant="secondary"
-              onClick={() => onChoose({ ...person, use_default: false, role: role.key })}
+              onClick={() => {
+                const priced = contractCharge(person.salary, years);
+                onChoose({
+                  ...person,
+                  use_default: false,
+                  role: role.key,
+                  season_salary: person.salary,
+                  contract_years: priced.years,
+                  salary: priced.total,
+                });
+              }}
               data-testid={`choose-staff-${person.manager_id || person.profile_id}`}
             >
               Select
@@ -1355,10 +1454,11 @@ function ManagerStep({ clubId, onDone }: any) {
           use_default: Boolean(choice.use_default),
           manager_id: choice.manager_id,
           profile_id: choice.profile_id,
+          contract_years: choice.use_default ? 1 : choice.contract_years || 1,
         });
       }
       toast.success("Staff contracts are in place.");
-      refetch();
+      await refetch();
       onDone();
     } catch (e) {
       toast.error(errMsg(e));
@@ -1375,10 +1475,11 @@ function ManagerStep({ clubId, onDone }: any) {
     >
       <p className="mb-4 text-sm text-slate-300">
         A club needs a first-team manager, a general manager, and a head of youth development. They
-        are not bought. A named contract is paid in Fan Coin for the season. The 1,000 FAN launch
-        grant is a start and may not cover every role. Convert deposited or earned GTEX, or buy Fan
-        Coin, below. If the salary is more than you want to pay right now, use the default for that
-        role and hire a named person later.
+        are not bought. Choose 1 to 5 years for each named person. The season salary is multiplied
+        by those years and taken once, in Fan Coin, when you agree. The 1,000 FAN launch grant is a
+        start and may not cover every role. Convert deposited or earned GTEX, or buy Fan Coin,
+        below. If the salary is more than you want to pay right now, use the default for that role
+        and hire a named person later.
       </p>
       <div className="mb-4 grid gap-4">
         {STAFF_ROLES.map((role) => (
@@ -1395,7 +1496,7 @@ function ManagerStep({ clubId, onDone }: any) {
         ))}
       </div>
       <p className="mb-3 text-xs text-slate-400" data-testid="staff-salary-total">
-        Season salaries selected: <b className="text-white">{fmt(salaryDue)} FAN</b>. Fan Coin on
+        Contracts selected, paid once: <b className="text-white">{fmt(salaryDue)} FAN</b>. Fan Coin on
         hand, wallet plus club: <b className="text-white">{fanText(fanAvailable)}</b>. Each contract
         is paid from whichever of those balances can cover it.
       </p>
@@ -1417,7 +1518,7 @@ export function academyIntakeQuote(level: number) {
   const facilityLevel = Math.max(1, Math.floor(Number(level) || 1));
   return {
     level: facilityLevel,
-    cost: 1500 * facilityLevel,
+    cost: 200 * facilityLevel,
     minimumArrivals: 1 + Math.floor(facilityLevel / 2),
   };
 }
@@ -1438,20 +1539,25 @@ function filedLabel(value: unknown) {
 function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void }) {
   const { data: club, refetch } = useClub(clubId);
   const [busyIntake, setBusyIntake] = useState(false);
+  const [justScouted, setJustScouted] = useState<any[]>([]);
 
-  const youth = (club?.squad || []).filter(isAcademyListPlayer);
-  const appointed =
-    club?.executive_staff?.head_of_youth_development || club?.staff?.head_of_youth_development;
-  const hoydName =
-    appointed &&
-    !appointed.use_default &&
-    !appointed.is_default &&
-    !appointed.is_vacant &&
-    String(appointed.name || "").trim() &&
-    String(appointed.name).toLowerCase() !== "default"
-      ? String(appointed.name)
-      : "";
+  const fromClub = (club?.squad || []).filter(isAcademyListPlayer);
+  const youth = [...justScouted.filter(isAcademyListPlayer), ...fromClub].filter(
+    (player, index, all) => {
+      const key = String(player.id || player.name);
+      return all.findIndex((item) => String(item.id || item.name) === key) === index;
+    },
+  );
+  const appointed = appointedFor(club, "head_of_youth_development");
+  const hoydName = appointed?.name || "";
   const hoydRating = hoydName && appointed?.rating != null ? appointed.rating : null;
+  const hoydInfluence = appointed ? staffDevelopment(appointed, "head_of_youth_development") : null;
+  const hiredStaff = STAFF_ROLES.map((role) => {
+    const person = appointedFor(club, role.key);
+    return person
+      ? { role, person, influence: staffDevelopment(person, role.key) }
+      : { role, person: null, influence: null };
+  });
   const quote = academyIntakeQuote(club?.facilities?.academy?.level);
   const cashRaw = club?.economy?.cash_gtex ?? club?.health?.cash;
   const cash = cashRaw == null || cashRaw === "" ? null : Number(cashRaw);
@@ -1464,13 +1570,15 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
     setBusyIntake(true);
     try {
       const { data } = await api.post(`/owner/clubs/${clubId}/academy/intake`);
-      const added = Array.isArray(data?.regens) ? data.regens.length : 0;
+      const addedPlayers = Array.isArray(data?.regens) ? data.regens : [];
+      setJustScouted((current) => [...addedPlayers, ...current]);
+      const added = addedPlayers.length;
       toast.success(
         added
           ? `${added} youth player${added === 1 ? "" : "s"} added to the academy list.`
           : "Youth intake filed.",
       );
-      refetch();
+      await refetch();
     } catch (e) {
       toast.error(errMsg(e));
     } finally {
@@ -1508,19 +1616,38 @@ function AcademyStep({ clubId, onDone }: { clubId: string; onDone: () => void })
         </div>
       </div>
 
-      <div className="mb-4 flex items-start gap-3 rounded border border-white/10 bg-slate-950/40 p-3">
-        <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-300" />
-        <div>
-          <p className="text-sm font-semibold text-white">
-            {hoydName || "Default youth lead"}
-            {hoydRating != null ? ` · rating ${hoydRating}` : ""}
-          </p>
-          <p className="text-xs text-slate-400">
-            {hoydName
-              ? `${hoydName} is the appointed head of youth. Their development rating is one of the inputs when an intake is generated.`
-              : "No named head of youth is appointed. The default lead's development rating is used when an intake is generated."}
-          </p>
+      <div className="mb-4 rounded border border-white/10 bg-slate-950/40 p-3" data-testid="academy-staff">
+        <div className="flex items-start gap-3">
+          <Sprout size={16} className="mt-0.5 shrink-0 text-emerald-300" />
+          <div>
+            <p className="text-sm font-semibold text-white">
+              {hoydName || "Default youth lead"}
+              {hoydRating != null ? ` · rating ${hoydRating}` : ""}
+              {hoydInfluence ? ` · youth development ${hoydInfluence.skill}` : ""}
+            </p>
+            <p className="text-xs text-slate-400">
+              {hoydName && hoydInfluence
+                ? `${hoydName} is the appointed head of youth. Youth development ${hoydInfluence.skill} adds ${hoydInfluence.intakeBonus} to intake potential and ${hoydInfluence.potentialBonus} to the academy potential bonus.`
+                : "No named head of youth is appointed. The default lead's development rating of 10 is used when an intake is generated."}
+            </p>
+          </div>
         </div>
+        <ul className="mt-3 space-y-1 text-xs text-slate-300">
+          {hiredStaff.map(({ role, person, influence }) => (
+            <li key={role.key} data-testid={`academy-appointed-${role.key}`}>
+              {role.label}:{" "}
+              {person ? (
+                <span className="text-white">
+                  {person.name}
+                  {person.rating != null ? ` · rating ${person.rating}` : ""}
+                  {influence ? ` · ${influence.label} ${influence.skill}` : ""}
+                </span>
+              ) : (
+                <span className="text-slate-500">Default seat</span>
+              )}
+            </li>
+          ))}
+        </ul>
       </div>
 
       <div className="mb-4 space-y-3">

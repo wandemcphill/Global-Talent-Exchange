@@ -664,6 +664,65 @@ def calculate_staff_effects(appointed_staff: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _filled_skill(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    skill = int(value)
+    if skill <= 0:
+        return None
+    return max(1, min(20, skill))
+
+
+def apply_staff_influence(record: dict[str, Any] | None, role_key: str) -> dict[str, Any]:
+    """Attach a hired person's strength to the skill that role actually changes.
+
+    A named hire with only a rating still moves youth intake, negotiation,
+    or tactics. A vacant or default seat is left untouched, so the game keeps
+    using the default development rating of 10.
+    """
+    if not isinstance(record, dict):
+        return {}
+    if record.get("use_default") or record.get("is_default") or record.get("is_vacant"):
+        return record
+    name = str(record.get("name") or record.get("display_name") or "").strip()
+    if not name or name.lower() == "default":
+        return record
+    rating_raw = record.get("rating")
+    if rating_raw is None:
+        rating_raw = record.get("gsi")
+    rating = int(rating_raw) if isinstance(rating_raw, (int, float)) and not isinstance(rating_raw, bool) else None
+    if rating is None:
+        rarity = str(record.get("rarity") or "").strip().lower()
+        derived = {"legendary": 18, "elite_active": 16, "rare": 13, "popular": 11}.get(rarity, 10)
+    else:
+        derived = max(8, min(20, int(round(rating / 5))))
+    if rating is not None:
+        record["rating"] = rating
+    if role_key == "head_of_youth_development":
+        record["youth_development"] = _filled_skill(record.get("youth_development")) or derived
+    elif role_key == "general_manager":
+        record["negotiation"] = _filled_skill(record.get("negotiation")) or derived
+        record["commercial_acumen"] = _filled_skill(record.get("commercial_acumen")) or derived
+    elif role_key == "first_team_manager":
+        tactical = (
+            _filled_skill(record.get("tactical_flexibility"))
+            or _filled_skill(record.get("tactical_quality"))
+            or derived
+        )
+        record["tactical_flexibility"] = tactical
+        record["tactical_quality"] = _filled_skill(record.get("tactical_quality")) or tactical
+        traits = record.get("traits") or record.get("catalog_traits") or []
+        trait_names = {str(item).strip().lower() for item in traits} if isinstance(traits, list) else set()
+        record["youth_development"] = _filled_skill(record.get("youth_development")) or (
+            16 if "develops_young_players" in trait_names else max(8, derived - 2)
+        )
+    elif role_key == "chief_scout":
+        record["scouting_accuracy"] = _filled_skill(record.get("scouting_accuracy")) or derived
+    elif role_key == "medical_director":
+        record["medical_expertise"] = _filled_skill(record.get("medical_expertise")) or derived
+    return record
+
+
 def manager_profile(snapshot: dict[str, Any]) -> dict[str, Any]:
 
     manager_id = str(snapshot.get("manager_id") or snapshot.get("id") or "")

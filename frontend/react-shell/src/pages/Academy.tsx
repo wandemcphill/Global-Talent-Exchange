@@ -873,10 +873,25 @@ export default function Academy() {
             : clubPrestige >= 35
               ? 4
               : 5;
-  const youthHead = club.staff?.head_of_youth_development;
+  const youthHead =
+    club.executive_staff?.head_of_youth_development ||
+    club.staff?.head_of_youth_development ||
+    club.onboarding_staff?.head_of_youth_development;
   const youthHeadNamed = Boolean(
-    youthHead?.name && !youthHead?.is_default && youthHead?.manager_id !== "gtex-staff-coach",
+    youthHead?.name &&
+      !youthHead?.use_default &&
+      !youthHead?.is_default &&
+      !youthHead?.is_vacant &&
+      youthHead?.manager_id !== "gtex-staff-coach",
   );
+  const youthSkill = (() => {
+    if (!youthHeadNamed) return null;
+    const rating = Number(youthHead?.rating);
+    const derived =
+      Number.isFinite(rating) && rating > 0 ? Math.max(8, Math.min(20, Math.round(rating / 5))) : 10;
+    const filed = Number(youthHead?.youth_development);
+    return Number.isFinite(filed) && filed > 0 ? Math.max(1, Math.min(20, Math.round(filed))) : derived;
+  })();
   const hoydRating =
     youthHeadNamed && youthHead?.rating != null && youthHead?.rating !== ""
       ? Number(youthHead.rating)
@@ -977,6 +992,9 @@ export default function Academy() {
           </p>
           <p className="text-[11px] text-purple-200 mt-1">
             {youthHeadNamed ? youthHead.name : "No youth head appointed"}
+            {youthSkill == null
+              ? ""
+              : ` · development ${youthSkill} · intake +${Math.floor(youthSkill / 4)}`}
           </p>
         </div>
       </section>

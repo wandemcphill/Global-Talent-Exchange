@@ -9,7 +9,12 @@ import React, { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PaymentCallback from "./PaymentCallback";
-import Onboarding, { academyIntakeQuote, isAcademyListPlayer } from "./Onboarding";
+import Onboarding, {
+  academyIntakeQuote,
+  contractCharge,
+  isAcademyListPlayer,
+  staffDevelopment,
+} from "./Onboarding";
 
 let mockSearchParams = new URLSearchParams();
 let mockUser: any = {
@@ -269,8 +274,8 @@ describe("PaymentCallback and Onboarding grant/funding flows", () => {
 
 describe("academy list facts", () => {
   it("prices the intake from the academy facility level", () => {
-    expect(academyIntakeQuote(1)).toEqual({ level: 1, cost: 1500, minimumArrivals: 1 });
-    expect(academyIntakeQuote(3)).toEqual({ level: 3, cost: 4500, minimumArrivals: 2 });
+    expect(academyIntakeQuote(1)).toEqual({ level: 1, cost: 200, minimumArrivals: 1 });
+    expect(academyIntakeQuote(3)).toEqual({ level: 3, cost: 600, minimumArrivals: 2 });
   });
 
   it("lists academy players and leaves the senior squad off that list", () => {
@@ -279,5 +284,21 @@ describe("academy list facts", () => {
     expect(isAcademyListPlayer({ acquired_via: "academy", squad_status: "first_team" })).toBe(false);
     expect(isAcademyListPlayer({ is_regen: true, acquired_via: "share", squad_status: "first_team" })).toBe(false);
     expect(isAcademyListPlayer({ squad_status: "academy", promoted: true })).toBe(false);
+  });
+
+  it("multiplies the season salary by the chosen contract years", () => {
+    expect(contractCharge(267, 1)).toEqual({ years: 1, total: 267 });
+    expect(contractCharge(267, 4)).toEqual({ years: 4, total: 1068 });
+    expect(contractCharge(267, 9)).toEqual({ years: 5, total: 1335 });
+  });
+
+  it("turns a hired head of youth rating into the intake influence", () => {
+    expect(staffDevelopment({ name: "Rinat Akhmetov", rating: 98 }, "head_of_youth_development")).toEqual({
+      skill: 20,
+      label: "Youth development",
+      intakeBonus: 5,
+      potentialBonus: 6,
+    });
+    expect(staffDevelopment({ name: "Mats Kofi Silva", rating: 91 }, "general_manager").skill).toBe(18);
   });
 });
