@@ -12,10 +12,10 @@ from typing import Any, Iterable
 from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, Response
-from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response
+from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response, websocket_session
 from fastapi.utils import generate_unique_id, get_value_or_default
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.routing import compile_path, websocket_session
+from starlette.routing import compile_path
 
 from app.core.errors import (
     ApiError,

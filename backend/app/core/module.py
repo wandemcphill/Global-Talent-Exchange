@@ -9,9 +9,8 @@ from time import perf_counter
 from typing import Any, Callable
 
 from fastapi import APIRouter, FastAPI
-from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response
+from fastapi.routing import APIRoute, APIWebSocketRoute, get_websocket_app, request_response, websocket_session
 from fastapi.utils import get_value_or_default
-from starlette.routing import websocket_session
 
 from app.core.api_contract import register_versioned_route_aliases
 from app.core.container import ApplicationContext
