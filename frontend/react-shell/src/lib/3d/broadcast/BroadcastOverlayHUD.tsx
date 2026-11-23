@@ -94,6 +94,10 @@ export interface BroadcastOverlayHUDProps {
   onToggleMinimalHud?: () => void;
   isReplayActive?: boolean;
   onTriggerReplay?: () => void;
+  /** Suppress legacy inline lower-third / subtitle cards when an external FMCommentaryStrip is mounted. */
+  suppressInlineCommentary?: boolean;
+  /** Optional FM-style lower-third commentary strip slotted cleanly above the bottom HUD controls. */
+  commentaryStripNode?: React.ReactNode;
   className?: string;
 }
 
@@ -171,6 +175,8 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
   onToggleMinimalHud,
   isReplayActive = false,
   onTriggerReplay,
+  suppressInlineCommentary = false,
+  commentaryStripNode = null,
   className = "",
 }) => {
   const clockDisplay = useMemo(() => {
@@ -687,7 +693,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
           </div>
         )}
 
-        {eventPresentation && !bannerDismissed && (
+        {!suppressInlineCommentary && eventPresentation && !bannerDismissed && (
           <div
             data-testid="broadcast-event-banner"
             className="pointer-events-none max-w-md transform transition-all"
@@ -750,7 +756,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
         )}
 
         {/* Dynamic AI Commentary Subtitle Ticker */}
-        {commentaryCue && (
+        {!suppressInlineCommentary && commentaryCue && (
           <div
             data-testid="broadcast-commentary-ticker"
             className="pointer-events-none mx-auto max-w-xl rounded-xl border border-white/20 bg-slate-950/90 px-4 py-2 text-center shadow-xl backdrop-blur-md transition-all"
@@ -794,9 +800,11 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
       )}
 
       {/* =====================================================================
-          3. BOTTOM ROW: Minimap Radar, Player Callout & 6-Mode Camera Switcher
+          3. BOTTOM STACK: FM Lower-Third Commentary Strip + Radar & Camera Switcher
           ===================================================================== */}
-      <div className="flex flex-wrap items-end justify-between gap-3">
+      <div className="flex flex-col gap-2">
+        {commentaryStripNode}
+        <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex items-end gap-3">
           {/* Tactical Minimap Radar (105m x 68m pitch miniature) */}
           <div
@@ -892,6 +900,18 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
         <div className="pointer-events-auto flex flex-wrap items-center gap-1.5 rounded-xl border border-white/10 bg-slate-950/90 p-1.5 shadow-2xl backdrop-blur-md">
           {/* 6 Broadcast Camera Modes Switcher */}
           <div className="flex flex-wrap items-center gap-1">
+            <button
+              type="button"
+              data-testid="camera-mode-fm_director"
+              onClick={() => onSelectCameraMode("fm_director")}
+              className={`rounded-lg px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+                cameraMode === "fm_director"
+                  ? "bg-emerald-500 text-slate-950 shadow-sm"
+                  : "text-slate-300 hover:bg-white/10"
+              }`}
+            >
+              FM DIRECTOR
+            </button>
             <button
               type="button"
               data-testid="camera-mode-director_auto"
@@ -1039,6 +1059,7 @@ export const BroadcastOverlayHUD: React.FC<BroadcastOverlayHUDProps> = React.mem
             <Layers className="size-3.5" />
             <span>{is2DActive ? "3D BROADCAST" : "2D PITCH"}</span>
           </button>
+        </div>
         </div>
       </div>
     </div>

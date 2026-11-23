@@ -19,6 +19,7 @@ export type LiveCameraMode = "broadcast" | "tactical" | "action" | "goal_replay"
 
 export type ManualCameraMode =
   | "director_auto"
+  | "fm_director"
   | "broadcast_main"
   | "tactical_high"
   | "closeup_action"
@@ -98,9 +99,10 @@ export class CameraDirector {
   private fovVelocity = 0;
   private rollVelocity = 0;
 
-  // Ball velocity estimation & dead-zone state
+  // Ball velocity estimation, damped lead-ahead vector, & dead-zone state
   private lastBallPos3D: [number, number, number] | null = null;
   private estimatedBallVel3D: [number, number, number] = [0, 0, 0];
+  private dampedLeadVel3D: [number, number, number] = [0, 0, 0];
   private deadZoneAnchorX = 0;
   private readonly deadZoneRadiusM = 3.2;
 
@@ -124,7 +126,7 @@ export class CameraDirector {
       this.liveCameraMode = "action";
     } else if (mode === "replay_cam" || mode === "celebration_cam") {
       this.liveCameraMode = "goal_replay";
-    } else if (mode === "broadcast_main" || mode === "director_auto") {
+    } else if (mode === "broadcast_main" || mode === "director_auto" || mode === "fm_director") {
       this.liveCameraMode = "broadcast";
     }
   }
@@ -356,13 +358,22 @@ export class CameraDirector {
     }
     this.lastBallPos3D = [ballX, ballY, ballZ];
 
+    // Exponentially damped lead-ahead velocity so the camera glides smoothly into attacking space
+    // instead of jerking sharply when passes are deflected or possession flips.
+    const leadVelDamp = 1 - Math.exp(-3.4 * safeDelta);
+    this.dampedLeadVel3D = [
+      this.dampedLeadVel3D[0] + (this.estimatedBallVel3D[0] - this.dampedLeadVel3D[0]) * leadVelDamp,
+      this.dampedLeadVel3D[1] + (this.estimatedBallVel3D[1] - this.dampedLeadVel3D[1]) * leadVelDamp,
+      this.dampedLeadVel3D[2] + (this.estimatedBallVel3D[2] - this.dampedLeadVel3D[2]) * leadVelDamp,
+    ];
+
     // Predictive ball lead (0.5–1.0 seconds in direction of travel)
-    const leadSec = context?.leadTimeSec !== undefined ? clamp(context.leadTimeSec, 0.5, 1.0) : 0.65;
+    const leadSec = context?.leadTimeSec !== undefined ? clamp(context.leadTimeSec, 0.5, 1.0) : 0.72;
     const hasVelocityContext = Boolean(context?.ballVelocity3D);
-    const effectiveLeadSec = hasVelocityContext ? leadSec : Math.min(0.55, safeDelta < 0.25 ? 0.5 : 0);
-    const predictedBallX = clamp(ballX + this.estimatedBallVel3D[0] * effectiveLeadSec, -52.5, 52.5);
-    const predictedBallY = clamp(ballY + this.estimatedBallVel3D[1] * (effectiveLeadSec * 0.35), 0, 18);
-    const predictedBallZ = clamp(ballZ + this.estimatedBallVel3D[2] * effectiveLeadSec, -34, 34);
+    const effectiveLeadSec = hasVelocityContext ? leadSec : Math.min(0.6, safeDelta < 0.25 ? 0.55 : 0);
+    const predictedBallX = clamp(ballX + this.dampedLeadVel3D[0] * effectiveLeadSec, -52.5, 52.5);
+    const predictedBallY = clamp(ballY + this.dampedLeadVel3D[1] * (effectiveLeadSec * 0.35), 0, 18);
+    const predictedBallZ = clamp(ballZ + this.dampedLeadVel3D[2] * effectiveLeadSec, -34, 34);
 
     // Tactical framing zone (ball carrier + nearest support runners + defensive line)
     let framedX = predictedBallX;
@@ -400,7 +411,26 @@ export class CameraDirector {
     }
 
     // 1. Check if user selected manual camera override
-    if (this.manualMode === "broadcast_main") {
+    if (this.manualMode === "fm_director") {
+      // Lean FM Director Camera: elevated 2.5D/3D tactical TV perspective that leads smoothly
+      // into attacking space ahead of the ball with gentle dynamic box framing.
+      const attackZoneBias = clamp((Math.abs(framedX) - 22) / 28, 0, 1);
+      const attackingLead = clamp(this.dampedLeadVel3D[0] * 0.32, -7.5, 7.5);
+      const aimX = clamp(framedX + attackingLead, -46, 46);
+      const trackingX = clamp(this.deadZoneAnchorX * 0.62 + attackingLead * 0.35, -36, 36);
+      this.targetPose = {
+        position: [
+          trackingX,
+          21.5 - attackZoneBias * 4.5,
+          47.5 - attackZoneBias * 6.5,
+        ],
+        target: [aimX * 0.92, Math.max(0.65, predictedBallY * 0.35), framedZ * 0.52],
+        fov: 34.5 - attackZoneBias * 3.0 + tacticalFovBonus * 0.12,
+        roll: 0,
+        activeShotPreset: attackZoneBias > 0.55 ? "attack_push" : "broadcast",
+        liveMode: "broadcast",
+      };
+    } else if (this.manualMode === "broadcast_main") {
       const trackingX = clamp(this.deadZoneAnchorX * 0.55, -38, 38);
       this.targetPose = {
         position: [trackingX, 18.5, 52],

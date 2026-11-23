@@ -602,7 +602,7 @@ export class PlayerMotionTracker {
 
   constructor(options?: { holdWindowMs?: number; actionHysteresisMs?: number }) {
     this.holdWindowMs = options?.holdWindowMs ?? 380;
-    this.actionHysteresisMs = options?.actionHysteresisMs ?? 120;
+    this.actionHysteresisMs = options?.actionHysteresisMs ?? 180;
   }
 
   update(
@@ -675,25 +675,26 @@ export class PlayerMotionTracker {
     const stepMeters = Math.hypot(dx * 105, dy * 68);
     const dtSampleSec = Math.max(0.016, (nowMs - existing.sampleTimeMs) / 1000);
 
-    if (distance > 0.00035) {
+    if (distance > 0.00008) {
       const rawVx = dx / dtSampleSec;
       const rawVy = (y - existing.sampleY) / dtSampleSec;
-      existing.vx = existing.vx * 0.3 + rawVx * 0.7;
-      existing.vy = existing.vy * 0.3 + rawVy * 0.7;
+      const velBlend = 1 - Math.exp(-Math.min(0.25, dtSampleSec) * 11);
+      existing.vx = existing.vx + (rawVx - existing.vx) * velBlend;
+      existing.vy = existing.vy + (rawVy - existing.vy) * velBlend;
 
       const measuredSpeed = Math.min(0.08, (distance / dtSampleSec) * 0.1);
       existing.previousSpeed = existing.speed;
-      existing.speed = existing.speed > 0.001 ? existing.speed * 0.35 + measuredSpeed * 0.65 : measuredSpeed;
+      existing.speed = existing.speed > 0.001 ? existing.speed + (measuredSpeed - existing.speed) * Math.max(0.35, velBlend) : measuredSpeed;
       existing.acceleration = (existing.speed - existing.previousSpeed) / dtSampleSec;
 
-      if (distance > 0.0007) {
+      if (distance > 0.0002) {
         const targetFacing = Math.atan2(dy, dx);
         const delta = normalizeAngle(targetFacing - existing.facing);
-        const turnRate = Math.min(1, dtSampleSec * 12);
+        const turnRate = 1 - Math.exp(-Math.min(0.25, dtSampleSec) * 10);
         existing.facing = normalizeAngle(existing.facing + delta * turnRate);
         existing.facingDelta = delta;
       } else {
-        existing.facingDelta *= 0.75;
+        existing.facingDelta *= 0.78;
       }
 
       existing.sampleX = x;
@@ -746,7 +747,7 @@ export class PlayerMotionTracker {
     existing.direction = stableFacingDirection(existing.facing, existing.direction);
 
     const coastMeters = Math.hypot(existing.vx * 105, existing.vy * 68) * dtFrameSec;
-    const covered = distance > 0.00035 ? stepMeters : coastMeters;
+    const covered = distance > 0.00008 ? stepMeters : coastMeters;
     existing.gaitPhase = (existing.gaitPhase + gaitPhaseAdvance(existing.action, covered, dtFrameSec, cadenceVariance)) % ATLAS_FRAMES;
     existing.frame = Math.floor(existing.gaitPhase) % ATLAS_FRAMES;
 

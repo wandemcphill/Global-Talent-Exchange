@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
 import { MixamoKitFootballer } from "@/lib/3d/broadcast/MixamoKitFootballer";
@@ -11,6 +11,15 @@ import { CampusBuilder3D } from "@/components/gtex/CampusBuilder3D";
 import { ClubOperationsCentre3D } from "@/components/gtex/ClubOperationsCentre3D";
 import type { ClubOperationsHubPayload, OperationsHubDestination } from "@/lib/ownerBriefing";
 import type { SpectatorSafeMatchView } from "@/lib/3d/broadcast/spectatorContract";
+import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
+import { MatchTimelineScrubber, buildTimelineModel } from "@/pages/match-center/MatchTimelineScrubber";
+import { KitPlayerPortrait } from "@/components/gtex/KitPlayerPortrait";
+import {
+  EditorialLineupPosterCard,
+  TunnelStartingXICard,
+  type MatchdayTeamSheet,
+} from "@/components/gtex/MatchdayLineupBroadcast";
+import type { PitchCameraMode } from "@/match2d/OrthographicPitch";
 
 const HEADQUARTERS_PREVIEW: ClubOperationsHubPayload = headquartersPreview();
 
@@ -170,14 +179,264 @@ function KitCloseUp() {
   );
 }
 
+function LiveFpsPill() {
+  const [fps, setFps] = useState<number | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    let frames = 0;
+    let windowStart = performance.now();
+    const tick = (now: number) => {
+      frames += 1;
+      const elapsed = now - windowStart;
+      if (elapsed >= 500) {
+        setFps(Math.round((frames * 1000) / elapsed));
+        frames = 0;
+        windowStart = now;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, []);
+  return (
+    <span
+      data-testid="visual-review-live-fps"
+      className="ml-auto rounded border border-emerald-400/35 bg-emerald-500/15 px-2 py-0.5 font-mono text-[10px] font-black uppercase tracking-wider text-emerald-300"
+    >
+      {fps !== null ? `${fps} FPS` : "MEASURING..."}
+    </span>
+  );
+}
+
+function Match2DReviewStage({ match }: { match: SpectatorSafeMatchView | null }) {
+  const [cameraMode, setCameraMode] = useState<PitchCameraMode>("2d");
+  const [activePanel, setActivePanel] = useState<"pitch" | "lineups">("pitch");
+  const [timeSeconds, setTimeSeconds] = useState(12);
+  const [paused, setPaused] = useState(false);
+  const [playbackSpeed, setPlaybackSpeed] = useState<1 | 2 | 3 | 4>(2);
+
+  useEffect(() => {
+    if (paused) return undefined;
+    const id = window.setInterval(() => {
+      setTimeSeconds((prev) => {
+        const next = prev + 0.25 * playbackSpeed;
+        return next >= 298 ? 2 : next;
+      });
+    }, 250);
+    return () => window.clearInterval(id);
+  }, [paused, playbackSpeed]);
+
+  const homeName = match?.home_team?.team_name || "EKITI FC";
+  const awayName = match?.away_team?.team_name || "Lagos Titans AI";
+  const homeColor = match?.home_team?.primary_color || "#123C73";
+  const awayColor = match?.away_team?.primary_color || "#F5F7FA";
+  const timelineModel = useMemo(
+    () =>
+      buildTimelineModel(
+        (match?.frames || []).map((f: any) => ({
+          timeSeconds: Number(f.time_seconds ?? f.timeSeconds ?? 0),
+          phase: f.phase,
+          possession_side: f.possession_side,
+          pressure_index: f.pressure_index,
+          ball: f.ball,
+          home_attacks_right: f.home_attacks_right,
+        })),
+        (match?.events as any) || [],
+        300,
+      ),
+    [match],
+  );
+
+  if (!match) {
+    return <div className="grid h-screen place-items-center text-sm text-slate-400">Loading 2D match review...</div>;
+  }
+
+  const firstPlayers = (match.frames?.[0] as any)?.players || [];
+  const toSheet = (side: "home" | "away", clubName: string, formation: string): MatchdayTeamSheet => {
+    const sidePlayers = firstPlayers
+      .filter((p: any) => String(p.side || "").toLowerCase() === side)
+      .slice(0, 11);
+    const starters = sidePlayers.map((p: any, idx: number) => ({
+      player_id: String(p.player_id || `${side}-${idx}`),
+      full_name: String(p.player_name || p.name || `${clubName.split(" ")[0]} #${p.shirt_number || idx + 1}`),
+      short_name: String(p.player_name || p.name || `Player ${p.shirt_number || idx + 1}`).split(" ").slice(-1)[0],
+      shirt_number: Number(p.shirt_number || idx + 1),
+      position: String(p.role || (idx === 0 ? "GK" : idx <= 4 ? "DF" : idx <= 7 ? "MF" : "FW")),
+      rating: 82 + (idx % 5),
+      portrait_url: null,
+      is_captain: idx === 3,
+      is_signed: true,
+    }));
+    const hero = starters[3] || starters[0];
+    return {
+      clubId: side,
+      clubName,
+      formation,
+      starters,
+      substitutes: [
+        { player_id: `${side}-sub-1`, full_name: "Tunde Adeyemi", short_name: "Adeyemi", shirt_number: 13, position: "GK", rating: 78, portrait_url: null },
+        { player_id: `${side}-sub-2`, full_name: "Chuka Eze", short_name: "Eze", shirt_number: 15, position: "MF", rating: 80, portrait_url: null },
+        { player_id: `${side}-sub-3`, full_name: "Kola Balogun", short_name: "Balogun", shirt_number: 18, position: "FW", rating: 81, portrait_url: null },
+      ],
+      hero,
+      avgRating: 84,
+      signedStarterCount: starters.length,
+    };
+  };
+
+  const homeSheet = toSheet("home", homeName, match.home_team?.formation || "4-3-3");
+  const awaySheet = toSheet("away", awayName, match.away_team?.formation || "4-3-3");
+
+  return (
+    <main className="min-h-screen bg-[#07111c] px-4 py-2.5 text-white">
+      <div className="mx-auto max-w-5xl space-y-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <h1 className="text-sm font-black uppercase tracking-widest text-emerald-300">
+              GTEX 2D / 2.5D Broadcast &amp; Lineup Verification
+            </h1>
+            <div className="flex items-center gap-1 rounded border border-white/10 bg-slate-900/90 p-0.5">
+              <button
+                type="button"
+                data-testid="review-tab-pitch"
+                onClick={() => setActivePanel("pitch")}
+                className={`rounded px-2.5 py-0.5 text-[11px] font-black uppercase ${
+                  activePanel === "pitch" ? "bg-emerald-500/25 text-emerald-200" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Pitch
+              </button>
+              <button
+                type="button"
+                data-testid="review-tab-lineups"
+                onClick={() => setActivePanel("lineups")}
+                className={`rounded px-2.5 py-0.5 text-[11px] font-black uppercase ${
+                  activePanel === "lineups" ? "bg-emerald-500/25 text-emerald-200" : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Lineups
+              </button>
+            </div>
+          </div>
+          {activePanel === "pitch" && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPaused((p) => !p)}
+                className="rounded border border-white/15 bg-slate-900 px-3 py-1 text-xs font-black uppercase text-slate-200 hover:text-white"
+              >
+                {paused ? "Play" : "Pause"}
+              </button>
+              <div className="flex items-center gap-1 rounded border border-white/10 bg-slate-900/90 p-0.5">
+                {([1, 2, 3, 4] as const).map((spd) => (
+                  <button
+                    key={spd}
+                    type="button"
+                    data-testid={`review-speed-${spd}x`}
+                    onClick={() => setPlaybackSpeed(spd)}
+                    className={`rounded px-2 py-0.5 font-mono text-[11px] font-black ${
+                      playbackSpeed === spd
+                        ? "bg-emerald-500/25 text-emerald-200"
+                        : "text-slate-400 hover:text-white"
+                    }`}
+                  >
+                    {spd}x
+                  </button>
+                ))}
+              </div>
+              {(["2d", "2.5d"] as PitchCameraMode[]).map((mode) => (
+                <button
+                  key={mode}
+                  type="button"
+                  data-testid={`review-mode-${mode}`}
+                  onClick={() => setCameraMode(mode)}
+                  className={`rounded border px-3 py-1 text-xs font-black uppercase ${
+                    cameraMode === mode
+                      ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                      : "border-white/15 bg-slate-900 text-slate-300"
+                  }`}
+                >
+                  {mode.toUpperCase()}
+                </button>
+              ))}
+              <LiveFpsPill />
+            </div>
+          )}
+        </div>
+
+        {activePanel === "pitch" ? (
+          <div className="space-y-3">
+            <Pitch2DView
+              matchId="visual-review-match2d"
+              frames={match.frames as any}
+              timeSeconds={timeSeconds}
+              events={match.events as any}
+              homeName={homeName}
+              awayName={awayName}
+              homeColor={homeColor}
+              awayColor={awayColor}
+              homeScore={2}
+              awayScore={1}
+              clockMinute={Math.floor((timeSeconds / 300) * 90)}
+              cameraMode={cameraMode}
+              onCameraModeChange={setCameraMode}
+              isPaused={paused}
+              playbackSpeed={playbackSpeed}
+              durationSeconds={300}
+            />
+            <MatchTimelineScrubber
+              model={timelineModel}
+              currentSeconds={timeSeconds}
+              readOnly={false}
+              homeColor={homeColor}
+              awayColor={awayColor}
+              onSeek={(s) => setTimeSeconds(s)}
+            />
+          </div>
+        ) : (
+          <div className="space-y-4 pt-2" data-testid="review-lineups-section">
+            <KitPlayerPortrait
+              shirtNumber={homeSheet.hero?.shirt_number || 4}
+              playerName={homeSheet.hero?.full_name || "Captain"}
+              primaryColor={homeColor}
+            />
+            <div className="grid gap-5 xl:grid-cols-2">
+              <TunnelStartingXICard
+                sheet={homeSheet}
+                opponentName={awayName}
+                competitionName="GTEX MATCHDAY LIVE"
+                roundLabel="MATCHDAY 1"
+                kitColor={homeColor}
+              />
+              <EditorialLineupPosterCard
+                sheet={awaySheet}
+                venueName={`${homeName} Arena`}
+                matchdayNumber={1}
+                kitColor={awayColor}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
 export default function VisualReviewPage() {
   const [match, setMatch] = useState<SpectatorSafeMatchView | null>(null);
   const only = new URLSearchParams(window.location.search).get("scene");
+  const [activeScene, setActiveScene] = useState<
+    "broadcast" | "match2d" | "kit" | "press" | "gift" | "takeover" | "showroom"
+  >(only === "match2d" ? "match2d" : "broadcast");
 
   useEffect(() => {
-    if (only) return;
+    if (only && only !== "match2d") return;
     void loadFiveMinuteShowcaseFixture(300).then(setMatch);
   }, [only]);
+
+  if (only === "match2d") {
+    return <Match2DReviewStage match={match} />;
+  }
 
   if (only === "arrival") {
     return (
@@ -287,76 +546,125 @@ export default function VisualReviewPage() {
     );
   }
 
+  const scenes: Array<{ id: typeof activeScene; label: string }> = [
+    { id: "broadcast", label: "3D Broadcast" },
+    { id: "match2d", label: "2D / 2.5D Match" },
+    { id: "kit", label: "Kit Close-Up" },
+    { id: "press", label: "Press Room" },
+    { id: "gift", label: "Gift Engine" },
+    { id: "takeover", label: "Takeover" },
+    { id: "showroom", label: "Showroom" },
+  ];
+
+  // Mount only ONE WebGL stage at a time so concurrent RAF contexts never contend for GPU frame time.
   return (
     <main className="min-h-screen bg-slate-950 text-white">
-      <section id="broadcast" className="h-screen">
-        {match ? (
-          <MatchPitchLiveScene
-            matchViewState={match}
-            isLive
-            qualityTier="high"
-            weatherPreset="clear_night"
-            playbackSpeed={1}
-            isPaused={false}
-            className="h-screen"
-          />
-        ) : (
-          <div className="grid h-screen place-items-center text-sm text-slate-400">Loading the showcase match</div>
-        )}
-      </section>
-
-      <section id="kit" className="border-t border-white/10 bg-slate-950">
-        <KitCloseUp />
-      </section>
-
-      <section id="press" className="border-t border-white/10 bg-slate-950 p-4">
-        <PressRoomStage clubName="Harbour Athletic" scoreLine="FT 2 - 1" primaryColor="#C8102E" />
-        <div className="mt-3 rounded border border-white/10 bg-slate-900 p-3 text-sm text-slate-200">
-          <p className="text-[11px] font-bold text-sky-300">Matchday Wire</p>
-          <p className="mt-1 italic">How do you see the second half after the equaliser?</p>
-          <button type="button" className="mt-2 rounded border border-white/10 px-3 py-2 text-xs">
-            We kept the same shape and asked the wide players to arrive earlier.
+      <nav className="sticky top-0 z-30 flex flex-wrap items-center gap-1.5 border-b border-white/10 bg-slate-950/95 px-4 py-2 backdrop-blur">
+        <span className="mr-2 text-[10px] font-black uppercase tracking-widest text-emerald-300">
+          GTEX Visual Review
+        </span>
+        {scenes.map((scene) => (
+          <button
+            key={scene.id}
+            type="button"
+            onClick={() => setActiveScene(scene.id)}
+            className={`rounded border px-2.5 py-1 text-[11px] font-bold uppercase tracking-wider transition-colors ${
+              activeScene === scene.id
+                ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                : "border-white/10 bg-slate-900 text-slate-300 hover:text-white"
+            }`}
+          >
+            {scene.label}
           </button>
-        </div>
-      </section>
+        ))}
+        <LiveFpsPill />
+      </nav>
 
-      <section id="gift" className="relative h-[640px] border-t border-white/10 bg-black">
-        <CinematicGiftingEngine
-          soundEnabled={false}
-          activeGift={{
-            id: "review-coach",
-            gift_code: "club_coach",
-            gift_name: "Club coach",
-            sender: "Review",
-            amount: 1,
-            rarity: "legendary",
-            duration_ms: 600000,
-          }}
-        />
-      </section>
+      {activeScene === "broadcast" && (
+        <section id="broadcast" className="h-[calc(100vh-44px)]">
+          {match ? (
+            <MatchPitchLiveScene
+              matchViewState={match}
+              isLive
+              qualityTier="medium"
+              stadiumTier={2}
+              weatherPreset="clear_night"
+              initialCameraMode="fm_director"
+              bloomEnabled={false}
+              playbackSpeed={2}
+              isPaused={false}
+              className="h-full"
+            />
+          ) : (
+            <div className="grid h-full place-items-center text-sm text-slate-400">Loading the showcase match</div>
+          )}
+        </section>
+      )}
 
-      <section id="takeover" className="border-t border-white/10 bg-[#07111c] p-4">
-        <GtexSceneViewport
-          sceneId="club_takeover"
-          clubName="Harbour Athletic"
-          primaryColor="#0f766e"
-          secondaryColor="#d4a24c"
-          title="The club is yours"
-          badgeText="OWNERSHIP"
-        />
-      </section>
+      {activeScene === "match2d" && <Match2DReviewStage match={match} />}
 
-      <section id="showroom" className="h-[720px] border-t border-white/10 bg-black">
-        <PrestigeShowroomScene
-          assetName="Executive convoy"
-          assetCategory="vehicle"
-          meshArchetype="luxury_suv"
-          modelName="Executive SUV"
-          clubName="Harbour Athletic"
-          primaryColor="#C8102E"
-          compact={false}
-        />
-      </section>
+      {activeScene === "kit" && (
+        <section id="kit" className="bg-slate-950">
+          <KitCloseUp />
+        </section>
+      )}
+
+      {activeScene === "press" && (
+        <section id="press" className="bg-slate-950 p-4">
+          <PressRoomStage clubName="Harbour Athletic" scoreLine="FT 2 - 1" primaryColor="#C8102E" />
+          <div className="mt-3 rounded border border-white/10 bg-slate-900 p-3 text-sm text-slate-200">
+            <p className="text-[11px] font-bold text-sky-300">Matchday Wire</p>
+            <p className="mt-1 italic">How do you see the second half after the equaliser?</p>
+            <button type="button" className="mt-2 rounded border border-white/10 px-3 py-2 text-xs">
+              We kept the same shape and asked the wide players to arrive earlier.
+            </button>
+          </div>
+        </section>
+      )}
+
+      {activeScene === "gift" && (
+        <section id="gift" className="relative h-[640px] bg-black">
+          <CinematicGiftingEngine
+            soundEnabled={false}
+            activeGift={{
+              id: "review-coach",
+              gift_code: "club_coach",
+              gift_name: "Club coach",
+              sender: "Review",
+              amount: 1,
+              rarity: "legendary",
+              duration_ms: 600000,
+            }}
+          />
+        </section>
+      )}
+
+      {activeScene === "takeover" && (
+        <section id="takeover" className="bg-[#07111c] p-4">
+          <GtexSceneViewport
+            sceneId="club_takeover"
+            clubName="Harbour Athletic"
+            primaryColor="#0f766e"
+            secondaryColor="#d4a24c"
+            title="The club is yours"
+            badgeText="OWNERSHIP"
+          />
+        </section>
+      )}
+
+      {activeScene === "showroom" && (
+        <section id="showroom" className="h-[720px] bg-black">
+          <PrestigeShowroomScene
+            assetName="Executive convoy"
+            assetCategory="vehicle"
+            meshArchetype="luxury_suv"
+            modelName="Executive SUV"
+            clubName="Harbour Athletic"
+            primaryColor="#C8102E"
+            compact={false}
+          />
+        </section>
+      )}
     </main>
   );
 }

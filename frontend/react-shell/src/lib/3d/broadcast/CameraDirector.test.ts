@@ -136,4 +136,34 @@ describe("CameraDirector", () => {
     expect(director.triggerCameraShake("woodwork", 0.5)).toBe(true);
     expect(director.getShakeIntensity()).toBeGreaterThan(0);
   });
+
+  test("FM Director camera mode leads smoothly into attacking space without single-frame velocity jerks", () => {
+    const fmDir = new CameraDirector();
+    fmDir.setManualMode("fm_director");
+    expect(fmDir.getManualMode()).toBe("fm_director");
+
+    // Settle on midfield buildup moving right
+    let prevPose = fmDir.update(0.5, "broadcast", [5, 0, 0], null, {
+      ballVelocity3D: [10, 0, 2],
+    });
+    for (let i = 0; i < 20; i++) {
+      prevPose = fmDir.update(0.05, "broadcast", [5 + i * 0.4, 0, 0], null, {
+        ballVelocity3D: [10, 0, 2],
+      });
+    }
+    // Elevated FM gantry framing leading into attacking space ahead of the ball
+    expect(prevPose.position[1]).toBeGreaterThan(17);
+    expect(prevPose.position[1]).toBeLessThan(28);
+    expect(prevPose.target[0]).toBeGreaterThan(13);
+
+    // Sudden turnover velocity reversal must NOT jerk camera target by >2m in a single 16ms frame
+    const nextPose = fmDir.update(0.016, "broadcast", [13, 0, 0], null, {
+      ballVelocity3D: [-18, 0, -6],
+    });
+    const jumpDist = Math.hypot(
+      nextPose.target[0] - prevPose.target[0],
+      nextPose.target[2] - prevPose.target[2],
+    );
+    expect(jumpDist).toBeLessThan(1.5);
+  });
 });

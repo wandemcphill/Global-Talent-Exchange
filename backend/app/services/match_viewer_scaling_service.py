@@ -603,6 +603,7 @@ class MatchViewerScalingService:
                     side=left.side if blend_left else right.side,
                     shirt_number=left.shirt_number if blend_left else right.shirt_number,
                     label=left.label if blend_left else right.label,
+                    player_name=(left.player_name or right.player_name) if blend_left else (right.player_name or left.player_name),
                     role=left.role if blend_left else right.role,
                     line=left.line if blend_left else right.line,
                     state=left.state if blend_left else right.state,

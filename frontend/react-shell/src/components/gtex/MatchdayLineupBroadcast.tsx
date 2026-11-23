@@ -106,6 +106,40 @@ const EDITORIAL_ACCENTS = [
   { wordmark: "#8F7CC4", subText: "#6E5AA6", badgeBg: "#8F7CC4" }, // Royal violet editorial
 ];
 
+export interface PresentationPlayerLike {
+  player_id?: string | null;
+  player_name?: string | null;
+  shirt_number?: number | null;
+  role?: string | null;
+  line?: string | null;
+  rating?: number | null;
+}
+
+export interface PresentationTeamLike {
+  team_id?: string;
+  team_name?: string;
+  formation?: string;
+  primary_color?: string | null;
+  starters?: PresentationPlayerLike[];
+  bench?: PresentationPlayerLike[];
+}
+
+function sanitizeLineupName(rawName: unknown, shirtNumber: number, role?: string): string {
+  const cleaned = String(rawName || "").trim();
+  const lowered = cleaned.toLowerCase();
+  if (
+    cleaned &&
+    lowered !== "unnamed" &&
+    lowered !== "unknown" &&
+    cleaned !== "?" &&
+    !/^#?\d+$/.test(cleaned)
+  ) {
+    return cleaned;
+  }
+  const pos = posShort(role || "") || (shirtNumber === 1 ? "GK" : "Squad");
+  return shirtNumber > 0 ? `${pos} #${shirtNumber}` : `${pos} Player`;
+}
+
 function buildTeamSheetFromRoster(opts: {
   clubId: string;
   clubName: string;
@@ -116,9 +150,11 @@ function buildTeamSheetFromRoster(opts: {
   lineupMode: "strongest" | "rotate";
   useSmartSuggestion: boolean;
   exactFiled?: boolean;
+  presentationTeam?: PresentationTeamLike | null;
   pitchPlayers?: Array<{
     player_id?: string;
     name?: string;
+    player_name?: string;
     shirt_number?: number;
     role?: string;
     stamina_pct?: number | null;
@@ -135,6 +171,7 @@ function buildTeamSheetFromRoster(opts: {
     lineupMode,
     useSmartSuggestion,
     exactFiled = false,
+    presentationTeam,
     pitchPlayers,
   } = opts;
 
@@ -237,20 +274,71 @@ function buildTeamSheetFromRoster(opts: {
 
   const signedStarterCount = starters.length;
 
-  // A live opponent with no owner book uses the names already on the pitch.
-  if (starters.length === 0 && pitchPlayers && pitchPlayers.length > 0) {
-    pitchPlayers.slice(0, 11).forEach((pp, idx) => {
-      const fullName = pp.name || "Unnamed";
+  // Build presentation lookup for fast hydration by id or shirt number
+  const presStarterList = Array.isArray(presentationTeam?.starters) ? presentationTeam.starters : [];
+  const presBenchList = Array.isArray(presentationTeam?.bench) ? presentationTeam.bench : [];
+  const presById = new Map<string, PresentationPlayerLike>();
+  const presByShirt = new Map<number, PresentationPlayerLike>();
+  [...presStarterList, ...presBenchList].forEach((pp) => {
+    if (pp?.player_id) presById.set(String(pp.player_id), pp);
+    if (pp?.shirt_number) presByShirt.set(Number(pp.shirt_number), pp);
+  });
+
+  // 1. Hydrate from authoritative match broadcast presentation_package when owner/club roster had no filed XI
+  if (starters.length === 0 && presStarterList.length > 0) {
+    presStarterList.slice(0, 11).forEach((pp, idx) => {
+      const pid = String(pp.player_id || `pres-${clubId}-${idx}`);
+      const rosterMatch = byId.get(pid);
+      const shirt = Number(pp.shirt_number || DEFAULT_NUMBERS[idx] || idx + 1);
+      const role = String(pp.role || rosterMatch?.position || (idx === 0 ? "GK" : idx <= 4 ? "DEF" : idx <= 7 ? "MID" : "FWD"));
+      const fullName = sanitizeLineupName(rosterMatch?.player_name || pp.player_name, shirt, role);
+      const ratingRaw = rosterMatch?.rating ?? (pp.rating && pp.rating <= 10 ? Math.round(pp.rating * 10) : pp.rating);
       starters.push({
-        player_id: pp.player_id || `live-${clubId}-${idx}`,
+        player_id: pid,
         full_name: fullName,
         short_name: extractBroadcastSurname(fullName),
-        shirt_number: pp.shirt_number || DEFAULT_NUMBERS[idx] || idx + 1,
-        position: pp.role || (idx === 0 ? "GK" : idx <= 4 ? "DEF" : idx <= 7 ? "MID" : "FWD"),
-        rating: 79 + ((seed + idx) % 7),
-        portrait_url: null,
-        is_signed: false,
+        shirt_number: shirt,
+        position: posShort(role),
+        rating: ratingRaw && Number.isFinite(Number(ratingRaw)) ? Math.round(Number(ratingRaw)) : 79 + ((seed + idx) % 7),
+        portrait_url: rosterMatch
+          ? sanitizeRealPlayerImage(rosterMatch.portrait_url, Boolean(rosterMatch.is_regen))
+          : null,
+        is_signed: Boolean(rosterMatch),
+        is_regen: Boolean(rosterMatch?.is_regen),
       });
+      usedIds.add(pid);
+    });
+  }
+
+  // 2. If still empty on a live/replay match with pitch players, match against loaded roster & presentation first
+  if (starters.length === 0 && pitchPlayers && pitchPlayers.length > 0) {
+    pitchPlayers.slice(0, 11).forEach((pp, idx) => {
+      const pid = String(pp.player_id || `live-${clubId}-${idx}`);
+      const shirt = Number(pp.shirt_number || DEFAULT_NUMBERS[idx] || idx + 1);
+      const rosterMatch = byId.get(pid);
+      const presMatch = presById.get(pid) || presByShirt.get(shirt);
+      const role = String(pp.role || rosterMatch?.position || presMatch?.role || (idx === 0 ? "GK" : idx <= 4 ? "DEF" : idx <= 7 ? "MID" : "FWD"));
+      const fullName = sanitizeLineupName(
+        rosterMatch?.player_name || presMatch?.player_name || pp.player_name || pp.name,
+        shirt,
+        role,
+      );
+      starters.push({
+        player_id: pid,
+        full_name: fullName,
+        short_name: extractBroadcastSurname(fullName),
+        shirt_number: shirt,
+        position: posShort(role),
+        rating:
+          rosterMatch?.rating != null
+            ? Math.round(Number(rosterMatch.rating))
+            : 79 + ((seed + idx) % 7),
+        portrait_url: rosterMatch
+          ? sanitizeRealPlayerImage(rosterMatch.portrait_url, Boolean(rosterMatch.is_regen))
+          : null,
+        is_signed: Boolean(rosterMatch),
+      });
+      usedIds.add(pid);
     });
   }
 
@@ -259,17 +347,29 @@ function buildTeamSheetFromRoster(opts: {
     for (const pp of pitchPlayers) {
       if (starters.length >= 11) break;
       if (pp.player_id && starters.some((starter) => starter.player_id === pp.player_id)) continue;
-      const fullName = pp.name || "Unnamed";
+      const pid = String(pp.player_id || `live-${clubId}-${starters.length}`);
+      const shirt = Number(pp.shirt_number || DEFAULT_NUMBERS[starters.length] || starters.length + 1);
+      const rosterMatch = byId.get(pid);
+      const presMatch = presById.get(pid) || presByShirt.get(shirt);
+      const role = String(pp.role || rosterMatch?.position || presMatch?.role || "MID");
+      const fullName = sanitizeLineupName(
+        rosterMatch?.player_name || presMatch?.player_name || pp.player_name || pp.name,
+        shirt,
+        role,
+      );
       starters.push({
-        player_id: pp.player_id || `live-${clubId}-${starters.length}`,
+        player_id: pid,
         full_name: fullName,
         short_name: extractBroadcastSurname(fullName),
-        shirt_number: pp.shirt_number || DEFAULT_NUMBERS[starters.length] || starters.length + 1,
-        position: pp.role || "MID",
-        rating: 78,
-        portrait_url: null,
+        shirt_number: shirt,
+        position: posShort(role),
+        rating: rosterMatch?.rating != null ? Math.round(Number(rosterMatch.rating)) : 78,
+        portrait_url: rosterMatch
+          ? sanitizeRealPlayerImage(rosterMatch.portrait_url, Boolean(rosterMatch.is_regen))
+          : null,
         is_signed: true,
       });
+      usedIds.add(pid);
     }
   }
   const usedNumbers = new Set(starters.map((s) => s.shirt_number));
@@ -347,6 +447,36 @@ function buildTeamSheetFromRoster(opts: {
     });
   });
 
+  // Hydrate bench from presentation_package if no club bench was loaded (e.g. AI opponents or archived replays)
+  if (substitutes.length === 0 && presBenchList.length > 0) {
+    presBenchList.slice(0, 9).forEach((bp, idx) => {
+      const pid = String(bp.player_id || `pres-bench-${clubId}-${idx}`);
+      if (usedIds.has(pid)) return;
+      usedIds.add(pid);
+      let shirt = Number(bp.shirt_number || SUB_NUMBERS[idx] || 22 + idx);
+      while (usedNumbers.has(shirt)) shirt += 1;
+      usedNumbers.add(shirt);
+      const rosterMatch = byId.get(pid);
+      const role = String(bp.role || rosterMatch?.position || "MID");
+      const fullName = sanitizeLineupName(rosterMatch?.player_name || bp.player_name, shirt, role);
+      substitutes.push({
+        player_id: pid,
+        full_name: fullName,
+        short_name: extractBroadcastSurname(fullName),
+        shirt_number: shirt,
+        position: posShort(role),
+        rating:
+          rosterMatch?.rating != null
+            ? Math.round(Number(rosterMatch.rating))
+            : 76 + ((seed + idx) % 6),
+        portrait_url: rosterMatch
+          ? sanitizeRealPlayerImage(rosterMatch.portrait_url, Boolean(rosterMatch.is_regen))
+          : null,
+        is_signed: Boolean(rosterMatch),
+      });
+    });
+  }
+
   const picturedStarters = starters.filter((s) => Boolean(s.portrait_url));
   const hero = picturedStarters.find((s) => s.is_captain) ||
     [...picturedStarters].sort((a, b) => b.rating - a.rating)[0] ||
@@ -384,9 +514,11 @@ export function useClubMatchdaySheet(opts: {
   lineupMode?: "strongest" | "rotate";
   formationOverride?: string;
   useSmartSuggestion?: boolean;
+  presentationTeam?: PresentationTeamLike | null;
   pitchPlayers?: Array<{
     player_id?: string;
     name?: string;
+    player_name?: string;
     shirt_number?: number;
     role?: string;
     stamina_pct?: number | null;
@@ -483,10 +615,12 @@ export function useClubMatchdaySheet(opts: {
         opts.formationOverride ||
         (showFiled && packet?.filedFormation) ||
         planQuery.data?.formation ||
+        opts.presentationTeam?.formation ||
         "4-3-3",
       lineupMode: opts.lineupMode || "strongest",
       useSmartSuggestion: Boolean(opts.useSmartSuggestion),
       exactFiled: showFiled,
+      presentationTeam: opts.presentationTeam,
       pitchPlayers: opts.pitchPlayers,
     });
   }, [
@@ -497,6 +631,7 @@ export function useClubMatchdaySheet(opts: {
     opts.formationOverride,
     opts.lineupMode,
     opts.useSmartSuggestion,
+    opts.presentationTeam,
     opts.pitchPlayers,
   ]);
 
@@ -519,12 +654,14 @@ export function TunnelStartingXICard({
   opponentName,
   competitionName,
   roundLabel,
+  kitColor = "#38bdf8",
   testid,
 }: {
   sheet: MatchdayTeamSheet;
   opponentName?: string;
   competitionName?: string;
   roundLabel?: string;
+  kitColor?: string;
   testid?: string;
 }) {
   const heroFallback = buildSilhouetteDataUri(sheet.hero.position, sheet.hero.rating >= 85);
@@ -560,11 +697,11 @@ export function TunnelStartingXICard({
         <div className="col-span-7 sm:col-span-7 flex flex-col justify-between p-5 sm:p-6">
           <div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300/80">
-                {sheet.clubName} · {sheet.formation}
+              <span className="truncate text-[10px] font-bold uppercase tracking-[0.22em] text-sky-300/80">
+                {sheet.clubName} · <span className="whitespace-nowrap">{sheet.formation}</span>
               </span>
               {roundLabel && (
-                <span className="rounded bg-sky-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-sky-300">
+                <span className="shrink-0 whitespace-nowrap rounded bg-sky-500/15 px-2 py-0.5 text-[9px] font-black uppercase tracking-wider text-sky-300">
                   {roundLabel}
                 </span>
               )}
@@ -599,7 +736,7 @@ export function TunnelStartingXICard({
                         className="h-6 w-6 shrink-0 rounded-full border border-sky-400/50 bg-slate-900 object-cover shadow"
                       />
                     ) : (
-                      <KitBakedMark color="#38bdf8" size={22} />
+                      <KitBakedMark color={kitColor} size={22} />
                     )}
                     <span className="gx-mono w-5 shrink-0 text-right text-[11px] font-bold text-sky-300/80">
                       {player.shirt_number}
@@ -717,12 +854,14 @@ export function EditorialLineupPosterCard({
   venueName,
   matchdayNumber = 1,
   dateLabel,
+  kitColor,
   testid,
 }: {
   sheet: MatchdayTeamSheet;
   venueName?: string;
   matchdayNumber?: number | string;
   dateLabel?: string;
+  kitColor?: string;
   testid?: string;
 }) {
   const accent = useMemo(() => {
@@ -783,7 +922,7 @@ export function EditorialLineupPosterCard({
           </span>
         </div>
 
-        <div className="relative z-10 -mt-5 sm:-mt-7 grid grid-cols-12 items-end gap-2">
+        <div className="relative z-10 mt-2 grid grid-cols-12 items-end gap-2">
           {/* Left Hero Cutout Overlapping "LI" of LINEUP */}
           <div className="col-span-5 flex flex-col justify-end self-stretch">
             <div className="relative mt-auto flex items-end justify-center">
@@ -821,7 +960,7 @@ export function EditorialLineupPosterCard({
                         className="h-6 w-6 shrink-0 rounded-full border border-amber-400/50 bg-slate-900 object-cover shadow"
                       />
                     ) : (
-                      <KitBakedMark color={accent.badgeBg} size={22} />
+                      <KitBakedMark color={kitColor || accent.badgeBg} size={22} />
                     )}
                     <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
                       {String(player.shirt_number).padStart(2, "0")}
@@ -891,6 +1030,10 @@ export function MatchdayLineupBroadcast({
   onFormationChange,
   homePitchPlayers,
   awayPitchPlayers,
+  homePrimaryColor,
+  awayPrimaryColor,
+  homePresentationTeam,
+  awayPresentationTeam,
   defaultView,
 }: {
   homeClubId?: string;
@@ -908,6 +1051,7 @@ export function MatchdayLineupBroadcast({
   homePitchPlayers?: Array<{
     player_id?: string;
     name?: string;
+    player_name?: string;
     shirt_number?: number;
     role?: string;
     stamina_pct?: number | null;
@@ -916,11 +1060,16 @@ export function MatchdayLineupBroadcast({
   awayPitchPlayers?: Array<{
     player_id?: string;
     name?: string;
+    player_name?: string;
     shirt_number?: number;
     role?: string;
     stamina_pct?: number | null;
     staminaPct?: number | null;
   }>;
+  homePrimaryColor?: string;
+  awayPrimaryColor?: string;
+  homePresentationTeam?: PresentationTeamLike | null;
+  awayPresentationTeam?: PresentationTeamLike | null;
   defaultView?: "dual" | "tunnel" | "editorial";
 }) {
   const queryClient = useQueryClient();
@@ -933,6 +1082,8 @@ export function MatchdayLineupBroadcast({
   const [savingSuggested, setSavingSuggested] = useState<boolean>(false);
 
   const activeFormation = formationOverride || localFormation || undefined;
+  const resolvedHomeColor = homePrimaryColor || homePresentationTeam?.primary_color || "#10b981";
+  const resolvedAwayColor = awayPrimaryColor || awayPresentationTeam?.primary_color || "#f59e0b";
 
   const home = useClubMatchdaySheet({
     clubId: homeClubId,
@@ -941,6 +1092,7 @@ export function MatchdayLineupBroadcast({
     formationOverride:
       !editableClubId || editableClubId === homeClubId ? activeFormation : undefined,
     useSmartSuggestion,
+    presentationTeam: homePresentationTeam,
     pitchPlayers: homePitchPlayers,
   });
 
@@ -951,10 +1103,13 @@ export function MatchdayLineupBroadcast({
     formationOverride:
       editableClubId && editableClubId === awayClubId ? activeFormation : undefined,
     useSmartSuggestion,
+    presentationTeam: awayPresentationTeam,
     pitchPlayers: awayPitchPlayers,
   });
 
-  const myTarget = editableClubId && editableClubId === awayClubId && hasAway ? away : home;
+  const isAwayTarget = Boolean(editableClubId && editableClubId === awayClubId && hasAway);
+  const myTarget = isAwayTarget ? away : home;
+  const myTargetColor = isAwayTarget ? resolvedAwayColor : resolvedHomeColor;
   const canPersistToClub = Boolean(
     editableClubId && !editableClubId.startsWith("ai:") && myTarget.roster.length > 0,
   );
@@ -1013,6 +1168,7 @@ export function MatchdayLineupBroadcast({
       <KitPlayerPortrait
         shirtNumber={myTarget.sheet.hero.shirt_number}
         playerName={myTarget.sheet.hero.short_name}
+        primaryColor={myTargetColor}
       />
       {/* Smart Matchday Lineup Suggestion Controls */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/25 bg-slate-950/75 px-4 py-3">
@@ -1131,12 +1287,14 @@ export function MatchdayLineupBroadcast({
             opponentName={awayClubName}
             competitionName={competitionName}
             roundLabel={roundLabel || `MATCHDAY ${matchdayNumber}`}
+            kitColor={resolvedHomeColor}
             testid="home-tunnel-xi-card"
           />
           <EditorialLineupPosterCard
             sheet={away.sheet}
             venueName={venueName || `${homeClubName} Arena`}
             matchdayNumber={matchdayNumber}
+            kitColor={resolvedAwayColor}
             testid="away-editorial-poster-card"
           />
         </div>
@@ -1147,6 +1305,7 @@ export function MatchdayLineupBroadcast({
             opponentName={myTarget.sheet.clubName === homeClubName ? awayClubName : homeClubName}
             competitionName={competitionName}
             roundLabel={roundLabel || `MATCHDAY ${matchdayNumber}`}
+            kitColor={myTargetColor}
           />
           {hasAway && myTarget.sheet.clubName === homeClubName && (
             <TunnelStartingXICard
@@ -1154,6 +1313,7 @@ export function MatchdayLineupBroadcast({
               opponentName={homeClubName}
               competitionName={competitionName}
               roundLabel="OPPONENT XI"
+              kitColor={resolvedAwayColor}
               testid="opponent-tunnel-xi-card"
             />
           )}
@@ -1164,12 +1324,14 @@ export function MatchdayLineupBroadcast({
             sheet={myTarget.sheet}
             venueName={venueName || `${homeClubName} Arena`}
             matchdayNumber={matchdayNumber}
+            kitColor={myTargetColor}
           />
           {hasAway && myTarget.sheet.clubName === homeClubName && (
             <EditorialLineupPosterCard
               sheet={away.sheet}
               venueName={venueName || `${homeClubName} Arena`}
               matchdayNumber={matchdayNumber}
+              kitColor={resolvedAwayColor}
               testid="opponent-editorial-poster-card"
             />
           )}

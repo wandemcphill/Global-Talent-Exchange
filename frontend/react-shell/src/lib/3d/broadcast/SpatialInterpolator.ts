@@ -165,6 +165,68 @@ function lerpAngle(from: number, to: number, alpha: number): number {
   return normalizeAngle(normFrom + diff * alpha);
 }
 
+/**
+ * Monotone-clamped cubic Hermite spline in 1D so curves remain C1 velocity-continuous
+ * across keyframe boundaries without overshooting sidelines or whipping backward.
+ */
+export function hermiteSpline(
+  p0: number,
+  v0: number,
+  p1: number,
+  v1: number,
+  t: number,
+  dt: number
+): number {
+  const safeDt = Math.max(1e-4, dt);
+  const chord = (p1 - p0) / safeDt;
+  // Fritsch-Carlson monotone guard: prevent overshoot on reversals or stationary holds
+  let m0 = v0;
+  let m1 = v1;
+  if (Math.abs(chord) < 1e-4) {
+    m0 = 0;
+    m1 = 0;
+  } else {
+    if (m0 * chord < 0) m0 = 0;
+    if (m1 * chord < 0) m1 = 0;
+    const maxSlope = Math.abs(chord) * 1.65;
+    m0 = Math.max(-maxSlope, Math.min(maxSlope, m0));
+    m1 = Math.max(-maxSlope, Math.min(maxSlope, m1));
+  }
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const h00 = 2 * t3 - 3 * t2 + 1;
+  const h10 = t3 - 2 * t2 + t;
+  const h01 = -2 * t3 + 3 * t2;
+  const h11 = t3 - t2;
+  return h00 * p0 + h10 * m0 * safeDt + h01 * p1 + h11 * m1 * safeDt;
+}
+
+export function hermiteDerivative(
+  p0: number,
+  v0: number,
+  p1: number,
+  v1: number,
+  t: number,
+  dt: number
+): number {
+  const safeDt = Math.max(1e-4, dt);
+  const chord = (p1 - p0) / safeDt;
+  let m0 = v0;
+  let m1 = v1;
+  if (Math.abs(chord) < 1e-4) return 0;
+  if (m0 * chord < 0) m0 = 0;
+  if (m1 * chord < 0) m1 = 0;
+  const maxSlope = Math.abs(chord) * 1.65;
+  m0 = Math.max(-maxSlope, Math.min(maxSlope, m0));
+  m1 = Math.max(-maxSlope, Math.min(maxSlope, m1));
+  const t2 = t * t;
+  const dh00 = 6 * t2 - 6 * t;
+  const dh10 = 3 * t2 - 4 * t + 1;
+  const dh01 = -6 * t2 + 6 * t;
+  const dh11 = 3 * t2 - 2 * t;
+  return (dh00 * p0 + dh10 * m0 * safeDt + dh01 * p1 + dh11 * m1 * safeDt) / safeDt;
+}
+
 export class SpatialInterpolator {
   private frames: SpectatorSafeFrameView[] = [];
   private tacticalConfig: TacticalVisualConfig | null = null;
@@ -278,8 +340,10 @@ export class SpatialInterpolator {
       }
     }
 
+    const framePrev = indexA > 0 ? this.frames[indexA - 1] : null;
     const frameA = this.frames[indexA];
     const frameB = this.frames[Math.min(indexA + 1, this.frames.length - 1)];
+    const frameNext = indexA + 2 < this.frames.length ? this.frames[indexA + 2] : null;
 
     if (frameA === frameB || frameB.time_seconds <= frameA.time_seconds) {
       return this.frameToInterpolated(frameA);
@@ -296,23 +360,58 @@ export class SpatialInterpolator {
     const isDirectionFlip = frameA.home_attacks_right !== frameB.home_attacks_right;
     const activeFrame = alpha >= 0.5 ? frameB : frameA;
 
-    // Interpolate Ball
+    // Velocity-based cubic Hermite Ball interpolation (smooth passes & lofted arcs)
     const ballA3D = pitchTo3D(frameA.ball.position, frameA.ball.height, frameA.home_attacks_right);
     const ballB3D = pitchTo3D(frameB.ball.position, frameB.ball.height, frameB.home_attacks_right);
+    const ballPrev3D =
+      framePrev && framePrev.home_attacks_right === frameA.home_attacks_right
+        ? pitchTo3D(framePrev.ball.position, framePrev.ball.height, framePrev.home_attacks_right)
+        : null;
+    const ballNext3D =
+      frameNext && frameNext.home_attacks_right === frameB.home_attacks_right
+        ? pitchTo3D(frameNext.ball.position, frameNext.ball.height, frameNext.home_attacks_right)
+        : null;
 
-    let ballX = isDirectionFlip ? activeFrame.ball.position.x : ballA3D[0] + (ballB3D[0] - ballA3D[0]) * alpha;
+    const chordBallVx = (ballB3D[0] - ballA3D[0]) / duration;
+    const chordBallVz = (ballB3D[2] - ballA3D[2]) / duration;
+    const ballVelA_X = ballPrev3D
+      ? (ballB3D[0] - ballPrev3D[0]) / Math.max(0.05, frameB.time_seconds - framePrev!.time_seconds)
+      : chordBallVx;
+    const ballVelB_X = ballNext3D
+      ? (ballNext3D[0] - ballA3D[0]) / Math.max(0.05, frameNext!.time_seconds - frameA.time_seconds)
+      : chordBallVx;
+    const ballVelA_Z = ballPrev3D
+      ? (ballB3D[2] - ballPrev3D[2]) / Math.max(0.05, frameB.time_seconds - framePrev!.time_seconds)
+      : chordBallVz;
+    const ballVelB_Z = ballNext3D
+      ? (ballNext3D[2] - ballA3D[2]) / Math.max(0.05, frameNext!.time_seconds - frameA.time_seconds)
+      : chordBallVz;
+
+    let ballX = isDirectionFlip
+      ? activeFrame.ball.position.x
+      : hermiteSpline(ballA3D[0], ballVelA_X, ballB3D[0], ballVelB_X, alpha, duration);
     let ballY = ballA3D[1] + (ballB3D[1] - ballA3D[1]) * alpha;
-    let ballZ = isDirectionFlip ? activeFrame.ball.position.y : ballA3D[2] + (ballB3D[2] - ballA3D[2]) * alpha;
+    let ballZ = isDirectionFlip
+      ? activeFrame.ball.position.y
+      : hermiteSpline(ballA3D[2], ballVelA_Z, ballB3D[2], ballVelB_Z, alpha, duration);
 
     // Clamp ball to physical bounds
     ballX = Math.max(PITCH_BOUNDS.minX, Math.min(PITCH_BOUNDS.maxX, ballX));
     ballZ = Math.max(PITCH_BOUNDS.minZ, Math.min(PITCH_BOUNDS.maxZ, ballZ));
     ballY = Math.max(0, Math.min(PITCH_BOUNDS.maxY, ballY));
 
-    // Interpolate Players
+    // Interpolate Players with velocity-based cubic Hermite splines for silky C1 motion
+    const playerMapPrev = new Map<string, SpectatorSafePlayerTelemetry>();
+    if (framePrev && framePrev.home_attacks_right === frameA.home_attacks_right) {
+      for (const p of framePrev.players) playerMapPrev.set(p.player_id, p);
+    }
     const playerMapB = new Map<string, SpectatorSafePlayerTelemetry>();
     for (const p of frameB.players) {
       playerMapB.set(p.player_id, p);
+    }
+    const playerMapNext = new Map<string, SpectatorSafePlayerTelemetry>();
+    if (frameNext && frameNext.home_attacks_right === frameB.home_attacks_right) {
+      for (const p of frameNext.players) playerMapNext.set(p.player_id, p);
     }
 
     const interpolatedPlayers: InterpolatedPlayerState[] = [];
@@ -327,11 +426,38 @@ export class SpatialInterpolator {
 
       const pA3D = pitchTo3D(pA.position, 0, frameA.home_attacks_right);
       const pB3D = pitchTo3D(pB.position, 0, frameB.home_attacks_right);
+      const pPrev = playerMapPrev.get(pA.player_id);
+      const pNext = playerMapNext.get(pA.player_id);
+      const pPrev3D = pPrev ? pitchTo3D(pPrev.position, 0, framePrev!.home_attacks_right) : null;
+      const pNext3D = pNext ? pitchTo3D(pNext.position, 0, frameNext!.home_attacks_right) : null;
 
-      const px = isDirectionFlip ? pB3D[0] : pA3D[0] + (pB3D[0] - pA3D[0]) * alpha;
-      const pz = isDirectionFlip ? pB3D[2] : pA3D[2] + (pB3D[2] - pA3D[2]) * alpha;
+      const chordVx = (pB3D[0] - pA3D[0]) / duration;
+      const chordVz = (pB3D[2] - pA3D[2]) / duration;
+      const vxA = pPrev3D
+        ? (pB3D[0] - pPrev3D[0]) / Math.max(0.05, frameB.time_seconds - framePrev!.time_seconds)
+        : pA.velocity && Number.isFinite(pA.velocity.x)
+          ? pA.velocity.x
+          : chordVx;
+      const vxB = pNext3D
+        ? (pNext3D[0] - pA3D[0]) / Math.max(0.05, frameNext!.time_seconds - frameA.time_seconds)
+        : pB.velocity && Number.isFinite(pB.velocity.x)
+          ? pB.velocity.x
+          : chordVx;
+      const vzA = pPrev3D
+        ? (pB3D[2] - pPrev3D[2]) / Math.max(0.05, frameB.time_seconds - framePrev!.time_seconds)
+        : pA.velocity && Number.isFinite(pA.velocity.y)
+          ? pA.velocity.y
+          : chordVz;
+      const vzB = pNext3D
+        ? (pNext3D[2] - pA3D[2]) / Math.max(0.05, frameNext!.time_seconds - frameA.time_seconds)
+        : pB.velocity && Number.isFinite(pB.velocity.y)
+          ? pB.velocity.y
+          : chordVz;
 
-      // Facing orientation: evaluate velocity direction or facing vector
+      const px = isDirectionFlip ? pB3D[0] : hermiteSpline(pA3D[0], vxA, pB3D[0], vxB, alpha, duration);
+      const pz = isDirectionFlip ? pB3D[2] : hermiteSpline(pA3D[2], vzA, pB3D[2], vzB, alpha, duration);
+
+      // Facing orientation: smoothly blend authoritative facing with Hermite tangent when sprinting
       let angleA = 0;
       let angleB = 0;
       if (pA.facing) {
@@ -345,7 +471,15 @@ export class SpatialInterpolator {
         angleB = Math.atan2(pB.velocity.y, pB.velocity.x);
       }
 
-      const facing = lerpAngle(angleA, angleB, alpha);
+      let facing = lerpAngle(angleA, angleB, alpha);
+      if (!isDirectionFlip && (pPrev3D || pNext3D)) {
+        const curVx = hermiteDerivative(pA3D[0], vxA, pB3D[0], vxB, alpha, duration);
+        const curVz = hermiteDerivative(pA3D[2], vzA, pB3D[2], vzB, alpha, duration);
+        const curveSpeed = Math.hypot(curVx, curVz);
+        if (curveSpeed > 1.2) {
+          facing = lerpAngle(facing, Math.atan2(curVz, curVx), Math.min(0.75, (curveSpeed - 1.2) * 0.25));
+        }
+      }
       const speedA = pA.speed_ratio ?? 0;
       const speedB = pB.speed_ratio ?? speedA;
       const speed = pA.speed_ratio !== undefined && pB.speed_ratio !== undefined

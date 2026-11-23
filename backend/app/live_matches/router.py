@@ -1430,10 +1430,12 @@ def _v2_pre_match_payload(match_id: str, view_state: Any, app: Any = None) -> di
 def _v2_pitch_player_payload(player) -> dict[str, object]:
     facing = getattr(player, "facing", None)
     velocity = getattr(player, "velocity", None)
+    resolved_name = getattr(player, "player_name", None) or player.label
     return {
         "player_id": player.player_id,
         "team_id": player.team_id,
-        "name": player.label,
+        "name": resolved_name,
+        "player_name": resolved_name,
         "shirt_number": player.shirt_number or 0,
         "x": round(_float_or_default(player.position.x) / 100.0, 4),
         "y": round(_float_or_default(player.position.y) / 100.0, 4),

@@ -1,4 +1,4 @@
-import { calculateTimelineAdvanceSeconds, SpatialInterpolator } from "./SpatialInterpolator";
+import { calculateTimelineAdvanceSeconds, hermiteSpline, SpatialInterpolator } from "./SpatialInterpolator";
 import { SpectatorSafeFrameView } from "./spectatorContract";
 import { PITCH_BOUNDS } from "./matchCoordinates";
 
@@ -270,6 +270,42 @@ describe("SpatialInterpolator", () => {
     expect(midFlight?.ball.ballistic_apex).toBeGreaterThan(0);
     expect(midFlight?.ball.height).toBeGreaterThan(0.5);
     expect(midFlight?.ball.spin).toBeDefined();
+  });
+
+  test("hermiteSpline stays monotone without overshoot and smoothly curves multi-frame player paths", () => {
+    expect(hermiteSpline(0, 5, 10, 5, 0, 1.0)).toBeCloseTo(0, 5);
+    expect(hermiteSpline(0, 5, 10, 5, 1, 1.0)).toBeCloseTo(10, 5);
+    // Extreme tangents must not cause overshoot outside [0, 10]
+    for (const t of [0.15, 0.35, 0.5, 0.75, 0.9]) {
+      const val = hermiteSpline(0, 40, 10, 40, t, 1.0);
+      expect(val).toBeGreaterThanOrEqual(0);
+      expect(val).toBeLessThanOrEqual(10);
+    }
+
+    const fA: SpectatorSafeFrameView = {
+      ...frame0,
+      frame_id: "h-0",
+      time_seconds: 0,
+      players: [{ ...frame0.players[0], position: { x: 30, y: 50 }, velocity: { x: 8, y: 0 } }],
+    };
+    const fB: SpectatorSafeFrameView = {
+      ...frame0,
+      frame_id: "h-1",
+      time_seconds: 1,
+      players: [{ ...frame0.players[0], position: { x: 45, y: 55 }, velocity: { x: 8, y: 5 } }],
+    };
+    const fC: SpectatorSafeFrameView = {
+      ...frame0,
+      frame_id: "h-2",
+      time_seconds: 2,
+      players: [{ ...frame0.players[0], position: { x: 60, y: 50 }, velocity: { x: 8, y: -5 } }],
+    };
+    const interp = new SpatialInterpolator([fA, fB, fC]);
+    const beforeTurn = interp.interpolate(0.95)!.players[0].position3D;
+    const atTurn = interp.interpolate(1.0)!.players[0].position3D;
+    const afterTurn = interp.interpolate(1.05)!.players[0].position3D;
+    expect(Math.hypot(atTurn[0] - beforeTurn[0], atTurn[2] - beforeTurn[2])).toBeLessThan(1.5);
+    expect(Math.hypot(afterTurn[0] - atTurn[0], afterTurn[2] - atTurn[2])).toBeLessThan(1.5);
   });
 
 });

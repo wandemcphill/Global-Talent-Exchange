@@ -1700,9 +1700,8 @@ export default function MatchCenter() {
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<"pitch" | "lineups" | "tactics" | "pre_match" | "post_match" | "commentary">("pitch");
-  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(
-    Boolean(params.get("live") && params.get("dismissWalkout") !== "1")
-  );
+  // Never block the live match pitch with an auto-expanded walkout wall; users can open Lineups tab anytime.
+  const [showKickoffLineups, setShowKickoffLineups] = useState<boolean>(false);
 
   // Pitch Overlay & Camera Perspective Toggles
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -1806,7 +1805,7 @@ export default function MatchCenter() {
       );
   const canLocalReplay = !isSharedLiveBroadcast && !isSimulatedMatch && timedRecordedFrames.length >= 2;
   const [replayPaused, setReplayPaused] = useState(false);
-  const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 2>(1);
+  const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 2 | 4>(2);
   const [instantReplayActive, setInstantReplayActive] = useState(false);
   const triggerInstantReplay = useCallback((startSeconds: number) => {
     setPlaybackSeconds(Math.max(0, startSeconds));
@@ -1861,7 +1860,7 @@ export default function MatchCenter() {
           durationSeconds: replayDurationSeconds,
         });
       });
-    }, 50);
+    }, 250);
     return () => window.clearInterval(timer);
   }, [
     acceptedLive,
@@ -1887,6 +1886,53 @@ export default function MatchCenter() {
     [replayPair],
   );
 
+  const presentationPkg: any =
+    (viewerData as any)?.presentation_package || (m as any)?.presentation_package || null;
+  const homePresentationTeam: any = presentationPkg?.home || null;
+  const awayPresentationTeam: any = presentationPkg?.away || null;
+
+  const playerNameById = useMemo<Record<string, string>>(() => {
+    const map: Record<string, string> = {};
+    const register = (rawId: unknown, rawName: unknown) => {
+      const pid = String(rawId || "").trim();
+      const name = String(rawName || "").trim();
+      if (!pid || !name) return;
+      const lowered = name.toLowerCase();
+      if (lowered === "unnamed" || lowered === "unknown" || /^#?\d+$/.test(name)) return;
+      if (!map[pid]) map[pid] = name;
+    };
+    const scanRoster = (rows: any[] | undefined | null) => {
+      if (!Array.isArray(rows)) return;
+      for (const p of rows) {
+        register(p?.player_id || p?.id, p?.player_name || p?.display_name || p?.name);
+      }
+    };
+    scanRoster(homePresentationTeam?.starters);
+    scanRoster(homePresentationTeam?.bench);
+    scanRoster(awayPresentationTeam?.starters);
+    scanRoster(awayPresentationTeam?.bench);
+    scanRoster((matchReport as any)?.player_stats);
+    scanRoster((viewerData as any)?.home_team?.players);
+    scanRoster((viewerData as any)?.away_team?.players);
+    for (const ev of allMatchEvents as any[]) {
+      register(ev?.primary_player_id || ev?.player_id, ev?.primary_player_name || ev?.player_name);
+      register(ev?.secondary_player_id, ev?.secondary_player_name);
+    }
+    return map;
+  }, [homePresentationTeam, awayPresentationTeam, matchReport, viewerData, allMatchEvents]);
+
+  const enrichPitchPlayer = useCallback(
+    (p: any) => {
+      const pid = String(p?.player_id || p?.id || "");
+      const rawName = String(p?.player_name || p?.name || p?.label || "").trim();
+      const isBadName = !rawName || /^#?\d+$/.test(rawName) || rawName.toLowerCase() === "unnamed";
+      const resolved = (!isBadName ? rawName : "") || (pid ? playerNameById[pid] : "") || "";
+      if (!resolved || resolved === p?.name) return p;
+      return { ...p, name: resolved, player_name: resolved };
+    },
+    [playerNameById],
+  );
+
   const isPlayerActiveOnPitch = (p: any) =>
     p?.active !== false && String(p?.state || "").toLowerCase() !== "sent_off";
 
@@ -1899,8 +1945,10 @@ export default function MatchCenter() {
         activeReplayFrame?.players ||
         activeReplayFrame?.pitch_players ||
         []
-      ).filter((p: any) => isPlayerActiveOnPitch(p) && p.is_home !== false && String(p.side || "home").toLowerCase() !== "away"),
-    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame],
+      )
+        .filter((p: any) => isPlayerActiveOnPitch(p) && p.is_home !== false && String(p.side || "home").toLowerCase() !== "away")
+        .map(enrichPitchPlayer),
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame, enrichPitchPlayer],
   );
   const awayLivePitch = useMemo(
     () =>
@@ -1911,8 +1959,10 @@ export default function MatchCenter() {
         activeReplayFrame?.players ||
         activeReplayFrame?.pitch_players ||
         []
-      ).filter((p: any) => isPlayerActiveOnPitch(p) && (p.is_home === false || String(p.side || "").toLowerCase() === "away")),
-    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame],
+      )
+        .filter((p: any) => isPlayerActiveOnPitch(p) && (p.is_home === false || String(p.side || "").toLowerCase() === "away"))
+        .map(enrichPitchPlayer),
+    [spectatorStream.lastFrame, acceptedLive?.pitch_players, liveState?.pitch_players, activeReplayFrame, enrichPitchPlayer],
   );
 
   const minute = useMemo(() => {
@@ -2298,16 +2348,19 @@ export default function MatchCenter() {
     activeReplayFrame?.pitch_players ||
     []
   ).filter(isPlayerActiveOnPitch);
-  const activeNormalizedPlayers: PitchPlayer[] = activeRawPlayers.map((p: any) => {
+  const activeNormalizedPlayers: PitchPlayer[] = activeRawPlayers.map((rawP: any) => {
+    const p = enrichPitchPlayer(rawP);
     const rawSide = String(p?.side || "").toLowerCase();
     const pSide = p?.is_home === false || rawSide === "away" ? "away" : "home";
+    const rawName = String(p?.player_name || p?.name || p?.label || "").trim();
+    const displayName = rawName && !/^#?\d+$/.test(rawName) && rawName.toLowerCase() !== "unnamed" ? rawName : "Player";
     return {
       playerId: String(p?.player_id || p?.id || `${pSide}-${p?.shirt_number || 0}`),
       side: pSide,
       x: Number(p?.x ?? p?.position?.x ?? 0.5),
       y: Number(p?.y ?? p?.position?.y ?? 0.5),
       shirtNumber: Number(p?.shirt_number || 0),
-      name: String(p?.name || p?.label || "Player"),
+      name: displayName,
       role: String(p?.role || p?.line || ""),
       active: isPlayerActiveOnPitch(p),
       staminaPct: p?.stamina_pct ?? null,
@@ -2774,6 +2827,10 @@ export default function MatchCenter() {
                   onFormationChange={setFormation}
                   homePitchPlayers={homeLivePitch}
                   awayPitchPlayers={awayLivePitch}
+                  homePrimaryColor={homePrimaryColor}
+                  awayPrimaryColor={awayPrimaryColor}
+                  homePresentationTeam={homePresentationTeam}
+                  awayPresentationTeam={awayPresentationTeam}
                   defaultView="dual"
                 />
               </div>
@@ -2821,6 +2878,10 @@ export default function MatchCenter() {
                   playbackTimeSeconds={playbackSeconds}
                   playbackSpeed={canLocalReplay ? replaySpeed : 1}
                   isPaused={canLocalReplay ? replayPaused : false}
+                  qualityTier="medium"
+                  stadiumTier={2}
+                  initialCameraMode="fm_director"
+                  bloomEnabled={false}
                   lockServerPositions
                   className="h-[640px]"
                   testId="match-webgl-scene"
@@ -2884,6 +2945,11 @@ export default function MatchCenter() {
                 onWatchReplay={canLocalReplay ? triggerInstantReplay : undefined}
                 isInstantReplay={canLocalReplay && instantReplayActive}
                 onExitInstantReplay={canLocalReplay ? exitInstantReplay : undefined}
+                isPaused={canLocalReplay ? replayPaused : false}
+                playbackSpeed={canLocalReplay ? (instantReplayActive ? 0.75 : replaySpeed) : 1}
+                durationSeconds={replayDurationSeconds}
+                clockMinute={minute}
+                playerNameById={playerNameById}
               />
               )}
               {recentSubstitution && (
@@ -2937,6 +3003,8 @@ export default function MatchCenter() {
                   model={timelineModel}
                   currentSeconds={playbackSeconds}
                   readOnly={!canLocalReplay}
+                  homeColor={homePrimaryColor}
+                  awayColor={awayPrimaryColor}
                   onSeek={canLocalReplay ? (s) => { setInstantReplayActive(false); setPlaybackSeconds(s); } : undefined}
                 />
               )}
@@ -2959,7 +3027,7 @@ export default function MatchCenter() {
                   <button
                     type="button"
                     data-testid="match-speed-toggle"
-                    onClick={() => setReplaySpeed((v) => (v === 1 ? 2 : v === 2 ? 0.5 : 1))}
+                    onClick={() => setReplaySpeed((v) => (v === 1 ? 2 : v === 2 ? 4 : v === 4 ? 0.5 : 1))}
                     className="rounded border border-white/20 bg-slate-800 px-2 py-0.5 hover:bg-slate-700"
                   >
                     {replaySpeed.toFixed(1)}x
@@ -3012,6 +3080,10 @@ export default function MatchCenter() {
               onFormationChange={setFormation}
               homePitchPlayers={homeLivePitch}
               awayPitchPlayers={awayLivePitch}
+              homePrimaryColor={homePrimaryColor}
+              awayPrimaryColor={awayPrimaryColor}
+              homePresentationTeam={homePresentationTeam}
+              awayPresentationTeam={awayPresentationTeam}
               defaultView="dual"
             />
           </Panel>

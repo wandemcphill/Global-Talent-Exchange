@@ -131,6 +131,43 @@ const STRIDE_METERS: Partial<Record<FootballAnimationState, number>> = {
   shield_ball: 0.7,
 };
 
+/** Locomotion cycles that benefit from phase-warped crossfades and transition hysteresis. */
+const LOCOMOTION_LOOP_STATES = new Set<FootballAnimationState>([
+  "walk",
+  "jog",
+  "run",
+  "sprint",
+  "dribble",
+  "dribble_run",
+  "turn_left",
+  "turn_right",
+  "accelerate",
+  "decelerate",
+  "gk_lateral_move",
+]);
+
+/**
+ * Target body roll (radians) for athletic turn banking.
+ * Scales smoothly with both turn demand and ground speed, capped at ±0.22 rad (~12.6°).
+ */
+export function computeTurnBankingRad(
+  yawDeltaRad: number,
+  angularVelocityRad: number,
+  groundSpeedMps: number
+): number {
+  const speedScale = Math.min(1, Math.max(0.22, groundSpeedMps / 5.5));
+  const turnSignal = yawDeltaRad * 0.52 + angularVelocityRad * 0.14;
+  return Math.max(-0.22, Math.min(0.22, -turnSignal * speedScale));
+}
+
+/**
+ * Target forward torso pitch lean (radians) during high-speed runs/sprints.
+ */
+export function computeSprintPitchRad(groundSpeedMps: number): number {
+  if (groundSpeedMps <= 2.2) return 0;
+  return Math.min(0.09, ((groundSpeedMps - 2.2) / 5.5) * 0.09);
+}
+
 /** Play the clip once per stride of travel, so the feet land with the body. */
 export function clipTimeScale(metersPerSecond: number, strideMeters: number, clipDurationSec: number): number {
   const duration = Math.max(0.2, clipDurationSec);
@@ -215,33 +252,12 @@ function boneNamesOf(root: THREE.Object3D): string[] {
 
 function clipForThisRig(clip: THREE.AnimationClip, root: THREE.Object3D): THREE.AnimationClip {
   const renamed = retargetMixamoClip(clip, boneNamesOf(root));
-  const bones = new Map<string, THREE.Object3D>();
-  root.traverse((obj) => {
-    if (obj.name) bones.set(obj.name, obj);
-  });
-  const tracks = renamed.tracks.map((track) => {
-    const dot = track.name.lastIndexOf(".");
-    if (!track.name.endsWith(".quaternion") || dot <= 0) return track;
-    const bone = bones.get(track.name.slice(0, dot));
-    if (!bone) return track;
-    const next = track.clone();
-    const source = new THREE.Quaternion(next.values[0], next.values[1], next.values[2], next.values[3]);
-    if (source.lengthSq() < 0.5) return next;
-    source.normalize();
-    const inv = source.invert();
-    const rest = bone.quaternion.clone();
-    const keyframe = new THREE.Quaternion();
-    const posed = new THREE.Quaternion();
-    for (let i = 0; i < next.values.length; i += 4) {
-      keyframe.set(next.values[i], next.values[i + 1], next.values[i + 2], next.values[i + 3]).normalize();
-      posed.copy(rest).multiply(inv.clone().multiply(keyframe)).normalize();
-      next.values[i] = posed.x;
-      next.values[i + 1] = posed.y;
-      next.values[i + 2] = posed.z;
-      next.values[i + 3] = posed.w;
-    }
-    return next;
-  });
+  // All non-hip bones in gtex_gt_mixamo_kit.glb share the standard Mixamo local bone axes with
+  // gtex_mixamo_clips.glb. Applying the renamed quaternion tracks directly preserves natural
+  // athletic poses (arms lowered, running swing, strikes) instead of locking arms in T-pose.
+  const tracks = renamed.tracks.filter(
+    (track) => !track.name.endsWith(".scale") && !track.name.endsWith(".position"),
+  );
   return new THREE.AnimationClip(renamed.name, renamed.duration, tracks);
 }
 
@@ -489,7 +505,15 @@ export class MixamoKitFootballer {
     }
     const eventName = String(params.eventType || "").toLowerCase();
     const clipId = visualState === "shoot" && eventName === "penalty" ? "penalty_kick" : visualState;
-    if (clipId !== this.clipKey || visualState !== this.currentState) this.play(visualState, false, clipId);
+    const bothLocomotion =
+      LOCOMOTION_LOOP_STATES.has(this.currentState) && LOCOMOTION_LOOP_STATES.has(visualState);
+    const allowTransition =
+      clipId !== this.clipKey || visualState !== this.currentState
+        ? !bothLocomotion || this.timeInCurrentStateSec >= 0.16
+        : false;
+    if (allowTransition) {
+      this.play(visualState, false, clipId);
+    }
     this.timeInCurrentStateSec += deltaSec;
 
     const action = this.actions.get(this.clipKey);
@@ -502,39 +526,58 @@ export class MixamoKitFootballer {
       }
     }
     this.mixer?.update(deltaSec);
-    this.leanIntoTurn(yawDelta);
-    this.plantFeet();
-    this.settleSupportFoot();
+    this.leanIntoTurn(yawDelta, deltaSec, angular, this.smoothedSpeed);
+    if (this.lodLevel === "full" && this.leftFoot && this.rightFoot) {
+      // Sample foot world positions ONCE per frame instead of walking the 65-bone hierarchy twice.
+      this.leftFoot.getWorldPosition(this.leftFootWorld);
+      this.rightFoot.getWorldPosition(this.rightFootWorld);
+      this.plantFeetFromSampled(deltaSec);
+      this.settleSupportFootFromSampled();
+    } else if (this.supportSide !== null) {
+      this.releaseSupport();
+    }
   }
 
-  /** Drops a near-ground stride onto the pitch. Jumps and headers are left in the air. */
-  private plantFeet(): void {
-    if (!this.leftFoot || !this.rightFoot) return;
-    this.leftFoot.getWorldPosition(this.leftFootWorld);
-    this.rightFoot.getWorldPosition(this.rightFootWorld);
+  /** Drops a near-ground stride onto the pitch using already-sampled foot world positions. */
+  private plantFeetFromSampled(deltaSec = 1 / 60): void {
     const lowest = Math.min(this.leftFootWorld.y, this.rightFootWorld.y);
     const error = this.rootGroup.position.y + 0.02 - lowest;
-    if (error > -0.26 && error < 0.2) this.modelContainer.position.y += error;
+    if (error > -0.26 && error < 0.2) {
+      const alpha = 1 - Math.exp(-Math.max(deltaSec, 0.001) * 18);
+      this.modelContainer.position.y += error * alpha;
+    }
   }
 
-  /** Rolls the shoulders into a turn instead of spinning the body like a turret. */
-  private leanIntoTurn(yawDelta: number): void {
-    const lean = Math.max(-0.08, Math.min(0.08, -yawDelta * 0.12));
-    this.modelContainer.rotation.z += (lean - this.modelContainer.rotation.z) * 0.18;
+  /**
+   * Banks the torso into turns proportional to running speed and adds subtle
+   * forward sprint lean so cuts and accelerations feel athletic rather than rigid.
+   */
+  private leanIntoTurn(
+    yawDelta: number,
+    deltaSec: number,
+    angularVelocityRad: number,
+    groundSpeedMps: number
+  ): void {
+    const dt = Math.max(deltaSec, 0.001);
+    const targetRoll = computeTurnBankingRad(yawDelta, angularVelocityRad, groundSpeedMps);
+    const rollAlpha = 1 - Math.exp(-dt * 9.5);
+    this.modelContainer.rotation.z += (targetRoll - this.modelContainer.rotation.z) * rollAlpha;
+
+    const targetPitch = computeSprintPitchRad(groundSpeedMps);
+    const pitchAlpha = 1 - Math.exp(-dt * 7.5);
+    this.modelContainer.rotation.x += (targetPitch - this.modelContainer.rotation.x) * pitchAlpha;
   }
 
   /**
    * Holds the stance foot where it landed, up to a short slip, so the cycle
    * does not skate under a body the match is moving.
    */
-  private settleSupportFoot(): void {
+  private settleSupportFootFromSampled(): void {
     const stride = STRIDE_METERS[this.currentState];
-    if (!stride || !this.leftFoot || !this.rightFoot) {
+    if (!stride) {
       this.releaseSupport();
       return;
     }
-    this.leftFoot.getWorldPosition(this.leftFootWorld);
-    this.rightFoot.getWorldPosition(this.rightFootWorld);
     const leftLow = this.leftFootWorld.y < 0.16;
     const rightLow = this.rightFootWorld.y < 0.16;
     let side: "left" | "right" | null = null;
@@ -599,23 +642,31 @@ export class MixamoKitFootballer {
   private play(state: FootballAnimationState, immediate: boolean, clipId: string = state): void {
     const next = this.actions.get(clipId) || this.actions.get(state) || this.actions.get("idle");
     const prev = this.actions.get(this.clipKey);
+    const prevState = this.currentState;
     if (!next) {
       this.currentState = state;
       this.clipKey = clipId;
       this.timeInCurrentStateSec = 0;
       return;
     }
-    const fade = Math.max(FOOTBALL_ANIMATION_STATE_META[state].loop ? 0.26 : 0.12, FOOTBALL_ANIMATION_STATE_META[state].crossFadeSec);
-    if (prev && prev !== next) {
-      if (immediate) prev.stop();
-      else prev.fadeOut(fade);
-    }
+    const meta = FOOTBALL_ANIMATION_STATE_META[state];
+    const bothLocomotion = LOCOMOTION_LOOP_STATES.has(prevState) && LOCOMOTION_LOOP_STATES.has(state);
+    const fade = Math.max(
+      meta.loop ? (bothLocomotion ? 0.24 : 0.28) : 0.11,
+      meta.crossFadeSec
+    );
     // The first call is already "idle", so next and prev are the same action.
     // That action still has to start, or the body stays in the bind pose.
     if (next !== prev || !next.isRunning()) {
+      next.enabled = true;
       next.reset().setEffectiveWeight(1);
-      if (immediate || !prev || prev === next) next.play();
-      else next.fadeIn(fade).play();
+      if (immediate || !prev || prev === next) {
+        if (prev && prev !== next) prev.stop();
+        next.play();
+      } else {
+        next.play();
+        prev.crossFadeTo(next, fade, bothLocomotion);
+      }
     }
     this.currentState = state;
     this.clipKey = clipId;
@@ -697,16 +748,52 @@ function tintKitMaterials(root: THREE.Object3D, kit: HumanoidKitConfig): void {
   });
 }
 
-function fitAndGround(root: THREE.Object3D): void {
+/**
+ * Measures the true world-space bounds of a skinned footballer hierarchy.
+ * `Box3.setFromObject` under-reports `gtex_gt_mixamo_kit.glb` at ~0.28m due to its
+ * pre-rotated Armature/bind transform, so we sample skinned vertices directly.
+ */
+export function measureSkinnedBounds(root: THREE.Object3D): THREE.Box3 {
   root.updateMatrixWorld(true);
-  let box = new THREE.Box3().setFromObject(root);
-  const height = box.max.y - box.min.y;
-  if (height > 0.2 && (height < 1.65 || height > 1.96)) {
-    root.scale.multiplyScalar(1.83 / height);
-    root.updateMatrixWorld(true);
-    box = new THREE.Box3().setFromObject(root);
+  const box = new THREE.Box3();
+  const vertex = new THREE.Vector3();
+  let sampled = false;
+  root.traverse((obj) => {
+    const skinned = obj as THREE.SkinnedMesh;
+    if (skinned.isSkinnedMesh && skinned.geometry?.attributes?.position && skinned.skeleton) {
+      skinned.skeleton.update();
+      const pos = skinned.geometry.attributes.position;
+      const step = Math.max(1, Math.floor(pos.count / 240));
+      for (let i = 0; i < pos.count; i += step) {
+        vertex.fromBufferAttribute(pos, i);
+        skinned.applyBoneTransform(i, vertex);
+        skinned.localToWorld(vertex);
+        if (Number.isFinite(vertex.x) && Number.isFinite(vertex.y) && Number.isFinite(vertex.z)) {
+          box.expandByPoint(vertex);
+          sampled = true;
+        }
+      }
+    }
+  });
+  if (!sampled || box.isEmpty()) {
+    return new THREE.Box3().setFromObject(root);
   }
+  return box;
+}
+
+export function fitAndGround(root: THREE.Object3D, targetHeight = 1.83): THREE.Box3 {
+  let box = measureSkinnedBounds(root);
+  const height = box.max.y - box.min.y;
+  if (height > 0.2 && (height < targetHeight * 0.9 || height > targetHeight * 1.07)) {
+    root.scale.multiplyScalar(targetHeight / height);
+    box = measureSkinnedBounds(root);
+  }
+  const centerX = (box.min.x + box.max.x) * 0.5;
+  const centerZ = (box.min.z + box.max.z) * 0.5;
+  root.position.x -= centerX;
   root.position.y -= box.min.y;
+  root.position.z -= centerZ;
+  return measureSkinnedBounds(root);
 }
 
 function makeOriginalBadge(): THREE.Mesh {

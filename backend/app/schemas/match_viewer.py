@@ -155,6 +155,7 @@ class MatchViewerPlayerFrameView(CommonSchema):
     side: MatchViewerSide
     shirt_number: int | None = Field(default=None, ge=1, le=99)
     label: str
+    player_name: str | None = None
     role: PlayerRole
     line: str
     state: MatchViewerPlayerState

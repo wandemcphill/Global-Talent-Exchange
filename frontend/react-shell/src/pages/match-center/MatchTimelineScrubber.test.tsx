@@ -135,4 +135,46 @@ describe("match timeline scrubber", () => {
     act(() => root.unmount());
     host.remove();
   });
+
+  test("builds and renders the dual-sided xG momentum wave SVG from recorded territory and shot events", () => {
+    (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    const richFrames = [
+      { timeSeconds: 0, phase: "first_half", possession_side: "home", ball: { position: { x: 80 } }, home_attacks_right: true },
+      { timeSeconds: 100, phase: "first_half", possession_side: "home", ball: { position: { x: 88 } }, home_attacks_right: true },
+      { timeSeconds: 200, phase: "second_half", possession_side: "away", ball: { position: { x: 18 } }, home_attacks_right: true },
+      { timeSeconds: 300, phase: "second_half", possession_side: "away", ball: { position: { x: 12 } }, home_attacks_right: true },
+    ];
+    const model = buildTimelineModel(
+      richFrames,
+      [
+        { event_id: "g1", type: "goal", time_seconds: 95, team: "home", xg: 0.55 },
+        { event_id: "s1", type: "save", time_seconds: 260, team: "away", xg: 0.35 },
+      ],
+      300,
+    );
+    expect(model.momentum?.length).toBeGreaterThan(20);
+    const earlyWave = model.momentum!.slice(0, 18).reduce((acc, p) => acc + p.value, 0);
+    const lateWave = model.momentum!.slice(-18).reduce((acc, p) => acc + p.value, 0);
+    expect(earlyWave).toBeGreaterThan(0);
+    expect(lateWave).toBeLessThan(0);
+
+    const host = document.createElement("div");
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    act(() => {
+      root.render(
+        <MatchTimelineScrubber
+          model={model}
+          currentSeconds={150}
+          onSeek={jest.fn()}
+          readOnly={false}
+          homeColor="#10b981"
+          awayColor="#f59e0b"
+        />,
+      );
+    });
+    expect(host.querySelector("[data-testid='match-momentum-wave']")).not.toBeNull();
+    act(() => root.unmount());
+    host.remove();
+  });
 });

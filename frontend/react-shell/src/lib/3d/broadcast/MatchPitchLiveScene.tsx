@@ -25,6 +25,7 @@ import {
 } from "./SpatialInterpolator";
 import { CameraDirector, ManualCameraMode, type CameraPose } from "./CameraDirector";
 import { BroadcastOverlayHUD } from "./BroadcastOverlayHUD";
+import { FMCommentaryStrip, resolveCommentaryPhase } from "../../../match2d/FMCommentaryStrip";
 import {
   SpectatorSafeMatchView,
   SpectatorSafeFrameView,
@@ -183,6 +184,8 @@ export interface MatchPitchLiveSceneProps {
   bloomEnabled?: boolean;
   /** Callback when user toggles bloom post-processing */
   onToggleBloom?: () => void;
+  /** Initial broadcast camera mode (e.g. "fm_director" for lean locked-60fps FM Director Camera) */
+  initialCameraMode?: ManualCameraMode;
   /** Additional container CSS class */
   className?: string;
   /** Test identifier */
@@ -224,6 +227,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   onHapticsChange,
   bloomEnabled: propBloomEnabled = true,
   onToggleBloom,
+  initialCameraMode: propInitialCameraMode = "director_auto",
   className = "",
   testId = "match-pitch-live-scene",
 }) => {
@@ -249,7 +253,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   const audioEngineRef = useRef<StadiumAudioEngine>(new StadiumAudioEngine({ initialMuted: true }));
   const [webglSupported, setWebglSupported] = useState<boolean>(true);
   const [contextLost, setContextLost] = useState<boolean>(false);
-  const [cameraMode, setCameraMode] = useState<ManualCameraMode>("director_auto");
+  const [cameraMode, setCameraMode] = useState<ManualCameraMode>(propInitialCameraMode);
+  const cameraModeRef = useRef<ManualCameraMode>(propInitialCameraMode);
   const [is2DActive, setIs2DActive] = useState<boolean>(false);
   const [audioMuted, setAudioMuted] = useState<boolean>(true);
   const [qualityTier, setQualityTierState] = useState<DeviceQualityTier>(propQualityTier);
@@ -417,7 +422,11 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
   );
 
   // Camera director instance
-  const cameraDirector = useMemo(() => new CameraDirector(), []);
+  const cameraDirector = useMemo(() => {
+    const dir = new CameraDirector();
+    dir.setManualMode(propInitialCameraMode);
+    return dir;
+  }, []);
 
   // Internal playback time tracker
   const [currentTime, setCurrentTime] = useState<number>(() => {
@@ -511,6 +520,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
 
   // Sync manual camera mode
   useEffect(() => {
+    cameraModeRef.current = cameraMode;
     cameraDirector.setManualMode(cameraMode);
   }, [cameraMode, cameraDirector]);
 
@@ -995,9 +1005,15 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
     const observedCameraPresetsHistory = new Set<string>();
     const activePlayerIdsScratch = new Set<string>();
     let lastUiStateUpdateMs = 0;
+    let lastCommentaryCueKey = "";
+    let lastReactionsKey = "";
+    let lastCheerMeterValue = -1;
     let phaseStamp = "";
     let phaseStartedMs = performance.now();
     const ballAnchor = new THREE.Vector3();
+    const smoothedBallAnchor = new THREE.Vector3();
+    let hasSmoothedBallAnchor = false;
+    let ballHoldBlend = 0;
 
     if (typeof window !== "undefined") {
       (window as any).__GTEX_BROADCAST_CONTROL__ = {
@@ -1126,7 +1142,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       animationFrameId = requestAnimationFrame(renderLoop);
 
       const rawDeltaMs = Math.max(0.1, now - lastTimestamp);
-      const deltaSec = Math.min(0.1, rawDeltaMs / 1000);
+      const deltaSec = Math.min(0.05, rawDeltaMs / 1000);
       lastTimestamp = now;
 
       if (rawDeltaMs < 250) {
@@ -1211,7 +1227,8 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
               clock_minute: liveAuthoritativeState.clock_minute,
             }
           : state;
-      if (now - lastUiStateUpdateMs >= 100 || !state) {
+      const shouldSyncUi = now - lastUiStateUpdateMs >= 250 || !state;
+      if (shouldSyncUi) {
         lastUiStateUpdateMs = now;
         setCurrentTime(localTime);
         setCurrentMatchState(hudState);
@@ -1450,9 +1467,25 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           phase: state.phase,
         });
         immersionLayer.update(deltaSec);
-        setCommentaryCue(immersionLayer.getCurrentCommentaryCue());
-        setSpectatorReactions(immersionLayer.getRecentReactions());
-        setWatchPartyCheerMeter(immersionLayer.getSummary().cheerMeter);
+        if (shouldSyncUi) {
+          const nextCue = immersionLayer.getCurrentCommentaryCue();
+          const cueKey = nextCue ? `${nextCue.id || ""}:${nextCue.text || ""}` : "";
+          if (cueKey !== lastCommentaryCueKey) {
+            lastCommentaryCueKey = cueKey;
+            setCommentaryCue(nextCue);
+          }
+          const nextReactions = immersionLayer.getRecentReactions();
+          const reactKey = nextReactions.map((r) => r.id).join(",");
+          if (reactKey !== lastReactionsKey) {
+            lastReactionsKey = reactKey;
+            setSpectatorReactions(nextReactions);
+          }
+          const nextCheer = Math.round(immersionLayer.getSummary().cheerMeter);
+          if (nextCheer !== lastCheerMeterValue) {
+            lastCheerMeterValue = nextCheer;
+            setWatchPartyCheerMeter(nextCheer);
+          }
+        }
 
         // React WebGL Upgrades: Update PBR turf anisotropic sheen & moisture
         pbrTurf.setMoisture(weatherPresetRef.current === "rain" ? 0.8 : weatherPresetRef.current === "snow" ? 0.45 : 0.0);
@@ -1539,15 +1572,32 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           observedStatesHistory.add(resolvedState);
         }
 
+        let holdingBallNow = false;
         if (ballOwner) {
           const ownerRig = playerRigs.get(ballOwner.player_id);
           if (ownerRig && "holdsBall" in ownerRig && ownerRig.holdsBall() && ownerRig.placeBall(ballAnchor)) {
-            bx = ballAnchor.x;
-            by = ballAnchor.y;
-            bz = ballAnchor.z;
-            ballMesh.position.set(bx, by + ballLift, bz);
-            ballShadowMesh.position.set(bx, 0.03, bz);
+            holdingBallNow = true;
+            if (!hasSmoothedBallAnchor || smoothedBallAnchor.distanceTo(ballAnchor) > 2.2) {
+              smoothedBallAnchor.copy(ballAnchor);
+              hasSmoothedBallAnchor = true;
+            } else {
+              const anchorAlpha = 1 - Math.exp(-Math.max(deltaSec, 0.001) * 18);
+              smoothedBallAnchor.lerp(ballAnchor, anchorAlpha);
+            }
           }
+        }
+        if (holdingBallNow) {
+          ballHoldBlend = Math.min(1, ballHoldBlend + deltaSec * 12);
+        } else {
+          ballHoldBlend = Math.max(0, ballHoldBlend - deltaSec * 14);
+          if (ballHoldBlend <= 0.01) hasSmoothedBallAnchor = false;
+        }
+        if (ballHoldBlend > 0.01 && hasSmoothedBallAnchor) {
+          bx = bx + (smoothedBallAnchor.x - bx) * ballHoldBlend;
+          by = by + (smoothedBallAnchor.y - by) * ballHoldBlend;
+          bz = bz + (smoothedBallAnchor.z - bz) * ballHoldBlend;
+          ballMesh.position.set(bx, by + ballLift, bz);
+          ballShadowMesh.position.set(bx, 0.03, bz);
         }
 
         // Hide inactive/substituted player rigs
@@ -1586,7 +1636,13 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
       }
 
       if (renderer) {
-        postProcessing.render(deltaSec);
+        const replayActiveRender = replayCursorTimeRef.current !== null;
+        // Lean locked-60fps path for FM Director / bloom-off live play: skip multi-pass FBO post-processing overhead
+        if (!replayActiveRender && (cameraModeRef.current === "fm_director" || !postProcessing.isBloomEnabled())) {
+          renderer.render(scene, camera);
+        } else {
+          postProcessing.render(deltaSec);
+        }
 
         if (typeof window !== "undefined" && frameDeltaSamplesMs.length > 0) {
           telemetryTick++;
@@ -1947,7 +2003,7 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
         {/* Three.js Canvas Mount */}
         <div ref={mountRef} className="h-full w-full" />
 
-        {/* Broadcast Overlay HUD */}
+        {/* Broadcast Overlay HUD with slotted FM-Style Dynamic Commentary Strip (never overlaps bottom controls or penalty box) */}
         <BroadcastOverlayHUD
           matchState={currentMatchState}
           homeTeam={safeView.home_team}
@@ -1991,6 +2047,82 @@ export const MatchPitchLiveScene: React.FC<MatchPitchLiveSceneProps> = ({
           replayFallbackMessage={replayFallbackMessage}
           onTriggerReplay={handleTriggerReplay}
           activeSponsorName={activeSponsorName}
+          suppressInlineCommentary
+          commentaryStripNode={
+            currentMatchState
+              ? (() => {
+                  const ev = activeHudEvent as Record<string, any> | null;
+                  const evType = String(ev?.event_type || ev?.type || "").toLowerCase();
+                  const fmPhase = resolveCommentaryPhase({ kind: evType || (isReplayActive ? "var" : "neutral") });
+                  const carrier = currentMatchState.players.find((p) => p.has_possession);
+                  const posTeam =
+                    currentMatchState.possession_side === "away" ? safeView.away_team : safeView.home_team;
+                  const evTeamIsAway =
+                    ev?.team_id === safeView.away_team.team_id ||
+                    String(ev?.side || "").toLowerCase() === "away" ||
+                    currentMatchState.possession_side === "away";
+                  const clubColor = evTeamIsAway
+                    ? safeView.away_team.primary_color
+                    : safeView.home_team.primary_color;
+                  const headline =
+                    ev?.banner_text ||
+                    ev?.commentary ||
+                    commentaryCue?.text ||
+                    currentMatchState.event_banner ||
+                    (carrier
+                      ? `${carrier.label || `#${carrier.shirt_number || ""}`} drives forward for ${posTeam.team_name}`
+                      : `${posTeam.team_name} building through midfield`);
+                  const badge =
+                    fmPhase === "goal"
+                      ? "GOAL"
+                      : fmPhase === "chance"
+                        ? evType === "save"
+                          ? "SAVE"
+                          : "BIG CHANCE"
+                        : fmPhase === "card_red"
+                          ? "RED CARD"
+                          : fmPhase === "card_yellow"
+                            ? "YELLOW CARD"
+                            : fmPhase === "var"
+                              ? "VAR"
+                              : fmPhase === "sub"
+                                ? "SUBSTITUTION"
+                                : "PLAY-BY-PLAY";
+                  const ballXNorm = (currentMatchState.ball.position3D[0] + 52.5) / 105;
+                  const ballYNorm = (currentMatchState.ball.position3D[2] + 34) / 68;
+                  const rawXg = Number(
+                    ev?.xg ??
+                      ev?.expected_goals ??
+                      (fmPhase === "chance"
+                        ? Math.max(
+                            0.07,
+                            Math.min(
+                              0.76,
+                              0.55 - Math.min(0.46, Math.hypot(Math.min(ballXNorm, 1 - ballXNorm), Math.abs(ballYNorm - 0.5)) * 1.45),
+                            ),
+                          )
+                        : NaN),
+                  );
+                  return (
+                    <FMCommentaryStrip
+                      floating
+                      testId="broadcast-fm-commentary-strip"
+                      phase={fmPhase}
+                      badge={badge}
+                      headline={headline}
+                      minuteLabel={`${Math.max(0, Math.floor(currentMatchState.clock_minute))}'`}
+                      scoreline={`${currentMatchState.home_score} - ${currentMatchState.away_score}`}
+                      scorerName={fmPhase === "goal" ? String(ev?.primary_player_name || "").trim() || null : null}
+                      assistName={fmPhase === "goal" ? String(ev?.secondary_player_name || "").trim() || null : null}
+                      shotXg={Number.isFinite(rawXg) && rawXg > 0 ? rawXg : null}
+                      clubColor={clubColor}
+                      kind={evType || fmPhase}
+                      tone={fmPhase}
+                    />
+                  );
+                })()
+              : null
+          }
         />
       </div>
     </div>

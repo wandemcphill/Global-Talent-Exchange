@@ -15,10 +15,17 @@ export type TimelineSegment = {
   endSeconds: number;
 };
 
+export type MomentumPoint = {
+  t: number;
+  /** Signed momentum in [-1, 1]: positive = Home attacking pressure / xG, negative = Away. */
+  value: number;
+};
+
 export type TimelineModel = {
   durationSeconds: number;
   segments: TimelineSegment[];
   pins: TimelinePin[];
+  momentum?: MomentumPoint[];
 };
 
 const PIN_TYPES: Record<string, TimelinePin["type"]> = {
@@ -49,7 +56,15 @@ export function phaseLabel(phase: string): string {
  * field and pins from supplied events. Nothing is synthesised (no assumed 45' half-time).
  */
 export function buildTimelineModel(
-  frames: ReadonlyArray<{ timeSeconds: number; phase?: string | null }>,
+  frames: ReadonlyArray<{
+    timeSeconds: number;
+    phase?: string | null;
+    possession_side?: string | null;
+    possessionSide?: string | null;
+    pressure_index?: number | null;
+    ball?: { x?: number; position?: { x?: number } } | null;
+    home_attacks_right?: boolean;
+  }>,
   events: ReadonlyArray<Record<string, any>>,
   durationSeconds: number,
 ): TimelineModel {
@@ -106,7 +121,69 @@ export function buildTimelineModel(
     });
   }
   pins.sort((a, b) => a.timeSeconds - b.timeSeconds);
-  return { durationSeconds: duration, segments, pins };
+
+  // Build smoothed xG & territorial momentum wave across 48 buckets
+  const BUCKETS = 48;
+  const rawSum = new Float32Array(BUCKETS);
+  const rawCount = new Float32Array(BUCKETS);
+  if (duration > 0) {
+    for (const frame of sorted) {
+      const idx = Math.min(BUCKETS - 1, Math.max(0, Math.floor((frame.timeSeconds / duration) * BUCKETS)));
+      const rawBallX = Number(frame.ball?.position?.x ?? frame.ball?.x ?? NaN);
+      const ballX = Number.isFinite(rawBallX) ? (rawBallX > 1.5 ? rawBallX / 100 : rawBallX) : 0.5;
+      const attacksRight = frame.home_attacks_right !== false;
+      const territory = (ballX - 0.5) * 2 * (attacksRight ? 1 : -1); // +1 near away goal, -1 near home goal
+      const posSide = String(frame.possession_side || frame.possessionSide || "").toLowerCase();
+      const posBias = posSide === "home" ? 0.35 : posSide === "away" ? -0.35 : 0;
+      const pressure = Number(frame.pressure_index);
+      const pressBoost = Number.isFinite(pressure) ? 0.7 + Math.min(0.6, pressure * 0.5) : 1;
+      rawSum[idx] += Math.max(-1, Math.min(1, (territory * 0.75 + posBias) * pressBoost));
+      rawCount[idx] += 1;
+    }
+    for (const ev of events || []) {
+      if (!ev) continue;
+      const sec = Number.isFinite(Number(ev.time_seconds))
+        ? Number(ev.time_seconds)
+        : Number.isFinite(Number(ev.minute ?? ev.clock_minute))
+          ? Number(ev.minute ?? ev.clock_minute) * 60
+          : NaN;
+      if (!Number.isFinite(sec) || sec < 0 || sec > duration + 1) continue;
+      const idx = Math.min(BUCKETS - 1, Math.max(0, Math.floor((sec / duration) * BUCKETS)));
+      const sideRaw = String(ev.side || ev.team || "").toLowerCase();
+      const sign = sideRaw === "away" ? -1 : sideRaw === "home" ? 1 : 0;
+      if (sign === 0) continue;
+      const rawType = String(ev.type || ev.event_type || "").toLowerCase();
+      const xg = Number(ev.xg ?? ev.expected_goals ?? 0);
+      const weight =
+        rawType === "goal" || rawType === "penalty_goal"
+          ? 1.0
+          : rawType === "shot" || rawType === "save" || rawType === "penalty" || rawType === "miss"
+            ? Math.max(0.45, Math.min(0.95, xg > 0 ? xg * 1.4 : 0.55))
+            : rawType === "corner" || rawType === "attack" || rawType === "chance"
+              ? 0.32
+              : 0;
+      if (weight > 0) {
+        rawSum[idx] += sign * weight * 1.8;
+        rawCount[idx] += 1;
+      }
+    }
+  }
+  const averaged = new Float32Array(BUCKETS);
+  for (let i = 0; i < BUCKETS; i += 1) {
+    averaged[i] = rawCount[i] > 0 ? Math.max(-1, Math.min(1, rawSum[i] / rawCount[i])) : 0;
+  }
+  const momentum: MomentumPoint[] = [];
+  for (let i = 0; i < BUCKETS; i += 1) {
+    const prev = averaged[Math.max(0, i - 1)];
+    const cur = averaged[i];
+    const next = averaged[Math.min(BUCKETS - 1, i + 1)];
+    momentum.push({
+      t: ((i + 0.5) / BUCKETS) * duration,
+      value: Math.max(-1, Math.min(1, prev * 0.25 + cur * 0.5 + next * 0.25)),
+    });
+  }
+
+  return { durationSeconds: duration, segments, pins, momentum };
 }
 
 const PIN_STYLE: Record<TimelinePin["type"], string> = {
@@ -134,19 +211,43 @@ export function MatchTimelineScrubber({
   currentSeconds,
   onSeek,
   readOnly = true,
+  homeColor = "#10b981",
+  awayColor = "#38bdf8",
 }: {
   model: TimelineModel;
   currentSeconds: number;
   onSeek?: (seconds: number) => void;
   readOnly?: boolean;
+  homeColor?: string;
+  awayColor?: string;
 }) {
   const [hoveredPinId, setHoveredPinId] = useState<string | null>(null);
-  const { durationSeconds, segments, pins } = model;
+  const { durationSeconds, segments, pins, momentum = [] } = model;
   if (durationSeconds <= 0) return null;
   const clamped = Math.min(durationSeconds, Math.max(0, currentSeconds));
   const pct = (sec: number) => `${Math.min(100, Math.max(0, (sec / durationSeconds) * 100))}%`;
   const activeSegment = segments.find((s) => clamped >= s.startSeconds && clamped <= s.endSeconds);
   const hoveredPin = hoveredPinId ? pins.find((p) => p.id === hoveredPinId) || null : null;
+
+  // Build SVG upper (Home) and lower (Away) xG momentum wave paths
+  const waveW = 480;
+  const waveH = 28;
+  const midY = waveH / 2;
+  const buildWavePath = (sideSign: 1 | -1) => {
+    if (!momentum.length) return "";
+    const pts: string[] = [`M 0 ${midY}`];
+    for (let i = 0; i < momentum.length; i += 1) {
+      const x = ((i + 0.5) / momentum.length) * waveW;
+      const v = momentum[i].value * sideSign;
+      const mag = v > 0 ? Math.min(1, v) * (midY - 2) : 0;
+      const y = sideSign > 0 ? midY - mag : midY + mag;
+      pts.push(`L ${x.toFixed(1)} ${y.toFixed(1)}`);
+    }
+    pts.push(`L ${waveW} ${midY} Z`);
+    return pts.join(" ");
+  };
+  const homeWavePath = buildWavePath(1);
+  const awayWavePath = buildWavePath(-1);
 
   const handlePrevKey = () => {
     if (!onSeek) return;
@@ -195,29 +296,43 @@ export function MatchTimelineScrubber({
             </div>
           )}
         </div>
-        <span className="font-mono">
-          {Math.floor(clamped / 60)}:{String(Math.floor(clamped % 60)).padStart(2, "0")} /{" "}
-          {Math.floor(durationSeconds / 60)}:{String(Math.floor(durationSeconds % 60)).padStart(2, "0")}
-        </span>
-      </div>
-      {hoveredPin && (
-        <div
-          data-testid="timeline-pin-preview"
-          className="mb-1.5 flex items-center justify-between gap-2 rounded border border-white/15 bg-slate-900/95 px-2.5 py-1 text-[11px] text-slate-100 shadow-lg"
-        >
-          <div className="flex min-w-0 items-center gap-2">
+        {hoveredPin && (
+          <div
+            data-testid="timeline-pin-preview"
+            className="pointer-events-none flex min-w-0 max-w-md items-center gap-2 rounded border border-white/15 bg-slate-900/95 px-2 py-0.5 text-[10px] normal-case tracking-normal text-slate-100 shadow"
+          >
             <span
-              className={`shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider ${PIN_BADGE[hoveredPin.type].tone}`}
+              className={`shrink-0 rounded border px-1.5 py-0 text-[9px] font-black uppercase tracking-wider ${PIN_BADGE[hoveredPin.type].tone}`}
             >
               {PIN_BADGE[hoveredPin.type].text}
             </span>
             <span className="truncate font-bold">{hoveredPin.label}</span>
           </div>
-          <span className="shrink-0 font-mono text-[10px] text-slate-400">Broadcast incident</span>
-        </div>
-      )}
-      <div className="relative h-6" role="progressbar" aria-label="Universal broadcast progress" aria-valuemin={0} aria-valuemax={Math.round(durationSeconds)} aria-valuenow={Math.round(clamped)}>
-        <div className="absolute inset-x-0 top-2.5 flex h-1.5 overflow-hidden rounded-full bg-slate-800">
+        )}
+        <span className="font-mono">
+          {Math.floor(clamped / 60)}:{String(Math.floor(clamped % 60)).padStart(2, "0")} /{" "}
+          {Math.floor(durationSeconds / 60)}:{String(Math.floor(durationSeconds % 60)).padStart(2, "0")}
+        </span>
+      </div>
+      <div className="relative h-9" role="progressbar" aria-label="Universal broadcast progress" aria-valuemin={0} aria-valuemax={Math.round(durationSeconds)} aria-valuenow={Math.round(clamped)}>
+        {/* xG & Territorial Momentum Wave */}
+        {momentum.length > 0 && (
+          <svg
+            data-testid="match-momentum-wave"
+            role="img"
+            aria-label="Match xG momentum wave"
+            width="100%"
+            height="28"
+            viewBox={`0 0 ${waveW} ${waveH}`}
+            preserveAspectRatio="none"
+            className="pointer-events-none absolute inset-x-0 top-0.5 block h-7 w-full"
+          >
+            <line x1={0} y1={midY} x2={waveW} y2={midY} stroke="rgba(148,163,184,0.22)" strokeWidth={1} />
+            {homeWavePath && <path d={homeWavePath} fill={homeColor} fillOpacity={0.34} />}
+            {awayWavePath && <path d={awayWavePath} fill={awayColor} fillOpacity={0.34} />}
+          </svg>
+        )}
+        <div className="absolute inset-x-0 top-4 flex h-1.5 overflow-hidden rounded-full bg-slate-800/80">
           {segments.map((s) => (
             <div
               key={`${s.phase}:${s.startSeconds}`}
@@ -237,29 +352,35 @@ export function MatchTimelineScrubber({
             max={Math.round(durationSeconds)}
             value={Math.round(clamped)}
             onChange={(e) => onSeek(Number(e.target.value))}
-            className="absolute inset-x-0 top-0 z-20 h-6 w-full cursor-pointer opacity-0"
+            className="absolute inset-x-0 top-0 z-20 h-9 w-full cursor-pointer opacity-0"
           />
         )}
-        {pins.map((pin) => (
-          <div
-            key={pin.id}
-            data-testid="match-timeline-pin"
-            data-pin-type={pin.type}
-            title={pin.label}
-            aria-label={pin.label}
-            tabIndex={0}
-            onMouseEnter={() => setHoveredPinId(pin.id)}
-            onMouseLeave={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
-            onFocus={() => setHoveredPinId(pin.id)}
-            onBlur={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
-            onClick={!readOnly && onSeek ? () => onSeek(Math.max(0, pin.timeSeconds - 6)) : undefined}
-            className={`pointer-events-auto absolute top-0 z-10 h-3 w-1.5 -translate-x-1/2 rounded-sm ${PIN_STYLE[pin.type]} ${!readOnly && onSeek ? "cursor-pointer" : ""}`}
-            style={{ left: pct(pin.timeSeconds) }}
-          />
-        ))}
+        {pins.map((pin) => {
+          const isGoalPin = pin.type === "goal" || pin.type === "penalty";
+          const topClass = pin.side === "away" ? "top-5" : "top-0.5";
+          return (
+            <div
+              key={pin.id}
+              data-testid="match-timeline-pin"
+              data-pin-type={pin.type}
+              title={pin.label}
+              aria-label={pin.label}
+              tabIndex={0}
+              onMouseEnter={() => setHoveredPinId(pin.id)}
+              onMouseLeave={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
+              onFocus={() => setHoveredPinId(pin.id)}
+              onBlur={() => setHoveredPinId((prev) => (prev === pin.id ? null : prev))}
+              onClick={!readOnly && onSeek ? () => onSeek(Math.max(0, pin.timeSeconds - 6)) : undefined}
+              className={`pointer-events-auto absolute ${topClass} z-30 -translate-x-1/2 rounded-full border border-slate-950 shadow-sm transition-transform hover:scale-125 ${
+                isGoalPin ? "h-3 w-3" : "h-2.5 w-2"
+              } ${PIN_STYLE[pin.type]} ${!readOnly && onSeek ? "cursor-pointer" : ""}`}
+              style={{ left: pct(pin.timeSeconds) }}
+            />
+          );
+        })}
         <div
           data-testid="match-timeline-playhead"
-          className="pointer-events-none absolute top-1.5 h-4 w-0.5 -translate-x-1/2 bg-white"
+          className="pointer-events-none absolute top-0.5 z-20 h-8 w-0.5 -translate-x-1/2 bg-white shadow-[0_0_8px_rgba(255,255,255,0.85)]"
           style={{ left: pct(clamped) }}
         />
       </div>

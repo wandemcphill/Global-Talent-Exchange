@@ -179,13 +179,43 @@ def _anchors_tuples(
     cursor = 0
     outfield = lineup[1:]
     width_factor = 1.0 + ((width - 50.0) * 0.008)
+    attack_dir = 1.0 if attacks_right else -1.0
+    num_groups = len(sizes)
     for group_index, size in enumerate(sizes):
         ys = _LINE_Y.get(size, tuple(10.0 + ((i + 1) * (80.0 / (size + 1))) for i in range(size)))
         if width_factor != 1.0:
             ys = tuple(_clamp(50.0 + (y - 50.0) * width_factor, 8.0, 92.0) for y in ys)
         bx = float(base_x[group_index])
+        is_defense = group_index == 0
+        is_attack = group_index == num_groups - 1 and num_groups > 1
         for local_index in range(size):
-            result[outfield[cursor + local_index]] = (bx, float(ys[local_index]))
+            # Subtle, realistic football depth staggering so lines form natural triangles/bows
+            # instead of rigid foosball columns (static per slot -> zero idle drift).
+            depth_stagger = 0.0
+            if is_defense:
+                if size >= 4:
+                    depth_stagger = 2.4 if local_index in (0, size - 1) else -1.2
+                elif size == 3:
+                    depth_stagger = 1.6 if local_index in (0, 2) else -1.2
+            elif is_attack:
+                if size == 3:
+                    depth_stagger = 2.8 if local_index == 1 else -1.6
+                elif size == 2:
+                    depth_stagger = 1.4 if local_index == 0 else -1.4
+                elif size >= 4:
+                    depth_stagger = 2.0 if 0 < local_index < size - 1 else -1.6
+            else:
+                # Midfield shape: subtle triangle stagger without breaking pressing proximity
+                if size == 3:
+                    depth_stagger = -1.2 if local_index == 1 else 1.1
+                elif size == 4:
+                    depth_stagger = 1.8 if local_index in (0, 3) else (-1.2 if local_index == 1 else 0.8)
+                elif size == 2:
+                    depth_stagger = -1.2 if local_index == 0 else 1.2
+                elif size >= 5:
+                    depth_stagger = 1.8 if local_index in (0, size - 1) else (-1.4 if local_index == size // 2 else 0.6)
+            staggered_x = _clamp(bx + depth_stagger * attack_dir, 12.0, 88.0)
+            result[outfield[cursor + local_index]] = (staggered_x, float(ys[local_index]))
         cursor += size
     return result
 
@@ -722,7 +752,7 @@ def _engage_around_the_ball(
     stop = 4.6
     if dist > stop:
         press = _clamp((_instruction(runtime, "press_intensity") - 50.0) / 50.0, -1.0, 1.0)
-        gain = 0.4 + (0.22 * press)
+        gain = 0.56 + (0.22 * press)
         scale = (dist - stop) / dist
         position["x"] += dx * scale * gain
         position["y"] += dy * scale * gain
@@ -948,7 +978,12 @@ def build_player_payloads(
                 moving = 1.4 if in_possession else -0.7
                 vx = moving * possession_dir
                 vy = 0.0
-            speed_ratio = _clamp(hypot(vx, vy) / 8.5, 0.0, 1.0)
+            speed_mag = hypot(vx, vy)
+            speed_ratio = _clamp(speed_mag / 8.5, 0.0, 1.0)
+            if speed_mag >= 0.15:
+                facing_vec = {"x": round(vx / speed_mag, 3), "y": round(vy / speed_mag, 3)}
+            else:
+                facing_vec = {"x": 1.0 if attacks_right else -1.0, "y": 0.0}
             appearance = _player_appearance(player)
             payloads.append(
                 {
@@ -957,6 +992,7 @@ def build_player_payloads(
                     "side": player.side,
                     "shirt_number": player.shirt_number,
                     "label": player.label,
+                    "player_name": getattr(player, "player_name", None) or player.label,
                     "role": player.role,
                     "line": line,
                     "state": state,
@@ -978,7 +1014,7 @@ def build_player_payloads(
                             and runtime.view.side is possession_side
                         )
                     ),
-                    "facing": {"x": 1.0 if vx >= 0 else -1.0, "y": 0.0},
+                    "facing": facing_vec,
                     "velocity": {"x": round(vx, 3), "y": round(vy, 3)},
                     **appearance,
                 }

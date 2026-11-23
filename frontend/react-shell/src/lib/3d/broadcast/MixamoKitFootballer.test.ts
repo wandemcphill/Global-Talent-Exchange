@@ -3,7 +3,15 @@ jest.mock("three/examples/jsm/utils/SkeletonUtils.js", () => ({
 }));
 
 import * as THREE from "three";
-import { clipTimeScale, everyFootballStateHasMixamoClip, gaitForGroundSpeed, MIXAMO_CLIP_BY_STATE, retargetMixamoClip } from "./MixamoKitFootballer";
+import {
+  clipTimeScale,
+  computeSprintPitchRad,
+  computeTurnBankingRad,
+  everyFootballStateHasMixamoClip,
+  gaitForGroundSpeed,
+  MIXAMO_CLIP_BY_STATE,
+  retargetMixamoClip,
+} from "./MixamoKitFootballer";
 import { ALL_FOOTBALL_ANIMATION_STATES } from "./FootballAnimationStateMachine";
 
 describe("MixamoKitFootballer clip map", () => {
@@ -54,5 +62,16 @@ describe("MixamoKitFootballer clip map", () => {
       "mixamorig:Spine.quaternion",
       "mixamorigLeftArm.quaternion",
     ]);
+  });
+
+  test("scales athletic turn banking and forward sprint pitch with ground speed and clamps bounds", () => {
+    const slowBank = Math.abs(computeTurnBankingRad(0.5, 1.0, 1.0));
+    const fastBank = Math.abs(computeTurnBankingRad(0.5, 1.0, 6.0));
+    expect(fastBank).toBeGreaterThan(slowBank);
+    expect(Math.abs(computeTurnBankingRad(3.0, 5.0, 9.0))).toBeLessThanOrEqual(0.22);
+
+    expect(computeSprintPitchRad(1.5)).toBe(0);
+    expect(computeSprintPitchRad(6.5)).toBeGreaterThan(0.05);
+    expect(computeSprintPitchRad(12.0)).toBeLessThanOrEqual(0.09);
   });
 });

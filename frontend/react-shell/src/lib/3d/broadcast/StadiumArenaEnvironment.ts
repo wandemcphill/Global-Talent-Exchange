@@ -206,6 +206,8 @@ export class StadiumArenaEnvironment {
   private crowdReactionIntensity: number = 0.15;
   private crowdReactionTimerSec: number = 0;
   private crowdWaveTimerSec: number = 0;
+  private crowdUpdateAccumSec: number = 1;
+  private readonly crowdMatScratch = new THREE.Matrix4();
   private elapsedSec: number = 0;
   private disposables: Array<{ dispose: () => void }> = [];
   private disposed = false;
@@ -1633,12 +1635,18 @@ export class StadiumArenaEnvironment {
       this.crowdWaveTimerSec = Math.max(0, this.crowdWaveTimerSec - deltaSec);
     }
 
-    // 3. Animate instanced supporters (jumping wave during excitement, subtle sway in open play)
+    // 3. Animate instanced supporters (throttled to ~12Hz calm / ~24Hz celebration to keep 60fps GPU budget lean)
     if (this.supporterMeshes.length > 0 && this.supporterMeta.length > 0) {
-      const mat4 = new THREE.Matrix4();
+      this.crowdUpdateAccumSec += Math.max(0, deltaSec);
+      const waveActive = this.crowdWaveTimerSec > 0;
+      const crowdStepSec = waveActive || this.crowdReactionIntensity > 0.5 ? 0.042 : 0.085;
+      if (this.crowdUpdateAccumSec < crowdStepSec) {
+        return;
+      }
+      this.crowdUpdateAccumSec = 0;
+      const mat4 = this.crowdMatScratch;
       const freq = this.crowdReactionIntensity > 0.5 ? 11.5 : 4.2;
       const amp = 0.06 + this.crowdReactionIntensity * 0.42;
-      const waveActive = this.crowdWaveTimerSec > 0;
       const waveFrontAngle = (this.elapsedSec * 2.8) % (Math.PI * 2);
 
       for (let i = 0; i < this.supporterMeta.length; i++) {

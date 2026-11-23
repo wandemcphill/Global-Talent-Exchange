@@ -70,6 +70,7 @@ class _PlayerRuntime:
     label: str
     shirt_number: int | None
     role: PlayerRole
+    player_name: str = ""
     minutes_played: int | None = None
     substituted_in_minute: int | None = None
     substituted_out_minute: int | None = None
@@ -497,6 +498,7 @@ class MatchTimelineService:
                 label=item.display_name[:3].upper() if item.shirt_number is None else str(item.shirt_number),
                 shirt_number=item.shirt_number,
                 role=item.role,
+                player_name=item.display_name,
                 minutes_played=(
                     player_stats_by_id[item.player_id].minutes_played
                     if player_stats_by_id is not None

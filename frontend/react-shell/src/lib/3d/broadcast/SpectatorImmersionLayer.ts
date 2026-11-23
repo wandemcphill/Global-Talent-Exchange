@@ -81,6 +81,12 @@ export class SpectatorImmersionLayer {
     if (!this.hapticsEnabled || !this.isHapticsSupported()) {
       return false;
     }
+    const navWithActivation = navigator as Navigator & {
+      userActivation?: { hasBeenActive?: boolean };
+    };
+    if (navWithActivation.userActivation && !navWithActivation.userActivation.hasBeenActive) {
+      return false;
+    }
     try {
       return navigator.vibrate(pattern);
     } catch {

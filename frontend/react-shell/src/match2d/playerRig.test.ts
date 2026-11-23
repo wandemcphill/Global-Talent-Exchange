@@ -66,9 +66,10 @@ describe("procedural player rig", () => {
 });
 
 describe("canvas fallback", () => {
-  test("players are painted by the rig, not drawn as circles", () => {
+  test("OrthographicPitch renders FM 2D Classic SDF/vector directional tokens without ctx.arc", () => {
     const src = fs.readFileSync(path.resolve(__dirname, "./OrthographicPitch.tsx"), "utf8");
-    expect(src).toContain("paintRig(");
+    expect(src).toContain("FM 2D Classic Vector Directional Token");
+    expect(src).toContain("uFacing");
     expect(src).not.toContain(".arc(");
   });
 });
