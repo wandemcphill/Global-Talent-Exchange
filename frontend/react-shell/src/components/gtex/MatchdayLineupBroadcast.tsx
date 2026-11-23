@@ -590,9 +590,17 @@ export function TunnelStartingXICard({
                 return (
                   <li
                     key={player.player_id}
-                    className="group flex items-baseline gap-2.5 rounded px-1 py-0.5 transition-colors hover:bg-white/[0.04]"
+                    className="group flex items-center gap-2.5 rounded px-1 py-0.5 transition-colors hover:bg-white/[0.04]"
                   >
-                    <KitBakedMark color="#38bdf8" size={22} />
+                    {player.portrait_url ? (
+                      <img
+                        src={player.portrait_url}
+                        alt={player.full_name}
+                        className="h-6 w-6 shrink-0 rounded-full border border-sky-400/50 bg-slate-900 object-cover shadow"
+                      />
+                    ) : (
+                      <KitBakedMark color="#38bdf8" size={22} />
+                    )}
                     <span className="gx-mono w-5 shrink-0 text-right text-[11px] font-bold text-sky-300/80">
                       {player.shirt_number}
                     </span>
@@ -804,9 +812,17 @@ export function EditorialLineupPosterCard({
                 return (
                   <li
                     key={player.player_id}
-                    className="flex items-baseline justify-center gap-2 leading-none"
+                    className="flex items-center justify-center gap-2 leading-none"
                   >
-                    <KitBakedMark color={accent.badgeBg} size={22} />
+                    {player.portrait_url ? (
+                      <img
+                        src={player.portrait_url}
+                        alt={player.full_name}
+                        className="h-6 w-6 shrink-0 rounded-full border border-amber-400/50 bg-slate-900 object-cover shadow"
+                      />
+                    ) : (
+                      <KitBakedMark color={accent.badgeBg} size={22} />
+                    )}
                     <span className="gx-mono text-[10px] sm:text-[11px] font-black text-[#E5B63F]">
                       {String(player.shirt_number).padStart(2, "0")}
                     </span>

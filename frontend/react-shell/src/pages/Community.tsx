@@ -720,31 +720,83 @@ function CompetitionsTab({ viewerId, clubs }: { viewerId?: string; clubs: any[] 
 
 function ClubsTab({ viewerId }: { viewerId?: string }) {
   const [search, setSearch] = useState("");
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const { active } = useActiveClub();
   const qc = useQueryClient();
   const q = useQuery({ queryKey: ["community-clubs", search], queryFn: async () => (await api.get("/community/discovery/clubs", { params: { q: search || undefined } })).data.clubs as any[] });
+  const challengeClub = async (c: any) => {
+    if (!active?.club_id) {
+      toast.error("Select your active club first.");
+      return;
+    }
+    if (active.club_id === c.id) {
+      toast.error("You cannot challenge your own club.");
+      return;
+    }
+    setBusyId(c.id);
+    try {
+      const created = await api.post(`/clubs/${active.club_id}/challenges`, {
+        title: `Challenge ${c.club_name}`.slice(0, 160),
+        message: `${active.club_name || "Our club"} wants a match against ${c.club_name}.`,
+        target_club_id: c.id,
+        visibility: "private",
+        stakes_text: "Friendly",
+      });
+      const challengeId = created.data?.challenge?.id || created.data?.card?.challenge_id;
+      if (challengeId) {
+        await api.post(`/challenges/${challengeId}/publish`);
+      }
+      toast.success(`Match challenge sent to ${c.club_name}!`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyId(null);
+    }
+  };
   return (
     <div className="space-y-3">
       <input className="gx-input w-full" placeholder="Search clubs by name or city" value={search} onChange={(e) => setSearch(e.target.value)} aria-label="Search clubs" />
       {q.isLoading ? <Loading /> : (q.data || []).length === 0 ? <Empty title="No clubs yet" /> : (
         <div className="grid gap-3 sm:grid-cols-2">
-          {(q.data || []).map((c) => (
-            <div key={c.id} className="gx-panel p-4">
-              <div className="flex items-center gap-3">
-                <span className="size-10 shrink-0 rounded-lg border border-white/20" style={{ background: c.primary_color }} />
-                <div className="min-w-0 flex-1">
-                  <Link to={`/club/${c.slug}`} className="block truncate font-extrabold text-white hover:underline">{c.club_name}</Link>
-                  <p className="truncate text-xs text-slate-400">{[c.city_name, c.country_code, c.stadium_name].filter(Boolean).join(" · ")}</p>
+          {(q.data || []).map((c) => {
+            const isOwn = c.id === active?.club_id || Boolean(viewerId && c.owner?.id && String(c.owner.id) === String(viewerId));
+            return (
+              <div key={c.id} className="gx-panel p-4">
+                <div className="flex items-center gap-3">
+                  <span className="size-10 shrink-0 rounded-lg border border-white/20" style={{ background: c.primary_color }} />
+                  <div className="min-w-0 flex-1">
+                    <Link to={`/club/${c.slug || c.id}`} className="block truncate font-extrabold text-white hover:underline">{c.club_name}</Link>
+                    <p className="truncate text-xs text-slate-400">{[c.city_name, c.country_code, c.stadium_name].filter(Boolean).join(" · ")}</p>
+                  </div>
+                </div>
+                {c.description && <p className="mt-2 line-clamp-3 text-sm text-slate-300">{c.description}</p>}
+                <p className="mt-2 text-xs text-slate-400">{c.trophy_count} trophies · {c.follower_count} supporters · owner {name(c.owner)}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Link to={`/club/${c.slug || c.id}`} className="gx-btn gx-btn-secondary text-xs">
+                    View Profile & Squad
+                  </Link>
+                  {!isOwn && (
+                    <>
+                      <Btn disabled={busyId === c.id} onClick={() => challengeClub(c)}>
+                        {busyId === c.id ? "Sending…" : "Challenge Match"}
+                      </Btn>
+                      <Link
+                        to={`/app/competitions?invite_club_id=${encodeURIComponent(c.id)}&invite_club_name=${encodeURIComponent(c.club_name)}`}
+                        className="gx-btn gx-btn-secondary text-xs"
+                      >
+                        Invite to Cup
+                      </Link>
+                    </>
+                  )}
+                  {viewerId && (
+                    <Btn variant={c.viewer_follows ? "secondary" : "ghost"} onClick={async () => {
+                      try { await toggleClubSupport(c.id, !!c.viewer_follows); qc.invalidateQueries({ queryKey: ["community-clubs"] }); } catch (e) { toast.error(errMsg(e)); }
+                    }}><UserPlus size={13} /> {c.viewer_follows ? "Following" : "Support club"}</Btn>
+                  )}
                 </div>
               </div>
-              {c.description && <p className="mt-2 line-clamp-3 text-sm text-slate-300">{c.description}</p>}
-              <p className="mt-2 text-xs text-slate-400">{c.trophy_count} trophies · {c.follower_count} supporters · owner {name(c.owner)}</p>
-              {viewerId && (
-                <Btn className="mt-3" variant={c.viewer_follows ? "secondary" : "primary"} onClick={async () => {
-                  try { await toggleClubSupport(c.id, !!c.viewer_follows); qc.invalidateQueries({ queryKey: ["community-clubs"] }); } catch (e) { toast.error(errMsg(e)); }
-                }}><UserPlus size={13} /> {c.viewer_follows ? "Following" : "Support club"}</Btn>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

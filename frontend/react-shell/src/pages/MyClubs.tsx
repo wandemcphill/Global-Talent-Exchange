@@ -817,7 +817,7 @@ function ClubIdentityPublishingPanel({ club }: any) {
     const next = visibility === "public" ? "private" : "public";
     setBusy(true);
     try {
-      await api.patch(`/api/clubs/${club.club_id}`, { visibility: next });
+      await api.patch(`/clubs/${club.club_id}`, { visibility: next });
       setVisibility(next);
       toast.success(`Club profile visibility set to ${next.toUpperCase()}.`);
       refresh();
@@ -832,7 +832,7 @@ function ClubIdentityPublishingPanel({ club }: any) {
     e.preventDefault();
     setBusy(true);
     try {
-      await api.patch(`/api/clubs/${club.club_id}`, {
+      await api.patch(`/clubs/${club.club_id}`, {
         short_name: shortName.trim() || undefined,
         home_venue_name: venueName.trim() || undefined,
         description: description.trim() || undefined,

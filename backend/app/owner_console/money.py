@@ -28,7 +28,6 @@ from app.owner_console.service import (
     open_high_flags,
     raise_flag,
     require_state,
-    user_states,
 )
 
 GIFTS = {
@@ -1033,25 +1032,120 @@ def support_holdings(session: Session, user_id: str) -> list[dict[str, Any]]:
 
 
 def world_clubs(session: Session) -> list[dict[str, Any]]:
-    from app.owner_console.models import OwnerClubState
+    from sqlalchemy import func
 
-    states = session.scalars(
-        select(OwnerClubState)
-        .where(OwnerClubState.stage.in_(("competition", "active")))
-        .order_by(OwnerClubState.prestige.desc())
+    from app.models.club_profile import ClubLifecycleStatus, ClubProfile
+    from app.models.club_trophy import ClubTrophy
+    from app.models.user import User
+    from app.owner_console.living_institution import division_name
+    from app.owner_console.models import OwnerClubState, OwnerSquadPlayer
+
+    states = session.scalars(select(OwnerClubState).order_by(OwnerClubState.prestige.desc()).limit(50)).all()
+    state_by_id = {s.club_id: s for s in states}
+    profiles = session.scalars(
+        select(ClubProfile)
+        .where(ClubProfile.lifecycle_status != ClubLifecycleStatus.ARCHIVED_GENERATED)
+        .order_by(ClubProfile.created_at.asc())
         .limit(50)
     ).all()
-    counts: dict[str, int] = {}
-    for s in states:
-        counts[s.owner_user_id] = counts.get(s.owner_user_id, 0) + 1
-    return [
-        {
-            "club_id": s.club_id,
-            "club_name": s.club_name,
-            "fans": s.fans,
-            "prestige": s.prestige,
-            "owner_user_id": s.owner_user_id,
-            "multi_club_group": len(user_states(session, s.owner_user_id)) > 1,
-        }
-        for s in states
+    profile_by_id = {p.id: p for p in profiles}
+    all_club_ids = [
+        cid
+        for cid in dict.fromkeys([*state_by_id.keys(), *profile_by_id.keys()])
+        if cid not in profile_by_id
+        or getattr(profile_by_id[cid].lifecycle_status, "value", profile_by_id[cid].lifecycle_status)
+        != ClubLifecycleStatus.ARCHIVED_GENERATED.value
     ]
+    if not all_club_ids:
+        return []
+
+    missing_profile_ids = [cid for cid in all_club_ids if cid not in profile_by_id]
+    if missing_profile_ids:
+        for p in session.scalars(select(ClubProfile).where(ClubProfile.id.in_(missing_profile_ids))).all():
+            profile_by_id[p.id] = p
+
+    owner_ids = list(
+        {
+            (state_by_id[cid].owner_user_id if cid in state_by_id else profile_by_id[cid].owner_user_id)
+            for cid in all_club_ids
+            if cid in state_by_id or cid in profile_by_id
+        }
+    )
+    owners_by_id = (
+        {u.id: u for u in session.scalars(select(User).where(User.id.in_(owner_ids))).all()} if owner_ids else {}
+    )
+    squad_counts = {
+        str(cid): int(cnt)
+        for cid, cnt in session.execute(
+            select(OwnerSquadPlayer.club_id, func.count(OwnerSquadPlayer.id))
+            .where(
+                OwnerSquadPlayer.club_id.in_(all_club_ids),
+                OwnerSquadPlayer.status.in_(("active", "listed")),
+            )
+            .group_by(OwnerSquadPlayer.club_id)
+        ).all()
+        if cid
+    }
+    trophy_counts = {
+        str(cid): int(cnt)
+        for cid, cnt in session.execute(
+            select(ClubTrophy.club_id, func.count(ClubTrophy.id))
+            .where(ClubTrophy.club_id.in_(all_club_ids))
+            .group_by(ClubTrophy.club_id)
+        ).all()
+        if cid
+    }
+    owner_club_counts: dict[str, int] = {}
+    for cid in all_club_ids:
+        st = state_by_id.get(cid)
+        pr = profile_by_id.get(cid)
+        oid = (st.owner_user_id if st else None) or (pr.owner_user_id if pr else "")
+        if oid:
+            owner_club_counts[oid] = owner_club_counts.get(oid, 0) + 1
+
+    results: list[dict[str, Any]] = []
+    for cid in all_club_ids:
+        st = state_by_id.get(cid)
+        pr = profile_by_id.get(cid)
+        if pr is not None and pr.visibility == "private":
+            continue
+        owner_id = (st.owner_user_id if st else None) or (pr.owner_user_id if pr else "")
+        owner = owners_by_id.get(owner_id)
+        owner_name = (
+            getattr(owner, "display_name", None) or getattr(owner, "username", None) or "GTEX Club Owner"
+            if owner is not None
+            else "GTEX Club Owner"
+        )
+        fac_trophies = len((st.facilities_json or {}).get("_trophies") or []) if st else 0
+        trophies = max(trophy_counts.get(cid, 0), fac_trophies)
+        city_name = pr.city_name if pr else None
+        country_code = pr.country_code if pr else None
+        country_label = (
+            f"{city_name}, {country_code}" if city_name and country_code else (country_code or city_name or "Global")
+        )
+        div_level = (st.division_level if st else None) or "foundation"
+        results.append(
+            {
+                "club_id": cid,
+                "slug": (pr.slug if pr and pr.slug else cid),
+                "club_name": (st.club_name if st and st.club_name else None) or (pr.club_name if pr else "GTEX Club"),
+                "short_name": pr.short_name if pr else None,
+                "city_name": city_name,
+                "country_code": country_code,
+                "country": country_label,
+                "crest_url": pr.crest_asset_ref if pr else None,
+                "primary_color": (pr.primary_color if pr and pr.primary_color else None) or "#0F766E",
+                "secondary_color": (pr.secondary_color if pr and pr.secondary_color else None) or "#F8FAFC",
+                "fans": st.fans if st else 0,
+                "prestige": st.prestige if st else 10,
+                "trophies": trophies,
+                "squad_count": squad_counts.get(cid, 0),
+                "division_level": div_level,
+                "division_name": division_name(div_level),
+                "owner_user_id": owner_id,
+                "owner_name": owner_name,
+                "multi_club_group": owner_club_counts.get(owner_id, 0) > 1,
+            }
+        )
+    results.sort(key=lambda item: (int(item.get("prestige") or 0), int(item.get("trophies") or 0)), reverse=True)
+    return results

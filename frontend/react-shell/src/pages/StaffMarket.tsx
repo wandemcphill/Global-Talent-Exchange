@@ -75,15 +75,24 @@ export default function StaffMarket() {
   const hire = async (candidate: any) => {
     if (!clubId) return;
     try {
-      await api.post(`/owner/clubs/${clubId}/living-world/staff-market/offers`, {
+      const { data } = await api.post(`/owner/clubs/${clubId}/living-world/staff-market/offers`, {
         profile_id: candidate.profile_id,
         role: candidate.role_key,
         offered_salary_fan_coin: Number(salary || annualFanCoin(candidate)),
         contract_years: Number(years || 3),
       });
-      toast.success(`Offer sent to ${candidate.name}.`);
+      if (data?.success === false || data?.status === "rejected" || data?.status === "counter_offer") {
+        toast.error(data?.message || `Offer to ${candidate.name} was not accepted.`);
+        return;
+      }
+      toast.success(data?.message || `Appointed ${candidate.name}.`);
       setOfferFor(null);
-      queryClient.invalidateQueries({ queryKey: ["staff-market", clubId] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["staff-market", clubId] }),
+        queryClient.invalidateQueries({ queryKey: ["club", clubId] }),
+        queryClient.invalidateQueries({ queryKey: ["club-staff", clubId] }),
+        queryClient.invalidateQueries({ queryKey: ["cc"] }),
+      ]);
     } catch (error) {
       toast.error(errMsg(error));
     }

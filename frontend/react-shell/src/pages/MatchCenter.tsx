@@ -1742,10 +1742,12 @@ export default function MatchCenter() {
   // Synchronize late joiners / reconnectors cleanly to shared server-authoritative broadcast position.
   useEffect(() => {
     if (acceptedLive || timedRecordedFrames.length === 0) return;
-    const serverPos = deriveUniversalBroadcastPosition(broadcastSession);
-    if (serverPos !== null && Number.isFinite(serverPos)) {
-      setPlaybackSeconds((prev) => Math.max(prev, serverPos));
-      return;
+    if (isSharedLiveBroadcast) {
+      const serverPos = deriveUniversalBroadcastPosition(broadcastSession);
+      if (serverPos !== null && Number.isFinite(serverPos)) {
+        setPlaybackSeconds((prev) => Math.max(prev, serverPos));
+        return;
+      }
     }
     const key = `${id || ""}:${timedRecordedFrames.length}:${timedRecordedFrames[0].timeSeconds}`;
     if (initializedReplayRef.current === key) return;
@@ -1753,7 +1755,7 @@ export default function MatchCenter() {
     if (timedRecordedFrames[0].timeSeconds > 0) {
       setPlaybackSeconds(timedRecordedFrames[0].timeSeconds);
     }
-  }, [id, acceptedLive, timedRecordedFrames, broadcastSession]);
+  }, [id, acceptedLive, timedRecordedFrames, broadcastSession, isSharedLiveBroadcast]);
 
   const allMatchEvents = useMemo(
     () => (viewerData?.events?.length ? viewerData.events : m?.events || []),

@@ -731,24 +731,6 @@ export default function Lineup() {
                   Academy
                 </span>
               </div>
-              {/* Quick Mobile & Desktop Save / Manager XI Bar right under the Pitch */}
-              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-white/10 pt-3">
-                <Btn
-                  onClick={saveLineup}
-                  disabled={saving || players.length === 0}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Save className="mr-1.5 h-4 w-4" /> {saving ? "Saving lineup…" : "Save lineup"}
-                </Btn>
-                <Btn
-                  variant="secondary"
-                  onClick={autoFillLineup}
-                  disabled={players.length === 0}
-                  className="flex-1 sm:flex-none"
-                >
-                  <Users className="mr-1.5 h-4 w-4" /> Use the manager's XI
-                </Btn>
-              </div>
             </div>
 
             {/* Position-Sorted Unpicked Players Pool (GK -> DEF -> MID -> FWD) with Drag/Tap & Reserve/Academy Move */}
@@ -885,6 +867,7 @@ export default function Lineup() {
             <div className="grid gap-2 sm:grid-cols-2">
               {roles.map((role, index) => {
                 const currentId = starters[index] || "";
+                const selectedPlayer = players.find((item) => item.player_id === currentId);
                 const usedByOtherSlots = new Set(
                   starters.filter((id, slot) => slot !== index && Boolean(id)),
                 );
@@ -893,33 +876,54 @@ export default function Lineup() {
                 );
                 return (
                   <div key={index} className="min-w-0 rounded-sm border border-white/10 p-3">
-                    <label
-                      htmlFor={"lineup-slot-" + index}
-                      className="mb-2 block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
-                    >
-                      {String(index + 1).padStart(2, "0")} · {role}
-                    </label>
-                    <select
-                      id={"lineup-slot-" + index}
-                      data-testid={"lineup-slot-" + index}
-                      aria-label={"Starting position " + (index + 1) + " " + role}
-                      className="gx-input w-full"
-                      value={currentId}
-                      onChange={(event) => setStarter(index, event.target.value)}
-                    >
-                      <option value="">Select player</option>
-                      {options.map((player) => (
-                        <option key={player.player_id} value={player.player_id}>
-                          {player.player_name}
-                          {player.position ? " · " + player.position : ""}
-                          {player.mood_state ? ` · ${player.mood_state}` : ""}
-                          {typeof player.performance_shift === "number" &&
-                          player.performance_shift !== 0
-                            ? ` (${player.performance_shift > 0 ? "+" : ""}${player.performance_shift} OVR)`
-                            : ""}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <label
+                        htmlFor={"lineup-slot-" + index}
+                        className="block text-[10px] font-bold uppercase tracking-[0.14em] text-slate-500"
+                      >
+                        {String(index + 1).padStart(2, "0")} · {role}
+                      </label>
+                      {selectedPlayer?.rating != null && (
+                        <span className="gx-mono rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-black text-emerald-300">
+                          {Math.round(Number(selectedPlayer.rating))} OVR
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2.5">
+                      {selectedPlayer?.portrait_url ? (
+                        <img
+                          src={selectedPlayer.portrait_url}
+                          alt={selectedPlayer.player_name}
+                          className="h-9 w-9 shrink-0 rounded-full border border-emerald-400/60 bg-slate-900 object-cover shadow"
+                        />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-white/15 bg-slate-900 text-[10px] font-black text-emerald-300">
+                          {selectedPlayer?.position?.split("/")[0]?.trim() ||
+                            String(index + 1).padStart(2, "0")}
+                        </span>
+                      )}
+                      <select
+                        id={"lineup-slot-" + index}
+                        data-testid={"lineup-slot-" + index}
+                        aria-label={"Starting position " + (index + 1) + " " + role}
+                        className="gx-input min-w-0 flex-1"
+                        value={currentId}
+                        onChange={(event) => setStarter(index, event.target.value)}
+                      >
+                        <option value="">Select player</option>
+                        {options.map((player) => (
+                          <option key={player.player_id} value={player.player_id}>
+                            {player.player_name}
+                            {player.position ? " · " + player.position : ""}
+                            {player.mood_state ? ` · ${player.mood_state}` : ""}
+                            {typeof player.performance_shift === "number" &&
+                            player.performance_shift !== 0
+                              ? ` (${player.performance_shift > 0 ? "+" : ""}${player.performance_shift} OVR)`
+                              : ""}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
                   </div>
                 );
               })}
@@ -1079,21 +1083,6 @@ export default function Lineup() {
             )}
           </>
         )}
-      </Panel>
-
-      <Panel
-        title="Official Matchday Broadcast Team Sheet"
-        eyebrow="Live TV & Editorial Preview"
-        testid="lineup-broadcast-preview-panel"
-      >
-        <MatchdayLineupBroadcast
-          homeClubId={clubId}
-          homeClubName={club?.club_name || "Your Club"}
-          editableClubId={clubId}
-          formationOverride={formation}
-          onFormationChange={setFormation}
-          defaultView="tunnel"
-        />
       </Panel>
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-sm border border-white/10 p-4">

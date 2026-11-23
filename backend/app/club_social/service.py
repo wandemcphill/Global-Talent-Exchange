@@ -72,7 +72,7 @@ class ClubSocialService:
     ) -> ClubChallenge:
         issuing_club = self._require_owned_club(actor.id, club_id)
         target_club = self._require_club(target_club_id) if target_club_id else None
-        if target_club is not None and target_club.id == issuing_club.id:
+        if target_club is not None and (target_club.id == issuing_club.id or target_club.owner_user_id == actor.id):
             raise ClubSocialError("challenge_target_must_be_different_club")
         challenge = ClubChallenge(
             issuing_club_id=issuing_club.id,
@@ -93,6 +93,64 @@ class ClubSocialService:
         )
         self.session.add(challenge)
         self.session.flush()
+        if target_club is not None and target_club.owner_user_id:
+            try:
+                from sqlalchemy import inspect as sa_inspect
+
+                from app.owner_console.models import OwnerCompetition, OwnerInboxItem
+
+                inspector = sa_inspect(self.session.connection())
+                if inspector.has_table(OwnerInboxItem.__tablename__):
+                    with self.session.begin_nested():
+                        invite_comp = (
+                            self.session.get(OwnerCompetition, competition_id)
+                            if competition_id and inspector.has_table(OwnerCompetition.__tablename__)
+                            else None
+                        )
+                        is_comp_invite = invite_comp is not None or bool(
+                            isinstance(metadata_json, dict) and metadata_json.get("invite_code")
+                        )
+                        inbox_item = OwnerInboxItem(
+                            user_id=target_club.owner_user_id,
+                            club_id=target_club.id,
+                            save_context_id=f"club:{target_club.id}",
+                            category="scheduling",
+                            kind="competition_invite" if is_comp_invite else "match_schedule",
+                            sender=issuing_club.club_name,
+                            title=title,
+                            what=message,
+                            why=(
+                                f"{issuing_club.club_name} invited {target_club.club_name} to join their competition. Entry is free."
+                                if is_comp_invite
+                                else f"{issuing_club.club_name} issued a direct match challenge to {target_club.club_name}."
+                            ),
+                            actions_json=(
+                                [
+                                    {"key": "enter", "label": "Enter competition", "style": "primary"},
+                                    {"key": "decline", "label": "Not now", "style": "ghost"},
+                                ]
+                                if invite_comp is not None
+                                else []
+                            ),
+                            payload_json={
+                                "subject": competition_id or challenge.id,
+                                "competition_id": competition_id,
+                                "challenge_id": challenge.id,
+                                "issuing_club_id": issuing_club.id,
+                                "issuing_club_name": issuing_club.club_name,
+                                "invite_code": (
+                                    invite_comp.invite_code
+                                    if invite_comp is not None
+                                    else (metadata_json or {}).get("invite_code")
+                                ),
+                            },
+                            priority="high",
+                            is_decision=bool(invite_comp is not None),
+                        )
+                        self.session.add(inbox_item)
+                        self.session.flush()
+            except Exception:
+                pass
         self._sync_challenge_status(challenge)
         self.refresh_identity_metrics(club_id=issuing_club.id)
         return challenge

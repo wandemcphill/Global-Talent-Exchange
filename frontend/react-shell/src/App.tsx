@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import AppShell from "@/components/gtex/AppShell";
@@ -81,6 +81,20 @@ function LegacyAdvertisingRedirect() {
   return <Navigate to="/advertise" replace />;
 }
 
+function MatchRedirect() {
+  const { id } = useParams();
+  const { search } = useLocation();
+  return <Navigate to={`/app/match/${encodeURIComponent(id || "")}${search || ""}`} replace />;
+}
+
+function CompetitionRedirect() {
+  const { id } = useParams();
+  const { search } = useLocation();
+  return (
+    <Navigate to={`/app/competitions/${encodeURIComponent(id || "")}${search || ""}`} replace />
+  );
+}
+
 export default function App() {
   return (
     <AuthProvider>
@@ -124,6 +138,17 @@ export default function App() {
                 <Route path="/club/:clubSlug" element={<PublicClubProfile />} />
                 <Route path="/clubs/:clubSlug" element={<PublicClubProfile />} />
                 <Route path="/inbox" element={<Navigate to="/app/inbox" replace />} />
+                <Route path="/notifications" element={<Navigate to="/app/inbox" replace />} />
+                <Route path="/news" element={<Navigate to="/app/newsroom" replace />} />
+                <Route path="/broadcast/live" element={<Navigate to="/app/competitions" replace />} />
+                <Route path="/world/regens" element={<Navigate to="/app/regen-world" replace />} />
+                <Route path="/national-team" element={<Navigate to="/app/national" replace />} />
+                <Route path="/player-cards" element={<Navigate to="/app/market" replace />} />
+                <Route path="/gtex/jackpot" element={<Navigate to="/app/jackpot" replace />} />
+                <Route path="/gtex/jackpot/win" element={<Navigate to="/app/jackpot" replace />} />
+                <Route path="/competitions/:id" element={<CompetitionRedirect />} />
+                <Route path="/match/:id" element={<MatchRedirect />} />
+                <Route path="/matches/:id" element={<MatchRedirect />} />
 
                 {/* Dedicated GTEX Commercial Network Public Portal */}
                 <Route path="/advertise" element={<CommercialPublicPortal />} />
@@ -299,8 +324,13 @@ export default function App() {
                   <Route path="awards" element={<RegenAwards />} />
                   <Route path="competitions" element={<Competitions />} />
                   <Route path="competitions/:id" element={<CompetitionDetail />} />
+                  <Route path="play" element={<Navigate to="/app/competitions" replace />} />
+                  <Route path="match" element={<Navigate to="/app/competitions" replace />} />
+                  <Route path="matches" element={<Navigate to="/app/competitions" replace />} />
                   <Route path="match/:id" element={<MatchCenter />} />
+                  <Route path="matches/:id" element={<MatchCenter />} />
                   <Route path="squad" element={<Squad />} />
+                  <Route path="staff" element={<Navigate to="/app/staff-market" replace />} />
                   <Route path="staff-market" element={<StaffMarket />} />
                   <Route path="lineup" element={<Lineup />} />
                   <Route path="academy" element={<Academy />} />
@@ -308,6 +338,8 @@ export default function App() {
                   <Route path="regens/create-son" element={<Academy />} />
                   <Route path="trophies" element={<ClubStory />} />
                   <Route path="dynasty" element={<ClubStory />} />
+                  <Route path="club" element={<Navigate to="/app/clubs" replace />} />
+                  <Route path="wallet" element={<Navigate to="/app/finance" replace />} />
                   <Route path="player-cards" element={<Navigate to="/app/market" replace />} />
                   <Route path="players" element={<Navigate to="/app/market" replace />} />
                   <Route path="transfers" element={<Navigate to="/app/transfer-hub" replace />} />

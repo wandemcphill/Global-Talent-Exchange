@@ -1405,9 +1405,10 @@ def _resolve_staff_identity_for_conversation(
             "finance_commercial_director",
         ):
             dept = dict(identities.get(candidate_role) or {})
-            if not dept or dept.get("is_vacant") or not dept.get("id") or not str(dept.get("name") or "").strip():
+            dept_id = dept.get("id") or dept.get("staff_id") or dept.get("manager_id") or dept.get("profile_id")
+            if not dept or dept.get("is_vacant") or not dept_id or not str(dept.get("name") or "").strip():
                 continue
-            staff_id = str(dept.get("id") or dept.get("manager_id") or candidate_role)
+            staff_id = str(dept_id)
             staff_name = str(dept["name"])
             staff_title = str(dept.get("title") or candidate_role.replace("_", " ").title())
             personality = dict(
@@ -1449,9 +1450,10 @@ def _resolve_staff_identity_for_conversation(
     ):
         dept = dict(identities.get(role_key) or {})
         staff_title = str(dept.get("title") or staff_meta["role"])
-        if not dept or dept.get("is_vacant") or not dept.get("id") or not str(dept.get("name") or "").strip():
+        dept_id = dept.get("id") or dept.get("staff_id") or dept.get("manager_id") or dept.get("profile_id")
+        if not dept or dept.get("is_vacant") or not dept_id or not str(dept.get("name") or "").strip():
             return role_key, "", f"{staff_title} (Vacant)", staff_title, {}, None
-        staff_id = str(dept.get("id") or dept.get("manager_id") or role_key)
+        staff_id = str(dept_id)
         staff_name = str(dept.get("name") or staff_title)
         personality = dict(
             dept.get("personality_profile")
@@ -1530,7 +1532,13 @@ def get_club_communications_durable(
             "finance_commercial_director",
         ):
             staff_obj = dict(identities.get(rk) or {})
-            is_vacant = bool(staff_obj.get("is_vacant") or not staff_obj.get("id") or not staff_obj.get("name"))
+            staff_id_val = (
+                staff_obj.get("id")
+                or staff_obj.get("staff_id")
+                or staff_obj.get("manager_id")
+                or staff_obj.get("profile_id")
+            )
+            is_vacant = bool(staff_obj.get("is_vacant") or not staff_id_val or not staff_obj.get("name"))
             resolved_name = f"{member['role']} (Vacant)" if is_vacant else str(staff_obj.get("name"))
             personality = {} if is_vacant else dict(staff_obj.get("personality_profile") or {})
             rel_key = rk

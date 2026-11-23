@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { API, api, errMsg } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { useActiveClub } from "@/lib/owner";
 import { GtexSceneViewport } from "@/lib/3d/GtexSceneViewport";
 import {
@@ -196,7 +197,9 @@ function normalizePositionGroup(position?: string | null): "GK" | "DEF" | "MID" 
 
 export default function PublicClubProfile() {
   const { clubSlug } = useParams<{ clubSlug: string }>();
-  const { active } = useActiveClub();
+  const auth = useAuth();
+  const currentUser = auth?.user ?? null;
+  const { active, clubs } = useActiveClub();
   const [crestFailed, setCrestFailed] = useState(false);
   const [positionFilter, setPositionFilter] = useState<string>("ALL");
   const [ownerModalOpen, setOwnerModalOpen] = useState(false);
@@ -206,7 +209,7 @@ export default function PublicClubProfile() {
     queryFn: async () => {
       try {
         const res = await api.get(
-          `/api/clubs/${encodeURIComponent(clubSlug || "")}/public-profile`,
+          `/clubs/${encodeURIComponent(clubSlug || "")}/public-profile`,
         );
         return res.data;
       } catch (err: any) {
@@ -301,14 +304,30 @@ export default function PublicClubProfile() {
     setCrestFailed(false);
   }, [data?.club?.crest_url]);
 
+  const storedActiveClubId =
+    typeof window !== "undefined" ? localStorage.getItem("gtex_active_club") : null;
+  const isOwnClub = Boolean(
+    data?.club?.id &&
+      (active?.club_id === data.club.id ||
+        storedActiveClubId === data.club.id ||
+        (clubSlug && (active?.slug === clubSlug || active?.public_profile_slug === clubSlug)) ||
+        (Array.isArray(clubs) &&
+          clubs.some(
+            (c: any) =>
+              c?.club_id === data.club.id ||
+              (clubSlug && (c?.slug === clubSlug || c?.public_profile_slug === clubSlug)),
+          )) ||
+        (currentUser?.id && data?.owner?.id && String(currentUser.id) === String(data.owner.id))),
+  );
+
   const handleChallenge = async () => {
     const targetId = data?.club?.id;
     if (!active?.club_id || !targetId) {
       toast.error("Select your club in the console before sending a challenge.");
       return;
     }
-    if (active.club_id === targetId) {
-      toast.error("Choose a different club.");
+    if (isOwnClub || active.club_id === targetId) {
+      toast.error("You cannot challenge your own club.");
       return;
     }
     try {
@@ -461,14 +480,25 @@ export default function PublicClubProfile() {
               GTEX<span className="text-emerald-400">.</span>
             </Link>
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleChallenge}
-                className="gx-btn gx-btn-primary text-xs"
-                data-testid="challenge-club"
-              >
-                Challenge this club
-              </button>
+              {!isOwnClub && (
+                <>
+                  <button
+                    type="button"
+                    onClick={handleChallenge}
+                    className="gx-btn gx-btn-primary text-xs"
+                    data-testid="challenge-club"
+                  >
+                    Challenge this club
+                  </button>
+                  <Link
+                    to={`/app/competitions?invite_club_id=${encodeURIComponent(club.id)}&invite_club_name=${encodeURIComponent(club.name)}`}
+                    className="gx-btn gx-btn-secondary text-xs"
+                    data-testid="invite-club-competition"
+                  >
+                    Invite to Competition
+                  </Link>
+                </>
+              )}
               <button
                 type="button"
                 onClick={handleShare}
@@ -478,7 +508,10 @@ export default function PublicClubProfile() {
                 <Share2 size={13} />
                 <span className="hidden sm:inline">Share</span>
               </button>
-              <Link to="/login" className="gx-btn gx-btn-primary text-xs flex items-center gap-1.5">
+              <Link
+                to={currentUser ? "/app" : "/login"}
+                className="gx-btn gx-btn-primary text-xs flex items-center gap-1.5"
+              >
                 <span>Enter World</span>
                 <ExternalLink size={13} />
               </Link>

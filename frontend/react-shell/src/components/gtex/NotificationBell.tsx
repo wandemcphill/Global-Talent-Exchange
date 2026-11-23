@@ -17,8 +17,25 @@ type NotificationItem = {
 };
 
 function resolveNotificationRoute(n: NotificationItem, hasActiveClub: boolean): string {
+  const matchId = n.metadata?.match_id || n.metadata?.matchId;
+  if (typeof matchId === "string" && matchId.trim()) {
+    return `/app/match/${encodeURIComponent(matchId.trim())}`;
+  }
   const explicit = n.metadata?.deep_link_route;
-  if (typeof explicit === "string" && explicit.startsWith("/")) return explicit;
+  if (typeof explicit === "string" && explicit.startsWith("/")) {
+    if (explicit === "/app/play" || explicit === "/app/match" || explicit === "/broadcast/live") {
+      return "/app/competitions";
+    }
+    if (explicit === "/app/wallet") return "/app/finance";
+    if (explicit === "/app/club") return "/app/clubs";
+    if (explicit.startsWith("/matches/")) {
+      return `/app/match/${explicit.slice("/matches/".length)}`;
+    }
+    if (explicit.startsWith("/competitions/")) {
+      return `/app/competitions/${explicit.slice("/competitions/".length)}`;
+    }
+    return explicit;
+  }
   const topic = (n.topic || "").toLowerCase();
   if (topic.startsWith("owner_") && hasActiveClub) return "/app/inbox";
   if (topic.includes("community") || topic.includes("competition") || topic.includes("pm")) {

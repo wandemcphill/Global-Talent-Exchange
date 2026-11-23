@@ -398,7 +398,7 @@ def get_club_formation_status(session: Session, club_id: str) -> dict[str, Any]:
         "first_team_count": first_team_count,
         "reserve_count": reserve_count,
         "academy_count": academy_count,
-        "progress_label": f"{total_registered} registered Â· {MIN_SQUAD} to play",
+        "progress_label": f"{total_registered} registered · {MIN_SQUAD} to play",
     }
 
 
@@ -472,6 +472,25 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
     loyalty = _trait(pers.get("loyalty"))
     prof = _trait(pers.get("professionalism"))
     market = _trait(pers.get("marketability"))
+    if bool(p.is_regen) and any(value is None for value in (ambition, loyalty, prof, market)):
+        rng = engine.seeded("regen-traits", p.id, p.name or "")
+        if ambition is None:
+            ambition = rng.randint(11, 18)
+            pers["ambition"] = ambition
+        if loyalty is None:
+            loyalty = rng.randint(11, 18)
+            pers["loyalty"] = loyalty
+        if prof is None:
+            prof = rng.randint(11, 18)
+            pers["professionalism"] = prof
+        if market is None:
+            market = rng.randint(10, 17)
+            pers["marketability"] = market
+        pers.setdefault("adaptability", rng.randint(11, 18))
+        pers.setdefault("growth_responsiveness", rng.randint(12, 18))
+        pers.setdefault("environment_sensitivity", rng.randint(10, 16))
+        pers.setdefault("transfer_pressure", max(0, min(100, int((ambition - loyalty) * 3))))
+        pers.setdefault("generation", 1)
     traits_filed = any(value is not None for value in (ambition, loyalty, prof, market))
 
     if not traits_filed:
@@ -535,12 +554,12 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         elif manager_approved:
             hoyd_verdict = (
                 f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
-                f"Cleared for a first-team call-up Â· {mood_profile['contract_summary']}"
+                f"Cleared for a first-team call-up · {mood_profile['contract_summary']}"
             )
         else:
             hoyd_verdict = (
                 f"Readiness {readiness_score}/100 ({gap} below potential {p.potential}). "
-                f"Keep developing on the academy sheet Â· {mood_profile['contract_summary']}"
+                f"Keep developing on the academy sheet · {mood_profile['contract_summary']}"
             )
     readiness_assessment = {
         "readiness_score": readiness_score,
@@ -622,7 +641,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
         "injured_days": p.injured_days,
         "is_regen": p.is_regen,
         "status": p.status,
-        "personality": p.personality_json if p.is_regen else None,
+        "personality": pers if p.is_regen else None,
         "growth_log": (p.growth_log_json or [])[-6:],
         "acquired_via": p.acquired_via,
         "squad_status": squad_status,
@@ -673,7 +692,7 @@ def player_dict(p: OwnerSquadPlayer, session: Session | None = None) -> dict[str
                 "owner_hook": (
                     "Offer improved youth contract, promise minutes, or gift a Showroom luxury item to lock down loyalty."
                     if p.morale < 55
-                    else "High morale â€” prime candidate for Senior Promotion or Sponsor Endorsement."
+                    else "High morale — prime candidate for Senior Promotion or Sponsor Endorsement."
                 ),
             }
             if p.morale is not None
@@ -1353,7 +1372,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
                     user_id=user_id,
                     related_type="player",
                     related_id=related_id,
-                    memo=f"Released {target.name} (refund Â· {cls})",
+                    memo=f"Released {target.name} (refund · {cls})",
                 )
             if fee_share > 0:
                 ledger.record(
@@ -1368,7 +1387,7 @@ def unsign_market_player(session: Session, user_id: str, club_id: str, player_id
                     user_id=user_id,
                     related_type="player",
                     related_id=related_id,
-                    memo=f"Released {target.name} (platform fee returned Â· {cls})",
+                    memo=f"Released {target.name} (platform fee returned · {cls})",
                 )
             remaining_refund -= portion
         if remaining_refund > 0 and not purchase_events:
@@ -2169,9 +2188,19 @@ def appoint_manager(
         raise OwnerError("fire_current_manager_first", 409)
     mgr_personality = autonomous_staff_engine.derive_manager_personality(profile)
     profile["personality_profile"] = mgr_personality
+    profile.setdefault("id", str(profile.get("manager_id") or "first_team_manager"))
     state.manager_json = profile
     tactics = engine.manager_tactics(profile, state.facilities_json)
     facs = dict(state.facilities_json or {})
+    exec_staff = dict(facs.get("_executive_staff") or {})
+    exec_staff["first_team_manager"] = {
+        **dict(exec_staff.get("first_team_manager") or {}),
+        **profile,
+        "role": "first_team_manager",
+        "is_vacant": False,
+        "is_appointed": True,
+    }
+    facs["_executive_staff"] = exec_staff
     facs["_tactical_setup"] = {
         "formation": tactics["formation"],
         "formations": tactics["formations"],
@@ -3681,6 +3710,8 @@ def _pitch_card(player: dict[str, Any]) -> dict[str, Any]:
         "position": player.get("position"),
         "position_display": player.get("position_display"),
         "rating": player.get("rating"),
+        "potential": player.get("potential"),
+        "value_coin": player.get("value_coin"),
         "age": player.get("age"),
         "portrait_url": player.get("portrait_url"),
         "squad_status": player.get("squad_status"),
@@ -4010,26 +4041,84 @@ def get_club_staff(session: Session, user_id: str, club_id: str) -> dict[str, An
         }
     )
 
+    def _is_named_staff_record(record: Any, *, is_manager: bool = False) -> bool:
+        if not isinstance(record, dict) or not record:
+            return False
+        if record.get("is_vacant") or record.get("is_default") or record.get("use_default"):
+            return False
+        if is_manager and record.get("manager_id") == "gtex-staff-coach":
+            return False
+        raw_name = str(record.get("name") or record.get("display_name") or "").strip()
+        return bool(raw_name and "vacant" not in raw_name.lower())
+
+    onboarding_staff = dict(facs.get("_onboarding_staff") or {})
     appointed: dict[str, Any] = {}
     for r in engine.EXECUTIVE_STAFF_ROLES:
-        if r in exec_staff:
-            record = exec_staff[r] or {}
-            caretaker_seat = r == "first_team_manager" and (
-                not record.get("name") or record.get("is_default") or record.get("manager_id") == "gtex-staff-coach"
-            )
-            appointed[r] = None if caretaker_seat else record
-        elif r == "first_team_manager":
+        is_mgr = r == "first_team_manager"
+        record = exec_staff.get(r)
+        if _is_named_staff_record(record, is_manager=is_mgr):
+            appointed[r] = dict(record)
+            continue
+        if is_mgr:
             manager = state.manager_json or {}
-            caretaker = (
-                not manager.get("name") or manager.get("is_default") or manager.get("manager_id") == "gtex-staff-coach"
+            if _is_named_staff_record(manager, is_manager=True):
+                appointed[r] = dict(manager)
+                continue
+        onboard = onboarding_staff.get(r)
+        if _is_named_staff_record(onboard, is_manager=is_mgr):
+            appointed[r] = dict(onboard)
+            continue
+        appointed[r] = None
+
+    missing_roles = [r for r, val in appointed.items() if val is None]
+    if missing_roles:
+        try:
+            from app.models.club_growth import (
+                ClubStaffAssignment,
+                ClubStaffContract,
+                ClubStaffProfile,
             )
-            appointed[r] = None if caretaker else manager
-        else:
-            appointed[r] = None
+
+            rows = session.execute(
+                select(ClubStaffAssignment, ClubStaffContract, ClubStaffProfile)
+                .join(ClubStaffContract, ClubStaffContract.id == ClubStaffAssignment.staff_contract_id)
+                .join(ClubStaffProfile, ClubStaffProfile.id == ClubStaffContract.staff_profile_id)
+                .where(
+                    ClubStaffAssignment.club_id == club_id,
+                    ClubStaffAssignment.active.is_(True),
+                    ClubStaffContract.status == "active",
+                )
+            ).all()
+            for assignment, contract, staff_profile in rows:
+                r_key = str(assignment.role_key or "").strip()
+                if r_key in appointed and appointed[r_key] is None and staff_profile.display_name:
+                    meta = dict(staff_profile.metadata_json or {})
+                    appointed[r_key] = {
+                        "id": meta.get("staff_id") or staff_profile.id,
+                        "staff_id": meta.get("staff_id") or staff_profile.id,
+                        "profile_id": staff_profile.id,
+                        "contract_id": contract.id,
+                        "name": staff_profile.display_name,
+                        "role": r_key,
+                        "rating": staff_profile.rating,
+                        "style": meta.get("style", "Balanced"),
+                        "temperament": meta.get("temperament", "pragmatic"),
+                        "salary_fan_coin": (contract.salary_minor // 100) if contract.salary_minor else 600,
+                        "is_appointed": True,
+                    }
+        except Exception:
+            pass
 
     for r_key, st_val in list(appointed.items()):
         if isinstance(st_val, dict):
-            appointed[r_key] = engine.apply_staff_influence(dict(st_val), r_key)
+            normalized = engine.apply_staff_influence(dict(st_val), r_key)
+            if not normalized.get("name") and normalized.get("display_name"):
+                normalized["name"] = normalized["display_name"]
+            if not normalized.get("id"):
+                normalized["id"] = (
+                    normalized.get("staff_id") or normalized.get("manager_id") or normalized.get("profile_id") or r_key
+                )
+            appointed[r_key] = normalized
 
     staff_effects = engine.calculate_staff_effects(appointed)
     agenda_by_role = {
@@ -5267,7 +5356,7 @@ def conduct_press_conference(
                 if statement
                 else f"Owner Speaks Publicly at {state.club_name}"
             ),
-            subheadline=f"Verified press briefing Â· Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
+            subheadline=f"Verified press briefing · Tone: {tone.replace('_', ' ').title()} on World Day {world_day}",
             body=(
                 f"During a formal press briefing on World Day {world_day}, the {state.club_name} owner adopted a "
                 f"{tone.replace('_', ' ')} tone" + (f': "{statement}"' if statement else ".")

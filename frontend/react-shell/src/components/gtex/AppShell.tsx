@@ -685,7 +685,7 @@ export default function AppShell() {
         {/* Matchday Top Control Strip */}
         <header className="sticky top-0 z-20 flex flex-wrap items-center gap-3 border-b border-[#25354B] bg-[#0E1A2C]/95 px-4 py-2.5 backdrop-blur-2xl sm:px-8 shadow-[0_8px_32px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(0,201,145,0.18)]">
           <p className="gx-display text-xl font-black text-white lg:hidden">GTEX</p>
-          {isError && (
+          {isError && !data && (
             <button
               type="button"
               data-testid="app-shell-control-center-retry"

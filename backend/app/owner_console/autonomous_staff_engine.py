@@ -758,6 +758,10 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
     gm_raw = exec_staff.get("general_manager")
     if _is_appointed_record(gm_raw):
         gm = dict(gm_raw)
+        if not gm.get("name") and gm.get("display_name"):
+            gm["name"] = str(gm["display_name"])
+        if not gm.get("id"):
+            gm["id"] = str(gm.get("staff_id") or gm.get("profile_id") or "general_manager")
         gm["is_vacant"] = False
         gm["is_appointed"] = True
         gm_profile = derive_gm_personality(gm)
@@ -780,6 +784,10 @@ def ensure_club_staff_identities(db: Session, state: OwnerClubState) -> dict[str
         raw_entry = exec_staff.get(role_key)
         if _is_appointed_record(raw_entry):
             current_entry = dict(raw_entry)
+            if not current_entry.get("name") and current_entry.get("display_name"):
+                current_entry["name"] = str(current_entry["display_name"])
+            if not current_entry.get("id"):
+                current_entry["id"] = str(current_entry.get("staff_id") or current_entry.get("profile_id") or role_key)
             current_entry["is_vacant"] = False
             current_entry["is_appointed"] = True
             appointed_name = str(current_entry.get("name") or "")

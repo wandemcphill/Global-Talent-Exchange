@@ -18,7 +18,21 @@ function Standings({ rows, myIds }: any) {
           {rows.map((r: any, i: number) => (
             <tr key={r.club_id} className={myIds.includes(r.club_id) ? "bg-gtex-emerald/10 font-bold" : ""}>
               <td className="gx-mono text-slate-500">{r.final_position || i + 1}</td>
-              <td className="font-medium text-white">{r.club_name} {r.is_ai && <span className="text-[10px] text-slate-500">AI</span>} {r.eliminated && <Chip tone="red">Out</Chip>}</td>
+              <td className="font-medium text-white">
+                {r.is_ai ? (
+                  <span>
+                    {r.club_name} <span className="text-[10px] text-slate-500">AI</span>
+                  </span>
+                ) : (
+                  <Link
+                    to={`/club/${encodeURIComponent(r.slug || r.club_id)}`}
+                    className="text-white hover:text-emerald-300 hover:underline"
+                  >
+                    {r.club_name}
+                  </Link>
+                )}{" "}
+                {r.eliminated && <Chip tone="red">Out</Chip>}
+              </td>
               <td className="gx-mono">{r.played}</td><td className="gx-mono">{r.won}</td><td className="gx-mono">{r.drawn}</td><td className="gx-mono">{r.lost}</td>
               <td className="gx-mono">{r.gf - r.ga}</td><td className="gx-mono font-bold text-emerald-300">{r.points}</td>
             </tr>

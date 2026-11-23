@@ -120,12 +120,22 @@ def _asset_summary(session: Session, asset: ClubLegacyAsset) -> dict[str, Any] |
 
 def _person_name(value: Any) -> str | None:
     if isinstance(value, str) and value.strip():
-        return value.strip()
+        candidate = value.strip()
+        return None if "vacant" in candidate.lower() else candidate
     if isinstance(value, dict):
+        if (
+            value.get("is_vacant")
+            or value.get("is_default")
+            or value.get("use_default")
+            or value.get("manager_id") == "gtex-staff-coach"
+        ):
+            return None
         for key in ("display_name", "displayName", "name", "full_name", "manager_name"):
             candidate = value.get(key)
             if isinstance(candidate, str) and candidate.strip():
-                return candidate.strip()
+                cleaned = candidate.strip()
+                if "vacant" not in cleaned.lower():
+                    return cleaned
     return None
 
 
@@ -352,41 +362,43 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
 
     state = session.scalar(select(OwnerClubState).where(OwnerClubState.club_id == club.id))
     if state is not None:
-        exec_staff = (state.facilities_json or {}).get("_executive_staff") or {}
-        if "general_manager" not in people and exec_staff.get("general_manager"):
-            gm_data = exec_staff["general_manager"]
-            people["general_manager"] = {
-                "role": "general_manager",
-                "name": gm_data.get("name") or gm_data.get("display_name"),
-                "rating": gm_data.get("rating"),
-            }
-        if "head_of_youth_development" not in people and exec_staff.get("head_of_youth_development"):
-            hoyd_data = exec_staff["head_of_youth_development"]
-            people["head_of_youth_development"] = {
-                "role": "head_of_youth_development",
-                "name": hoyd_data.get("name") or hoyd_data.get("display_name"),
-                "rating": hoyd_data.get("rating"),
-            }
-        if "coach" not in people and exec_staff.get("first_team_coach"):
-            coach_data = exec_staff["first_team_coach"]
-            people["coach"] = {
-                "role": "coach",
-                "name": coach_data.get("name") or coach_data.get("display_name"),
-                "rating": coach_data.get("rating"),
-            }
-        if "manager" not in people:
-            mgr_data = exec_staff.get("first_team_manager") or state.manager_json
-            name = _person_name(mgr_data)
+        facs = state.facilities_json or {}
+        exec_staff = facs.get("_executive_staff") or {}
+        onboarding_staff = facs.get("_onboarding_staff") or {}
+        for role_key, target_role in (
+            ("general_manager", "general_manager"),
+            ("head_of_youth_development", "head_of_youth_development"),
+            ("first_team_coach", "coach"),
+            ("chief_scout", "coach"),
+        ):
+            if target_role in people:
+                continue
+            raw_person = exec_staff.get(role_key) or onboarding_staff.get(role_key)
+            name = _person_name(raw_person)
             if name:
-                people["manager"] = {
-                    "role": "manager",
+                people[target_role] = {
+                    "role": target_role,
                     "name": name,
-                    "rating": (
-                        mgr_data.get("rating") or mgr_data.get("tactical_rating")
-                        if isinstance(mgr_data, dict)
-                        else None
-                    ),
+                    "rating": raw_person.get("rating") if isinstance(raw_person, dict) else None,
                 }
+        if "manager" not in people:
+            for mgr_data in (
+                exec_staff.get("first_team_manager"),
+                state.manager_json,
+                onboarding_staff.get("first_team_manager"),
+            ):
+                name = _person_name(mgr_data)
+                if name:
+                    people["manager"] = {
+                        "role": "manager",
+                        "name": name,
+                        "rating": (
+                            mgr_data.get("rating") or mgr_data.get("tactical_rating")
+                            if isinstance(mgr_data, dict)
+                            else None
+                        ),
+                    }
+                    break
 
     staff_roles = (
         ("manager", "Manager"),
@@ -455,6 +467,73 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
     except Exception:
         pass
 
+    from app.owner_console import engine as owner_engine
+
+    resolved_stadium_level = (
+        int(stadium.level)
+        if stadium is not None
+        else (
+            int((state.facilities_json or {}).get("stadium"))
+            if state and (state.facilities_json or {}).get("stadium")
+            else None
+        )
+    )
+    resolved_stadium_capacity = int(stadium.capacity) if stadium is not None else None
+    resolved_academy_level = (
+        int(academy.level)
+        if academy is not None
+        else (
+            academy_facility_level
+            if academy_facility_level is not None
+            else (int((state.facilities_json or {}).get("academy", 1)) if state is not None else None)
+        )
+    )
+    fallback_regen_prospects = [
+        p
+        for p in legacy_squad
+        if bool(p.is_regen)
+        and owner_engine.squad_sheet(
+            squad_status=(p.personality_json or {}).get("squad_status"),
+            is_regen=bool(p.is_regen),
+            age=p.age,
+            minutes=p.minutes,
+            acquired_via=p.acquired_via,
+        )
+        == "academy"
+    ]
+    resolved_prospect_count = prospect_count if prospect_count > 0 else len(fallback_regen_prospects)
+    resolved_prospects = (
+        [
+            {
+                "id": prospect.id,
+                "name": prospect.display_name,
+                "position": prospect.position,
+                "age": int(prospect.age),
+                "potential": int(prospect.potential),
+                "portrait_url": prospect.portrait_asset_ref,
+            }
+            for prospect in prospects
+        ]
+        if prospects
+        else [
+            {
+                "id": regen.id,
+                "name": regen.name,
+                "position": regen.position,
+                "age": int(regen.age or 16),
+                "rating": int(round(regen.rating)) if regen.rating is not None else None,
+                "potential": int(round(regen.potential or regen.rating or 80)),
+                "is_regen": True,
+                "portrait_url": _portrait(session, regen.id, regen.name),
+            }
+            for regen in sorted(
+                fallback_regen_prospects,
+                key=lambda item: (item.potential or 0, -(item.age or 99)),
+                reverse=True,
+            )[:3]
+        ]
+    )
+
     return {
         "club": {
             "id": club.id,
@@ -484,16 +563,8 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
                     or (f"{club.club_name} Arena" if club.club_name else "Stadium details unavailable")
                 )
             ),
-            "level": (
-                int(stadium.level)
-                if stadium is not None
-                else (
-                    int((state.facilities_json or {}).get("stadium"))
-                    if state and (state.facilities_json or {}).get("stadium")
-                    else None
-                )
-            ),
-            "capacity": int(stadium.capacity) if stadium is not None else None,
+            "level": resolved_stadium_level,
+            "capacity": resolved_stadium_capacity,
             "theme_key": stadium.theme_key if stadium is not None else None,
             "image_asset": "assets/showroom/arena_imperiale_stadium.webp",
         },
@@ -546,20 +617,10 @@ def public_club_profile(session: Session, club_id: str) -> dict[str, Any]:
             "academy_image_asset": "assets/showroom/apex_performance_campus.webp",
         },
         "academy": {
-            "level": int(academy.level) if academy is not None else None,
-            "capacity": int(academy.capacity_limit) if academy is not None else None,
-            "prospect_count": prospect_count,
-            "prospects": [
-                {
-                    "id": prospect.id,
-                    "name": prospect.display_name,
-                    "position": prospect.position,
-                    "age": int(prospect.age),
-                    "potential": int(prospect.potential),
-                    "portrait_url": prospect.portrait_asset_ref,
-                }
-                for prospect in prospects
-            ],
+            "level": resolved_academy_level,
+            "capacity": int(academy.capacity_limit) if academy is not None else 24,
+            "prospect_count": resolved_prospect_count,
+            "prospects": resolved_prospects,
         },
         "squad": {
             "player_count": len(squad_players),

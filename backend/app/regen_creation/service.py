@@ -9,11 +9,11 @@ from random import Random
 from typing import Any
 
 import httpx
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings, get_settings
-from app.ingestion.models import Country, Player, PlayerVerification
+from app.ingestion.models import Country, Player, PlayerImageMetadata, PlayerVerification
 from app.models.base import utcnow
 from app.models.club_profile import ClubLifecycleStatus, ClubProfile
 from app.models.player_cards import (
@@ -106,19 +106,32 @@ class RegenCreationService:
         self.engine = self.engine or RegenGenerationEngine(self.settings)
 
     def request_son_options(self, actor: User, club_id: str | None = None) -> RequestSonOptionsView:
+        from app.services.player_aging import world_date
+
         club = self._resolve_actor_club(actor, club_id=club_id)
         pricing = self._pricing_view()
         rows = self._eligible_parent_rows(club.id)
-        regens_by_player = self._regens_by_player([player.id for player, _country in rows])
-        eligible = [
-            self._parent_player_view(
-                player=player,
-                club=club,
-                country=country,
-                regen=regens_by_player.get(player.id),
-            )
-            for player, country in rows
-        ]
+        player_ids = [player.id for player, _country in rows]
+        regens_by_player = self._regens_by_player(player_ids)
+        images_by_player = self._images_by_player(player_ids)
+        current_world_date = world_date(self.session)
+        eligible: list[RegenCreationParentPlayerView] = []
+        for player, country in rows:
+            try:
+                eligible.append(
+                    self._parent_player_view(
+                        player=player,
+                        club=club,
+                        country=country,
+                        regen=regens_by_player.get(player.id),
+                        regen_loaded=True,
+                        images_by_player=images_by_player,
+                        current_world_date=current_world_date,
+                        allow_db_mutation=False,
+                    )
+                )
+            except Exception:
+                continue
         assert self.settings is not None
         lifetime_used = self._owner_son_lifetime_count(actor.id)
         lifetime_cap = int(self.settings.regen_generation.owner_son_lifetime_cap)
@@ -258,11 +271,22 @@ class RegenCreationService:
         return club
 
     def _eligible_parent_rows(self, club_id: str) -> list[tuple[Player, Country | None]]:
+        from app.owner_console.models import OwnerSquadPlayer
+
+        squad_refs = select(OwnerSquadPlayer.player_ref).where(
+            OwnerSquadPlayer.club_id == club_id,
+            OwnerSquadPlayer.player_ref.is_not(None),
+        )
         return list(
             self.session.execute(
                 select(Player, Country)
                 .outerjoin(Country, Country.id == Player.country_id)
-                .where(Player.current_club_profile_id == club_id)
+                .where(
+                    or_(
+                        Player.current_club_profile_id == club_id,
+                        Player.id.in_(squad_refs),
+                    )
+                )
                 .order_by(Player.full_name.asc(), Player.id.asc())
             ).all()
         )
@@ -274,11 +298,37 @@ class RegenCreationService:
         actor: User,
         parent_player_id: str,
     ) -> Player:
+        from app.owner_console.models import OwnerSquadPlayer
+
         player = self.session.get(Player, parent_player_id)
+        squad_row = None
+        if player is None:
+            squad_row = self.session.scalar(
+                select(OwnerSquadPlayer).where(
+                    OwnerSquadPlayer.club_id == club.id,
+                    or_(
+                        OwnerSquadPlayer.id == parent_player_id,
+                        OwnerSquadPlayer.player_ref == parent_player_id,
+                    ),
+                )
+            )
+            if squad_row is not None and squad_row.player_ref:
+                player = self.session.get(Player, squad_row.player_ref)
         if player is None:
             raise RegenCreationNotFoundError("Selected parent player was not found.")
         if player.current_club_profile_id != club.id:
-            raise RegenCreationPermissionError("You can only request a son from a player in your own club.")
+            if squad_row is None:
+                squad_row = self.session.scalar(
+                    select(OwnerSquadPlayer).where(
+                        OwnerSquadPlayer.club_id == club.id,
+                        or_(
+                            OwnerSquadPlayer.player_ref == player.id,
+                            OwnerSquadPlayer.id == player.id,
+                        ),
+                    )
+                )
+            if squad_row is None:
+                raise RegenCreationPermissionError("You can only request a son from a player in your own club.")
         del actor
         return player
 
@@ -1046,8 +1096,26 @@ class RegenCreationService:
         rows = self.session.scalars(select(RegenProfile).where(RegenProfile.player_id.in_(player_ids))).all()
         return {row.player_id: row for row in rows if row.player_id}
 
-    def _parent_bloodline(self, player: Player, regen: RegenProfile | None = None) -> dict[str, object]:
-        if regen is None:
+    def _images_by_player(self, player_ids: list[str]) -> dict[str, list[PlayerImageMetadata]]:
+        if not player_ids:
+            return {}
+        rows = self.session.scalars(
+            select(PlayerImageMetadata).where(PlayerImageMetadata.player_id.in_(player_ids))
+        ).all()
+        grouped: dict[str, list[PlayerImageMetadata]] = {}
+        for row in rows:
+            if row.player_id:
+                grouped.setdefault(row.player_id, []).append(row)
+        return grouped
+
+    def _parent_bloodline(
+        self,
+        player: Player,
+        regen: RegenProfile | None = None,
+        *,
+        regen_loaded: bool = False,
+    ) -> dict[str, object]:
+        if regen is None and not regen_loaded:
             regen = self.session.scalar(select(RegenProfile).where(RegenProfile.player_id == player.id))
         rating = None
         potential = None
@@ -1090,12 +1158,15 @@ class RegenCreationService:
             "inherited_dna": inherited_dna or None,
         }
 
-    def _parent_age(self, player: Player) -> int | None:
+    def _parent_age(self, player: Player, *, current_world_date: date | None = None) -> int | None:
         from app.services.player_aging import age_years, aging_date_for_player
 
         if player.date_of_birth is None:
             return None
-        return age_years(player.date_of_birth, aging_date_for_player(player, self.session))
+        return age_years(
+            player.date_of_birth,
+            aging_date_for_player(player, self.session, competition_date=current_world_date),
+        )
 
     def _parent_player_view(
         self,
@@ -1104,16 +1175,25 @@ class RegenCreationService:
         club: ClubProfile,
         country: Country | None,
         regen: RegenProfile | None = None,
+        regen_loaded: bool = False,
+        images_by_player: dict[str, list[PlayerImageMetadata]] | None = None,
+        current_world_date: date | None = None,
+        allow_db_mutation: bool = True,
     ) -> RegenCreationParentPlayerView:
-        bloodline = self._parent_bloodline(player, regen=regen)
+        bloodline = self._parent_bloodline(player, regen=regen, regen_loaded=regen_loaded)
         rating = bloodline.get("parent_rating")
         potential = bloodline.get("parent_potential")
         height = bloodline.get("parent_height_cm")
+        resolved_image = self._player_image_url(
+            player,
+            images_by_player=images_by_player,
+            allow_db_mutation=allow_db_mutation,
+        )
         return RegenCreationParentPlayerView(
             player_id=player.id,
             full_name=player.full_name,
-            image_url=self._player_image_url(player),
-            portrait_url=self._player_image_url(player),
+            image_url=resolved_image,
+            portrait_url=resolved_image,
             position=str(bloodline.get("parent_position") or player.position or player.normalized_position or "")
             or None,
             country_code=self._country_code(country),
@@ -1124,7 +1204,7 @@ class RegenCreationService:
             potential_rating=int(potential) if isinstance(potential, int) else None,
             preferred_foot=bloodline.get("parent_foot") if isinstance(bloodline.get("parent_foot"), str) else None,
             height_cm=int(height) if isinstance(height, int) else None,
-            age=self._parent_age(player),
+            age=self._parent_age(player, current_world_date=current_world_date),
             dna=self._parent_dna_view(bloodline.get("inherited_dna")),
         )
 
@@ -1228,19 +1308,28 @@ class RegenCreationService:
             dna_archetype=archetype.strip().lower() if isinstance(archetype, str) and archetype.strip() else None,
         )
 
-    def _player_image_url(self, player: Player) -> str | None:
+    def _player_image_url(
+        self,
+        player: Player,
+        *,
+        images_by_player: dict[str, list[PlayerImageMetadata]] | None = None,
+        allow_db_mutation: bool = True,
+    ) -> str | None:
         dna = dict(player.dna_profile or {}) if isinstance(player.dna_profile, dict) else {}
         for key in ("portraitUrl", "portrait_url", "image_url", "photo_url"):
             value = dna.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()
+        images = (
+            images_by_player.get(player.id, []) if images_by_player is not None else list(player.image_metadata or [])
+        )
         for image in sorted(
-            player.image_metadata,
+            images,
             key=lambda item: (
-                not item.is_primary,
+                not bool(item.is_primary),
                 item.moderation_status != "approved",
-                item.created_at,
-                item.id,
+                str(item.created_at or ""),
+                str(item.id or ""),
             ),
         ):
             if image.moderation_status == "rejected":
@@ -1250,8 +1339,15 @@ class RegenCreationService:
             if image.storage_key:
                 return image.storage_key
         if not bool(player.is_real_player):
+            if allow_db_mutation:
+                try:
+                    return RegenPortraitService(self.session).ensure_player_portrait(player).portrait_url
+                except Exception:
+                    pass
             try:
-                return RegenPortraitService(self.session).ensure_player_portrait(player).portrait_url
+                from app.owner_console import storytelling
+
+                return storytelling._fallback_portrait_for_seed(str(player.id), player.full_name or "Player")
             except Exception:
                 return None
         return None

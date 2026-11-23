@@ -166,8 +166,8 @@ export function RegenCard(props: RegenCardProps) {
   const age = props.age ?? r.age ?? "—";
   const nationality = props.nationality || r.nationality || "—";
   const club = props.club || r.club || "—";
-  const generation = props.generation ?? r.generation ?? "—";
-  const archetype = props.archetype || r.archetype || "—";
+  const generation = props.generation ?? r.generation ?? 1;
+  const archetype = props.archetype || r.archetype || "";
   const serial = props.serial || r.serial || "—";
   const price = props.price ?? r.price;
   const rawCandidate =
@@ -267,7 +267,8 @@ export function RegenCard(props: RegenCardProps) {
               {name}
             </p>
             <p className="truncate text-[10px] text-emerald-200/60">
-              {archetype} · {age}y
+              {archetype && archetype !== "—" ? `${archetype} · ` : ""}
+              {age}y
             </p>
           </div>
         </div>

@@ -1,8 +1,8 @@
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Crown, Flame, Globe, Medal, Swords, Trophy, Zap } from "lucide-react";
+import { Crown, ExternalLink, Flame, Globe, Medal, Shield, Swords, Trophy, Users, Zap } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { fmt, label, useActiveClub, useRefreshOwner } from "@/lib/owner";
@@ -138,9 +138,16 @@ function CompCard({ c, clubId }: any) {
 
 const HOST_TEMPLATES_KEY = "gtex-host-templates";
 
-function HostForm() {
+function HostForm({
+  worldClubs = [],
+  externalOpponent,
+}: {
+  worldClubs?: any[];
+  externalOpponent?: any | null;
+}) {
   const refresh = useRefreshOwner();
   const { active } = useActiveClub();
+  const { user: currentUser } = useAuth();
   const [f, setF] = useState<any>({
     name: "",
     format: "league",
@@ -153,6 +160,28 @@ function HostForm() {
   const [opponentQuery, setOpponentQuery] = useState("");
   const [opponents, setOpponents] = useState<any[]>([]);
   const [opponent, setOpponent] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (externalOpponent && externalOpponent.id) {
+      setOpponent(externalOpponent);
+      setOpponentQuery(externalOpponent.club_name || "");
+      setF((prev: any) => ({
+        ...prev,
+        name:
+          prev.name ||
+          `${active?.club_name || "GTEX"} vs ${externalOpponent.club_name || "Rival"} Cup`,
+      }));
+    }
+  }, [externalOpponent, active?.club_name]);
+
+  const rivalWorldClubs = (worldClubs || []).filter((c: any) => {
+    const cid = c.club_id || c.id;
+    if (!cid || cid === active?.club_id) return false;
+    if (currentUser?.id && c.owner_user_id && String(c.owner_user_id) === String(currentUser.id)) {
+      return false;
+    }
+    return true;
+  });
   const [savedName, setSavedName] = useState("");
   const [saved, setSaved] = useState<any[]>(() => {
     try {
@@ -316,6 +345,50 @@ function HostForm() {
         <p className="text-xs text-emerald-300 md:col-span-4">
           Opponent: {opponent.club_name}. They receive the pin with the challenge.
         </p>
+      )}
+      {rivalWorldClubs.length > 0 && (
+        <div
+          className="md:col-span-4 flex flex-wrap items-center gap-1.5 text-xs"
+          data-testid="host-quick-pick-rivals"
+        >
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            Quick-pick platform club:
+          </span>
+          {rivalWorldClubs.slice(0, 8).map((c: any) => {
+            const cid = c.club_id || c.id;
+            const isSelected = (opponent?.id || opponent?.club_id) === cid;
+            return (
+              <button
+                type="button"
+                key={cid}
+                onClick={() => {
+                  const picked = {
+                    id: cid,
+                    club_id: cid,
+                    club_name: c.club_name,
+                    slug: c.slug || cid,
+                  };
+                  setOpponent(picked);
+                  setOpponentQuery(c.club_name);
+                  setOpponents([]);
+                  if (!f.name) {
+                    setF((prev: any) => ({
+                      ...prev,
+                      name: `${active?.club_name || "GTEX"} vs ${c.club_name} Cup`,
+                    }));
+                  }
+                }}
+                className={`rounded-full border px-2.5 py-0.5 text-[11px] font-bold transition ${
+                  isSelected
+                    ? "border-emerald-400 bg-emerald-500/20 text-emerald-200"
+                    : "border-white/15 bg-white/5 text-slate-200 hover:border-emerald-400/50 hover:text-white"
+                }`}
+              >
+                {c.club_name}
+              </button>
+            );
+          })}
+        </div>
       )}
       <input
         data-testid="host-pin-input"
@@ -576,7 +649,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
               <Btn
                 variant="secondary"
                 data-testid="play-quick-game-btn"
-                onClick={() => navigate(`/app/matches/${lastMatch.match_id}`)}
+                onClick={() => navigate(`/app/match/${lastMatch.match_id}?live=1`)}
               >
                 <Flame size={13} /> Play & Watch Match
               </Btn>
@@ -598,8 +671,22 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
   );
 }
 
-function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
-  const [boardScope, setBoardScope] = useState<"global" | "clubs">("global");
+function GlobalLeaderboardPanel({
+  worldClubs,
+  activeClub,
+  currentUserId,
+  onChallengeClub,
+  onInviteClub,
+  busyClubId,
+}: {
+  worldClubs: any[];
+  activeClub?: any;
+  currentUserId?: string;
+  onChallengeClub?: (club: any) => void;
+  onInviteClub?: (club: any) => void;
+  busyClubId?: string | null;
+}) {
+  const [boardScope, setBoardScope] = useState<"global" | "clubs">("clubs");
 
   const { data: season } = useQuery({
     queryKey: ["leaderboard-season-current"],
@@ -707,7 +794,7 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
         </div>
       ) : (
         <div className="gx-scroll overflow-x-auto">
-          <table className="gx-table w-full min-w-[640px]">
+          <table className="gx-table w-full min-w-[740px]">
             <thead>
               <tr>
                 <th>Rank</th>
@@ -716,27 +803,85 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
                 <th>Prestige</th>
                 <th>Trophies</th>
                 <th>Group</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
-              {sortedClubs.map((c: any, idx: number) => (
-                <tr key={c.club_id} data-testid={`club-rank-row-${c.club_id}`}>
-                  <td className="gx-mono font-bold text-amber-300">#{idx + 1}</td>
-                  <td className="font-semibold text-white">{c.club_name}</td>
-                  <td className="text-slate-300">{c.country || "Global"}</td>
-                  <td className="gx-mono text-emerald-300">
-                    {c.prestige == null ? "—" : c.prestige}
-                  </td>
-                  <td className="gx-mono text-amber-300">{c.trophies ?? 0}</td>
-                  <td>
-                    {c.multi_club_group ? (
-                      <Chip tone="cyan">Multi-Club Group</Chip>
-                    ) : (
-                      <span className="text-xs text-slate-500">Independent</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+              {sortedClubs.map((c: any, idx: number) => {
+                const cid = c.club_id || c.id;
+                const slug = c.slug || cid;
+                const isOwn =
+                  cid === activeClub?.club_id ||
+                  Boolean(
+                    currentUserId &&
+                      c.owner_user_id &&
+                      String(currentUserId) === String(c.owner_user_id),
+                  );
+                return (
+                  <tr key={cid} data-testid={`club-rank-row-${cid}`}>
+                    <td className="gx-mono font-bold text-amber-300">#{idx + 1}</td>
+                    <td className="font-semibold text-white">
+                      <Link
+                        to={`/club/${encodeURIComponent(slug)}`}
+                        className="inline-flex items-center gap-1.5 text-white hover:text-emerald-300 hover:underline"
+                      >
+                        <span>{c.club_name}</span>
+                        <ExternalLink size={12} className="text-slate-400" />
+                      </Link>
+                      {isOwn && (
+                        <span className="ml-2 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-emerald-300">
+                          Your Club
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-slate-300">{c.country || c.country_code || "Global"}</td>
+                    <td className="gx-mono text-emerald-300">
+                      {c.prestige == null ? "—" : c.prestige}
+                    </td>
+                    <td className="gx-mono text-amber-300">{c.trophies ?? 0}</td>
+                    <td>
+                      {c.multi_club_group ? (
+                        <Chip tone="cyan">Multi-Club Group</Chip>
+                      ) : (
+                        <span className="text-xs text-slate-500">Independent</span>
+                      )}
+                    </td>
+                    <td className="text-right">
+                      <div className="inline-flex flex-wrap justify-end gap-1.5">
+                        <Link
+                          to={`/club/${encodeURIComponent(slug)}`}
+                          className="gx-btn gx-btn-secondary text-[11px] px-2.5 py-1"
+                          data-testid={`view-club-profile-${cid}`}
+                        >
+                          Profile & Squad
+                        </Link>
+                        {!isOwn && onChallengeClub && (
+                          <button
+                            type="button"
+                            disabled={busyClubId === cid}
+                            onClick={() => onChallengeClub(c)}
+                            className="gx-btn gx-btn-primary text-[11px] px-2.5 py-1"
+                            data-testid={`challenge-club-btn-${cid}`}
+                          >
+                            {busyClubId === cid ? "Sending…" : "Challenge Match"}
+                          </button>
+                        )}
+                        {!isOwn && onInviteClub && (
+                          <button
+                            type="button"
+                            disabled={busyClubId === cid}
+                            onClick={() => onInviteClub(c)}
+                            className="gx-btn gx-btn-secondary text-[11px] px-2.5 py-1"
+                            data-testid={`invite-club-btn-${cid}`}
+                          >
+                            Invite to Cup
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -747,6 +892,8 @@ function GlobalLeaderboardPanel({ worldClubs }: { worldClubs: any[] }) {
 
 export default function Competitions() {
   const { active } = useActiveClub();
+  const { user: currentUser } = useAuth();
+  const [searchParams] = useSearchParams();
   const { getModuleView, setModuleView } = useSkin();
   const compView = getModuleView("competitions");
   const { data, isLoading } = useQuery({
@@ -763,6 +910,66 @@ export default function Competitions() {
       }
     },
   });
+  const { data: discoveryClubs = [] } = useQuery({
+    queryKey: ["discovery-clubs-competitions"],
+    queryFn: async () => {
+      try {
+        return (await api.get("/community/discovery/clubs", { params: { limit: 30 } })).data.clubs || [];
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const allPlatformClubs = React.useMemo(() => {
+    const merged = new Map<string, any>();
+    for (const c of worldClubs || []) {
+      const id = c.club_id || c.id;
+      if (id) merged.set(String(id), { ...c, club_id: id, id });
+    }
+    for (const c of discoveryClubs || []) {
+      const id = c.id || c.club_id;
+      if (!id) continue;
+      const existing = merged.get(String(id)) || {};
+      merged.set(String(id), {
+        ...c,
+        ...existing,
+        club_id: id,
+        id,
+        slug: existing.slug || c.slug || id,
+        club_name: existing.club_name || c.club_name,
+        city_name: existing.city_name || c.city_name,
+        country_code: existing.country_code || c.country_code,
+        country:
+          existing.country ||
+          [c.city_name, c.country_code].filter(Boolean).join(", ") ||
+          "Global",
+        primary_color: existing.primary_color || c.primary_color || "#0F766E",
+        owner_name:
+          existing.owner_name ||
+          c.owner?.display_name ||
+          c.owner?.username ||
+          "GTEX Club Owner",
+        trophies: existing.trophies ?? c.trophy_count ?? 0,
+      });
+    }
+    return Array.from(merged.values());
+  }, [worldClubs, discoveryClubs]);
+
+  const [selectedHostOpponent, setSelectedHostOpponent] = useState<any | null>(null);
+  const [busyClubId, setBusyClubId] = useState<string | null>(null);
+
+  useEffect(() => {
+    const inviteId = searchParams.get("invite_club_id");
+    const inviteName = searchParams.get("invite_club_name");
+    if (inviteId) {
+      setSelectedHostOpponent({
+        id: inviteId,
+        club_id: inviteId,
+        club_name: inviteName || "Invited Club",
+      });
+    }
+  }, [searchParams]);
 
   const [fixtureQuery, setFixtureQuery] = useState("");
   const [fixtures, setFixtures] = useState<any[]>([]);
@@ -788,6 +995,92 @@ export default function Competitions() {
   const visibleUser = needle
     ? user.filter((c: any) => `${c.name} ${c.description || ""}`.toLowerCase().includes(needle))
     : user;
+
+  const handleChallengeClub = async (targetClub: any) => {
+    const targetId = targetClub?.club_id || targetClub?.id;
+    if (!active?.club_id || !targetId) {
+      toast.error("Select your active club before sending a match challenge.");
+      return;
+    }
+    if (active.club_id === targetId) {
+      toast.error("You cannot challenge your own club.");
+      return;
+    }
+    setBusyClubId(targetId);
+    try {
+      const created = await api.post(`/clubs/${active.club_id}/challenges`, {
+        title: `Challenge ${targetClub.club_name || "club"}`.slice(0, 160),
+        message: `${active.club_name || "Our club"} wants a match against ${targetClub.club_name || "your club"}.`,
+        target_club_id: targetId,
+        visibility: "private",
+        stakes_text: "Friendly",
+      });
+      const challengeId = created.data?.challenge?.id || created.data?.card?.challenge_id;
+      if (challengeId) {
+        await api.post(`/challenges/${challengeId}/publish`);
+      }
+      toast.success(`Match challenge sent to ${targetClub.club_name}!`);
+    } catch (e) {
+      toast.error(errMsg(e));
+    } finally {
+      setBusyClubId(null);
+    }
+  };
+
+  const handleInviteClubToCompetition = async (targetClub: any) => {
+    const targetId = targetClub?.club_id || targetClub?.id;
+    if (!active?.club_id || !targetId) {
+      toast.error("Select your active club before sending a competition invite.");
+      return;
+    }
+    if (active.club_id === targetId) {
+      toast.error("You cannot invite your own club.");
+      return;
+    }
+    setSelectedHostOpponent({
+      id: targetId,
+      club_id: targetId,
+      club_name: targetClub.club_name,
+      slug: targetClub.slug || targetId,
+    });
+    const openUserComp = user.find((comp: any) => comp.status === "open" && comp.invite_code);
+    if (openUserComp) {
+      setBusyClubId(targetId);
+      try {
+        const created = await api.post(`/clubs/${active.club_id}/challenges`, {
+          title: `Join ${openUserComp.name}`.slice(0, 160),
+          message: `You are invited to ${openUserComp.name}. Use pin ${openUserComp.invite_code} to enter with ${targetClub.club_name}.`,
+          target_club_id: targetId,
+          competition_id: openUserComp.id,
+          visibility: "private",
+          stakes_text: "Friend competition",
+          metadata_json: {
+            invite_code: openUserComp.invite_code,
+            source: "friend_competition",
+          },
+        });
+        const challengeId = created.data?.challenge?.id || created.data?.card?.challenge_id;
+        if (challengeId) {
+          await api.post(`/challenges/${challengeId}/publish`);
+        }
+        toast.success(
+          `Invited ${targetClub.club_name} to ${openUserComp.name} (Pin ${openUserComp.invite_code})!`,
+        );
+        return;
+      } catch (e) {
+        toast.error(errMsg(e));
+      } finally {
+        setBusyClubId(null);
+      }
+    }
+    const hostEl = document.querySelector('[data-testid="host-panel"]');
+    if (hostEl && typeof hostEl.scrollIntoView === "function") {
+      hostEl.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+    toast.info(
+      `Selected ${targetClub.club_name} as opponent in "Host a friend competition" below — click Host to send the invite pin!`,
+    );
+  };
   return (
     <div data-testid="competitions-page" className="space-y-6">
       <PageHeader
@@ -856,6 +1149,115 @@ export default function Competitions() {
             </Panel>
           )}
           <QuickMatchmakingDesk activeClub={active} />
+          {allPlatformClubs.length > 0 && (
+            <Panel
+              eyebrow="Live GTEX World Directory · Inspect Squads & Issue Challenges"
+              title={`Platform Clubs & Rivals (${allPlatformClubs.length})`}
+              testid="platform-clubs-directory"
+            >
+              <div className="grid gap-3 md:grid-cols-3">
+                {allPlatformClubs.map((c: any) => {
+                  const cid = c.club_id || c.id;
+                  const slug = c.slug || cid;
+                  const isOwn =
+                    cid === active?.club_id ||
+                    Boolean(
+                      currentUser?.id &&
+                        c.owner_user_id &&
+                        String(currentUser.id) === String(c.owner_user_id),
+                    );
+                  return (
+                    <div
+                      key={cid}
+                      data-testid={`platform-club-card-${cid}`}
+                      className="flex flex-col justify-between rounded-xl border border-white/10 bg-slate-950/75 p-4 shadow-lg transition hover:border-emerald-400/50"
+                    >
+                      <div>
+                        <div className="flex items-start justify-between gap-2">
+                          <Link
+                            to={`/club/${encodeURIComponent(slug)}`}
+                            className="group flex items-center gap-2.5 min-w-0"
+                          >
+                            <span
+                              className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-white/20 text-xs font-black text-white shadow"
+                              style={{ background: c.primary_color || "#0F766E" }}
+                            >
+                              {String(c.short_name || c.club_name || "FC")
+                                .slice(0, 3)
+                                .toUpperCase()}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="truncate font-extrabold text-white group-hover:text-emerald-300 group-hover:underline">
+                                {c.club_name}
+                              </p>
+                              <p className="truncate text-[11px] text-slate-400">
+                                {c.country || c.country_code || "Global"} ·{" "}
+                                {c.division_name || "Foundation"}
+                              </p>
+                            </div>
+                          </Link>
+                          {isOwn ? (
+                            <Chip tone="emerald">Your Club</Chip>
+                          ) : (
+                            <Chip tone="cyan">Rival Club</Chip>
+                          )}
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-300">
+                          <span>
+                            Prestige: <b className="text-emerald-300">{c.prestige ?? "—"}</b>
+                          </span>
+                          {c.squad_count != null && (
+                            <span>
+                              Squad: <b className="text-white">{c.squad_count} players</b>
+                            </span>
+                          )}
+                          <span>
+                            Trophies: <b className="text-amber-300">{c.trophies ?? 0}</b>
+                          </span>
+                        </div>
+                        {c.owner_name && (
+                          <p className="mt-1 text-[11px] text-slate-400">
+                            Owner: <span className="text-slate-200">{c.owner_name}</span>
+                          </p>
+                        )}
+                      </div>
+                      <div className="mt-4 flex flex-wrap gap-1.5 border-t border-white/10 pt-3">
+                        <Link
+                          to={`/club/${encodeURIComponent(slug)}`}
+                          className="gx-btn gx-btn-secondary flex-1 text-center text-[11px] py-1.5"
+                          data-testid={`platform-club-view-${cid}`}
+                        >
+                          View Profile & Squad
+                        </Link>
+                        {!isOwn && (
+                          <>
+                            <button
+                              type="button"
+                              disabled={busyClubId === cid}
+                              onClick={() => handleChallengeClub(c)}
+                              className="gx-btn gx-btn-primary text-[11px] px-2.5 py-1.5"
+                              data-testid={`platform-club-challenge-${cid}`}
+                            >
+                              {busyClubId === cid ? "Sending…" : "Challenge Match"}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={busyClubId === cid}
+                              onClick={() => handleInviteClubToCompetition(c)}
+                              className="gx-btn gx-btn-secondary text-[11px] px-2.5 py-1.5"
+                              data-testid={`platform-club-invite-${cid}`}
+                            >
+                              Invite to Cup
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          )}
           <Panel
             eyebrow="GTEX-hosted"
             title="Platform competitions"
@@ -883,7 +1285,7 @@ export default function Competitions() {
               className="lg:col-span-8"
               testid="host-panel"
             >
-              <HostForm />
+              <HostForm worldClubs={allPlatformClubs} externalOpponent={selectedHostOpponent} />
             </Panel>
             <Panel
               eyebrow="Invite"
@@ -909,7 +1311,14 @@ export default function Competitions() {
               </div>
             )}
           </Panel>
-          <GlobalLeaderboardPanel worldClubs={worldClubs} />
+          <GlobalLeaderboardPanel
+            worldClubs={allPlatformClubs}
+            activeClub={active}
+            currentUserId={currentUser?.id ? String(currentUser.id) : undefined}
+            onChallengeClub={handleChallengeClub}
+            onInviteClub={handleInviteClubToCompetition}
+            busyClubId={busyClubId}
+          />
         </>
       )}
     </div>

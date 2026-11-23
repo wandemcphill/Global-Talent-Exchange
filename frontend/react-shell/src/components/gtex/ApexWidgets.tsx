@@ -298,12 +298,12 @@ export const HolographicPlayerCard: React.FC<HolographicPlayerCardProps> = ({
           style={{ transform: "translateZ(16px)" }}
         >
           <div className="flex items-center gap-1.5">
-            {potential && (
+            {Boolean(potential && potential > 0) && (
               <span className="rounded bg-emerald-500/20 border border-emerald-400/40 px-2 py-0.5 text-[10px] font-black text-emerald-300">
                 {potential} POT
               </span>
             )}
-            {priceGtx !== undefined && (
+            {priceGtx !== undefined && priceGtx > 0 && (
               <span className="gx-mono text-xs font-extrabold text-amber-300">
                 {fmt(priceGtx)} GTX
               </span>
@@ -624,25 +624,38 @@ export function placeFirstTeamOnPitch(players: TacticalPitchPlayer[] = [], forma
     ...slot,
     player: undefined as TacticalPitchPlayer | undefined,
   }));
-  const unplaced = [...players];
-  for (const player of unplaced) {
-    const bucket = pitchBucket(player.position);
-    const raw = String(player.position || "").toUpperCase();
-    const exact = slots.find(
-      (slot) => !slot.player && slot.bucket === bucket && raw.includes(slot.role),
-    );
-    if (exact) exact.player = player;
-  }
-  for (const player of unplaced) {
-    if (slots.some((slot) => slot.player === player)) continue;
-    const bucket = pitchBucket(player.position);
-    const open = slots.find((slot) => !slot.player && slot.bucket === bucket);
-    if (open) open.player = player;
-  }
-  for (const player of unplaced) {
-    if (slots.some((slot) => slot.player === player)) continue;
-    const anyOpen = slots.find((slot) => !slot.player);
-    if (anyOpen) anyOpen.player = player;
+  if (players.length === 11 && pitchBucket(players[0]?.position) === "GK") {
+    const gkSlots = slots.filter((slot) => slot.bucket === "GK");
+    const defSlots = slots.filter((slot) => slot.bucket === "DEF").sort((a, b) => a.x - b.x);
+    const midSlots = slots
+      .filter((slot) => slot.bucket === "MID")
+      .sort((a, b) => a.x - b.x || b.y - a.y);
+    const fwdSlots = slots.filter((slot) => slot.bucket === "FWD").sort((a, b) => a.x - b.x);
+    const orderedSlots = [...gkSlots, ...defSlots, ...midSlots, ...fwdSlots];
+    orderedSlots.forEach((slot, index) => {
+      slot.player = players[index];
+    });
+  } else {
+    const unplaced = [...players];
+    for (const player of unplaced) {
+      const bucket = pitchBucket(player.position);
+      const raw = String(player.position || "").toUpperCase();
+      const exact = slots.find(
+        (slot) => !slot.player && slot.bucket === bucket && raw.includes(slot.role),
+      );
+      if (exact) exact.player = player;
+    }
+    for (const player of unplaced) {
+      if (slots.some((slot) => slot.player === player)) continue;
+      const bucket = pitchBucket(player.position);
+      const open = slots.find((slot) => !slot.player && slot.bucket === bucket);
+      if (open) open.player = player;
+    }
+    for (const player of unplaced) {
+      if (slots.some((slot) => slot.player === player)) continue;
+      const anyOpen = slots.find((slot) => !slot.player);
+      if (anyOpen) anyOpen.player = player;
+    }
   }
   return slots.map((slot) => {
     const rating = Number(slot.player?.overall ?? slot.player?.rating ?? 0);
