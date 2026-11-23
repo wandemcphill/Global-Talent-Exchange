@@ -54,7 +54,14 @@ function PlayPanel({ comp, clubId, lineup, setLineup }: any) {
     try {
       const { data } = await api.post(`/owner/competitions/${comp.id}/play-next`, { club_id: clubId, mentality, lineup_mode: lineup });
       refresh();
-      navigate(`/app/match/${data.match.id}?club=${clubId}&live=1`);
+      const matchAlreadySimulated =
+        data?.execution !== "canonical_fixture" &&
+        ["played", "completed", "settled"].includes(String(data?.match?.status || "").toLowerCase());
+      navigate(
+        matchAlreadySimulated
+          ? `/app/match/${data.match.id}?club=${clubId}`
+          : `/app/match/${data.match.id}?club=${clubId}&live=1`,
+      );
     } catch (e) {
       toast.error(errMsg(e));
     } finally {

@@ -1923,6 +1923,8 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         away_team=_build_side_input("away", away),
     )
 
+    from app.match_engine.services.match_report import build_simulated_match_report
+
     service = MatchSimulationService()
 
     replay = service.build_replay_payload(req)
@@ -1930,6 +1932,14 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
     hg = replay.summary.home_score
 
     ag = replay.summary.away_score
+
+    match_report = build_simulated_match_report(
+        replay,
+        home_team_name=str(home.get("name") or "Home"),
+        away_team_name=str(away.get("name") or "Away"),
+    )
+    home_player_ids = {str(p.player_id) for p in replay.summary.player_stats if str(p.team_id) == "home"}
+    away_player_ids = {str(p.player_id) for p in replay.summary.player_stats if str(p.team_id) == "away"}
 
     events = [
         {"minute": 0, "type": "kickoff", "team": None, "text": f"Kick-off between {home['name']} and {away['name']}."}
@@ -1951,37 +1961,79 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
 
                 score[side_key] += 1
 
+            is_penalty = ev_type in {"penalty_goal", "penalty_scored"}
+            scorer_id = str(ev.primary_player.player_id) if ev.primary_player else None
             scorer = ev.primary_player.player_name if ev.primary_player else f"{team_name} Scorer"
+            assist_id = None
+            assist_name = None
+            if not is_penalty and ev.secondary_player is not None:
+                cand_id = str(ev.secondary_player.player_id or "")
+                cand_name = str(ev.secondary_player.player_name or "").strip()
+                same_team = (side_key == "home" and cand_id in home_player_ids) or (
+                    side_key == "away" and cand_id in away_player_ids
+                )
+                if cand_name and cand_id != scorer_id and same_team:
+                    assist_id = cand_id or None
+                    assist_name = cand_name
 
             events.append(
                 {
                     "minute": ev.minute,
-                    "type": "goal",
+                    "type": "penalty_goal" if is_penalty else "goal",
                     "team": side_key,
+                    "scorer_id": scorer_id,
                     "scorer": scorer,
+                    "assist_id": assist_id,
+                    "assist": assist_name,
+                    "is_penalty": is_penalty,
+                    "home_score": score["home"],
+                    "away_score": score["away"],
                     "score": f"{score['home']}-{score['away']}",
-                    "text": ev.commentary or f"{scorer} scores for {team_name}!",
+                    "text": ev.commentary
+                    or (
+                        f"{scorer} scores for {team_name}"
+                        + (f" (assist: {assist_name})" if assist_name else " (pen)" if is_penalty else "")
+                        + "!"
+                    ),
                 }
             )
 
-        elif ev_type in {"shot_missed", "shot_saved", "shot_blocked"}:
-
+        elif ev_type in {
+            "shot_missed",
+            "shot_saved",
+            "shot_blocked",
+            "missed_chance",
+            "missed_big_chance",
+            "woodwork",
+            "goalkeeper_save",
+            "save",
+            "double_save",
+            "shot_on_target",
+            "shot",
+            "penalty_missed",
+            "penalty_miss",
+        }:
+            player_name = ev.primary_player.player_name if ev.primary_player else None
             events.append(
                 {
                     "minute": ev.minute,
-                    "type": "chance",
+                    "type": "save" if ev_type in {"save", "goalkeeper_save", "double_save"} else "chance",
                     "team": side_key,
+                    "player": player_name,
                     "text": ev.commentary or f"Chance for {team_name}.",
                 }
             )
 
         elif ev_type in {"yellow_card", "red_card"}:
 
+            player_name = ev.primary_player.player_name if ev.primary_player else None
             events.append(
                 {
                     "minute": ev.minute,
-                    "type": "flavour",
+                    "type": ev_type,
                     "team": side_key,
+                    "player_id": str(ev.primary_player.player_id) if ev.primary_player else None,
+                    "player": player_name,
                     "text": ev.commentary or f"Card shown for {team_name}.",
                 }
             )
@@ -2020,10 +2072,18 @@ def simulate_match(seed: str, home: dict[str, Any], away: dict[str, Any]) -> dic
         "events": events,
         "momentum": momentum,
         "lambda": [
-            round(replay.summary.home_stats.shots * 0.15 + 0.5, 2),
-            round(replay.summary.away_stats.shots * 0.15 + 0.5, 2),
+            round(float(replay.summary.expected_goals_home or 0.0), 2),
+            round(float(replay.summary.expected_goals_away or 0.0), 2),
         ],
         "gap": round(gap, 3),
+        "stats": match_report["stats"],
+        "goals": match_report["goals"],
+        "cards": match_report["cards"],
+        "player_stats": match_report["player_stats"],
+        "motm": match_report["motm"],
+        "key_highlights": match_report["key_highlights"],
+        "summary_line": match_report["summary_line"],
+        "match_report": match_report,
     }
 
     if replay.summary.decided_by_penalties:

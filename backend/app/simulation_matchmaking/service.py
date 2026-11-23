@@ -9,6 +9,10 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.match_engine.services.match_report import (
+    build_simulated_match_report,
+    build_simulated_match_report_from_payload,
+)
 from app.match_engine.services.match_simulation_service import MatchSimulationService
 from app.match_engine.schemas import (
     MatchClubContextInput,
@@ -56,6 +60,7 @@ from app.simulation_matchmaking.schemas import (
     QuickGameStyle,
     QuickTournamentRequest,
     QuickTournamentResponse,
+    SimulatedMatchReportView,
     SimulationExecutionMode,
     SimulationGameProfileInput,
     SimulationGameProfileView,
@@ -185,6 +190,7 @@ class SimulationMatchmakingService:
             competition_type=MatchCompetitionType.LEAGUE,
             stage="quick_game",
             requires_winner=False,
+            session=session,
         )
         free_matches_remaining = 10
         free_matches_used = 0
@@ -193,6 +199,10 @@ class SimulationMatchmakingService:
         entitlement_status = "free_run_active"
         settlement_status: str | None = None
         result_label: str | None = None
+        home_score: int | None = None
+        away_score: int | None = None
+        is_simulated = False
+        match_report_view: SimulatedMatchReportView | None = None
 
         # Head-to-head against another human in LIVE mode → spin up the real-time
         # tick engine and let the match actually play out, instead of pre-computing
@@ -214,9 +224,25 @@ class SimulationMatchmakingService:
             wallet_ledger_id: str | None = None
 
             replay_payload = MatchSimulationService().build_replay_payload(match_engine_request)
-            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
             result = self._result_for_requester(replay_payload.summary.winner_team_id, requester=requester)
             result_label = result.value
+            home_score = int(replay_payload.summary.home_score)
+            away_score = int(replay_payload.summary.away_score)
+            is_simulated = True
+            match_report_dict = build_simulated_match_report(
+                replay_payload,
+                home_team_name=requester.club_name,
+                away_team_name=best.profile.club_name,
+                result_label=result.value,
+            )
+            match_report_view = SimulatedMatchReportView.model_validate(match_report_dict)
+
+            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
+            viewer_payload["stats"] = match_report_dict["stats"]
+            viewer_payload["match_report"] = match_report_dict
+            viewer_payload["is_simulated"] = True
+            viewer_payload["match_status"] = "completed"
+
             settlement = self._settle_fast_match(
                 session=session,
                 actor=actor,
@@ -255,9 +281,13 @@ class SimulationMatchmakingService:
                         "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
                         "queue_source": queue_source,
                         "viewer_mode_hint": "twoD",
-                        "home_score": int(replay_payload.summary.home_score),
-                        "away_score": int(replay_payload.summary.away_score),
-                        "final_score": f"{replay_payload.summary.home_score}-{replay_payload.summary.away_score}",
+                        "is_simulated": True,
+                        "home_team_name": requester.club_name,
+                        "away_team_name": best.profile.club_name,
+                        "home_score": home_score,
+                        "away_score": away_score,
+                        "final_score": f"{home_score}-{away_score}",
+                        "match_report": match_report_dict,
                     },
                 )
             )
@@ -265,16 +295,6 @@ class SimulationMatchmakingService:
             free_matches_remaining = entitlement.free_matches_remaining
             free_matches_used = entitlement.free_matches_used
             entitlement_status = self._entitlement_status(entitlement)
-            if live_session_view is None:
-                live_session_view = LiveSessionBridgeView(
-                    match_id=match_id,
-                    session_route=f"/app/matches/{match_id}",
-                    your_side="home",
-                    home_user_id=requester.user_id,
-                    away_user_id=best.profile.user_id,
-                    home_name=requester.club_name,
-                    away_name=best.profile.club_name,
-                )
 
         return QuickGameResponse(
             match_id=match_id,
@@ -297,7 +317,7 @@ class SimulationMatchmakingService:
             simulation_bridge=MatchSimulationBridgeView(
                 seed_hint=self._seed_hint(match_id),
                 recommended_mode=recommended_mode,
-                live_supported=True,
+                live_supported=not is_simulated,
                 async_supported=True,
                 marketplace_feedback_enabled=True,
                 match_engine_request=match_engine_request,
@@ -312,6 +332,10 @@ class SimulationMatchmakingService:
             entitlement_status=entitlement_status,
             settlement_status=settlement_status,
             result=result_label,
+            home_score=home_score,
+            away_score=away_score,
+            is_simulated=is_simulated,
+            match_report=match_report_view,
             rules_copy="Entry is free.",
         )
 
@@ -343,19 +367,23 @@ class SimulationMatchmakingService:
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
             meta = dict(existing_fast.metadata_json or {})
             viewer = dict(existing_fast.viewer_payload_json or {})
+            home_team = viewer.get("home_team") if isinstance(viewer.get("home_team"), dict) else {}
+            away_team = viewer.get("away_team") if isinstance(viewer.get("away_team"), dict) else {}
             home_score = meta.get("home_score")
             away_score = meta.get("away_score")
             if home_score is None or away_score is None:
-                home_team = viewer.get("home_team") if isinstance(viewer.get("home_team"), dict) else {}
-                away_team = viewer.get("away_team") if isinstance(viewer.get("away_team"), dict) else {}
                 home_score = home_team.get("score")
                 away_score = away_team.get("score")
             if (home_score is None or away_score is None) and isinstance(viewer.get("events"), list):
                 h_goals = 0
                 a_goals = 0
-                home_id = str((viewer.get("home_team") or {}).get("team_id") or existing_fast.home_club_id or "")
+                home_id = str(home_team.get("team_id") or existing_fast.home_club_id or "")
                 for ev in viewer["events"]:
-                    if isinstance(ev, dict) and str(ev.get("event_type") or "").lower() in {"goal", "penalty_goal"}:
+                    if isinstance(ev, dict) and str(ev.get("event_type") or "").lower() in {
+                        "goal",
+                        "penalty_goal",
+                        "penalty_scored",
+                    }:
                         if str(ev.get("team_id") or "") == home_id:
                             h_goals += 1
                         else:
@@ -370,6 +398,20 @@ class SimulationMatchmakingService:
                     home_score, away_score = 0, 1
                 else:
                     home_score, away_score = 1, 1
+            raw_report = meta.get("match_report") if isinstance(meta.get("match_report"), dict) else None
+            if raw_report is None:
+                raw_report = build_simulated_match_report_from_payload(
+                    match_id=existing_fast.match_id,
+                    home_team_id=str(home_team.get("team_id") or existing_fast.home_club_id or "home"),
+                    away_team_id=str(away_team.get("team_id") or existing_fast.away_club_id or "away"),
+                    home_team_name=str(meta.get("home_team_name") or home_team.get("team_name") or "Home"),
+                    away_team_name=str(meta.get("away_team_name") or away_team.get("team_name") or "Away"),
+                    home_score=int(home_score),
+                    away_score=int(away_score),
+                    events=viewer.get("events") if isinstance(viewer.get("events"), list) else [],
+                    narrative=viewer,
+                    result_label=res_str,
+                )
             return LiveMatchSettlementView(
                 match_id=existing_fast.match_id,
                 result=res_str,
@@ -384,6 +426,8 @@ class SimulationMatchmakingService:
                 entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
                 entitlement_status=self._entitlement_status(entitlement),
                 already_settled=True,
+                is_simulated=True,
+                match_report=SimulatedMatchReportView.model_validate(raw_report),
             )
         if live.phase != "full_time":
             raise MatchmakingUnavailableError("Live match is still in progress.")
@@ -394,6 +438,22 @@ class SimulationMatchmakingService:
 
         existing = session.scalar(select(FastMatchSession).where(FastMatchSession.match_id == match_id))
         if existing is not None:
+            existing_meta = dict(existing.metadata_json or {})
+            raw_report = (
+                existing_meta.get("match_report")
+                if isinstance(existing_meta.get("match_report"), dict)
+                else build_simulated_match_report_from_payload(
+                    match_id=live.match_id,
+                    home_team_id=live.home_id,
+                    away_team_id=live.away_id,
+                    home_team_name=live.home_name,
+                    away_team_name=live.away_name,
+                    home_score=live.home_score,
+                    away_score=live.away_score,
+                    events=list(live.events or []),
+                    result_label=existing.result or FastMatchResult.DRAW.value,
+                )
+            )
             return self._live_settlement_view(
                 live=live,
                 result=existing.result or FastMatchResult.DRAW.value,
@@ -401,6 +461,7 @@ class SimulationMatchmakingService:
                 charge_required_now=existing.charge_required_now,
                 fan_coin_charged=existing.fan_coin_entry_fee,
                 already_settled=True,
+                match_report=SimulatedMatchReportView.model_validate(raw_report),
             )
 
         if live.home_score > live.away_score:
@@ -426,6 +487,17 @@ class SimulationMatchmakingService:
             fan_coin_charged=Decimal("0.0000"),
             wallet_ledger_id=wallet_ledger_id,
         )
+        live_report_dict = build_simulated_match_report_from_payload(
+            match_id=live.match_id,
+            home_team_id=live.home_id,
+            away_team_id=live.away_id,
+            home_team_name=live.home_name,
+            away_team_name=live.away_name,
+            home_score=live.home_score,
+            away_score=live.away_score,
+            events=list(live.events or []),
+            result_label=result.value,
+        )
         session.add(
             FastMatchSession(
                 user_id=actor.id,
@@ -448,7 +520,13 @@ class SimulationMatchmakingService:
                     "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
                     "queue_source": "player",
                     "viewer_mode_hint": "live",
+                    "is_simulated": True,
+                    "home_team_name": live.home_name,
+                    "away_team_name": live.away_name,
+                    "home_score": live.home_score,
+                    "away_score": live.away_score,
                     "final_score": f"{live.home_score}-{live.away_score}",
+                    "match_report": live_report_dict,
                 },
             )
         )
@@ -460,6 +538,7 @@ class SimulationMatchmakingService:
             charge_required_now=charge_required_now,
             fan_coin_charged=fan_coin_entry_fee if charge_required_now else Decimal("0.0000"),
             already_settled=False,
+            match_report=SimulatedMatchReportView.model_validate(live_report_dict),
         )
 
     def _live_settlement_view(
@@ -471,6 +550,7 @@ class SimulationMatchmakingService:
         charge_required_now: bool,
         fan_coin_charged: Decimal,
         already_settled: bool,
+        match_report: SimulatedMatchReportView | None = None,
     ) -> LiveMatchSettlementView:
         return LiveMatchSettlementView(
             match_id=live.match_id,
@@ -486,6 +566,8 @@ class SimulationMatchmakingService:
             entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
             entitlement_status=self._entitlement_status(entitlement),
             already_settled=already_settled,
+            is_simulated=True,
+            match_report=match_report,
         )
 
     def create_quick_tournament(self, payload: QuickTournamentRequest) -> QuickTournamentResponse:
@@ -1040,6 +1122,7 @@ class SimulationMatchmakingService:
         competition_type: MatchCompetitionType,
         stage: str,
         requires_winner: bool,
+        session: Session | None = None,
     ) -> MatchSimulationRequest:
         return MatchSimulationRequest(
             match_id=match_id,
@@ -1050,11 +1133,63 @@ class SimulationMatchmakingService:
                 is_final=stage == "final",
                 requires_winner=requires_winner,
             ),
-            home_team=self._build_team_input(home, team_id=f"{home.club_id}-home"),
-            away_team=self._build_team_input(away, team_id=f"{away.club_id}-away"),
+            home_team=self._build_team_input(home, team_id=f"{home.club_id}-home", session=session),
+            away_team=self._build_team_input(away, team_id=f"{away.club_id}-away", session=session),
         )
 
-    def _build_team_input(self, profile: SimulationGameProfileView, *, team_id: str) -> MatchTeamInput:
+    def _load_club_squad_rows(
+        self,
+        profile: SimulationGameProfileView,
+        *,
+        session: Session | None,
+    ) -> list[dict[str, object]]:
+        if session is None or profile.is_bot or not profile.club_id:
+            return []
+        try:
+            from app.owner_console.models import OwnerSquadPlayer
+
+            with session.begin_nested():
+                rows = list(
+                    session.scalars(
+                        select(OwnerSquadPlayer)
+                        .where(OwnerSquadPlayer.club_id == profile.club_id)
+                        .order_by(OwnerSquadPlayer.rating.desc())
+                    ).all()
+                )
+        except Exception:
+            return []
+        output: list[dict[str, object]] = []
+        for row in rows:
+            name = str(getattr(row, "name", "") or "").strip()
+            if not name:
+                continue
+            raw_pos = str(getattr(row, "position", "") or "").strip().lower()
+            if any(token in raw_pos for token in ("gk", "keeper", "goalkeeper")):
+                role = PlayerRole.GOALKEEPER
+            elif any(token in raw_pos for token in ("def", "cb", "lb", "rb", "wb", "back")):
+                role = PlayerRole.DEFENDER
+            elif any(token in raw_pos for token in ("fw", "st", "cf", "lw", "rw", "wing", "striker", "forward")):
+                role = PlayerRole.FORWARD
+            else:
+                role = PlayerRole.MIDFIELDER
+            output.append(
+                {
+                    "id": str(row.id),
+                    "name": name,
+                    "role": role,
+                    "rating": int(getattr(row, "rating", None) or profile.squad_strength),
+                    "fitness": int(getattr(row, "fitness", None) or 82),
+                }
+            )
+        return output
+
+    def _build_team_input(
+        self,
+        profile: SimulationGameProfileView,
+        *,
+        team_id: str,
+        session: Session | None = None,
+    ) -> MatchTeamInput:
         formation = self._formation_for_style(profile.tactical_profile.style)
         starter_roles = self._starter_roles(formation)
         bench_roles = (
@@ -1070,30 +1205,63 @@ class SimulationMatchmakingService:
         discipline = self._clamp_rating(55 + ((profile.manager_rating - 1300) // 20))
         fitness = self._clamp_rating(58 + ((profile.squad_depth - 50) // 2))
         style = self._match_engine_style(profile.tactical_profile.style, profile.tactical_profile.pressing)
-        starters = [
-            self._build_player_input(
-                team_id=team_id,
-                shirt_number=index + 1,
-                role=role,
-                base_overall=base_overall,
-                discipline=discipline,
-                fitness=fitness,
-                depth_modifier=0,
+        available_squad = self._load_club_squad_rows(profile, session=session)
+        used_squad_ids: set[str] = set()
+
+        def _pick_real_player(target_role: PlayerRole) -> dict[str, object] | None:
+            for item in available_squad:
+                if item["id"] not in used_squad_ids and item["role"] is target_role:
+                    used_squad_ids.add(str(item["id"]))
+                    return item
+            if target_role is not PlayerRole.GOALKEEPER:
+                for item in available_squad:
+                    if item["id"] not in used_squad_ids and item["role"] is not PlayerRole.GOALKEEPER:
+                        used_squad_ids.add(str(item["id"]))
+                        return item
+            for item in available_squad:
+                if item["id"] not in used_squad_ids:
+                    used_squad_ids.add(str(item["id"]))
+                    return item
+            return None
+
+        starters = []
+        for index, role in enumerate(starter_roles):
+            picked = _pick_real_player(role)
+            starters.append(
+                self._build_player_input(
+                    team_id=team_id,
+                    club_name=profile.club_name,
+                    shirt_number=index + 1,
+                    role=role,
+                    base_overall=int(picked["rating"]) if picked else base_overall,
+                    discipline=discipline,
+                    fitness=int(picked["fitness"]) if picked else fitness,
+                    depth_modifier=0,
+                    player_name_override=str(picked["name"]) if picked else None,
+                    player_id_override=f"{team_id}-{picked['id']}" if picked else None,
+                )
             )
-            for index, role in enumerate(starter_roles)
-        ]
-        bench = [
-            self._build_player_input(
-                team_id=team_id,
-                shirt_number=index + 101,
-                role=role,
-                base_overall=max(42, base_overall - max(2, (100 - profile.squad_depth) // 12)),
-                discipline=min(99, discipline + 2),
-                fitness=min(99, fitness + 3),
-                depth_modifier=max(1, (profile.squad_depth - 50) // 12),
+        bench = []
+        for index, role in enumerate(bench_roles):
+            picked = _pick_real_player(role)
+            bench.append(
+                self._build_player_input(
+                    team_id=team_id,
+                    club_name=profile.club_name,
+                    shirt_number=index + 101,
+                    role=role,
+                    base_overall=(
+                        int(picked["rating"])
+                        if picked
+                        else max(42, base_overall - max(2, (100 - profile.squad_depth) // 12))
+                    ),
+                    discipline=min(99, discipline + 2),
+                    fitness=int(picked["fitness"]) if picked else min(99, fitness + 3),
+                    depth_modifier=0 if picked else max(1, (profile.squad_depth - 50) // 12),
+                    player_name_override=str(picked["name"]) if picked else None,
+                    player_id_override=f"{team_id}-{picked['id']}" if picked else None,
+                )
             )
-            for index, role in enumerate(bench_roles)
-        ]
         return MatchTeamInput(
             team_id=team_id,
             team_name=profile.club_name,
@@ -1142,21 +1310,30 @@ class SimulationMatchmakingService:
         self,
         *,
         team_id: str,
+        club_name: str,
         shirt_number: int,
         role: PlayerRole,
         base_overall: int,
         discipline: int,
         fitness: int,
         depth_modifier: int,
+        player_name_override: str | None = None,
+        player_id_override: str | None = None,
     ) -> MatchPlayerInput:
         variation = (shirt_number % 3) - 1 + depth_modifier
         overall = self._clamp_rating(base_overall + variation)
         resolved_shirt_number = shirt_number if shirt_number <= 99 else None
-        display_name = f"{team_id[:2].upper()}{shirt_number}" if resolved_shirt_number is not None else None
+        display_name = (
+            player_name_override.split()[-1][:14]
+            if player_name_override
+            else (f"{club_name[:2].upper()}{shirt_number}" if resolved_shirt_number is not None else None)
+        )
+        resolved_player_id = player_id_override or f"{team_id}-p{shirt_number}"
+        label_num = shirt_number if shirt_number <= 99 else shirt_number - 100
         if role is PlayerRole.GOALKEEPER:
             return MatchPlayerInput(
-                player_id=f"{team_id}-p{shirt_number}",
-                player_name=f"{team_id.title()} Keeper {shirt_number}",
+                player_id=resolved_player_id,
+                player_name=player_name_override or f"{club_name} Keeper #{label_num}",
                 role=role,
                 overall=self._clamp_rating(overall - 2),
                 finishing=10,
@@ -1170,8 +1347,8 @@ class SimulationMatchmakingService:
             )
         if role is PlayerRole.DEFENDER:
             return MatchPlayerInput(
-                player_id=f"{team_id}-p{shirt_number}",
-                player_name=f"{team_id.title()} Defender {shirt_number}",
+                player_id=resolved_player_id,
+                player_name=player_name_override or f"{club_name} Defender #{label_num}",
                 role=role,
                 overall=overall,
                 finishing=self._clamp_rating(base_overall - 16 + variation),
@@ -1185,8 +1362,8 @@ class SimulationMatchmakingService:
             )
         if role is PlayerRole.MIDFIELDER:
             return MatchPlayerInput(
-                player_id=f"{team_id}-p{shirt_number}",
-                player_name=f"{team_id.title()} Midfielder {shirt_number}",
+                player_id=resolved_player_id,
+                player_name=player_name_override or f"{club_name} Midfielder #{label_num}",
                 role=role,
                 overall=self._clamp_rating(overall + 1),
                 finishing=self._clamp_rating(base_overall - 2 + variation),
@@ -1199,8 +1376,8 @@ class SimulationMatchmakingService:
                 display_name=display_name,
             )
         return MatchPlayerInput(
-            player_id=f"{team_id}-p{shirt_number}",
-            player_name=f"{team_id.title()} Forward {shirt_number}",
+            player_id=resolved_player_id,
+            player_name=player_name_override or f"{club_name} Forward #{label_num}",
             role=role,
             overall=self._clamp_rating(overall + 2),
             finishing=self._clamp_rating(base_overall + 10 + variation),

@@ -287,6 +287,10 @@ class MatchViewStateView(CommonSchema):
     presentation_package: "MatchViewerPresentationPackageView | None" = None
     monetization: MatchViewerMonetizationView | None = None
     broadcast_session: dict[str, Any] | None = None
+    stats: dict[str, Any] | None = None
+    match_report: dict[str, Any] | None = None
+    is_simulated: bool = False
+    match_status: str | None = None
 
 
 class MatchViewerPresentationPlayerView(CommonSchema):

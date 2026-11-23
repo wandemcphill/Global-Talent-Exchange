@@ -516,3 +516,66 @@ def test_hosted_competition_preview_rejects_ai_or_bot_clubs(client: TestClient, 
 
     assert response.status_code == 422
     assert "do not allow AI or bot participants" in response.text
+
+
+def test_simulated_quick_game_returns_full_match_report_and_hides_live_session(client: TestClient) -> None:
+    _register_profiles(
+        client,
+        "/api/simulation-matchmaking",
+        _profile(
+            "user_123",
+            "club_abc",
+            "Lagos United",
+            manager_rating=1420,
+            style="possession",
+            pressing="high",
+            tempo="fast",
+            squad_strength=78,
+            squad_depth=65,
+        ),
+    )
+
+    response = client.post(
+        "/api/simulation-matchmaking/quick-game",
+        json={
+            "mode": "quick_game",
+            "user_id": "user_123",
+            "include_bots": True,
+        },
+    )
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["is_simulated"] is True
+    assert body["settlement_status"] == "settled"
+    assert body["live_session"] is None
+    assert body["simulation_bridge"]["live_supported"] is False
+    assert isinstance(body["home_score"], int)
+    assert isinstance(body["away_score"], int)
+
+    report = body["match_report"]
+    assert report is not None
+    assert report["home_score"] == body["home_score"]
+    assert report["away_score"] == body["away_score"]
+    stats = report["stats"]
+    assert stats["home_possession"] + stats["away_possession"] == 100
+    assert stats["home_shots"] >= report["home_score"]
+    assert stats["away_shots"] >= report["away_score"]
+    assert stats["home_expected_goals"] is not None
+    assert stats["away_expected_goals"] is not None
+    assert len(report["goals"]) == report["home_score"] + report["away_score"]
+    for goal in report["goals"]:
+        assert goal["scorer_name"]
+        assert "club_abc-home" not in goal["scorer_name"].lower()
+        assert "bot_club_" not in goal["scorer_name"].lower()
+    assert len(report["player_stats"]) >= 11
+    assert report["motm"]["available"] is True
+    assert report["motm"]["player_name"]
+
+    settle_response = client.post(f"/api/simulation-matchmaking/quick-game/{body['match_id']}/settle")
+    assert settle_response.status_code == 200, settle_response.text
+    settled = settle_response.json()
+    assert settled["already_settled"] is True
+    assert settled["is_simulated"] is True
+    assert settled["match_report"] is not None
+    assert settled["match_report"]["stats"]["home_possession"] == stats["home_possession"]
+    assert len(settled["match_report"]["goals"]) == len(report["goals"])

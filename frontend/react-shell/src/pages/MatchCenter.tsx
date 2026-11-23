@@ -73,6 +73,10 @@ import { sharedMatchAudio } from "@/match2d/matchAudio";
 import { MatchTimelineScrubber, buildTimelineModel } from "./match-center/MatchTimelineScrubber";
 import { Pitch2DView } from "@/pages/match-center/Pitch2DView";
 import { MatchPitchLiveScene } from "@/lib/3d/broadcast/MatchPitchLiveScene";
+import {
+  SimulatedMatchStatsReport,
+  type SimulatedMatchReport,
+} from "@/components/gtex/SimulatedMatchStatsReport";
 
 const GIFTS = [
   { code: "fan_chant", name: "Stadium Roar", cost: 2, rarity: "common", anim: "fan_chant", animation_key: "fan_chant", sound_key: "crowd_roar", duration_ms: 4200 },
@@ -1237,17 +1241,17 @@ function PostMatchAnalytics({
           </button>
         </div>
 
-        {show3DMotmStage && (
+        {show3DMotmStage && motm?.available === true && motm?.player_name && (
           <div className="mb-4 overflow-hidden rounded-lg">
             <GtexSceneViewport
               sceneId="world_gala"
-              title={motm?.player_name || "VICTOR OSIMHEN"}
-              subtitle={`${motm?.team_name || match.home_name} · Official Man of the Match Honors`}
+              title={motm.player_name}
+              subtitle={`${motm.team_name || match.home_name} · Official Man of the Match Honors`}
               badgeText="3D MOTM TROPHY PLINTH"
-              subjectName={motm?.player_name || "VICTOR OSIMHEN"}
-              subjectLabel={motm?.player_name || "Man of the Match"}
-              overallRating={motm?.rating ? Number(motm.rating).toFixed(1) : "9.2"}
-              clubName={motm?.team_name || match.home_name}
+              subjectName={motm.player_name}
+              subjectLabel={motm.player_name}
+              overallRating={motm.rating != null ? Number(motm.rating).toFixed(1) : undefined}
+              clubName={motm.team_name || match.home_name}
               qualityTier="medium"
               compact
             />
@@ -1474,15 +1478,17 @@ export default function MatchCenter() {
       } catch {
         const viewer = (await api.get(`/match-viewer/${id}`)).data;
         if (viewer && viewer.match_id) {
+          const viewerReport = viewer.match_report || null;
+          const viewerIsSimulated = Boolean(viewer.is_simulated || viewerReport?.is_simulated);
           return {
             match_id: viewer.match_id,
             id: viewer.match_id,
             home_club_id: viewer.home_team?.team_id || "home-club",
             away_club_id: viewer.away_team?.team_id || "away-club",
-            home_name: viewer.home_team?.team_name || "Home XI",
-            away_name: viewer.away_team?.team_name || "Away XI",
+            home_name: viewer.home_team?.team_name || viewerReport?.home_team_name || "Home XI",
+            away_name: viewer.away_team?.team_name || viewerReport?.away_team_name || "Away XI",
             venue_name: viewer.venue_name || "GTEX National Arena",
-            status: "LIVE",
+            status: viewer.match_status || (viewerIsSimulated ? "completed" : "LIVE"),
             round: 1,
             events: viewer.events || [],
             frames: viewer.frames || [],
@@ -1490,7 +1496,11 @@ export default function MatchCenter() {
             away_team: viewer.away_team,
             duration_seconds: viewer.duration_seconds,
             broadcast_session: viewer.broadcast_session,
-            stats: viewer.stats,
+            stats: viewer.stats || viewerReport?.stats,
+            match_report: viewerReport,
+            is_simulated: viewerIsSimulated,
+            home_goals: viewerReport?.home_score,
+            away_goals: viewerReport?.away_score,
           };
         }
         throw new Error("Match not found");
@@ -1498,6 +1508,71 @@ export default function MatchCenter() {
     },
     enabled: !!id,
   });
+
+  const matchReport = useMemo<SimulatedMatchReport | null>(() => {
+    const direct: SimulatedMatchReport | null =
+      (m as any)?.match_report ||
+      (m as any)?.narrative?.match_report ||
+      (viewerData as any)?.match_report ||
+      null;
+    if (direct) return direct;
+    const statusLower = String((m as any)?.status || (viewerData as any)?.match_status || "").toLowerCase();
+    const isSim = Boolean(
+      (m as any)?.is_simulated ||
+        (viewerData as any)?.is_simulated ||
+        statusLower === "played" ||
+        statusLower === "settled",
+    );
+    if (!isSim || !m) return null;
+    const rawEvents: any[] = Array.isArray((m as any).events)
+      ? (m as any).events
+      : Array.isArray((viewerData as any)?.events)
+        ? (viewerData as any).events
+        : [];
+    const goals = rawEvents
+      .filter((ev) => ["goal", "penalty_goal", "penalty_scored"].includes(String(ev?.type || ev?.event_type || "").toLowerCase()))
+      .map((ev) => ({
+        minute: Number(ev.minute ?? 0),
+        side: (String(ev.team || ev.side || "").toLowerCase() === "away" ? "away" : "home") as "home" | "away",
+        scorer_name: String(ev.scorer || ev.scorer_name || ev.primary_player_name || "Scorer"),
+        assist_name: ev.assist || ev.assist_name || ev.secondary_player_name || null,
+        is_penalty: Boolean(ev.is_penalty || String(ev.type || ev.event_type || "").toLowerCase().includes("penalty")),
+        commentary: String(ev.text || ev.commentary || ""),
+      }));
+    const cards = rawEvents
+      .filter((ev) => ["yellow_card", "red_card"].includes(String(ev?.type || ev?.event_type || "").toLowerCase()))
+      .map((ev) => ({
+        minute: Number(ev.minute ?? 0),
+        side: (String(ev.team || ev.side || "").toLowerCase() === "away" ? "away" : "home") as "home" | "away",
+        player_name: String(ev.player || ev.player_name || ev.primary_player_name || "Player"),
+        card_type: String(ev.type || ev.event_type || "yellow_card").toLowerCase(),
+        commentary: String(ev.text || ev.commentary || ""),
+      }));
+    return {
+      match_id: String((m as any).id || id || ""),
+      home_team_id: (m as any).home_club_id,
+      away_team_id: (m as any).away_club_id,
+      home_team_name: String((m as any).home_name || "Home"),
+      away_team_name: String((m as any).away_name || "Away"),
+      home_score: Number((m as any).home_goals ?? 0),
+      away_score: Number((m as any).away_goals ?? 0),
+      stats: (m as any).stats || (m as any).narrative?.stats || (viewerData as any)?.stats || null,
+      goals,
+      cards,
+      player_stats: (m as any).player_stats || (m as any).narrative?.player_stats || [],
+      motm: (m as any).motm || (m as any).narrative?.motm || { available: false },
+      is_simulated: true,
+    };
+  }, [m, viewerData, id]);
+
+  const rawMatchStatus = String((m as any)?.status || (viewerData as any)?.match_status || "").toLowerCase();
+  const isSimulatedBase = Boolean(
+    (m as any)?.is_simulated ||
+      (viewerData as any)?.is_simulated ||
+      rawMatchStatus === "played" ||
+      rawMatchStatus === "settled" ||
+      (rawMatchStatus === "completed" && Boolean(matchReport)),
+  );
 
   const { data: liveState, refetch: refetchLiveState } = useQuery({
     queryKey: ["match-live-state", id],
@@ -1508,8 +1583,8 @@ export default function MatchCenter() {
         return null;
       }
     },
-    refetchInterval: (query) => (shouldPollMatchState(query.state.data) ? 2500 : false),
-    enabled: !!id && id !== "u2a-006-showcase",
+    refetchInterval: (query) => (isSimulatedBase ? false : shouldPollMatchState(query.state.data) ? 2500 : false),
+    enabled: !!id && id !== "u2a-006-showcase" && !isSimulatedBase,
     retry: false,
   });
 
@@ -1523,7 +1598,7 @@ export default function MatchCenter() {
       }
     },
     refetchInterval: 5000,
-    enabled: !!id && id !== "u2a-006-showcase",
+    enabled: !!id && id !== "u2a-006-showcase" && !isSimulatedBase,
     retry: false,
   });
   const authoritativeTactics = useMemo(() => mapAuthoritativeTactics(appliedTactics), [appliedTactics]);
@@ -1591,7 +1666,7 @@ export default function MatchCenter() {
 
   const spectatorStream = useMatchSpectatorStream({
     matchId: id || "",
-    enabled: Boolean(id && id !== "u2a-006-showcase"),
+    enabled: Boolean(id && id !== "u2a-006-showcase" && !isSimulatedBase),
     isAuthenticated: isViewerAuthenticated,
     requestTicket: isViewerAuthenticated ? requestSpectatorTicket : undefined,
     onResyncRequired: () => {
@@ -1606,6 +1681,7 @@ export default function MatchCenter() {
       enqueueGift(g);
     },
   });
+  const isSimulatedMatch = isSimulatedBase && !acceptedLive && !spectatorStream.lastFrame;
   const [audioAtmosphere, setAudioAtmosphere] = useState(false);
 
   // End-whistle -> Owner Authority governance (backend validates completion, ownership and idempotency).
@@ -1728,7 +1804,7 @@ export default function MatchCenter() {
           broadcastSession?.sync_strategy === "canonical_live_execution" ||
           String(broadcastSession?.broadcast_status || broadcastSession?.status || "").toLowerCase() === "live",
       );
-  const canLocalReplay = !isSharedLiveBroadcast && timedRecordedFrames.length >= 2;
+  const canLocalReplay = !isSharedLiveBroadcast && !isSimulatedMatch && timedRecordedFrames.length >= 2;
   const [replayPaused, setReplayPaused] = useState(false);
   const [replaySpeed, setReplaySpeed] = useState<0.5 | 1 | 2>(1);
   const [instantReplayActive, setInstantReplayActive] = useState(false);
@@ -1764,7 +1840,7 @@ export default function MatchCenter() {
 
   // Monotonic 1.0x shared wall-clock progression for recorded broadcast timelines.
   useEffect(() => {
-    if (acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length < 2) {
+    if (isSimulatedMatch || acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length < 2) {
       return undefined;
     }
     let lastTickMs = typeof performance !== "undefined" ? performance.now() : Date.now();
@@ -1840,6 +1916,9 @@ export default function MatchCenter() {
   );
 
   const minute = useMemo(() => {
+    if (isSimulatedMatch) {
+      return 90;
+    }
     if (
       acceptedLive &&
       isActiveCanonicalBroadcast(canonicalStatus(acceptedLive)) &&
@@ -1862,16 +1941,18 @@ export default function MatchCenter() {
       return Math.max(0, Math.round(leftMin + (rightMin - leftMin) * replayPair.t));
     }
     return 0;
-  }, [spectatorStream.latestScore?.minute, spectatorStream.lastFrame?.clock_minute, acceptedLive?.minute, replayPair]);
+  }, [isSimulatedMatch, spectatorStream.latestScore?.minute, spectatorStream.lastFrame?.clock_minute, acceptedLive?.minute, replayPair]);
 
-  const phaseName = (acceptedLive || liveState)
-    ? canonicalBroadcastPhase(acceptedLive || liveState)
-    : String(
-        spectatorStream.latestScore?.status ||
-          spectatorStream.lastFrame?.phase ||
-          activeReplayFrame?.phase ||
-          "",
-      ).toLowerCase();
+  const phaseName = isSimulatedMatch
+    ? "full_time"
+    : (acceptedLive || liveState)
+      ? canonicalBroadcastPhase(acceptedLive || liveState)
+      : String(
+          spectatorStream.latestScore?.status ||
+            spectatorStream.lastFrame?.phase ||
+            activeReplayFrame?.phase ||
+            "",
+        ).toLowerCase();
   // Only the real half-time break counts; "first_half" / "second_half" merely contain the word "half".
   const isHalftime = /^(half_?time|half_time_break|ht|break)$/.test(phaseName.replace(/[\s-]+/g, "_"));
   const matchAds = useMatchCommercialInventory(id, true);
@@ -1893,7 +1974,7 @@ export default function MatchCenter() {
       if (!ev) continue;
       const evMin = Number(ev.minute ?? ev.clock_minute ?? 0);
       const evSec = ev.time_seconds !== undefined ? Number(ev.time_seconds) : null;
-      if (!isLiveAuthoritative) {
+      if (!isLiveAuthoritative && !isSimulatedMatch) {
         if (evSec !== null && Number.isFinite(evSec)) {
           if (evSec > playbackSeconds + 0.05) continue;
         } else if (evMin > minute + 0.2) {
@@ -1915,7 +1996,7 @@ export default function MatchCenter() {
       });
     }
     return filtered;
-  }, [acceptedLive, viewerData?.events, m?.events, spectatorStream.recentEvents, spectatorStream.lastFrame, playbackSeconds, minute]);
+  }, [isSimulatedMatch, acceptedLive, viewerData?.events, m?.events, spectatorStream.recentEvents, spectatorStream.lastFrame, playbackSeconds, minute]);
 
   const commentary = useMemo(() => {
     const played = timedRecordedFrames;
@@ -1943,15 +2024,17 @@ export default function MatchCenter() {
     return merged;
   }, [shown, timedRecordedFrames, acceptedLive, spectatorStream.lastFrame, playbackSeconds, minute]);
 
-  const isRecordedReplay = !acceptedLive && !spectatorStream.lastFrame && timedRecordedFrames.length >= 2;
+  const isRecordedReplay = !isSimulatedMatch && !acceptedLive && !spectatorStream.lastFrame && timedRecordedFrames.length >= 2;
   const timelineModel = useMemo(() => buildTimelineModel(timedRecordedFrames as any, (viewerData?.events?.length ? viewerData.events : m?.events) || [], replayDurationSeconds), [timedRecordedFrames, viewerData?.events, m?.events, replayDurationSeconds]);
 
   // Authoritative live stats win; otherwise derive only what shown events can honestly support
   // (shot attempts and cards). Possession, xG, etc. stay "—" rather than being invented.
   const liveStats = useMemo(() => {
     if (acceptedLive?.stats) return acceptedLive.stats;
+    if (matchReport?.stats) return matchReport.stats;
     if (viewerData?.stats) return viewerData.stats;
     if ((m as any)?.stats) return (m as any).stats;
+    if ((m as any)?.narrative?.stats) return (m as any).narrative.stats;
     const homeId = String(viewerData?.home_team?.team_id || "");
     const awayId = String(viewerData?.away_team?.team_id || "");
     const sideOf = (ev: any): "home" | "away" | null => {
@@ -1990,7 +2073,7 @@ export default function MatchCenter() {
       home_red_cards: tally.hr,
       away_red_cards: tally.ar,
     } as any;
-  }, [acceptedLive?.stats, viewerData?.stats, (m as any)?.stats, shown, viewerData?.home_team?.team_id, viewerData?.away_team?.team_id]);
+  }, [acceptedLive?.stats, matchReport?.stats, viewerData?.stats, (m as any)?.stats, (m as any)?.narrative?.stats, shown, viewerData?.home_team?.team_id, viewerData?.away_team?.team_id]);
 
   // Synchronize Procedural Web Audio Engine with stadium audio toggle and active match events
   useEffect(() => {
@@ -2079,22 +2162,26 @@ export default function MatchCenter() {
 
   const canonicalScore = isActiveCanonicalBroadcast(canonicalStatus(acceptedLive)) ? acceptedLive : null;
   const score = {
-    home:
-      canonicalScore?.home?.score ??
-      spectatorStream.latestScore?.home_score ??
-      spectatorStream.lastFrame?.home_score ??
-      acceptedLive?.home?.score ??
-      liveState?.home?.score ??
-      activeReplayFrame?.home_score ??
-      fallbackScore.home,
-    away:
-      canonicalScore?.away?.score ??
-      spectatorStream.latestScore?.away_score ??
-      spectatorStream.lastFrame?.away_score ??
-      acceptedLive?.away?.score ??
-      liveState?.away?.score ??
-      activeReplayFrame?.away_score ??
-      fallbackScore.away,
+    home: isSimulatedMatch
+      ? (matchReport?.home_score ?? (m as any).home_goals ?? fallbackScore.home)
+      : (canonicalScore?.home?.score ??
+          spectatorStream.latestScore?.home_score ??
+          spectatorStream.lastFrame?.home_score ??
+          acceptedLive?.home?.score ??
+          liveState?.home?.score ??
+          activeReplayFrame?.home_score ??
+          (m as any).home_goals ??
+          fallbackScore.home),
+    away: isSimulatedMatch
+      ? (matchReport?.away_score ?? (m as any).away_goals ?? fallbackScore.away)
+      : (canonicalScore?.away?.score ??
+          spectatorStream.latestScore?.away_score ??
+          spectatorStream.lastFrame?.away_score ??
+          acceptedLive?.away?.score ??
+          liveState?.away?.score ??
+          activeReplayFrame?.away_score ??
+          (m as any).away_goals ??
+          fallbackScore.away),
   };
   const replayFinished =
     !acceptedLive &&
@@ -2103,12 +2190,13 @@ export default function MatchCenter() {
     replayDurationSeconds > 0 &&
     playbackSeconds >= replayDurationSeconds - 0.001;
   const done =
+    isSimulatedMatch ||
     phaseName === "completed" ||
     phaseName === "full_time" ||
     phaseName === "fulltime" ||
     replayFinished;
   const hasAuthoritativeFeed = Boolean(
-    acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length > 0,
+    isSimulatedMatch || acceptedLive || spectatorStream.lastFrame || timedRecordedFrames.length > 0,
   );
   // Live xG running totals — aligned to authoritative stats when available
   const liveXg = computeLiveXgTotals(
@@ -2260,6 +2348,15 @@ export default function MatchCenter() {
           {/* Top Broadcast Venue & Status Strip */}
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/[0.08] pb-3.5">
             {/* Layer 3: Football Display Mode Switcher */}
+            {isSimulatedMatch ? (
+              <div
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-black/40 px-3 py-1.5 text-xs font-black uppercase tracking-wider text-emerald-300"
+                data-testid="simulated-match-report-badge"
+              >
+                <Activity size={13} />
+                <span>Simulated Match Report</span>
+              </div>
+            ) : (
             <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-black/40 p-1" data-testid="match-center-view-toggle">
               <button
                 type="button"
@@ -2307,10 +2404,13 @@ export default function MatchCenter() {
                 Compact Ticker
               </button>
             </div>
+            )}
 
             <div className="flex flex-wrap items-center gap-2">
               <Chip tone={!hasAuthoritativeFeed ? "slate" : done ? "slate" : isScheduled ? "cyan" : "emerald"}>
-                {!hasAuthoritativeFeed ? (
+                {isSimulatedMatch ? (
+                  "Simulated · Full time"
+                ) : !hasAuthoritativeFeed ? (
                   "Preview · authoritative match feed unavailable"
                 ) : done ? (
                   "Full time"
@@ -2372,6 +2472,7 @@ export default function MatchCenter() {
               )}
 
               {/* Stadium Audio Ambiance Toggle */}
+              {!isSimulatedMatch && (
               <button
                 type="button"
                 data-testid="match-audio-toggle"
@@ -2389,6 +2490,7 @@ export default function MatchCenter() {
                 {audioAtmosphere ? <Volume2 size={12} /> : <VolumeX size={12} />}
                 <span className="hidden sm:inline">CROWD SFX</span>
               </button>
+              )}
             </div>
 
           </div>
@@ -2506,14 +2608,22 @@ export default function MatchCenter() {
 
         {/* Match Navigation Tabs */}
         <div className="hidden flex-wrap gap-2 border-b border-[#25354B] pb-3 md:flex">
-          {[
-            { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
-            { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
-            { id: "tactics", label: "TACTICS & ADVISOR", icon: Sliders },
-            { id: "pre_match", label: "PRE-MATCH + 3D STAGE", icon: Target },
-            { id: "post_match", label: "POST-MATCH + 3D GALA", icon: Award },
-            { id: "commentary", label: "LIVE FEED", icon: Radio },
-          ].map((tab) => {
+          {(isSimulatedMatch
+            ? [
+                { id: "pitch", label: "MATCH STATS & SCORERS", icon: Activity },
+                { id: "commentary", label: "MATCH EVENT LOG", icon: Radio },
+                { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
+                { id: "post_match", label: "POST-MATCH + 3D GALA", icon: Award },
+              ]
+            : [
+                { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
+                { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
+                { id: "tactics", label: "TACTICS & ADVISOR", icon: Sliders },
+                { id: "pre_match", label: "PRE-MATCH + 3D STAGE", icon: Target },
+                { id: "post_match", label: "POST-MATCH + 3D GALA", icon: Award },
+                { id: "commentary", label: "LIVE FEED", icon: Radio },
+              ]
+          ).map((tab) => {
             const IconComponent = tab.icon;
             const isActive = activeTab === tab.id;
             return (
@@ -2533,7 +2643,21 @@ export default function MatchCenter() {
           })}
         </div>
 
-        {/* Tab 1: 2D / 2.5D Match Pitch Board */}
+        {/* Tab 1: Simulated Match Report (already simulated) OR 2D / 2.5D Match Pitch Board (live/replay) */}
+        {isSimulatedMatch ? (
+          <div
+            className={`${activeTab === "pitch" || activeTab === "post_match" ? "block" : "hidden"} order-2 space-y-4 max-md:block`}
+            data-testid="simulated-match-summary-panel"
+          >
+            <Panel
+              eyebrow="Simulated Match · Final Report"
+              title={`${m.home_name} ${score.home} – ${score.away} ${m.away_name}`}
+              testid="simulated-match-stats-panel"
+            >
+              <SimulatedMatchStatsReport report={matchReport} />
+            </Panel>
+          </div>
+        ) : (
         <div className={`${activeTab === "pitch" || (activeTab === "post_match" && done) ? "block" : "hidden"} order-2 space-y-4 max-md:block`}>
             {/* Pitch Camera & Tactical Shader Toolbar */}
             <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-white/10 bg-slate-900/85 p-2.5">
@@ -2867,6 +2991,7 @@ export default function MatchCenter() {
                 )}
               </div>
           </div>
+        )}
 
         {/* Tab 1B: Official Broadcast Matchday Lineups */}
         {activeTab === "lineups" && (
@@ -2893,6 +3018,7 @@ export default function MatchCenter() {
         )}
 
         {/* Tab 2: Tactics & In-Match Advisor */}
+        {!isSimulatedMatch && (
         <div className={`${activeTab === "tactics" ? "block" : "hidden"} order-4 max-md:block`}>
           <TacticalHUD
             formation={activeFormation}
@@ -2931,6 +3057,7 @@ export default function MatchCenter() {
             }}
           />
         </div>
+        )}
 
         {/* Tab 3: Pre-Match Package */}
         {activeTab === "pre_match" && (
@@ -2941,8 +3068,20 @@ export default function MatchCenter() {
         {activeTab === "post_match" && (
           <PostMatchAnalytics
             match={m}
-            postMatch={liveState?.post_match}
-            stats={liveState?.stats}
+            postMatch={
+              liveState?.post_match ||
+              (matchReport
+                ? {
+                    motm: matchReport.motm,
+                    xg: {
+                      home: matchReport.stats?.home_expected_goals,
+                      away: matchReport.stats?.away_expected_goals,
+                    },
+                    shot_map: [],
+                  }
+                : undefined)
+            }
+            stats={liveState?.stats || liveStats}
             matchId={id || ""}
             homeScore={score.home}
             awayScore={score.away}
@@ -2952,17 +3091,21 @@ export default function MatchCenter() {
 
         {/* Tab 5: Live Commentary & Events */}
         <div className={`${activeTab === "commentary" ? "block" : "hidden"} order-3 max-md:block`}>
-          <Panel eyebrow="Live commentary" title="Event feed" testid="commentary-feed">
+          <Panel eyebrow={isSimulatedMatch ? "Match timeline" : "Live commentary"} title="Event feed" testid="commentary-feed">
             <ol className="space-y-2">
               {[...commentary].reverse().map((e: any, i: number) => (
                 <li
                   key={i}
                   className={`gx-rise flex gap-3 rounded-sm px-3 py-2 text-sm ${
-                    e.type === "goal" ? "border border-emerald-500/30 bg-emerald-500/10 text-white" : "text-slate-300"
+                    e.type === "goal" || e.type === "penalty_goal"
+                      ? "border border-emerald-500/30 bg-emerald-500/10 text-white"
+                      : "text-slate-300"
                   }`}
                 >
                   <span className="gx-mono w-10 shrink-0 text-slate-500">{e.minute}'</span>
-                  {e.type === "goal" && <Flame size={14} className="mt-0.5 text-emerald-400" />}
+                  {(e.type === "goal" || e.type === "penalty_goal") && (
+                    <Flame size={14} className="mt-0.5 text-emerald-400" />
+                  )}
                   <span>{e.text || e.title || e.description}</span>
                 </li>
               ))}
@@ -2979,15 +3122,17 @@ export default function MatchCenter() {
           isHalftime={isHalftime}
         />
         {done && <OwnerView view={m.narrative?.[`${side}_owner_view`]} />}
-        <GiftRail
-          match={m}
-          clubId={clubId}
-          onGiftSent={(g: any) => {
-            enqueueGift(g);
-          }}
-        />
+        {!isSimulatedMatch && (
+          <GiftRail
+            match={m}
+            clubId={clubId}
+            onGiftSent={(g: any) => {
+              enqueueGift(g);
+            }}
+          />
+        )}
         <Link
-          to={`/app/competitions/${m.competition_id}`}
+          to={m.competition_id ? `/app/competitions/${m.competition_id}` : "/app/competitions"}
           className="gx-btn gx-btn-secondary flex w-full items-center justify-center gap-1.5"
           data-testid="back-to-competition"
         >

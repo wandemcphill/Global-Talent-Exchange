@@ -286,6 +286,28 @@ def match_dict(m: OwnerMatch, full: bool = False) -> dict[str, Any]:
     if full:
         data["events"] = m.events_json
         data["narrative"] = m.narrative_json
+        is_simulated = m.status == "played" or bool(narrative.get("is_simulated"))
+        data["is_simulated"] = is_simulated
+        if is_simulated:
+            from app.match_engine.services.match_report import build_simulated_match_report_from_payload
+
+            report = build_simulated_match_report_from_payload(
+                match_id=m.id,
+                home_team_id=m.home_club_id,
+                away_team_id=m.away_club_id,
+                home_team_name=m.home_name,
+                away_team_name=m.away_name,
+                home_score=int(m.home_goals or 0),
+                away_score=int(m.away_goals or 0),
+                events=list(m.events_json or []),
+                narrative=narrative,
+            )
+            data["match_report"] = report
+            data["stats"] = report.get("stats")
+            data["goals"] = report.get("goals")
+            data["cards"] = report.get("cards")
+            data["player_stats"] = report.get("player_stats")
+            data["motm"] = report.get("motm")
     return data
 
 
@@ -361,6 +383,44 @@ def _canonical_match_dict(
         ]
         metadata = dict(canonical_match.metadata_json or {})
         data["narrative"] = metadata.get("match_viewer") or metadata.get("replay_payload") or {}
+        if completed:
+            from app.match_engine.services.match_report import (
+                build_simulated_match_report,
+                build_simulated_match_report_from_payload,
+            )
+
+            report = metadata.get("match_report") if isinstance(metadata.get("match_report"), dict) else None
+            if report is None and isinstance(metadata.get("replay_payload"), dict):
+                try:
+                    from app.match_engine.schemas import MatchReplayPayloadView
+
+                    replay_view = MatchReplayPayloadView.model_validate(metadata["replay_payload"])
+                    report = build_simulated_match_report(
+                        replay_view,
+                        home_team_name=str(data["home_name"]),
+                        away_team_name=str(data["away_name"]),
+                    )
+                except Exception:
+                    report = None
+            if report is None:
+                report = build_simulated_match_report_from_payload(
+                    match_id=str(data["id"]),
+                    home_team_id=str(canonical_match.home_club_id),
+                    away_team_id=str(canonical_match.away_club_id),
+                    home_team_name=str(data["home_name"]),
+                    away_team_name=str(data["away_name"]),
+                    home_score=int(canonical_match.home_score or 0),
+                    away_score=int(canonical_match.away_score or 0),
+                    events=data["events"],
+                    narrative=metadata,
+                )
+            data["is_simulated"] = True
+            data["match_report"] = report
+            data["stats"] = report.get("stats")
+            data["goals"] = report.get("goals")
+            data["cards"] = report.get("cards")
+            data["player_stats"] = report.get("player_stats")
+            data["motm"] = report.get("motm")
     return data
 
 
@@ -1442,6 +1502,15 @@ def play_next(
             "mentality": {"home": home["mentality"], "away": away["mentality"]},
             "formation": {"home": home.get("formation"), "away": away.get("formation")},
             "philosophy": {"home": home.get("philosophy"), "away": away.get("philosophy")},
+            "is_simulated": True,
+            "stats": sim.get("stats"),
+            "goals": sim.get("goals"),
+            "cards": sim.get("cards"),
+            "player_stats": sim.get("player_stats"),
+            "motm": sim.get("motm"),
+            "key_highlights": sim.get("key_highlights"),
+            "summary_line": sim.get("summary_line"),
+            "match_report": sim.get("match_report"),
         }
         if home["state"] is None:
             ai_att = engine.calculate_match_attendance(

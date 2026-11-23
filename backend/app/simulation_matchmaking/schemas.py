@@ -160,6 +160,125 @@ class LiveSessionBridgeView(CommonSchema):
     away_name: str
 
 
+class SimulatedMatchGoalView(CommonSchema):
+    minute: int = Field(ge=0, le=150)
+    added_time: int = Field(default=0, ge=0, le=15)
+    clock_label: str = ""
+    side: Literal["home", "away"]
+    team_id: str | None = None
+    team_name: str
+    scorer_id: str | None = None
+    scorer_name: str
+    assist_id: str | None = None
+    assist_name: str | None = None
+    is_penalty: bool = False
+    home_score: int = Field(default=0, ge=0)
+    away_score: int = Field(default=0, ge=0)
+    commentary: str = ""
+
+
+class SimulatedMatchCardView(CommonSchema):
+    minute: int = Field(ge=0, le=150)
+    clock_label: str = ""
+    side: Literal["home", "away"]
+    team_id: str | None = None
+    team_name: str
+    player_id: str | None = None
+    player_name: str
+    card_type: str
+    commentary: str = ""
+
+
+class SimulatedMatchStatsView(CommonSchema):
+    home_possession: int | None = None
+    away_possession: int | None = None
+    home_shots: int = 0
+    away_shots: int = 0
+    home_shots_on_target: int = 0
+    away_shots_on_target: int = 0
+    home_saves: int = 0
+    away_saves: int = 0
+    home_expected_goals: float | None = None
+    away_expected_goals: float | None = None
+    home_yellow_cards: int = 0
+    away_yellow_cards: int = 0
+    home_red_cards: int = 0
+    away_red_cards: int = 0
+    home_big_chances: int | None = None
+    away_big_chances: int | None = None
+    home_woodwork: int | None = None
+    away_woodwork: int | None = None
+    home_substitutions: int | None = None
+    away_substitutions: int | None = None
+    home_assists: int = 0
+    away_assists: int = 0
+    home_key_passes: int | None = None
+    away_key_passes: int | None = None
+    home_tackles_won: int | None = None
+    away_tackles_won: int | None = None
+    home_interceptions: int | None = None
+    away_interceptions: int | None = None
+
+
+class SimulatedMatchPlayerStatView(CommonSchema):
+    player_id: str
+    player_name: str
+    team_id: str
+    team_name: str
+    side: Literal["home", "away"]
+    role: str = ""
+    started: bool = True
+    minutes_played: int = 0
+    goals: int = 0
+    assists: int = 0
+    saves: int = 0
+    shots_on_target: int = 0
+    key_passes: int = 0
+    tackles_won: int = 0
+    interceptions: int = 0
+    yellow_cards: int = 0
+    red_card: bool = False
+    xg: float = 0.0
+    rating: float | None = None
+    rating_summary: str | None = None
+
+
+class SimulatedMatchMotmView(CommonSchema):
+    available: bool = False
+    player_id: str | None = None
+    player_name: str | None = None
+    team_id: str | None = None
+    team_name: str | None = None
+    side: Literal["home", "away"] | None = None
+    role: str | None = None
+    goals: int = 0
+    assists: int = 0
+    rating: float | None = None
+    summary: str | None = None
+
+
+class SimulatedMatchReportView(CommonSchema):
+    match_id: str
+    home_team_id: str | None = None
+    away_team_id: str | None = None
+    home_team_name: str
+    away_team_name: str
+    home_score: int = Field(ge=0)
+    away_score: int = Field(ge=0)
+    decided_by_penalties: bool = False
+    home_penalty_score: int | None = None
+    away_penalty_score: int | None = None
+    result: str | None = None
+    summary_line: str = ""
+    stats: SimulatedMatchStatsView = Field(default_factory=SimulatedMatchStatsView)
+    goals: list[SimulatedMatchGoalView] = Field(default_factory=list)
+    cards: list[SimulatedMatchCardView] = Field(default_factory=list)
+    player_stats: list[SimulatedMatchPlayerStatView] = Field(default_factory=list)
+    motm: SimulatedMatchMotmView = Field(default_factory=SimulatedMatchMotmView)
+    key_highlights: list[str] = Field(default_factory=list)
+    is_simulated: bool = True
+
+
 class LiveMatchSettlementView(CommonSchema):
     """Result of settling a finished head-to-head live match for the initiator.
 
@@ -180,6 +299,8 @@ class LiveMatchSettlementView(CommonSchema):
     entry_currency_label: str = "Fan Coin"
     entitlement_status: str = "free_run_active"
     already_settled: bool = False
+    is_simulated: bool = True
+    match_report: SimulatedMatchReportView | None = None
 
 
 class QuickGameResponse(CommonSchema):
@@ -200,6 +321,10 @@ class QuickGameResponse(CommonSchema):
     entitlement_status: str = "free_run_active"
     settlement_status: str | None = None
     result: str | None = None
+    home_score: int | None = None
+    away_score: int | None = None
+    is_simulated: bool = False
+    match_report: SimulatedMatchReportView | None = None
     rules_copy: str = "Entry is free."
 
 

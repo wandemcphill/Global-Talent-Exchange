@@ -236,6 +236,81 @@ def _attach_monetization(
     return view_state.model_copy(update={"monetization": monetization})
 
 
+def _attach_match_report_metadata(
+    view_state: MatchViewStateView,
+    *,
+    metadata_json: dict[str, object] | None = None,
+    match: CompetitionMatch | None = None,
+) -> MatchViewStateView:
+    meta = dict(metadata_json or {}) if isinstance(metadata_json, dict) else {}
+    is_fast_match = isinstance(meta.get("fast_match"), dict)
+    match_status_raw = str(meta.get("match_status") or (match.status if match is not None else "") or "").strip()
+    is_completed_match = match_status_raw.lower() in {"completed", "played", "settled", "full_time", "fulltime", "ft"}
+    is_simulated = bool(meta.get("is_simulated") or view_state.is_simulated or is_fast_match)
+
+    report = meta.get("match_report") if isinstance(meta.get("match_report"), dict) else None
+    if report is None and isinstance(view_state.match_report, dict):
+        report = dict(view_state.match_report)
+    if report is None and isinstance(meta.get("replay_payload"), dict):
+        try:
+            from app.match_engine.schemas import MatchReplayPayloadView
+            from app.match_engine.services.match_report import build_simulated_match_report
+
+            replay_view = MatchReplayPayloadView.model_validate(meta["replay_payload"])
+            report = build_simulated_match_report(
+                replay_view,
+                home_team_name=view_state.home_team.team_name,
+                away_team_name=view_state.away_team.team_name,
+            )
+        except Exception:
+            report = None
+    if report is None and (is_simulated or is_completed_match):
+        from app.match_engine.services.match_report import build_simulated_match_report_from_payload
+
+        home_score = meta.get("home_score")
+        away_score = meta.get("away_score")
+        if (home_score is None or away_score is None) and match is not None and match.home_score is not None:
+            home_score = match.home_score
+            away_score = match.away_score
+        if (home_score is None or away_score is None) and view_state.frames:
+            home_score = view_state.frames[-1].home_score
+            away_score = view_state.frames[-1].away_score
+        if (home_score is None or away_score is None) and view_state.events:
+            home_score = view_state.events[-1].home_score
+            away_score = view_state.events[-1].away_score
+        report = build_simulated_match_report_from_payload(
+            match_id=view_state.match_id,
+            home_team_id=view_state.home_team.team_id,
+            away_team_id=view_state.away_team.team_id,
+            home_team_name=view_state.home_team.team_name,
+            away_team_name=view_state.away_team.team_name,
+            home_score=int(home_score or 0),
+            away_score=int(away_score or 0),
+            events=[ev.model_dump(mode="json") for ev in view_state.events],
+            narrative=meta,
+            result_label=(
+                str((meta.get("fast_match") or {}).get("result") or "") or None
+                if isinstance(meta.get("fast_match"), dict)
+                else None
+            ),
+        )
+
+    stats = (
+        dict(report.get("stats") or {})
+        if isinstance(report, dict) and isinstance(report.get("stats"), dict)
+        else (dict(view_state.stats) if isinstance(view_state.stats, dict) else None)
+    )
+    resolved_status = match_status_raw or ("completed" if is_simulated else view_state.match_status)
+    return view_state.model_copy(
+        update={
+            "stats": stats,
+            "match_report": report,
+            "is_simulated": is_simulated,
+            "match_status": resolved_status,
+        }
+    )
+
+
 def _match_gift_metadata(
     *,
     session: Session,
@@ -419,6 +494,8 @@ def _resolve_match_viewer_context(
             canonical_view=MatchViewStateView.model_validate(fast_match.viewer_payload_json),
             metadata_json={
                 **dict(fast_match.metadata_json or {}),
+                "is_simulated": True,
+                "match_status": "completed",
                 "fast_match": {
                     "match_id": fast_match.match_id,
                     "live_match_key": fast_match.live_match_key,
@@ -431,6 +508,47 @@ def _resolve_match_viewer_context(
             fairness_metadata=None,
             match=None,
         )
+
+    try:
+        from app.owner_console.models import OwnerMatch
+        from app.services.owner_competition_lifecycle_mapping_service import (
+            OwnerCompetitionLifecycleMappingService,
+        )
+
+        owner_match = session.get(OwnerMatch, match_key)
+        if owner_match is not None:
+            mapped_canonical = OwnerCompetitionLifecycleMappingService(session).canonical_match_for_legacy_match(
+                owner_match.id
+            )
+            if mapped_canonical is not None:
+                mapped_meta = dict(mapped_canonical.metadata_json or {})
+                mapped_stored = mapped_meta.get("match_viewer")
+                if isinstance(mapped_stored, dict):
+                    return _ResolvedMatchViewerContext(
+                        canonical_view=MatchViewStateView.model_validate(mapped_stored),
+                        metadata_json=mapped_meta,
+                        fairness_metadata=(
+                            mapped_meta.get("fairness") if isinstance(mapped_meta.get("fairness"), dict) else None
+                        ),
+                        match=mapped_canonical,
+                    )
+            narrative = dict(owner_match.narrative_json or {})
+            stored_viewer = narrative.get("match_viewer")
+            if isinstance(stored_viewer, dict):
+                return _ResolvedMatchViewerContext(
+                    canonical_view=MatchViewStateView.model_validate(stored_viewer),
+                    metadata_json={
+                        **narrative,
+                        "is_simulated": owner_match.status == "played" or bool(narrative.get("is_simulated")),
+                        "match_status": owner_match.status,
+                        "home_score": owner_match.home_goals,
+                        "away_score": owner_match.away_goals,
+                    },
+                    fairness_metadata=None,
+                    match=None,
+                )
+    except Exception:
+        pass
 
     live_view = _resolve_live_view_state(
         match_key=match_key,
@@ -556,11 +674,15 @@ def read_match_viewer_timeline(
                 match=resolved.match,
                 include_coach_notes=can_view_coach_notes,
             )
-            return _attach_monetization(
-                secured,
-                match_key=match_key,
-                session=session,
-                ad_engine=ad_engine,
+            return _attach_match_report_metadata(
+                _attach_monetization(
+                    secured,
+                    match_key=match_key,
+                    session=session,
+                    ad_engine=ad_engine,
+                    metadata_json=resolved.metadata_json,
+                    match=resolved.match,
+                ),
                 metadata_json=resolved.metadata_json,
                 match=resolved.match,
             )
@@ -580,11 +702,15 @@ def read_match_viewer_timeline(
         match=resolved.match,
         include_coach_notes=can_view_coach_notes,
     )
-    return _attach_monetization(
-        transformed,
-        match_key=match_key,
-        session=session,
-        ad_engine=ad_engine,
+    return _attach_match_report_metadata(
+        _attach_monetization(
+            transformed,
+            match_key=match_key,
+            session=session,
+            ad_engine=ad_engine,
+            metadata_json=resolved.metadata_json,
+            match=resolved.match,
+        ),
         metadata_json=resolved.metadata_json,
         match=resolved.match,
     )
@@ -645,11 +771,15 @@ def read_match_viewer_session(
             include_coach_notes=can_view_coach_notes,
         )
         return MatchViewerSessionView.model_validate(
-            _attach_monetization(
-                secured,
-                match_key=match_key,
-                session=session,
-                ad_engine=ad_engine,
+            _attach_match_report_metadata(
+                _attach_monetization(
+                    secured,
+                    match_key=match_key,
+                    session=session,
+                    ad_engine=ad_engine,
+                    metadata_json=resolved.metadata_json,
+                    match=resolved.match,
+                ),
                 metadata_json=resolved.metadata_json,
                 match=resolved.match,
             ).model_dump(mode="json")

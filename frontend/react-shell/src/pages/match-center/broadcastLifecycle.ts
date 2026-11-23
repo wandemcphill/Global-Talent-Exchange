@@ -5,6 +5,8 @@ const TERMINAL_STATUSES = new Set([
   "full_time",
   "fulltime",
   "completed",
+  "played",
+  "settled",
   "cancelled",
   "canceled",
   "abandoned",

@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth";
 import { fmt, label, useActiveClub, useRefreshOwner } from "@/lib/owner";
 import { Btn, Chip, Coin, Empty, Loading, PageHeader, Panel, Stat } from "@/components/gtex/ui";
 import { CompetitionsTableView } from "@/components/gtex/CompetitionsTableView";
+import { SimulatedMatchStatsReport } from "@/components/gtex/SimulatedMatchStatsReport";
 import { useSkin } from "@/lib/skin-engine";
 
 function CompCard({ c, clubId }: any) {
@@ -539,9 +540,16 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
         },
       });
       setLastMatch(data);
-      toast.success(
-        `Matched vs ${data.opponent?.club_name || "Rival Club"} (${data.match_context?.tactical_story || "Tactical Clash"})!`,
-      );
+      const alreadySim = Boolean(data.is_simulated || data.settlement_status === "settled");
+      if (alreadySim && data.home_score != null && data.away_score != null) {
+        toast.success(
+          `Match simulated vs ${data.opponent?.club_name || "Rival Club"}: ${data.home_score}–${data.away_score} (${label(data.result || "full_time")})`,
+        );
+      } else {
+        toast.success(
+          `Matched vs ${data.opponent?.club_name || "Rival Club"} (${data.match_context?.tactical_story || "Tactical Clash"})!`,
+        );
+      }
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
     } catch (e) {
       toast.error(errMsg(e));
@@ -557,7 +565,20 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       toast.success(
         `Quick match settled: ${data.home_score}–${data.away_score} (${label(data.result)})`,
       );
-      setLastMatch((prev: any) => (prev ? { ...prev, settlement: data } : prev));
+      setLastMatch((prev: any) =>
+        prev
+          ? {
+              ...prev,
+              is_simulated: true,
+              settlement_status: data.settlement_status || "settled",
+              home_score: data.home_score,
+              away_score: data.away_score,
+              result: data.result,
+              match_report: data.match_report || prev.match_report,
+              settlement: data,
+            }
+          : prev,
+      );
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
     } catch (e) {
       toast.error(errMsg(e));
@@ -565,6 +586,18 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       setBusy(false);
     }
   };
+
+  const isAlreadySimulated = Boolean(
+    lastMatch &&
+      (lastMatch.is_simulated || lastMatch.settlement || lastMatch.settlement_status === "settled"),
+  );
+  const simulatedReport = lastMatch?.settlement?.match_report || lastMatch?.match_report || null;
+  const finalHomeScore =
+    lastMatch?.settlement?.home_score ?? lastMatch?.home_score ?? simulatedReport?.home_score;
+  const finalAwayScore =
+    lastMatch?.settlement?.away_score ?? lastMatch?.away_score ?? simulatedReport?.away_score;
+  const finalResult =
+    lastMatch?.settlement?.result ?? lastMatch?.result ?? simulatedReport?.result;
 
   return (
     <Panel
@@ -622,49 +655,68 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
 
       {lastMatch && (
         <div
-          className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-xs"
+          className="mt-4 space-y-4 rounded-xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-xs"
           data-testid="quick-game-result-banner"
         >
-          <div>
-            <p className="font-bold text-white text-sm">
-              {activeClub?.club_name} vs. {lastMatch.opponent?.club_name} (
-              {lastMatch.opponent?.region})
-            </p>
-            <p className="text-slate-300 mt-0.5">
-              {lastMatch.match_context?.tactical_story} · Compatibility{" "}
-              {lastMatch.match_context?.tactical_compatibility_score}% · Difficulty:{" "}
-              <b className="uppercase text-amber-300">
-                {lastMatch.match_context?.expected_difficulty}
-              </b>
-            </p>
-            {lastMatch.settlement && (
-              <p className="text-emerald-300 font-bold mt-1">
-                Final Score: {lastMatch.settlement.home_score} – {lastMatch.settlement.away_score} (
-                {label(lastMatch.settlement.result)})
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="font-bold text-white text-sm">
+                  {activeClub?.club_name} vs. {lastMatch.opponent?.club_name} (
+                  {lastMatch.opponent?.region})
+                </p>
+                {isAlreadySimulated && <Chip tone="slate">Simulated · Full Time</Chip>}
+              </div>
+              <p className="text-slate-300 mt-0.5">
+                {lastMatch.match_context?.tactical_story} · Compatibility{" "}
+                {lastMatch.match_context?.tactical_compatibility_score}% · Difficulty:{" "}
+                <b className="uppercase text-amber-300">
+                  {lastMatch.match_context?.expected_difficulty}
+                </b>
               </p>
-            )}
+              {isAlreadySimulated && finalHomeScore != null && finalAwayScore != null && (
+                <p className="text-emerald-300 font-bold mt-1.5 text-sm" data-testid="quick-game-final-score">
+                  Final Score: {activeClub?.club_name} {finalHomeScore} – {finalAwayScore}{" "}
+                  {lastMatch.opponent?.club_name}
+                  {finalResult ? ` (${label(finalResult)})` : ""}
+                </p>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isAlreadySimulated && lastMatch.match_id && (
+                <Btn
+                  variant="secondary"
+                  data-testid="play-quick-game-btn"
+                  onClick={() => navigate(`/app/match/${lastMatch.match_id}?live=1`)}
+                >
+                  <Flame size={13} /> Play & Watch Match
+                </Btn>
+              )}
+              {!isAlreadySimulated && lastMatch.match_id && (
+                <Btn
+                  variant="gold"
+                  data-testid="settle-quick-game-btn"
+                  onClick={() => settleQuickGame(lastMatch.match_id)}
+                  disabled={busy}
+                >
+                  <Zap size={13} /> Settle Match Result
+                </Btn>
+              )}
+              {isAlreadySimulated && lastMatch.match_id && (
+                <Btn
+                  variant="secondary"
+                  data-testid="view-simulated-report-btn"
+                  onClick={() => navigate(`/app/match/${lastMatch.match_id}`)}
+                >
+                  Full Match Report
+                </Btn>
+              )}
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            {lastMatch.match_id && (
-              <Btn
-                variant="secondary"
-                data-testid="play-quick-game-btn"
-                onClick={() => navigate(`/app/match/${lastMatch.match_id}?live=1`)}
-              >
-                <Flame size={13} /> Play & Watch Match
-              </Btn>
-            )}
-            {!lastMatch.settlement && (
-              <Btn
-                variant="gold"
-                data-testid="settle-quick-game-btn"
-                onClick={() => settleQuickGame(lastMatch.match_id)}
-                disabled={busy}
-              >
-                <Zap size={13} /> Settle Match Result
-              </Btn>
-            )}
-          </div>
+
+          {isAlreadySimulated && simulatedReport && (
+            <SimulatedMatchStatsReport report={simulatedReport} compact />
+          )}
         </div>
       )}
     </Panel>
