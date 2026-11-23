@@ -55,7 +55,9 @@ function parseGltf(filePath) {
   const loader = new GLTFLoader();
   const buf = fs.readFileSync(filePath);
   const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
-  return new Promise((resolve, reject) => loader.parse(ab, path.dirname(filePath) + "/", resolve, reject));
+  return new Promise((resolve, reject) =>
+    loader.parse(ab, path.dirname(filePath) + "/", resolve, reject),
+  );
 }
 
 function retarget(clip, root) {
@@ -67,8 +69,12 @@ function retarget(clip, root) {
   for (const track of clip.tracks) {
     const dot = track.name.lastIndexOf(".");
     if (dot <= 0) continue;
-    const key = track.name.slice(0, dot).replace(/[^a-z0-9]/gi, "").toLowerCase();
-    if (track.name.endsWith(".scale") || track.name.endsWith(".position") || key.endsWith("hips")) continue;
+    const key = track.name
+      .slice(0, dot)
+      .replace(/[^a-z0-9]/gi, "")
+      .toLowerCase();
+    if (track.name.endsWith(".scale") || track.name.endsWith(".position") || key.endsWith("hips"))
+      continue;
     const bone = bones.get(key);
     if (!bone) continue;
     const prop = track.name.slice(dot + 1);
@@ -145,8 +151,8 @@ function partForMesh(matName, y) {
     return PART.boots;
   }
   if (y > 1.56) return PART.hair;
-  if (y > 1.40) return PART.skin;
-  if (y > 0.90) return PART.shirt;
+  if (y > 1.4) return PART.skin;
+  if (y > 0.9) return PART.shirt;
   if (y > 0.54) return PART.shorts;
   if (y > 0.13) return PART.socks;
   return PART.boots;
@@ -160,7 +166,10 @@ function classifyRestParts(restPoints, geometry, matName, restFit) {
     const ia = index.getX(ti * 3);
     const ib = index.getX(ti * 3 + 1);
     const ic = index.getX(ti * 3 + 2);
-    const midY = (((restPoints[ia * 3 + 1] + restPoints[ib * 3 + 1] + restPoints[ic * 3 + 1]) / 3) - restFit.ground) * restFit.scale;
+    const midY =
+      ((restPoints[ia * 3 + 1] + restPoints[ib * 3 + 1] + restPoints[ic * 3 + 1]) / 3 -
+        restFit.ground) *
+      restFit.scale;
     triParts[ti] = partForMesh(matName, midY);
   }
   return triParts;
@@ -176,7 +185,9 @@ const FRAME_H = 2.08;
 
 function raster(points, geometry, triParts, zbuf, body, kit, parts, originX, originY, atlasW, yaw) {
   const index = geometry.index;
-  const groups = geometry.groups.length ? geometry.groups : [{ start: 0, count: index.count, materialIndex: 0 }];
+  const groups = geometry.groups.length
+    ? geometry.groups
+    : [{ start: 0, count: index.count, materialIndex: 0 }];
   const cos = Math.cos(yaw);
   const sin = Math.sin(yaw);
 
@@ -390,9 +401,6 @@ kit.scene.traverse((obj) => {
   if (obj.isSkinnedMesh) meshes.push(obj);
 });
 if (!meshes.length) throw new Error("GT kit has no skinned mesh");
-const mainMesh = meshes.reduce((best, mesh) =>
-  mesh.geometry.attributes.position.count > best.geometry.attributes.position.count ? mesh : best
-);
 kit.scene.traverse((obj) => {
   if (obj.isBone) obj.userData.restQuaternion = obj.quaternion.clone();
 });
@@ -419,7 +427,9 @@ const restFit = {
   midZ: (restCloud.minZ + restCloud.maxZ) / 2,
   scale: 1.83 / Math.max(0.05, restCloud.height),
 };
-const meshTriParts = meshes.map((mesh, i) => classifyRestParts(restSkinned[i], mesh.geometry, meshMatNames[i], restFit));
+const meshTriParts = meshes.map((mesh, i) =>
+  classifyRestParts(restSkinned[i], mesh.geometry, meshMatNames[i], restFit),
+);
 const cellZbuf = new Float32Array(CELL * CELL);
 
 function tiltPoseAll(meshClouds, rollRad, pitchRad) {
@@ -483,13 +493,15 @@ for (let row = 0; row < ACTIONS.length; row += 1) {
         midZ: (frameCloud.minZ + frameCloud.maxZ) / 2,
         scale: 1.83 / Math.max(0.05, frameCloud.height),
       };
-      console.log("\nfit", frameCloud.height.toFixed(3), fit.scale.toFixed(3));
-      if (frameCloud.height < 1.2) throw new Error(`Posed body is folded (${frameCloud.height.toFixed(3)} m)`);
+      process.stdout.write(`\nfit ${frameCloud.height.toFixed(3)} ${fit.scale.toFixed(3)}\n`);
+      if (frameCloud.height < 1.2)
+        throw new Error(`Posed body is folded (${frameCloud.height.toFixed(3)} m)`);
     }
     const groundOffset =
       action.id === "header"
         ? fit.ground
-        : Math.min(fit.ground, frameCloud.minY) + (frameCloud.minY > fit.ground + 0.25 ? frameCloud.minY - fit.ground : 0);
+        : Math.min(fit.ground, frameCloud.minY) +
+          (frameCloud.minY > fit.ground + 0.25 ? frameCloud.minY - fit.ground : 0);
     const frameFit = {
       ground: groundOffset,
       midX: (frameCloud.minX + frameCloud.maxX) / 2,
@@ -502,7 +514,7 @@ for (let row = 0; row < ACTIONS.length; row += 1) {
     const posed = tiltPoseAll(
       skinned.map((points) => standOnPitch(points, frameFit)),
       rollRad,
-      pitchRad
+      pitchRad,
     );
     const frameAnchors = [];
     for (let direction = 0; direction < DIRECTIONS; direction += 1) {
@@ -511,7 +523,19 @@ for (let row = 0; row < ACTIONS.length; row += 1) {
       const originY = row * CELL;
       cellZbuf.fill(1e9);
       meshes.forEach((mesh, meshIndex) => {
-        raster(posed[meshIndex], mesh.geometry, meshTriParts[meshIndex], cellZbuf, body, kitPx, parts, originX, originY, atlasW, yaw);
+        raster(
+          posed[meshIndex],
+          mesh.geometry,
+          meshTriParts[meshIndex],
+          cellZbuf,
+          body,
+          kitPx,
+          parts,
+          originX,
+          originY,
+          atlasW,
+          yaw,
+        );
       });
       addCellOutline(body, kitPx, parts, originX, originY, atlasW);
       frameAnchors.push(footAnchor(posed, yaw));
@@ -535,4 +559,6 @@ const manifest = {
   anchors,
 };
 fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest));
-console.log("atlas", atlasW, atlasH, "bytes", fs.statSync(path.join(outDir, "body.png")).size);
+process.stdout.write(
+  `atlas ${atlasW} ${atlasH} bytes ${fs.statSync(path.join(outDir, "body.png")).size}\n`,
+);
