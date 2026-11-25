@@ -1392,7 +1392,7 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
             highSave ? 12 : 6,
             Math.max(highSave ? 1.25 : 0.45, seg.heightPeak ?? 0.8),
           );
-          if (highSave && ballState === "in_flight") ballHeight = Math.max(ballHeight, 1.2);
+          if (highSave) ballHeight = Math.max(ballHeight, 1.2);
           if (Math.hypot(ballX - (possessionSide === "home" ? 92.8 : 7.2), ballY - 50) < 1.4) {
             ballState = "controlled";
             ballHeight = 0.05;
