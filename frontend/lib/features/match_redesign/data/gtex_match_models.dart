@@ -274,7 +274,9 @@ class GtexLiveMatchState {
     int? minute,
     GtexMatchPhase? phase,
     List<GtexMatchTimelineEvent>? timeline,
+    List<GtexPitchPlayer>? pitchPlayers,
     GtexPitchBall? ball,
+    bool replaceBall = false,
     GtexPreMatchPackage? preMatch,
     GtexPostMatchPackage? postMatch,
   }) {
@@ -284,11 +286,11 @@ class GtexLiveMatchState {
       away: away,
       minute: minute ?? this.minute,
       phase: phase ?? this.phase,
-      pitchPlayers: pitchPlayers,
+      pitchPlayers: pitchPlayers ?? this.pitchPlayers,
       timeline: timeline ?? this.timeline,
       stats: stats,
       highlights: highlights,
-      ball: ball ?? this.ball,
+      ball: replaceBall ? ball : (ball ?? this.ball),
       preMatch: preMatch ?? this.preMatch,
       postMatch: postMatch ?? this.postMatch,
       homeMomentumPercent: homeMomentumPercent,
@@ -334,6 +336,10 @@ class GtexMatchTeam {
     this.mentality,
     this.instructionSummary = const <String>[],
     this.bench = const <GtexLineupPlayer>[],
+    this.press,
+    this.defensiveLine,
+    this.width,
+    this.tempo,
   });
 
   final String id;
@@ -349,6 +355,10 @@ class GtexMatchTeam {
   final String? mentality;
   final List<String> instructionSummary;
   final List<GtexLineupPlayer> bench;
+  final int? press;
+  final int? defensiveLine;
+  final int? width;
+  final int? tempo;
 }
 
 @immutable
@@ -363,6 +373,8 @@ class GtexLineupPlayer {
     this.isRegen = false,
     this.formLabel,
     this.fitnessPct,
+    this.yellowCards = 0,
+    this.redCards = 0,
   });
 
   final String id;
@@ -374,6 +386,8 @@ class GtexLineupPlayer {
   final bool isRegen;
   final String? formLabel;
   final double? fitnessPct;
+  final int yellowCards;
+  final int redCards;
 }
 
 @immutable
@@ -415,6 +429,7 @@ class GtexMatchTimelineEvent {
     required this.title,
     required this.description,
     this.teamId,
+    this.teamName,
     this.playerName,
   });
 
@@ -423,6 +438,7 @@ class GtexMatchTimelineEvent {
   final String title;
   final String description;
   final String? teamId;
+  final String? teamName;
   final String? playerName;
 }
 

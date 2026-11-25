@@ -1134,6 +1134,7 @@ export function MatchdayLineupBroadcast({
       ).data;
       const filedIds = filed?.manager_selection?.starting_xi_ids || signedStarterIds;
       const filedBench = filed?.manager_selection?.bench_ids || signedBenchIds;
+      const filedShape = String(filed?.manager_selection?.formation || myTarget.sheet.formation);
       queryClient.setQueryData(["lineup-squad", editableClubId], (current: any) => {
         if (!current || Array.isArray(current)) return current;
         return {
@@ -1141,20 +1142,20 @@ export function MatchdayLineupBroadcast({
           ownerBook: true,
           filedIds,
           filedBench,
-          filedFormation: myTarget.sheet.formation,
+          filedFormation: filedShape,
         };
       });
       queryClient.setQueryData(
         ["lineup-plan", editableClubId],
         normalizeLineupPlan({
-          formation: myTarget.sheet.formation,
+          formation: filedShape,
           starter_player_ids: filedIds,
           bench_player_ids: filedBench,
         }),
       );
       setUseSmartSuggestion(false);
       toast.success(
-        `${myTarget.sheet.formation} filed with the first-team manager for ${myTarget.sheet.clubName}.`,
+        `${filedShape} filed with the first-team manager for ${myTarget.sheet.clubName}.`,
       );
     } catch (err) {
       toast.error(errMsg(err));

@@ -125,14 +125,15 @@ GtexLiveMatchState _parseLiveMatchState(
 }) {
   final Map<String, Object?> home = _asMap(payload['home']);
   final Map<String, Object?> away = _asMap(payload['away']);
+  final Map<String, Object?> tactics = _asMap(payload['tactics']);
   final String matchId = _string(payload, const <String>[
     'match_id',
     'matchId',
   ], fallback: expectedMatchId);
   return GtexLiveMatchState(
     matchId: matchId,
-    home: _parseTeam(home, fallbackId: 'home'),
-    away: _parseTeam(away, fallbackId: 'away'),
+    home: _withSideTactics(_parseTeam(home, fallbackId: 'home'), _asMap(tactics['home'])),
+    away: _withSideTactics(_parseTeam(away, fallbackId: 'away'), _asMap(tactics['away'])),
     minute: _int(payload, const <String>['minute', 'clock'], fallback: 0),
     phase: _phase(
       _string(payload, const <String>[
@@ -207,6 +208,10 @@ GtexMatchTeam _parseTeam(
       'recent_form_percent', 'recentFormPercent', 'recent_form', 'recentForm',
     ]),
     mentality: _nullableString(json, const <String>['mentality', 'manager_mentality']),
+    press: _nullableInt(json, const <String>['press_intensity', 'pressing', 'press']),
+    defensiveLine: _nullableInt(json, const <String>['defensive_line', 'defensiveLine']),
+    width: _nullableInt(json, const <String>['width']),
+    tempo: _nullableInt(json, const <String>['tempo']),
     instructionSummary: _list(
       json['instruction_summary'] ?? json['instructionSummary'] ?? json['tactical_instructions'],
     ).map((Object? value) => value?.toString().trim() ?? '')
@@ -242,7 +247,68 @@ GtexLineupPlayer _parseLineupPlayer(Map<String, Object?> json) {
     isRegen: _boolOrDefault(json, const <String>['is_regen', 'isRegen'], fallback: false),
     formLabel: _nullableString(json, const <String>['form', 'form_label', 'formLabel']),
     fitnessPct: _nullableDouble(json, const <String>['fitness_pct', 'fitnessPct', 'fitness']),
+    yellowCards: _int(json, const <String>['yellow_cards', 'yellowCards'], fallback: 0),
+    redCards: _int(json, const <String>['red_cards', 'redCards'], fallback: 0),
   );
+}
+
+GtexMatchTeam _withSideTactics(GtexMatchTeam team, Map<String, Object?> side) {
+  if (side.isEmpty) {
+    return team;
+  }
+  final Set<String> yellow = _idSet(side['yellow_carded_ids']);
+  final Set<String> red = _idSet(side['red_carded_ids']);
+  final int? press = _nullableInt(side, const <String>['press_intensity', 'pressing', 'press']);
+  final int? line = _nullableInt(side, const <String>['defensive_line', 'defensiveLine']);
+  final int? width = _nullableInt(side, const <String>['width']);
+  final int? tempo = _nullableInt(side, const <String>['tempo']);
+  final String? mentality = _nullableString(side, const <String>['mentality']);
+  final List<String> filed = _list(side['instructions'])
+      .map((Object? value) => value?.toString().trim() ?? '')
+      .where((String value) => value.isNotEmpty)
+      .toList(growable: false);
+  return GtexMatchTeam(
+    id: team.id,
+    name: team.name,
+    shortName: team.shortName,
+    score: team.score,
+    formation: team.formation,
+    players: team.players
+        .map(
+          (GtexLineupPlayer player) => GtexLineupPlayer(
+            id: player.id,
+            name: player.name,
+            position: player.position,
+            shirtNumber: player.shirtNumber,
+            rating: player.rating,
+            imageUrl: player.imageUrl,
+            isRegen: player.isRegen,
+            formLabel: player.formLabel,
+            fitnessPct: player.fitnessPct,
+            yellowCards: yellow.contains(player.id) ? 1 : player.yellowCards,
+            redCards: red.contains(player.id) ? 1 : player.redCards,
+          ),
+        )
+        .toList(growable: false),
+    badgeUrl: team.badgeUrl,
+    primaryColorHex: team.primaryColorHex,
+    managerName: team.managerName,
+    recentFormPercent: team.recentFormPercent,
+    mentality: team.mentality ?? mentality,
+    instructionSummary: team.instructionSummary.isNotEmpty ? team.instructionSummary : filed,
+    bench: team.bench,
+    press: press ?? team.press,
+    defensiveLine: line ?? team.defensiveLine,
+    width: width ?? team.width,
+    tempo: tempo ?? team.tempo,
+  );
+}
+
+Set<String> _idSet(Object? raw) {
+  return _list(raw)
+      .map((Object? value) => value?.toString().trim() ?? '')
+      .where((String value) => value.isNotEmpty)
+      .toSet();
 }
 
 GtexPostMatchPackage? _parsePostMatchPackage(Map<String, Object?> json) {
@@ -422,6 +488,7 @@ GtexMatchTimelineEvent _parseTimelineEvent(Map<String, Object?> json) {
         rawType.replaceAll('_', ' '),
     description: description ?? '',
     teamId: _nullableString(json, const <String>['team_id', 'teamId']),
+    teamName: _nullableString(json, const <String>['team_name', 'teamName']),
     playerName: _nullableString(json, const <String>[
       'player_name',
       'playerName',

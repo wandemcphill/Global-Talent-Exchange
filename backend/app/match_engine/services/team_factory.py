@@ -442,12 +442,14 @@ class SyntheticSquadFactory:
             return None
 
         resolved: list[Player] = []
+        sheet_ids: list[str] = []
         used: set[str] = set()
         for raw_id in starter_ids:
             player = resolve_player(raw_id)
             if player is None or str(player.id) in used:
                 return None
             resolved.append(player)
+            sheet_ids.append(str(raw_id))
             used.add(str(player.id))
         if len(resolved) != 11:
             return None
@@ -463,8 +465,10 @@ class SyntheticSquadFactory:
             return None
         if keeper_index != 0:
             resolved.insert(0, resolved.pop(keeper_index))
+            sheet_ids.insert(0, sheet_ids.pop(keeper_index))
 
-        formation = str(selection.get("formation") or self._formation_for_profile(manager_profile) or "4-3-3")
+        stored_shape = str(selection.get("formation") or "").strip()
+        formation = self._kickoff_formation(stored_shape, manager_profile)
         try:
             roles = self._starter_roles(formation)
         except (TypeError, ValueError):
@@ -473,7 +477,42 @@ class SyntheticSquadFactory:
         if len(roles) != 11:
             formation = "4-3-3"
             roles = self._starter_roles(formation)
-        starters = list(zip(resolved, roles, strict=True))
+        if stored_shape == formation:
+            starters = list(zip(resolved, roles, strict=True))
+        else:
+            starters = self._reslot_for_formation(resolved, formation)
+            sheet_for_player = {id(player): sheet_id for player, sheet_id in zip(resolved, sheet_ids, strict=True)}
+            line_name = {
+                PlayerRole.GOALKEEPER: "GK",
+                PlayerRole.DEFENDER: "DEF",
+                PlayerRole.MIDFIELDER: "MID",
+                PlayerRole.FORWARD: "FWD",
+            }
+            ordered_ids = [sheet_for_player[id(player)] for player, _role in starters]
+            details = {
+                str(item.get("id")): dict(item)
+                for item in (selection.get("starting_xi") or [])
+                if isinstance(item, dict) and item.get("id") is not None
+            }
+            selection["formation"] = formation
+            selection["starting_xi_ids"] = ordered_ids
+            selection["manager_starting_ids"] = ordered_ids
+            if details:
+                rebuilt = []
+                for player, role in starters:
+                    item = details.get(sheet_for_player[id(player)])
+                    if item is None:
+                        continue
+                    item["sheet_line"] = line_name[role]
+                    rebuilt.append(item)
+                selection["starting_xi"] = rebuilt
+            note = str(selection.get("verdict_reason") or "").strip()
+            selection["verdict_reason"] = (
+                f"{note} Sheet rebuilt into {formation} for the hired manager."
+            ).strip()
+            facilities["_last_manager_matchday_selection"] = selection
+            state.facilities_json = facilities
+            flag_modified(state, "facilities_json")
         bench: list[tuple[Player, PlayerRole]] = []
         for raw_id in [str(pid) for pid in (selection.get("bench_ids") or [])]:
             player = resolve_player(raw_id)
@@ -666,6 +705,56 @@ class SyntheticSquadFactory:
             bench.append((player, self._resolve_player_role(player)))
         return starters, bench, formation
 
+    def _reslot_for_formation(
+        self,
+        players: list[Player],
+        formation: str,
+    ) -> list[tuple[Player, PlayerRole]]:
+        """Line the same eleven up in the hired shape, using each player's real position."""
+
+        roles = self._starter_roles(formation)
+        keeper = players[0]
+        buckets: dict[PlayerRole, list[Player]] = {
+            PlayerRole.DEFENDER: [],
+            PlayerRole.MIDFIELDER: [],
+            PlayerRole.FORWARD: [],
+        }
+        for player in players[1:]:
+            role = self._resolve_player_role(player)
+            buckets.get(role, buckets[PlayerRole.MIDFIELDER]).append(player)
+        assigned: list[tuple[Player, PlayerRole]] = [(keeper, PlayerRole.GOALKEEPER)]
+        for role in roles[1:]:
+            pool = buckets[role]
+            if not pool:
+                for fallback in (PlayerRole.MIDFIELDER, PlayerRole.DEFENDER, PlayerRole.FORWARD):
+                    if buckets[fallback]:
+                        pool = buckets[fallback]
+                        break
+            assigned.append((pool.pop(0), role))
+        return assigned
+
+    @staticmethod
+    def _kickoff_formation(stored: object, manager_profile: dict[str, object] | None) -> str:
+        """The hired manager's shape starts the match. A saved sheet is kept only when it is one of theirs."""
+
+        preferred = SyntheticSquadFactory._formation_for_profile(manager_profile)
+        filed = str(stored or "").strip()
+        explicit: list[str] = []
+        if manager_profile and manager_profile.get("team_instructions_filed"):
+            explicit = [
+                str(item).strip()
+                for item in (manager_profile.get("preferred_formations") or [])
+                if str(item or "").strip()
+            ]
+            single = str(manager_profile.get("preferred_formation") or "").strip()
+            if single:
+                explicit.insert(0, single)
+        if explicit:
+            if filed in set(explicit):
+                return filed
+            return preferred or explicit[0]
+        return filed or preferred or "4-3-3"
+
     @staticmethod
     def _formation_for_profile(manager_profile: dict[str, object] | None) -> str:
         """Map the employed coach's preferred_formations/mentality/tactics to a formation (all sum to
@@ -729,6 +818,8 @@ class SyntheticSquadFactory:
         pressing = self._optional_tactic(manager_profile, "pressing")
         tempo = self._optional_tactic(manager_profile, "tempo")
         aggression = self._optional_tactic(manager_profile, "aggression")
+        width = self._optional_tactic(manager_profile, "width")
+        defensive_line = self._optional_tactic(manager_profile, "defensive_line")
         tactical_quality = self._optional_tactic(manager_profile, "tactical_quality")
         adaptability = self._optional_tactic(manager_profile, "adaptability")
         game_management = self._optional_tactic(manager_profile, "game_management")
@@ -736,21 +827,26 @@ class SyntheticSquadFactory:
             mentality = str(manager_profile.get("mentality") or "").strip().lower()
             tactics = set(manager_profile.get("tactics") or [])
             traits = set(manager_profile.get("traits") or [])
+            # A hired profile already turned style and tempo into the four team numbers.
+            instructions_filed = bool(manager_profile.get("team_instructions_filed"))
             if mentality in {"attacking", "pressing"} or "high_press_attack" in tactics:
                 style = TacticalStyle.ATTACKING
-                pressing = self._adjust_filed(pressing, 10)
-                tempo = self._adjust_filed(tempo, 8)
+                if not instructions_filed:
+                    pressing = self._adjust_filed(pressing, 10)
+                    tempo = self._adjust_filed(tempo, 8)
             elif (
                 mentality in {"defensive", "pragmatic"}
                 or "low_block_counter" in tactics
                 or "compact_midblock" in tactics
             ):
                 style = TacticalStyle.DEFENSIVE
-                pressing = self._adjust_filed(pressing, -6)
-                aggression = self._adjust_filed(aggression, -3)
+                if not instructions_filed:
+                    pressing = self._adjust_filed(pressing, -6)
+                    aggression = self._adjust_filed(aggression, -3)
             elif mentality in {"technical", "possession"} or "tiki_taka" in tactics or "possession_control" in tactics:
                 style = TacticalStyle.BALANCED
-                tempo = self._adjust_filed(tempo, 4)
+                if not instructions_filed:
+                    tempo = self._adjust_filed(tempo, 4)
             if "quick_substitution" in traits:
                 substitution_windows = (56, 67, 78)
                 adaptability = self._adjust_filed(adaptability, 8)
@@ -775,7 +871,8 @@ class SyntheticSquadFactory:
                 tactical_quality = self._adjust_filed(tactical_quality, 10)
                 adaptability = self._adjust_filed(adaptability, 8)
                 game_management = self._adjust_filed(game_management, 10)
-                pressing = self._adjust_filed(pressing, 4)
+                if not instructions_filed:
+                    pressing = self._adjust_filed(pressing, 4)
             elif impact_score >= 75:
                 tactical_quality = self._adjust_filed(tactical_quality, 6)
                 adaptability = self._adjust_filed(adaptability, 5)
@@ -788,6 +885,8 @@ class SyntheticSquadFactory:
             pressing=pressing,
             tempo=tempo,
             aggression=aggression,
+            width=width,
+            defensive_line=defensive_line,
             substitution_windows=substitution_windows,
             red_card_fallback_formation="4-4-1",
             injury_auto_substitution=True,
@@ -1351,12 +1450,24 @@ class SyntheticSquadFactory:
         return 0
 
     def _resolve_player_role(self, player: Player) -> PlayerRole:
-        position = (player.normalized_position or player.position or "").lower()
-        if "goal" in position or position in {"gk", "goalkeeper"}:
+        from app.owner_console.autonomous_staff_engine import _sheet_token_line
+
+        position = player.normalized_position or player.position or ""
+        token = _sheet_token_line(str(position).split("/")[0])
+        if token == "GK":
             return PlayerRole.GOALKEEPER
-        if any(token in position for token in ("back", "def", "cb", "lb", "rb", "wb")):
+        if token == "DEF":
             return PlayerRole.DEFENDER
-        if any(token in position for token in ("mid", "wing", "dm", "cm", "am")):
+        if token == "MID":
+            return PlayerRole.MIDFIELDER
+        if token == "FWD":
+            return PlayerRole.FORWARD
+        lowered = str(position or "").lower()
+        if "goal" in lowered or lowered in {"gk", "goalkeeper"}:
+            return PlayerRole.GOALKEEPER
+        if any(token in lowered for token in ("back", "def", "cb", "lb", "rb", "wb")):
+            return PlayerRole.DEFENDER
+        if any(token in lowered for token in ("mid", "wing", "dm", "cm", "am", "lm", "rm")):
             return PlayerRole.MIDFIELDER
         return PlayerRole.FORWARD
 

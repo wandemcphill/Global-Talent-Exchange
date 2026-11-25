@@ -3093,6 +3093,8 @@ class MatchEventGenerator:
         base_metadata = dict(metadata or {})
         base_metadata.setdefault("home_formation", home_state.current_formation)
         base_metadata.setdefault("away_formation", away_state.current_formation)
+        base_metadata.setdefault("home_tactics", self._shape_instructions(home_state))
+        base_metadata.setdefault("away_tactics", self._shape_instructions(away_state))
         base_metadata.setdefault("home_momentum", round(home_state.momentum, 2))
         base_metadata.setdefault("away_momentum", round(away_state.momentum, 2))
         base_metadata.setdefault("crowd_home", round(home_state.crowd_intensity, 3))

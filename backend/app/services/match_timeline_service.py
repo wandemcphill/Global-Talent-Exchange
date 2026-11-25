@@ -28,7 +28,13 @@ from app.match_engine.schemas import (
 )
 from app.match_engine.simulation.models import MatchEventType, PlayerRole
 from app.replay_archive.schemas import ReplayArchiveRecord, ReplayMomentView
-from app.services.authoritative_spatial_simulation import build_ball_payload, build_player_payloads
+from app.services.authoritative_spatial_simulation import (
+    _anchors,
+    _line,
+    _ordered_lineup,
+    build_ball_payload,
+    build_player_payloads,
+)
 from app.schemas.match_viewer import (
     MatchViewerAnimationState,
     MatchViewerCameraPreset,
@@ -225,8 +231,8 @@ class MatchTimelineService:
         if record.visual_identity is None:
             raise ValueError("Viewer timeline fallback requires replay archive visual identity data.")
 
-        home_formation = self._infer_formation(record.visual_identity.home_team.player_visuals)
-        away_formation = self._infer_formation(record.visual_identity.away_team.player_visuals)
+        home_formation = self._stored_or_inferred_formation(record.visual_identity.home_team.player_visuals)
+        away_formation = self._stored_or_inferred_formation(record.visual_identity.away_team.player_visuals)
         home_team = self._team_view(
             record.visual_identity.home_team,
             side=MatchViewerSide.HOME,
@@ -341,8 +347,16 @@ class MatchTimelineService:
             side=MatchViewerSide.AWAY,
             events=ordered_events,
         )
-        home_team = self._team_view(home_identity, side=MatchViewerSide.HOME, formation="4-3-3")
-        away_team = self._team_view(away_identity, side=MatchViewerSide.AWAY, formation="4-3-3")
+        home_team = self._team_view(
+            home_identity,
+            side=MatchViewerSide.HOME,
+            formation=self._formation_hint_from_live(ordered_events, side="home"),
+        )
+        away_team = self._team_view(
+            away_identity,
+            side=MatchViewerSide.AWAY,
+            formation=self._formation_hint_from_live(ordered_events, side="away"),
+        )
         home_runtime = self._team_runtime(home_identity, home_team)
         away_runtime = self._team_runtime(away_identity, away_team)
 
@@ -773,6 +787,9 @@ class MatchTimelineService:
             ),
             source_type=raw_event_type,
             team_side=team_side,
+            home_formation=self._optional_text(context_metadata.get("home_formation")),
+            away_formation=self._optional_text(context_metadata.get("away_formation")),
+            fallback_formation=self._optional_text(context_metadata.get("fallback_formation")),
             render_contract=self._live_render_contract(event),
             metadata=context_metadata,
             motion=event.experience.motion if event.experience is not None else None,
@@ -1444,6 +1461,8 @@ class MatchTimelineService:
         skip: bool,
         home_name: str = "Home",
         away_name: str = "Away",
+        home_runtime: _TeamRuntime | None = None,
+        away_runtime: _TeamRuntime | None = None,
     ) -> None:
         if skip:
             return
@@ -1456,6 +1475,7 @@ class MatchTimelineService:
             return
         previous_clock = frames[-1].clock_minute if frames else 0.0
         next_clock = float(event.view.minute)
+        possession_runtime = home_runtime if possession_side is MatchViewerSide.HOME else away_runtime
         for beat in range(1, beats):
             time_seconds = self._controlled_circulation_time(last_time + (beat * step))
             if time_seconds >= gap_end - 0.45:
@@ -1463,6 +1483,26 @@ class MatchTimelineService:
             clock = previous_clock + ((next_clock - previous_clock) * (beat / beats))
             if previous_clock < 45.0 <= clock:
                 clock = min(clock, 44.9)
+            depth = self._circulation_depth(beat, beats)
+            channel = self._circulation_channel(beat)
+            call = self._circulation_call(
+                home_name if possession_side is MatchViewerSide.HOME else away_name,
+                depth,
+                beat,
+            )
+            pair = self._pass_pair(possession_runtime, beat) if possession_runtime is not None else None
+            carrier_id = None
+            if pair is not None and possession_runtime is not None:
+                passer = self._player_short_name(possession_runtime, pair[0])
+                receiver = self._player_short_name(possession_runtime, pair[1])
+                if passer and receiver:
+                    call = f"{call} {passer} finds {receiver}."
+                attacks_right = clock < 45.0 if possession_side is MatchViewerSide.HOME else clock >= 45.0
+                receiver_anchor = _anchors(possession_runtime, attacks_right).get(pair[1])
+                if receiver_anchor is not None:
+                    channel = float(receiver_anchor["y"])
+                    carrier_id = pair[1]
+                    depth = {"defense": 0.22, "attack": 0.78}.get(_line(possession_runtime, pair[1]), 0.48)
             append_frame(
                 time_seconds=time_seconds,
                 clock_minute=max(0.0, clock),
@@ -1473,13 +1513,10 @@ class MatchTimelineService:
                 stage="pre",
                 possession_side=possession_side,
                 camera_preset=MatchViewerCameraPreset.BROADCAST,
-                phase_depth=self._circulation_depth(beat, beats),
-                phase_channel=self._circulation_channel(beat),
-                overlay_text=self._circulation_call(
-                    home_name if possession_side is MatchViewerSide.HOME else away_name,
-                    self._circulation_depth(beat, beats),
-                    beat,
-                ),
+                phase_depth=depth,
+                phase_channel=channel,
+                forced_carrier_id=carrier_id,
+                overlay_text=call,
             )
 
     def _circulation_channel(self, beat: int) -> float:
@@ -1505,6 +1542,8 @@ class MatchTimelineService:
         def apply(runtime: _TeamRuntime, blob: object) -> None:
             if not isinstance(blob, dict):
                 return
+            if blob.get("formation"):
+                runtime.current_formation = self._normalize_formation(str(blob["formation"]))
             if blob.get("defensive_line") is not None:
                 runtime.defensive_line = float(blob["defensive_line"])
             if blob.get("pressing") is not None:
@@ -1554,6 +1593,7 @@ class MatchTimelineService:
             celebration_team_id: str | None = None,
             phase_depth: float | None = None,
             phase_channel: float | None = None,
+            forced_carrier_id: str | None = None,
         ) -> None:
             nonlocal last_time
             resolved_time = max(
@@ -1581,6 +1621,7 @@ class MatchTimelineService:
                     celebration_team_id=celebration_team_id,
                     phase_depth=phase_depth,
                     phase_channel=phase_channel,
+                    forced_carrier_id=forced_carrier_id,
                 )
             )
             last_time = frames[-1].time_seconds
@@ -1672,9 +1713,12 @@ class MatchTimelineService:
                 skip=False,
                 home_name=home_runtime.view.team_name,
                 away_name=away_runtime.view.team_name,
+                home_runtime=home_runtime,
+                away_runtime=away_runtime,
             )
 
             if pre_time > last_time + 0.1:
+                action_hold = self._action_hold(event)
                 append_frame(
                     time_seconds=pre_time,
                     clock_minute=max(0.0, self._pre_clock(frames[-1].clock_minute, event.view.minute)),
@@ -1685,6 +1729,8 @@ class MatchTimelineService:
                     stage="pre",
                     possession_side=possession_side,
                     camera_preset=pre_camera,
+                    overlay_text=self._action_buildup(event) if action_hold else None,
+                    playback_rate=0.45 if action_hold else 1.0,
                 )
 
             if event.view.event_type is MatchViewerEventType.SUBSTITUTION:
@@ -2078,6 +2124,7 @@ class MatchTimelineService:
         celebration_team_id: str | None = None,
         phase_depth: float | None = None,
         phase_channel: float | None = None,
+        forced_carrier_id: str | None = None,
     ) -> MatchTimelineFrameView:
         home_attacks_right = clock_minute < 45.0
         player_payloads = self._player_payloads(
@@ -2091,6 +2138,7 @@ class MatchTimelineService:
             time_seconds=time_seconds,
             phase_depth=phase_depth,
             phase_channel=phase_channel,
+            forced_carrier_id=forced_carrier_id,
         )
         ball_payload = self._ball_payload(
             player_payloads=player_payloads,
@@ -2141,6 +2189,7 @@ class MatchTimelineService:
         time_seconds: float | None = None,
         phase_depth: float | None = None,
         phase_channel: float | None = None,
+        forced_carrier_id: str | None = None,
     ) -> list[dict[str, Any]]:
         return build_player_payloads(
             home_runtime=home_runtime,
@@ -2153,6 +2202,7 @@ class MatchTimelineService:
             time_seconds=float(time_seconds if time_seconds is not None else clock_minute * 60.0),
             phase_depth=phase_depth,
             phase_channel=phase_channel,
+            forced_carrier_id=forced_carrier_id,
         )
 
     def _player_variance_offset(
@@ -3484,6 +3534,139 @@ class MatchTimelineService:
             output.append(round((float(item.minute) / last_clock) * max(60.0, duration_seconds - 8.0), 2))
         return output
 
+    def _formation_hint_from_live(self, events: list[Any], *, side: str) -> str:
+        key = "home_formation" if side == "home" else "away_formation"
+        tactics_key = "home_tactics" if side == "home" else "away_tactics"
+        for event in events:
+            meta = dict(getattr(event, "metadata", None) or {})
+            meta.update(getattr(event, "meta", None) or {})
+            direct = self._optional_text(meta.get(key))
+            if direct:
+                return self._normalize_formation(direct)
+            blob = meta.get(tactics_key)
+            if isinstance(blob, dict):
+                formed = self._optional_text(blob.get("formation"))
+                if formed:
+                    return self._normalize_formation(formed)
+        return "4-3-3"
+
+    def _stored_or_inferred_formation(self, player_visuals: list[Any]) -> str:
+        for item in player_visuals:
+            stored = self._optional_text(getattr(item, "formation", None))
+            if stored:
+                return self._normalize_formation(stored)
+        return self._infer_formation(player_visuals)
+
+    def _pass_pair(self, runtime: _TeamRuntime, beat: int) -> tuple[str, str] | None:
+        """One short named hop. A back five uses the pivot, a wide line stays on a flank, and a pair of strikers both get the ball.
+
+        Each hop moves one slot or one line, so the next picture eases instead of crossing the pitch.
+        """
+        lineup = _ordered_lineup(runtime)
+        if len(lineup) < 3:
+            return None
+        outfield = lineup[1:]
+        sizes = self._line_sizes(runtime.current_formation, outfield, runtime)
+        groups: list[list[str]] = []
+        cursor = 0
+        for size in sizes:
+            groups.append(list(outfield[cursor : cursor + size]))
+            cursor += size
+        groups = [group for group in groups if group]
+        if len(groups) < 2:
+            return None
+        wide = float(getattr(runtime, "width", 50.0) or 50.0) >= 62.0
+        slots = [self._pass_slot(group, wide, None) for group in groups]
+        line = 0
+        line_step = 1
+        strike_right = False
+        passer_id = ""
+        receiver_id = ""
+        for step in range(1, max(beat, 1) + 1):
+            passer_line = line
+            passer_slot = slots[passer_line]
+            group = groups[passer_line]
+            # A three-man line at full width is already more than a third of the pitch
+            # between neighbours, so the switch happens on a line of four, one slot at a time.
+            slide = wide and step % 3 == 0 and len(group) == 4
+            if slide:
+                direction = 1 if (step // 3) % 2 == 1 else -1
+                nxt = passer_slot + direction
+                if nxt < 0 or nxt >= len(group):
+                    nxt = passer_slot - direction
+                if 0 <= nxt < len(group) and nxt != passer_slot:
+                    slots[passer_line] = nxt
+                    receiver_line = passer_line
+                    receiver_slot = nxt
+                else:
+                    receiver_line, line_step = self._next_pass_line(passer_line, line_step, len(groups))
+                    line = receiver_line
+                    receiver_slot = slots[receiver_line]
+            else:
+                receiver_line, line_step = self._next_pass_line(passer_line, line_step, len(groups))
+                line = receiver_line
+                receiver_group = groups[receiver_line]
+                if receiver_line == len(groups) - 1 and len(receiver_group) == 2:
+                    receiver_slot = 1 if strike_right else 0
+                    strike_right = not strike_right
+                else:
+                    receiver_slot = self._pass_slot(
+                        receiver_group,
+                        wide,
+                        passer_slot / max(1, len(group) - 1),
+                    )
+                slots[receiver_line] = receiver_slot
+            passer_id = groups[passer_line][passer_slot]
+            receiver_id = groups[receiver_line][receiver_slot]
+        if not passer_id or not receiver_id or passer_id == receiver_id:
+            return None
+        return passer_id, receiver_id
+
+    @staticmethod
+    def _pass_slot(group: list[str], wide: bool, along: float | None) -> int:
+        if len(group) >= 5 or not wide or len(group) < 3:
+            return len(group) // 2
+        if along is None:
+            return 0
+        return max(0, min(len(group) - 1, int(round(along * (len(group) - 1)))))
+
+    @staticmethod
+    def _next_pass_line(line: int, step: int, count: int) -> tuple[int, int]:
+        nxt = line + step
+        if nxt < 0 or nxt >= count:
+            step = -step
+            nxt = line + step
+        return nxt, step
+
+    def _player_short_name(self, runtime: _TeamRuntime, player_id: str) -> str:
+        player = runtime.players_by_id.get(player_id)
+        if player is None:
+            return ""
+        return str(player.player_name or player.label or "").strip()
+
+    def _action_hold(self, event: _ViewerEventContext) -> bool:
+        return event.view.event_type in {
+            MatchViewerEventType.GOAL,
+            MatchViewerEventType.SAVE,
+            MatchViewerEventType.MISS,
+            MatchViewerEventType.ATTACK,
+            MatchViewerEventType.PENALTY,
+            MatchViewerEventType.YELLOW_CARD,
+            MatchViewerEventType.RED_CARD,
+            MatchViewerEventType.INJURY,
+            MatchViewerEventType.OFFSIDE,
+            MatchViewerEventType.FOUL,
+        }
+
+    def _action_buildup(self, event: _ViewerEventContext) -> str:
+        team = event.view.team_name or "The side"
+        actor = (event.view.primary_player_name or "").strip()
+        shape = event.home_formation if event.team_side is MatchViewerSide.HOME else event.away_formation
+        shape_text = f" in the {shape}" if shape else ""
+        if actor:
+            return f"{actor} is about to act for {team}{shape_text}."
+        return f"{team} are about to force the moment{shape_text}."
+
     def _infer_formation(self, player_visuals: list[Any]) -> str:
         starters = list(player_visuals[:11])
         defenders = sum(1 for item in starters if item.role is PlayerRole.DEFENDER)
@@ -3497,6 +3680,14 @@ class MatchTimelineService:
             return "4-4-2"
         if defenders == 3 and midfielders == 5 and forwards == 2:
             return "3-5-2"
+        if defenders == 5 and midfielders == 3 and forwards == 2:
+            return "5-3-2"
+        if defenders == 5 and midfielders == 4 and forwards == 1:
+            return "5-4-1"
+        if defenders == 3 and midfielders == 4 and forwards == 3:
+            return "3-4-3"
+        if defenders + midfielders + forwards in {9, 10} and defenders and midfielders and forwards:
+            return f"{defenders}-{midfielders}-{forwards}"
         return "4-3-3"
 
     def _normalize_formation(self, formation: str | None) -> str:
@@ -3509,7 +3700,7 @@ class MatchTimelineService:
             parts = [int(part) for part in normalized.split("-")]
         except ValueError:
             return "4-3-3"
-        if sum(parts) in {9, 10} and len(parts) in {3, 4}:
+        if parts and all(part > 0 for part in parts) and sum(parts) in {9, 10} and 3 <= len(parts) <= 5:
             return normalized
         return "4-3-3"
 

@@ -509,7 +509,7 @@ export function ControlCenter() {
   });
   const activePitchPlayers = filedXi.length > 0 ? filedXi : firstTeamPitch;
   const activeFormation =
-    clubDetail?.tactics?.formation || clubDetail?.matchday_formation || undefined;
+    clubDetail?.matchday_formation || clubDetail?.tactics?.formation || undefined;
   const pitchLead = placeFirstTeamOnPitch(activePitchPlayers, activeFormation).find(
     (slot) => slot.player,
   );

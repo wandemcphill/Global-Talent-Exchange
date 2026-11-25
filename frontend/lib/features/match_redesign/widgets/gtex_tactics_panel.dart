@@ -61,11 +61,14 @@ class GtexTacticsPanel extends StatefulWidget {
 
 class _GtexTacticsPanelState extends State<GtexTacticsPanel> {
   static const List<String> _availableFormations = <String>[
-    '4-3-3',
-    '4-2-3-1',
-    '4-4-2',
-    '3-5-2',
     '5-3-2',
+    '4-4-2',
+    '4-2-3-1',
+    '4-1-2-1-2',
+    '3-4-3',
+    '3-5-2',
+    '5-4-1',
+    '4-3-3',
     '4-1-4-1',
   ];
 
@@ -99,6 +102,22 @@ class _GtexTacticsPanelState extends State<GtexTacticsPanel> {
 
   GtexMatchTeam? get currentTeam =>
       selectedSide == 'home' ? widget.homeTeam : widget.awayTeam;
+
+  List<String> get _formationOptions {
+    final String live = (currentTeam?.formation ?? formation).trim();
+    if (live.isNotEmpty && !_availableFormations.contains(live) && _shapeFits(live)) {
+      return <String>[live, ..._availableFormations];
+    }
+    return _availableFormations;
+  }
+
+  bool _shapeFits(String shape) {
+    final List<int?> parts = shape.split('-').map(int.tryParse).toList();
+    if (parts.isEmpty || parts.any((int? part) => part == null || part <= 0)) return false;
+    final List<int> lines = parts.cast<int>();
+    final int sum = lines.fold<int>(0, (int total, int line) => total + line);
+    return lines.length >= 3 && lines.length <= 5 && (sum == 9 || sum == 10);
+  }
 
   String _resolveMentality(double riskVal) {
     if (riskVal >= 80) return 'all_out_attack';
@@ -291,7 +310,7 @@ class _GtexTacticsPanelState extends State<GtexTacticsPanel> {
                   const Spacer(),
                   DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
-                      value: _availableFormations.contains(formation) ? formation : _availableFormations.first,
+                      value: _formationOptions.contains(formation) ? formation : _formationOptions.first,
                       dropdownColor: GtexMatchVisualTokens.surfaceRaised,
                       style: const TextStyle(
                         color: GtexMatchVisualTokens.textPrimary,
@@ -300,7 +319,7 @@ class _GtexTacticsPanelState extends State<GtexTacticsPanel> {
                         fontFamily: 'JetBrains Mono',
                       ),
                       icon: const Icon(Icons.arrow_drop_down, color: GtexMatchVisualTokens.textSecondary),
-                      items: _availableFormations.map((String f) {
+                      items: _formationOptions.map((String f) {
                         return DropdownMenuItem<String>(
                           value: f,
                           child: Text(f),

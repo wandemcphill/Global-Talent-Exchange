@@ -18,13 +18,29 @@ const Color _pitch = Color(0xFF0F3D2A);
 const String _condensed = 'BarlowCondensed';
 
 const List<String> _formations = <String>[
-  '4-3-3',
+  '5-3-2',
+  '5-4-1',
   '4-4-2',
   '4-2-3-1',
+  '4-1-2-1-2',
+  '4-1-4-1',
+  '4-3-3',
   '4-5-1',
-  '5-3-2',
+  '3-4-3',
   '3-5-2',
+  '3-4-1-2',
+  '3-4-2-1',
 ];
+
+bool _isOutfieldShape(String shape) {
+  final List<int> parts = shape
+      .split('-')
+      .map((String part) => int.tryParse(part.trim()) ?? 0)
+      .toList();
+  if (parts.length < 3 || parts.length > 5) return false;
+  if (parts.any((int count) => count <= 0)) return false;
+  return parts.fold<int>(0, (int sum, int count) => sum + count) == 10;
+}
 
 /// Owner-facing lineup editor: pick a formation, tap-to-assign the starting XI
 /// from the club squad, and save. Consumed by the match engine via
@@ -85,8 +101,10 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
       }
       setState(() {
         _squad = squad;
-        _formation =
-            _formations.contains(plan.formation) ? plan.formation : '4-3-3';
+        _formation = _formations.contains(plan.formation.trim()) ||
+                _isOutfieldShape(plan.formation)
+            ? plan.formation.trim()
+            : '4-3-3';
         _slots = slots;
         _loading = false;
       });
@@ -245,13 +263,26 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
             .toList();
     setState(() => _saving = true);
     try {
-      await _repo.saveLineup(
+      final ClubLineupPlan filed = await _repo.saveLineup(
         widget.clubId,
         formation: _formation,
         starterPlayerIds: starters,
         benchPlayerIds: bench,
       );
+      final String filedShape = filed.formation.trim();
+      final List<String?> filedSlots = List<String?>.filled(11, null);
+      for (int i = 0; i < filed.starterPlayerIds.length && i < 11; i += 1) {
+        filedSlots[i] = filed.starterPlayerIds[i];
+      }
       if (!mounted) return;
+      setState(() {
+        if (_formations.contains(filedShape) || _isOutfieldShape(filedShape)) {
+          _formation = filedShape;
+        }
+        if (filed.starterPlayerIds.length >= 11) {
+          _slots = filedSlots;
+        }
+      });
       ScaffoldMessenger.of(
         context,
       ).showSnackBar(const SnackBar(content: Text('Lineup saved')));
@@ -331,7 +362,11 @@ class _GtexLineupEditorScreenState extends State<GtexLineupEditorScreen> {
         Wrap(
           spacing: 8,
           runSpacing: 8,
-          children: _formations.map((String formation) {
+          children: <String>[
+            if (!_formations.contains(_formation) && _isOutfieldShape(_formation))
+              _formation,
+            ..._formations,
+          ].map((String formation) {
             final bool selected = formation == _formation;
             return Semantics(
               button: true,

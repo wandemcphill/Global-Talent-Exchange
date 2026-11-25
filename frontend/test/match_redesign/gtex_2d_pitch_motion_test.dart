@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:gte_frontend/features/match_redesign/data/gtex_match_models.dart';
 import 'package:gte_frontend/features/match_redesign/widgets/gtex_2d_pitch.dart';
 
-GtexLiveMatchState _match({required double playerX}) {
+GtexLiveMatchState _match({required double playerX, String? selectedPlayerId}) {
   return GtexLiveMatchState(
     matchId: 'motion-test-match',
     home: const GtexMatchTeam(
@@ -60,6 +60,7 @@ GtexLiveMatchState _match({required double playerX}) {
       awayExpectedGoals: 0.2,
     ),
     highlights: const <GtexMatchHighlight>[],
+    selectedPlayerId: selectedPlayerId,
   );
 }
 
@@ -87,7 +88,8 @@ void main() {
     );
     await tester.pump();
 
-    expect(find.text('ALEX STRIKER'), findsOneWidget);
+    expect(find.text('9'), findsOneWidget);
+    expect(find.textContaining('ALEX STRIKER'), findsNothing);
     expect(find.byKey(const ValueKey<String>('player-9')), findsOneWidget);
     expect(find.byKey(const ValueKey<String>('player-4')), findsOneWidget);
     final double startX = tester.getTopLeft(
@@ -122,6 +124,25 @@ void main() {
     ).dx;
     expect(movedX, greaterThan(startX));
     expect(movedX, lessThan(300));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Center(
+            child: SizedBox(
+              width: 390,
+              child: Gtex2dPitch(
+                match: _match(playerX: 0.72, selectedPlayerId: 'player-9'),
+                onPlayerSelected: (_) {},
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    expect(find.textContaining('ALEX STRIKER'), findsOneWidget);
+    expect(find.textContaining('100%'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

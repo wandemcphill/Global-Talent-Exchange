@@ -6,6 +6,7 @@ import '../data/gtex_match_feed.dart';
 import '../data/gtex_match_models.dart';
 import '../data/gtex_match_repository.dart';
 import '../widgets/gtex_2d_pitch.dart';
+import '../widgets/gtex_commentary_match.dart';
 import '../widgets/gtex_highlights_panel.dart';
 import '../widgets/gtex_match_connection_banner.dart';
 import '../widgets/gtex_match_lineups.dart';
@@ -309,11 +310,9 @@ class _MainPitchWorkspace extends StatelessWidget {
                     ),
                   )
                 : null,
-            child: Center(
-              child: _PitchViewStack(
-                match: match,
-                onPlayerSelected: controller.selectPitchPlayer,
-              ),
+            child: GtexLiveMatchStage(
+              match: match,
+              onPlayerSelected: controller.selectPitchPlayer,
             ),
           ),
         ),
@@ -689,11 +688,9 @@ class _MobileMatchView extends StatelessWidget {
           flex: 5,
           child: _BroadcastPanel(
             title: 'MATCH CAM',
-            child: Center(
-              child: _PitchViewStack(
-                match: match,
-                onPlayerSelected: controller.selectPitchPlayer,
-              ),
+            child: GtexLiveMatchStage(
+              match: match,
+              onPlayerSelected: controller.selectPitchPlayer,
             ),
           ),
         ),

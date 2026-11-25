@@ -1529,7 +1529,7 @@ function OrthographicPitchComponent({
         const prevDisp = displayPosMap.get(key);
         let drawX = targetX;
         let drawY = targetY;
-        if (prevDisp && Math.hypot(targetX - prevDisp.x, targetY - prevDisp.y) < 0.16) {
+        if (prevDisp && Math.hypot(targetX - prevDisp.x, targetY - prevDisp.y) < 0.34) {
           const follow = activeMode === "2d" ? 36 : 16;
           const smoothAlpha = 1 - Math.exp(-follow * dtSec);
           drawX = prevDisp.x + (targetX - prevDisp.x) * smoothAlpha;

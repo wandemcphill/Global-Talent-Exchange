@@ -3702,6 +3702,21 @@ def club_card(session: Session, state: OwnerClubState) -> dict[str, Any]:
     }
 
 
+def _tactics_for_filed_sheet(tactics: dict[str, Any], matchday_formation: object) -> dict[str, Any]:
+    """The club tactics card shows the shape on the saved sheet."""
+
+    sheet = str(matchday_formation or "").strip()
+    filed = dict(tactics or {})
+    if not sheet:
+        return filed
+    formations = [str(item) for item in (filed.get("formations") or []) if str(item or "").strip()]
+    if sheet not in formations:
+        formations.insert(0, sheet)
+    filed["formation"] = sheet
+    filed["formations"] = formations
+    return filed
+
+
 def _pitch_card(player: dict[str, Any]) -> dict[str, Any]:
     """The face, role and rating the tactical board shows for a filed player."""
     return {
@@ -3739,10 +3754,22 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
     selection_formation = str(selection.get("formation") or "") if isinstance(selection, dict) else ""
     valid_shapes = set(tactics_plan.get("formations") or [])
     owner_pref_ids = list((facilities.get("_owner_lineup_preference") or {}).get("preferred_player_ids") or [])
+    hired_profile = None
+    try:
+        from app.manager_marketplace.service import ManagerMarketplaceService
+
+        hired_profile = ManagerMarketplaceService(session).build_match_manager_profile(club_id=str(club_id))
+    except Exception:
+        hired_profile = None
+    from app.owner_console.autonomous_staff_engine import resolve_sheet_formation
+
+    hired_shape = resolve_sheet_formation(selection_formation, hired_profile) if hired_profile else selection_formation
+    shape_disagrees = bool(hired_profile and selection_formation and hired_shape != selection_formation)
     needs_lineup_refresh = bool(
         len(players) >= 11
         and (
             len(filed_ids) < 11
+            or shape_disagrees
             or (not owner_pref_ids and selection_formation and valid_shapes and selection_formation not in valid_shapes)
         )
     )
@@ -3759,7 +3786,18 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
         except Exception:
             pass
     bench_ids = [str(pid) for pid in (selection.get("bench_ids") or [])] if isinstance(selection, dict) else []
-    matchday_xi = [{**_pitch_card(by_id[pid])} for pid in filed_ids if pid in by_id]
+    from app.owner_console.autonomous_staff_engine import sheet_slot_lines
+
+    slot_lines = sheet_slot_lines(matchday_formation)
+    matchday_xi = []
+    for index, pid in enumerate(filed_ids):
+        player = by_id.get(pid)
+        if player is None:
+            continue
+        card = _pitch_card(player)
+        if index < len(slot_lines):
+            card["sheet_line"] = slot_lines[index]
+        matchday_xi.append(card)
     matchday_bench = [{**_pitch_card(by_id[pid])} for pid in bench_ids if pid in by_id]
     matchday_formation = (selection.get("formation") if isinstance(selection, dict) else None) or tactics_plan.get(
         "formation"
@@ -3811,7 +3849,7 @@ def club_detail(session: Session, user_id: str, club_id: str) -> dict[str, Any]:
             for role, note in dict(facilities.get("_onboarding_staff") or {}).items()
             if isinstance(note, dict)
         },
-        "tactics": engine.manager_tactics(state.manager_json, facilities),
+        "tactics": _tactics_for_filed_sheet(engine.manager_tactics(state.manager_json, facilities), matchday_formation),
         **(
             lambda staff_bundle: {
                 "executive_staff": staff_bundle.get("appointed_staff"),

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.manager_marketplace.service import ManagerMarketplaceService
+from app.match_engine.services.team_factory import SyntheticSquadFactory
 from app.models.club_profile import ClubProfile
 from app.models.competition_match import CompetitionMatch
 from app.models.event_backbone import EventOutbox
@@ -153,5 +154,32 @@ def test_hire_release_and_match_updates_work_for_manager_marketplace() -> None:
         release_result = service.release_manager(owner, profile.id)
         assert release_result.contract.status is ManagerContractStatus.ENDED
         assert release_result.profile.availability is True
+    finally:
+        session.close()
+
+
+def test_hired_manager_formation_reaches_the_match_profile() -> None:
+    session = _build_session()
+    try:
+        owner, profile = _seed_marketplace(session)
+        profile.formation_preferences_json = ["5-3-2", "4-4-2"]
+        profile.tempo_control = "slow"
+        session.commit()
+        service = ManagerMarketplaceService(session)
+        service.hire_manager(owner, profile.id)
+        match_profile = service.build_match_manager_profile(club_id="club-home")
+        assert match_profile is not None
+        assert match_profile["preferred_formation"] == "5-3-2"
+        assert match_profile["preferred_formations"] == ["5-3-2", "4-4-2"]
+        assert match_profile["defensive_line"] == 68
+        assert match_profile["tempo"] == 58
+        assert SyntheticSquadFactory._formation_for_profile(match_profile) == "5-3-2"
+        assert SyntheticSquadFactory._kickoff_formation("4-3-3", match_profile) == "5-3-2"
+        assert SyntheticSquadFactory._kickoff_formation("4-4-2", match_profile) == "4-4-2"
+        plan = SyntheticSquadFactory.__new__(SyntheticSquadFactory)._build_tactics(80, manager_profile=match_profile)
+        assert plan.pressing == 72
+        assert plan.tempo == 58
+        assert plan.width == 66
+        assert plan.defensive_line == 68
     finally:
         session.close()

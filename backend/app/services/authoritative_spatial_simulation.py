@@ -140,8 +140,24 @@ def _line_sizes_cached(
     return (defenders, midfielders, forwards)
 
 
+def _ordered_lineup(runtime: Any) -> list[str]:
+    """The goalkeeper occupies the goal. Everyone else keeps their selection order."""
+    lineup = [str(item) for item in (getattr(runtime, "lineup", None) or [])]
+    if len(lineup) < 2:
+        return lineup
+    players = getattr(runtime, "players_by_id", {}) or {}
+    keeper = next(
+        (player_id for player_id in lineup if getattr(players.get(player_id), "role", None) is PlayerRole.GOALKEEPER),
+        None,
+    )
+    if keeper is None or keeper == lineup[0]:
+        return lineup
+    return [keeper, *[player_id for player_id in lineup if player_id != keeper]]
+
+
 def _line_sizes(runtime: Any) -> list[int]:
-    outfield = runtime.lineup[1:]
+    ordered = _ordered_lineup(runtime)
+    outfield = ordered[1:]
     if not outfield:
         return []
     roles = tuple(runtime.players_by_id[item].role for item in outfield)
@@ -221,14 +237,15 @@ def _anchors_tuples(
 
 
 def _anchors(runtime: Any, attacks_right: bool) -> dict[str, dict[str, float]]:
-    if not runtime.lineup:
+    ordered = _ordered_lineup(runtime)
+    if not ordered:
         return {}
-    outfield = runtime.lineup[1:]
+    outfield = ordered[1:]
     roles = tuple(runtime.players_by_id[item].role for item in outfield)
     sizes = _line_sizes_cached(str(runtime.current_formation), roles)
     defensive_line = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
     width = float(getattr(runtime, "width", 50.0) or 50.0)
-    raw = _anchors_tuples(tuple(runtime.lineup), sizes, defensive_line, width, bool(attacks_right))
+    raw = _anchors_tuples(tuple(ordered), sizes, defensive_line, width, bool(attacks_right))
     return {pid: {"x": pt[0], "y": pt[1]} for pid, pt in raw.items()}
 
 
@@ -249,12 +266,13 @@ def _line_map_cached(lineup: tuple[str, ...], sizes: tuple[int, ...]) -> dict[st
 
 
 def _line_map(runtime: Any) -> dict[str, str]:
-    if not runtime.lineup:
+    ordered = _ordered_lineup(runtime)
+    if not ordered:
         return {}
-    outfield = runtime.lineup[1:]
+    outfield = ordered[1:]
     roles = tuple(runtime.players_by_id[item].role for item in outfield)
     sizes = _line_sizes_cached(str(runtime.current_formation), roles)
-    return _line_map_cached(tuple(runtime.lineup), sizes)
+    return _line_map_cached(tuple(ordered), sizes)
 
 
 def _line(runtime: Any, player_id: str) -> str:
@@ -444,12 +462,13 @@ def _carrier_id(
     phase_depth: float,
     channel: float | None = None,
 ) -> str | None:
-    if not runtime.lineup:
+    ordered = _ordered_lineup(runtime)
+    if not ordered:
         return None
     sizes = _line_sizes(runtime)
-    outfield = runtime.lineup[1:]
+    outfield = ordered[1:]
     if not sizes or not outfield:
-        return runtime.lineup[0]
+        return ordered[0]
     if phase_depth < 0.34:
         line_index = 0
     elif phase_depth < 0.62:
@@ -505,9 +524,11 @@ def _player_position(
     direction = 1.0 if _side_attacks_right(attacking_side, home_attacks_right) else -1.0
     in_possession = runtime.view.side is possession_side
     if in_possession:
-        push = {"goalkeeper": 0.8, "defense": 5.5, "midfield": 8.5, "attack": 12.0}.get(line, 6.0)
+        line_height = float(getattr(runtime, "defensive_line", 50.0) or 50.0)
+        scale = 0.45 + (_clamp(line_height) / 100.0) * 0.7
+        push = {"goalkeeper": 0.6, "defense": 2.4, "midfield": 3.6, "attack": 5.0}.get(line, 3.0) * scale
         if line == "defense":
-            push += 3.2 * min(1.0, abs(anchor["y"] - 50.0) / 28.0)
+            push += 1.4 * min(1.0, abs(anchor["y"] - 50.0) / 28.0) * scale
         position["x"] += push * direction
         state = (
             MatchViewerPlayerState.IDLE
@@ -937,6 +958,7 @@ def build_player_payloads(
     time_seconds: float,
     phase_depth: float | None = None,
     phase_channel: float | None = None,
+    forced_carrier_id: str | None = None,
 ) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
     mark: dict[str, float] | None = None
@@ -982,7 +1004,8 @@ def build_player_payloads(
                 phase_channel,
             )
             if in_possession:
-                carrier_id = _carrier_id(runtime, attacks_right, phase_depth, phase_channel)
+                named = forced_carrier_id if forced_carrier_id in anchors else None
+                carrier_id = named or _carrier_id(runtime, attacks_right, phase_depth, phase_channel)
                 support_id = _support_id(runtime, attacks_right, depth_ball, direction, carrier_id, anchors, line_map)
             else:
                 mark_ball = mark or depth_ball

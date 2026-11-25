@@ -33,8 +33,8 @@ class _HeatmapSample {
 }
 
 class _Gtex2dPitchState extends State<Gtex2dPitch> {
-  bool _showTacticsOverlay = true;
-  bool _showPassingLanes = true;
+  bool _showTacticsOverlay = false;
+  bool _showPassingLanes = false;
   bool _showHeatmap = false;
   double _playbackSpeed = 1.0;
   bool _isPaused = false;
@@ -84,7 +84,7 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
       );
     }
 
-    final int markerDurationMs = _isPaused ? 9999999 : (380 / _playbackSpeed).toInt();
+              final int markerDurationMs = _isPaused ? 9999999 : (480 / _playbackSpeed).round();
 
     return LayoutBuilder(
       builder: (context, outerConstraints) {
@@ -95,11 +95,7 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
             builder: (context, constraints) {
               final double pitchWidth = constraints.maxWidth;
               final double pitchHeight = constraints.maxHeight;
-              final double markerWidth = compact ? 116.0 : 104.0;
-              final double maxMarkerLeft =
-                  (pitchWidth - markerWidth).clamp(0.0, double.infinity).toDouble();
-              final double maxMarkerTop =
-                  (pitchHeight - 58.0).clamp(0.0, double.infinity).toDouble();
+              const double markerWidth = 28.0;
 
               // Compute ball position
               final GtexPitchPlayer? ballOwner = widget.match.pitchPlayers
@@ -170,24 +166,34 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                           ),
                         ),
 
-                      // Player Markers
+                      // Player Markers — shirt discs. The name and stamina hang under the selected disc only.
                       for (final GtexPitchPlayer player in widget.match.pitchPlayers)
                         AnimatedPositioned(
                           key: ValueKey<String>(player.playerId),
                           duration: Duration(milliseconds: markerDurationMs),
                           curve: Curves.easeInOutCubic,
-                          width: markerWidth,
-                          height: 58,
-                          left: (player.x * pitchWidth - markerWidth / 2)
-                              .clamp(0.0, maxMarkerLeft)
+                          width: widget.match.selectedPlayerId == player.playerId ? 96.0 : markerWidth,
+                          height: widget.match.selectedPlayerId == player.playerId ? 54.0 : 28.0,
+                          left: (player.x * pitchWidth -
+                                  (widget.match.selectedPlayerId == player.playerId ? 48.0 : markerWidth / 2))
+                              .clamp(
+                                0.0,
+                                (pitchWidth - (widget.match.selectedPlayerId == player.playerId ? 96.0 : markerWidth))
+                                    .clamp(0.0, double.infinity),
+                              )
                               .toDouble(),
-                          top: (player.y * pitchHeight - 18)
-                              .clamp(0.0, maxMarkerTop)
+                          top: (player.y * pitchHeight - 14)
+                              .clamp(
+                                0.0,
+                                (pitchHeight - (widget.match.selectedPlayerId == player.playerId ? 54.0 : 28.0))
+                                    .clamp(0.0, double.infinity),
+                              )
                               .toDouble(),
                           child: _PitchPlayerMarker(
                             player: player,
                             selected: widget.match.selectedPlayerId == player.playerId,
                             compact: compact,
+                            rating: _lineupRating(widget.match, player),
                             onTap: () => widget.onPlayerSelected(player.playerId),
                           ),
                         ),
@@ -202,6 +208,7 @@ class _Gtex2dPitchState extends State<Gtex2dPitch> {
                         pitchHeight: pitchHeight,
                         isPaused: _isPaused,
                         playbackSpeed: _playbackSpeed,
+                        durationMs: markerDurationMs,
                       ),
 
                       // Freeze Frame Notification Banner
@@ -312,6 +319,7 @@ class _DynamicBallLayer extends StatelessWidget {
     required this.pitchHeight,
     this.isPaused = false,
     this.playbackSpeed = 1.0,
+    this.durationMs = 480,
   });
 
   final double ballX;
@@ -322,10 +330,11 @@ class _DynamicBallLayer extends StatelessWidget {
   final double pitchHeight;
   final bool isPaused;
   final double playbackSpeed;
+  final int durationMs;
 
   @override
   Widget build(BuildContext context) {
-    final int ballDurationMs = isPaused ? 9999999 : (140 / playbackSpeed).toInt().clamp(40, 350);
+    final int ballDurationMs = isPaused || playbackSpeed <= 0 ? 9999999 : durationMs;
     final double groundPixelX = (ballX * pitchWidth).clamp(8.0, pitchWidth - 8.0);
     final double groundPixelY = (ballY * pitchHeight).clamp(8.0, pitchHeight - 8.0);
     final double elevationOffset = (ballZ * 48.0).clamp(0.0, 36.0);
@@ -715,18 +724,30 @@ class _PitchPainter extends CustomPainter {
   bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
 }
 
+double? _lineupRating(GtexLiveMatchState match, GtexPitchPlayer player) {
+  final List<GtexLineupPlayer> sheet = player.isHome ? match.home.players : match.away.players;
+  for (final GtexLineupPlayer item in sheet) {
+    if (item.id == player.playerId && item.rating > 0) {
+      return item.rating;
+    }
+  }
+  return null;
+}
+
 class _PitchPlayerMarker extends StatelessWidget {
   const _PitchPlayerMarker({
     required this.player,
     required this.selected,
     required this.compact,
     required this.onTap,
+    this.rating,
   });
 
   final GtexPitchPlayer player;
   final bool selected;
   final bool compact;
   final VoidCallback onTap;
+  final double? rating;
 
   @override
   Widget build(BuildContext context) {
@@ -806,7 +827,7 @@ class _PitchPlayerMarker extends StatelessWidget {
       ],
     );
 
-    final bool nameplateVisible = !compact || player.hasBall || selected || isPressing;
+    final bool nameplateVisible = selected;
     final String nameplate = player.hasBall || selected
         ? player.name
         : _surname(player.name);
@@ -853,7 +874,9 @@ class _PitchPlayerMarker extends StatelessWidget {
                     ],
                     Flexible(
                       child: Text(
-                        nameplate.toUpperCase(),
+                        selected
+                            ? '${nameplate.toUpperCase()}${rating == null ? '' : ' · ${rating!.toStringAsFixed(1)}'} · ${player.staminaPct.toInt()}%'
+                            : nameplate.toUpperCase(),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         textAlign: TextAlign.center,

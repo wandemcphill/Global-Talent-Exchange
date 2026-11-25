@@ -4468,6 +4468,110 @@ def evaluate_manager_mentality_authority(
     return resolve_manager_mentality_decision(state, requested_mentality=requested_mentality)
 
 
+def _sheet_token_line(token: object) -> str | None:
+    raw = str(token or "").strip().upper()
+    if not raw:
+        return None
+    if raw in {"GK", "GOALKEEPER"} or raw.startswith("GOAL"):
+        return "GK"
+    if raw in {"CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"} or raw.startswith("DEF") or "BACK" in raw:
+        return "DEF"
+    if raw in {"DM", "CDM", "CM", "AM", "CAM", "LM", "RM", "MF", "MID"} or raw.startswith("MID"):
+        return "MID"
+    if (
+        raw in {"ST", "CF", "LW", "RW", "SS", "FW", "FWD", "ATT"}
+        or raw.startswith("FORW")
+        or raw.startswith("STRIK")
+    ):
+        return "FWD"
+    return None
+
+
+def sheet_position_line(position: object) -> str:
+    """The line a saved shirt occupies: the first position token, or midfield when it is blank."""
+
+    return _sheet_token_line(str(position or "").split("/")[0]) or "MID"
+
+
+def sheet_slot_lines(formation: object) -> list[str]:
+    """GK plus the outfield lines of the shape that is actually filed."""
+
+    parts = [int(piece) for piece in str(formation or "").split("-") if piece.isdigit()]
+    if len(parts) >= 3 and sum(parts) == 10:
+        def_target, fwd_target = parts[0], parts[-1]
+        mid_target = sum(parts[1:-1])
+    else:
+        def_target, mid_target, fwd_target = 4, 3, 3
+    return ["GK", *["DEF"] * def_target, *["MID"] * mid_target, *["FWD"] * fwd_target]
+
+
+def order_xi_for_shape(players: list, formation: str, line_of) -> list:
+    """Put an accepted eleven into the shape that will be played, without dropping anyone."""
+
+    parts = [int(piece) for piece in str(formation or "").split("-") if piece.isdigit()]
+    if len(parts) >= 3 and sum(parts) == 10:
+        def_target, fwd_target = parts[0], parts[-1]
+        mid_target = sum(parts[1:-1])
+    else:
+        def_target, mid_target, fwd_target = 4, 3, 3
+    buckets: dict[str, list] = {"GK": [], "DEF": [], "MID": [], "FWD": []}
+    for player in players:
+        line = line_of(player)
+        buckets[line if line in buckets else "MID"].append(player)
+    slots = ["GK", *["DEF"] * def_target, *["MID"] * mid_target, *["FWD"] * fwd_target]
+    ordered: list = []
+    for line in slots:
+        pool = buckets[line]
+        if not pool:
+            for fallback in ("MID", "DEF", "FWD", "GK"):
+                if buckets[fallback]:
+                    pool = buckets[fallback]
+                    break
+        if not pool:
+            break
+        ordered.append(pool.pop(0))
+    return ordered
+
+
+def sheet_order_needs_reline(
+    *,
+    owner_formation: object,
+    chosen_formation: object,
+    shape_before_hire: object,
+    hired_profile: dict | None,
+) -> bool:
+    """An accepted slot order belongs to the shape it was filed in. A different shape gets a new order."""
+
+    chosen = str(chosen_formation or "").strip()
+    owner_shape = str(owner_formation or "").strip()
+    if owner_shape:
+        return owner_shape != chosen
+    if not isinstance(hired_profile, dict) or not hired_profile.get("team_instructions_filed"):
+        return False
+    return str(shape_before_hire or "").strip() != chosen
+
+
+def resolve_sheet_formation(chosen: object, hired_profile: dict | None) -> str:
+    """The saved sheet uses the hired shape. A stored shape is kept only when the manager plays it."""
+
+    filed = str(chosen or "").strip()
+    if not isinstance(hired_profile, dict) or not hired_profile.get("team_instructions_filed"):
+        return filed or "4-3-3"
+    allowed = {
+        str(item).strip()
+        for item in (hired_profile.get("preferred_formations") or [])
+        if str(item or "").strip()
+    }
+    single = str(hired_profile.get("preferred_formation") or "").strip()
+    if single:
+        allowed.add(single)
+    if filed and filed in allowed:
+        return filed
+    from app.match_engine.services.team_factory import SyntheticSquadFactory
+
+    return SyntheticSquadFactory._formation_for_profile(hired_profile) or filed or "4-3-3"
+
+
 def select_manager_matchday_lineup(
     db: Session,
     state: OwnerClubState,
@@ -4522,6 +4626,15 @@ def select_manager_matchday_lineup(
         chosen_formation = owner_formation
     else:
         chosen_formation = str(tactics.get("formation") or tactical_setup.get("formation") or "") or None
+    hired_profile = None
+    try:
+        from app.manager_marketplace.service import ManagerMarketplaceService
+
+        hired_profile = ManagerMarketplaceService(db).build_match_manager_profile(club_id=str(state.club_id))
+    except Exception:
+        hired_profile = None
+    shape_before_hire = chosen_formation
+    chosen_formation = resolve_sheet_formation(chosen_formation, hired_profile)
 
     mentality_authority = resolve_manager_mentality_decision(state)
     chosen_mentality = str(mentality_authority["effective_mentality"])
@@ -4564,26 +4677,10 @@ def select_manager_matchday_lineup(
         return pos.upper() in {"GK", "GOALKEEPER"} or pos.lower().startswith("goal")
 
     def _token_line(token: str) -> str | None:
-        raw = token.strip().upper()
-        if not raw:
-            return None
-        if raw in {"GK", "GOALKEEPER"} or raw.startswith("GOAL"):
-            return "GK"
-        if raw in {"CB", "LB", "RB", "LWB", "RWB", "DF", "DEF", "SW"} or raw.startswith("DEF") or "BACK" in raw:
-            return "DEF"
-        if raw in {"DM", "CDM", "CM", "AM", "CAM", "LM", "RM", "MF", "MID"} or raw.startswith("MID"):
-            return "MID"
-        if (
-            raw in {"ST", "CF", "LW", "RW", "SS", "FW", "FWD", "ATT"}
-            or raw.startswith("FORW")
-            or raw.startswith("STRIK")
-        ):
-            return "FWD"
-        return None
+        return _sheet_token_line(token)
 
     def _player_line(p: OwnerSquadPlayer) -> str:
-        first_token = str(p.position or "").strip().upper().split("/")[0].strip()
-        return _token_line(first_token) or "MID"
+        return sheet_position_line(p.position)
 
     def _player_can_play_line(p: OwnerSquadPlayer, line: str) -> bool:
         pers = dict(p.personality_json or {})
@@ -4607,6 +4704,10 @@ def select_manager_matchday_lineup(
         str(pid) for pid in (owner_pref.get("preferred_player_ids") or owner_pref.get("preferred_starter_ids") or [])
     ]
     by_id = {str(p.id): p for p in eligible}
+    by_ref = {str(p.player_ref): p for p in eligible if getattr(p, "player_ref", None)}
+
+    def _owner_player(pid: str) -> OwnerSquadPlayer | None:
+        return by_id.get(pid) or by_ref.get(pid)
     first_team = [p for p in eligible if _sheet_name(p) == "first_team"]
     committed_xi = [
         p
@@ -4617,16 +4718,17 @@ def select_manager_matchday_lineup(
     pref_first: list[OwnerSquadPlayer] = []
     pref_seen: set[str] = set()
     for pid in pref_ids:
-        if pid in pref_seen or pid not in by_id:
+        candidate = _owner_player(pid)
+        if candidate is None or str(candidate.id) in pref_seen:
             continue
-        candidate = by_id[pid]
-        if _sheet_name(candidate) == "first_team" or pid in committed_xi_ids:
+        if _sheet_name(candidate) == "first_team" or str(candidate.id) in committed_xi_ids:
             pref_first.append(candidate)
-            pref_seen.add(pid)
+            pref_seen.add(str(candidate.id))
 
     # If the owner submitted a complete 11-player lineup and the manager accepts all 11
     # (all 11 are eligible, on the first team or committed XI, not rejected, and include a GK),
-    # keep the owner's exact 11 players in their exact chosen slot order without reshuffling.
+    # keep those players. Their slot order stands when it was filed for the shape being played.
+    # A different shape is lined up again from each player's real position.
     owner_full_xi_accepted = (
         len(pref_ids) == 11
         and len(pref_first) == 11
@@ -4634,8 +4736,17 @@ def select_manager_matchday_lineup(
         and any(_is_gk(p) for p in pref_first)
     )
 
+    sheet_relined = False
     if owner_full_xi_accepted:
         starters = list(pref_first[:11])
+        if sheet_order_needs_reline(
+            owner_formation=owner_formation,
+            chosen_formation=chosen_formation,
+            shape_before_hire=shape_before_hire,
+            hired_profile=hired_profile,
+        ):
+            starters = order_xi_for_shape(starters, str(chosen_formation), _player_line)
+            sheet_relined = True
     else:
         ranked_first = sorted(first_team, key=_manager_player_score, reverse=True)
         ranked_non_academy = [
@@ -4715,7 +4826,7 @@ def select_manager_matchday_lineup(
     bench: list[OwnerSquadPlayer] = []
     pref_bench_ids = [str(pid) for pid in (owner_pref.get("preferred_bench_ids") or [])]
     for pid in pref_bench_ids:
-        player = by_id.get(pid)
+        player = _owner_player(pid)
         if (
             player is not None
             and player.id not in starter_ids
@@ -4735,8 +4846,12 @@ def select_manager_matchday_lineup(
         if p not in bench and _sheet_name(p) != "academy" and len(bench) < 7:
             bench.append(p)
 
-    accepted_pref_ids = [pid for pid in pref_ids if pid in starter_ids]
-    declined_pref_ids = [pid for pid in pref_ids if pid not in starter_ids]
+    accepted_keys = {str(player_id) for player_id in starter_ids}
+    accepted_keys.update(
+        str(player.player_ref) for player in starters if getattr(player, "player_ref", None)
+    )
+    accepted_pref_ids = [pid for pid in pref_ids if pid in accepted_keys]
+    declined_pref_ids = [pid for pid in pref_ids if pid not in accepted_keys]
     if declined_pref_ids:
         decision_outcome = "declined"
         verdict_reason = (
@@ -4760,7 +4875,10 @@ def select_manager_matchday_lineup(
             f" {mgr['name']} kept {chosen_formation}; tactical flexibility "
             f"{tactics.get('tactical_flexibility')} does not take {owner_formation}."
         )
+    if sheet_relined:
+        verdict_reason += f" The eleven was lined up in {chosen_formation} by position."
 
+    slot_lines = sheet_slot_lines(chosen_formation)
     selection_payload = {
         "selected_by_manager_id": mgr.get("id"),
         "selected_by_manager_name": mgr.get("name"),
@@ -4783,13 +4901,14 @@ def select_manager_matchday_lineup(
                 "id": p.id,
                 "name": p.name,
                 "position": p.position,
+                "sheet_line": slot_lines[index] if index < len(slot_lines) else sheet_position_line(p.position),
                 "age": p.age,
                 "rating": p.rating,
                 "fitness": _player_fitness(p),
                 "is_academy": _player_is_academy(p),
                 "manager_score": _manager_player_score(p),
             }
-            for p in starters
+            for index, p in enumerate(starters)
         ],
         "bench": [
             {

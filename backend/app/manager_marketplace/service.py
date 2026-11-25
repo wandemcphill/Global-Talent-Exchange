@@ -281,6 +281,12 @@ class ManagerMarketplaceService:
             return None
         user = self._manager_user(profile)
         style = self._style_contract(profile.preferred_style)
+        formations = [
+            str(item).strip()
+            for item in (profile.formation_preferences_json or [])
+            if str(item or "").strip()
+        ]
+        instructions = self._team_instructions(profile.preferred_style, profile.tempo_control)
         return {
             "display_name": self._display_name(user),
             "preferred_style": profile.preferred_style,
@@ -288,6 +294,13 @@ class ManagerMarketplaceService:
             "mentality": style["mentality"],
             "tactics": style["tactics"],
             "traits": style["traits"],
+            "preferred_formation": formations[0] if formations else None,
+            "preferred_formations": formations,
+            "pressing": instructions["pressing"],
+            "tempo": instructions["tempo"],
+            "width": instructions["width"],
+            "defensive_line": instructions["defensive_line"],
+            "team_instructions_filed": True,
             "rating": self._rating(profile),
             "reputation_score": profile.reputation_score,
         }
@@ -499,4 +512,33 @@ class ManagerMarketplaceService:
             "mentality": "balanced",
             "tactics": ["balanced_shape"],
             "traits": ["in_game_adjustments"],
+        }
+
+    @staticmethod
+    def _team_instructions(preferred_style: str, tempo_control: str | None) -> dict[str, int]:
+        """Team numbers the match can actually play: press, tempo, width, and the defensive line."""
+        style = (preferred_style or "").strip().lower()
+        if style in {"attack", "attacking", "front-foot"}:
+            pressing, tempo, width, line = 72, 70, 66, 68
+        elif style in {"defense", "defensive", "low_block"}:
+            pressing, tempo, width, line = 34, 38, 40, 32
+        elif style in {"possession", "control"}:
+            pressing, tempo, width, line = 46, 40, 58, 56
+        elif style in {"counter", "counter_attack", "transition"}:
+            pressing, tempo, width, line = 40, 64, 52, 34
+        else:
+            pressing, tempo, width, line = 50, 50, 50, 50
+        tempo_word = (tempo_control or "balanced").strip().lower()
+        if tempo_word in {"high", "fast", "quick"}:
+            tempo = min(100, tempo + 12)
+        elif tempo_word in {"slow", "low", "patient"}:
+            tempo = max(0, tempo - 12)
+        elif tempo_word == "direct":
+            tempo = min(100, tempo + 8)
+            width = min(100, width + 6)
+        return {
+            "pressing": pressing,
+            "tempo": tempo,
+            "width": width,
+            "defensive_line": line,
         }

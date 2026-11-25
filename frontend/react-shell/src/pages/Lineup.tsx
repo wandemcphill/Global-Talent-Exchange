@@ -247,12 +247,12 @@ export default function Lineup() {
     const managerFormations: string[] = Array.isArray(effectiveRoster.tactics?.formations)
       ? effectiveRoster.tactics.formations
       : [];
-    const rawFormation =
-      effectiveRoster.filedFormation || effectiveRoster.tactics?.formation || "4-3-3";
+    const filedShape = String(effectiveRoster.filedFormation || "");
+    const rawFormation = filedShape || managerFormations[0] || effectiveRoster.tactics?.formation || "4-3-3";
     const resolvedFormation =
-      managerFormations.length > 0 && !managerFormations.includes(rawFormation)
-        ? managerFormations[0]
-        : rawFormation;
+      filedShape || managerFormations.length === 0 || managerFormations.includes(rawFormation)
+        ? rawFormation
+        : managerFormations[0];
     setFormation(resolvedFormation);
     setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
     setBench(effectiveRoster.filedBench || []);
@@ -434,17 +434,19 @@ export default function Lineup() {
       ).data;
       const filedIds = filed?.manager_selection?.starting_xi_ids || payload.starter_player_ids;
       const filedBench = filed?.manager_selection?.bench_ids || payload.bench_player_ids;
+      const filedShape = String(filed?.manager_selection?.formation || formation);
+      setFormation(filedShape);
       setStarters([...filedIds.slice(0, 11), ...Array(11).fill("")].slice(0, 11));
       setBench(filedBench);
       queryClient.setQueryData(["lineup-editor", clubId], (current: any) => ({
         ...(current || {}),
         filedIds,
         filedBench,
-        filedFormation: formation,
+        filedFormation: filedShape,
       }));
       queryClient.setQueryData(["lineup-squad", clubId], (current: any) => {
         if (!current || Array.isArray(current)) return current;
-        return { ...current, ownerBook: true, filedIds, filedBench, filedFormation: formation };
+        return { ...current, ownerBook: true, filedIds, filedBench, filedFormation: filedShape };
       });
       const verdict = filed?.manager_selection?.verdict_reason;
       toast.success(verdict || "The first-team manager filed this eleven.");

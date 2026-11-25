@@ -1207,16 +1207,30 @@ def _load_strict_live_view_state(
     return view_state, frame, recent_events, is_live
 
 
-def _v2_player_payload(player) -> dict[str, object]:
+def _sheet_ratings(sheet) -> dict[str, float]:
+    ratings: dict[str, float] = {}
+    for starter in list(getattr(sheet, "starters", None) or []):
+        player_id = getattr(starter, "player_id", None)
+        rating = getattr(starter, "rating", None)
+        if player_id and isinstance(rating, (int, float)) and not isinstance(rating, bool) and float(rating) > 0:
+            ratings[str(player_id)] = round(float(rating), 1)
+    return ratings
+
+
+def _v2_player_payload(player, rating: float | None = None) -> dict[str, object]:
+    name = getattr(player, "player_name", None) or getattr(player, "label", None) or "Player"
+    stamina = round(_float_or_default(getattr(player, "stamina_pct", None), default=100.0), 1)
     return {
         "id": player.player_id,
         "player_id": player.player_id,
-        "name": player.label,
-        "label": player.label,
+        "name": name,
+        "label": name,
         "position": _enum_value(player.role) or "N/A",
         "role": _enum_value(player.role) or "N/A",
         "shirt_number": player.shirt_number or 0,
-        "rating": None,
+        "rating": None if rating is None else round(float(rating), 1),
+        "fitness_pct": stamina,
+        "stamina_pct": stamina,
         "is_regen": False,
     }
 
@@ -1484,6 +1498,62 @@ def _v2_event_type(raw: object | None) -> str:
     return mapping.get(value, value or "pass")
 
 
+def _circulation_timeline(view_state, frames: list[Any], events: list[Any]) -> list[tuple[float, dict[str, object]]]:
+    """Named passes between events, in the order the picture plays them."""
+
+    home = getattr(view_state, "home_team", None)
+    away = getattr(view_state, "away_team", None)
+    earliest = None
+    for event in events:
+        stamp = getattr(event, "time_seconds", None)
+        if isinstance(stamp, (int, float)):
+            earliest = float(stamp) if earliest is None else min(earliest, float(stamp))
+    lines: list[tuple[float, dict[str, object]]] = []
+    previous = None
+    for frame in frames:
+        text = str(getattr(frame, "overlay_text", None) or "").strip()
+        if " finds " not in text or text == previous:
+            continue
+        stamp = float(getattr(frame, "time_seconds", 0.0) or 0.0)
+        if earliest is not None and stamp < earliest - 12.0:
+            continue
+        previous = text
+        side = str(_enum_value(getattr(frame, "possession_side", None)) or "").lower()
+        team = home if side == "home" else away if side == "away" else None
+        lines.append(
+            (
+                stamp,
+                {
+                    "id": f"pass:{getattr(frame, 'frame_id', len(lines))}",
+                    "type": "pass",
+                    "minute": int(round(float(getattr(frame, "clock_minute", 0.0) or 0.0))),
+                    "title": text if len(text) <= 72 else f"{text[:69].rstrip()}...",
+                    "description": text,
+                    "team_id": getattr(team, "team_id", None) if team is not None else None,
+                    "team_name": (
+                        getattr(team, "short_name", None) or getattr(team, "team_name", None)
+                        if team is not None
+                        else None
+                    ),
+                    "player_name": None,
+                    "home_score": int(getattr(frame, "home_score", 0) or 0),
+                    "away_score": int(getattr(frame, "away_score", 0) or 0),
+                    "flags": [],
+                },
+            )
+        )
+    return lines[-18:]
+
+
+def _timeline_with_passes(view_state, frames: list[Any], events: list[Any]) -> list[dict[str, object]]:
+    rows: list[tuple[float, int, dict[str, object]]] = [
+        (float(getattr(event, "time_seconds", 0.0) or 0.0), 1, _v2_event_payload(event)) for event in events
+    ]
+    rows.extend((stamp, 0, payload) for stamp, payload in _circulation_timeline(view_state, frames, events))
+    rows.sort(key=lambda row: (row[0], row[1]))
+    return [payload for _, _, payload in rows]
+
+
 def _v2_event_payload(event) -> dict[str, object]:
     payload: dict[str, object] = {
         "id": event.event_id,
@@ -1492,6 +1562,7 @@ def _v2_event_payload(event) -> dict[str, object]:
         "title": event.banner_text,
         "description": event.commentary,
         "team_id": event.team_id,
+        "team_name": event.team_name,
         "player_name": event.primary_player_name,
         "secondary_player_name": getattr(event, "secondary_player_name", None),
         "home_score": int(event.home_score),
@@ -1524,6 +1595,7 @@ def _v2_team_payload(
     bench: list[Any] | None = None,
     crest_url: str | None = None,
     goalkeeper_color: str | None = None,
+    ratings: dict[str, float] | None = None,
 ) -> dict[str, object]:
     return {
         "id": team.team_id,
@@ -1541,7 +1613,10 @@ def _v2_team_payload(
         "sponsor_text": getattr(team, "sponsor_text", None),
         "crest_url": crest_url or getattr(team, "crest_url", None),
         "goalkeeper_color": goalkeeper_color or getattr(team, "goalkeeper_color", None),
-        "players": [_v2_player_payload(player) for player in players],
+        "players": [
+            _v2_player_payload(player, rating=(ratings or {}).get(str(getattr(player, "player_id", ""))))
+            for player in players
+        ],
         "bench": [_v2_bench_payload(player) for player in (bench or [])],
     }
 
@@ -1984,6 +2059,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
             bench=list(getattr(home_sheet, "bench", None) or []),
             crest_url=home_crest,
             goalkeeper_color=getattr(home_sheet, "goalkeeper_color", None),
+            ratings=_sheet_ratings(home_sheet),
         ),
         "away": _v2_team_payload(
             view_state.away_team,
@@ -1992,6 +2068,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
             bench=list(getattr(away_sheet, "bench", None) or []),
             crest_url=away_crest,
             goalkeeper_color=getattr(away_sheet, "goalkeeper_color", None),
+            ratings=_sheet_ratings(away_sheet),
         ),
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
         "ball": _v2_ball_payload(getattr(frame, "ball", None)),
@@ -2000,7 +2077,7 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         "recent_gifts": ensure_live_match_hub(app).get_recent_gifts(match_id),
         "pre_match": _v2_pre_match_payload(match_id, view_state, app),
         "post_match": _v2_post_match_payload(match_id, view_state, frame, events, stats_payload),
-        "timeline": [_v2_event_payload(event) for event in events],
+        "timeline": _timeline_with_passes(view_state, played_frames, events),
         "events": [_v2_event_payload(event) for event in events],
         "stats": stats_payload,
         "highlights": [

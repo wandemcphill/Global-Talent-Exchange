@@ -1542,7 +1542,7 @@ export default function Squad() {
     ...club,
     squad: players.filter((player: any) => sheetOf(player) === "first_team"),
   };
-  const activeFormation = club.tactics?.formation || club.matchday_formation || undefined;
+  const activeFormation = club.matchday_formation || club.tactics?.formation || undefined;
   const activePitchPlayers =
     Array.isArray(club.matchday_xi) && club.matchday_xi.length > 0
       ? club.matchday_xi

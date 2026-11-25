@@ -618,8 +618,31 @@ function pitchBucket(position?: string): "GK" | "DEF" | "MID" | "FWD" {
   return "MID";
 }
 
+function slotsForShape(formation?: string): readonly PitchSlotDef[] {
+  if (formation && FORMATION_PITCH_SLOTS[formation]) return FORMATION_PITCH_SLOTS[formation];
+  const parts = String(formation || "")
+    .split("-")
+    .map((piece) => Number(piece))
+    .filter((count) => Number.isInteger(count) && count > 0);
+  if (parts.length < 3 || parts.length > 5 || parts.reduce((sum, count) => sum + count, 0) !== 10) {
+    return PITCH_SLOTS;
+  }
+  const slots: PitchSlotDef[] = [];
+  parts.forEach((count, lineIndex) => {
+    const y = 74 - (lineIndex / Math.max(1, parts.length - 1)) * 58;
+    const bucket = lineIndex === 0 ? "DEF" : lineIndex === parts.length - 1 ? "FWD" : "MID";
+    const role = bucket === "DEF" ? "CB" : bucket === "FWD" ? "ST" : "CM";
+    for (let seat = 0; seat < count; seat += 1) {
+      const x = count === 1 ? 50 : 12 + (seat / (count - 1)) * 76;
+      slots.push({ x, y, role, bucket, shirt: seat + 2 });
+    }
+  });
+  slots.push({ x: 50, y: 90, role: "GK", bucket: "GK", shirt: 1 });
+  return slots;
+}
+
 export function placeFirstTeamOnPitch(players: TacticalPitchPlayer[] = [], formation?: string) {
-  const slotTemplate = (formation && FORMATION_PITCH_SLOTS[formation]) || PITCH_SLOTS;
+  const slotTemplate = slotsForShape(formation);
   const slots = slotTemplate.map((slot) => ({
     ...slot,
     player: undefined as TacticalPitchPlayer | undefined,

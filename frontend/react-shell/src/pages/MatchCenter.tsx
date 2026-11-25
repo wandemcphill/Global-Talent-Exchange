@@ -696,7 +696,7 @@ function TacticalHUD({
               onChange={(e) => setDraftFormation(e.target.value)}
               className="rounded border border-white/15 bg-slate-900 px-2 py-1 text-xs text-white"
             >
-              {Array.from(new Set([formation, "4-3-3", "4-2-3-1", "4-4-2", "3-5-2", "5-3-2"])).map((f) => (
+              {Array.from(new Set([formation, "5-3-2", "4-4-2", "4-2-3-1", "4-1-2-1-2", "3-4-3", "3-5-2", "4-3-3"])).map((f) => (
                 <option key={f} value={f}>{f}</option>
               ))}
             </select>
@@ -2332,9 +2332,10 @@ export default function MatchCenter() {
   const awayDisplayFormation =
     acceptedLive?.away?.formation || authoritativeTactics?.awayFormation || "—";
   const activeFormation =
+    myAppliedTactics?.formation ||
+    (side === "away" ? acceptedLive?.away?.formation : acceptedLive?.home?.formation) ||
     (side === "away" ? authoritativeTactics?.awayFormation : authoritativeTactics?.homeFormation) ||
-    formation ||
-    "4-3-3";
+    formation;
   const press = Number(
     (side === "away" ? authoritativeTactics?.awayPressing : authoritativeTactics?.homePressing) ??
       myAppliedTactics?.press_intensity ??
@@ -2899,7 +2900,7 @@ export default function MatchCenter() {
                       team_id: String(m.home_club_id || "home"),
                       team_name: m.home_name,
                       short_name: String(m.home_name || "HOM").slice(0, 3).toUpperCase(),
-                      formation: authoritativeTactics?.homeFormation || formation || "4-3-3",
+                      formation: acceptedLive?.home?.formation || authoritativeTactics?.homeFormation || formation,
                       primary_color: homePrimaryColor,
                       secondary_color: homeSecondaryColor,
                       accent_color: homeAccentColor,
@@ -2909,7 +2910,7 @@ export default function MatchCenter() {
                       team_id: String(m.away_club_id || "away"),
                       team_name: m.away_name,
                       short_name: String(m.away_name || "AWY").slice(0, 3).toUpperCase(),
-                      formation: authoritativeTactics?.awayFormation || "4-3-3",
+                      formation: acceptedLive?.away?.formation || authoritativeTactics?.awayFormation || formation,
                       primary_color: awayPrimaryColor,
                       secondary_color: awaySecondaryColor,
                       accent_color: awayAccentColor,
