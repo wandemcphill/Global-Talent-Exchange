@@ -932,7 +932,7 @@ function OrthographicPitchComponent({
     digitCanvas.height = digitCell;
     const digitCtx = digitCanvas.getContext("2d");
     let digitTexture: THREE.Texture;
-    if (digitCtx) {
+    if (digitCtx && typeof digitCtx.strokeText === "function" && typeof digitCtx.fillText === "function") {
       digitCtx.clearRect(0, 0, digitCanvas.width, digitCanvas.height);
       digitCtx.font = "900 60px Arial, sans-serif";
       digitCtx.textAlign = "center";

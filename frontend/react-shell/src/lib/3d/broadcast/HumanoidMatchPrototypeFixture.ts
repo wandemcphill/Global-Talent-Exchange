@@ -152,7 +152,7 @@ const CONTINUOUS_SEGMENTS: readonly BallSegment[] = [
   { t0: 75, t1: 79, x0: 84, y0: 76, x1: 88, y1: 60, owner: "home_11", possession: "home", camera: "box_zoom", danger: "central_box" },
   { t0: 79, t1: 81, x0: 88, y0: 60, x1: 72, y1: 46, owner: null, passer: "home_11", passState: "pass", heightPeak: 0.3, possession: "home", camera: "box_zoom", danger: "final_third", stage: "pre", eventId: "ev_shot_save_4" },
   { t0: 81, t1: 86, x0: 72, y0: 46, x1: 70, y1: 48, owner: "home_10", possession: "home", camera: "box_zoom", danger: "final_third", stage: "pre", eventId: "ev_shot_save_4", banner: "SHOT FROM OUTSIDE THE BOX!" },
-  { t0: 86, t1: 91, x0: 70, y0: 48, x1: 93, y1: 50, owner: null, passer: "home_10", passState: "shoot", heightPeak: 0.7, possession: "home", camera: "box_zoom", danger: "final_third", stage: "event", eventId: "ev_shot_save_4", banner: "SHOT FROM OUTSIDE THE BOX!", overrides: { home_10: "shoot", away_1: "save" } },
+  { t0: 86, t1: 91, x0: 70, y0: 48, x1: 93, y1: 50, owner: null, passer: "home_10", passState: "shoot", heightPeak: 1.25, possession: "home", camera: "box_zoom", danger: "final_third", stage: "event", eventId: "ev_shot_save_4", banner: "SHOT FROM OUTSIDE THE BOX!", overrides: { home_10: "shoot", away_1: "save" } },
   { t0: 91, t1: 95, x0: 95, y0: 49, x1: 90, y1: 52, owner: "away_1", possession: "away", camera: "broadcast", stage: "post", eventId: "ev_shot_save_4", overrides: { away_1: "save" } },
   { t0: 95, t1: 100, x0: 90, y0: 52, x1: 84, y1: 46, owner: "away_1", possession: "away", camera: "broadcast", stage: "post", eventId: "ev_shot_save_4" },
 
@@ -1385,7 +1385,14 @@ export function buildFiveMinuteHumanoidMatchFixture(durationSeconds: number = 30
             ballHeight = 0.12;
           }
         } else if (saved) {
-          fly(possessionSide === "home" ? 92.8 : 7.2, 50, 22, Math.max(0.5, seg.heightPeak ?? 0.8));
+          const highSave = seg.eventId === "ev_shot_save_4";
+          fly(
+            possessionSide === "home" ? 92.8 : 7.2,
+            50,
+            highSave ? 12 : 6,
+            Math.max(highSave ? 1.25 : 0.45, seg.heightPeak ?? 0.8),
+          );
+          if (highSave && ballState === "in_flight") ballHeight = Math.max(ballHeight, 1.2);
           if (Math.hypot(ballX - (possessionSide === "home" ? 92.8 : 7.2), ballY - 50) < 1.4) {
             ballState = "controlled";
             ballHeight = 0.05;
