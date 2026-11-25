@@ -36,6 +36,7 @@ import {
   X,
 } from "lucide-react";
 import { api, errMsg } from "@/lib/api";
+import { LegendInventoryReel } from "@/components/gtex/InventoryAdvert";
 import {
   fmt,
   label,
@@ -216,6 +217,7 @@ function NoClubDashboard({
 }) {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
+      <LegendInventoryReel context="owner" />
       <section className="relative overflow-hidden rounded-3xl border border-gtex-emerald/30 bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <p className="gx-eyebrow mb-3">Start here</p>
         <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
@@ -585,6 +587,7 @@ export function ControlCenter() {
   const squadReady = activePitchPlayers.length >= 11;
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
+      <LegendInventoryReel context="owner" />
       <section
         className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 sm:p-6"
         data-testid="owner-start-strip"

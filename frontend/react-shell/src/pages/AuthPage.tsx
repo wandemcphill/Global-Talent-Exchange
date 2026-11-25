@@ -8,6 +8,7 @@ import { publicUrl } from "@/lib/publicPath";
 import { Btn, Loading } from "@/components/gtex/ui";
 import { TURNSTILE_SITE_KEY, TurnstileChallenge } from "@/components/gtex/TurnstileChallenge";
 import { GtexAuthAdvertisingPanel } from "@/components/advertising/GtexAdvertising";
+import { LegendInventoryReel } from "@/components/gtex/InventoryAdvert";
 import { DocumentHead } from "@/components/seo/DocumentHead";
 
 type AccountType = "user" | "creator" | "coin_trader";
@@ -431,6 +432,7 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
           data-testid={mode + "-form"}
           className="w-full max-w-xl space-y-4"
         >
+          {mode === "signup" ? <LegendInventoryReel context="signup" /> : null}
           <div className="lg:hidden">
             <GtexAuthAdvertisingPanel compact />
           </div>
