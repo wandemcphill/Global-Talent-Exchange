@@ -203,7 +203,7 @@ describe("AppShell control-center resilience and admin bypass", () => {
     expect(container.querySelector('[data-testid="mock-outlet"]')?.textContent).toBe("Route:/app/admin");
   });
 
-  test("an active club shows the eight club-day destinations", async () => {
+  test("an active club shows the club-day destinations, including matches, chat, and invite", async () => {
     mockApiGet.mockResolvedValue({
       data: {
         clubs: [{ club_id: "c1", club_name: "Lagos United", stage: "active" }],
@@ -228,13 +228,23 @@ describe("AppShell control-center resilience and admin bypass", () => {
     expect(labels).toEqual([
       "Today",
       "Squad",
+      "Sign players",
+      "Matches",
+      "Community",
+      "Lineup",
       "Staff",
       "Academy",
-      "Competitions",
       "Inbox",
       "Market",
       "Wallet",
+      "Invite",
     ]);
+    expect(nav?.querySelector('[data-testid="nav-community"]')?.getAttribute("href")).toBe(
+      "/app/community?tab=channels",
+    );
+    expect(nav?.querySelector('[data-testid="nav-competitions"]')?.getAttribute("href")).toBe(
+      "/app/competitions#play-a-match",
+    );
     expect(nav?.textContent).not.toContain("Control Centre");
     expect(nav?.textContent).not.toContain("Trophy Cabinet");
   });

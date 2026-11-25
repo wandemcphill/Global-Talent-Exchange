@@ -1171,6 +1171,24 @@ export default function Competitions() {
           </div>
         }
       />
+      <section
+        className="rounded-2xl border border-emerald-400/30 bg-emerald-400/10 p-4 text-sm leading-6 text-slate-100"
+        data-testid="match-start-guide"
+      >
+        <p className="font-bold text-white">How a match starts</p>
+        <p className="mt-1">
+          Find Instant Match pairs {active?.club_name || "your club"} with a rival. The club
+          directory lists every owner: Challenge Match sends them the fixture. Entry is free.
+        </p>
+        <div className="mt-3 flex flex-wrap gap-3 text-xs font-bold uppercase tracking-wider">
+          <a href="#play-a-match" className="text-emerald-200 hover:text-white">
+            Instant match
+          </a>
+          <a href="#find-clubs" className="text-amber-200 hover:text-white">
+            Find clubs
+          </a>
+        </div>
+      </section>
       {isLoading ? (
         <Loading />
       ) : (
@@ -1200,8 +1218,11 @@ export default function Competitions() {
               ))}
             </Panel>
           )}
-          <QuickMatchmakingDesk activeClub={active} />
-          {allPlatformClubs.length > 0 && (
+          <div id="play-a-match">
+            <QuickMatchmakingDesk activeClub={active} />
+          </div>
+          <div id="find-clubs">
+          {allPlatformClubs.length > 0 ? (
             <Panel
               eyebrow="Live GTEX World Directory · Inspect Squads & Issue Challenges"
               title={`Platform Clubs & Rivals (${allPlatformClubs.length})`}
@@ -1309,7 +1330,19 @@ export default function Competitions() {
                 })}
               </div>
             </Panel>
+          ) : (
+            <Panel
+              eyebrow="Club directory"
+              title="Other clubs appear here"
+              testid="platform-clubs-directory"
+            >
+              <p className="text-sm leading-6 text-slate-300">
+                When another owner is on the platform, their club is listed here with Challenge
+                Match. Until then, Find Instant Match above pairs you with a rival. Entry is free.
+              </p>
+            </Panel>
           )}
+          </div>
           <Panel
             eyebrow="GTEX-hosted"
             title="Platform competitions"

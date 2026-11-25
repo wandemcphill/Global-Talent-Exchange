@@ -850,9 +850,12 @@ export default function AuthPage({ mode }: { mode: "login" | "signup" }) {
               className="rounded-xl border border-cyan-400/20 bg-cyan-400/5 p-3"
               data-testid="signup-referral-panel"
             >
-              <p className="text-sm leading-6 text-slate-200">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-cyan-300">
+                Friend's invite
+              </p>
+              <p className="mt-1 text-sm leading-6 text-slate-200">
                 Register with this referral code and receive a 10% bonus on your first qualifying
-                deposit.
+                deposit. Your friend earns 10% too.
               </p>
               <Field label="Referral code" error={fieldErrors.referral_code}>
                 <input

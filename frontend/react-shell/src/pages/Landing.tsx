@@ -128,8 +128,6 @@ export default function Landing() {
       <GtexTopAdvertisingRail />
       <div aria-hidden="true" className="h-[148px] md:h-[158px]" />
 
-      <LandingIntroVideos />
-
       {/* 2. Cinematic Hero & Live Pulse */}
       <HeroSection
         pulse={pulse}
@@ -154,6 +152,7 @@ export default function Landing() {
             </p>
             <p className="mt-2 text-xs text-slate-400">
               The launch grant is promotional, non-withdrawable and reserved for eligible player signings.
+              Have a friend's code? Enter it on the next screen and receive 10% on your first deposit.
             </p>
           </div>
           <Link
@@ -165,6 +164,8 @@ export default function Landing() {
           </Link>
         </div>
       </section>
+
+      <LandingIntroVideos />
 
       {/* 3. Premium brand placement */}
       <GtexHomepageAdvertising />

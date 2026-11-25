@@ -438,41 +438,36 @@ export default function AppShell() {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const clubDayNav = [
+  const clubDayItems: { id: string; label: string; to?: string }[] = [
     { id: "home", label: "Today" },
     { id: "squad", label: "Squad" },
-    { id: "staff-market", label: "Staff" },
-    { id: "academy", label: "Academy" },
-    { id: "competitions", label: "Competitions" },
-    { id: "inbox", label: "Inbox" },
-    { id: "market", label: "Market" },
-    { id: "finance", label: "Wallet" },
-  ]
-    .map((item) => {
-      const found = NAV.find((entry) => entry.id === item.id);
-      return found ? { ...found, label: item.label, category: "CLUB DAY" } : null;
-    })
-    .filter((item): item is (typeof NAV)[number] => item !== null);
-
-  const mobileClubDayNav = [
-    { id: "home", label: "Today" },
-    { id: "squad", label: "Squad" },
+    { id: "transfers", label: "Sign players" },
+    { id: "competitions", label: "Matches", to: "/app/competitions#play-a-match" },
+    { id: "community", label: "Community", to: "/app/community?tab=channels" },
     { id: "lineup", label: "Lineup" },
     { id: "staff-market", label: "Staff" },
     { id: "academy", label: "Academy" },
-    { id: "competitions", label: "Competitions" },
-    { id: "transfers", label: "Transfers" },
     { id: "inbox", label: "Inbox" },
     { id: "market", label: "Market" },
     { id: "finance", label: "Wallet" },
-    { id: "campus", label: "Campus" },
+    { id: "referrals", label: "Invite" },
+  ];
+  const asClubDay = (item: { id: string; label: string; to?: string }) => {
+    const found = NAV.find((entry) => entry.id === item.id);
+    return found
+      ? { ...found, label: item.label, to: item.to || found.to, category: "CLUB DAY" }
+      : null;
+  };
+  const clubDayNav = clubDayItems
+    .map(asClubDay)
+    .filter((item): item is (typeof NAV)[number] => item !== null);
+
+  const mobileClubDayNav = [
+    ...clubDayItems,
     { id: "national", label: "National" },
     { id: "newsroom", label: "Newsroom" },
   ]
-    .map((item) => {
-      const found = NAV.find((entry) => entry.id === item.id);
-      return found ? { ...found, label: item.label, category: "CLUB DAY" } : null;
-    })
+    .map(asClubDay)
     .filter((item): item is (typeof NAV)[number] => item !== null);
 
   const normalNav = hasActiveClub
@@ -700,6 +695,15 @@ export default function AppShell() {
           <GlobalWorldClockPill />
 
           {/* Appearance Studio Shortcut Pill */}
+          <NavLink
+            to="/app/referrals"
+            data-testid="topbar-invite-link"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-cyan-300/40 bg-cyan-400/10 px-2.5 py-1.5 text-xs font-bold text-cyan-100 transition hover:border-cyan-200 hover:text-white"
+            title="Invite an owner. They get 10% on their first deposit. You earn 10%."
+          >
+            <Share2 size={13} className="text-cyan-300" />
+            <span>Invite</span>
+          </NavLink>
           <NavLink
             to="/app/settings/appearance"
             data-testid="topbar-appearance-studio-link"

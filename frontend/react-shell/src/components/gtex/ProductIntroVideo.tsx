@@ -25,8 +25,39 @@ const FILMS: Record<
   },
 };
 
-export function ProductIntroVideo({ audience }: { audience: IntroAudience }) {
+export function ProductIntroVideo({
+  audience,
+  collapsed = false,
+}: {
+  audience: IntroAudience;
+  collapsed?: boolean;
+}) {
   const film = FILMS[audience];
+  if (collapsed) {
+    return (
+      <details
+        className="rounded-2xl border border-white/10 bg-[#070B11]"
+        data-testid={film.testId}
+      >
+        <summary className="cursor-pointer list-none px-4 py-3">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-300">
+            Watch later · {film.eyebrow}
+          </p>
+          <p className="text-sm font-bold text-white">{film.title}</p>
+          <p className="text-xs leading-5 text-slate-400">{film.caption}</p>
+        </summary>
+        <video
+          className="max-h-52 w-full bg-black"
+          controls
+          playsInline
+          preload="none"
+          src={publicUrl(film.src)}
+        >
+          {film.title}
+        </video>
+      </details>
+    );
+  }
   return (
     <figure
       className="overflow-hidden rounded-2xl border border-white/10 bg-[#070B11]"
@@ -60,20 +91,20 @@ export function LandingIntroVideos() {
       aria-labelledby="landing-intro-videos-title"
     >
       <p className="font-['Barlow_Condensed'] text-xs font-extrabold uppercase tracking-[0.2em] text-[#36E38A]">
-        Watch before you join
+        Optional tour
       </p>
       <h2
         id="landing-intro-videos-title"
-        className="mt-2 font-['Barlow_Condensed'] text-3xl font-black uppercase tracking-tight text-white sm:text-5xl"
+        className="mt-2 font-['Barlow_Condensed'] text-3xl font-black uppercase tracking-tight text-white sm:text-4xl"
       >
-        See GTEX in a few minutes
+        Watch the tour after you start
       </h2>
       <p className="mt-2 max-w-2xl text-sm leading-6 text-[#9AA7BD]">
-        One film for members who want a club. One film for coin traders who run a desk.
+        Open a film if you want the walkthrough. Creating the club does not wait on it.
       </p>
       <div className="mt-6 grid gap-5 lg:grid-cols-2">
-        <ProductIntroVideo audience="member" />
-        <ProductIntroVideo audience="trader" />
+        <ProductIntroVideo audience="member" collapsed />
+        <ProductIntroVideo audience="trader" collapsed />
       </div>
     </section>
   );

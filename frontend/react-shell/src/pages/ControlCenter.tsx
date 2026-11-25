@@ -167,7 +167,44 @@ function DashboardIntroVideo() {
   const auth = useAuth();
   const user = auth?.user;
   const accountType = String(user?.account_type || user?.accountType || "user").toLowerCase();
-  return <ProductIntroVideo audience={accountType === "coin_trader" ? "trader" : "member"} />;
+  return (
+    <ProductIntroVideo
+      audience={accountType === "coin_trader" ? "trader" : "member"}
+      collapsed
+    />
+  );
+}
+
+function InviteStrip() {
+  const auth = useAuth();
+  const user = auth?.user;
+  const referral = useQuery({
+    queryKey: ["my-affiliate", user?.id],
+    queryFn: async () => (await api.get("/referrals/me/affiliate")).data,
+    enabled: Boolean(user?.id),
+    retry: false,
+    staleTime: 60_000,
+  });
+  const code = referral.data?.code;
+  return (
+    <Link
+      to="/app/referrals"
+      data-testid="owner-referral-strip"
+      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-cyan-300/30 bg-cyan-400/10 px-4 py-3 text-sm text-cyan-50"
+    >
+      <span>
+        Invite an owner. They receive 10% on their first deposit. You earn 10% in GTEX Coin.
+        {code ? (
+          <b className="ml-2 font-mono text-white" data-testid="owner-referral-code">
+            {code}
+          </b>
+        ) : null}
+      </span>
+      <span className="text-xs font-black uppercase tracking-wider text-cyan-200">
+        Open your invite →
+      </span>
+    </Link>
+  );
 }
 
 function NoClubDashboard({
@@ -179,32 +216,30 @@ function NoClubDashboard({
 }) {
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="no-club-home">
-      <DashboardIntroVideo />
       <section className="relative overflow-hidden rounded-3xl border border-gtex-emerald/30 bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <p className="gx-eyebrow mb-3">Start here</p>
         <h1 className="gx-display max-w-3xl text-3xl font-black uppercase leading-tight text-white sm:text-5xl">
-          Top up. Create your club. Hire the staff.
+          Create your club and sign the squad
         </h1>
         <p
           className="mt-4 max-w-2xl text-sm leading-6 text-slate-300"
           data-testid="member-start-guide"
         >
-          Your personal GTEX Coin wallet has{" "}
-          <b className="text-white">{fmt(gtexBalance || "0")} GTX</b>. Coins you buy, and coins an
-          admin credits, land here. Club cash is a separate balance you fund after the club exists.
+          Your personal wallet has <b className="text-white">{fmt(gtexBalance || "0")} GTX</b>. The
+          first 500 club owners receive a 2,500 GTEX Coin grant for the squad. Entering a
+          competition is free. Your manager runs the matches.
         </p>
         <ol className="mt-5 max-w-2xl space-y-3 text-sm leading-6 text-slate-200">
           <li>
-            <b className="text-white">1. Top up your account.</b> Buying and selling through
-            verified coin traders guarantees more value for money than the platform treasury rate.
+            <b className="text-white">1. Create the club.</b> The grant is there to sign active
+            players.
           </li>
           <li>
-            <b className="text-white">2. Create your club.</b> The first 500 club owners receive a
-            2,500 GTEX Coin grant.
+            <b className="text-white">2. Sign players</b> from Sign players in the day menu.
           </li>
           <li>
-            <b className="text-white">3. Hire the right staff.</b> Gameplay is not required. You do
-            not play the matches. Your manager handles matchday and tactics.
+            <b className="text-white">3. Play.</b> Matches finds another club. Send a challenge, or
+            take an instant match.
           </li>
         </ol>
         <div className="mt-6 flex flex-wrap items-center gap-3">
@@ -212,19 +247,28 @@ function NoClubDashboard({
             Create your club
           </Btn>
           <Link
-            to="/app/finance"
+            to="/app/referrals"
+            className="text-xs font-bold uppercase tracking-wider text-cyan-200 hover:text-white"
+            data-testid="no-club-invite"
+          >
+            Invite a friend
+          </Link>
+          <Link
+            to="/app/community?tab=channels"
             className="text-xs font-bold uppercase tracking-wider text-emerald-300 hover:text-white"
+          >
+            General chat
+          </Link>
+          <Link
+            to="/app/finance"
+            className="text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white"
           >
             Top up wallet
           </Link>
-          <Link
-            to="/app/coin-traders"
-            className="text-xs font-bold uppercase tracking-wider text-amber-300 hover:text-white"
-          >
-            Buy through coin traders
-          </Link>
         </div>
       </section>
+      <InviteStrip />
+      <DashboardIntroVideo />
 
       <WorldClockCard />
 
@@ -314,9 +358,9 @@ function NoClubDashboard({
 
       <Panel eyebrow="Your club" title="The first 500 club owners receive 2,500 GTEX Coin">
         <p className="max-w-3xl text-sm leading-6 text-slate-300">
-          Create the club, then hire your staff. You do not play the matches. Your manager handles
-          matchday and tactics. Top up the personal wallet first, preferably through a coin trader,
-          so the club has GTEX Coin to spend.
+          Create the club, sign players with the grant, then open Matches and send a fixture.
+          Your manager handles matchday. Coins you buy later go into the personal wallet, then into
+          the club.
         </p>
         <div className="mt-5 flex flex-wrap items-center gap-3">
           <Btn onClick={onCreateClub}>Create your club</Btn>
@@ -538,8 +582,64 @@ export function ControlCenter() {
     }
   };
 
+  const squadReady = activePitchPlayers.length >= 11;
   return (
     <div className="space-y-8 p-4 sm:p-8" data-testid="control-center-screen">
+      <section
+        className="rounded-3xl border border-emerald-400/30 bg-emerald-400/10 p-5 sm:p-6"
+        data-testid="owner-start-strip"
+      >
+        <p className="text-[11px] font-black uppercase tracking-[0.22em] text-emerald-300">
+          {squadReady ? "Play the next match" : "Your club still needs a match"}
+        </p>
+        <h2 className="mt-1 text-2xl font-black uppercase text-white">
+          {squadReady ? "Find a club and send the fixture" : "Sign the squad, then send a match"}
+        </h2>
+        <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-200">
+          Entry is free. Matches lists every club. Challenge Match sends them a fixture. Find
+          Instant Match pairs you straight away. Community is the general chat.
+        </p>
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <Link
+            to="/app/transfer-hub"
+            data-testid="owner-start-sign"
+            className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 hover:border-emerald-300"
+          >
+            <p className="text-xs font-black uppercase tracking-wider text-emerald-300">1 · Squad</p>
+            <p className="mt-1 font-bold text-white">Sign players</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              {squadReady
+                ? `${activePitchPlayers.length} on the sheet. Add the players you still want.`
+                : "A match needs a squad. The welcome grant signs active players at GSI 74 and under."}
+            </p>
+          </Link>
+          <Link
+            to="/app/competitions#find-clubs"
+            data-testid="owner-start-match"
+            className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 hover:border-emerald-300"
+          >
+            <p className="text-xs font-black uppercase tracking-wider text-amber-300">2 · Match</p>
+            <p className="mt-1 font-bold text-white">Find a club and play</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              Open the club directory, send a challenge, or take an instant match. Entry is free.
+            </p>
+          </Link>
+          <Link
+            to="/app/community?tab=channels"
+            data-testid="owner-start-chat"
+            className="rounded-2xl border border-white/10 bg-slate-950/70 p-4 hover:border-emerald-300"
+          >
+            <p className="text-xs font-black uppercase tracking-wider text-cyan-300">3 · Chat</p>
+            <p className="mt-1 font-bold text-white">General lounge</p>
+            <p className="mt-1 text-xs leading-5 text-slate-400">
+              The club chat is open to every owner. Ask for a match in the lounge.
+            </p>
+          </Link>
+        </div>
+        <div className="mt-4">
+          <InviteStrip />
+        </div>
+      </section>
       {/* 1. EXECUTIVE FIRST VIEWPORT: CLUB COMMAND HERO */}
       <section className="relative overflow-hidden rounded-3xl border border-gtex-graphite bg-gradient-to-br from-gtex-slate via-[#0A1628] to-gtex-midnight p-6 sm:p-10 shadow-2xl ring-1 ring-white/5">
         <div className="pointer-events-none absolute right-0 top-0 h-full w-1/2 bg-[radial-gradient(ellipse_at_80%_20%,rgba(16,185,129,0.18),transparent_70%)]" />
