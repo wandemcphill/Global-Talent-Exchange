@@ -26,6 +26,8 @@ export type FMCommentaryStripProps = {
   onWatchReplay?: () => void;
   /** Compact floating mode for bottom-center overlay inside 3D / 2D viewports without blocking penalty boxes. */
   floating?: boolean;
+  /** Full-width single line under the classic top-down pitch. */
+  variant?: "broadcast" | "classic";
   testId?: string;
 };
 
@@ -122,8 +124,23 @@ export function FMCommentaryStrip({
   tone,
   onWatchReplay,
   floating = false,
+  variant = "broadcast",
   testId = "pitch-broadcast-banner",
 }: FMCommentaryStripProps) {
+  if (variant === "classic") {
+    return (
+      <div
+        data-testid={testId}
+        data-banner-kind={kind || phase}
+        data-banner-tone={tone || phase}
+        data-commentary-phase={phase}
+        data-commentary-variant="classic"
+        className="w-full bg-[#e11d48] px-4 py-1.5 text-center text-[13px] font-semibold leading-5 text-white"
+      >
+        {headline}
+      </div>
+    );
+  }
   const accentHex = clubColor || "#10b981";
   const animKey = `${phase}:${badge}:${headline}:${scoreline || ""}`;
   const isGoal = phase === "goal";

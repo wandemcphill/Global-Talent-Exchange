@@ -7,6 +7,8 @@ import {
 } from "@/match2d/OrthographicPitch";
 import { resolveDistinctKitPalette } from "@/match2d/kitContrast";
 import { FMCommentaryStrip, resolveCommentaryPhase } from "@/match2d/FMCommentaryStrip";
+import { ClassicMatchBar } from "@/pages/match-center/ClassicMatchBar";
+import { ballPlaneVelocity, classicLineupStat } from "@/pages/match-center/classicMatchMarkers";
 import type { KitPattern } from "@/match2d/playerRig";
 import {
   deriveBroadcastBanner,
@@ -17,6 +19,8 @@ import {
   pitchSource,
   playerIdentityKey,
   resolveFeedPresentationStatus,
+  classicActionWindows,
+  isClassicPitchAction,
   seekTime,
   suppliedCrest,
   type CardDetailSummary,
@@ -90,6 +94,7 @@ type MatchEventRow = {
   event_type?: string;
   player_id?: string;
   primary_player_id?: string;
+  secondary_player_id?: string;
   minute?: number;
   clock_minute?: number;
   time_seconds?: number;
@@ -175,6 +180,8 @@ export type Pitch2DViewProps = {
   durationSeconds?: number;
   clockMinute?: number | null;
   playerNameById?: Record<string, string>;
+  /** Classic 2D: keep the pitch off except while an attack, stop, or set piece is on. */
+  actionOnly?: boolean;
 };
 
 function unitPoint(rawX: unknown, rawY: unknown): { x: number; y: number } {
@@ -279,7 +286,7 @@ function toPitchBall(
     height: Number.isFinite(h) ? h : null,
     state: raw.state ?? null,
     ownerPlayerId: raw.owner_player_id ?? null,
-    velocity: vec(raw.velocity),
+    velocity: ballPlaneVelocity(raw.velocity),
   };
 }
 
@@ -297,6 +304,7 @@ function frameMeta(raw: Record<string, unknown> | null | undefined) {
     dangerZone: r.danger_zone ?? null,
     pressureIndex: n(r.pressure_index),
     eventBanner: r.event_banner ?? null,
+    overlayText: r.overlay_text ?? r.overlayText ?? null,
     activeEventId: r.active_event_id ?? r.active_event?.event_id ?? null,
     celebrationTeamId: r.celebration_team_id ?? null,
     primaryPlayerId: r.active_event?.primary_player_id ?? r.primary_player_id ?? null,
@@ -380,6 +388,7 @@ function renderOf(f: PitchFrame, alpha: number, fallbackEvent: string | null): S
     homeScore: f.homeScore ?? null,
     awayScore: f.awayScore ?? null,
     eventBanner: f.eventBanner ?? null,
+    overlayText: f.overlayText ?? null,
     offsideSnapshot: f.offsideSnapshot ?? null,
     varReview: f.varReview ?? null,
     cardDetail: f.cardDetail ?? null,
@@ -505,6 +514,7 @@ export function Pitch2DView({
   durationSeconds,
   clockMinute = null,
   playerNameById,
+  actionOnly = false,
 }: Pitch2DViewProps) {
   const bufferRef = useRef(new LiveRenderBuffer());
   const lastGoodRef = useRef<SampledPitchFrame | null>(null);
@@ -832,8 +842,9 @@ export function Pitch2DView({
       if (!ev) continue;
       const evType = String(ev.type || ev.event_type || "").toLowerCase();
       const evSec = typeof ev.time_seconds === "number" ? ev.time_seconds : null;
-      if (evSec !== null && Math.abs(evSec - timeSeconds) <= 4) {
-        return ev;
+      if (evSec !== null) {
+        if (timeSeconds >= evSec - 2 && timeSeconds <= evSec + 4) return ev;
+        continue;
       }
       if (targetEv && evType === targetEv) {
         return ev;
@@ -936,8 +947,30 @@ export function Pitch2DView({
   const homeArrow = homeAttacksRightNow ? "▶" : "◀";
   const awayArrow = homeAttacksRightNow ? "◀" : "▶";
 
+  const shownTime = timeSeconds;
+  const actionWindows = useMemo(
+    () => (actionOnly && cameraMode === "2d" ? classicActionWindows(frames, durationSeconds || 300) : []),
+    [actionOnly, cameraMode, frames, durationSeconds],
+  );
+  const pitchLive = !actionOnly || cameraMode !== "2d" || isClassicPitchAction(shownTime, actionWindows);
   return (
     <div data-testid="pitch-2d-view" className="space-y-2">
+      {cameraMode === "2d" ? (
+        <ClassicMatchBar
+          timeSeconds={shownTime}
+          minute={typeof displayClockMin === "number" ? displayClockMin : null}
+          homeName={homeName}
+          awayName={awayName}
+          homeScore={hasScorebug ? scoreHome : null}
+          awayScore={hasScorebug ? scoreAway : null}
+          events={events as Array<Record<string, unknown>> | null}
+          feedStatus={feedStatus.status}
+          feedAgeSeconds={feedStatus.ageMs != null ? feedStatus.ageMs / 1000 : null}
+          demo={isDemo}
+          activeEvent={shownEvent}
+        />
+      ) : null}
+      {cameraMode === "2d" ? null : (
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-white/10 bg-slate-950/75 px-3 py-1.5">
         <div className="flex items-center gap-2">
           <CrestMark url={homeCrest} name={homeName} />
@@ -1027,6 +1060,9 @@ export function Pitch2DView({
           <CrestMark url={awayCrest} name={awayName} />
         </div>
       </div>
+      )}
+      <div className="relative" data-testid="classic-pitch-stage">
+      <div className={pitchLive ? undefined : "pointer-events-none opacity-0"}>
       <OrthographicPitch
         players={shown}
         ball={shownBall}
@@ -1076,6 +1112,105 @@ export function Pitch2DView({
         sampleFrame={sampleFrame}
         feedFreshness={feedStatus.status}
       />
+      </div>
+      {pitchLive ? null : (
+        <div
+          data-testid="classic-waiting-board"
+          className="absolute inset-0 z-20 flex flex-col overflow-hidden rounded-md"
+        >
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "repeating-linear-gradient(90deg, #0c6b2c 0px, #0c6b2c 28px, #128237 28px, #128237 56px)",
+            }}
+          />
+          <div className="relative z-10 flex items-center justify-between gap-3 px-3 pb-1 pt-2">
+            <p className="font-mono text-[10px] font-black uppercase tracking-[0.22em] text-emerald-200">
+              Waiting for the next moment
+            </p>
+            <p className="truncate text-[11px] font-black uppercase tracking-wide text-white">
+              {homeName}
+              {hasScorebug ? `  ${scoreHome} - ${scoreAway}  ` : "  vs  "}
+              {awayName}
+            </p>
+          </div>
+          <div className="relative z-10 grid min-h-0 flex-1 grid-cols-2 gap-2 px-2 pb-2" data-testid="classic-waiting-lineups">
+            {(["home", "away"] as const).map((side) => {
+              const sidePlayers = shown
+                .filter((player) => player.side === side && player.active !== false)
+                .sort((a, b) => {
+                  const rank = (line?: string, role?: string) => {
+                    const key = `${line || ""} ${role || ""}`.toLowerCase();
+                    if (key.includes("goal") || /\bgk\b/.test(key)) return 0;
+                    if (key.includes("def")) return 1;
+                    if (key.includes("mid")) return 2;
+                    return 3;
+                  };
+                  const byLine = rank(a.line, a.role) - rank(b.line, b.role);
+                  if (byLine !== 0) return byLine;
+                  return (a.anchorY ?? a.shirtNumber) - (b.anchorY ?? b.shirtNumber);
+                });
+              const accent = side === "home" ? headerPalette.homeColor : headerPalette.awayColor;
+              const title = side === "home" ? homeName : awayName;
+              return (
+                <section
+                  key={side}
+                  data-testid={`classic-waiting-xi-${side}`}
+                  className="flex min-h-0 flex-col overflow-hidden rounded-md border border-white/10 bg-[#07111f]/95"
+                >
+                  <header className="flex items-center gap-2 border-b border-white/10 px-2 py-1">
+                    <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: accent }} />
+                    <span className="truncate text-[11px] font-black uppercase tracking-wide text-white">{title}</span>
+                  </header>
+                  <div className="grid grid-cols-[16px_minmax(88px,1fr)_44px_28px_14px_14px_16px] gap-1.5 px-2 py-1 font-mono text-[9px] font-black uppercase tracking-wider text-slate-500">
+                    <span />
+                    <span>Player</span>
+                    <span>Stm</span>
+                    <span>Rt</span>
+                    <span>G</span>
+                    <span>A</span>
+                    <span>C</span>
+                  </div>
+                  <ul className="flex min-h-0 flex-1 flex-col justify-evenly overflow-y-auto px-2 pb-1">
+                    {sidePlayers.map((player) => {
+                      const stat = classicLineupStat(
+                        events as Array<Record<string, unknown>> | null,
+                        player.playerId,
+                        shownTime,
+                      );
+                      const stamina = typeof player.staminaPct === "number" ? Math.max(0, Math.min(100, player.staminaPct)) : null;
+                      const staminaColor = stamina == null ? "#64748b" : stamina < 40 ? "#f43f5e" : stamina < 65 ? "#f59e0b" : "#34d399";
+                      return (
+                        <li
+                          key={player.playerId}
+                          data-testid={`classic-waiting-player-${player.playerId}`}
+                          className="grid grid-cols-[16px_minmax(88px,1fr)_44px_28px_14px_14px_16px] items-center gap-1.5 text-[12px] text-slate-100"
+                        >
+                          <span className="font-mono text-[11px] text-slate-400">{player.shirtNumber || ""}</span>
+                          <span className="truncate font-semibold">{player.name || "Player"}</span>
+                          <span className="h-2 overflow-hidden rounded-full bg-white/10" title={stamina == null ? "Stamina not filed" : `${stamina}%`}>
+                            <span className="block h-full rounded-full" style={{ width: `${stamina ?? 0}%`, backgroundColor: staminaColor }} />
+                          </span>
+                          <span className="font-mono font-black text-white">{stat.rating.toFixed(1)}</span>
+                          <span className="font-mono">{stat.goals}</span>
+                          <span className="font-mono">{stat.assists}</span>
+                          <span className="flex items-center gap-0.5">
+                            {stat.yellow > 0 ? <span className="inline-block h-2.5 w-1.5 rounded-[1px] bg-yellow-400" title={`${stat.yellow} yellow`} /> : null}
+                            {stat.red > 0 ? <span className="inline-block h-2.5 w-1.5 rounded-[1px] bg-rose-500" title={`${stat.red} red`} /> : null}
+                            {stat.yellow === 0 && stat.red === 0 ? <span className="text-slate-600">–</span> : null}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
+          </div>
+        </div>
+      )}
+      </div>
       {isAutoVarReplay && (
         <div
           data-testid="auto-var-replay-badge"
@@ -1179,31 +1314,59 @@ export function Pitch2DView({
           <span className="truncate font-bold text-white">{tacticalBanner}</span>
         </div>
       )}
-      {(banner || shown.length > 0) ? (() => {
+      {pitchLive && (banner || shown.length > 0) ? (() => {
         const carrier = shown.find((p) => p.hasBall) || null;
         const posSide: "home" | "away" =
           carrier?.side ||
           (currentRenderData?.possessionSide === "away" ? "away" : "home");
         const posTeamName = posSide === "away" ? awayName : homeName;
         const ballX = shownBall?.x ?? 0.5;
+        const ballY = shownBall?.y ?? 0.5;
+        const ballHeight = Number(shownBall?.height ?? 0);
+        const ballInFlight = shownBall?.state === "in_flight" || ballHeight > 0.45;
+        const wideBall = Math.abs(ballY - 0.5) > 0.16;
         const attacksRight = currentRenderData?.homeAttacksRight !== false;
         const attackingProgress =
           (posSide === "home" && attacksRight) || (posSide === "away" && !attacksRight)
             ? ballX
             : 1 - ballX;
+        const offThePitch = ballX < 0.06 || ballX > 0.94;
+        const inTheGoal = Math.abs(ballY - 0.5) < 0.08;
         const zonePhrase =
-          attackingProgress > 0.72
-            ? "probes the final third"
-            : attackingProgress < 0.32
-              ? "builds out from the back"
-              : "works possession through midfield";
+          offThePitch && !inTheGoal
+            ? carrier?.role === "GK"
+              ? "gathers it wide of the post"
+              : "drags it wide of the post"
+            : offThePitch
+              ? "sees it nestle in the net"
+            : ballInFlight && ballHeight > 0.8 && wideBall && attackingProgress > 0.8
+            ? "whips the cross into the box"
+            : ballInFlight && ballHeight > 0.8
+              ? "lofts the pass"
+            : ballInFlight && wideBall && attackingProgress > 0.62 && attackingProgress < 0.94
+              ? "slides the through ball"
+            : ballInFlight && !wideBall && attackingProgress > 0.62 && attackingProgress < 0.82
+              ? "lets fly from outside the box"
+            : ballInFlight && attackingProgress > 0.82
+                ? "strikes at goal"
+                : wideBall && attackingProgress > 0.72
+                  ? "drives down the wing"
+                  : attackingProgress > 0.84
+                    ? "is in on goal"
+                    : attackingProgress > 0.72
+                      ? "probes the final third"
+                      : attackingProgress < 0.32
+                        ? "builds out from the back"
+                        : "works possession through midfield";
         const carrierLabel = carrier
           ? carrier.name && !/^#?\d+$/.test(carrier.name)
             ? carrier.name
             : `#${carrier.shirtNumber || ""}`
           : "";
+        const filedCall = String(currentRenderData?.overlayText || "").trim();
         const neutralHeadline =
           String(activeEventRow?.banner_text || activeEventRow?.commentary || currentRenderData?.eventBanner || "").trim() ||
+          filedCall ||
           (carrierLabel
             ? `${carrierLabel} ${zonePhrase} for ${posTeamName}...`
             : `${posTeamName} ${zonePhrase}...`);
@@ -1281,6 +1444,7 @@ export function Pitch2DView({
             : null;
         return (
           <FMCommentaryStrip
+            variant={cameraMode === "2d" ? "classic" : "broadcast"}
             phase={commentaryPhase}
             badge={displayBadge}
             headline={effectiveBanner.headline}

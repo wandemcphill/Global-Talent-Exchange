@@ -118,6 +118,15 @@ describe("resolveBallPresentation", () => {
     expect(real.heightMeters).toBeCloseTo(0.4);
   });
 
+  test("a low authoritative shot is lifted into a visible arc", () => {
+    const shot = resolveBallPresentation(
+      base({ eventType: "shot", ball: { x: 0.8, y: 0.45, height: 0.2 } }),
+      0.35,
+    )!;
+    expect(shot.flightKind).toBe("shot");
+    expect(shot.heightMeters).toBeGreaterThan(0.6);
+  });
+
   test("a shot and a goal are classified and a missing ball resolves to null", () => {
     expect(resolveBallPresentation(base({ eventType: "shot" }), 0.3)!.flightKind).toBe("shot");
     expect(resolveBallPresentation(base({ eventType: "goal" }), 1)!.flightKind).toBe("in_goal");

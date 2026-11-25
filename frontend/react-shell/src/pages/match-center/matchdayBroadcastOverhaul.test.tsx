@@ -439,7 +439,7 @@ describe("MatchCenter universal broadcast overhaul integration", () => {
     expect(lastOrthographicProps).not.toBeNull();
     expect(lastOrthographicProps?.homeColor).toBe("#006633");
     expect(lastOrthographicProps?.homeKitPattern).toBe("stripes");
-    expect(lastOrthographicProps?.cameraMode).toBe("2.5d");
+    expect(lastOrthographicProps?.cameraMode).toBe("2d");
     expect(lastOrthographicProps?.players.map((p) => p.playerId)).toEqual(["h1", "h2"]);
 
     expect(container.querySelector('[data-testid="pitch-feed-status"]')?.textContent).toBe("FINAL");
@@ -458,12 +458,12 @@ describe("MatchCenter universal broadcast overhaul integration", () => {
     );
 
     // 4B. Camera mode switch updates OrthographicPitch perspective preset
-    const cam2dBtn = container.querySelector('[data-testid="cam-mode-2d"]') as HTMLButtonElement | null;
-    expect(cam2dBtn).not.toBeNull();
+    const camBroadcastBtn = container.querySelector('[data-testid="cam-mode-2.5d"]') as HTMLButtonElement | null;
+    expect(camBroadcastBtn).not.toBeNull();
     act(() => {
-      cam2dBtn?.click();
+      camBroadcastBtn?.click();
     });
-    expect(lastOrthographicProps?.cameraMode).toBe("2d");
+    expect(lastOrthographicProps?.cameraMode).toBe("2.5d");
 
     // 5. Read-only manager authority in TacticalHUD — reflects authoritative backend values, zero POST mutations
     const tacticsBanner = container.querySelector('[data-testid="manager-matchday-authority-banner"]');

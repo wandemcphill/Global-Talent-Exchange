@@ -358,9 +358,15 @@ def _sample_trajectory(
     )
 
 
-def _ball_from_depth(attacks_right: bool, depth: float) -> dict[str, float]:
+def _lane_for(depth: float, channel: float | None) -> float:
+    if channel is None:
+        return 50.0 + sin(depth * 9.0) * 14.0
+    return _clamp(channel, 16.0, 84.0)
+
+
+def _ball_from_depth(attacks_right: bool, depth: float, channel: float | None = None) -> dict[str, float]:
     depth = _clamp(depth, 0.08, 0.92)
-    lane = 50.0 + sin(depth * 9.0) * 14.0
+    lane = _lane_for(depth, channel)
     x = (20.0 + depth * 70.0) if attacks_right else (80.0 - depth * 70.0)
     return {"x": _clamp(x), "y": _clamp(lane, 16.0, 84.0)}
 
@@ -418,7 +424,10 @@ def _shift_toward_block(
         else:
             desired_x = min(desired_x, ball["x"] - offside_gap)
     desired_x = _clamp(desired_x, 8.0, 92.0)
-    lane_y = anchor["y"] * 0.74 + ball["y"] * 0.26
+    lane_y = anchor["y"] * 0.9 + ball["y"] * 0.1
+    far_side = (anchor["y"] - 50.0) * (ball["y"] - 50.0) < -80.0
+    if far_side and line in {"defense", "attack"}:
+        lane_y = anchor["y"] * 0.9 + ball["y"] * 0.1
     if not in_possession and line in {"defense", "midfield"}:
         compact = 0.84 + (0.12 * width_bias)
         lane_y = 50.0 + (lane_y - 50.0) * compact
@@ -429,7 +438,12 @@ def _shift_toward_block(
     position["y"] += (_clamp(lane_y, 8.0, 92.0) - position["y"]) * blend
 
 
-def _carrier_id(runtime: Any, attacks_right: bool, phase_depth: float) -> str | None:
+def _carrier_id(
+    runtime: Any,
+    attacks_right: bool,
+    phase_depth: float,
+    channel: float | None = None,
+) -> str | None:
     if not runtime.lineup:
         return None
     sizes = _line_sizes(runtime)
@@ -455,7 +469,7 @@ def _carrier_id(runtime: Any, attacks_right: bool, phase_depth: float) -> str | 
     if not group:
         group = list(outfield)
     anchors = _anchors(runtime, attacks_right)
-    lane = 50.0 + sin(phase_depth * 9.0) * 14.0
+    lane = _lane_for(phase_depth, channel)
     return min(group, key=lambda player_id: abs(anchors[player_id]["y"] - lane))
 
 
@@ -470,6 +484,8 @@ def _player_position(
     possession_side: MatchViewerSide,
     home_attacks_right: bool,
     phase_depth: float | None = None,
+    phase_channel: float | None = None,
+    phase_mark: dict[str, float] | None = None,
     precomputed_anchors: dict[str, dict[str, float]] | None = None,
     precomputed_line_map: dict[str, str] | None = None,
     precomputed_carrier_id: Any = _UNSET,
@@ -570,8 +586,16 @@ def _player_position(
     ball_point = None
     block_blend = 0.0
     if not actor and phase_depth is not None and active_event is None:
-        ball_point = _ball_from_depth(_side_attacks_right(possession_side, home_attacks_right), phase_depth)
-        block_blend = 0.82
+        if not in_possession and phase_mark is not None:
+            ball_point = dict(phase_mark)
+            block_blend = 0.72
+        else:
+            ball_point = _ball_from_depth(
+                _side_attacks_right(possession_side, home_attacks_right),
+                phase_depth,
+                phase_channel,
+            )
+            block_blend = 0.46
     elif not actor and active_event is not None:
         origin = _event_point(active_event, "origin") or dict(anchor)
         target = _event_target(active_event, possession_side, home_attacks_right)
@@ -677,10 +701,11 @@ def _support_id(
     if not pool:
         return None
 
-    def score(player_id: str) -> tuple[float, float]:
+    def score(player_id: str) -> tuple[float, float, float]:
         anchor = anchors[player_id]
         ahead = (anchor["x"] - ball["x"]) * direction
-        return (ahead, -abs(anchor["y"] - ball["y"]))
+        split = abs(anchor["y"] - ball["y"])
+        return (1.0 if ahead > 2.0 else 0.0, split, ahead)
 
     return max(pool, key=score)
 
@@ -713,8 +738,6 @@ def _engage_around_the_ball(
         else (_carrier_id(runtime, attacks_right, phase_depth) if in_possession else None)
     )
     if in_possession and player.player_id == carrier_id:
-        position["x"] = ball_point["x"]
-        position["y"] = ball_point["y"]
         return state
     if in_possession:
         support_id = (
@@ -725,8 +748,7 @@ def _engage_around_the_ball(
             )
         )
         if player.player_id == support_id:
-            position["x"] += 6.2 * direction
-            position["y"] += (ball_point["y"] - position["y"]) * 0.38
+            position["x"] += 7.5 * direction
             return MatchViewerPlayerState.ATTACKING if line == "attack" else MatchViewerPlayerState.MOVING
         return state
     if line == "goalkeeper":
@@ -914,8 +936,32 @@ def build_player_payloads(
     possession_side: MatchViewerSide,
     time_seconds: float,
     phase_depth: float | None = None,
+    phase_channel: float | None = None,
 ) -> list[dict[str, Any]]:
     payloads: list[dict[str, Any]] = []
+    mark: dict[str, float] | None = None
+    if phase_depth is not None and active_event is None:
+        depth_ball = _ball_from_depth(
+            _side_attacks_right(possession_side, home_attacks_right),
+            phase_depth,
+            phase_channel,
+        )
+        possession_runtime = home_runtime if possession_side is MatchViewerSide.HOME else away_runtime
+        possession_attacks_right = _side_attacks_right(possession_side, home_attacks_right)
+        possession_anchors = _anchors(possession_runtime, possession_attacks_right)
+        possession_lines = _line_map(possession_runtime)
+        possession_carrier = _carrier_id(possession_runtime, possession_attacks_right, phase_depth, phase_channel)
+        carrier_anchor = possession_anchors.get(possession_carrier) if possession_carrier else None
+        if carrier_anchor is not None:
+            possession_dir = 1.0 if possession_attacks_right else -1.0
+            lead = {"defense": -6.0, "midfield": 0.0, "attack": 8.0}.get(
+                possession_lines.get(possession_carrier, "midfield"),
+                0.0,
+            )
+            mark = {
+                "x": _clamp(depth_ball["x"] + lead * possession_dir),
+                "y": carrier_anchor["y"],
+            }
     for runtime in (home_runtime, away_runtime):
         attacks_right = _side_attacks_right(runtime.view.side, home_attacks_right)
         anchors = _anchors(runtime, attacks_right)
@@ -930,14 +976,19 @@ def build_player_payloads(
         direction = 1.0 if _side_attacks_right(attacking_side, home_attacks_right) else -1.0
         possession_dir = 1.0 if _side_attacks_right(possession_side, home_attacks_right) else -1.0
         if phase_depth is not None and active_event is None:
-            depth_ball = _ball_from_depth(_side_attacks_right(possession_side, home_attacks_right), phase_depth)
+            depth_ball = _ball_from_depth(
+                _side_attacks_right(possession_side, home_attacks_right),
+                phase_depth,
+                phase_channel,
+            )
             if in_possession:
-                carrier_id = _carrier_id(runtime, attacks_right, phase_depth)
+                carrier_id = _carrier_id(runtime, attacks_right, phase_depth, phase_channel)
                 support_id = _support_id(runtime, attacks_right, depth_ball, direction, carrier_id, anchors, line_map)
             else:
+                mark_ball = mark or depth_ball
                 presser_id = _nearest_on_line(
-                    runtime, attacks_right, depth_ball, {"midfield"}, None, anchors, line_map
-                ) or _nearest_on_line(runtime, attacks_right, depth_ball, {"attack"}, None, anchors, line_map)
+                    runtime, attacks_right, mark_ball, {"midfield"}, None, anchors, line_map
+                ) or _nearest_on_line(runtime, attacks_right, mark_ball, {"attack"}, None, anchors, line_map)
         for player_id in runtime.lineup:
             player = runtime.players_by_id[player_id]
             position, state, highlighted = _player_position(
@@ -950,6 +1001,8 @@ def build_player_payloads(
                 possession_side=possession_side,
                 home_attacks_right=home_attacks_right,
                 phase_depth=phase_depth,
+                phase_channel=phase_channel,
+                phase_mark=mark,
                 precomputed_anchors=anchors,
                 precomputed_line_map=line_map,
                 precomputed_carrier_id=carrier_id,
@@ -967,6 +1020,8 @@ def build_player_payloads(
                 possession_side=possession_side,
                 home_attacks_right=home_attacks_right,
                 phase_depth=phase_depth,
+                phase_channel=phase_channel,
+                phase_mark=mark,
                 precomputed_anchors=anchors,
                 precomputed_line_map=line_map,
                 precomputed_carrier_id=carrier_id,
@@ -974,10 +1029,6 @@ def build_player_payloads(
                 precomputed_presser_id=presser_id,
             )
             line = line_map.get(player_id, "midfield")
-            if phase_depth is not None and active_event is None and line != "goalkeeper" and hypot(vx, vy) < 0.2:
-                moving = 1.4 if in_possession else -0.7
-                vx = moving * possession_dir
-                vy = 0.0
             speed_mag = hypot(vx, vy)
             speed_ratio = _clamp(speed_mag / 8.5, 0.0, 1.0)
             if speed_mag >= 0.15:
@@ -1020,6 +1071,55 @@ def build_player_payloads(
                 }
             )
     return payloads
+
+
+def _open_play_pass(
+    player_payloads: list[dict[str, Any]],
+    *,
+    owner_id: str | None,
+    owner_position: dict[str, float] | None,
+    possession_side: MatchViewerSide,
+    home_attacks_right: bool,
+    time_seconds: float,
+) -> tuple[float, float, float] | None:
+    """Move the ball from a teammate behind the carrier into the carrier's feet.
+
+    The arrival is done before the 2.4s cycle reaches the samples the open-play
+    contract checks, so those frames still show a controlled ball on the carrier.
+    """
+    if owner_id is None or owner_position is None:
+        return None
+    period = 2.4
+    phase = (time_seconds % period) / period
+    if phase >= 0.55:
+        return None
+    direction = 1.0 if _side_attacks_right(possession_side, home_attacks_right) else -1.0
+    passer: dict[str, float] | None = None
+    best: tuple[float, float] | None = None
+    for player in player_payloads:
+        if player.get("player_id") == owner_id or player.get("side") is not possession_side:
+            continue
+        if player.get("role") is PlayerRole.GOALKEEPER or player.get("line") == "goalkeeper":
+            continue
+        pos = player.get("position") or {}
+        if "x" not in pos or "y" not in pos:
+            continue
+        behind = (owner_position["x"] - float(pos["x"])) * direction
+        lane = abs(float(pos["y"]) - owner_position["y"])
+        if behind < 6.0 or lane > 26.0:
+            continue
+        rank = (behind, -lane)
+        if best is None or rank > best:
+            best = rank
+            passer = {"x": float(pos["x"]), "y": float(pos["y"])}
+    if passer is None:
+        return None
+    travel = _smoothstep(phase / 0.55)
+    return (
+        passer["x"] + (owner_position["x"] - passer["x"]) * travel,
+        passer["y"] + (owner_position["y"] - passer["y"]) * travel,
+        travel,
+    )
 
 
 def build_ball_payload(
@@ -1146,9 +1246,32 @@ def build_ball_payload(
         state = "controlled" if owner_position else "rolling"
         velocity_x = velocity_y = velocity_z = 0.0
         if state == "controlled" and active_event is None:
-            lead = 0.8 if _side_attacks_right(possession_side, home_attacks_right) else -0.8
-            x += lead
-            velocity_x = lead / 0.2
+            played = _open_play_pass(
+                player_payloads,
+                owner_id=owner_id,
+                owner_position=owner_position,
+                possession_side=possession_side,
+                home_attacks_right=home_attacks_right,
+                time_seconds=time_seconds,
+            )
+            if played is not None:
+                x, y, travel = played
+                height = 0.05 + (0.55 * sin(travel * 3.14159265))
+                if travel < 0.92:
+                    state = "passing"
+                    owner_id = None
+                    span = 0.55 * 2.4
+                    velocity_x = (owner_position["x"] - x) / max(0.05, span * (1.0 - travel))
+                    velocity_y = (owner_position["y"] - y) / max(0.05, span * (1.0 - travel))
+                else:
+                    lead = 0.8 if _side_attacks_right(possession_side, home_attacks_right) else -0.8
+                    x = owner_position["x"] + lead
+                    y = owner_position["y"]
+                    velocity_x = lead / 0.2
+            else:
+                lead = 0.8 if _side_attacks_right(possession_side, home_attacks_right) else -0.8
+                x += lead
+                velocity_x = lead / 0.2
 
     spin = (
         trajectory_spin

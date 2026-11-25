@@ -111,6 +111,7 @@ export type PitchFrame = {
   compactnessHome?: number | null;
   compactnessAway?: number | null;
   eventBanner?: string | null;
+  overlayText?: string | null;
   activeEventId?: string | null;
   celebrationTeamId?: string | null;
   primaryPlayerId?: string | null;
@@ -607,6 +608,71 @@ export function isHighlightMoment(
   return false;
 }
 
+export type ClassicActionWindow = { start: number; end: number };
+
+type ClassicActionFrame = {
+  time_seconds?: number;
+  timeSeconds?: number;
+  danger_zone?: string | null;
+  event_banner?: string | null;
+  offside_snapshot?: unknown;
+  celebration_team_id?: string | null;
+};
+
+/**
+ * Spans where the classic pitch is on screen. Box attacks, filed banners,
+ * offsides and celebrations count. Quiet circulation stays off the pitch.
+ */
+export function classicActionWindows(
+  frames: ReadonlyArray<ClassicActionFrame> | null | undefined,
+  durationSeconds = 300,
+): ClassicActionWindow[] {
+  const duration = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 300;
+  const marks: number[] = [];
+  for (const frame of frames || []) {
+    if (!frame) continue;
+    const time = Number(frame.time_seconds ?? frame.timeSeconds);
+    if (!Number.isFinite(time)) continue;
+    const danger = String(frame.danger_zone || "");
+    const banner = String(frame.event_banner || "").trim();
+    const action =
+      danger === "central_box" ||
+      danger === "wide_box" ||
+      Boolean(banner) ||
+      Boolean(frame.offside_snapshot) ||
+      Boolean(frame.celebration_team_id);
+    if (action) marks.push(time);
+  }
+  if (!marks.length) return [];
+  marks.sort((a, b) => a - b);
+  const lead = 5;
+  const tail = 3;
+  const windows: ClassicActionWindow[] = [];
+  for (const time of marks) {
+    const start = Math.max(0, time - lead);
+    const end = Math.min(duration, time + tail);
+    const prev = windows[windows.length - 1];
+    if (prev && start <= prev.end + 3) prev.end = Math.max(prev.end, end);
+    else windows.push({ start, end });
+  }
+  return windows;
+}
+
+export function isClassicPitchAction(timeSeconds: number, windows: ReadonlyArray<ClassicActionWindow>): boolean {
+  if (!windows.length) return true;
+  return windows.some((window) => timeSeconds >= window.start && timeSeconds <= window.end);
+}
+
+export function nextClassicActionStart(
+  timeSeconds: number,
+  windows: ReadonlyArray<ClassicActionWindow>,
+): number | null {
+  for (const window of windows) {
+    if (window.start > timeSeconds + 0.15) return window.start;
+  }
+  return null;
+}
+
 /**
  * Steps a broadcast timeline cursor forward monotonically at universal 1.0x wall-clock speed.
  * Any viewer pause, speed multiplier, or highlight-skip arguments are ignored to enforce
@@ -866,6 +932,7 @@ export function interpolate(from: PitchFrame, to: PitchFrame, alpha: number): Pi
         ? from.compactnessAway + (to.compactnessAway - from.compactnessAway) * t
         : (t < 0.5 ? from?.compactnessAway : to?.compactnessAway) ?? null,
     eventBanner: t < 0.5 ? from?.eventBanner ?? to?.eventBanner : to?.eventBanner ?? from?.eventBanner,
+    overlayText: t < 0.5 ? from?.overlayText ?? to?.overlayText : to?.overlayText ?? from?.overlayText,
     activeEventId: t < 0.5 ? from?.activeEventId ?? to?.activeEventId : to?.activeEventId ?? from?.activeEventId,
     celebrationTeamId:
       t < 0.5 ? from?.celebrationTeamId ?? to?.celebrationTeamId : to?.celebrationTeamId ?? from?.celebrationTeamId,
@@ -1264,6 +1331,11 @@ export function resolveBallPresentation(
 
   let heightMeters =
     frame.ball?.height != null && Number.isFinite(frame.ball.height) ? Math.max(0, frame.ball.height) : 0;
+
+  if (inFlight && flightKind === "shot" && heightMeters < 0.55) {
+    const lifted = Math.sin(Math.min(1, alpha) * Math.PI * 0.85) * 1.35;
+    heightMeters = Math.max(heightMeters, lifted);
+  }
 
   if (heightMeters <= 0.05 && inFlight) {
     const arc = Math.max(0, 4 * alpha * (1 - alpha));

@@ -12,6 +12,8 @@ import {
   seekTime,
   stepReplayClock,
   suppliedCrest,
+  classicActionWindows,
+  isClassicPitchAction,
   isHighlightMoment,
   extractShotMarkers,
   deriveTouchlineNudge,
@@ -457,6 +459,17 @@ describe("match state adapter", () => {
       highlightMode: "key",
       events,
     });
+    const windows = classicActionWindows([
+      { timeSeconds: 30, danger_zone: "midfield" },
+      { timeSeconds: 52, danger_zone: "wide_box" },
+      { timeSeconds: 88, event_banner: "SHOT FROM OUTSIDE THE BOX!" },
+      { timeSeconds: 104, danger_zone: "midfield" },
+    ]);
+    expect(isClassicPitchAction(20, windows)).toBe(false);
+    expect(isClassicPitchAction(50, windows)).toBe(true);
+    expect(isClassicPitchAction(100, windows)).toBe(false);
+    expect(isHighlightMoment(30, events, "full")).toBe(true);
+
     expect(deadPhaseStep - 30).toBeCloseTo(1, 3);
     expect(keyMomentStep - 56).toBeCloseTo(1, 3);
   });

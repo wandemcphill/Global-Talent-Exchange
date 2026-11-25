@@ -73,7 +73,7 @@ describe("MatchCenter canonical 2D/2.5D broadcast & authoritative tactics contra
   const src = fs.readFileSync(path.resolve(__dirname, "../../../pages/MatchCenter.tsx"), "utf-8");
 
   test("2D/2.5D stays the default and WebGL receives the same Match Center frames", () => {
-    expect(src).toContain("2D TOP-DOWN");
+    expect(src).toContain("2D CLASSIC");
     expect(src).toContain("VORONOI");
     expect(src).toContain("<MatchPitchLiveScene");
     expect(src).toContain("frames: recordedFrames");

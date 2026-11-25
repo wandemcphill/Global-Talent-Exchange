@@ -94,5 +94,18 @@ describe("FMCommentaryStrip", () => {
     });
     expect(strip?.getAttribute("data-commentary-phase")).toBe("var");
     expect(strip?.textContent).toContain("VAR CHECK");
+
+    act(() => {
+      root.render(
+        <FMCommentaryStrip
+          variant="classic"
+          phase="neutral"
+          badge="PLAY-BY-PLAY"
+          headline="Hutchinson searches out Rebic to his left"
+        />,
+      );
+    });
+    expect(strip?.getAttribute("data-commentary-variant")).toBe("classic");
+    expect(strip?.textContent).toBe("Hutchinson searches out Rebic to his left");
   });
 });

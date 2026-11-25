@@ -37,6 +37,9 @@ import { useMatchFullTimeGovernance } from "@/lib/3d/broadcast/useMatchFullTimeG
 import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader";
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
+import { ClassicMatchFacts } from "@/pages/match-center/ClassicMatchBar";
+import { ClassicTouchline } from "@/pages/match-center/ClassicTouchline";
+import { PrematchClassicFlow } from "@/pages/match-center/PrematchClassicFlow";
 import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
 import {
   canonicalBroadcastPhase,
@@ -825,7 +828,19 @@ function TacticalHUD({
 }
 
 // Pre-Match Briefing Component with Strategic 3D Stadium & Walkout Stage
-function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?: any; matchId: string }) {
+function PreMatchBriefing({
+  match,
+  preMatch,
+  matchId,
+  presentation,
+  onKickOff,
+}: {
+  match: any;
+  preMatch?: any;
+  matchId: string;
+  presentation?: any;
+  onKickOff?: () => void;
+}) {
   const [pollVote, setPollVote] = useState<string | null>(null);
   const [predictionData, setPredictionData] = useState<any>(preMatch?.fan_predictions);
   const [preMatch3DScene, setPreMatch3DScene] = useState("facility_upgrade");
@@ -889,7 +904,28 @@ function PreMatchBriefing({ match, preMatch, matchId }: { match: any; preMatch?:
 
   return (
     <div className="space-y-6">
-      {/* Official Broadcast Starting XIs (Tunnel Graphic + Editorial Matchday Poster) */}
+      <PrematchClassicFlow
+        homeName={match.home_name}
+        awayName={match.away_name}
+        homeColor={presentation?.home?.crest?.primary_color || presentation?.home?.primary_color || "#38bdf8"}
+        awayColor={presentation?.away?.crest?.primary_color || presentation?.away?.primary_color || "#f43f5e"}
+        homePlayers={presentation?.home?.starters || []}
+        awayPlayers={presentation?.away?.starters || []}
+        homeBench={presentation?.home?.bench || []}
+        awayBench={presentation?.away?.bench || []}
+        competitionName={presentation?.context?.competition_name}
+        venueName={presentation?.context?.venue_name}
+        kickoffLabel={presentation?.context?.kickoff_label || presentation?.context?.date_label}
+        refereeName={presentation?.context?.referee_name}
+        standings={presentation?.context?.standings || []}
+        reactions={presentation?.reactions || []}
+        storylines={presentation?.context?.storylines || []}
+        coachNotes={presentation?.coach_notes || []}
+        homeForm={homeForm}
+        awayForm={awayForm}
+        onKickOff={onKickOff}
+      />
+      {/* Official Broadcast Starting XIs — kept as the GTEX lineup presentation */}
       <Panel
         eyebrow="Official Matchday Team Sheets"
         title="Confirmed Starting XIs & Lineup Suggestion"
@@ -1712,7 +1748,7 @@ export default function MatchCenter() {
   const [tacticalBanner, setTacticalBanner] = useState<string | null>(null);
   const [dismissedNudgeId, setDismissedNudgeId] = useState<string | null>(null);
   const tacticalFlashTimerRef = useRef<number | null>(null);
-  const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom" | "webgl">("2.5d");
+  const [cameraMode, setCameraMode] = useState<"2d" | "2.5d" | "zoom" | "webgl">("2d");
   const [selectedPlayer, setSelectedPlayer] = useState<string | null>(null);
 
   // Lineup preview formation state (tactical parameters below reflect read-only authoritative backend state)
@@ -2672,7 +2708,7 @@ export default function MatchCenter() {
                 { id: "pitch", label: "2D / 2.5D MATCH PITCH", icon: Tv },
                 { id: "lineups", label: "MATCHDAY LINEUPS", icon: Users },
                 { id: "tactics", label: "TACTICS & ADVISOR", icon: Sliders },
-                { id: "pre_match", label: "PRE-MATCH + 3D STAGE", icon: Target },
+                { id: "pre_match", label: "PRE-MATCH", icon: Target },
                 { id: "post_match", label: "POST-MATCH + 3D GALA", icon: Award },
                 { id: "commentary", label: "LIVE FEED", icon: Radio },
               ]
@@ -2718,7 +2754,7 @@ export default function MatchCenter() {
               <div className="flex items-center gap-1.5">
                 <Camera size={13} className="text-emerald-400" />
                 {[
-                  { id: "2d" as const, label: "2D TOP-DOWN" },
+                  { id: "2d" as const, label: "2D CLASSIC" },
                   { id: "2.5d" as const, label: "2.5D TV BROADCAST" },
                   { id: "zoom" as const, label: "DIRECTOR ZOOM" },
                   { id: "webgl" as const, label: "WEBGL" },
@@ -2952,6 +2988,13 @@ export default function MatchCenter() {
                 playerNameById={playerNameById}
               />
               )}
+              {cameraMode === "2d" && <ClassicMatchFacts events={shown} />}
+              {cameraMode === "2d" && (
+                <ClassicTouchline
+                  kitColor={String(m.away_club_id) === String(clubId) ? awayPrimaryColor : homePrimaryColor}
+                  players={String(m.away_club_id) === String(clubId) ? awayLivePitch : homeLivePitch}
+                />
+              )}
               {recentSubstitution && (
                 <div
                   data-testid="substitution-lower-third"
@@ -3133,7 +3176,13 @@ export default function MatchCenter() {
 
         {/* Tab 3: Pre-Match Package */}
         {activeTab === "pre_match" && (
-          <PreMatchBriefing match={m} preMatch={liveState?.pre_match} matchId={id || ""} />
+          <PreMatchBriefing
+            match={m}
+            preMatch={liveState?.pre_match}
+            matchId={id || ""}
+            presentation={presentationPkg}
+            onKickOff={() => setActiveTab("pitch")}
+          />
         )}
 
         {/* Tab 4: Post-Match Analytics & Press Room */}

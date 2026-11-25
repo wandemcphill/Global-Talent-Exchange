@@ -1414,7 +1414,7 @@ class MatchTimelineService:
     def _circulation_depth(self, beat: int, count: int) -> float:
         progress = beat / max(1, count)
         envelope = 0.16 + (0.66 * progress)
-        chain = (0.20, 0.46, 0.72, 0.38)[(beat - 1) % 4]
+        chain = (0.24, 0.48, 0.70, 0.86)[(beat - 1) % 4]
         return max(0.12, min(0.88, (envelope * 0.5) + (chain * 0.5)))
 
     def _append_circulation_frames(
@@ -1461,6 +1461,7 @@ class MatchTimelineService:
                 possession_side=possession_side,
                 camera_preset=MatchViewerCameraPreset.BROADCAST,
                 phase_depth=self._circulation_depth(beat, beats),
+                phase_channel=self._circulation_channel(beat),
                 overlay_text=self._circulation_call(
                     home_name if possession_side is MatchViewerSide.HOME else away_name,
                     self._circulation_depth(beat, beats),
@@ -1468,8 +1469,11 @@ class MatchTimelineService:
                 ),
             )
 
+    def _circulation_channel(self, beat: int) -> float:
+        return (22.0, 50.0, 78.0, 36.0, 64.0)[(beat - 1) % 5]
+
     def _circulation_call(self, team_name: str, depth: float, beat: int) -> str:
-        if beat % 4 == 0:
+        if beat > 1 and abs(self._circulation_channel(beat) - self._circulation_channel(beat - 1)) >= 28.0:
             return f"{team_name} switch the play."
         if depth < 0.34:
             return f"{team_name} play it out from the back."
@@ -1536,6 +1540,7 @@ class MatchTimelineService:
             flag_animation: bool = False,
             celebration_team_id: str | None = None,
             phase_depth: float | None = None,
+            phase_channel: float | None = None,
         ) -> None:
             nonlocal last_time
             resolved_time = max(
@@ -1562,6 +1567,7 @@ class MatchTimelineService:
                     flag_animation=flag_animation,
                     celebration_team_id=celebration_team_id,
                     phase_depth=phase_depth,
+                    phase_channel=phase_channel,
                 )
             )
             last_time = frames[-1].time_seconds
@@ -2058,6 +2064,7 @@ class MatchTimelineService:
         flag_animation: bool = False,
         celebration_team_id: str | None = None,
         phase_depth: float | None = None,
+        phase_channel: float | None = None,
     ) -> MatchTimelineFrameView:
         home_attacks_right = clock_minute < 45.0
         player_payloads = self._player_payloads(
@@ -2070,6 +2077,7 @@ class MatchTimelineService:
             possession_side=possession_side,
             time_seconds=time_seconds,
             phase_depth=phase_depth,
+            phase_channel=phase_channel,
         )
         ball_payload = self._ball_payload(
             player_payloads=player_payloads,
@@ -2119,6 +2127,7 @@ class MatchTimelineService:
         possession_side: MatchViewerSide,
         time_seconds: float | None = None,
         phase_depth: float | None = None,
+        phase_channel: float | None = None,
     ) -> list[dict[str, Any]]:
         return build_player_payloads(
             home_runtime=home_runtime,
@@ -2130,6 +2139,7 @@ class MatchTimelineService:
             possession_side=possession_side,
             time_seconds=float(time_seconds if time_seconds is not None else clock_minute * 60.0),
             phase_depth=phase_depth,
+            phase_channel=phase_channel,
         )
 
     def _player_variance_offset(

@@ -20,6 +20,11 @@ import {
   type MatchdayTeamSheet,
 } from "@/components/gtex/MatchdayLineupBroadcast";
 import type { PitchCameraMode } from "@/match2d/OrthographicPitch";
+import {
+  classicActionWindows,
+  isClassicPitchAction,
+  nextClassicActionStart,
+} from "@/match2d/matchStateAdapter";
 
 const HEADQUARTERS_PREVIEW: ClubOperationsHubPayload = headquartersPreview();
 
@@ -214,17 +219,29 @@ function Match2DReviewStage({ match }: { match: SpectatorSafeMatchView | null })
   const [timeSeconds, setTimeSeconds] = useState(12);
   const [paused, setPaused] = useState(false);
   const [playbackSpeed, setPlaybackSpeed] = useState<1 | 2 | 3 | 4>(2);
+  const actionWindows = useMemo(
+    () => classicActionWindows(match?.frames || [], 300),
+    [match],
+  );
 
   useEffect(() => {
     if (paused) return undefined;
     const id = window.setInterval(() => {
       setTimeSeconds((prev) => {
+        const pitchOn = cameraMode !== "2d" || isClassicPitchAction(prev, actionWindows);
+        if (!pitchOn) {
+          const nextStart = nextClassicActionStart(prev, actionWindows);
+          if (nextStart == null) return prev >= 298 ? 2 : Math.min(298, prev + 4);
+          const jump = Math.max(0.35, (nextStart - prev) / 20);
+          const landed = prev + jump;
+          return landed >= nextStart - 0.15 ? nextStart : landed;
+        }
         const next = prev + 0.25 * playbackSpeed;
         return next >= 298 ? 2 : next;
       });
     }, 250);
     return () => window.clearInterval(id);
-  }, [paused, playbackSpeed]);
+  }, [paused, playbackSpeed, cameraMode, actionWindows]);
 
   const homeName = match?.home_team?.team_name || "EKITI FC";
   const awayName = match?.away_team?.team_name || "Lagos Titans AI";
@@ -383,6 +400,7 @@ function Match2DReviewStage({ match }: { match: SpectatorSafeMatchView | null })
               isPaused={paused}
               playbackSpeed={playbackSpeed}
               durationSeconds={300}
+              actionOnly={cameraMode === "2d"}
             />
             <MatchTimelineScrubber
               model={timelineModel}

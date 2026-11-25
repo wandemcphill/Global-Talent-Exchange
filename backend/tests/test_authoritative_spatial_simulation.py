@@ -544,6 +544,21 @@ def test_open_play_puts_a_runner_on_the_ball_and_a_presser_on_the_carrier() -> N
     assert ball["position"]["x"] > carrier["position"]["x"] + 0.4
     assert abs(ball["position"]["x"] - carrier["position"]["x"]) < 1.5
 
+    passing_players = _open_play(home, away, phase_depth=0.55, time_seconds=38.88)
+    passing_ball = build_ball_payload(
+        player_payloads=passing_players,
+        home_runtime=home,
+        away_runtime=away,
+        home_attacks_right=True,
+        active_event=None,
+        stage="pre",
+        possession_side=MatchViewerSide.HOME,
+        time_seconds=38.88,
+    )
+    assert passing_ball["state"] == "passing"
+    assert passing_ball["owner_player_id"] is None
+    assert passing_ball["position"]["x"] < carrier["position"]["x"] - 4.0
+
     attackers = [
         item for item in players if item["player_id"] in {"home-9", "home-10", "home-11"} and not item["has_possession"]
     ]
@@ -559,3 +574,14 @@ def test_open_play_puts_a_runner_on_the_ball_and_a_presser_on_the_carrier() -> N
     assert gap(pressing[0]) + 1.0 < min(gap(item) for item in mids if item is not pressing[0])
     line = [item["position"]["x"] for item in players if item["player_id"] in {"away-2", "away-3", "away-4", "away-5"}]
     assert max(line) - min(line) < 8.0
+
+    still = next(item for item in players if item["player_id"] == "home-2")
+    plane_speed = (still["velocity"]["x"] ** 2 + still["velocity"]["y"] ** 2) ** 0.5
+    assert plane_speed < 0.25
+
+    wide = _open_play(home, away, phase_depth=0.55, phase_channel=78.0)
+    wide_carrier = next(item for item in wide if item["has_possession"])
+    assert wide_carrier["position"]["y"] > 70.0
+    central = _open_play(home, away, phase_depth=0.55, phase_channel=50.0)
+    central_carrier = next(item for item in central if item["has_possession"])
+    assert abs(wide_carrier["position"]["y"] - central_carrier["position"]["y"]) > 20.0

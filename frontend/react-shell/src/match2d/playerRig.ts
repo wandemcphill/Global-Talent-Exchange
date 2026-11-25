@@ -1255,7 +1255,6 @@ export function rasterPitch(width = 512, height = 320): Uint8Array {
   const topLine = Math.round(18 * sy);
   const bottomLine = height - Math.round(18 * sy);
   const pitchW = rightLine - leftLine;
-  const pitchH = bottomLine - topLine;
   const stripeCount = 18;
   const stripeWidth = pitchW / stripeCount;
 
@@ -1276,29 +1275,29 @@ export function rasterPitch(width = 512, height = 320): Uint8Array {
           // Broadcast perimeter hoarding trim
           setPixel(data, width, x, y, 22, 65, 52, 255);
         } else {
-          const r = Math.max(7, Math.round(12 - vignette * 4));
-          const g = Math.max(22, Math.round(44 - vignette * 12));
-          const b = Math.max(15, Math.round(27 - vignette * 8));
+          const r = Math.max(6, Math.round(10 - vignette * 3));
+          const g = Math.max(18, Math.round(32 - vignette * 8));
+          const b = Math.max(12, Math.round(18 - vignette * 5));
           setPixel(data, width, x, y, r, g, b, 255);
         }
       } else {
         const relX = x - leftLine;
-        const relY = y - topLine;
         const vStripe = Math.floor(relX / stripeWidth) % 2;
-        const hBand = Math.floor(relY / (pitchH / 12)) % 2;
-        const microBlade = ((x * 13 + y * 7) & 3) * 0.65;
-        const worn = Math.exp(-(dx * dx * 12 + dy * dy * 8));
-        const boxWear =
-          relX < pitchW * 0.16 || relX > pitchW * 0.84
-            ? Math.exp(-((((y - centerY) / height) ** 2) * 9)) * 0.24
-            : 0;
-
-        const turfCut = (vStripe ? 16 : 0) + (hBand ? 3 : 0);
-        const lightBoost = floodlight * 7;
-        const red = Math.round(15 + worn * 7 + (vStripe ? 4 : 0) + lightBoost * 0.35 + microBlade);
-        const green = Math.round(98 + turfCut + lightBoost - worn * 10 - boxWear * 14 - vignette * 9 + microBlade);
-        const blue = Math.round(46 + (vStripe ? 5 : 0) + lightBoost * 0.3 - worn * 5 - vignette * 6);
-        setPixel(data, width, x, y, red, green, blue, 255);
+        const microBlade = ((x * 13 + y * 7) & 3) * 0.4;
+        const lightBoost = floodlight * 10;
+        const red = Math.round((vStripe ? 34 : 22) + lightBoost * 0.2 + microBlade);
+        const green = Math.round((vStripe ? 158 : 124) + lightBoost - vignette * 8 + microBlade);
+        const blue = Math.round((vStripe ? 58 : 42) + lightBoost * 0.15);
+        setPixel(
+          data,
+          width,
+          x,
+          y,
+          Math.max(0, Math.min(255, red)),
+          Math.max(0, Math.min(255, green)),
+          Math.max(0, Math.min(255, blue)),
+          255,
+        );
       }
     }
   }
@@ -1365,9 +1364,9 @@ export function rasterPitch(width = 512, height = 320): Uint8Array {
   fillSpot(data, width, height, rightLine, topLine, 1.8 * sMin, [250, 204, 21, 255]);
   fillSpot(data, width, height, rightLine, bottomLine, 1.8 * sMin, [250, 204, 21, 255]);
 
-  // Goals with 3D depth & hexagonal netting
-  drawGoal(data, width, height, Math.round(8 * sx), centerY, 1, sx, sy);
-  drawGoal(data, width, height, width - Math.round(8 * sx), centerY, -1, sx, sy);
+  // Mouths sit on the goal lines. Nets hang behind the line, inside the margin.
+  drawGoal(data, width, height, leftLine, centerY, 1, sx, sy);
+  drawGoal(data, width, height, rightLine, centerY, -1, sx, sy);
 
   cachedPitchPixels.set(key, data);
   return data;
@@ -1377,47 +1376,45 @@ function drawGoal(
   data: Uint8Array,
   width: number,
   height: number,
-  goalX: number,
+  lineX: number,
   centerY: number,
-  direction: number,
+  intoPitch: number,
   sx = 1,
   sy = 1,
 ) {
-  const depth = Math.round(20 * sx);
-  const halfSpan = Math.round(24 * sy);
-  const post = direction > 0 ? goalX : goalX - depth;
+  const depth = Math.max(10, Math.round(16 * sx));
+  const halfSpan = Math.max(12, Math.round(20 * sy));
+  const mouth = Math.round(lineX);
+  const back = Math.round(lineX - intoPitch * depth);
   const sMin = Math.min(sx, sy);
+  const top = centerY - halfSpan;
+  const bot = centerY + halfSpan;
+  const left = Math.max(1, Math.min(mouth, back));
+  const right = Math.min(width - 2, Math.max(mouth, back));
 
-  // Interior goal shadow on turf
-  for (let y = Math.floor(centerY - halfSpan); y <= Math.ceil(centerY + halfSpan); y += 1) {
-    for (let x = Math.floor(post); x <= Math.ceil(post + depth); x += 1) {
-      if (x >= 0 && x < width && y >= 0 && y < height) {
-        const idx = (y * width + x) * 4;
-        data[idx] = Math.round(data[idx] * 0.72);
-        data[idx + 1] = Math.round(data[idx + 1] * 0.72);
-        data[idx + 2] = Math.round(data[idx + 2] * 0.72);
-      }
+  for (let y = Math.floor(top); y <= Math.ceil(bot); y += 1) {
+    if (y < 0 || y >= height) continue;
+    for (let x = left; x <= right; x += 1) {
+      setPixel(data, width, x, y, 10, 52, 32, 255);
     }
   }
 
-  // Goal mesh netting (horizontal + vertical + diagonal weave)
-  const stepY = Math.max(2, Math.round(3 * sy));
-  const stepX = Math.max(2, Math.round(3 * sx));
-  for (let y = centerY - halfSpan; y <= centerY + halfSpan; y += stepY) {
-    stroke(data, width, height, post, y, post + depth, y, [218, 234, 226, 150]);
+  const step = Math.max(5, Math.round(6 * sMin));
+  for (let y = Math.floor(top); y <= Math.ceil(bot); y += 1) {
+    if (y < 0 || y >= height) continue;
+    for (let x = left; x <= right; x += 1) {
+      const weave = (x + y) % step === 0 || (x - y + step * 8) % step === 0;
+      if (weave) setPixel(data, width, x, y, 248, 252, 250, 245);
+    }
   }
-  for (let x = 0; x <= depth; x += stepX) {
-    stroke(data, width, height, post + x, centerY - halfSpan, post + x, centerY + halfSpan, [218, 234, 226, 150]);
-  }
-  // Net support stanchions
-  strokeThick(data, width, height, post, centerY - halfSpan - sy, post, centerY + halfSpan + sy, 1.35 * sMin, [248, 250, 252, 255]);
-  strokeThick(data, width, height, post + depth, centerY - halfSpan - sy, post + depth, centerY + halfSpan + sy, 1.45 * sMin, [248, 250, 252, 255]);
-  strokeThick(data, width, height, post, centerY - halfSpan - sy, post + depth, centerY - halfSpan - sy, 1.4 * sMin, [248, 250, 252, 255]);
-  strokeThick(data, width, height, post, centerY + halfSpan + sy, post + depth, centerY + halfSpan + sy, 1.4 * sMin, [248, 250, 252, 255]);
-  // Goalposts highlight
-  const mouthX = direction > 0 ? post + depth : post;
-  fillSpot(data, width, height, mouthX, centerY - halfSpan - sy, 2.2 * sMin, [255, 255, 255, 255]);
-  fillSpot(data, width, height, mouthX, centerY + halfSpan + sy, 2.2 * sMin, [255, 255, 255, 255]);
+
+  const post: [number, number, number, number] = [255, 255, 255, 255];
+  strokeThick(data, width, height, mouth, top, mouth, bot, 2.6 * sMin, post);
+  strokeThick(data, width, height, mouth, top, back, top, 1.8 * sMin, post);
+  strokeThick(data, width, height, mouth, bot, back, bot, 1.8 * sMin, post);
+  strokeThick(data, width, height, back, top, back, bot, 1.8 * sMin, post);
+  fillSpot(data, width, height, mouth, top, 2.4 * sMin, post);
+  fillSpot(data, width, height, mouth, bot, 2.4 * sMin, post);
 }
 
 export function rasterBall(): Uint8Array {

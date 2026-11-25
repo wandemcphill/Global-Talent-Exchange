@@ -83,6 +83,21 @@ export interface SpectatorSafeFrameView {
   flag_animation?: boolean;
   players: SpectatorSafePlayerTelemetry[];
   ball: SpectatorSafeBallTelemetry;
+  offside_snapshot?: {
+    offside_line_x: number;
+    attacker_line_x: number;
+    margin_meters?: number;
+    attacker_id?: string | null;
+    attacker_name?: string | null;
+    attacker_body_part?: string | null;
+    second_last_defender_id?: string | null;
+    second_last_defender_name?: string | null;
+    second_last_defender_body_part?: string | null;
+    is_offside_position?: boolean;
+    is_penalised?: boolean;
+    attacking_direction?: number;
+    reason?: string | null;
+  } | null;
 }
 
 export interface SpectatorAdPlacementView {
