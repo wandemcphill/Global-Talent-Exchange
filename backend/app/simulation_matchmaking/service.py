@@ -194,8 +194,6 @@ class SimulationMatchmakingService:
         )
         free_matches_remaining = 10
         free_matches_used = 0
-        charge_required_now = False
-        fan_coin_entry_fee = Decimal("0.0000")
         entitlement_status = "free_run_active"
         settlement_status: str | None = None
         result_label: str | None = None
@@ -306,7 +304,10 @@ class SimulationMatchmakingService:
             raise MatchmakingUnavailableError("This match is not waiting for a result.")
         if existing.user_id and existing.user_id != actor.id:
             raise MatchmakingUnavailableError("Only the match initiator can settle this result.")
-        if existing.status is FastMatchSessionStatus.SETTLED or str(existing.status) == FastMatchSessionStatus.SETTLED.value:
+        if (
+            existing.status is FastMatchSessionStatus.SETTLED
+            or str(existing.status) == FastMatchSessionStatus.SETTLED.value
+        ):
             meta = dict(existing.metadata_json or {})
             raw_report = meta.get("match_report") if isinstance(meta.get("match_report"), dict) else None
             if raw_report is None:
@@ -428,7 +429,10 @@ class SimulationMatchmakingService:
                 raise MatchmakingUnavailableError("Live match session was not found.") from exc
             if existing_fast.user_id and existing_fast.user_id != actor.id:
                 raise MatchmakingUnavailableError("Only the match initiator can settle this result.") from exc
-            if existing_fast.status is not FastMatchSessionStatus.SETTLED and str(existing_fast.status) != FastMatchSessionStatus.SETTLED.value:
+            if (
+                existing_fast.status is not FastMatchSessionStatus.SETTLED
+                and str(existing_fast.status) != FastMatchSessionStatus.SETTLED.value
+            ):
                 return self._simulate_ready_match(match_id=match_id, actor=actor, session=session)
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
             meta = dict(existing_fast.metadata_json or {})
