@@ -1411,6 +1411,19 @@ class MatchTimelineService:
                 payload["replay"]["speed"] = float(replay_speed)
         return payload or None
 
+    def _controlled_circulation_time(self, time_seconds: float) -> float:
+        """Keep a circulation sample out of the open-play pass window.
+
+        The pass clears the carrier for the first 55% of each 2.4s cycle.
+        These frames are the ones that must still show the ball at a player's feet.
+        """
+        period = 2.4
+        passing_until = 0.55 * period
+        remainder = time_seconds % period
+        if remainder + 1e-6 >= passing_until:
+            return time_seconds
+        return time_seconds + (passing_until - remainder) + 0.02
+
     def _circulation_depth(self, beat: int, count: int) -> float:
         progress = beat / max(1, count)
         envelope = 0.16 + (0.66 * progress)
@@ -1444,7 +1457,7 @@ class MatchTimelineService:
         previous_clock = frames[-1].clock_minute if frames else 0.0
         next_clock = float(event.view.minute)
         for beat in range(1, beats):
-            time_seconds = last_time + (beat * step)
+            time_seconds = self._controlled_circulation_time(last_time + (beat * step))
             if time_seconds >= gap_end - 0.45:
                 break
             clock = previous_clock + ((next_clock - previous_clock) * (beat / beats))
