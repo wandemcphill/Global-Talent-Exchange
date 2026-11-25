@@ -367,6 +367,85 @@ describe("Simulated match report UX", () => {
     queryClient.clear();
   });
 
+  it("offers watch or simulate after pairing, and files the result only when simulate is chosen", async () => {
+    mockApiGet.mockImplementation(async (url: string) => {
+      if (url === "/owner/competitions") return { data: { competitions: [] } };
+      if (url === "/owner/world/clubs") return { data: { clubs: [] } };
+      if (url === "/community/discovery/clubs") return { data: { clubs: [] } };
+      if (url === "/simulation-matchmaking/fast-match/entitlement") {
+        return { data: { wins_count: 2 } };
+      }
+      return { data: null };
+    });
+    mockApiPut.mockResolvedValue({ data: {} });
+    mockApiPost.mockImplementation(async (url: string) => {
+      if (url === "/simulation-matchmaking/quick-game") {
+        return {
+          data: {
+            match_id: "choice-match-1",
+            is_simulated: false,
+            settlement_status: null,
+            home_score: null,
+            away_score: null,
+            opponent: { club_name: "Lagos Titans AI", region: "AF-WEST", is_bot: true },
+            match_context: {
+              tactical_story: "Instant tactical clash.",
+              tactical_compatibility_score: 79,
+              expected_difficulty: "high",
+            },
+          },
+        };
+      }
+      if (url === "/simulation-matchmaking/quick-game/choice-match-1/settle") {
+        return {
+          data: {
+            match_id: "choice-match-1",
+            is_simulated: true,
+            settlement_status: "settled",
+            result: "win",
+            home_score: 2,
+            away_score: 0,
+            match_report: SAMPLE_REPORT,
+          },
+        };
+      }
+      return { data: {} };
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    act(() => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <Competitions />
+        </QueryClientProvider>,
+      );
+    });
+
+    await waitFor(() => Boolean(container.querySelector('[data-testid="launch-quick-game-btn"]')));
+    const launchBtn = container.querySelector('[data-testid="launch-quick-game-btn"]') as HTMLButtonElement;
+    await act(async () => {
+      launchBtn.click();
+    });
+
+    await waitFor(() => Boolean(container.querySelector('[data-testid="quick-game-choice"]')));
+    expect(container.querySelector('[data-testid="simulated-match-report"]')).toBeNull();
+    expect(container.querySelector('[data-testid="play-quick-game-btn"]')?.textContent).toContain("Watch the match");
+    expect(container.querySelector('[data-testid="settle-quick-game-btn"]')?.textContent).toContain("Simulate the result");
+
+    const settleBtn = container.querySelector('[data-testid="settle-quick-game-btn"]') as HTMLButtonElement;
+    await act(async () => {
+      settleBtn.click();
+    });
+
+    await waitFor(() => Boolean(container.querySelector('[data-testid="simulated-match-report"]')));
+    const bannerText = container.querySelector('[data-testid="quick-game-result-banner"]')?.textContent || "";
+    expect(bannerText).toContain("Simulated · Full Time");
+    expect(container.querySelector('[data-testid="play-quick-game-btn"]')).toBeNull();
+    expect(container.querySelector('[data-testid="settle-quick-game-btn"]')).toBeNull();
+
+    queryClient.clear();
+  });
+
   it("renders MatchCenter as a full stats report (not a live watch pitch) for an already-simulated match", async () => {
     mockApiGet.mockImplementation(async (url: string) => {
       if (url === "/owner/matches/sim-match-1") {

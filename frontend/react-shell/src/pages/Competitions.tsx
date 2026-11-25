@@ -547,7 +547,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
         );
       } else {
         toast.success(
-          `Matched vs ${data.opponent?.club_name || "Rival Club"} (${data.match_context?.tactical_story || "Tactical Clash"})!`,
+          `Paired with ${data.opponent?.club_name || "a rival"}. Watch the match, or simulate the result.`,
         );
       }
       await qc.invalidateQueries({ queryKey: ["fast-match-entitlement"] });
@@ -563,7 +563,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
     try {
       const { data } = await api.post(`/simulation-matchmaking/quick-game/${matchId}/settle`);
       toast.success(
-        `Quick match settled: ${data.home_score}–${data.away_score} (${label(data.result)})`,
+        `Result simulated: ${data.home_score}–${data.away_score} (${label(data.result)})`,
       );
       setLastMatch((prev: any) =>
         prev
@@ -608,10 +608,8 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
       <div className="grid gap-4 lg:grid-cols-12 items-center">
         <div className="space-y-2 lg:col-span-5">
           <p className="text-xs text-slate-300 leading-relaxed">
-            Pair <b className="text-white">{activeClub?.club_name || "your club"}</b> against live
-            owners or elite tactical bots via{" "}
-            <span className="gx-mono text-emerald-300">/api/simulation-matchmaking/quick-game</span>
-            .
+            Pair <b className="text-white">{activeClub?.club_name || "your club"}</b> with another
+            club, then choose to watch the match or simulate the result. Entry is free.
           </p>
           <div className="flex flex-wrap gap-2 text-xs">
             <Chip tone="emerald">Entry is free</Chip>
@@ -684,12 +682,17 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
             </div>
             <div className="flex flex-wrap gap-2">
               {!isAlreadySimulated && lastMatch.match_id && (
+                <p className="w-full text-sm text-white" data-testid="quick-game-choice">
+                  Choose how this match is played.
+                </p>
+              )}
+              {!isAlreadySimulated && lastMatch.match_id && (
                 <Btn
                   variant="secondary"
                   data-testid="play-quick-game-btn"
                   onClick={() => navigate(`/app/match/${lastMatch.match_id}?live=1`)}
                 >
-                  <Flame size={13} /> Play & Watch Match
+                  <Flame size={13} /> Watch the match
                 </Btn>
               )}
               {!isAlreadySimulated && lastMatch.match_id && (
@@ -699,7 +702,7 @@ function QuickMatchmakingDesk({ activeClub }: { activeClub: any }) {
                   onClick={() => settleQuickGame(lastMatch.match_id)}
                   disabled={busy}
                 >
-                  <Zap size={13} /> Settle Match Result
+                  <Zap size={13} /> Simulate the result
                 </Btn>
               )}
               {isAlreadySimulated && lastMatch.match_id && (

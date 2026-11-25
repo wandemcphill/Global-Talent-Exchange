@@ -204,61 +204,19 @@ class SimulationMatchmakingService:
         is_simulated = False
         match_report_view: SimulatedMatchReportView | None = None
 
-        # Head-to-head against another human in LIVE mode → spin up the real-time
-        # tick engine and let the match actually play out, instead of pre-computing
-        # and settling the result up front. Bot / async pairings keep the one-shot
-        # settle path unchanged. (Settlement-on-finish for live H2H is a follow-up.)
+        # Pair first. The owner chooses whether to watch the match or simulate
+        # the result. The result is filed only when they ask, or when a watched
+        # match reaches full time.
         live_session_view: LiveSessionBridgeView | None = None
-        is_live_head_to_head = queue_source == "player" and recommended_mode is SimulationExecutionMode.LIVE
-        if is_live_head_to_head:
+        if actor is not None:
             live_session_view = self._create_live_session(
                 match_id=match_id,
                 home=requester,
                 away=best.profile,
             )
 
-        if actor is not None and session is not None and not is_live_head_to_head:
+        if actor is not None and session is not None:
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
-            fan_coin_entry_fee = Decimal("0.0000")
-            charge_required_now = False
-            wallet_ledger_id: str | None = None
-
-            replay_payload = MatchSimulationService().build_replay_payload(match_engine_request)
-            result = self._result_for_requester(replay_payload.summary.winner_team_id, requester=requester)
-            result_label = result.value
-            home_score = int(replay_payload.summary.home_score)
-            away_score = int(replay_payload.summary.away_score)
-            is_simulated = True
-            match_report_dict = build_simulated_match_report(
-                replay_payload,
-                home_team_name=requester.club_name,
-                away_team_name=best.profile.club_name,
-                result_label=result.value,
-            )
-            match_report_view = SimulatedMatchReportView.model_validate(match_report_dict)
-
-            viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
-            viewer_payload["stats"] = match_report_dict["stats"]
-            viewer_payload["match_report"] = match_report_dict
-            viewer_payload["is_simulated"] = True
-            viewer_payload["match_status"] = "completed"
-
-            settlement = self._settle_fast_match(
-                session=session,
-                actor=actor,
-                entitlement=entitlement,
-                match_id=match_id,
-                live_match_key=live_match_key,
-                result=result,
-                was_free=True,
-                fan_coin_charged=Decimal("0.0000"),
-                wallet_ledger_id=wallet_ledger_id,
-            )
-            settlement_status = (
-                settlement.settlement_status.value
-                if hasattr(settlement.settlement_status, "value")
-                else str(settlement.settlement_status)
-            )
             session.add(
                 FastMatchSession(
                     user_id=actor.id,
@@ -268,26 +226,22 @@ class SimulationMatchmakingService:
                     home_club_id=requester.club_id,
                     away_club_id=best.profile.club_id,
                     entitlement_id=entitlement.id,
-                    settlement_id=settlement.id,
-                    status=FastMatchSessionStatus.SETTLED,
-                    charge_required_now=charge_required_now,
+                    settlement_id=None,
+                    status=FastMatchSessionStatus.READY,
+                    charge_required_now=False,
                     entry_currency=FAST_MATCH_CURRENCY.value,
-                    fan_coin_entry_fee=fan_coin_entry_fee,
-                    wallet_ledger_id=wallet_ledger_id,
-                    result=result.value,
-                    viewer_payload_json=viewer_payload,
+                    fan_coin_entry_fee=Decimal("0.0000"),
+                    wallet_ledger_id=None,
+                    result=None,
+                    viewer_payload_json={},
                     simulation_request_json=match_engine_request.model_dump(mode="json"),
                     metadata_json={
                         "entry_currency_label": FAST_MATCH_CURRENCY_LABEL,
                         "queue_source": queue_source,
                         "viewer_mode_hint": "twoD",
-                        "is_simulated": True,
+                        "is_simulated": False,
                         "home_team_name": requester.club_name,
                         "away_team_name": best.profile.club_name,
-                        "home_score": home_score,
-                        "away_score": away_score,
-                        "final_score": f"{home_score}-{away_score}",
-                        "match_report": match_report_dict,
                     },
                 )
             )
@@ -339,6 +293,116 @@ class SimulationMatchmakingService:
             rules_copy="Entry is free.",
         )
 
+    def _simulate_ready_match(
+        self,
+        *,
+        match_id: str,
+        actor: User,
+        session: Session,
+    ) -> LiveMatchSettlementView:
+        """File the result now, because the owner chose to simulate instead of watch."""
+        existing = session.scalar(select(FastMatchSession).where(FastMatchSession.match_id == match_id))
+        if existing is None:
+            raise MatchmakingUnavailableError("This match is not waiting for a result.")
+        if existing.user_id and existing.user_id != actor.id:
+            raise MatchmakingUnavailableError("Only the match initiator can settle this result.")
+        if existing.status is FastMatchSessionStatus.SETTLED or str(existing.status) == FastMatchSessionStatus.SETTLED.value:
+            meta = dict(existing.metadata_json or {})
+            raw_report = meta.get("match_report") if isinstance(meta.get("match_report"), dict) else None
+            if raw_report is None:
+                raise MatchmakingUnavailableError("This match was already settled without a report.")
+            entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+            return LiveMatchSettlementView(
+                match_id=existing.match_id,
+                result=str(existing.result or FastMatchResult.DRAW.value),
+                settlement_status=FastMatchSettlementStatus.SETTLED.value,
+                home_score=int(meta.get("home_score") or 0),
+                away_score=int(meta.get("away_score") or 0),
+                free_matches_remaining=entitlement.free_matches_remaining,
+                free_matches_used=entitlement.free_matches_used,
+                charge_required_now=existing.charge_required_now,
+                fan_coin_charged=existing.fan_coin_entry_fee,
+                entry_currency=FAST_MATCH_CURRENCY.value,
+                entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+                entitlement_status=self._entitlement_status(entitlement),
+                already_settled=True,
+                is_simulated=True,
+                match_report=SimulatedMatchReportView.model_validate(raw_report),
+            )
+
+        request_payload = existing.simulation_request_json or {}
+        if not request_payload:
+            raise MatchmakingUnavailableError("This match has no simulation to run.")
+        request = MatchSimulationRequest.model_validate(request_payload)
+        replay_payload = MatchSimulationService().build_replay_payload(request)
+        home_score = int(replay_payload.summary.home_score)
+        away_score = int(replay_payload.summary.away_score)
+        if home_score > away_score:
+            result = FastMatchResult.WIN
+        elif away_score > home_score:
+            result = FastMatchResult.LOSS
+        else:
+            result = FastMatchResult.DRAW
+        meta = dict(existing.metadata_json or {})
+        match_report_dict = build_simulated_match_report(
+            replay_payload,
+            home_team_name=str(meta.get("home_team_name") or "Home"),
+            away_team_name=str(meta.get("away_team_name") or "Away"),
+            result_label=result.value,
+        )
+        viewer_payload = MatchTimelineService().build_from_replay_payload(replay_payload).model_dump(mode="json")
+        viewer_payload["stats"] = match_report_dict["stats"]
+        viewer_payload["match_report"] = match_report_dict
+        viewer_payload["is_simulated"] = True
+        viewer_payload["match_status"] = "completed"
+        entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
+        settlement = self._settle_fast_match(
+            session=session,
+            actor=actor,
+            entitlement=entitlement,
+            match_id=match_id,
+            live_match_key=existing.live_match_key,
+            result=result,
+            was_free=True,
+            fan_coin_charged=Decimal("0.0000"),
+            wallet_ledger_id=None,
+        )
+        existing.settlement_id = settlement.id
+        existing.status = FastMatchSessionStatus.SETTLED
+        existing.result = result.value
+        existing.viewer_payload_json = viewer_payload
+        existing.metadata_json = {
+            **meta,
+            "is_simulated": True,
+            "home_score": home_score,
+            "away_score": away_score,
+            "final_score": f"{home_score}-{away_score}",
+            "match_report": match_report_dict,
+        }
+        session.flush()
+        settlement_status = (
+            settlement.settlement_status.value
+            if hasattr(settlement.settlement_status, "value")
+            else str(settlement.settlement_status)
+        )
+        return LiveMatchSettlementView(
+            match_id=match_id,
+            result=result.value,
+            settlement_status=settlement_status,
+            home_score=home_score,
+            away_score=away_score,
+            free_matches_remaining=entitlement.free_matches_remaining,
+            free_matches_used=entitlement.free_matches_used,
+            charge_required_now=False,
+            fan_coin_charged=Decimal("0.0000"),
+            entry_currency=FAST_MATCH_CURRENCY.value,
+            entry_currency_label=FAST_MATCH_CURRENCY_LABEL,
+            entitlement_status=self._entitlement_status(entitlement),
+            already_settled=False,
+            is_simulated=True,
+            match_report=SimulatedMatchReportView.model_validate(match_report_dict),
+        )
+
     def settle_live_match(
         self,
         *,
@@ -364,6 +428,8 @@ class SimulationMatchmakingService:
                 raise MatchmakingUnavailableError("Live match session was not found.") from exc
             if existing_fast.user_id and existing_fast.user_id != actor.id:
                 raise MatchmakingUnavailableError("Only the match initiator can settle this result.") from exc
+            if existing_fast.status is not FastMatchSessionStatus.SETTLED and str(existing_fast.status) != FastMatchSessionStatus.SETTLED.value:
+                return self._simulate_ready_match(match_id=match_id, actor=actor, session=session)
             entitlement = self._get_or_create_fast_match_entitlement(actor=actor, session=session)
             meta = dict(existing_fast.metadata_json or {})
             viewer = dict(existing_fast.viewer_payload_json or {})
@@ -430,7 +496,7 @@ class SimulationMatchmakingService:
                 match_report=SimulatedMatchReportView.model_validate(raw_report),
             )
         if live.phase != "full_time":
-            raise MatchmakingUnavailableError("Live match is still in progress.")
+            return self._simulate_ready_match(match_id=match_id, actor=actor, session=session)
         if live.home_user_id is not None and actor.id != live.home_user_id:
             raise MatchmakingUnavailableError("Only the match initiator can settle this result.")
 

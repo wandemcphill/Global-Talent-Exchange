@@ -246,7 +246,9 @@ def test_quick_game_falls_back_to_ai_when_queue_empty(client: TestClient, prefix
     assert body["entry_currency"] == "credit"
     assert body["entry_currency_label"] == "Fan Coin"
     assert body["fan_coin_entry_fee"] == "0.0000"
-    assert body["free_matches_used"] == 1
+    assert body["free_matches_used"] == 0
+    assert body["is_simulated"] is False
+    assert body["live_session"]["match_id"] == body["match_id"]
     assert body["live_match_key"].startswith("fast-match:")
     assert body["rules_copy"] == "Entry is free."
 
@@ -285,6 +287,11 @@ def test_fast_match_entitlement_endpoint_tracks_persisted_free_usage(
         },
     )
     assert response.status_code == 200
+    assert response.json()["is_simulated"] is False
+    assert response.json()["free_matches_used"] == 0
+
+    settled = client.post(f"{prefix}/quick-game/{response.json()['match_id']}/settle")
+    assert settled.status_code == 200, settled.text
 
     after = client.get(f"{prefix}/fast-match/entitlement")
     assert after.status_code == 200
@@ -545,13 +552,19 @@ def test_simulated_quick_game_returns_full_match_report_and_hides_live_session(c
     )
     assert response.status_code == 200, response.text
     body = response.json()
-    assert body["is_simulated"] is True
-    assert body["settlement_status"] == "settled"
-    assert body["live_session"] is None
-    assert body["simulation_bridge"]["live_supported"] is False
-    assert isinstance(body["home_score"], int)
-    assert isinstance(body["away_score"], int)
+    assert body["is_simulated"] is False
+    assert body["settlement_status"] is None
+    assert body["live_session"]["your_side"] == "home"
+    assert body["simulation_bridge"]["live_supported"] is True
+    assert body["home_score"] is None
+    assert body["away_score"] is None
 
+    settle_response = client.post(f"/api/simulation-matchmaking/quick-game/{body['match_id']}/settle")
+    assert settle_response.status_code == 200, settle_response.text
+    settled = settle_response.json()
+    assert settled["already_settled"] is False
+    assert settled["is_simulated"] is True
+    body = {**body, **settled}
     report = body["match_report"]
     assert report is not None
     assert report["home_score"] == body["home_score"]
@@ -571,9 +584,9 @@ def test_simulated_quick_game_returns_full_match_report_and_hides_live_session(c
     assert report["motm"]["available"] is True
     assert report["motm"]["player_name"]
 
-    settle_response = client.post(f"/api/simulation-matchmaking/quick-game/{body['match_id']}/settle")
-    assert settle_response.status_code == 200, settle_response.text
-    settled = settle_response.json()
+    settle_again = client.post(f"/api/simulation-matchmaking/quick-game/{body['match_id']}/settle")
+    assert settle_again.status_code == 200, settle_again.text
+    settled = settle_again.json()
     assert settled["already_settled"] is True
     assert settled["is_simulated"] is True
     assert settled["match_report"] is not None
