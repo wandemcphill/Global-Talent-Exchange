@@ -221,10 +221,10 @@ function FaceToken({
   return (
     <div
       data-testid={testid}
-      className={x == null ? "w-[68px] shrink-0 text-center" : "absolute w-[68px] -translate-x-1/2 -translate-y-1/2 text-center"}
+      className={x == null ? "w-11 shrink-0 text-center" : "absolute w-11 -translate-x-1/2 -translate-y-1/2 text-center"}
       style={x == null ? undefined : { left: `${x}%`, top: `${y}%` }}
     >
-      <div className={`mx-auto h-9 w-9 overflow-hidden rounded-full border-2 ${ring} bg-slate-950 shadow-lg`}>
+      <div className={`mx-auto h-7 w-7 overflow-hidden rounded-full border-2 ${ring} bg-slate-950 shadow`}>
         {image && !failed ? (
           <img
             src={image}
@@ -233,15 +233,17 @@ function FaceToken({
             onError={() => setFailed(true)}
           />
         ) : (
-          <span className="flex h-full items-center justify-center text-[10px] font-black text-white">
+          <span className="flex h-full items-center justify-center text-[9px] font-black text-white">
             {surname.slice(0, 2).toUpperCase()}
           </span>
         )}
       </div>
-      <p className="mt-0.5 truncate text-[10px] font-black text-white drop-shadow">{surname}</p>
-      <p className="text-[9px] font-bold uppercase text-amber-100">
-        {role || player.position} · {player.rating || "—"}
-      </p>
+      <p className="truncate text-[9px] font-black leading-tight text-white drop-shadow">{surname}</p>
+      {x == null ? (
+        <p className="text-[8px] font-bold uppercase text-amber-100">
+          {role || player.position} · {player.rating || "—"}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -254,9 +256,9 @@ export function FormationInventoryAdvert({ players: provided }: { players?: Show
     return (
       <section
         data-testid="formation-inventory-advert"
-        className="mx-auto my-6 max-w-7xl px-4 sm:px-6 lg:px-8"
+        className="mx-auto my-3 max-w-5xl px-4 sm:px-6"
       >
-        <div className="h-40 animate-pulse rounded-3xl border border-white/10 bg-slate-900/70" />
+        <div className="h-24 animate-pulse rounded-2xl border border-white/10 bg-slate-900/70" />
       </section>
     );
   }
@@ -272,51 +274,45 @@ export function FormationInventoryAdvert({ players: provided }: { players?: Show
     <section
       data-testid="formation-inventory-advert"
       aria-live="polite"
-      className="mx-auto my-6 max-w-7xl px-4 sm:px-6 lg:px-8"
+      className="mx-auto my-3 max-w-5xl px-4 sm:px-6"
     >
-      <div className="overflow-hidden rounded-3xl border border-emerald-400/30 bg-[#07140F] shadow-2xl">
-        <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-          <div className="flex items-center gap-3">
+      <div className="overflow-hidden rounded-2xl border border-emerald-400/30 bg-[#07140F]">
+        <div className="flex items-center justify-between gap-3 px-3 py-2 sm:px-4">
+          <div className="flex min-w-0 items-center gap-2">
             <img
               src={publicUrl(sheet.manager.portrait)}
               alt=""
-              className="h-16 w-16 rounded-full border-2 border-[#E5B63F] object-cover"
+              className="h-9 w-9 rounded-full border-2 border-[#E5B63F] object-cover"
             />
-            <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-emerald-300">Squad advert</p>
-              <h2 className="text-xl font-black uppercase text-white sm:text-2xl" data-testid="formation-inventory-manager">
+            <div className="min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-emerald-300">Squad advert</p>
+              <h2 className="truncate text-sm font-black uppercase text-white" data-testid="formation-inventory-manager">
                 {sheet.manager.name}
               </h2>
-              <p className="text-sm text-slate-300">
-                {sheet.manager.formation} · {sheet.manager.style}
+              <p className="truncate text-[11px] text-slate-300">
+                {sheet.manager.formation} · {mix || "GTEX market"} · changes every 8 seconds
               </p>
             </div>
           </div>
-          <div className="max-w-md text-sm leading-5 text-slate-300">
-            <p>
-              {mix || "Players"} from the GTEX market, arranged by {sheet.manager.name}. This sheet
-              changes every 8 seconds.
-            </p>
-            <Link
-              to="/signup"
-              className="mt-2 inline-flex text-xs font-black uppercase tracking-wider text-emerald-300"
-            >
-              Create a club and sign from this market
-            </Link>
-          </div>
+          <Link
+            to="/signup"
+            className="shrink-0 text-[10px] font-black uppercase tracking-wider text-emerald-300"
+          >
+            Sign from this market
+          </Link>
         </div>
         <div
           data-testid="formation-inventory-pitch"
-          className="relative mx-4 mb-4 h-[520px] overflow-hidden rounded-2xl border border-white/15 sm:mx-6"
+          className="relative mx-3 mb-2 h-[220px] overflow-hidden rounded-xl border border-white/15 sm:mx-4 sm:h-[240px]"
           style={{
             background:
               "repeating-linear-gradient(90deg, #147845 0 8%, #0e6438 8% 16%)",
           }}
         >
           <div className="pointer-events-none absolute inset-x-0 top-1/2 border-t border-white/40" />
-          <div className="pointer-events-none absolute left-1/2 top-1/2 h-24 w-24 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
-          <div className="pointer-events-none absolute inset-x-[22%] top-0 h-16 border-x border-b border-white/40" />
-          <div className="pointer-events-none absolute inset-x-[22%] bottom-0 h-16 border-x border-t border-white/40" />
+          <div className="pointer-events-none absolute left-1/2 top-1/2 h-12 w-12 -translate-x-1/2 -translate-y-1/2 rounded-full border border-white/40" />
+          <div className="pointer-events-none absolute inset-x-[22%] top-0 h-8 border-x border-b border-white/40" />
+          <div className="pointer-events-none absolute inset-x-[22%] bottom-0 h-8 border-x border-t border-white/40" />
           {sheet.xi.map(({ slot, player }) => (
             <FaceToken
               key={`${sheet.manager.name}-${slot.role}-${player.id}`}
@@ -328,8 +324,8 @@ export function FormationInventoryAdvert({ players: provided }: { players?: Show
             />
           ))}
         </div>
-        <div className="px-4 pb-5 sm:px-6" data-testid="formation-inventory-bench">
-          <p className="mb-2 text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Bench</p>
+        <div className="px-3 pb-2 sm:px-4" data-testid="formation-inventory-bench">
+          <p className="mb-1 text-[9px] font-black uppercase tracking-[0.2em] text-slate-400">Bench</p>
           <div className="flex gap-2 overflow-x-auto">
             {sheet.bench.map((player) => (
               <FaceToken key={player.id} player={player} testid="formation-bench-face" />

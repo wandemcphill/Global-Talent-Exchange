@@ -1486,7 +1486,7 @@ export default function MatchCenter() {
     retry: false,
   });
 
-  const { data: m, isLoading } = useQuery({
+  const { data: m, isLoading, isError } = useQuery({
     queryKey: ["match", id],
     queryFn: async () => {
       if (id === "u2a-006-showcase") {
@@ -1543,6 +1543,7 @@ export default function MatchCenter() {
       }
     },
     enabled: !!id,
+    retry: false,
   });
 
   const matchReport = useMemo<SimulatedMatchReport | null>(() => {
@@ -2237,7 +2238,20 @@ export default function MatchCenter() {
     return Math.abs(minute - subMin) <= 2 ? latest : null;
   }, [shown, minute]);
 
-  if (isLoading || !m) return <Loading label="Loading match" />;
+  if (isLoading) return <Loading label="Loading match" />;
+  if (isError || !m) {
+    return (
+      <div
+        data-testid="match-unavailable"
+        className="rounded-2xl border border-white/10 bg-slate-950 p-8 text-white"
+      >
+        <p className="text-lg font-black">This match is not on the pitch yet.</p>
+        <Link to="/app/competitions" className="mt-4 inline-flex text-sm font-black uppercase tracking-wider text-emerald-300">
+          Back to matches
+        </Link>
+      </div>
+    );
+  }
 
   const fallbackScore = shown
     .filter((e: any) => e.type === "goal" || e.type === "penalty_goal")

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -14,7 +15,7 @@ from app.infinite_league.service import ensure_infinite_league_runtime
 from app.live_matches.service import ensure_live_match_hub
 from app.models.competition import UserCompetition
 from app.models.competition_match import CompetitionMatch
-from app.models.fast_match import FastMatchSession
+from app.models.fast_match import FastMatchSession, FastMatchSessionStatus
 from app.replay_archive.service import ensure_replay_archive
 from app.match_engine.simulation.offside_var import (
     BROADCAST_CATEGORY_DURATION_WINDOWS,
@@ -29,6 +30,7 @@ from app.services.match_viewer_scaling_service import MatchViewerScalingService
 from app.services.match_timeline_service import MatchTimelineService
 
 router = APIRouter(prefix="/match-viewer", tags=["match-viewer"])
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -246,7 +248,13 @@ def _attach_match_report_metadata(
     is_fast_match = isinstance(meta.get("fast_match"), dict)
     match_status_raw = str(meta.get("match_status") or (match.status if match is not None else "") or "").strip()
     is_completed_match = match_status_raw.lower() in {"completed", "played", "settled", "full_time", "fulltime", "ft"}
-    is_simulated = bool(meta.get("is_simulated") or view_state.is_simulated or is_fast_match)
+    # A quick game the owner chose to watch is a live 2D broadcast. The result
+    # report is attached only after they simulate, or after full time is filed.
+    if meta.get("watch_live") is True:
+        is_simulated = False
+        is_completed_match = False
+    else:
+        is_simulated = bool(meta.get("is_simulated") or view_state.is_simulated or is_fast_match)
 
     report = meta.get("match_report") if isinstance(meta.get("match_report"), dict) else None
     if report is None and isinstance(view_state.match_report, dict):
@@ -294,6 +302,8 @@ def _attach_match_report_metadata(
                 else None
             ),
         )
+    if meta.get("watch_live") is True:
+        report = None
 
     stats = (
         dict(report.get("stats") or {})
@@ -453,6 +463,51 @@ def _resolve_live_view_state(
     return None
 
 
+def _fast_match_is_settled(fast_match: FastMatchSession) -> bool:
+    status = fast_match.status
+    return status is FastMatchSessionStatus.SETTLED or str(status) == FastMatchSessionStatus.SETTLED.value
+
+
+def _fast_match_watch_view(
+    *,
+    fast_match: FastMatchSession,
+    session: Session,
+    service: MatchTimelineService,
+) -> MatchViewStateView | None:
+    """Return the 2D timeline for a quick game.
+
+    A ready session stores the engine request and an empty viewer payload until
+    someone opens the match. Build that film once so Watch lands on the pitch.
+    """
+    raw = fast_match.viewer_payload_json if isinstance(fast_match.viewer_payload_json, dict) else {}
+    if raw:
+        try:
+            return MatchViewStateView.model_validate(raw)
+        except Exception:
+            logger.info("Stored quick-game viewer payload for %s is not a timeline. Rebuilding.", fast_match.match_id)
+    request_raw = fast_match.simulation_request_json if isinstance(fast_match.simulation_request_json, dict) else {}
+    if not request_raw:
+        return None
+    from app.match_engine.schemas import MatchSimulationRequest
+    from app.match_engine.services.match_simulation_service import MatchSimulationService
+
+    try:
+        request = MatchSimulationRequest.model_validate(request_raw)
+        replay = MatchSimulationService().build_replay_payload(request)
+        view = service.build_from_replay_payload(replay)
+    except Exception:
+        logger.exception("Quick-game viewer timeline could not be built for %s", fast_match.match_id)
+        return None
+    stored = view.model_dump(mode="json")
+    fast_match.viewer_payload_json = stored
+    try:
+        session.commit()
+    except Exception:
+        logger.exception("Quick-game viewer timeline could not be stored for %s", fast_match.match_id)
+        session.rollback()
+    return view
+
+
 def _resolve_match_viewer_context(
     *,
     match_key: str,
@@ -489,25 +544,31 @@ def _resolve_match_viewer_context(
             (FastMatchSession.live_match_key == match_key) | (FastMatchSession.match_id == match_key)
         )
     )
-    if fast_match is not None and isinstance(fast_match.viewer_payload_json, dict) and fast_match.viewer_payload_json:
-        return _ResolvedMatchViewerContext(
-            canonical_view=MatchViewStateView.model_validate(fast_match.viewer_payload_json),
-            metadata_json={
-                **dict(fast_match.metadata_json or {}),
-                "is_simulated": True,
-                "match_status": "completed",
-                "fast_match": {
-                    "match_id": fast_match.match_id,
-                    "live_match_key": fast_match.live_match_key,
-                    "entry_currency": fast_match.entry_currency,
-                    "fan_coin_entry_fee": str(fast_match.fan_coin_entry_fee),
-                    "charge_required_now": fast_match.charge_required_now,
-                    "result": fast_match.result,
+    if fast_match is not None:
+        settled = _fast_match_is_settled(fast_match)
+        stored_meta = dict(fast_match.metadata_json or {})
+        fast_meta = {
+            "match_id": fast_match.match_id,
+            "live_match_key": fast_match.live_match_key,
+            "entry_currency": fast_match.entry_currency,
+            "fan_coin_entry_fee": str(fast_match.fan_coin_entry_fee),
+            "charge_required_now": fast_match.charge_required_now,
+            "result": fast_match.result,
+        }
+        watch_view = _fast_match_watch_view(fast_match=fast_match, session=session, service=service)
+        if watch_view is not None:
+            return _ResolvedMatchViewerContext(
+                canonical_view=watch_view,
+                metadata_json={
+                    **stored_meta,
+                    "is_simulated": settled,
+                    "watch_live": not settled,
+                    "match_status": "completed" if settled else "live",
+                    "fast_match": fast_meta,
                 },
-            },
-            fairness_metadata=None,
-            match=None,
-        )
+                fairness_metadata=None,
+                match=None,
+            )
 
     try:
         from app.owner_console.models import OwnerMatch

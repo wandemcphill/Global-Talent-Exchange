@@ -571,3 +571,30 @@ def test_match_viewer_spectator_security_enforces_coach_notes_redaction() -> Non
 
     # The club owner retains authority after staff changes.
     assert_coach_notes("owner-user-apex", True)
+
+
+def test_ready_quick_game_opens_as_live_2d_timeline() -> None:
+    app, session_factory = _build_app()
+    request = build_request(seed=51)
+    with session_factory() as session:
+        session.add(
+            FastMatchSession(
+                user_id="user_123",
+                match_id="match_watch_2d",
+                live_match_key="fast-match:match_watch_2d",
+                status="ready",
+                viewer_payload_json={},
+                simulation_request_json=request.model_dump(mode="json"),
+                metadata_json={"is_simulated": False},
+            )
+        )
+        session.commit()
+
+    response = TestClient(app).get("/match-viewer/match_watch_2d")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["is_simulated"] is False
+    assert str(body["match_status"]).lower() == "live"
+    assert not body.get("match_report")
+    assert len(body["frames"]) >= 2
