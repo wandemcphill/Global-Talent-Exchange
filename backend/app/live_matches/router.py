@@ -1961,6 +1961,132 @@ def _v2_post_match_payload(
     }
 
 
+_CHANCE_EVENT_TYPES = frozenset(
+    {
+        "goal",
+        "own_goal",
+        "shot",
+        "save",
+        "miss",
+        "foul",
+        "yellow_card",
+        "red_card",
+        "penalty",
+        "penalty_goal",
+        "penalty_scored",
+        "attack",
+        "chance",
+        "offside",
+        "injury",
+        "var_review",
+    }
+)
+
+
+def _playback_is_slow(frame: Any) -> bool:
+    try:
+        return float(getattr(frame, "playback_rate", 1.0) or 1.0) < 0.95
+    except (TypeError, ValueError):
+        return False
+
+
+def _event_stamp(event: Any) -> float | None:
+    stamp = getattr(event, "time_seconds", None)
+    if isinstance(stamp, (int, float)):
+        return float(stamp)
+    return None
+
+
+def _is_chance_event(event: Any) -> bool:
+    return event is not None and _v2_event_type(getattr(event, "event_type", None)) in _CHANCE_EVENT_TYPES
+
+
+def _chance_for_frame(frame: Any, active_event: Any, events: list[Any] | None) -> Any:
+    """The chance a poll can still show. It stays open for eight seconds, so a 2.5s poll cannot miss it."""
+
+    try:
+        now = float(getattr(frame, "time_seconds", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return None
+    pool = list(events or [])
+    active_id = getattr(active_event, "event_id", None) if active_event is not None else None
+    if active_event is not None and all(getattr(item, "event_id", None) != active_id for item in pool):
+        pool.append(active_event)
+    chosen = None
+    chosen_time: float | None = None
+    slow = _playback_is_slow(frame)
+    for event in pool:
+        if not _is_chance_event(event):
+            continue
+        stamp = _event_stamp(event)
+        if stamp is None:
+            continue
+        if stamp > now + 0.05:
+            same_buildup = slow and getattr(event, "event_id", None) == active_id and stamp <= now + 6.0
+            if not same_buildup:
+                continue
+        elif now - stamp > 8.0:
+            continue
+        if chosen_time is None or stamp >= chosen_time:
+            chosen = event
+            chosen_time = stamp
+    if chosen is not None:
+        return chosen
+    if slow:
+        return active_event
+    return None
+
+
+def _frames_for_open_chance(
+    frames: list[Any],
+    frame: Any,
+    active_event: Any,
+    events: list[Any] | None = None,
+) -> list[Any]:
+    """Pictures of the move into the chance. Open play, and anything after the finish, stays out."""
+
+    chance = _chance_for_frame(frame, active_event, events)
+    if not frames or chance is None:
+        return []
+    try:
+        now = float(getattr(frame, "time_seconds", 0.0) or 0.0)
+    except (TypeError, ValueError):
+        return []
+    event_time = _event_stamp(chance)
+    end = event_time if event_time is not None else now
+    start = max(0.0, end - 8.0)
+    chosen = []
+    for item in frames:
+        try:
+            stamp = float(getattr(item, "time_seconds", -1.0))
+        except (TypeError, ValueError):
+            continue
+        if start - 0.01 <= stamp <= end + 0.05:
+            chosen.append(item)
+    if len(chosen) > 16:
+        return chosen[-16:]
+    return chosen
+
+
+def _v2_highlight_frames(
+    frames: list[Any],
+    frame: Any,
+    active_event: Any,
+    events: list[Any] | None = None,
+) -> tuple[str | None, list[dict[str, object]]]:
+    chance = _chance_for_frame(frame, active_event, events)
+    event_id = getattr(chance, "event_id", None) if chance is not None else None
+    payload = [
+        {
+            "time_seconds": round(float(item.time_seconds), 2),
+            "players": [_v2_pitch_player_payload(player) for player in item.players],
+            "ball": _v2_ball_payload(getattr(item, "ball", None)),
+        }
+        for item in _frames_for_open_chance(frames, frame, active_event, events)
+    ]
+    return (str(event_id) if event_id else None), payload
+
+
 def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
     view_state, frame, events, is_live = _load_strict_live_view_state(match_id, app)
     home_players = [player for player in frame.players if (_enum_value(player.side) or "").lower() == "home"]
@@ -2033,6 +2159,12 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
                 broadcast_session_payload["assigned_duration_seconds"] = min(
                     max_broadcast_seconds, max(1, int(round(float(raw_assigned))))
                 )
+    highlight_event_id, highlight_frames = _v2_highlight_frames(
+        list(view_state.frames),
+        frame,
+        active_event,
+        list(view_state.events),
+    )
     payload = {
         "match_id": view_state.match_id,
         "matchId": view_state.match_id,
@@ -2072,6 +2204,8 @@ def _v2_match_state_payload(match_id: str, app) -> dict[str, object]:
         ),
         "pitch_players": [_v2_pitch_player_payload(player) for player in frame.players],
         "ball": _v2_ball_payload(getattr(frame, "ball", None)),
+        "highlight_event_id": highlight_event_id,
+        "highlight_frames": highlight_frames,
         "active_event_type": _v2_event_type(active_event.event_type) if active_event is not None else None,
         "tactics": ensure_live_match_hub(app).get_tactics(match_id),
         "recent_gifts": ensure_live_match_hub(app).get_recent_gifts(match_id),

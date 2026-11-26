@@ -38,6 +38,15 @@ import { loadFiveMinuteShowcaseFixture } from "@/lib/3d/broadcast/showcaseLoader
 import { HolographicPlayerCard } from "@/components/gtex/ApexWidgets";
 import { MatchdayLineupBroadcast, type MatchdaySquadMember } from "@/components/gtex/MatchdayLineupBroadcast";
 import { ClassicMatchFacts } from "@/pages/match-center/ClassicMatchBar";
+import {
+  highlightPictureKey,
+  highlightPlaySeconds,
+  highlightReel,
+  isMatchHighlight,
+  rememberPitchSample,
+  serverHighlightSamples,
+  type HighlightSample,
+} from "@/pages/match-center/highlightPicture";
 import { ClassicTouchline } from "@/pages/match-center/ClassicTouchline";
 import { PrematchClassicFlow } from "@/pages/match-center/PrematchClassicFlow";
 import { mapAuthoritativeTactics } from "@/lib/3d/broadcast/authoritativeTactics";
@@ -2111,6 +2120,94 @@ export default function MatchCenter() {
     return merged;
   }, [shown, timedRecordedFrames, acceptedLive, spectatorStream.lastFrame, playbackSeconds, minute]);
 
+  const watchingLive = Boolean(acceptedLive || spectatorStream.lastFrame);
+  const liveActionType =
+    (spectatorStream.lastFrame as { active_event?: { event_type?: string }; event_type?: string } | null)?.active_event
+      ?.event_type ||
+    (spectatorStream.lastFrame as { event_type?: string } | null)?.event_type ||
+    acceptedLive?.active_event_type ||
+    null;
+  const latestShown = shown.length ? shown[shown.length - 1] : null;
+  const latestHighlight =
+    latestShown &&
+    isMatchHighlight(latestShown.type) &&
+    Math.abs(Number(minute) - Number(latestShown.minute || 0)) <= 1;
+  const pictureKey = watchingLive
+    ? highlightPictureKey({
+        serverEventId: acceptedLive?.highlight_event_id,
+        serverFrameCount: Array.isArray(acceptedLive?.highlight_frames) ? acceptedLive.highlight_frames.length : 0,
+        liveActionType,
+        latestIsHighlight: Boolean(latestHighlight),
+        latestEventId: latestShown?.event_id || latestShown?.id,
+      })
+    : "";
+  const [pictureOn, setPictureOn] = useState(false);
+  const [highlightClip, setHighlightClip] = useState<HighlightSample[] | null>(null);
+  const [highlightClock, setHighlightClock] = useState(0);
+  const pitchMemoryRef = useRef<HighlightSample[]>([]);
+  const serverClipRef = useRef<HighlightSample[]>([]);
+  serverClipRef.current = serverHighlightSamples(acceptedLive?.highlight_frames);
+  useEffect(() => {
+    if (!watchingLive) return;
+    const frame = spectatorStream.lastFrame;
+    const players = (frame?.players?.length ? frame.players : acceptedLive?.pitch_players) as
+      | Array<Record<string, unknown>>
+      | undefined;
+    if (!players?.length) return;
+    const matchSeconds = Number(frame?.time_seconds);
+    pitchMemoryRef.current = rememberPitchSample(pitchMemoryRef.current, {
+      matchSeconds: Number.isFinite(matchSeconds) ? matchSeconds : null,
+      players,
+      ball: frame?.ball || acceptedLive?.ball,
+    });
+  }, [watchingLive, spectatorStream.lastFrame, acceptedLive?.pitch_players, acceptedLive?.ball]);
+  useEffect(() => {
+    if (!watchingLive) {
+      setPictureOn(true);
+      setHighlightClip(null);
+      return undefined;
+    }
+    if (!pictureKey) {
+      const timer = window.setTimeout(() => {
+        setPictureOn(false);
+        setHighlightClip(null);
+      }, 4000);
+      return () => window.clearTimeout(timer);
+    }
+    const served = serverClipRef.current;
+    const clip = highlightReel(served.length >= 2 ? served : pitchMemoryRef.current);
+    const start = clip[0]?.timeSeconds ?? 0;
+    const end = clip[clip.length - 1]?.timeSeconds ?? start;
+    setHighlightClip(clip);
+    setHighlightClock(start);
+    setPictureOn(true);
+    const playMs = highlightPlaySeconds(clip) * 1000;
+    const startedAt = typeof performance !== "undefined" ? performance.now() : Date.now();
+    const tick = window.setInterval(() => {
+      const now = typeof performance !== "undefined" ? performance.now() : Date.now();
+      const t = Math.min(1, (now - startedAt) / playMs);
+      setHighlightClock(start + (end - start) * t);
+    }, 80);
+    const hide = window.setTimeout(() => {
+      setPictureOn(false);
+      setHighlightClip(null);
+    }, playMs + 3000);
+    return () => {
+      window.clearInterval(tick);
+      window.clearTimeout(hide);
+    };
+  }, [watchingLive, pictureKey]);
+  const playingHighlight = Boolean(watchingLive && pictureOn && highlightClip && highlightClip.length > 0);
+  const highlightCaption = useMemo(() => {
+    for (let index = shown.length - 1; index >= 0; index -= 1) {
+      const event = shown[index];
+      if (!isMatchHighlight(event?.type)) continue;
+      const text = String(event.text || event.description || event.title || "").trim();
+      if (text) return text;
+    }
+    return "The move is on.";
+  }, [shown]);
+
   const isRecordedReplay = !isSimulatedMatch && !acceptedLive && !spectatorStream.lastFrame && timedRecordedFrames.length >= 2;
   const timelineModel = useMemo(() => buildTimelineModel(timedRecordedFrames as any, (viewerData?.events?.length ? viewerData.events : m?.events) || [], replayDurationSeconds), [timedRecordedFrames, viewerData?.events, m?.events, replayDurationSeconds]);
 
@@ -2887,9 +2984,37 @@ export default function MatchCenter() {
               </div>
             )}
 
-            {/* Canonical 2D / 2.5D Broadcast Matchday Pitch. WebGL is the same frames. */}
+            {/* The picture is the chance. Open play stays on the commentary. */}
             <div className="relative">
-              {cameraMode === "webgl" ? (
+              {!pictureOn ? (
+                <div
+                  data-testid="match-commentary-stage"
+                  className="flex min-h-[420px] flex-col rounded-xl border border-white/10 bg-slate-950/80 p-4"
+                >
+                  <p className="font-mono text-[11px] font-black uppercase tracking-[0.18em] text-amber-300">
+                    {minute}&apos; · {score.home}–{score.away}
+                  </p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    {m.home_name} {acceptedLive?.home?.formation || authoritativeTactics?.homeFormation || ""} /{" "}
+                    {m.away_name} {acceptedLive?.away?.formation || authoritativeTactics?.awayFormation || ""}
+                  </p>
+                  <ol className="mt-4 space-y-2">
+                    {commentary.slice(-8).map((entry, index) => (
+                      <li key={`${entry.minute}-${index}`} className="flex gap-3 text-sm text-slate-200">
+                        <span className="w-10 shrink-0 font-mono text-slate-500">{entry.minute}&apos;</span>
+                        <span>{entry.text || entry.title || entry.description}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-auto pt-4 text-xs text-slate-500">The 2D pitch comes on for the next chance.</p>
+                </div>
+              ) : null}
+              {pictureOn && watchingLive ? (
+                <p data-testid="highlight-caption" className="mb-2 text-sm font-semibold text-slate-100">
+                  {highlightCaption}
+                </p>
+              ) : null}
+              {pictureOn ? (cameraMode === "webgl" ? (
                 <MatchPitchLiveScene
                   matchViewState={{
                     match_id: String(id || m?.id || ""),
@@ -2940,12 +3065,20 @@ export default function MatchCenter() {
               ) : (
               <Pitch2DView
                 matchId={id}
-                frames={recordedFrames}
-                timeSeconds={playbackSeconds}
-                snapshotVersion={Number(acceptedLive?.snapshot_version ?? 0)}
-                snapshotPlayers={acceptedLive?.pitch_players}
-                snapshotBall={acceptedLive?.ball}
-                socketFrame={spectatorStream.lastFrame}
+                frames={
+                  playingHighlight
+                    ? (highlightClip || []).map((sample) => ({
+                        time_seconds: sample.timeSeconds,
+                        players: sample.players,
+                        ball: sample.ball,
+                      }))
+                    : recordedFrames
+                }
+                timeSeconds={playingHighlight ? highlightClock : playbackSeconds}
+                snapshotVersion={playingHighlight ? 0 : Number(acceptedLive?.snapshot_version ?? 0)}
+                snapshotPlayers={playingHighlight ? undefined : acceptedLive?.pitch_players}
+                snapshotBall={playingHighlight ? undefined : acceptedLive?.ball}
+                socketFrame={playingHighlight ? null : spectatorStream.lastFrame}
                 events={shown}
                 activeEventType={
                   (spectatorStream.lastFrame as any)?.active_event?.event_type ||
@@ -3002,9 +3135,9 @@ export default function MatchCenter() {
                 clockMinute={minute}
                 playerNameById={playerNameById}
               />
-              )}
-              {cameraMode === "2d" && <ClassicMatchFacts events={shown} />}
-              {cameraMode === "2d" && (
+              )) : null}
+              {pictureOn && cameraMode === "2d" && <ClassicMatchFacts events={shown} />}
+              {pictureOn && cameraMode === "2d" && (
                 <ClassicTouchline
                   kitColor={String(m.away_club_id) === String(clubId) ? awayPrimaryColor : homePrimaryColor}
                   players={String(m.away_club_id) === String(clubId) ? awayLivePitch : homeLivePitch}
